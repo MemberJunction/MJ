@@ -46,6 +46,14 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
             <i class="fas" [ngClass]="viewMode === 'grid' ? 'fa-list' : 'fa-th'"></i>
           </button>
 
+          <!-- Select mode toggle -->
+          <button class="btn-icon"
+                  [class.active]="isSelectMode"
+                  (click)="toggleSelectMode()"
+                  [title]="isSelectMode ? 'Exit Select Mode' : 'Select Items'">
+            <i class="fas fa-check-square"></i>
+          </button>
+
           <!-- Sort dropdown (grid view only) -->
           <div class="dropdown-container" *ngIf="viewMode === 'grid'">
             <button class="btn-icon"
@@ -141,8 +149,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       <div class="collections-content">
         <!-- Loading state -->
         <div *ngIf="isLoading" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
-          <p>Loading collections...</p>
+          <mj-loading text="Loading collections..." size="large"></mj-loading>
         </div>
 
         <!-- Empty state -->
@@ -176,16 +183,19 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
         <!-- Grid view -->
         <div *ngIf="!isLoading && unifiedItems.length > 0 && viewMode === 'grid'"
-             class="unified-grid">
+             class="unified-grid"
+             [class.select-mode]="isSelectMode">
           <div *ngFor="let item of unifiedItems"
                class="grid-item"
                [class.selected]="item.selected"
                [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
                (click)="onItemClick(item, $event)"
+               (dblclick)="onItemDoubleClick(item, $event)"
                (contextmenu)="onItemContextMenu(item, $event)">
 
-            <!-- Selection checkbox -->
+            <!-- Selection checkbox (only visible in select mode) -->
             <div class="item-checkbox"
+                 *ngIf="isSelectMode"
                  (click)="toggleItemSelection(item, $event)">
               <i class="fas"
                  [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"></i>
@@ -243,11 +253,12 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
         <!-- List view -->
         <div *ngIf="!isLoading && unifiedItems.length > 0 && viewMode === 'list'"
-             class="unified-list">
+             class="unified-list"
+             [class.select-mode]="isSelectMode">
           <table class="list-table">
             <thead>
               <tr>
-                <th class="col-checkbox">
+                <th class="col-checkbox" *ngIf="isSelectMode">
                   <i class="fas"
                      [ngClass]="selectedItems.size === unifiedItems.length ? 'fa-check-square' : 'fa-square'"
                      (click)="selectedItems.size === unifiedItems.length ? clearSelection() : selectAll()"></i>
@@ -279,9 +290,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
                   [class.selected]="item.selected"
                   [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
                   (click)="onItemClick(item, $event)"
+                  (dblclick)="onItemDoubleClick(item, $event)"
                   (contextmenu)="onItemContextMenu(item, $event)">
 
-                <td class="col-checkbox">
+                <td class="col-checkbox" *ngIf="isSelectMode">
                   <i class="fas"
                      [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"
                      (click)="toggleItemSelection(item, $event)"></i>
@@ -468,6 +480,16 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       background: #F9FAFB;
       color: #111827;
       border-color: #9CA3AF;
+    }
+
+    .btn-icon.active {
+      background: #EFF6FF;
+      color: #007AFF;
+      border-color: #007AFF;
+    }
+
+    .btn-icon.active:hover {
+      background: #DBEAFE;
     }
 
     /* Dropdown menus */
@@ -666,17 +688,6 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       padding: 48px 24px;
     }
 
-    .loading-state i {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .loading-state p {
-      margin: 0;
-      font-size: 14px;
-    }
-
     .empty-state i {
       font-size: 64px;
       margin-bottom: 24px;
@@ -722,6 +733,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       cursor: pointer;
       transition: all 150ms ease;
       position: relative;
+      user-select: none;
     }
 
     .grid-item:hover {
@@ -742,6 +754,16 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .grid-item.active:hover {
       background: #FDE68A;
+    }
+
+    /* Select mode styling for grid */
+    .unified-grid.select-mode .grid-item {
+      cursor: pointer;
+    }
+
+    .unified-grid.select-mode .grid-item:hover {
+      background: #EFF6FF;
+      border-color: #93C5FD;
     }
 
     .item-checkbox {
@@ -949,6 +971,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .list-table tbody tr {
       border-bottom: 1px solid #F3F4F6;
       transition: background 150ms ease;
+      cursor: pointer;
+      user-select: none;
     }
 
     .list-table tbody tr:last-child {
@@ -1070,6 +1094,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public showNewDropdown: boolean = false;
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
+  public isSelectMode: boolean = false; // Toggle for selection mode
 
   private destroy$ = new Subject<void>();
   private isNavigatingProgrammatically = false;
@@ -1083,13 +1108,23 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.loadData();
-
-    // Subscribe to collection state changes for deep linking
+    // Subscribe to collection state changes for deep linking FIRST
+    // This ensures that if there's a URL with collectionId, we set it before loading data
     this.subscribeToCollectionState();
 
     // Subscribe to artifact state changes to track active artifact
     this.subscribeToArtifactState();
+
+    // Check if there's an active collection from URL params (set by parent component)
+    const activeCollectionId = this.collectionState.activeCollectionId;
+    if (activeCollectionId) {
+      // If there's an active collection, navigate to it (which will call loadData)
+      console.log('📁 Initial load with active collection:', activeCollectionId);
+      this.navigateToCollectionById(activeCollectionId);
+    } else {
+      // Otherwise, just load the root level
+      this.loadData();
+    }
   }
 
   ngOnDestroy() {
@@ -1111,12 +1146,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         }
 
         // Only navigate if the state is different from our current state
+        // This prevents double-loading during initialization
         if (collectionId !== this.currentCollectionId) {
           if (collectionId) {
-            console.log('📁 Collection state changed, navigating to:', collectionId);
+            console.log('📁 Collection state changed externally, navigating to:', collectionId);
             this.navigateToCollectionById(collectionId);
           } else {
-            console.log('📁 Collection state cleared, navigating to root');
+            console.log('📁 Collection state cleared externally, navigating to root');
             this.navigateToRoot();
           }
         }
@@ -1136,7 +1172,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   async loadData(): Promise<void> {
-    this.isLoading = true;
+    // Only show loading spinner if we don't have data yet
+    // This prevents flash of loading when navigating between collections
+    const hasData = this.collections.length > 0 || this.unifiedItems.length > 0;
+    if (!hasData) {
+      this.isLoading = true;
+    }
+
     try {
       // Load saved view preferences from localStorage
       const savedMode = localStorage.getItem('collections-view-mode');
@@ -1584,10 +1626,6 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   viewArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
     this.activeArtifactId = item.artifact.ID;
     this.artifactState.openArtifact(item.artifact.ID, item.version.VersionNumber);
-
-    // Don't emit navigation event when just viewing an artifact in current collection
-    // Only emit when actually navigating between collections (handled by openCollection, navigateTo, etc.)
-    // The artifactState.openArtifact() already handles updating the artifact viewer
   }
 
   // Permission validation and checking methods
@@ -1797,6 +1835,29 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Toggle selection mode on/off
+   * When entering select mode, clicks toggle selection instead of opening items
+   * When exiting select mode, clears any selections
+   */
+  public toggleSelectMode(): void {
+    this.isSelectMode = !this.isSelectMode;
+    if (!this.isSelectMode) {
+      // Clear selection when exiting select mode
+      this.clearSelection();
+    }
+  }
+
+  /**
+   * Exit selection mode (called when navigating to a new folder)
+   */
+  private exitSelectMode(): void {
+    if (this.isSelectMode) {
+      this.isSelectMode = false;
+      this.clearSelection();
+    }
+  }
+
+  /**
    * Set sort order - toggles asc/desc if clicking same column
    */
   public setSortBy(sortBy: CollectionSortBy): void {
@@ -1908,14 +1969,57 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle clicking on unified item (Phase 1)
+   * Handle clicking on unified item
+   * In select mode: toggles selection
+   * In normal mode: opens item (folder or artifact)
    */
   public onItemClick(item: CollectionViewItem, event?: MouseEvent): void {
+    // In select mode, single click toggles selection
+    if (this.isSelectMode) {
+      this.toggleItemSelectionSimple(item);
+      return;
+    }
+
+    // Normal mode: open the item
+    this.openItem(item);
+  }
+
+  /**
+   * Handle double-clicking on unified item
+   * Always opens the item, even in select mode
+   */
+  public onItemDoubleClick(item: CollectionViewItem, event?: MouseEvent): void {
+    event?.preventDefault();
+    this.openItem(item);
+  }
+
+  /**
+   * Open an item (folder or artifact)
+   */
+  private openItem(item: CollectionViewItem): void {
     if (item.type === 'folder' && item.collection) {
+      // Exit select mode when navigating to a new folder
+      this.exitSelectMode();
       this.openCollection(item.collection);
     } else if (item.type === 'artifact') {
+      if (!item.artifact || !item.version) {
+        console.error('Artifact or version is missing for item:', item.id);
+        return;
+      }
       this.viewArtifact({ artifact: item.artifact, version: item.version });
     }
+  }
+
+  /**
+   * Simple toggle for item selection (used in select mode)
+   */
+  private toggleItemSelectionSimple(item: CollectionViewItem): void {
+    if (this.selectedItems.has(item.id)) {
+      this.selectedItems.delete(item.id);
+    } else {
+      this.selectedItems.add(item.id);
+    }
+    this.buildUnifiedItemList();
   }
 
   /**
@@ -1944,22 +2048,25 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   /**
    * Handle keyboard shortcuts
-   * - Cmd/Ctrl+A: Select all
-   * - Escape: Clear selection
+   * - Cmd/Ctrl+A: Select all (enters select mode if not already)
+   * - Escape: Exit select mode and clear selection
    * - Delete/Backspace: Delete selected items
    */
   public handleKeyboardShortcut(event: KeyboardEvent): void {
-    // Cmd+A / Ctrl+A: Select all
+    // Cmd+A / Ctrl+A: Select all (enters select mode)
     if ((event.metaKey || event.ctrlKey) && event.key === 'a') {
       event.preventDefault();
+      if (!this.isSelectMode) {
+        this.isSelectMode = true;
+      }
       this.selectAll();
       return;
     }
 
-    // Escape: Clear selection
-    if (event.key === 'Escape' && this.selectedItems.size > 0) {
+    // Escape: Exit select mode
+    if (event.key === 'Escape' && this.isSelectMode) {
       event.preventDefault();
-      this.clearSelection();
+      this.exitSelectMode();
       return;
     }
 

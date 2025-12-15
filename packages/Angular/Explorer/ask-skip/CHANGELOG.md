@@ -1,5 +1,132 @@
 # Change Log - @memberjunction/ng-ask-skip
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ng-skip-chat@2.125.0
+  - @memberjunction/graphql-dataprovider@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/skip-types@2.125.0
+  - @memberjunction/ng-user-view-grid@2.125.0
+  - @memberjunction/ng-shared@2.125.0
+  - @memberjunction/ng-chat@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-data-context@2.125.0
+  - @memberjunction/ng-tabstrip@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ng-shared@2.124.0
+  - @memberjunction/ng-user-view-grid@2.124.0
+  - @memberjunction/ng-chat@2.124.0
+  - @memberjunction/ng-container-directives@2.124.0
+  - @memberjunction/ng-data-context@2.124.0
+  - @memberjunction/ng-skip-chat@2.124.0
+  - @memberjunction/graphql-dataprovider@2.124.0
+  - @memberjunction/skip-types@2.124.0
+  - @memberjunction/ng-tabstrip@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.123.1
+- @memberjunction/ng-user-view-grid@2.123.1
+- @memberjunction/ng-chat@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-data-context@2.123.1
+- @memberjunction/ng-skip-chat@2.123.1
+- @memberjunction/ng-tabstrip@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/skip-types@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.123.0
+- @memberjunction/ng-shared@2.123.0
+- @memberjunction/ng-user-view-grid@2.123.0
+- @memberjunction/ng-skip-chat@2.123.0
+- @memberjunction/ng-chat@2.123.0
+- @memberjunction/ng-container-directives@2.123.0
+- @memberjunction/ng-data-context@2.123.0
+- @memberjunction/ng-tabstrip@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/global@2.123.0
+- @memberjunction/skip-types@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/graphql-dataprovider@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/ng-container-directives@2.122.2
+  - @memberjunction/ng-data-context@2.122.2
+  - @memberjunction/ng-shared@2.122.2
+  - @memberjunction/ng-skip-chat@2.122.2
+  - @memberjunction/ng-user-view-grid@2.122.2
+  - @memberjunction/ng-chat@2.122.2
+  - @memberjunction/ng-tabstrip@2.122.2
+  - @memberjunction/skip-types@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- Updated dependencies [699a480]
+  - @memberjunction/ng-shared@2.122.1
+  - @memberjunction/ng-skip-chat@2.122.1
+  - @memberjunction/ng-user-view-grid@2.122.1
+  - @memberjunction/ng-chat@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-data-context@2.122.1
+  - @memberjunction/ng-tabstrip@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/skip-types@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/graphql-dataprovider@2.122.0
+  - @memberjunction/skip-types@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/ng-shared@2.122.0
+  - @memberjunction/ng-user-view-grid@2.122.0
+  - @memberjunction/ng-chat@2.122.0
+  - @memberjunction/ng-container-directives@2.122.0
+  - @memberjunction/ng-data-context@2.122.0
+  - @memberjunction/ng-skip-chat@2.122.0
+  - @memberjunction/ng-tabstrip@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

@@ -1,5 +1,110 @@
 # @memberjunction/scheduling-engine
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ai-agents@2.125.0
+  - @memberjunction/actions-base@2.125.0
+  - @memberjunction/actions@2.125.0
+  - @memberjunction/sqlserver-dataprovider@2.125.0
+  - @memberjunction/scheduling-engine-base@2.125.0
+  - @memberjunction/global@2.125.0
+  - @memberjunction/scheduling-base-types@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+- Updated dependencies [4b2181d]
+- Updated dependencies [cabe329]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ai-agents@2.124.0
+  - @memberjunction/actions-base@2.124.0
+  - @memberjunction/actions@2.124.0
+  - @memberjunction/sqlserver-dataprovider@2.124.0
+  - @memberjunction/scheduling-engine-base@2.124.0
+  - @memberjunction/global@2.124.0
+  - @memberjunction/scheduling-base-types@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.123.1
+- @memberjunction/actions-base@2.123.1
+- @memberjunction/actions@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/sqlserver-dataprovider@2.123.1
+- @memberjunction/scheduling-engine-base@2.123.1
+- @memberjunction/scheduling-base-types@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- Updated dependencies [0944f59]
+  - @memberjunction/ai-agents@2.123.0
+  - @memberjunction/actions@2.123.0
+  - @memberjunction/sqlserver-dataprovider@2.123.0
+  - @memberjunction/actions-base@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+  - @memberjunction/scheduling-engine-base@2.123.0
+  - @memberjunction/scheduling-base-types@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/ai-agents@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/sqlserver-dataprovider@2.122.2
+  - @memberjunction/actions@2.122.2
+  - @memberjunction/actions-base@2.122.2
+  - @memberjunction/scheduling-engine-base@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+  - @memberjunction/scheduling-base-types@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.122.1
+- @memberjunction/actions@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/core-entities@2.122.1
+- @memberjunction/global@2.122.1
+- @memberjunction/sqlserver-dataprovider@2.122.1
+- @memberjunction/scheduling-engine-base@2.122.1
+- @memberjunction/scheduling-base-types@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/sqlserver-dataprovider@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/ai-agents@2.122.0
+  - @memberjunction/actions@2.122.0
+  - @memberjunction/scheduling-engine-base@2.122.0
+  - @memberjunction/global@2.122.0
+  - @memberjunction/scheduling-base-types@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

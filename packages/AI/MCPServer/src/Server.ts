@@ -5,9 +5,21 @@ import * as sql from "mssql";
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntity } from "@memberjunction/core-entities";
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
+
+// Tool filtering types
+export interface ToolFilterOptions {
+    includePatterns?: string[];
+    excludePatterns?: string[];
+}
+
+// Track registered tool names for listing and filtering
+const registeredToolNames: string[] = [];
+let activeFilterOptions: ToolFilterOptions = {};
 
 
 const mcpServerPort = mcpServerSettings?.port || 3100;
@@ -38,9 +50,115 @@ const server = new FastMCP({
     version: "1.0.0"
 });
 
+/**
+ * Check if a tool name matches a glob-style pattern
+ * Supports: * (match all), prefix*, *suffix, *contains*
+ */
+function matchesPattern(toolName: string, pattern: string): boolean {
+    const lowerName = toolName.toLowerCase();
+    const lowerPattern = pattern.trim().toLowerCase();
+
+    if (lowerPattern === '*') {
+        return true;
+    }
+
+    const startsWithWildcard = lowerPattern.startsWith('*');
+    const endsWithWildcard = lowerPattern.endsWith('*');
+
+    if (startsWithWildcard && endsWithWildcard) {
+        // *contains*
+        const searchTerm = lowerPattern.slice(1, -1);
+        return lowerName.includes(searchTerm);
+    } else if (startsWithWildcard) {
+        // *suffix
+        const suffix = lowerPattern.slice(1);
+        return lowerName.endsWith(suffix);
+    } else if (endsWithWildcard) {
+        // prefix*
+        const prefix = lowerPattern.slice(0, -1);
+        return lowerName.startsWith(prefix);
+    } else {
+        // exact match
+        return lowerName === lowerPattern;
+    }
+}
+
+/**
+ * Check if a tool should be included based on filter options
+ */
+function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): boolean {
+    const { includePatterns, excludePatterns } = filterOptions;
+
+    // If include patterns are specified, tool must match at least one
+    if (includePatterns && includePatterns.length > 0) {
+        const matchesInclude = includePatterns.some(pattern => matchesPattern(toolName, pattern));
+        if (!matchesInclude) {
+            return false;
+        }
+    }
+
+    // If exclude patterns are specified, tool must not match any
+    if (excludePatterns && excludePatterns.length > 0) {
+        const matchesExclude = excludePatterns.some(pattern => matchesPattern(toolName, pattern));
+        if (matchesExclude) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Wrapper to add a tool with filtering support
+ */
+function addToolWithFilter(toolConfig: Parameters<typeof server.addTool>[0]): void {
+    const toolName = toolConfig.name;
+
+    // Always track the tool name for --list-tools
+    registeredToolNames.push(toolName);
+
+    // Check if tool should be included based on active filters
+    if (!shouldIncludeTool(toolName, activeFilterOptions)) {
+        return; // Skip this tool
+    }
+
+    server.addTool(toolConfig);
+}
+
+/**
+ * Smart text truncation that preserves beginning and end of content
+ * Used for large input/output data in agent run diagnostics
+ */
+function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+    if (!text) {
+        return { value: '', truncated: false };
+    }
+
+    if (maxChars === 0 || text.length <= maxChars) {
+        return { value: text, truncated: false };
+    }
+
+    // Keep 70% from start, 30% from end
+    const startChars = Math.floor(maxChars * 0.7);
+    const endChars = maxChars - startChars;
+    const truncatedCount = text.length - startChars - endChars;
+
+    const truncated = text.substring(0, startChars) +
+        `\n\n[... ${truncatedCount} characters truncated ...]\n\n` +
+        text.substring(text.length - endChars);
+
+    return { value: truncated, truncated: true };
+}
+
 // Initialize database and setup tools
-async function initializeServer() {
+export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
     try {
+        // Store filter options for use by addToolWithFilter
+        activeFilterOptions = filterOptions;
+
+        // Clear any previously registered tool names
+        registeredToolNames.length = 0;
+
         if (!mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
             throw new Error("MCP Server is disabled in the configuration.");
@@ -54,7 +172,7 @@ async function initializeServer() {
         await setupSQLServerClient(config);
         console.log("Database connection setup completed.");
 
-        server.addTool({
+        addToolWithFilter({
             name: "Get_All_Entities",
             description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
             parameters: z.object({}),
@@ -62,13 +180,14 @@ async function initializeServer() {
                 const md = new Metadata();
                 const output = JSON.stringify(md.Entities, null, 2);
                 return output;
-            }        
+            }
         });
 
         const contextUser = UserCache.Instance.Users[0];
         await loadEntityTools(contextUser);
         await loadActionTools(contextUser);
         await loadAgentTools(contextUser);
+        loadAgentRunDiagnosticTools(contextUser);
         console.log("Tools loaded successfully.");
         
         // Configure server options
@@ -115,7 +234,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Add discovery tool if any agent tool has discover enabled
         const hasDiscovery = agentTools.some(tool => tool.discover);
         if (hasDiscovery) {
-            server.addTool({
+            addToolWithFilter({
                 name: "Discover_Agents",
                 description: "List available AI agents based on a name pattern (* for all agents)",
                 parameters: z.object({
@@ -137,7 +256,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Add general agent execution tool if any tool has execute enabled
         const hasExecute = agentTools.some(tool => tool.execute);
         if (hasExecute) {
-            server.addTool({
+            addToolWithFilter({
                 name: "Run_Agent",
                 description: "Execute any AI agent by name or ID",
                 parameters: z.object({
@@ -239,7 +358,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Add status tool if any agent tool has status enabled
         const hasStatus = agentTools.some(tool => tool.status);
         if (hasStatus) {
-            server.addTool({
+            addToolWithFilter({
                 name: "Get_Agent_Run_Status",
                 description: "Get the status of a running or completed agent execution",
                 parameters: z.object({
@@ -270,7 +389,7 @@ async function loadAgentTools(contextUser: UserInfo) {
         // Add cancel tool if any agent tool has cancel enabled
         const hasCancel = agentTools.some(tool => tool.cancel);
         if (hasCancel) {
-            server.addTool({
+            addToolWithFilter({
                 name: "Cancel_Agent_Run",
                 description: "Cancel a running agent execution (Note: cancellation support depends on agent implementation)",
                 parameters: z.object({
@@ -297,6 +416,243 @@ async function loadAgentTools(contextUser: UserInfo) {
             });
         }
     }
+}
+
+/**
+ * Load agent run diagnostic tools for debugging and auditing agent executions
+ */
+function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
+    // Tool 1: List Recent Agent Runs
+    addToolWithFilter({
+        name: "List_Recent_Agent_Runs",
+        description: "Fast query for recent AI agent runs with optional filtering by agent name, status, and date range",
+        parameters: z.object({
+            agentName: z.string().optional().describe("Filter by agent name (partial match)"),
+            status: z.enum(['Success', 'Failed', 'Running', 'Cancelled', 'all']).default('all').describe("Filter by run status"),
+            days: z.number().default(7).describe("Number of days to look back"),
+            limit: z.number().default(10).describe("Maximum number of runs to return")
+        }),
+        async execute(props: { agentName?: string; status: string; days: number; limit: number }) {
+            const rv = new RunView();
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - props.days);
+            const dateFilter = `StartedAt >= '${cutoffDate.toISOString()}'`;
+
+            let filter = dateFilter;
+            if (props.agentName) {
+                filter += ` AND Agent LIKE '%${props.agentName}%'`;
+            }
+            if (props.status !== 'all') {
+                filter += ` AND Status = '${props.status}'`;
+            }
+
+            const result = await rv.RunView({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: filter,
+                OrderBy: 'StartedAt DESC',
+                MaxRows: props.limit,
+                Fields: ['ID', 'AgentID', 'Agent', 'Status', 'StartedAt', 'CompletedAt', 'TotalTokensUsed', 'TotalCost', 'ErrorMessage']
+            }, contextUser);
+
+            if (!result.Success) {
+                return JSON.stringify({ error: result.ErrorMessage });
+            }
+
+            return JSON.stringify(result.Results);
+        }
+    });
+
+    // Tool 2: Get Agent Run Summary
+    addToolWithFilter({
+        name: "Get_Agent_Run_Summary",
+        description: "Comprehensive summary of an agent run with step-level metadata (excludes large I/O data)",
+        parameters: z.object({
+            runId: z.string().describe("The agent run ID to summarize")
+        }),
+        async execute(props: { runId: string }) {
+            const md = new Metadata();
+            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+            const loaded = await agentRun.Load(props.runId);
+
+            if (!loaded) {
+                return JSON.stringify({ error: "Agent run not found" });
+            }
+
+            // Load all steps for this run
+            const rv = new RunView();
+            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID = '${props.runId}'`,
+                OrderBy: 'StepNumber',
+                Fields: ['ID', 'StepNumber', 'StepName', 'StepType', 'Status', 'StartedAt', 'CompletedAt', 'ErrorMessage'],
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!stepsResult.Success) {
+                return JSON.stringify({ error: stepsResult.ErrorMessage });
+            }
+
+            const steps = stepsResult.Results || [];
+            const errorSteps = steps.filter(s => s.ErrorMessage);
+
+            const summary = {
+                runId: agentRun.ID,
+                agentName: agentRun.Agent,
+                agentId: agentRun.AgentID,
+                status: agentRun.Status,
+                startedAt: agentRun.StartedAt?.toISOString(),
+                completedAt: agentRun.CompletedAt?.toISOString(),
+                duration: agentRun.CompletedAt && agentRun.StartedAt
+                    ? agentRun.CompletedAt.getTime() - agentRun.StartedAt.getTime()
+                    : null,
+                totalTokens: agentRun.TotalTokensUsed,
+                totalCost: agentRun.TotalCost,
+                stepCount: steps.length,
+                hasErrors: errorSteps.length > 0,
+                errorCount: errorSteps.length,
+                steps: steps.map(s => ({
+                    stepNumber: s.StepNumber,
+                    stepId: s.ID,
+                    stepName: s.StepName,
+                    stepType: s.StepType,
+                    status: s.Status,
+                    duration: s.CompletedAt && s.StartedAt
+                        ? new Date(s.CompletedAt).getTime() - new Date(s.StartedAt).getTime()
+                        : null,
+                    errorMessage: s.ErrorMessage || undefined
+                })),
+                firstError: errorSteps.length > 0 ? {
+                    stepNumber: errorSteps[0].StepNumber,
+                    stepName: errorSteps[0].StepName,
+                    message: errorSteps[0].ErrorMessage
+                } : undefined
+            };
+
+            return JSON.stringify(summary);
+        }
+    });
+
+    // Tool 3: Get Agent Run Step Detail
+    addToolWithFilter({
+        name: "Get_Agent_Run_Step_Detail",
+        description: "Detailed information about a specific step including input/output data with smart truncation",
+        parameters: z.object({
+            runId: z.string().describe("The agent run ID"),
+            stepNumber: z.number().describe("The step number to retrieve (1-based)"),
+            maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
+        }),
+        async execute(props: { runId: string; stepNumber: number; maxChars: number }) {
+            const rv = new RunView();
+            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID = '${props.runId}'`,
+                OrderBy: 'StepNumber',
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!stepsResult.Success) {
+                return JSON.stringify({ error: stepsResult.ErrorMessage });
+            }
+
+            const steps = stepsResult.Results || [];
+            if (props.stepNumber < 1 || props.stepNumber > steps.length) {
+                return JSON.stringify({ error: `Invalid step number. Run has ${steps.length} steps.` });
+            }
+
+            const step = steps[props.stepNumber - 1];
+            const inputData = truncateText(step.InputData, props.maxChars);
+            const outputData = truncateText(step.OutputData, props.maxChars);
+
+            const detail = {
+                stepNumber: step.StepNumber,
+                stepId: step.ID,
+                stepName: step.StepName,
+                stepType: step.StepType,
+                status: step.Status,
+                startedAt: step.StartedAt ? new Date(step.StartedAt).toISOString() : null,
+                completedAt: step.CompletedAt ? new Date(step.CompletedAt).toISOString() : null,
+                duration: step.CompletedAt && step.StartedAt
+                    ? new Date(step.CompletedAt).getTime() - new Date(step.StartedAt).getTime()
+                    : null,
+                input: {
+                    data: inputData.value,
+                    truncated: inputData.truncated,
+                    originalLength: step.InputData?.length || 0
+                },
+                output: {
+                    data: outputData.value,
+                    truncated: outputData.truncated,
+                    originalLength: step.OutputData?.length || 0
+                },
+                errorMessage: step.ErrorMessage || undefined
+            };
+
+            return JSON.stringify(detail);
+        }
+    });
+
+    // Tool 4: Get Agent Run Step Full Data
+    addToolWithFilter({
+        name: "Get_Agent_Run_Step_Full_Data",
+        description: "Export complete untruncated step data to JSON file for detailed analysis",
+        parameters: z.object({
+            runId: z.string().describe("The agent run ID"),
+            stepNumber: z.number().describe("The step number to retrieve (1-based)"),
+            outputFile: z.string().optional().describe("File path to write JSON output (optional)")
+        }),
+        async execute(props: { runId: string; stepNumber: number; outputFile?: string }) {
+            const rv = new RunView();
+            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID = '${props.runId}'`,
+                OrderBy: 'StepNumber',
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!stepsResult.Success) {
+                return JSON.stringify({ error: stepsResult.ErrorMessage });
+            }
+
+            const steps = stepsResult.Results || [];
+            if (props.stepNumber < 1 || props.stepNumber > steps.length) {
+                return JSON.stringify({ error: `Invalid step number. Run has ${steps.length} steps.` });
+            }
+
+            const step = steps[props.stepNumber - 1];
+            const stepData = step.GetAll();
+
+            // Determine output file path
+            const runIdShort = props.runId.substring(0, 8);
+            const defaultFile = `./agent-run-${runIdShort}-step-${props.stepNumber}.json`;
+            const filePath = path.resolve(process.cwd(), props.outputFile || defaultFile);
+
+            // Write to file
+            const jsonContent = JSON.stringify(stepData, null, 2);
+            await fs.writeFile(filePath, jsonContent, 'utf-8');
+
+            const response: Record<string, unknown> = {
+                success: true,
+                message: `Step data exported to file`,
+                filePath: filePath,
+                fileSize: jsonContent.length,
+                stepSummary: {
+                    stepNumber: step.StepNumber,
+                    stepName: step.StepName,
+                    status: step.Status,
+                    inputLength: step.InputData?.length || 0,
+                    outputLength: step.OutputData?.length || 0
+                }
+            };
+
+            // Include inline data if small enough
+            if (jsonContent.length < 10000) {
+                response.inlineData = stepData;
+                response.note = "Data included inline (file also saved)";
+            }
+
+            return JSON.stringify(response);
+        }
+    });
 }
 
 async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<AIAgentEntityExtended[]> {
@@ -327,7 +683,7 @@ async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<
 function addAgentExecuteTool(agent: AIAgentEntityExtended, contextUser: UserInfo) {
     const agentRunner = new AgentRunner();
     
-    server.addTool({
+    addToolWithFilter({
         name: `Execute_${(agent.Name || 'Unknown').replace(/\s+/g, '_')}_Agent`,
         description: `Execute the ${agent.Name || 'Unknown'} agent. ${agent.Description || ''}`,
         parameters: z.object({
@@ -433,7 +789,7 @@ function addEntityRunViewTool(entity: EntityInfo, contextUser: UserInfo) {
             return JSON.stringify(result);
         }
     };
-    server.addTool(toolConfig);
+    addToolWithFilter(toolConfig);
 }
 
 function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
@@ -457,7 +813,7 @@ function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    server.addTool(toolConfig);    
+    addToolWithFilter(toolConfig);    
 }
 
 function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
@@ -494,7 +850,7 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    server.addTool(toolConfig);    
+    addToolWithFilter(toolConfig);    
 }
 
 function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
@@ -525,7 +881,7 @@ function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    server.addTool(toolConfig);
+    addToolWithFilter(toolConfig);
 }
 
 
@@ -633,7 +989,7 @@ function addEntityGetTool(entity: EntityInfo, contextUser: UserInfo) {
             return await convertEntityObjectToJSON(record);
         }
     };
-    server.addTool(toolConfig);
+    addToolWithFilter(toolConfig);
 }
 function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: {
     get: boolean;
@@ -694,5 +1050,168 @@ function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: {
     return matchingEntities;
 }
 
-// Run the server
-initializeServer();
+/**
+ * List all available tools without starting the server
+ * This connects to the database to discover dynamic tools
+ */
+export async function listAvailableTools(filterOptions: ToolFilterOptions = {}) {
+    try {
+        if (!mcpServerSettings?.enableMCPServer) {
+            console.log("MCP Server is disabled in the configuration.");
+            return;
+        }
+
+        // Store filter options
+        activeFilterOptions = filterOptions;
+        registeredToolNames.length = 0;
+
+        // Initialize database connection to discover dynamic tools
+        const pool = new sql.ConnectionPool(poolConfig);
+        await pool.connect();
+
+        const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
+        await setupSQLServerClient(config);
+
+        // Register all tools (they won't actually be added to server, just tracked)
+        // We need to use a dummy filter that includes everything for listing
+        const listingFilterOptions = { ...filterOptions };
+        activeFilterOptions = {}; // Temporarily clear filters to get all tool names
+
+        // Add built-in tool
+        registeredToolNames.push("Get_All_Entities");
+
+        // Add agent run diagnostic tools
+        registeredToolNames.push("List_Recent_Agent_Runs");
+        registeredToolNames.push("Get_Agent_Run_Summary");
+        registeredToolNames.push("Get_Agent_Run_Step_Detail");
+        registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
+
+        const contextUser = UserCache.Instance.Users[0];
+
+        // Load tools to populate registeredToolNames
+        await loadEntityToolsForListing(contextUser);
+        await loadAgentToolsForListing(contextUser);
+
+        // Close database connection
+        await pool.close();
+
+        // Apply filters to the list if specified
+        let toolsToShow = registeredToolNames;
+        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+            activeFilterOptions = listingFilterOptions;
+            toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
+        }
+
+        // Sort tools alphabetically
+        toolsToShow.sort();
+
+        console.log("\n=== Available MCP Tools ===\n");
+
+        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+            console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
+        } else {
+            console.log(`Total tools: ${toolsToShow.length}\n`);
+        }
+
+        // Group tools by prefix for better readability
+        const toolGroups: Record<string, string[]> = {};
+        for (const tool of toolsToShow) {
+            const prefix = tool.split('_')[0];
+            if (!toolGroups[prefix]) {
+                toolGroups[prefix] = [];
+            }
+            toolGroups[prefix].push(tool);
+        }
+
+        // Print grouped tools
+        for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
+            console.log(`--- ${prefix} ---`);
+            for (const tool of tools) {
+                console.log(`  ${tool}`);
+            }
+            console.log();
+        }
+
+        console.log("Use --include and --exclude to filter tools when starting the server.");
+        console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+
+    } catch (error) {
+        console.error("Failed to list tools:", error);
+    }
+}
+
+/**
+ * Helper to load entity tools for listing (just collects names)
+ */
+async function loadEntityToolsForListing(contextUser: UserInfo) {
+    const entityTools = mcpServerSettings?.entityTools;
+
+    if (entityTools && entityTools.length > 0) {
+        const md = new Metadata();
+
+        entityTools.forEach((tool) => {
+            const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
+            matchingEntities.forEach((entity) => {
+                if (tool.get) {
+                    registeredToolNames.push(`Get_${entity.ClassName}_Record`);
+                }
+                if (tool.create) {
+                    registeredToolNames.push(`Create_${entity.ClassName}_Record`);
+                }
+                if (tool.update) {
+                    registeredToolNames.push(`Update_${entity.ClassName}_Record`);
+                }
+                if (tool.delete) {
+                    registeredToolNames.push(`Delete_${entity.ClassName}_Record`);
+                }
+                if (tool.runView) {
+                    registeredToolNames.push(`Run_${entity.ClassName}_View`);
+                }
+            });
+        });
+    }
+}
+
+/**
+ * Helper to load agent tools for listing (just collects names)
+ */
+async function loadAgentToolsForListing(contextUser: UserInfo) {
+    const agentTools = mcpServerSettings?.agentTools;
+
+    if (agentTools && agentTools.length > 0) {
+        const aiEngine = AIEngine.Instance;
+        await aiEngine.Config(false, contextUser);
+
+        const hasDiscovery = agentTools.some(tool => tool.discover);
+        if (hasDiscovery) {
+            registeredToolNames.push("Discover_Agents");
+        }
+
+        const hasExecute = agentTools.some(tool => tool.execute);
+        if (hasExecute) {
+            registeredToolNames.push("Run_Agent");
+        }
+
+        // Add specific agent execution tools
+        for (const tool of agentTools) {
+            const agentPattern = tool.agentName || "*";
+            const agents = await discoverAgents(agentPattern, contextUser);
+
+            for (const agent of agents) {
+                if (tool.execute) {
+                    registeredToolNames.push(`Execute_${(agent.Name || 'Unknown').replace(/\s+/g, '_')}_Agent`);
+                }
+            }
+        }
+
+        const hasStatus = agentTools.some(tool => tool.status);
+        if (hasStatus) {
+            registeredToolNames.push("Get_Agent_Run_Status");
+        }
+
+        const hasCancel = agentTools.some(tool => tool.cancel);
+        if (hasCancel) {
+            registeredToolNames.push("Cancel_Agent_Run");
+        }
+    }
+}

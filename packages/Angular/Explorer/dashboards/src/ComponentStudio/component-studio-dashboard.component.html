@@ -1,4 +1,4 @@
-<div class="component-studio">
+<div class="component-studio" kendoDialogContainer>
   <!-- Header -->
   <div class="dashboard-header">
     <div class="header-content">
@@ -179,7 +179,7 @@
         <div class="components-list">
           @if (isLoading) {
             <div class="loading-message">
-              <i class="fa-solid fa-spinner fa-spin"></i> Loading components...
+              <mj-loading text="Loading components..." size="small"></mj-loading>
             </div>
           } @else if (filteredComponents.length === 0) {
             <div class="empty-message">

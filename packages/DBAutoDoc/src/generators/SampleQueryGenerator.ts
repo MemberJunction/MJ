@@ -7,7 +7,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
-import * as fs from 'fs/promises';
 import {
   SampleQuery,
   SampleQueryGenerationResult,
@@ -23,7 +22,8 @@ import {
   QueryPlan,
   QuerySQL
 } from '../types/sample-queries.js';
-import { SchemaDefinition, TableDefinition } from '../types/state.js';
+import { SchemaDefinition, TableDefinition, DatabaseDocumentation } from '../types/state.js';
+import { StateManager } from '../state/StateManager.js';
 
 interface QueryGenerationPromptResponse {
   queries: Array<{
@@ -68,6 +68,56 @@ interface QueryGenerationPromptResponse {
   }>;
 }
 
+interface QueryFixResponse extends QuerySQL {
+  fixExplanation?: string;
+}
+
+interface QueryFixContext {
+  schema: SchemaDefinition;
+  focusTable: TableDefinition;
+  queryPlan: QueryPlan;
+  currentSQL: string;
+  errorMessage: string;
+  attemptNumber: number;
+  maxAttempts: number;
+  previousAttempts: Array<{ sql: string; error: string }>;
+}
+
+interface QueryRefinementResponse {
+  decision: 'KEEP' | 'REFINE';
+  analysis: string;
+  issues: string[];
+  refinedQuery?: QuerySQL;
+  refinementExplanation?: string;
+}
+
+interface QueryRefinementContext {
+  schema: SchemaDefinition;
+  focusTable: TableDefinition;
+  queryPlan: QueryPlan;
+  currentSQL: string;
+  parameters: Array<{
+    name: string;
+    dataType: string;
+    description: string;
+    required: boolean;
+    defaultValue?: string;
+    exampleValues: string[];
+  }>;
+  sampleResultColumns: Array<{
+    name: string;
+    dataType: string;
+    description: string;
+    isMeasure: boolean;
+    isDimension: boolean;
+  }>;
+  sampleRows: Record<string, unknown>[];
+  totalRows: number;
+  refinementNumber: number;
+  maxRefinements: number;
+  previousRefinements: Array<{ sql: string; feedback: string }>;
+}
+
 export class SampleQueryGenerator {
   private totalTokensUsed: number = 0;
   private totalCost: number = 0;
@@ -78,10 +128,9 @@ export class SampleQueryGenerator {
     private promptEngine: PromptEngine,
     private driver: BaseAutoDocDriver,
     private model: string,
+    private stateManager: StateManager,  // StateManager for incremental writes
     private effortLevel?: number,
-    private maxTokens: number = 16000,  // Default from typical AI config
-    private outputFilePath?: string,  // Optional path for incremental query writes
-    private summaryFilePath?: string  // Optional path for incremental summary writes
+    private maxTokens: number = 16000  // Default from typical AI config
   ) {}
 
   public async generateQueries(
@@ -91,38 +140,90 @@ export class SampleQueryGenerator {
     this.totalTokensUsed = 0;
     this.totalCost = 0;
 
-    const allQueries: SampleQuery[] = [];
-    const summary: SampleQueryGenerationSummary = {
-      totalQueriesGenerated: 0,
-      queriesValidated: 0,
-      queriesFailed: 0,
-      totalExecutionTime: 0,
+    const state = await this.stateManager.load();
+    if (!state) {
+      throw new Error('Failed to load state from StateManager');
+    }
+
+    const startedAt = new Date().toISOString();
+
+    // Initialize deliverable and phase tracking
+    if (!state.sampleQueries) {
+      state.sampleQueries = {
+        generatedAt: startedAt,
+        status: 'partial',
+        queries: [],
+        summary: {
+          totalQueriesGenerated: 0,
+          queriesValidated: 0,
+          queriesFailed: 0,
+          totalExecutionTime: 0,
+          tokensUsed: 0,
+          estimatedCost: 0,
+          averageConfidence: 0,
+          queriesByType: {} as Record<QueryType, number>,
+          queriesByPattern: {} as Record<QueryPattern, number>,
+          queriesByComplexity: {} as Record<QueryComplexity, number>
+        },
+        modelUsed: this.model
+      };
+    } else {
+      // Reset for a new run
+      state.sampleQueries.generatedAt = startedAt;
+      state.sampleQueries.status = 'partial';
+      state.sampleQueries.queries = [];
+      state.sampleQueries.modelUsed = this.model;
+    }
+
+    // Track phase metadata
+    state.phases.queryGeneration = {
+      startedAt,
+      status: 'running',
+      queriesGenerated: 0,
       tokensUsed: 0,
-      estimatedCost: 0,
-      averageConfidence: 0,
-      queriesByType: {} as Record<QueryType, number>,
-      queriesByPattern: {} as Record<QueryPattern, number>,
-      queriesByComplexity: {} as Record<QueryComplexity, number>
+      estimatedCost: 0
     };
 
     try {
       for (const schema of schemas) {
         LogStatus(`[SampleQueryGenerator] Generating queries for schema: ${schema.name}`);
 
-        const schemaQueries = await this.generateQueriesForSchema(schema, allQueries);
-        allQueries.push(...schemaQueries);
+        const schemaQueries = await this.generateQueriesForSchema(schema, state.sampleQueries.queries);
+        state.sampleQueries.queries.push(...schemaQueries);
       }
 
-      summary.totalQueriesGenerated = allQueries.length;
-      summary.queriesValidated = allQueries.filter(q => q.validated).length;
-      summary.queriesFailed = allQueries.filter(q => !q.validated).length;
-      summary.totalExecutionTime = Date.now() - this.startTime;
-      summary.tokensUsed = this.totalTokensUsed;
-      summary.estimatedCost = this.totalCost;
-      summary.averageConfidence =
-        allQueries.reduce((sum, q) => sum + q.confidence, 0) / allQueries.length;
+      // Update deliverable summary
+      const allQueries = state.sampleQueries.queries;
+      const summary: SampleQueryGenerationSummary = {
+        totalQueriesGenerated: allQueries.length,
+        queriesValidated: allQueries.filter(q => q.validated).length,
+        queriesFailed: allQueries.filter(q => !q.validated).length,
+        totalExecutionTime: Date.now() - this.startTime,
+        tokensUsed: this.totalTokensUsed,
+        estimatedCost: this.totalCost,
+        averageConfidence: allQueries.length > 0
+          ? allQueries.reduce((sum, q) => sum + q.confidence, 0) / allQueries.length
+          : 0,
+        queriesByType: {} as Record<QueryType, number>,
+        queriesByPattern: {} as Record<QueryPattern, number>,
+        queriesByComplexity: {} as Record<QueryComplexity, number>
+      };
 
       this.aggregateQueryMetrics(allQueries, summary);
+
+      // Mark deliverable as completed
+      state.sampleQueries.summary = summary;
+      state.sampleQueries.status = 'completed';
+
+      // Mark phase as completed
+      state.phases.queryGeneration.status = 'completed';
+      state.phases.queryGeneration.completedAt = new Date().toISOString();
+      state.phases.queryGeneration.queriesGenerated = allQueries.length;
+      state.phases.queryGeneration.tokensUsed = this.totalTokensUsed;
+      state.phases.queryGeneration.estimatedCost = this.totalCost;
+
+      // Save final state
+      await this.stateManager.save(state);
 
       return {
         success: true,
@@ -131,9 +232,38 @@ export class SampleQueryGenerator {
       };
     } catch (error) {
       LogError(`[SampleQueryGenerator] Failed to generate queries: ${(error as Error).message}`);
+
+      // Mark deliverable and phase as failed
+      const errorState = await this.stateManager.load();
+      if (errorState) {
+        if (errorState.sampleQueries) {
+          errorState.sampleQueries.status = 'failed';
+        }
+        if (errorState.phases.queryGeneration) {
+          errorState.phases.queryGeneration.status = 'failed';
+          errorState.phases.queryGeneration.errorMessage = (error as Error).message;
+          errorState.phases.queryGeneration.completedAt = new Date().toISOString();
+        }
+        await this.stateManager.save(errorState);
+      }
+
+      const queries = errorState?.sampleQueries?.queries || [];
+      const summary = errorState?.sampleQueries?.summary || {
+          totalQueriesGenerated: 0,
+          queriesValidated: 0,
+          queriesFailed: 0,
+          totalExecutionTime: 0,
+          tokensUsed: 0,
+          estimatedCost: 0,
+          averageConfidence: 0,
+          queriesByType: {} as Record<QueryType, number>,
+          queriesByPattern: {} as Record<QueryPattern, number>,
+          queriesByComplexity: {} as Record<QueryComplexity, number>
+        };
+
       return {
         success: false,
-        queries: allQueries,
+        queries,
         summary,
         errorMessage: (error as Error).message
       };
@@ -163,8 +293,8 @@ export class SampleQueryGenerator {
         );
         queries.push(...tableQueries);
 
-        // Write incrementally after each table if output path is provided
-        if ((this.outputFilePath || this.summaryFilePath) && tableQueries.length > 0) {
+        // Write incrementally after each table
+        if (tableQueries.length > 0) {
           await this.writeIncrementalOutput(existingQueries.concat(queries));
         }
       } catch (error) {
@@ -258,9 +388,9 @@ export class SampleQueryGenerator {
           modelUsed: this.model
         };
 
-        // Validate the query if enabled
+        // Process the query through validation, fixing, and refinement
         if (this.config.maxExecutionTime > 0) {
-          await this.validateQuery(completeQuery);
+          await this.processQueryGeneration(completeQuery, schema, focusTable, plan);
         }
 
         queries.push(completeQuery);
@@ -528,7 +658,249 @@ export class SampleQueryGenerator {
     return queries;
   }
 
-  private async validateQuery(query: SampleQuery): Promise<void> {
+  /**
+   * Main query processing loop: validate → fix → refine → repeat
+   * Uses a do-while pattern where refinement loops back to validation
+   */
+  private async processQueryGeneration(
+    query: SampleQuery,
+    schema: SchemaDefinition,
+    focusTable: TableDefinition,
+    queryPlan: QueryPlan
+  ): Promise<void> {
+    const enableRefinement = this.config.enableQueryRefinement === true;
+    const maxRefinements = this.config.maxRefinementAttempts ?? 1;
+
+    // Initialize tracking
+    query.fixAttempts = 0;
+    query.fixHistory = [];
+    query.refinementAttempts = 0;
+    query.refinementHistory = [];
+    query.wasRefined = false;
+
+    let refinementsUsed = 0;
+    let bestSuccessfulQuery: SampleQuery | null = null;
+    const previousRefinements: Array<{ sql: string; feedback: string }> = [];
+
+    // Main loop: validate/fix → refine → repeat
+    do {
+      // Step 1: Validate with fix attempts
+      const validationSuccess = await this.validateWithFixAttempts(query, schema, focusTable, queryPlan);
+
+      if (!validationSuccess) {
+        // If we have a previous successful version, restore it
+        if (bestSuccessfulQuery) {
+          LogError(`[SampleQueryGenerator] Refined query failed validation, restoring previous version: ${query.name}`);
+          this.restoreQueryState(query, bestSuccessfulQuery);
+          return;
+        }
+        // No successful version exists - query generation failed entirely
+        LogError(`[SampleQueryGenerator] Query generation failed for: ${query.name}`);
+        return;
+      }
+
+      // Save this successful version
+      bestSuccessfulQuery = this.copyQueryState(query);
+
+      // Step 2: Check if we should attempt refinement
+      if (!enableRefinement || refinementsUsed >= maxRefinements) {
+        // No more refinements - we're done
+        return;
+      }
+
+      // Step 3: Attempt refinement
+      if (!query.sampleResultRows || query.sampleResultRows.length === 0) {
+        LogStatus(`[SampleQueryGenerator] Skipping refinement for ${query.name} - no sample results`);
+        return;
+      }
+
+      LogStatus(`[SampleQueryGenerator] Analyzing results for refinement: ${query.name} (attempt ${refinementsUsed + 1}/${maxRefinements})`);
+
+      try {
+        const refinementResult = await this.analyzeAndRefineQuery({
+          schema,
+          focusTable,
+          queryPlan,
+          currentSQL: query.sqlQuery,
+          parameters: query.parameters,
+          sampleResultColumns: query.sampleResultColumns,
+          sampleRows: query.sampleResultRows,
+          totalRows: query.sampleResultRows.length,
+          refinementNumber: refinementsUsed + 1,
+          maxRefinements,
+          previousRefinements
+        });
+
+        refinementsUsed++;
+        query.refinementAttempts = refinementsUsed;
+
+        if (refinementResult.decision === 'KEEP') {
+          LogStatus(`[SampleQueryGenerator] ✓ Query results look good, keeping: ${query.name}`);
+          LogStatus(`[SampleQueryGenerator] Analysis: ${refinementResult.analysis}`);
+          return;
+        }
+
+        // Decision is REFINE
+        if (!refinementResult.refinedQuery) {
+          LogError(`[SampleQueryGenerator] Refinement requested but no refined query provided for: ${query.name}`);
+          return;
+        }
+
+        // Record the previous version
+        previousRefinements.push({
+          sql: query.sqlQuery,
+          feedback: refinementResult.analysis
+        });
+        query.refinementHistory = [...previousRefinements];
+
+        // Update query with refined SQL
+        this.applyRefinedSQL(query, refinementResult.refinedQuery);
+        query.wasRefined = true;
+
+        LogStatus(`[SampleQueryGenerator] Refinement: ${refinementResult.refinementExplanation}`);
+
+        // Loop back to validation with the refined query
+
+      } catch (error) {
+        LogError(`[SampleQueryGenerator] Refinement attempt ${refinementsUsed + 1} failed for ${query.name}: ${(error as Error).message}`);
+        return;
+      }
+
+    } while (refinementsUsed < maxRefinements);
+  }
+
+  /**
+   * Validate a query and attempt to fix it if validation fails
+   * Returns true if validation ultimately succeeds, false otherwise
+   */
+  private async validateWithFixAttempts(
+    query: SampleQuery,
+    schema: SchemaDefinition,
+    focusTable: TableDefinition,
+    queryPlan: QueryPlan
+  ): Promise<boolean> {
+    const enableFix = this.config.enableQueryFix !== false;
+    const maxAttempts = this.config.maxFixAttempts ?? 3;
+
+    // Initial validation
+    const validationResult = await this.executeValidation(query);
+
+    if (validationResult.success) {
+      return true;
+    }
+
+    // If fix is disabled, fail immediately
+    if (!enableFix || maxAttempts <= 0) {
+      query.validated = false;
+      query.validationError = validationResult.errorMessage;
+      LogError(`[SampleQueryGenerator] Query validation failed: ${query.name} - ${query.validationError}`);
+      return false;
+    }
+
+    // Attempt to fix the query
+    let currentSQL = query.sqlQuery;
+    let currentError = validationResult.errorMessage;
+    const previousAttempts: Array<{ sql: string; error: string }> = [];
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      LogStatus(`[SampleQueryGenerator] Attempting to fix query: ${query.name} (attempt ${attempt}/${maxAttempts})`);
+
+      // Record the failed attempt
+      previousAttempts.push({ sql: currentSQL, error: currentError });
+      query.fixHistory = [...previousAttempts];
+      query.fixAttempts = attempt;
+
+      try {
+        // Get fixed SQL from LLM
+        const fixedSQL = await this.fixQuery({
+          schema,
+          focusTable,
+          queryPlan,
+          currentSQL,
+          errorMessage: currentError,
+          attemptNumber: attempt,
+          maxAttempts,
+          previousAttempts
+        });
+
+        // Update query with fixed SQL
+        this.applyRefinedSQL(query, fixedSQL);
+
+        // Validate the fixed query
+        const fixValidation = await this.executeValidation(query);
+
+        if (fixValidation.success) {
+          LogStatus(`[SampleQueryGenerator] ✓ Query fixed successfully on attempt ${attempt}: ${query.name}`);
+          return true;
+        }
+
+        // Update for next attempt
+        currentSQL = query.sqlQuery;
+        currentError = fixValidation.errorMessage;
+
+      } catch (error) {
+        LogError(`[SampleQueryGenerator] Fix attempt ${attempt} failed for ${query.name}: ${(error as Error).message}`);
+        currentError = (error as Error).message;
+      }
+    }
+
+    // All fix attempts failed
+    query.validated = false;
+    query.validationError = currentError;
+    LogError(`[SampleQueryGenerator] Query could not be fixed after ${maxAttempts} attempts: ${query.name}`);
+    return false;
+  }
+
+  /**
+   * Apply refined/fixed SQL to a query object
+   */
+  private applyRefinedSQL(query: SampleQuery, refinedSQL: QuerySQL): void {
+    query.sqlQuery = refinedSQL.sqlQuery;
+    query.parameters = refinedSQL.parameters;
+    query.sampleResultColumns = refinedSQL.sampleResultColumns;
+    query.filteringRules = refinedSQL.filteringRules;
+    query.aggregationRules = refinedSQL.aggregationRules;
+    query.joinRules = refinedSQL.joinRules;
+    if (refinedSQL.alignmentNotes) {
+      query.alignmentNotes = refinedSQL.alignmentNotes;
+    }
+  }
+
+  /**
+   * Copy query state for backup purposes
+   */
+  private copyQueryState(query: SampleQuery): SampleQuery {
+    return {
+      ...query,
+      parameters: [...query.parameters],
+      sampleResultColumns: [...query.sampleResultColumns],
+      sampleResultRows: [...query.sampleResultRows],
+      filteringRules: [...query.filteringRules],
+      aggregationRules: [...query.aggregationRules],
+      joinRules: [...query.joinRules]
+    };
+  }
+
+  /**
+   * Restore query state from a backup
+   */
+  private restoreQueryState(query: SampleQuery, backup: SampleQuery): void {
+    query.sqlQuery = backup.sqlQuery;
+    query.parameters = backup.parameters;
+    query.sampleResultColumns = backup.sampleResultColumns;
+    query.sampleResultRows = backup.sampleResultRows;
+    query.filteringRules = backup.filteringRules;
+    query.aggregationRules = backup.aggregationRules;
+    query.joinRules = backup.joinRules;
+    query.alignmentNotes = backup.alignmentNotes;
+    query.validated = backup.validated;
+    query.executionTime = backup.executionTime;
+  }
+
+  /**
+   * Execute validation on a query and return result
+   */
+  private async executeValidation(query: SampleQuery): Promise<{ success: boolean; errorMessage: string }> {
     try {
       const validationQuery = this.prepareValidationQuery(query.sqlQuery);
 
@@ -544,15 +916,117 @@ export class SampleQueryGenerator {
         LogStatus(
           `[SampleQueryGenerator] Query validated: ${query.name} (${executionTime}ms, ${result.data.length} rows)`
         );
+        return { success: true, errorMessage: '' };
       } else {
-        query.validated = false;
-        query.validationError = result.errorMessage || 'Query returned no results';
-        LogError(`[SampleQueryGenerator] Query validation failed: ${query.name} - ${query.validationError}`);
+        const errorMessage = result.errorMessage || 'Query returned no results';
+        return { success: false, errorMessage };
       }
     } catch (error) {
+      return { success: false, errorMessage: (error as Error).message };
+    }
+  }
+
+  /**
+   * Use LLM to fix a failed query
+   */
+  private async fixQuery(context: QueryFixContext): Promise<QuerySQL> {
+    const relatedTables = this.getRelatedTables(context.schema, context.focusTable);
+    const focusTableContext = this.convertToTableContext(context.focusTable);
+    const relatedTablesContext = relatedTables.map(t => this.convertToTableContext(t));
+
+    const promptContext = {
+      schemaName: context.schema.name,
+      databaseType: this.getDatabaseType(),
+      focusTable: context.focusTable.name,
+      tableInfo: focusTableContext,
+      relatedTables: relatedTablesContext,
+      queryPlan: context.queryPlan,
+      currentSQL: context.currentSQL,
+      errorMessage: context.errorMessage,
+      attemptNumber: context.attemptNumber,
+      maxAttempts: context.maxAttempts,
+      previousAttempts: context.previousAttempts
+    };
+
+    const result = await this.promptEngine.executePrompt<QueryFixResponse>(
+      'query-fix',
+      promptContext,
+      {
+        responseFormat: 'JSON',
+        maxTokens: this.maxTokens
+      }
+    );
+
+    this.totalTokensUsed += result.tokensUsed;
+    this.totalCost += result.cost || 0;
+
+    if (!result.success || !result.result) {
+      throw new Error(`Query fix failed: ${result.errorMessage || 'Unknown error'}`);
+    }
+
+    if (result.result.fixExplanation) {
+      LogStatus(`[SampleQueryGenerator] Fix explanation: ${result.result.fixExplanation}`);
+    }
+
+    return result.result;
+  }
+
+  /**
+   * Use LLM to analyze query results and suggest refinements
+   */
+  private async analyzeAndRefineQuery(context: QueryRefinementContext): Promise<QueryRefinementResponse> {
+    const relatedTables = this.getRelatedTables(context.schema, context.focusTable);
+    const focusTableContext = this.convertToTableContext(context.focusTable);
+    const relatedTablesContext = relatedTables.map(t => this.convertToTableContext(t));
+
+    // Get column names from sample results
+    const resultColumnNames = context.sampleRows.length > 0
+      ? Object.keys(context.sampleRows[0])
+      : context.sampleResultColumns.map(c => c.name);
+
+    const promptContext = {
+      schemaName: context.schema.name,
+      databaseType: this.getDatabaseType(),
+      focusTable: context.focusTable.name,
+      tableInfo: focusTableContext,
+      relatedTables: relatedTablesContext,
+      queryPlan: context.queryPlan,
+      currentSQL: context.currentSQL,
+      parameters: context.parameters,
+      sampleResultColumns: context.sampleResultColumns,
+      sampleRows: context.sampleRows,
+      totalRows: context.totalRows,
+      resultColumnNames,
+      refinementNumber: context.refinementNumber,
+      maxRefinements: context.maxRefinements,
+      previousRefinements: context.previousRefinements
+    };
+
+    const result = await this.promptEngine.executePrompt<QueryRefinementResponse>(
+      'query-refinement',
+      promptContext,
+      {
+        responseFormat: 'JSON',
+        maxTokens: this.maxTokens
+      }
+    );
+
+    this.totalTokensUsed += result.tokensUsed;
+    this.totalCost += result.cost || 0;
+
+    if (!result.success || !result.result) {
+      throw new Error(`Query refinement failed: ${result.errorMessage || 'Unknown error'}`);
+    }
+
+    return result.result;
+  }
+
+  private async validateQuery(query: SampleQuery): Promise<void> {
+    const validationResult = await this.executeValidation(query);
+    if (!validationResult.success) {
       query.validated = false;
-      query.validationError = (error as Error).message;
-      LogError(`[SampleQueryGenerator] Query execution error: ${query.name} - ${query.validationError}`);
+      query.validationError = validationResult.errorMessage;
+      LogError(`[SampleQueryGenerator] Query validation failed: ${query.name} - ${query.validationError}`);
     }
   }
 
@@ -627,31 +1101,35 @@ export class SampleQueryGenerator {
   }
 
   /**
-   * Write queries and summary to files incrementally after each table completes
+   * Write queries and summary to state incrementally after each table completes
    * This allows users to cancel the run and still see completed queries and progress
    */
   private async writeIncrementalOutput(queries: SampleQuery[]): Promise<void> {
     try {
-      // Write queries if path is provided
-      if (this.outputFilePath) {
-        await fs.writeFile(
-          this.outputFilePath,
-          JSON.stringify(queries, null, 2),
-          'utf-8'
-        );
-        LogStatus(`[SampleQueryGenerator] Wrote ${queries.length} queries to ${this.outputFilePath}`);
+      const state = await this.stateManager.load();
+
+      if (!state || !state.sampleQueries) {
+        return; // Should not happen, but safeguard
       }
 
-      // Calculate and write summary if path is provided
-      if (this.summaryFilePath) {
-        const summary = this.calculateSummary(queries);
-        await fs.writeFile(
-          this.summaryFilePath,
-          JSON.stringify(summary, null, 2),
-          'utf-8'
-        );
-        LogStatus(`[SampleQueryGenerator] Updated summary: ${summary.totalQueriesGenerated} queries, ${summary.queriesValidated} validated`);
+      // Update deliverable queries
+      state.sampleQueries.queries = queries;
+
+      // Calculate and update summary
+      const summary = this.calculateSummary(queries);
+      state.sampleQueries.summary = summary;
+
+      // Update phase tracking
+      if (state.phases.queryGeneration) {
+        state.phases.queryGeneration.queriesGenerated = queries.length;
+        state.phases.queryGeneration.tokensUsed = this.totalTokensUsed;
+        state.phases.queryGeneration.estimatedCost = this.totalCost;
       }
+
+      // Save state
+      await this.stateManager.save(state);
+
+      LogStatus(`[SampleQueryGenerator] Updated state: ${summary.totalQueriesGenerated} queries, ${summary.queriesValidated} validated`);
     } catch (error) {
       LogError(`[SampleQueryGenerator] Failed to write incremental output: ${(error as Error).message}`);
     }

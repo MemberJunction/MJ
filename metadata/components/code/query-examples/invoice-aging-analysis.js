@@ -1,0 +1,814 @@
+function InvoiceAgingAnalysis({
+  utilities,
+  styles,
+  components,
+  callbacks,
+  savedUserSettings,
+  onSaveUserSettings,
+  onBucketClick = null,
+  onAccountClick = null,
+  onInvoiceClick = null
+}) {
+  // Pending filter state (user input)
+  const [pendingMinOutstanding, setPendingMinOutstanding] = useState(0);
+  const [pendingAccountType, setPendingAccountType] = useState(null);
+  const [pendingMonthsBack, setPendingMonthsBack] = useState(12);
+  const [pendingPaymentMethod, setPendingPaymentMethod] = useState(null);
+  const [pendingTopN, setPendingTopN] = useState(10);
+
+  // Applied filter state (active filters)
+  const [appliedMinOutstanding, setAppliedMinOutstanding] = useState(0);
+  const [appliedAccountType, setAppliedAccountType] = useState(null);
+  const [appliedMonthsBack, setAppliedMonthsBack] = useState(12);
+  const [appliedPaymentMethod, setAppliedPaymentMethod] = useState(null);
+  const [appliedTopN, setAppliedTopN] = useState(10);
+
+  // Data state
+  const [rawInvoices, setRawInvoices] = useState([]);
+  const [agingData, setAgingData] = useState([]);
+  const [paymentTrendsData, setPaymentTrendsData] = useState([]);
+  const [topAccountsData, setTopAccountsData] = useState([]);
+
+  // Selection state
+  const [selectedSegment, setSelectedSegment] = useState(null);
+  const [drilldownData, setDrilldownData] = useState(null);
+  const [loadingDrilldown, setLoadingDrilldown] = useState(false);
+
+  // UI state
+  const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState({});
+
+  // Get components from registry
+  const { SimpleChart, DataGrid } = components;
+
+  // Get D3 from utilities library unwrapper
+  // D3 is loaded by library loader and available in closure scope
+  const d3Lib = React.useMemo(() => {
+    return utilities?.unwrapLibraryComponents?.(d3, 'd3') || d3;
+  }, [utilities]);
+
+  // Ref for D3 aging bucket visualization
+  const agingChartRef = useRef(null);
+
+  /**
+   * Fill in missing months with zero values and format labels with month + year
+   * Ensures chart always shows all months in the requested range, even if no data exists
+   */
+  const fillMissingMonths = (data, monthsBack) => {
+    const result = [];
+    const today = new Date();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Create map of existing data by year-month
+    const dataMap = new Map();
+    data.forEach(item => {
+      // Query returns Year and Month fields (e.g., Year=2025, Month=1)
+      const key = `${item.Year}-${item.Month}`;
+      dataMap.set(key, item);
+    });
+
+    // Generate all months in range
+    for (let i = monthsBack - 1; i >= 0; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1; // JavaScript months are 0-indexed, query returns 1-indexed
+      const key = `${year}-${month}`;
+      const monthLabel = `${monthNames[date.getMonth()]} ${year}`;
+
+      if (dataMap.has(key)) {
+        // Use existing data but update label to include year
+        const existing = dataMap.get(key);
+        result.push({
+          ...existing,
+          MonthName: monthLabel
+        });
+      } else {
+        // Fill missing month with zeros
+        result.push({
+          Year: year,
+          Month: month,
+          MonthName: monthLabel,
+          PaymentCount: 0,
+          TotalPaid: 0,
+          AvgPayment: 0,
+          AvgDaysToPayment: 0,
+          UniqueAccounts: 0
+        });
+      }
+    }
+
+    return result;
+  };
+
+  /**
+   * ARCHITECTURAL DECISION: Client-Side Aggregation
+   *
+   * This component follows MemberJunction's best practice pattern:
+   * - SQL returns raw data (invoices with DaysOverdue calculated)
+   * - JavaScript aggregates into aging buckets
+   *
+   * Benefits:
+   * - Simpler SQL queries that are easier to maintain
+   * - Flexible bucket definitions that can change without SQL updates
+   * - Raw data available for multiple visualizations
+   * - Better performance through in-memory aggregation
+   * - Business logic stays in JavaScript where it's more testable
+   */
+  const aggregateIntoAgingBuckets = (invoices) => {
+    const buckets = {};
+
+    // Group invoices by aging period
+    invoices.forEach(inv => {
+      const bucket =
+        inv.DaysOverdue < 0 ? 'Not Yet Due' :
+        inv.DaysOverdue < 30 ? '0-30 days' :
+        inv.DaysOverdue < 60 ? '30-60 days' :
+        inv.DaysOverdue < 90 ? '60-90 days' : '90+ days';
+
+      if (!buckets[bucket]) {
+        buckets[bucket] = { invoices: [], totalOutstanding: 0, totalDaysOverdue: 0 };
+      }
+      buckets[bucket].invoices.push(inv);
+      buckets[bucket].totalOutstanding += inv.BalanceDue;
+      buckets[bucket].totalDaysOverdue += inv.DaysOverdue;
+    });
+
+    // Convert to array format for chart
+    return Object.entries(buckets).map(([bucket, data]) => ({
+      AgeBucket: bucket,
+      InvoiceCount: data.invoices.length,
+      TotalOutstanding: data.totalOutstanding,
+      AvgDaysOverdue: Math.round(data.totalDaysOverdue / data.invoices.length),
+      AvgOutstanding: data.totalOutstanding / data.invoices.length
+    })).sort((a, b) => {
+      // Sort by aging progression (Not Yet Due → 0-30 → 30-60 → 60-90 → 90+)
+      const order = {'Not Yet Due': 0, '0-30 days': 1, '30-60 days': 2, '60-90 days': 3, '90+ days': 4};
+      return order[a.AgeBucket] - order[b.AgeBucket];
+    });
+  };
+
+  // Load initial 3 queries when applied filters change
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      setErrors({});
+
+      // Clear selections when filters change
+      setSelectedSegment(null);
+
+      try {
+        // Execute first 3 queries in parallel
+        const [invoicesResult, trendsResult, topAccountsResult] = await Promise.all([
+          utilities.rq.RunQuery({
+            QueryName: 'Outstanding Invoices',
+            CategoryPath: 'Demo',
+            Parameters: {
+              MinOutstanding: appliedMinOutstanding,
+              AccountType: appliedAccountType
+            }
+          }),
+          utilities.rq.RunQuery({
+            QueryName: 'Payment Trends',
+            CategoryPath: 'Demo',
+            Parameters: {
+              MonthsBack: appliedMonthsBack,
+              PaymentMethod: appliedPaymentMethod,
+              AccountType: appliedAccountType
+            }
+          }),
+          utilities.rq.RunQuery({
+            QueryName: 'Top Accounts by Outstanding',
+            CategoryPath: 'Demo',
+            Parameters: {
+              TopN: appliedTopN,
+              MinOutstanding: appliedMinOutstanding,
+              AccountType: appliedAccountType
+            }
+          })
+        ]);
+
+        // Process outstanding invoices result and aggregate into aging buckets
+        if (invoicesResult && invoicesResult.Success && invoicesResult.Results) {
+          const rawData = invoicesResult.Results;
+          setRawInvoices(rawData);
+
+          // Aggregate raw invoices into aging buckets client-side
+          const aggregatedData = aggregateIntoAgingBuckets(rawData);
+          setAgingData(aggregatedData);
+        } else {
+          setErrors(prev => ({ ...prev, aging: invoicesResult?.ErrorMessage || 'Failed to load invoice data' }));
+        }
+
+        // Process payment trends result
+        if (trendsResult && trendsResult.Success && trendsResult.Results) {
+          // Fill in missing months and add year to labels
+          const filledData = fillMissingMonths(trendsResult.Results, appliedMonthsBack);
+          setPaymentTrendsData(filledData);
+        } else {
+          setErrors(prev => ({ ...prev, trends: trendsResult?.ErrorMessage || 'Failed to load payment trends' }));
+        }
+
+        // Process top accounts result
+        if (topAccountsResult && topAccountsResult.Success && topAccountsResult.Results) {
+          setTopAccountsData(topAccountsResult.Results);
+        } else {
+          setErrors(prev => ({ ...prev, topAccounts: topAccountsResult?.ErrorMessage || 'Failed to load top accounts' }));
+        }
+      } catch (err) {
+        console.error('Error loading invoice aging data:', err);
+        setErrors({ general: err.message || 'An unexpected error occurred' });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [appliedMinOutstanding, appliedAccountType, appliedMonthsBack, appliedPaymentMethod, appliedTopN]);
+
+  // Render D3 aging bucket visualization when agingData changes
+  useEffect(() => {
+    if (!agingChartRef.current || !agingData || agingData.length === 0 || !d3Lib) {
+      return;
+    }
+
+    // Clear previous chart
+    d3Lib.select(agingChartRef.current).selectAll('*').remove();
+
+    // Chart dimensions
+    const margin = { top: 20, right: 30, bottom: 60, left: 80 };
+    const width = 700 - margin.left - margin.right;
+    const height = 350 - margin.top - margin.bottom;
+
+    // Create SVG
+    const svg = d3Lib.select(agingChartRef.current)
+      .append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Color scale - green → yellow → red based on aging severity
+    const colorScale = d3Lib.scaleOrdinal()
+      .domain(['Not Yet Due', '0-30 days', '30-60 days', '60-90 days', '90+ days'])
+      .range(['#10B981', '#F59E0B', '#EF4444', '#DC2626', '#991B1B']);
+
+    // X scale
+    const x = d3Lib.scaleBand()
+      .domain(agingData.map(d => d.AgeBucket))
+      .range([0, width])
+      .padding(0.2);
+
+    // Y scale
+    const maxValue = d3Lib.max(agingData, d => d.TotalOutstanding);
+    const y = d3Lib.scaleLinear()
+      .domain([0, maxValue * 1.1])
+      .range([height, 0]);
+
+    // Add X axis
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3Lib.axisBottom(x))
+      .selectAll('text')
+      .style('text-anchor', 'end')
+      .attr('dx', '-.8em')
+      .attr('dy', '.15em')
+      .attr('transform', 'rotate(-45)')
+      .style('font-size', '12px');
+
+    // Add Y axis
+    svg.append('g')
+      .call(d3Lib.axisLeft(y).ticks(6).tickFormat(d => '$' + d3Lib.format(',')(d)))
+      .style('font-size', '12px');
+
+    // Add Y axis label
+    svg.append('text')
+      .attr('transform', 'rotate(-90)')
+      .attr('y', 0 - margin.left + 20)
+      .attr('x', 0 - (height / 2))
+      .attr('dy', '1em')
+      .style('text-anchor', 'middle')
+      .style('font-size', '12px')
+      .style('fill', '#666')
+      .text('Total Outstanding ($)');
+
+    // Add bars with click handling
+    svg.selectAll('.bar')
+      .data(agingData)
+      .enter()
+      .append('rect')
+      .attr('class', 'bar')
+      .attr('x', d => x(d.AgeBucket))
+      .attr('y', d => y(d.TotalOutstanding))
+      .attr('width', x.bandwidth())
+      .attr('height', d => height - y(d.TotalOutstanding))
+      .attr('fill', d => colorScale(d.AgeBucket))
+      .attr('opacity', 0.8)
+      .style('cursor', 'pointer')
+      .on('mouseover', function(event, d) {
+        d3Lib.select(this).attr('opacity', 1);
+      })
+      .on('mouseout', function(event, d) {
+        d3Lib.select(this).attr('opacity', 0.8);
+      })
+      .on('click', function(event, d) {
+        // Call handleBucketClick with compatible format
+        handleBucketClick({
+          label: d.AgeBucket,
+          value: d.TotalOutstanding,
+          records: [] // D3 doesn't track individual records
+        });
+      });
+
+    // Add value labels on bars
+    svg.selectAll('.label')
+      .data(agingData)
+      .enter()
+      .append('text')
+      .attr('class', 'label')
+      .attr('x', d => x(d.AgeBucket) + x.bandwidth() / 2)
+      .attr('y', d => y(d.TotalOutstanding) - 5)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '11px')
+      .style('font-weight', 'bold')
+      .style('fill', '#333')
+      .text(d => '$' + d3Lib.format(',.0f')(d.TotalOutstanding));
+
+    // Add invoice count labels below bars
+    svg.selectAll('.count-label')
+      .data(agingData)
+      .enter()
+      .append('text')
+      .attr('class', 'count-label')
+      .attr('x', d => x(d.AgeBucket) + x.bandwidth() / 2)
+      .attr('y', height + 15)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '10px')
+      .style('fill', '#666')
+      .text(d => `(${d.InvoiceCount} inv)`);
+
+    // Cleanup function - remove all D3 selections
+    return () => {
+      d3Lib.select(agingChartRef.current).selectAll('*').remove();
+    };
+  }, [agingData, d3Lib]);
+
+  // Apply filters
+  const handleApplyFilters = () => {
+    setAppliedMinOutstanding(pendingMinOutstanding);
+    setAppliedAccountType(pendingAccountType);
+    setAppliedMonthsBack(pendingMonthsBack);
+    setAppliedPaymentMethod(pendingPaymentMethod);
+    setAppliedTopN(pendingTopN);
+  };
+
+  // Clear filters
+  const handleClearFilters = () => {
+    setPendingMinOutstanding(0);
+    setPendingAccountType(null);
+    setPendingMonthsBack(12);
+    setPendingPaymentMethod(null);
+    setPendingTopN(10);
+    setAppliedMinOutstanding(0);
+    setAppliedAccountType(null);
+    setAppliedMonthsBack(12);
+    setAppliedPaymentMethod(null);
+    setAppliedTopN(10);
+  };
+
+  // Handle aging bucket click
+  const handleBucketClick = async (clickData) => {
+    console.log('Bucket clicked:', clickData);
+
+    // Set selected segment
+    setSelectedSegment(clickData);
+    setLoadingDrilldown(true);
+
+    // Map bucket label to age range (minDays, maxDays)
+    const bucketRanges = {
+      'Not Yet Due': { minDays: -999999, maxDays: -1 },
+      '0-30 days': { minDays: 0, maxDays: 30 },
+      '30-60 days': { minDays: 31, maxDays: 60 },
+      '60-90 days': { minDays: 61, maxDays: 90 },
+      '90+ days': { minDays: 91, maxDays: 999999 }
+    };
+
+    const range = bucketRanges[clickData.label];
+    if (!range) {
+      console.error('Unknown bucket label:', clickData.label);
+      setDrilldownData([]);
+      setLoadingDrilldown(false);
+      return;
+    }
+
+    try {
+      // Load invoices via query - Outstanding Invoices already supports AccountType filter
+      const result = await utilities.rq.RunQuery({
+        QueryName: 'Outstanding Invoices',
+        CategoryPath: 'Demo',
+        Parameters: {
+          AccountType: appliedAccountType || undefined,
+          MinOutstanding: appliedMinOutstanding > 0 ? appliedMinOutstanding : undefined
+        }
+      });
+
+      if (result && result.Success && result.Results) {
+        // Filter client-side by bucket age range
+        const filtered = result.Results.filter(invoice => {
+          const daysOverdue = invoice.DaysOverdue || 0;
+          return daysOverdue >= range.minDays && daysOverdue <= range.maxDays;
+        });
+        setDrilldownData(filtered);
+      } else {
+        console.error('Failed to load invoices:', result?.ErrorMessage);
+        setDrilldownData([]);
+      }
+    } catch (err) {
+      console.error('Error loading invoices:', err);
+      setDrilldownData([]);
+    } finally {
+      setLoadingDrilldown(false);
+    }
+
+    // Fire external event if provided
+    if (onBucketClick) {
+      onBucketClick({
+        bucket: clickData.label,
+        invoiceCount: clickData.records?.length || 0,
+        totalOutstanding: clickData.value
+      });
+    }
+  };
+
+  // Account row click removed - EntityDataGrid default behavior opens account detail page
+
+  // Handle invoice row click in DataGrid
+  const handleInvoiceClick = (record) => {
+    if (onInvoiceClick) {
+      onInvoiceClick({
+        invoiceId: record?.ID,
+        invoiceNumber: record?.InvoiceNumber,
+        totalAmount: record?.TotalAmount,
+        balanceDue: record?.BalanceDue,
+        status: record?.Status
+      });
+    }
+  };
+
+  // Clear all selections
+  const handleClearSelection = () => {
+    setSelectedSegment(null);
+    setDrilldownData(null);
+  };
+
+
+  // Payment history filter removed - no longer using account drill-down
+
+  // Loading state
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px' }}>
+        <div>Loading invoice aging data...</div>
+      </div>
+    );
+  }
+
+  // General error state
+  if (errors.general) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px', color: '#ff4d4f' }}>
+        <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Error Loading Data</div>
+        <div style={{ marginTop: '8px' }}>{errors.general}</div>
+      </div>
+    );
+  }
+
+  // Check if all queries failed
+  const allFailed = errors.aging && errors.trends && errors.topAccounts;
+  if (allFailed) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px', color: '#ff4d4f' }}>
+        <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Error Loading Data</div>
+        <div style={{ marginTop: '8px' }}>All data queries failed to load</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '16px', width: '100%', minWidth: '800px', boxSizing: 'border-box' }}>
+      <h2 style={{ marginBottom: '24px', fontSize: '20px', fontWeight: 'bold' }}>
+        Invoice Aging Analysis
+      </h2>
+
+      {/* Filter Panel - ALWAYS VISIBLE */}
+      <div style={{
+        marginBottom: '16px',
+        padding: '16px',
+        backgroundColor: '#f5f5f5',
+        borderRadius: '4px',
+        width: '100%',
+        boxSizing: 'border-box'
+      }}>
+        <div style={{ fontWeight: 'bold', marginBottom: '16px' }}>Filters:</div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '16px',
+          marginBottom: '16px'
+        }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+              Min Outstanding
+            </label>
+            <input
+              type="number"
+              value={pendingMinOutstanding}
+              onChange={(e) => setPendingMinOutstanding(Number(e.target.value))}
+              style={{
+                width: '100%',
+                padding: '6px 12px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+              Account Type
+            </label>
+            <select
+              value={pendingAccountType || ''}
+              onChange={(e) => setPendingAccountType(e.target.value || null)}
+              style={{
+                width: '100%',
+                padding: '6px 12px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            >
+              <option value="">All Types</option>
+              <option value="Customer">Customer</option>
+              <option value="Prospect">Prospect</option>
+              <option value="Partner">Partner</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+              Months Back (Trends)
+            </label>
+            <input
+              type="number"
+              value={pendingMonthsBack}
+              onChange={(e) => setPendingMonthsBack(Number(e.target.value))}
+              style={{
+                width: '100%',
+                padding: '6px 12px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+              Payment Method
+            </label>
+            <select
+              value={pendingPaymentMethod || ''}
+              onChange={(e) => setPendingPaymentMethod(e.target.value || null)}
+              style={{
+                width: '100%',
+                padding: '6px 12px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            >
+              <option value="">All Methods</option>
+              <option value="Credit Card">Credit Card</option>
+              <option value="Check">Check</option>
+              <option value="Wire Transfer">Wire Transfer</option>
+              <option value="ACH">ACH</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+              Top N Accounts
+            </label>
+            <input
+              type="number"
+              value={pendingTopN}
+              onChange={(e) => setPendingTopN(Number(e.target.value))}
+              style={{
+                width: '100%',
+                padding: '6px 12px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Filter buttons */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={handleApplyFilters}
+            style={{
+              padding: '6px 16px',
+              backgroundColor: '#1890ff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            Apply Filters
+          </button>
+          {(appliedMinOutstanding > 0 || appliedAccountType || appliedMonthsBack !== 12 || appliedPaymentMethod || appliedTopN !== 10) && (
+            <button
+              onClick={handleClearFilters}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#ff4d4f',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Aging Buckets Visualization (D3.js Custom Chart) */}
+      {!errors.aging && agingData.length > 0 && (
+        <div style={{ marginBottom: '32px' }}>
+          <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 'bold' }}>
+            Invoice Aging by Period (D3 Custom Visualization)
+          </h3>
+          <div ref={agingChartRef} style={{ width: '100%', minHeight: '350px' }} />
+        </div>
+      )}
+      {errors.aging && (
+        <div style={{
+          marginBottom: '32px',
+          padding: '16px',
+          backgroundColor: '#fff2e8',
+          border: '1px solid #ffbb96',
+          borderRadius: '4px',
+          color: '#d4380d'
+        }}>
+          Aging Analysis Error: {errors.aging}
+        </div>
+      )}
+
+      {/* Payment Trends Chart */}
+      {!errors.trends && paymentTrendsData.length > 0 && (
+        <div style={{ marginBottom: '32px' }}>
+          <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 'bold' }}>
+            Payment Trends (Last {appliedMonthsBack} Months)
+          </h3>
+          <SimpleChart
+            entityName="Payments"
+            data={paymentTrendsData}
+            chartType="line"
+            groupBy="MonthName"
+            valueField="TotalPaid"
+            aggregateMethod="sum"
+            sortBy={undefined}
+            title=""
+            showLegend={false}
+            height="300px"
+            utilities={utilities}
+            styles={styles}
+            components={components}
+          />
+        </div>
+      )}
+      {errors.trends && (
+        <div style={{
+          marginBottom: '32px',
+          padding: '16px',
+          backgroundColor: '#fff2e8',
+          border: '1px solid #ffbb96',
+          borderRadius: '4px',
+          color: '#d4380d'
+        }}>
+          Payment Trends Error: {errors.trends}
+        </div>
+      )}
+
+      {/* Top Accounts Grid */}
+      {!errors.topAccounts && topAccountsData.length > 0 && (
+        <div style={{ marginBottom: '32px' }}>
+          <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 'bold' }}>
+            Top {appliedTopN} Accounts by Outstanding Balance
+          </h3>
+          <DataGrid
+            data={topAccountsData}
+            columns={['AccountName', 'AccountType', 'InvoiceCount', 'TotalOutstanding', 'AvgOutstanding', 'AvgDaysOverdue', 'MaxDaysOverdue']}
+            sorting={true}
+            paging={false}
+            filtering={false}
+            utilities={utilities}
+            styles={styles}
+            components={components}
+            callbacks={callbacks}
+          />
+        </div>
+      )}
+      {errors.topAccounts && (
+        <div style={{
+          marginBottom: '32px',
+          padding: '16px',
+          backgroundColor: '#fff2e8',
+          border: '1px solid #ffbb96',
+          borderRadius: '4px',
+          color: '#d4380d'
+        }}>
+          Top Accounts Error: {errors.topAccounts}
+        </div>
+      )}
+
+      {/* Invoice Drill-Down Section - Shows invoices in selected aging bucket */}
+      {selectedSegment && (
+        <div style={{ marginTop: '32px' }}>
+          {/* Header with clear selection button */}
+          <div style={{
+            marginBottom: '16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '12px 16px',
+            backgroundColor: '#e6f7ff',
+            borderRadius: '4px',
+            border: '1px solid #91d5ff'
+          }}>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0050b3' }}>
+              Invoices in {selectedSegment.label} Bucket
+            </div>
+            <button
+              onClick={handleClearSelection}
+              style={{
+                padding: '6px 16px',
+                backgroundColor: '#1890ff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}
+            >
+              Clear Selection
+            </button>
+          </div>
+
+          {/* DataGrid for invoices */}
+          {loadingDrilldown ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <div>Loading invoices...</div>
+            </div>
+          ) : drilldownData && drilldownData.length > 0 ? (
+            <DataGrid
+              data={drilldownData}
+              columns={['InvoiceNumber', 'Account', 'AccountType', 'InvoiceDate', 'DueDate', 'TotalAmount', 'BalanceDue', 'Status', 'DaysOverdue']}
+              entityName="Invoices"
+              entityPrimaryKeys={['ID']}
+              sorting={true}
+              paging={true}
+              filtering={true}
+              onRowClick={handleInvoiceClick}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+            />
+          ) : drilldownData && drilldownData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#8c8c8c' }}>
+              <div style={{ fontSize: '16px' }}>No Invoices Found</div>
+              <div style={{ marginTop: '8px' }}>
+                No invoices found in this aging bucket
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {/* NOTE: Payment History drill-down removed because EntityDataGrid's default row click
+          behavior opens the entity record detail page, causing navigation conflicts.
+          Users can click accounts in the Top Accounts grid to view account details directly. */}
+    </div>
+  );
+}

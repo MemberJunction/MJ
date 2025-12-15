@@ -82,18 +82,120 @@ export class UserViewEntityExtended extends UserViewEntity  {
                 if (typeof s.direction === 'string')
                     dir = s.direction.trim().toLowerCase()
                 else if (s.direction === 1 ) // some legacy view metadata has 1/2 for asc/desc
-                    dir = 'asc' 
+                    dir = 'asc'
                 else if (s.direction === 2 )
                     dir = 'desc'
-                else 
+                else
                     dir = '';
 
                 const desc = dir === ViewSortDirectionInfo.Desc.trim().toLowerCase()
                 return s.field + (desc ? ' DESC' : '');
             }).join(', ')
         }
-        else 
+        else
             return ''
+    }
+
+    /**
+     * Get the parsed DisplayState object from the DisplayState JSON column.
+     * DisplayState contains view mode preferences and mode-specific configuration (e.g., timeline settings).
+     * @returns The parsed ViewDisplayState object or null if not set/invalid
+     */
+    public get ParsedDisplayState(): ViewDisplayState | null {
+        if (this.DisplayState) {
+            try {
+                return JSON.parse(this.DisplayState) as ViewDisplayState;
+            } catch (e) {
+                console.warn('Failed to parse DisplayState JSON:', e);
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Set the DisplayState from a ViewDisplayState object.
+     * @param state The ViewDisplayState object to serialize and store
+     */
+    public setDisplayState(state: ViewDisplayState): void {
+        this.DisplayState = JSON.stringify(state);
+    }
+
+    /**
+     * Get the default view mode from DisplayState, or 'grid' if not set.
+     */
+    public get DefaultViewMode(): ViewDisplayMode {
+        return this.ParsedDisplayState?.defaultMode || 'grid';
+    }
+
+    /**
+     * Get the timeline configuration from DisplayState.
+     * @returns TimelineState or null if not configured
+     */
+    public get TimelineConfig(): ViewTimelineState | null {
+        return this.ParsedDisplayState?.timeline || null;
+    }
+
+    /**
+     * Update timeline configuration in DisplayState.
+     * Creates DisplayState if it doesn't exist.
+     * @param config The timeline configuration to set
+     */
+    public setTimelineConfig(config: ViewTimelineState): void {
+        const current = this.ParsedDisplayState || { defaultMode: 'grid' as ViewDisplayMode };
+        current.timeline = config;
+        this.setDisplayState(current);
+    }
+
+    /**
+     * Check if a specific view mode is enabled.
+     * By default, all modes are enabled unless explicitly disabled.
+     * @param mode The view mode to check
+     */
+    public isViewModeEnabled(mode: ViewDisplayMode): boolean {
+        const enabledModes = this.ParsedDisplayState?.enabledModes;
+        if (!enabledModes) return true; // All modes enabled by default
+        return enabledModes[mode] !== false;
+    }
+
+    /**
+     * Get the best date field for timeline display based on entity metadata.
+     * Priority: 1) DefaultInView=true date fields (lowest Sequence wins)
+     *           2) Any date field (lowest Sequence wins)
+     * @returns The field name or null if no date fields exist
+     */
+    public getDefaultTimelineDateField(): string | null {
+        if (!this._ViewEntityInfo) return null;
+
+        const dateFields = this._ViewEntityInfo.Fields.filter(f =>
+            f.TSType === EntityFieldTSType.Date
+        );
+
+        if (dateFields.length === 0) return null;
+
+        // Priority 1: DefaultInView date fields, sorted by Sequence
+        const defaultInViewDateFields = dateFields
+            .filter(f => f.DefaultInView)
+            .sort((a, b) => a.Sequence - b.Sequence);
+
+        if (defaultInViewDateFields.length > 0) {
+            return defaultInViewDateFields[0].Name;
+        }
+
+        // Priority 2: Any date field, sorted by Sequence
+        const sortedDateFields = dateFields.sort((a, b) => a.Sequence - b.Sequence);
+        return sortedDateFields[0].Name;
+    }
+
+    /**
+     * Get all date fields available for timeline configuration.
+     * @returns Array of field info objects for date fields
+     */
+    public getAvailableDateFields(): EntityFieldInfo[] {
+        if (!this._ViewEntityInfo) return [];
+        return this._ViewEntityInfo.Fields.filter(f =>
+            f.TSType === EntityFieldTSType.Date
+        ).sort((a, b) => a.Sequence - b.Sequence);
     }
 
     override async LoadFromData(data: any): Promise<boolean> {
@@ -733,4 +835,67 @@ export class ViewGridState {
     sortSettings?: any;
     columnSettings?: any;
     filter?: any;
+}
+
+/**
+ * View display modes supported by the entity viewer
+ */
+export type ViewDisplayMode = 'grid' | 'cards' | 'timeline';
+
+/**
+ * Timeline segment grouping options
+ */
+export type ViewTimelineSegmentGrouping = 'none' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+/**
+ * Timeline-specific configuration state
+ */
+export interface ViewTimelineState {
+    /** The date field name to use for timeline ordering */
+    dateFieldName: string;
+    /** Time segment grouping */
+    segmentGrouping?: ViewTimelineSegmentGrouping;
+    /** Sort order for timeline events */
+    sortOrder?: 'asc' | 'desc';
+    /** Whether segments are collapsible */
+    segmentsCollapsible?: boolean;
+    /** Whether segments start expanded */
+    segmentsDefaultExpanded?: boolean;
+}
+
+/**
+ * Card-specific configuration state
+ */
+export interface ViewCardState {
+    /** Custom card size */
+    cardSize?: 'small' | 'medium' | 'large';
+}
+
+/**
+ * Grid-specific display configuration
+ */
+export interface ViewGridDisplayState {
+    /** Row height preference */
+    rowHeight?: 'compact' | 'normal' | 'comfortable';
+}
+
+/**
+ * View display state - persisted in UserView.DisplayState
+ * Contains the default view mode and mode-specific configuration
+ */
+export interface ViewDisplayState {
+    /** The default view mode to show when loading this view */
+    defaultMode: ViewDisplayMode;
+    /** Which view modes are enabled/visible for this view */
+    enabledModes?: {
+        grid?: boolean;
+        cards?: boolean;
+        timeline?: boolean;
+    };
+    /** Timeline-specific configuration */
+    timeline?: ViewTimelineState;
+    /** Card-specific configuration */
+    cards?: ViewCardState;
+    /** Grid-specific configuration */
+    grid?: ViewGridDisplayState;
 }

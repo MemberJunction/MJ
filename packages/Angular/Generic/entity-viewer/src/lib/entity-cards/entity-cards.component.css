@@ -1,0 +1,280 @@
+/* Scoped to mj-entity-cards to prevent style leakage with ViewEncapsulation.None */
+mj-entity-cards .cards-view-wrapper {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+mj-entity-cards .cards-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  padding: 4px;
+}
+
+mj-entity-cards .data-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+/* Hover state for unselected cards */
+mj-entity-cards .data-card:hover:not(.selected) {
+  border-color: #bdbdbd;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+mj-entity-cards .data-card:hover .card-open-btn {
+  opacity: 1;
+}
+
+/* Selected state - subtle but clear */
+mj-entity-cards .data-card.selected {
+  border-color: #1976d2;
+}
+
+mj-entity-cards .data-card.selected .card-title {
+  color: #1565c0;
+}
+
+/* Selected + hover state - same as regular hover */
+mj-entity-cards .data-card.selected:hover {
+  border-color: #1976d2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+mj-entity-cards .card-header {
+  display: flex;
+  align-items: flex-start;
+  padding: 16px;
+  gap: 12px;
+}
+
+mj-entity-cards .card-thumbnail {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+mj-entity-cards .card-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+mj-entity-cards .card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+}
+
+mj-entity-cards .card-header-content {
+  flex: 1;
+  min-width: 0;
+}
+
+mj-entity-cards .card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #212121;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+mj-entity-cards .card-subtitle {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #757575;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+mj-entity-cards .card-open-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9e9e9e;
+  opacity: 0;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+mj-entity-cards .card-open-btn:hover {
+  background: #f5f5f5;
+  color: #1976d2;
+}
+
+mj-entity-cards .card-body {
+  padding: 0 16px 16px 16px;
+}
+
+mj-entity-cards .card-description {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #616161;
+  line-height: 1.5;
+}
+
+/* Card Display Fields */
+mj-entity-cards .card-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+mj-entity-cards .field-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 60px;
+}
+
+mj-entity-cards .field-item .field-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #212121;
+}
+
+mj-entity-cards .field-item .field-label {
+  font-size: 10px;
+  color: #9e9e9e;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Boolean fields */
+mj-entity-cards .field-item.field-boolean {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-width: auto;
+}
+
+mj-entity-cards .field-item.field-boolean .field-icon {
+  font-size: 14px;
+}
+
+mj-entity-cards .field-item.field-boolean .field-icon.bool-true {
+  color: #2e7d32;
+}
+
+mj-entity-cards .field-item.field-boolean .field-icon.bool-false {
+  color: #bdbdbd;
+}
+
+mj-entity-cards .field-item.field-boolean .field-label {
+  font-size: 12px;
+  text-transform: none;
+  color: #616161;
+}
+
+/* Text fields */
+mj-entity-cards .field-item.field-text {
+  flex: 1 1 100%;
+  max-width: 100%;
+}
+
+mj-entity-cards .field-item .field-text-value {
+  font-size: 13px;
+  color: #424242;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* Date fields */
+mj-entity-cards .field-item .field-date {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+mj-entity-cards .card-footer {
+  padding: 12px 16px;
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Highlight matches - scoped to work with innerHTML */
+mj-entity-cards .highlight-match {
+  background-color: #fff176;
+  border-radius: 2px;
+}
+
+/* Pill spacing when used as subtitle */
+mj-entity-cards .card-header-content mj-pill {
+  display: block;
+  margin-top: 4px;
+}
+
+/* Hidden field match indicator */
+mj-entity-cards .hidden-match-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #fff8e1;
+  border-top: 1px solid #ffe082;
+  font-size: 11px;
+  color: #f57c00;
+}
+
+mj-entity-cards .hidden-match-indicator i {
+  font-size: 10px;
+}
+
+mj-entity-cards .hidden-match-indicator span {
+  font-weight: 500;
+}
+
+/* Loading state */
+mj-entity-cards .loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 40px;
+}
+
+/* No results state */
+mj-entity-cards .no-results {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #9e9e9e;
+  text-align: center;
+}
+mj-entity-cards .no-results i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+mj-entity-cards .no-results p {
+  margin: 0;
+  font-size: 14px;
+}

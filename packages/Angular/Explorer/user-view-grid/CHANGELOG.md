@@ -1,5 +1,160 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [e1569fc]
+- Updated dependencies [bd4aa3d]
+- Updated dependencies [a692034]
+  - @memberjunction/communication-types@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/graphql-dataprovider@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ng-entity-communications@2.125.0
+  - @memberjunction/entity-communications-client@2.125.0
+  - @memberjunction/actions-base@2.125.0
+  - @memberjunction/ng-compare-records@2.125.0
+  - @memberjunction/ng-entity-form-dialog@2.125.0
+  - @memberjunction/ng-shared@2.125.0
+  - @memberjunction/ng-base-types@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-resource-permissions@2.125.0
+  - @memberjunction/ng-shared-generic@2.125.0
+  - @memberjunction/templates-base-types@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/actions-base@2.124.0
+  - @memberjunction/ng-compare-records@2.124.0
+  - @memberjunction/ng-entity-form-dialog@2.124.0
+  - @memberjunction/ng-shared@2.124.0
+  - @memberjunction/ng-base-types@2.124.0
+  - @memberjunction/ng-container-directives@2.124.0
+  - @memberjunction/ng-entity-communications@2.124.0
+  - @memberjunction/ng-resource-permissions@2.124.0
+  - @memberjunction/ng-shared-generic@2.124.0
+  - @memberjunction/communication-types@2.124.0
+  - @memberjunction/entity-communications-client@2.124.0
+  - @memberjunction/graphql-dataprovider@2.124.0
+  - @memberjunction/templates-base-types@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/actions-base@2.123.1
+- @memberjunction/ng-compare-records@2.123.1
+- @memberjunction/ng-entity-form-dialog@2.123.1
+- @memberjunction/ng-shared@2.123.1
+- @memberjunction/ng-base-types@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-entity-communications@2.123.1
+- @memberjunction/ng-resource-permissions@2.123.1
+- @memberjunction/ng-shared-generic@2.123.1
+- @memberjunction/communication-types@2.123.1
+- @memberjunction/entity-communications-client@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/templates-base-types@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.123.0
+- @memberjunction/ng-shared@2.123.0
+- @memberjunction/entity-communications-client@2.123.0
+- @memberjunction/ng-entity-form-dialog@2.123.0
+- @memberjunction/ng-entity-communications@2.123.0
+- @memberjunction/ng-resource-permissions@2.123.0
+- @memberjunction/actions-base@2.123.0
+- @memberjunction/ng-compare-records@2.123.0
+- @memberjunction/ng-shared-generic@2.123.0
+- @memberjunction/ng-base-types@2.123.0
+- @memberjunction/ng-container-directives@2.123.0
+- @memberjunction/communication-types@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/global@2.123.0
+- @memberjunction/templates-base-types@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/graphql-dataprovider@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/entity-communications-client@2.122.2
+  - @memberjunction/ng-compare-records@2.122.2
+  - @memberjunction/ng-container-directives@2.122.2
+  - @memberjunction/ng-resource-permissions@2.122.2
+  - @memberjunction/ng-shared@2.122.2
+  - @memberjunction/actions-base@2.122.2
+  - @memberjunction/ng-entity-form-dialog@2.122.2
+  - @memberjunction/ng-base-types@2.122.2
+  - @memberjunction/ng-entity-communications@2.122.2
+  - @memberjunction/ng-shared-generic@2.122.2
+  - @memberjunction/communication-types@2.122.2
+  - @memberjunction/templates-base-types@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-entity-communications@2.122.1
+  - @memberjunction/ng-resource-permissions@2.122.1
+  - @memberjunction/ng-shared@2.122.1
+  - @memberjunction/ng-entity-form-dialog@2.122.1
+  - @memberjunction/actions-base@2.122.1
+  - @memberjunction/ng-compare-records@2.122.1
+  - @memberjunction/ng-base-types@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/communication-types@2.122.1
+  - @memberjunction/entity-communications-client@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/templates-base-types@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/actions-base@2.122.0
+  - @memberjunction/ng-compare-records@2.122.0
+  - @memberjunction/ng-entity-form-dialog@2.122.0
+  - @memberjunction/ng-shared@2.122.0
+  - @memberjunction/ng-base-types@2.122.0
+  - @memberjunction/ng-container-directives@2.122.0
+  - @memberjunction/ng-entity-communications@2.122.0
+  - @memberjunction/communication-types@2.122.0
+  - @memberjunction/entity-communications-client@2.122.0
+  - @memberjunction/templates-base-types@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

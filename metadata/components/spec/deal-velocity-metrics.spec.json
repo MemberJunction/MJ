@@ -10,9 +10,27 @@
     "entities": [
       {
         "name": "Deals",
-        "displayFields": ["DealName", "Stage", "Amount", "Probability", "CloseDate", "ActualCloseDate", "__mj_CreatedAt", "__mj_UpdatedAt"],
-        "filterFields": ["Stage", "ActualCloseDate", "CloseDate"],
-        "sortFields": ["ActualCloseDate", "CloseDate", "Amount"] 
+        "displayFields": [
+          "DealName",
+          "Stage",
+          "Amount",
+          "Probability",
+          "CloseDate",
+          "ActualCloseDate",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "filterFields": [
+          "Stage",
+          "ActualCloseDate",
+          "CloseDate"
+        ],
+        "sortFields": [
+          "ActualCloseDate",
+          "CloseDate",
+          "Amount",
+          "__mj_CreatedAt"
+        ]
       }
     ]
   },
@@ -20,8 +38,30 @@
   "properties": [],
   "events": [],
   "dependencies": [
-    "@include:deal-velocity-trend-chart.spec.json",
-    "@include:deal-velocity-distribution-chart.spec.json",
+    {
+      "name": "DealVelocityTrendChart",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "DealVelocityDistributionChart",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "VelocityHeatmap",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "DealsTable",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
     {
       "name": "DataExportPanel",
       "location": "registry",
@@ -30,11 +70,6 @@
     }
   ],
   "libraries": [
-    {
-      "name": "ECharts",
-      "version": "^5.4.3",
-      "globalVariable": "echarts"
-    },
     {
       "name": "simple-statistics",
       "version": "^7.8.3",
@@ -45,5 +80,6 @@
       "version": "^1.11.10",
       "globalVariable": "dayjs"
     }
-  ]
+  ],
+  "description": "Analyze and visualize the speed of deals through the sales pipeline with detailed stage-by-stage metrics"
 }

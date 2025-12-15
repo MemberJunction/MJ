@@ -1,5 +1,160 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [1115143]
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/interactive-component-types@2.125.0
+  - @memberjunction/react-runtime@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ng-react@2.125.0
+  - @memberjunction/graphql-dataprovider@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/skip-types@2.125.0
+  - @memberjunction/ng-base-types@2.125.0
+  - @memberjunction/ng-code-editor@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-data-context@2.125.0
+  - @memberjunction/ng-notifications@2.125.0
+  - @memberjunction/ng-resource-permissions@2.125.0
+  - @memberjunction/ng-shared-generic@2.125.0
+  - @memberjunction/data-context@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ng-base-types@2.124.0
+  - @memberjunction/ng-code-editor@2.124.0
+  - @memberjunction/ng-container-directives@2.124.0
+  - @memberjunction/ng-data-context@2.124.0
+  - @memberjunction/ng-notifications@2.124.0
+  - @memberjunction/ng-react@2.124.0
+  - @memberjunction/ng-resource-permissions@2.124.0
+  - @memberjunction/ng-shared-generic@2.124.0
+  - @memberjunction/graphql-dataprovider@2.124.0
+  - @memberjunction/interactive-component-types@2.124.0
+  - @memberjunction/data-context@2.124.0
+  - @memberjunction/react-runtime@2.124.0
+  - @memberjunction/skip-types@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@2.123.1
+- @memberjunction/ng-code-editor@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-data-context@2.123.1
+- @memberjunction/ng-notifications@2.123.1
+- @memberjunction/ng-react@2.123.1
+- @memberjunction/ng-resource-permissions@2.123.1
+- @memberjunction/ng-shared-generic@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/interactive-component-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/data-context@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/react-runtime@2.123.1
+- @memberjunction/skip-types@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.123.0
+- @memberjunction/ng-notifications@2.123.0
+- @memberjunction/ng-react@2.123.0
+- @memberjunction/react-runtime@2.123.0
+- @memberjunction/ng-resource-permissions@2.123.0
+- @memberjunction/ng-shared-generic@2.123.0
+- @memberjunction/ng-base-types@2.123.0
+- @memberjunction/ng-code-editor@2.123.0
+- @memberjunction/ng-container-directives@2.123.0
+- @memberjunction/ng-data-context@2.123.0
+- @memberjunction/interactive-component-types@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/data-context@2.123.0
+- @memberjunction/global@2.123.0
+- @memberjunction/skip-types@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/graphql-dataprovider@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/ng-code-editor@2.122.2
+  - @memberjunction/ng-container-directives@2.122.2
+  - @memberjunction/ng-data-context@2.122.2
+  - @memberjunction/ng-resource-permissions@2.122.2
+  - @memberjunction/ng-notifications@2.122.2
+  - @memberjunction/ng-react@2.122.2
+  - @memberjunction/react-runtime@2.122.2
+  - @memberjunction/ng-base-types@2.122.2
+  - @memberjunction/ng-shared-generic@2.122.2
+  - @memberjunction/data-context@2.122.2
+  - @memberjunction/skip-types@2.122.2
+  - @memberjunction/interactive-component-types@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-react@2.122.1
+  - @memberjunction/ng-resource-permissions@2.122.1
+  - @memberjunction/ng-base-types@2.122.1
+  - @memberjunction/ng-code-editor@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-data-context@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/interactive-component-types@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/data-context@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/react-runtime@2.122.1
+  - @memberjunction/skip-types@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/graphql-dataprovider@2.122.0
+  - @memberjunction/interactive-component-types@2.122.0
+  - @memberjunction/skip-types@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/ng-base-types@2.122.0
+  - @memberjunction/ng-code-editor@2.122.0
+  - @memberjunction/ng-container-directives@2.122.0
+  - @memberjunction/ng-data-context@2.122.0
+  - @memberjunction/ng-notifications@2.122.0
+  - @memberjunction/ng-react@2.122.0
+  - @memberjunction/ng-resource-permissions@2.122.0
+  - @memberjunction/data-context@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

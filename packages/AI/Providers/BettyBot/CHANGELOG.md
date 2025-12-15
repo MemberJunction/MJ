@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/ai-betty-bot
 
+## 2.125.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.125.0
+- @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.124.0
+- @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.123.1
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.123.0
+- @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.122.2
+- @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.122.1
+- @memberjunction/global@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.122.0
+- @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

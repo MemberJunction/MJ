@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, SecurityContext } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity, ArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -10,6 +10,7 @@ import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer
 import { ArtifactViewerTab } from './base-artifact-viewer.component';
 import { marked } from 'marked';
 import { ArtifactIconService } from '../services/artifact-icon.service';
+import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
 @Component({
   selector: 'mj-artifact-viewer-panel',
@@ -33,6 +34,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -127,11 +129,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
   }
 
+  private recentAccessService: RecentAccessService;
+
   constructor(
     private notificationService: MJNotificationService,
     private sanitizer: DomSanitizer,
     private artifactIconService: ArtifactIconService
-  ) {}
+  ) {
+    this.recentAccessService = new RecentAccessService();
+  }
 
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
@@ -150,6 +156,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     // Track that user viewed this artifact
     if (this.artifactVersion?.ID && this.currentUser) {
       this.trackArtifactUsage('Viewed');
+      // Also log to User Record Logs for recents feature (fire-and-forget)
+      this.recentAccessService.logAccess('MJ: Artifacts', this.artifactId, 'artifact');
     }
   }
 
@@ -832,6 +840,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   onMaximizeToggle(): void {
     this.maximizeToggled.emit();
+  }
+
+  /**
+   * Handle entity record open request from artifact viewer plugin (React component)
+   * Propagates the event up to parent components
+   */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    this.openEntityRecord.emit(event);
   }
 
   /**

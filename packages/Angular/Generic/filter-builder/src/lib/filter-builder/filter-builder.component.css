@@ -1,0 +1,318 @@
+.filter-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filter-builder.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Header */
+.filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.filter-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-icon {
+  color: #1976d2;
+  font-size: 14px;
+}
+
+.filter-count {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.filter-count.no-filters {
+  color: #999;
+  font-weight: 400;
+}
+
+/* Actions */
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.action-btn i {
+  font-size: 11px;
+}
+
+.clear-btn {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.clear-btn:hover:not(:disabled) {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.apply-btn {
+  background: #1976d2;
+  color: white;
+}
+
+.apply-btn:hover:not(:disabled) {
+  background: #1565c0;
+}
+
+/* Content */
+.filter-content {
+  min-height: 60px;
+}
+
+/* Tips */
+.filter-tips {
+  padding: 12px;
+  background: #f5f9ff;
+  border-radius: 6px;
+  border: 1px solid #e3edfa;
+}
+
+.filter-tips p {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.filter-tips i {
+  color: #ffc107;
+  margin-top: 2px;
+}
+
+.filter-tips strong {
+  color: #333;
+}
+
+/* Collapsible Filter Expression Summary */
+.filter-expression-summary {
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.filter-expression-summary.expanded {
+  background: white;
+  border-color: #d1d5db;
+}
+
+/* Toggle Button */
+.expression-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.expression-toggle:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: #374151;
+}
+
+.expression-toggle i:first-child {
+  font-size: 10px;
+  color: #9ca3af;
+  width: 12px;
+  transition: transform 0.2s ease;
+}
+
+.expression-icon {
+  color: #6366f1;
+  font-size: 13px;
+}
+
+.expression-label {
+  flex: 1;
+}
+
+.expression-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #e0e7ff;
+  color: #4f46e5;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Expression Content */
+.expression-content {
+  padding: 0 16px 16px 16px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.expression-text {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #374151;
+  padding: 16px;
+  margin: 0;
+  background: linear-gradient(135deg, #fafbfc 0%, #f3f4f6 100%);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Syntax Highlighting */
+.expression-text .field-name {
+  color: #0369a1;
+  font-weight: 600;
+}
+
+.expression-text .operator {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.expression-text .value {
+  font-weight: 500;
+}
+
+.expression-text .value-string {
+  color: #059669;
+}
+
+.expression-text .value-number {
+  color: #7c3aed;
+}
+
+.expression-text .value-boolean {
+  font-weight: 600;
+}
+
+.expression-text .value-true {
+  color: #16a34a;
+}
+
+.expression-text .value-false {
+  color: #dc2626;
+}
+
+.expression-text .value-date {
+  color: #c2410c;
+  font-weight: 500;
+}
+
+.expression-text .logic-keyword {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.expression-text .logic-and {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.expression-text .logic-or {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.expression-text .group-bracket {
+  color: #9333ea;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.expression-text .no-filters {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .filter-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .filter-summary {
+    justify-content: center;
+  }
+
+  .filter-actions {
+    justify-content: center;
+  }
+
+  .expression-toggle {
+    padding: 10px 12px;
+  }
+
+  .expression-content {
+    padding: 0 12px 12px 12px;
+  }
+
+  .expression-text {
+    font-size: 12px;
+    padding: 12px;
+  }
+}

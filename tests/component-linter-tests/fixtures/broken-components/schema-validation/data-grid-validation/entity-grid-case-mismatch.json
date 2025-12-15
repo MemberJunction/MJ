@@ -1,0 +1,45 @@
+{
+  "name": "EntityGridCaseMismatch",
+  "description": "EntityDataGrid with incorrect field name casing - violates subset-of-entity-fields constraint",
+  "code": "function EntityGridCaseMismatch({ components, utilities }) {\n  const { EntityDataGrid } = components;\n  \n  return (\n    <div>\n      <h1>Accounts Overview</h1>\n      <EntityDataGrid\n        entityName=\"Accounts\"\n        fields={['accountname', 'INDUSTRY', 'revenue']}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Accounts",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "description": "Primary key"
+          },
+          {
+            "name": "AccountName",
+            "type": "nvarchar",
+            "description": "Account name"
+          },
+          {
+            "name": "Industry",
+            "type": "nvarchar",
+            "description": "Industry sector"
+          },
+          {
+            "name": "Revenue",
+            "type": "decimal",
+            "description": "Annual revenue"
+          }
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "EntityDataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ]
+}

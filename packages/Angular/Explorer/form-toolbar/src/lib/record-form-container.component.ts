@@ -31,14 +31,16 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
                     </mj-form-section-controls>
                 </mj-form-toolbar>
 
-                <div class="form-panels-container">
-                    <div class="related-entity-grid">
-                        <ng-content select="[slot='before-panels']"></ng-content>
-                    </div>
-                    <ng-content select="[slot='field-panels']"></ng-content>
-                    <div class="related-entities-divider"></div>
-                    <div class="related-entity-grid">
-                        <ng-content select="[slot='after-panels']"></ng-content>
+                <div class="forms-panel-container-outer">
+                    <div class="form-panels-container">
+                        <div class="related-entity-grid">
+                            <ng-content select="[slot='before-panels']"></ng-content>
+                        </div>
+                        <ng-content select="[slot='field-panels']"></ng-content>
+                        <div class="related-entities-divider"></div>
+                        <div class="related-entity-grid">
+                            <ng-content select="[slot='after-panels']"></ng-content>
+                        </div>
                     </div>
                 </div>
             </form>

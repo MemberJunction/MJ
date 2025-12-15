@@ -10,9 +10,24 @@
     "entities": [
       {
         "name": "Deals",
-        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Owner", "LossReason", "Competitor"],
-        "filterFields": ["Stage", "CloseDate", "Owner"],
-        "sortFields": ["CloseDate", "Amount"] 
+        "displayFields": [
+          "DealName",
+          "Stage",
+          "Amount",
+          "CloseDate",
+          "Owner",
+          "LossReason",
+          "Competitor"
+        ],
+        "filterFields": [
+          "Stage",
+          "CloseDate",
+          "Owner"
+        ],
+        "sortFields": [
+          "CloseDate",
+          "Amount"
+        ]
       }
     ]
   },
@@ -32,16 +47,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": [
-    {
-      "name": "ag-grid",
-      "version": "^31.0.1",
-      "globalVariable": "agGrid"
-    },
-    {
-      "name": "mathjs",
-      "version": "^12.2.1",
-      "globalVariable": "math"
-    }
-  ]
+  "libraries": [],
+  "description": "Analyze patterns in won and lost deals to identify success factors and improvement areas with AI-powered insights"
 }

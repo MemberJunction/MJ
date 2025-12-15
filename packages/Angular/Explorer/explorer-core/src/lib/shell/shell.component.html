@@ -1,0 +1,145 @@
+<div class="shell-container" *ngIf="!loading" [class.tabs-visible]="tabBarVisible" kendoDialogContainer>
+  <!-- Header -->
+  <header class="shell-header">
+    <!-- MJ Logo -->
+    <div class="mj-logo" title="MemberJunction"></div>
+
+    <!-- Mobile Hamburger Button -->
+    <button class="hamburger-btn" (click)="toggleMobileNav()" title="Menu">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+
+    <!-- Nav Bar Apps: Left of App Switcher -->
+    <div class="nav-bar-apps left-of-switcher" *ngIf="leftOfSwitcherApps.length > 0">
+      <button *ngFor="let app of leftOfSwitcherApps"
+              class="nav-bar-app-btn"
+              [class.active]="app.ID === activeApp?.ID"
+              [title]="app.Name"
+              [style.--app-color]="app.GetColor()"
+              (click)="onNavBarAppClick(app, $event)"
+              (dblclick)="onNavBarAppDblClick(app, $event)">
+        <i [class]="app.Icon"></i>
+      </button>
+    </div>
+
+    <!-- App Switcher -->
+    <mj-app-switcher
+      [activeApp]="activeApp"
+      [isViewingSystemTab]="isViewingSystemTab"
+      [loadingAppId]="loadingAppId"
+      (appSelected)="onAppSwitch($event)">
+    </mj-app-switcher>
+
+    <!-- App Navigation (desktop only) -->
+    <mj-app-nav
+      *ngIf="activeApp"
+      class="desktop-nav"
+      [app]="activeApp"
+      (navItemClick)="onNavItemClick($event)">
+    </mj-app-nav>
+
+    <!-- Spacer -->
+    <div class="spacer"></div>
+
+    <!-- Actions (search, notifications, user menu) -->
+    <div class="header-actions">
+      <button class="icon-btn desktop-only" title="Search">
+        <i class="fa-solid fa-search"></i>
+      </button>
+      <button class="icon-btn desktop-only notification-btn" title="Notifications">
+        <i class="fa-solid fa-bell"></i>
+        <span class="notification-badge" *ngIf="unreadNotificationCount > 0">
+          {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+        </span>
+      </button>
+
+      <!-- Nav Bar Apps: Left of User Menu -->
+      <div class="nav-bar-apps left-of-user-menu" *ngIf="leftOfUserMenuApps.length > 0">
+        <button *ngFor="let app of leftOfUserMenuApps"
+                class="nav-bar-app-btn"
+                [class.active]="app.ID === activeApp?.ID"
+                [title]="app.Name"
+                [style.--app-color]="app.GetColor()"
+                (click)="onNavBarAppClick(app, $event)"
+                (dblclick)="onNavBarAppDblClick(app, $event)">
+          <i [class]="app.Icon"></i>
+        </button>
+      </div>
+
+      <div class="user-menu">
+        <button class="avatar-btn" (click)="toggleUserMenu($event)">
+          <ng-container *ngIf="userImageURL; else iconAvatar">
+            <img [src]="userImageURL" alt="User avatar" class="avatar-img" />
+          </ng-container>
+          <ng-template #iconAvatar>
+            <div class="icon-fallback">
+              <i [class]="userIconClass || 'fa-solid fa-user'"></i>
+            </div>
+          </ng-template>
+        </button>
+        <!-- User Context Menu -->
+        <div class="user-context-menu" *ngIf="userMenuVisible">
+          <div class="user-menu-header" *ngIf="userName">
+            <span class="user-name">{{ userName }}</span>
+          </div>
+          <div class="user-menu-divider" *ngIf="userName"></div>
+          <div class="user-menu-item" (click)="onSettings()">
+            <i class="fa-solid fa-gear"></i>
+            <span>Settings</span>
+          </div>
+          <div class="user-menu-divider"></div>
+          <div class="user-menu-item" (click)="onLogLayout()">
+            <i class="fa-solid fa-code"></i>
+            <span>Log Layout (Debug)</span>
+          </div>
+          <div class="user-menu-divider"></div>
+          <div class="user-menu-item danger" (click)="onResetLayout()">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Reset Layout</span>
+          </div>
+          <div class="user-menu-divider"></div>
+          <div class="user-menu-item" (click)="onLogout()">
+            <i class="fa-solid fa-sign-out-alt"></i>
+            <span>Logout</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Navigation Drawer -->
+  <div class="mobile-nav-overlay" *ngIf="mobileNavOpen" (click)="closeMobileNav()"></div>
+  <div class="mobile-nav-drawer" [class.open]="mobileNavOpen">
+    <div class="mobile-nav-header">
+      <span>Navigation</span>
+      <button class="close-btn" (click)="closeMobileNav()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="mobile-nav-content" *ngIf="activeApp">
+      <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
+      <mj-app-nav
+        [app]="activeApp"
+        (navItemClick)="onNavItemClick($event)">
+      </mj-app-nav>
+    </div>
+    <div class="mobile-nav-footer">
+      <button class="mobile-nav-action" title="Search">
+        <i class="fa-solid fa-search"></i>
+        <span>Search</span>
+      </button>
+      <button class="mobile-nav-action" title="Notifications">
+        <i class="fa-solid fa-bell"></i>
+        <span>Notifications</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab Container - with dynamic tab bar visibility -->
+  <mj-tab-container [class.hide-tab-bar]="!tabBarVisible"></mj-tab-container>
+</div>
+
+<!-- Loading State -->
+<div class="shell-loading" *ngIf="loading">
+  <mj-loading text="Loading workspace..." size="large"></mj-loading>
+</div>

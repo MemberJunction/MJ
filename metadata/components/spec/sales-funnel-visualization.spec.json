@@ -10,9 +10,23 @@
     "entities": [
       {
         "name": "Deals",
-        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Probability", "AccountID"],
-        "filterFields": ["Stage", "CloseDate"],
-        "sortFields": ["Amount", "CloseDate", "Probability"],
+        "displayFields": [
+          "DealName",
+          "Stage",
+          "Amount",
+          "CloseDate",
+          "Probability",
+          "AccountID"
+        ],
+        "filterFields": [
+          "Stage",
+          "CloseDate"
+        ],
+        "sortFields": [
+          "Amount",
+          "CloseDate",
+          "Probability"
+        ],
         "fields": [
           {
             "name": "ID",
@@ -44,7 +58,7 @@
             "type": "number",
             "description": "Win probability percentage"
           }
-        ] 
+        ]
       }
     ]
   },
@@ -57,8 +71,18 @@
     }
   ],
   "dependencies": [
-    "@include:sales-funnel-chart.spec.json",
-    "@include:sales-funnel-stage-panel.spec.json",
+    {
+      "name": "SalesFunnelChart",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "SalesFunnelStagePanel",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
     {
       "name": "AIInsightsPanel",
       "location": "registry",
@@ -66,11 +90,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": [
-    {
-      "name": "dayjs",
-      "version": "^1.11.10",
-      "globalVariable": "dayjs"
-    }
-  ]
+  "libraries": [],
+  "description": "Interactive sales funnel visualization with conversion metrics and drill-down capabilities"
 }

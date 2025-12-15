@@ -1,0 +1,19 @@
+{
+  "name": "ChartGroupByFieldInvalidBroken",
+  "type": "generic",
+  "title": "Chart GroupBy Field Invalid - Broken Pattern",
+  "description": "Tests chart with invalid groupBy field (may fail until linter refactor)",
+  "code": "function ChartGroupByFieldInvalidBroken({ utilities, components }) {\n  const [salesData, setSalesData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales By Category',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        setSalesData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sales Chart</h3>\n      {/* ❌ groupBy uses CategoryName but query has Category */}\n      <SimpleChart data={salesData} groupBy=\"CategoryName\" valueField=\"Revenue\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Sales By Category",
+      "categoryPath": "Sales/Reports",
+      "fields": ["Category", "Revenue", "OrderCount"]
+    }]
+  }
+}

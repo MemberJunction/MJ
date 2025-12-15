@@ -1,0 +1,19 @@
+{
+  "name": "QueryResultFieldNonexistentBroken",
+  "type": "generic",
+  "title": "Query Result Field Nonexistent - Broken Pattern",
+  "description": "Tests linter detection of accessing non-existent field from query results",
+  "code": "function QueryResultFieldNonexistentBroken({ utilities }) {\n  const [topProducts, setTopProducts] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Top Selling Products',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Query doesn't return UnitsSold field\n        const products = result.Results.map(p => ({\n          name: p.ProductName,\n          units: p.UnitsSold\n        }));\n        setTopProducts(products);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Top Products</h3>\n      {topProducts.map((p, i) => (\n        <div key={i}>{p.name}: {p.units} units</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Top Selling Products",
+      "categoryPath": "Sales/Reports",
+      "fields": ["ProductID", "ProductName", "TotalRevenue", "TotalQuantity"]
+    }]
+  }
+}

@@ -1,22 +1,14 @@
 import { Component, OnInit, OnDestroy, EventEmitter, Output } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global'
-import { CommonModule } from '@angular/common';
+import { RegisterClass } from '@memberjunction/global';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { SharedSettingsModule } from '../shared/shared-settings.module';
-import { SqlLoggingComponent } from '../sql-logging/sql-logging.component';
-import { UserManagementComponent } from '../user-management/user-management.component';
-import { RoleManagementComponent } from '../role-management/role-management.component';
-import { ApplicationManagementComponent } from '../application-management/application-management.component';
-import { EntityPermissionsComponent } from '../entity-permissions/entity-permissions.component';
-import { UserProfileSettingsComponent } from '../user-profile-settings/user-profile-settings.component';
-import { BaseNavigationComponent } from '@memberjunction/ng-shared'
+import { BaseNavigationComponent } from '@memberjunction/ng-shared';
 
 export interface SettingsTab {
   id: string;
   label: string;
   icon: string;
-  component?: any;
+  component?: unknown;
   badgeCount?: number;
   badgeColor?: 'primary' | 'danger' | 'warning' | 'success';
 }
@@ -29,21 +21,10 @@ export interface SettingsComponentState {
 
 @Component({
   selector: 'mj-settings',
-  standalone: true,
-  imports: [
-    CommonModule,
-    SharedSettingsModule,
-    SqlLoggingComponent,
-    UserManagementComponent,
-    RoleManagementComponent,
-    ApplicationManagementComponent,
-    EntityPermissionsComponent,
-    UserProfileSettingsComponent
-  ],
   templateUrl: './settings.component.html',
-  styleUrls: ['./settings.component.scss']
+  styleUrls: ['./settings.component.css']
 })
-@RegisterClass(BaseNavigationComponent, "Settings")
+@RegisterClass(BaseNavigationComponent, 'Settings')
 export class SettingsComponent extends BaseNavigationComponent implements OnInit, OnDestroy {
   @Output() stateChange = new EventEmitter<SettingsComponentState>();
 

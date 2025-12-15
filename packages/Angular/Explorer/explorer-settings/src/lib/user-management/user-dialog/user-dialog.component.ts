@@ -18,8 +18,6 @@ export interface UserDialogResult {
 
 @Component({
   selector: 'mj-user-dialog',
-  standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './user-dialog.component.html',
   styleUrls: ['./user-dialog.component.css']

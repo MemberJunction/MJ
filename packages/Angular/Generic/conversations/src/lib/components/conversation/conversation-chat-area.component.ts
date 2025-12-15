@@ -1,7 +1,7 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, AIAgentRunEntityExtended, ConversationDetailArtifactEntity, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
-import { ConversationStateService } from '../../services/conversation-state.service';
+import { ConversationDataService } from '../../services/conversation-data.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -18,26 +18,58 @@ import { Subject } from 'rxjs';
 @Component({
   selector: 'mj-conversation-chat-area',
   templateUrl: `./conversation-chat-area.component.html`,
-  styleUrls: ['./conversation-chat-area.component.scss']
+  styleUrls: ['./conversation-chat-area.component.css']
 })
-export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck, AfterViewChecked {
+export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterViewChecked {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+
+  // LOCAL STATE INPUTS - passed from parent workspace
+  private _conversationId: string | null = null;
+  @Input()
+  set conversationId(value: string | null) {
+    if (value !== this._conversationId) {
+      this._conversationId = value;
+      // Trigger change handler after initialization is complete
+      // Only skip during Angular's initial binding before ngOnInit completes
+      if (this.isInitialized) {
+        this.onConversationChanged(value);
+      }
+    }
+  }
+  get conversationId(): string | null {
+    return this._conversationId;
+  }
+
+  @Input() conversation: ConversationEntity | null = null;
+  @Input() threadId: string | null = null;
+  @Input() isNewConversation: boolean = false;
+  @Input() pendingMessage: string | null = null;
+  @Input() pendingArtifactId: string | null = null;
+  @Input() pendingArtifactVersionNumber: number | null = null;
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() taskClicked = new EventEmitter<TaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
 
+  // STATE CHANGE OUTPUTS - notify parent of state changes
+  @Output() conversationCreated = new EventEmitter<ConversationEntity>();
+  @Output() threadOpened = new EventEmitter<string>();
+  @Output() threadClosed = new EventEmitter<void>();
+  @Output() pendingArtifactConsumed = new EventEmitter<void>();
+  @Output() pendingMessageConsumed = new EventEmitter<void>();
+  @Output() pendingMessageRequested = new EventEmitter<string>();
+
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
-  @ViewChild('messageInput', { static: false }) private messageInputComponent?: MessageInputComponent;
+  @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
 
   public messages: ConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
   private scrollToBottom = false;
-  private previousConversationId: string | null = null;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
+  private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   public isProcessing: boolean = false;
   private intentCheckMessage: ConversationDetailEntity | null = null; // Temporary message shown during intent checking
   public isLoadingConversation: boolean = true; // True while loading initial conversation messages
@@ -138,7 +170,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
   constructor(
-    public conversationState: ConversationStateService,
+    public conversationData: ConversationDataService,
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
@@ -162,12 +194,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Load saved artifact pane width
     this.loadArtifactPaneWidth();
 
-    // Mark as initialized so ngDoCheck can proceed
+    // Mark as initialized so setter can trigger conversation changes
     this.isInitialized = true;
 
     // Initial load if there's already an active conversation
-    if (this.conversationState.activeConversationId) {
-      await this.onConversationChanged(this.conversationState.activeConversationId);
+    if (this.conversationId) {
+      await this.onConversationChanged(this.conversationId);
     }
 
     // Setup resize listeners
@@ -175,21 +207,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     window.addEventListener('mouseup', this.onResizeEnd.bind(this));
     window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
     window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
-  }
-
-  ngDoCheck() {
-    // Don't process conversation changes until initialization is complete
-    // This prevents race condition where messages load before agents are ready
-    if (!this.isInitialized) {
-      return;
-    }
-
-    // Detect conversation ID changes using change detection
-    const currentId = this.conversationState.activeConversationId;
-    if (currentId !== this.previousConversationId) {
-      this.previousConversationId = currentId;
-      this.onConversationChanged(currentId);
-    }
   }
 
   ngAfterViewChecked() {
@@ -221,48 +238,61 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
-    // Do NOT clear activeTasks here - they are workspace-level and should persist across conversation switches
-    // Tasks will be automatically removed when agents complete (via markMessageComplete in MessageInputComponent)
-    // Clearing here causes bugs: global tasks panel blanks out, no notifications when switching, spinners disappear
+    // Prevent double-loading if we're already loading this same conversation
+    // (ngDoCheck can fire multiple times during state changes)
+    if (this.currentlyLoadingConversationId === conversationId && conversationId !== null) {
+      return;
+    }
 
-    // Clear message status tracking for previous conversation
+    // Do NOT clear activeTasks - they are workspace-level and persist across conversations
+    // Clearing causes bugs: global tasks panel blanks out, no notifications when switching
+
     this.previousMessageStatuses.clear();
-
-    // Hide artifact panel when conversation changes
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
 
     if (conversationId) {
-      // Add conversation to message-input cache if not already present
+      this.currentlyLoadingConversationId = conversationId;
+
       if (!this.messageInputMetadataCache.has(conversationId)) {
-        const conversation = this.conversationState.activeConversation;
         this.messageInputMetadataCache.set(conversationId, {
           conversationId: conversationId,
-          conversationName: conversation?.Name || null
+          conversationName: this.conversation?.Name || null
         });
       }
 
-      // Show loading state
       this.isLoadingConversation = true;
-      this.messages = []; // Clear messages to avoid showing stale data
+      this.messages = [];
       this.cdr.detectChanges();
 
       try {
         await this.loadMessages(conversationId);
         await this.restoreActiveTasks(conversationId);
         this.agentStateService.startPolling(this.currentUser, conversationId);
+      } catch (error) {
+        console.error('Error loading conversation:', error);
+        this.messages = [];
       } finally {
-        // Hide loading state
+        this.currentlyLoadingConversationId = null;
         this.isLoadingConversation = false;
+
+        // Create new array reference to trigger Angular change detection
+        this.messages = [...this.messages];
         this.cdr.detectChanges();
 
-        // Pending message will be passed to message-input component via [initialMessage] Input
-        // The component will handle sending it when it initializes
+        // Defensive fallback: force another change detection cycle after async ops complete
+        setTimeout(() => {
+          if (conversationId === this._conversationId && this.messages.length > 0) {
+            this.messages = [...this.messages];
+            this.cdr.detectChanges();
+          }
+        }, 50);
       }
     } else {
       // No active conversation - show empty state
       this.messages = [];
       this.isLoadingConversation = false;
+      this.currentlyLoadingConversationId = null;
       this.agentStateService.stopPolling();
     }
   }
@@ -276,19 +306,29 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     return Array.from(this.messageInputMetadataCache.values());
   }
 
+  /**
+   * Get the message input component for the current conversation.
+   * Since we cache multiple message-input instances (one per visited conversation),
+   * we need to find the one that matches the current conversationId.
+   */
+  private getActiveMessageInputComponent(): MessageInputComponent | undefined {
+    if (!this.messageInputComponents || !this.conversationId) {
+      return undefined;
+    }
+    return this.messageInputComponents.find(
+      component => component.conversationId === this.conversationId
+    );
+  }
+
   private async loadMessages(conversationId: string): Promise<void> {
     try {
-      // Check if we have cached data for this conversation
       const cachedData = this.conversationDataCache.get(conversationId);
 
       if (cachedData) {
-        // Use cached data - instant load!
-        this.buildMessagesFromCache(cachedData);
-        this.loadPeripheralData(conversationId); // Process cached data for maps
+        await this.buildMessagesFromCache(cachedData);
+        await this.loadPeripheralData(conversationId);
       } else {
-        // Load from database with single optimized query
         const rq = new RunQuery();
-
         const result = await rq.RunQuery({
           QueryName: 'GetConversationComplete',
           CategoryPath: 'MJ/Conversations',
@@ -301,24 +341,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           return;
         }
 
-        // Cache the raw results for future use
         const conversationData = result.Results as ConversationDetailComplete[];
         this.conversationDataCache.set(conversationId, conversationData);
 
-        // Build messages and show immediately
-        this.buildMessagesFromCache(conversationData);
+        await this.buildMessagesFromCache(conversationData);
 
-        // Process peripheral data (agent runs & artifacts) in background
         this.isLoadingPeripheralData = true;
         await this.loadPeripheralData(conversationId);
         this.isLoadingPeripheralData = false;
         this.cdr.detectChanges();
       }
 
-      // After loading messages, check for in-progress runs and ensure we're receiving updates
       await this.detectAndReconnectToInProgressRuns(conversationId);
-
-      // Check for pending artifact navigation (from collection link)
       await this.handlePendingArtifactNavigation();
 
     } catch (error) {
@@ -335,29 +369,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     const md = new Metadata();
     const messages: ConversationDetailEntity[] = [];
 
-    // Store raw conversation data for access to query-specific fields
     this.rawConversationData = conversationData;
-
-    // Build user avatar map for fast lookups
     this.buildUserAvatarMap(conversationData);
 
     for (const row of conversationData) {
       if (!row.ID) continue;
 
-      // Create entity object and load from raw data
       const message = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
-
-      // LoadFromData expects the same structure as the query result
-      // Since we're using SELECT *, all fields should be present
       message.LoadFromData(row);
-
       messages.push(message);
     }
 
     this.messages = messages;
 
-    // CRITICAL: Initialize status tracking map BEFORE any callbacks fire
-    // This captures the initial state so the completion detector can see transitions
+    // Initialize status tracking to detect message completion
     this.previousMessageStatuses.clear();
     for (const message of messages) {
       if (message.ID && message.Status) {
@@ -366,22 +391,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     }
 
     // Detect in-progress messages for streaming reconnection
-    // IMPORTANT: Always create NEW array reference to trigger Input setter in message-input component
+    // Always create NEW array reference to trigger Input setter in message-input component
     this.inProgressMessageIds = [...messages
       .filter(m => m.Status === 'In-Progress')
       .map(m => m.ID)];
 
     if (this.inProgressMessageIds.length > 0) {
       LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
-      // Note: Reconnection now happens automatically via Input setter in message-input component
-
-      // CRITICAL: Restart the timer to monitor these in-progress messages for completion
-      // This ensures the completion detector runs even if the timer stopped before tracking was initialized
       this.startAgentRunUpdateTimer();
     }
 
     this.scrollToBottom = true;
-    this.cdr.detectChanges(); // Show messages immediately
+    LogStatusEx({message: `✅ Built ${messages.length} messages from cache`, verboseOnly: true});
   }
 
   /**
@@ -552,9 +573,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   onMessageSent(message: ConversationDetailEntity): void {
-    // Clear pending message if it was sent
-    if (this.conversationState.pendingMessageToSend) {
-      this.conversationState.pendingMessageToSend = null;
+    // Clear pending message if it was sent - notify parent via output
+    if (this.pendingMessage) {
+      this.pendingMessageConsumed.emit();
     }
 
     // Check if message already exists in the array (by ID) to prevent duplicates
@@ -724,7 +745,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * Called when completion is detected to discover newly delegated agent messages
    */
   private async reloadMessagesForActiveConversation(): Promise<void> {
-    const conversationId = this.conversationState.activeConversationId;
+    const conversationId = this.conversationId;
     if (!conversationId) {
       return;
     }
@@ -849,9 +870,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.messages = [...this.messages, event.message];
 
     // Invalidate cache for this conversation since we have new messages
-    const conversationId = this.conversationState.activeConversationId;
-    if (conversationId) {
-      this.invalidateConversationCache(conversationId);
+    if (this.conversationId) {
+      this.invalidateConversationCache(this.conversationId);
     }
 
     // Scroll to bottom when agent responds
@@ -1187,7 +1207,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   exportConversation(): void {
-    if (this.conversationState.activeConversation) {
+    if (this.conversation) {
       this.showExportModal = true;
     }
   }
@@ -1201,11 +1221,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   async onProjectSelected(project: any): Promise<void> {
-    const activeConv = this.conversationState.activeConversation;
-    if (activeConv && project) {
+    if (this.conversation && project) {
       try {
-        await this.conversationState.saveConversation(
-          activeConv.ID,
+        await this.conversationData.saveConversation(
+          this.conversation.ID,
           { ProjectID: project.ID },
           this.currentUser
         );
@@ -1213,11 +1232,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       } catch (error) {
         console.error('Failed to assign project:', error);
       }
-    } else if (activeConv && !project) {
+    } else if (this.conversation && !project) {
       // Remove project assignment
       try {
-        await this.conversationState.saveConversation(
-          activeConv.ID,
+        await this.conversationData.saveConversation(
+          this.conversation.ID,
           { ProjectID: null },
           this.currentUser
         );
@@ -1234,18 +1253,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   onReplyInThread(message: ConversationDetailEntity): void {
-    // Open thread panel for this message
-    this.conversationState.openThread(message.ID);
+    // Open thread panel for this message - emit to parent
+    this.threadOpened.emit(message.ID);
   }
 
   onViewThread(message: ConversationDetailEntity): void {
-    // Open thread panel for this message
-    this.conversationState.openThread(message.ID);
+    // Open thread panel for this message - emit to parent
+    this.threadOpened.emit(message.ID);
   }
 
-  onThreadClosed(): void {
-    // Close the thread panel
-    this.conversationState.closeThread();
+  onLocalThreadClosed(): void {
+    // Close the thread panel - emit to parent
+    this.threadClosed.emit();
   }
 
   onThreadReplyAdded(reply: ConversationDetailEntity): void {
@@ -1254,9 +1273,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     LogStatusEx({message: 'Thread reply added', verboseOnly: true, additionalArgs: [reply]});
 
     // Reload messages to get updated thread counts
-    const activeConv = this.conversationState.activeConversation;
-    if (activeConv) {
-      this.loadMessages(activeConv.ID);
+    if (this.conversationId) {
+      this.loadMessages(this.conversationId);
     }
   }
 
@@ -1286,10 +1304,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
     const messageText = event.customInput || event.text;
 
+    // Get the active message input for the current conversation
+    // (we cache multiple instances, one per visited conversation)
+    const activeInput = this.getActiveMessageInputComponent();
+
     // If we have an active conversation with message input available, use it
-    if (this.messageInputComponent && !this.conversationState.isNewUnsavedConversation) {
-      await this.messageInputComponent.sendMessageWithText(messageText);
-    } else if (!this.conversationState.activeConversation || this.conversationState.isNewUnsavedConversation) {
+    if (activeInput && !this.isNewConversation) {
+      await activeInput.sendMessageWithText(messageText);
+    } else if (!this.conversation || this.isNewConversation) {
       // If no conversation or in new unsaved state, route through empty state handler
       // This will create the conversation and send the message
       await this.onEmptyStateMessageSent(messageText);
@@ -1540,7 +1562,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   /**
    * Handle message sent from empty state component
-   * Creates a new conversation and sends the message
+   * Creates a new conversation and emits to parent to update selection
    */
   async onEmptyStateMessageSent(messageText: string): Promise<void> {
     if (!messageText || !messageText.trim()) {
@@ -1552,12 +1574,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     try {
       this.isProcessing = true;
 
-      // Store the message to send after conversation loads (in service to persist across component lifecycle)
-      this.conversationState.pendingMessageToSend = messageText.trim();
-      LogStatusEx({message: '💾 Stored pending message in service', verboseOnly: true, additionalArgs: [this.conversationState.pendingMessageToSend]});
-
-      // Create a new conversation
-      const newConversation = await this.conversationState.createConversation(
+      // Create a new conversation using the data service
+      const newConversation = await this.conversationData.createConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
         this.environmentId,
         this.currentUser
@@ -1565,22 +1583,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
       if (!newConversation) {
         console.error('❌ Failed to create new conversation');
-        this.conversationState.pendingMessageToSend = null;
         this.isProcessing = false;
         return;
       }
 
       LogStatusEx({message: '✅ Created new conversation', verboseOnly: true, additionalArgs: [newConversation.ID]});
 
-      // Clear the new unsaved conversation state since we've now created it
-      this.conversationState.clearNewConversationState();
+      // Emit to parent with the new conversation AND the pending message
+      // Parent will update its state and pass back the message via pendingMessage input
+      this.conversationCreated.emit(newConversation);
 
-      // Set as active conversation (this will trigger onConversationChanged which will send the message)
-      this.conversationState.activeConversationId = newConversation.ID;
+      // Also emit the pending message to be sent (parent will pass it back via input)
+      this.pendingMessageRequested.emit(messageText.trim());
 
     } catch (error) {
       console.error('❌ Error creating conversation from empty state:', error);
-      this.conversationState.pendingMessageToSend = null;
     } finally {
       this.isProcessing = false;
     }
@@ -1639,8 +1656,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   onNavigateToConversation(event: {conversationId: string; taskId: string}): void {
-    // Navigate to the conversation with the active task
-    this.conversationState.setActiveConversation(event.conversationId);
+    // Navigate to the conversation with the active task - emit to parent
+    // Parent will update its selection state
+    // For now, we can't navigate to a different conversation from within chat area
+    // This would require emitting an event to the parent
+    console.log('Navigate to conversation requested:', event.conversationId);
   }
 
   /**
@@ -1797,27 +1817,27 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * Opens the artifact and scrolls to the message containing it
    */
   private async handlePendingArtifactNavigation(): Promise<void> {
-    const pendingArtifactId = this.conversationState.pendingArtifactId;
-    const pendingVersionNumber = this.conversationState.pendingArtifactVersionNumber;
-
-    if (!pendingArtifactId) {
+    if (!this.pendingArtifactId) {
       return; // No pending navigation
     }
 
-    console.log('📦 Processing pending artifact navigation:', pendingArtifactId, 'v' + pendingVersionNumber);
+    console.log('📦 Processing pending artifact navigation:', this.pendingArtifactId, 'v' + this.pendingArtifactVersionNumber);
 
-    // Clear pending values immediately to prevent re-processing
-    this.conversationState.pendingArtifactId = null;
-    this.conversationState.pendingArtifactVersionNumber = null;
+    // Capture values before emitting consumed event
+    const artifactIdToOpen = this.pendingArtifactId;
+    const versionNumberToOpen = this.pendingArtifactVersionNumber;
+
+    // Notify parent that we consumed the pending artifact
+    this.pendingArtifactConsumed.emit();
 
     // Find the message containing this artifact version
     let messageIdWithArtifact: string | null = null;
 
     for (const [detailId, artifactList] of this.artifactsByDetailId.entries()) {
       for (const artifactInfo of artifactList) {
-        if (artifactInfo.artifactId === pendingArtifactId) {
+        if (artifactInfo.artifactId === artifactIdToOpen) {
           // Found the artifact - check if version matches (if specified)
-          if (pendingVersionNumber == null || artifactInfo.versionNumber === pendingVersionNumber) {
+          if (versionNumberToOpen == null || artifactInfo.versionNumber === versionNumberToOpen) {
             messageIdWithArtifact = detailId;
             console.log('✅ Found artifact in message:', detailId);
             break;
@@ -1828,17 +1848,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     }
 
     if (!messageIdWithArtifact) {
-      console.warn('⚠️ Could not find message containing artifact:', pendingArtifactId);
+      console.warn('⚠️ Could not find message containing artifact:', artifactIdToOpen);
       return;
     }
 
     // Open the artifact panel
-    this.selectedArtifactId = pendingArtifactId;
-    this.selectedVersionNumber = pendingVersionNumber ?? undefined;
+    this.selectedArtifactId = artifactIdToOpen;
+    this.selectedVersionNumber = versionNumberToOpen ?? undefined;
     this.showArtifactPanel = true;
 
     // Load permissions for the artifact
-    await this.loadArtifactPermissions(pendingArtifactId);
+    await this.loadArtifactPermissions(artifactIdToOpen);
 
     // Scroll to the message
     this.scrollToMessage(messageIdWithArtifact);

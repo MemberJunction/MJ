@@ -1,5 +1,86 @@
 # @memberjunction/react-test-harness
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [1115143]
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/interactive-component-types@2.125.0
+  - @memberjunction/react-runtime@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/aiengine@2.125.0
+  - @memberjunction/ai-vectors-memory@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/aiengine@2.124.0
+  - @memberjunction/ai-vectors-memory@2.124.0
+  - @memberjunction/interactive-component-types@2.124.0
+  - @memberjunction/react-runtime@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.123.1
+- @memberjunction/ai-vectors-memory@2.123.1
+- @memberjunction/interactive-component-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/react-runtime@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- 52cf482: Fix conversation state reference after service refactor, improve component linter test structure, and fix chart ordering
+  - @memberjunction/aiengine@2.123.0
+  - @memberjunction/react-runtime@2.123.0
+  - @memberjunction/ai-vectors-memory@2.123.0
+  - @memberjunction/interactive-component-types@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/react-runtime@2.122.2
+  - @memberjunction/aiengine@2.122.2
+  - @memberjunction/ai-vectors-memory@2.122.2
+  - @memberjunction/interactive-component-types@2.122.2
+  - @memberjunction/core@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/react-runtime@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- 6de83ec: Add component linter enhancements with type inference and control flow analysis, DBAutoDoc query generation features, MCP server diagnostic tools, metadata sync improvements, and enhanced JWKS client with HTTP keep-alive connections and connection pooling to prevent socket hangups
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/interactive-component-types@2.122.0
+  - @memberjunction/react-runtime@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

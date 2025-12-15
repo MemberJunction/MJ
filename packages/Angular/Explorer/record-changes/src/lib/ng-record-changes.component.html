@@ -12,7 +12,7 @@
         title="Record Changes History"
         (close)="closePropertiesDialog()"
     >
-        <kendo-loader *ngIf="showloader" type="converging-spinner"></kendo-loader>
+        <mj-loading *ngIf="showloader" text="Loading history..." size="medium"></mj-loading>
         @if (!showloader) {
             <div class="record-changes-container" #dialogContainer>
                 <!-- Filter Panel -->

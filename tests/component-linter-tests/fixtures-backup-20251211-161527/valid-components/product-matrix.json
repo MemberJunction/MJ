@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/product-matrix.spec.json",
+  "description": "Valid component demonstrating product matrix visualization"
+}

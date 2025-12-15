@@ -1,5 +1,70 @@
 # @memberjunction/db-auto-doc
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ai-provider-bundle@2.125.0
+  - @memberjunction/ai@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/ai-provider-bundle@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.123.1
+- @memberjunction/ai-provider-bundle@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/ai-provider-bundle@2.123.0
+- @memberjunction/ai@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+  - @memberjunction/ai-provider-bundle@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.122.1
+- @memberjunction/ai-provider-bundle@2.122.1
+- @memberjunction/global@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- 6de83ec: Add component linter enhancements with type inference and control flow analysis, DBAutoDoc query generation features, MCP server diagnostic tools, metadata sync improvements, and enhanced JWKS client with HTTP keep-alive connections and connection pooling to prevent socket hangups
+  - @memberjunction/ai-provider-bundle@2.122.0
+  - @memberjunction/ai@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

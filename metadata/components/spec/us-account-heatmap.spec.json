@@ -10,9 +10,20 @@
     "entities": [
       {
         "name": "Accounts",
-        "displayFields": ["AccountName", "City", "BillingState", "Industry", "AnnualRevenue"],
-        "filterFields": ["BillingState"],
-        "sortFields": ["AccountName", "AnnualRevenue"],
+        "displayFields": [
+          "Name",
+          "City",
+          "BillingState",
+          "Industry",
+          "AnnualRevenue"
+        ],
+        "filterFields": [
+          "BillingState"
+        ],
+        "sortFields": [
+          "Name",
+          "AnnualRevenue"
+        ],
         "fields": [
           {
             "name": "ID",
@@ -20,7 +31,7 @@
             "description": "Unique identifier for the account"
           },
           {
-            "name": "AccountName",
+            "name": "Name",
             "type": "string",
             "description": "Name of the account/company"
           },
@@ -44,7 +55,7 @@
             "type": "number",
             "description": "Annual revenue of the account"
           }
-        ] 
+        ]
       }
     ]
   },
@@ -68,5 +79,6 @@
       "version": "^3.1.0",
       "globalVariable": "topojson"
     }
-  ]
+  ],
+  "description": "Interactive choropleth map showing account distribution across US states with drill-down capability"
 }

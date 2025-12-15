@@ -1,0 +1,30 @@
+{
+  "title": "useEffect with Object Default Parameter",
+  "type": "report",
+  "name": "ObjectDefaultParamExample",
+  "userExplanation": "Demonstrates the CRITICAL bug pattern where a parameter with an object literal default is used in useEffect dependencies, causing infinite render loops.",
+  "functionalRequirements": "Test component to validate linter detects object default parameters in useEffect dependencies.",
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [],
+    "entities": []
+  },
+  "properties": [
+    {
+      "name": "queryParameters",
+      "type": "object",
+      "required": false,
+      "description": "Query parameters object with default {}"
+    },
+    {
+      "name": "showActive",
+      "type": "boolean",
+      "required": false,
+      "description": "Filter flag"
+    }
+  ],
+  "code": "function ObjectDefaultParamExample({ queryParameters = {}, showActive = true }) {\n  const [data, setData] = useState([]);\n\n  useEffect(() => {\n    console.log('Loading data with params:', queryParameters);\n    setData([]);\n  }, [queryParameters, showActive]);\n\n  return <div>Test Component</div>;\n}",
+  "namespace": "test/broken",
+  "version": "1.0.0",
+  "registry": "Test"
+}

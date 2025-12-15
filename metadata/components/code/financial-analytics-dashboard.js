@@ -1,7 +1,6 @@
 function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   // Load registry components
-  const AIInsightsPanel = components?.AIInsightsPanel;
-  const DataExportPanel = components?.DataExportPanel;
+  const { AIInsightsPanel, DataExportPanel, DrillDownTable, KPIGauges, RevenueTrendChart, CashFlowChart, ForecastModel } = components;
   const [invoices, setInvoices] = useState([]);
   const [deals, setDeals] = useState([]);
   const [products, setProducts] = useState([]);
@@ -65,7 +64,7 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
         }),
         utilities.rv.RunView({
           EntityName: 'Products',
-          OrderBy: 'ProductName ASC'
+          OrderBy: 'Name ASC'
         })
       ]);
 
@@ -149,8 +148,8 @@ Total Revenue: ${formatCurrency(metrics.totalRevenue)}
 Actual Revenue: ${formatCurrency(metrics.actualRevenue)}
 Projected Revenue: ${formatCurrency(metrics.projectedRevenue)}
 Outstanding Revenue: ${formatCurrency(metrics.outstandingRevenue)}
-Gross Margin: ${metrics.grossMargin.toFixed(1)}%
-Revenue Growth: ${metrics.revenueGrowth > 0 ? '+' : ''}${metrics.revenueGrowth.toFixed(1)}%
+Gross Margin: ${metrics.grossMargin?.toFixed(1) || '0'}%
+Revenue Growth: ${metrics.revenueGrowth > 0 ? '+' : ''}${metrics.revenueGrowth?.toFixed(1) || '0'}%
 Average Deal Size: ${formatCurrency(metrics.avgDealSize)}
 Cash Flow: ${formatCurrency(metrics.cashFlow)}
 
@@ -229,272 +228,51 @@ Focus on actionable business insights that can help improve financial performanc
     return `$${amount?.toFixed(0) || 0}`;
   }, []);
 
-  // Sub-component: KPI Gauges
-  const KPIGauges = () => {
-    useEffect(() => {
-      if (!loading && chartRefs.current.marginGauge && chartRefs.current.utilizationGauge) {
-        const gaugeOptions = {
-          chart: {
-            type: 'radialBar',
-            height: 200
-          },
-          plotOptions: {
-            radialBar: {
-              startAngle: -90,
-              endAngle: 90,
-              hollow: {
-                margin: 15,
-                size: '70%',
-                background: '#fff'
-              },
-              dataLabels: {
-                name: {
-                  show: true,
-                  offsetY: -10
-                },
-                value: {
-                  show: true,
-                  fontSize: '20px',
-                  fontWeight: 'bold',
-                  formatter: (val) => `${val.toFixed(0)}%`
-                }
-              }
-            }
-          },
-          fill: {
-            type: 'gradient',
-            gradient: {
-              shade: 'dark',
-              shadeIntensity: 0.15,
-              stops: [0, 100]
-            }
-          },
-          stroke: {
-            dashArray: 4
-          }
-        };
+  // Forecast scenarios configuration
+  const forecastScenarios = React.useMemo(() => [
+    {
+      id: 'conservative',
+      name: 'Conservative (3% growth)',
+      parameters: { growth: 1.03, seasonality: false }
+    },
+    {
+      id: 'moderate',
+      name: 'Moderate (5% growth)',
+      parameters: { growth: 1.05, seasonality: false }
+    },
+    {
+      id: 'aggressive',
+      name: 'Aggressive (8% growth)',
+      parameters: { growth: 1.08, seasonality: false }
+    }
+  ], []);
 
-        const marginGauge = new ApexCharts(chartRefs.current.marginGauge, {
-          ...gaugeOptions,
-          series: [metrics.grossMargin],
-          labels: ['Gross Margin'],
-          colors: ['#10B981']
-        });
-        marginGauge.render();
+  // Generate forecast data based on trend data
+  const generateForecastData = React.useCallback(() => {
+    const historicalData = trendData;
+    if (!historicalData || historicalData.length === 0) {
+      return [];
+    }
 
-        const utilizationGauge = new ApexCharts(chartRefs.current.utilizationGauge, {
-          ...gaugeOptions,
-          series: [75],
-          labels: ['Utilization'],
-          colors: ['#3B82F6']
-        });
-        utilizationGauge.render();
+    const lastValue = historicalData[historicalData.length - 1]?.total || 0;
+    const growthRate = 1.05; // Default 5% growth (moderate scenario)
 
-        return () => {
-          marginGauge.destroy();
-          utilizationGauge.destroy();
-        };
-      }
-    }, [loading]);
+    return Array.from({ length: 6 }, (_, i) => {
+      const forecastValue = lastValue * Math.pow(growthRate, i + 1);
+      const confidenceLow = forecastValue * 0.85; // 15% lower bound
+      const confidenceHigh = forecastValue * 1.15; // 15% upper bound
 
-    return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
-        <div ref={el => chartRefs.current.marginGauge = el}></div>
-        <div ref={el => chartRefs.current.utilizationGauge = el}></div>
-      </div>
-    );
-  };
+      return {
+        period: `Month +${i + 1}`,
+        value: forecastValue,
+        confidence: {
+          low: confidenceLow,
+          high: confidenceHigh
+        }
+      };
+    });
+  }, [trendData]);
 
-  // Sub-component: Revenue Trend Chart
-  const RevenueTrendChart = () => {
-    // trendData is already calculated via useMemo
-    
-    useEffect(() => {
-      if (!loading && chartRefs.current.trendChart && trendData.length > 0) {
-        const chart = new ApexCharts(chartRefs.current.trendChart, {
-          chart: {
-            type: 'area',
-            height: 350,
-            toolbar: {
-              show: false
-            }
-          },
-          series: [
-            {
-              name: 'Invoice Revenue',
-              data: trendData.map(d => d.revenue)
-            },
-            {
-              name: 'Deal Revenue',
-              data: trendData.map(d => d.deals)
-            }
-          ],
-          xaxis: {
-            categories: trendData.map(d => d.month)
-          },
-          yaxis: {
-            labels: {
-              formatter: (val) => formatCurrency(val)
-            }
-          },
-          colors: ['#3B82F6', '#8B5CF6'],
-          fill: {
-            type: 'gradient',
-            gradient: {
-              shadeIntensity: 1,
-              opacityFrom: 0.7,
-              opacityTo: 0.2
-            }
-          },
-          dataLabels: {
-            enabled: false
-          },
-          stroke: {
-            curve: 'smooth',
-            width: 2
-          },
-          tooltip: {
-            y: {
-              formatter: (val) => formatCurrency(val)
-            }
-          }
-        });
-        chart.render();
-
-        return () => chart.destroy();
-      }
-    }, [loading, trendData]);
-
-    return <div ref={el => chartRefs.current.trendChart = el}></div>;
-  };
-
-  // Sub-component: Cash Flow Chart
-  const CashFlowChart = () => {
-    useEffect(() => {
-      if (!loading && chartRefs.current.cashFlowChart) {
-        const categories = ['Revenue', 'Expenses', 'Outstanding', 'Net Cash'];
-        const data = [
-          metrics.actualRevenue,
-          -metrics.outstandingRevenue * 0.6,
-          -metrics.outstandingRevenue * 0.4,
-          metrics.cashFlow
-        ];
-
-        const chart = new ApexCharts(chartRefs.current.cashFlowChart, {
-          chart: {
-            type: 'bar',
-            height: 300
-          },
-          series: [{
-            name: 'Cash Flow',
-            data: data
-          }],
-          xaxis: {
-            categories: categories
-          },
-          yaxis: {
-            labels: {
-              formatter: (val) => formatCurrency(Math.abs(val))
-            }
-          },
-          colors: ['#10B981'],
-          plotOptions: {
-            bar: {
-              colors: {
-                ranges: [{
-                  from: -1000000000,
-                  to: 0,
-                  color: '#EF4444'
-                }]
-              }
-            }
-          },
-          dataLabels: {
-            enabled: true,
-            formatter: (val) => formatCurrency(val)
-          },
-          tooltip: {
-            y: {
-              formatter: (val) => formatCurrency(val)
-            }
-          }
-        });
-        chart.render();
-
-        return () => chart.destroy();
-      }
-    }, [loading]);
-
-    return <div ref={el => chartRefs.current.cashFlowChart = el}></div>;
-  };
-
-  // Sub-component: Forecast Model
-  const ForecastModel = () => {
-    const generateForecast = () => {
-      const historicalData = trendData;
-      const lastValue = historicalData[historicalData.length - 1]?.total || 0;
-      const growthRate = 1.05; // 5% growth
-      
-      return Array.from({ length: 6 }, (_, i) => ({
-        month: `Month +${i + 1}`,
-        forecast: lastValue * Math.pow(growthRate, i + 1),
-        confidence: 90 - (i * 10)
-      }));
-    };
-
-    const forecastData = generateForecast();
-
-    useEffect(() => {
-      if (!loading && chartRefs.current.forecastChart) {
-        const chart = new ApexCharts(chartRefs.current.forecastChart, {
-          chart: {
-            type: 'line',
-            height: 300,
-            toolbar: {
-              show: false
-            }
-          },
-          series: [{
-            name: 'Forecast',
-            data: forecastData.map(d => d.forecast)
-          }],
-          xaxis: {
-            categories: forecastData.map(d => d.month)
-          },
-          yaxis: {
-            labels: {
-              formatter: (val) => formatCurrency(val)
-            }
-          },
-          colors: ['#F59E0B'],
-          stroke: {
-            curve: 'smooth',
-            width: 3,
-            dashArray: 5
-          },
-          markers: {
-            size: 6
-          },
-          dataLabels: {
-            enabled: false
-          },
-          tooltip: {
-            y: {
-              formatter: (val, opts) => {
-                const confidence = forecastData[opts.dataPointIndex]?.confidence || 0;
-                return `${formatCurrency(val)} (${confidence}% confidence)`;
-              }
-            }
-          }
-        });
-        chart.render();
-
-        return () => chart.destroy();
-      }
-    }, [loading]);
-
-    return <div ref={el => chartRefs.current.forecastChart = el}></div>;
-  };
 
   // Sub-component: Details Panel
   const DetailsPanel = () => {
@@ -557,7 +335,7 @@ Focus on actionable business insights that can help improve financial performanc
               <DataExportPanel
                 data={exportData}
                 columns={exportColumns}
-                htmlElement={dashboardRef.current}
+                getHtmlElement={() => dashboardRef.current}
                 filename={`financial-report-${new Date().toISOString().split('T')[0]}`}
                 formats={['csv', 'excel', 'pdf']}
                 buttonStyle="menu"
@@ -965,273 +743,81 @@ Focus on actionable business insights that can help improve financial performanc
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '20px' }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
             <h3 style={{ marginTop: 0 }}>Revenue Trend</h3>
-            <RevenueTrendChart />
+            <RevenueTrendChart
+              loading={loading}
+              trendData={trendData}
+              chartRefs={chartRefs}
+              formatCurrency={formatCurrency}
+              styles={styles}
+              utilities={utilities}
+              components={components}
+              callbacks={callbacks}
+            />
           </div>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
             <h3 style={{ marginTop: 0 }}>KPI Gauges</h3>
-            <KPIGauges />
+            <KPIGauges
+              loading={loading}
+              metrics={metrics}
+              chartRefs={chartRefs}
+              styles={styles}
+              utilities={utilities}
+              components={components}
+              callbacks={callbacks}
+            />
           </div>
         </div>
-        
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
             <h3 style={{ marginTop: 0 }}>Cash Flow Analysis</h3>
-            <CashFlowChart />
+            <CashFlowChart
+              loading={loading}
+              metrics={metrics}
+              chartRefs={chartRefs}
+              formatCurrency={formatCurrency}
+              styles={styles}
+              utilities={utilities}
+              components={components}
+              callbacks={callbacks}
+            />
           </div>
           <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
             <h3 style={{ marginTop: 0 }}>Revenue Forecast</h3>
-            <ForecastModel />
+            <ForecastModel
+              loading={loading}
+              forecastData={generateForecastData()}
+              scenarios={forecastScenarios}
+              chartRefs={chartRefs}
+              formatCurrency={formatCurrency}
+              onScenarioChange={(scenarioId) => {
+                console.log('Scenario changed to:', scenarioId);
+              }}
+              styles={styles}
+              utilities={utilities}
+              components={components}
+              callbacks={callbacks}
+            />
           </div>
         </div>
       </div>
       
       {/* Drill-down Table */}
       {drillDownData && (
-        <DrillDownTable 
+        <DrillDownTable
           data={drillDownData}
           title={drillDownTitle}
           onClose={() => setDrillDownData(null)}
           sortConfig={sortConfig}
           setSortConfig={setSortConfig}
           callbacks={callbacks}
+          styles={styles}
+          utilities={utilities}
+          components={components}
         />
       )}
       
       <DetailsPanel />
-    </div>
-  );
-}
-
-// Drill-down Table Component
-function DrillDownTable({ data, title, onClose, sortConfig, setSortConfig, callbacks }) {
-  const formatCurrency = (value) => {
-    if (!value) return '$0';
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-    return `$${value.toFixed(0)}`;
-  };
-
-  const formatDate = (date) => {
-    if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString();
-  };
-
-  const sortedData = [...data].sort((a, b) => {
-    const aValue = a[sortConfig.key];
-    const bValue = b[sortConfig.key];
-    
-    if (aValue === null || aValue === undefined) return 1;
-    if (bValue === null || bValue === undefined) return -1;
-    
-    if (sortConfig.direction === 'asc') {
-      return aValue > bValue ? 1 : -1;
-    } else {
-      return aValue < bValue ? 1 : -1;
-    }
-  });
-
-  const handleSort = (key) => {
-    setSortConfig({
-      key,
-      direction: sortConfig.key === key && sortConfig.direction === 'desc' ? 'asc' : 'desc'
-    });
-  };
-
-  return (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '8px',
-      padding: '20px',
-      margin: '20px',
-      border: '1px solid #E5E7EB',
-      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-    }}>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '16px'
-      }}>
-        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>
-          {title} ({data.length} records)
-        </h3>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '24px',
-            cursor: 'pointer',
-            color: '#6B7280'
-          }}
-        >
-          <i className="fa-solid fa-times"></i>
-        </button>
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
-              <th 
-                onClick={() => handleSort('Type')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'left', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Type {sortConfig.key === 'Type' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th 
-                onClick={() => handleSort('InvoiceNumber')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'left', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Reference {sortConfig.key === 'InvoiceNumber' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th 
-                onClick={() => handleSort('InvoiceDate')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'left', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Date {sortConfig.key === 'InvoiceDate' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th 
-                onClick={() => handleSort('DisplayAmount')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'right', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Amount {sortConfig.key === 'DisplayAmount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th 
-                onClick={() => handleSort('Status')}
-                style={{ 
-                  padding: '12px 8px', 
-                  textAlign: 'left', 
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  textTransform: 'uppercase'
-                }}
-              >
-                Status {sortConfig.key === 'Status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th style={{ 
-                padding: '12px 8px', 
-                textAlign: 'center',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: '#374151',
-                textTransform: 'uppercase'
-              }}>
-                Action
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedData.map((item, index) => (
-              <tr 
-                key={item.ID || index}
-                style={{ 
-                  borderBottom: '1px solid #F3F4F6',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                  <span style={{
-                    padding: '2px 8px',
-                    backgroundColor: item.Type === 'Paid Invoice' ? '#D1FAE5' : 
-                                     item.Type === 'Unpaid Invoice' ? '#FEE2E2' : 
-                                     item.Type === 'Projected Deal' ? '#FEF3C7' : '#E5E7EB',
-                    color: item.Type === 'Paid Invoice' ? '#065F46' : 
-                           item.Type === 'Unpaid Invoice' ? '#991B1B' : 
-                           item.Type === 'Projected Deal' ? '#92400E' : '#374151',
-                    borderRadius: '4px',
-                    fontSize: '12px'
-                  }}>
-                    {item.Type}
-                  </span>
-                </td>
-                <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                  {item.InvoiceNumber || item.DealName || item.ProductName || '-'}
-                </td>
-                <td style={{ padding: '12px 8px', fontSize: '14px', color: '#6B7280' }}>
-                  {formatDate(item.InvoiceDate || item.CloseDate || item.CreatedAt)}
-                </td>
-                <td style={{ padding: '12px 8px', textAlign: 'right', fontSize: '14px', fontWeight: '500' }}>
-                  {formatCurrency(item.DisplayAmount || item.TotalAmount || item.Amount || item.Price)}
-                </td>
-                <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                  <span style={{
-                    padding: '2px 8px',
-                    backgroundColor: item.Status === 'Paid' ? '#D1FAE5' : 
-                                     item.Status === 'Pending' ? '#FEF3C7' : 
-                                     item.Stage === 'Closed Won' ? '#D1FAE5' :
-                                     item.Stage === 'Closed Lost' ? '#FEE2E2' : '#E5E7EB',
-                    color: item.Status === 'Paid' ? '#065F46' : 
-                           item.Status === 'Pending' ? '#92400E' : 
-                           item.Stage === 'Closed Won' ? '#065F46' :
-                           item.Stage === 'Closed Lost' ? '#991B1B' : '#374151',
-                    borderRadius: '4px',
-                    fontSize: '12px'
-                  }}>
-                    {item.Status || item.Stage || 'Active'}
-                  </span>
-                </td>
-                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                  <button
-                    onClick={() => {
-                      if (callbacks && callbacks.OpenEntityRecord) {
-                        callbacks.OpenEntityRecord(item.EntityType, [{ FieldName: 'ID', Value: item.ID }]);
-                      }
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#4F46E5',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      padding: '4px'
-                    }}
-                    title="Open Record"
-                  >
-                    <i className="fa-solid fa-arrow-up-right-from-square"></i>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

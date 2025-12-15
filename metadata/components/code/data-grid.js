@@ -359,7 +359,7 @@ function DataGrid({
         }
       }
 
-      return {
+      const columnDef = {
         title: displayName,
         dataIndex: fieldName,
         key: fieldName,
@@ -554,6 +554,14 @@ function DataGrid({
           return formattedContent;
         }
       };
+
+      // Only add sortOrder if explicitly provided (for controlled sorting)
+      // If undefined, Ant Design uses uncontrolled sorting with the sorter function
+      if (colDef.sortOrder !== undefined) {
+        columnDef.sortOrder = colDef.sortOrder;
+      }
+
+      return columnDef;
     });
   }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);
   
@@ -629,7 +637,7 @@ function DataGrid({
     total: filteredData.length,
     showSizeChanger: showPageSizeChanger,
     pageSizeOptions: ['5', '10', '20', '50', '100'],
-    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
+    showTotal: (total, range) => `${range?.[0] ?? 0}-${range?.[1] ?? 0} of ${total}`,
     onChange: (page, newPageSize) => {
       setCurrentPage(page);
       if (newPageSize !== currentPageSize) {
@@ -663,12 +671,25 @@ function DataGrid({
   const handleTableChange = (pag, filters, sorter) => {
     if (sorter && onSortChanged) {
       setSortConfig(sorter);
-      onSortChanged({
-        sortState: {
-          column: sorter.field,
-          direction: sorter.order === 'ascend' ? 'asc' : 'desc'
-        }
-      });
+
+      // Three-state sorting: ascend -> descend -> undefined (clear)
+      if (sorter.order) {
+        // Valid sort order (ascend or descend)
+        onSortChanged({
+          sortState: {
+            column: sorter.field,
+            direction: sorter.order === 'ascend' ? 'asc' : 'desc'
+          }
+        });
+      } else if (sorter.field) {
+        // sorter.order is undefined - user clicked third time to clear sort
+        onSortChanged({
+          sortState: {
+            column: sorter.field,
+            direction: null // Signal to clear sort
+          }
+        });
+      }
     }
   };
 

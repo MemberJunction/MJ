@@ -12,11 +12,19 @@
       {
         "name": "Deals",
         "description": "Deal records for funnel visualization",
-        "displayFields": ["ID", "Name", "Amount", "Stage", "Probability"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Amount",
+          "Stage",
+          "Probability"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Funnel stage data passed via props"
       }
     ],
@@ -47,9 +55,16 @@
       "type": "{count: number, value: number}",
       "description": "Closed lost deals data",
       "required": true
+    },
+    {
+      "name": "formatCurrency",
+      "type": "(value: number) => string",
+      "description": "Function to format currency values",
+      "required": true
     }
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Funnel chart visualization sub-component for displaying sales pipeline stages"
 }

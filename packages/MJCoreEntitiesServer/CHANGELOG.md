@@ -1,5 +1,144 @@
 # @memberjunction/core-entities-server
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/skip-types@2.125.0
+  - @memberjunction/ai-engine-base@2.125.0
+  - @memberjunction/ai-core-plus@2.125.0
+  - @memberjunction/aiengine@2.125.0
+  - @memberjunction/ai-prompts@2.125.0
+  - @memberjunction/ai-vector-dupe@2.125.0
+  - @memberjunction/actions-base@2.125.0
+  - @memberjunction/doc-utils@2.125.0
+  - @memberjunction/sqlserver-dataprovider@2.125.0
+  - @memberjunction/ai-provider-bundle@2.125.0
+  - @memberjunction/ai@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+- Updated dependencies [cabe329]
+- Updated dependencies [629cf5a]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ai-core-plus@2.124.0
+  - @memberjunction/ai-prompts@2.124.0
+  - @memberjunction/ai-engine-base@2.124.0
+  - @memberjunction/aiengine@2.124.0
+  - @memberjunction/ai-vector-dupe@2.124.0
+  - @memberjunction/actions-base@2.124.0
+  - @memberjunction/doc-utils@2.124.0
+  - @memberjunction/sqlserver-dataprovider@2.124.0
+  - @memberjunction/skip-types@2.124.0
+  - @memberjunction/ai-provider-bundle@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.123.1
+- @memberjunction/ai@2.123.1
+- @memberjunction/ai-core-plus@2.123.1
+- @memberjunction/aiengine@2.123.1
+- @memberjunction/ai-prompts@2.123.1
+- @memberjunction/ai-provider-bundle@2.123.1
+- @memberjunction/ai-vector-dupe@2.123.1
+- @memberjunction/actions-base@2.123.1
+- @memberjunction/doc-utils@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/sqlserver-dataprovider@2.123.1
+- @memberjunction/skip-types@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- Updated dependencies [0944f59]
+  - @memberjunction/ai-core-plus@2.123.0
+  - @memberjunction/aiengine@2.123.0
+  - @memberjunction/ai-prompts@2.123.0
+  - @memberjunction/ai-vector-dupe@2.123.0
+  - @memberjunction/sqlserver-dataprovider@2.123.0
+  - @memberjunction/ai-provider-bundle@2.123.0
+  - @memberjunction/ai-engine-base@2.123.0
+  - @memberjunction/ai@2.123.0
+  - @memberjunction/actions-base@2.123.0
+  - @memberjunction/doc-utils@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+  - @memberjunction/skip-types@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/ai-prompts@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/sqlserver-dataprovider@2.122.2
+  - @memberjunction/ai-provider-bundle@2.122.2
+  - @memberjunction/ai-vector-dupe@2.122.2
+  - @memberjunction/ai-engine-base@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/aiengine@2.122.2
+  - @memberjunction/actions-base@2.122.2
+  - @memberjunction/doc-utils@2.122.2
+  - @memberjunction/skip-types@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.122.1
+- @memberjunction/aiengine@2.122.1
+- @memberjunction/ai-prompts@2.122.1
+- @memberjunction/ai-provider-bundle@2.122.1
+- @memberjunction/ai-vector-dupe@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/core-entities@2.122.1
+- @memberjunction/global@2.122.1
+- @memberjunction/sqlserver-dataprovider@2.122.1
+- @memberjunction/skip-types@2.122.1
+
+## 2.122.0
+
+### Minor Changes
+
+- c989c45: migration
+
+### Patch Changes
+
+- 6de83ec: Add component linter enhancements with type inference and control flow analysis, DBAutoDoc query generation features, MCP server diagnostic tools, metadata sync improvements, and enhanced JWKS client with HTTP keep-alive connections and connection pooling to prevent socket hangups
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/sqlserver-dataprovider@2.122.0
+  - @memberjunction/skip-types@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/ai-core-plus@2.122.0
+  - @memberjunction/aiengine@2.122.0
+  - @memberjunction/ai-prompts@2.122.0
+  - @memberjunction/ai-vector-dupe@2.122.0
+  - @memberjunction/ai-provider-bundle@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

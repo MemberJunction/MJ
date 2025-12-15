@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component using createElement instead of JSX (violates prefer-jsx-syntax rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  return React.createElement('div', null,\n    React.createElement('h1', null, 'Test Component'),\n    React.createElement('p', null, `Data count: ${data.length}`)\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

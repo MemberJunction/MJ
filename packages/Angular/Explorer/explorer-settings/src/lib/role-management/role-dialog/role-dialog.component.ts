@@ -17,8 +17,6 @@ export interface RoleDialogResult {
 
 @Component({
   selector: 'mj-role-dialog',
-  standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './role-dialog.component.html',
   styleUrls: ['./role-dialog.component.css']

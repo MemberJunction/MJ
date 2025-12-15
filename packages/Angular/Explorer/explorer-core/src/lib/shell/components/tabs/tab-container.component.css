@@ -1,0 +1,304 @@
+:host {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tab-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+}
+
+.gl-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: white;
+}
+
+/* Direct content container for single-resource mode */
+/* Renders components directly without Golden Layout overhead */
+.direct-content-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  overflow: hidden;
+}
+
+.tab-content-container {
+  background: white;
+  color: #333;
+  padding: 20px;
+}
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 150px;
+  z-index: 10001;
+  overflow: hidden;
+}
+
+.context-menu .context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #424242;
+  transition: background 0.15s;
+}
+
+.context-menu .context-menu-item i {
+  width: 16px;
+  text-align: center;
+  color: #757575;
+}
+
+.context-menu .context-menu-item:hover {
+  background: #f5f5f5;
+}
+
+.context-menu .context-menu-divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 4px 0;
+}
+
+/* Override Golden Layout styles */
+/* Global overrides */
+
+/* Ensure GL root container fills available space */
+mj-tab-container .lm_goldenlayout {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure the root layout item fills space */
+mj-tab-container .lm_root {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure proper box-sizing for all GL layout elements */
+mj-tab-container .lm_item,
+mj-tab-container .lm_content,
+mj-tab-container .lm_stack,
+mj-tab-container .lm_row,
+mj-tab-container .lm_column {
+  box-sizing: border-box !important;
+}
+
+/* Ensure layout items don't overflow */
+mj-tab-container .lm_item {
+  overflow: hidden !important;
+}
+
+/* Fix for .lm_items - the content container inside stacks */
+/* This is separate from .lm_item - it holds the actual tab content */
+mj-tab-container .lm_items {
+  width: 100% !important;
+  height: calc(100% - 38px) !important; /* Account for header height (38px) */
+  box-sizing: border-box !important;
+  position: relative !important;
+}
+
+/* When tabs are maximized, no header visible */
+mj-tab-container .lm_stack.lm_maximised > .lm_items {
+  height: 100% !important;
+}
+
+/* Target the anonymous ComponentItem div inside lm_items (has no class) */
+/* Created in golden-layout/src/ts/items/component-item.ts:51 without a class */
+/* NOTE: Do NOT set display here - GL uses display:none to hide inactive tabs */
+mj-tab-container .lm_items > div {
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
+  flex-direction: column !important;
+}
+
+/* Only apply flex display to the active/visible tab content div */
+mj-tab-container .lm_items > div:not([style*="display: none"]) {
+  display: flex !important;
+}
+
+/* Clearfix for float-based row layout - GL uses float:left for horizontal panes */
+mj-tab-container .lm_row::after {
+  content: "" !important;
+  display: table !important;
+  clear: both !important;
+}
+
+/* Force content children to respect parent bounds (GL sets pixel widths inline) */
+mj-tab-container .lm_content > * {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+mj-tab-container .lm_content {
+  background: white !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+mj-tab-container .lm_item_container {
+  background: white !important;
+}
+
+/* Tab content wrapper - allow scrolling */
+.tab-content-wrapper {
+  overflow: auto !important;
+}
+
+/* Make tabs larger and easier to click */
+mj-tab-container .lm_header {
+  height: 38px !important;
+  padding-top: 2px !important;
+  padding-left: 4px !important;
+  background: #f5f5f5 !important;
+  border-bottom: 1px solid #ebebeb !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+
+mj-tab-container .lm_tabs {
+  height: 36px !important;
+}
+
+/* Hide Golden Layout window controls */
+mj-tab-container .lm_controls {
+  display: none !important;
+}
+
+mj-tab-container .lm_header .lm_tab {
+  padding: 0 16px !important;
+  font-size: 13px !important;
+  height: 35px !important;
+  line-height: 35px !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid #ebebeb !important;
+  transition: all 0.15s ease !important;
+  position: relative !important;
+  z-index: 1 !important;
+  margin-right: 1px !important;
+}
+
+/* App color accent - left edge indicator */
+mj-tab-container .lm_header .lm_tab::before {
+  content: '' !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 4px !important;
+  bottom: 4px !important;
+  width: 3px !important;
+  border-radius: 0 2px 2px 0 !important;
+  background-color: var(--app-color, transparent) !important;
+  opacity: 0.6 !important;
+  transition: all 0.15s ease !important;
+}
+
+mj-tab-container .lm_header .lm_tab:hover {
+  background: #e8e8e8 !important;
+}
+
+mj-tab-container .lm_header .lm_tab:hover .lm_close_tab {
+  opacity: 0.7 !important;
+}
+
+mj-tab-container .lm_header .lm_tab:hover::before {
+  opacity: 0.8 !important;
+}
+
+mj-tab-container .lm_header .lm_tab.lm_active {
+  background: white !important;
+  height: 36px !important;
+  margin-bottom: -1px !important;
+  margin-right: 0 !important;
+  border: 1px solid #ebebeb !important;
+  border-bottom-color: white !important;
+  border-radius: 4px 4px 0 0 !important;
+  z-index: 2 !important;
+}
+
+/* Enhanced app color accent for active tab */
+mj-tab-container .lm_header .lm_tab.lm_active::before {
+  opacity: 1 !important;
+  width: 3px !important;
+  top: 2px !important;
+  bottom: 2px !important;
+  box-shadow: 0 0 6px var(--app-color, transparent) !important;
+}
+
+mj-tab-container .lm_title {
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+mj-tab-container .lm_close_tab {
+  position: absolute !important;
+  right: 4px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 16px !important;
+  height: 16px !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 10px !important;
+  color: #757575 !important;
+}
+
+mj-tab-container .lm_close_tab:hover {
+  opacity: 1 !important;
+  color: #c62828 !important;
+}
+
+/* Show close button on hover (except pinned) */
+mj-tab-container .lm_header .lm_tab:hover:not(.pinned) .lm_close_tab {
+  opacity: 0.7 !important;
+}
+
+/* Pinned tabs never show close button */
+mj-tab-container .lm_header .lm_tab.pinned .lm_close_tab {
+  display: none !important;
+}
+
+/* Hide close button on active tab by default */
+mj-tab-container .lm_active .lm_close_tab {
+  opacity: 0 !important;
+}
+
+/* Show close button when hovering active tab */
+mj-tab-container .lm_active:hover .lm_close_tab {
+  opacity: 0.7 !important;
+}
+
+/* Adjust padding for close button */
+mj-tab-container .lm_header .lm_tab {
+  padding-right: 24px !important;
+}

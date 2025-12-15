@@ -1,0 +1,21 @@
+{
+  "name": "ComponentPropNameCaseBroken",
+  "type": "generic",
+  "title": "Component Property Name Case Mismatch - Broken Pattern",
+  "description": "Tests linter detection of case mismatch in component property",
+  "code": "function ComponentPropNameCaseBroken({ utilities, components }) {\n  const [products, setProducts] = useState([]);\n  const { EntityGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Products' });\n      if (result?.Success) {\n        setProducts(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Products</h3>\n      {/* ❌ Case mismatch: entityname should be entityName */}\n      <EntityGrid entityname=\"Products\" data={products} />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "components": [{
+      "name": "EntityGrid",
+      "properties": [
+        {"name": "entityName", "type": "string", "isRequired": true},
+        {"name": "data", "type": "array", "isRequired": false}
+      ]
+    }]
+  }
+}

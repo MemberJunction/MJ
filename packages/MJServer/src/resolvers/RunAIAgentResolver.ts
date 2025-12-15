@@ -170,12 +170,32 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private parseJsonInput(jsonString: string | undefined, fieldName: string): any {
         if (!jsonString) return {};
-        
+
         try {
             return JSON.parse(jsonString);
         } catch (parseError) {
             throw new Error(`Invalid JSON in ${fieldName}: ${(parseError as Error).message}`);
         }
+    }
+
+    /**
+     * Extract the user message from the messages array
+     * Looks for the last user message in the conversation
+     */
+    private extractUserMessage(messages: any[]): string | undefined {
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return undefined;
+        }
+
+        // Find the last user message in the array
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg && msg.role === 'user' && msg.content) {
+                return msg.content;
+            }
+        }
+
+        return undefined;
     }
 
     /**
@@ -347,6 +367,9 @@ export class RunAIAgentResolver extends ResolverBase {
                 throw new Error('Messages must be an array');
             }
 
+            // Extract user message from messages array (needed when conversationDetailId not provided)
+            const userMessage = this.extractUserMessage(parsedMessages);
+
             // Parse data contexts
             const parsedData = this.parseJsonInput(data, 'data');
             const parsedTemplateData = this.parseJsonInput(templateData, 'templateData');
@@ -356,7 +379,7 @@ export class RunAIAgentResolver extends ResolverBase {
             if (!currentUser) {
                 throw new Error('Unable to determine current user');
             }
-            
+
             // Validate agent
             const agentEntity = await this.validateAgent(agentId, currentUser);
 
@@ -387,6 +410,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 }
             }, {
                 conversationDetailId: conversationDetailId, // Use existing if provided
+                userMessage: userMessage, // Provide user message when conversationDetailId not provided
                 createArtifacts: createArtifacts || false,
                 sourceArtifactId: sourceArtifactId
             });

@@ -121,15 +121,16 @@ export class FormattingService {
             errors: number;
             duration: number;
             unchanged?: number;
+            deferred?: number;
         }
     ): string {
         const lines: string[] = [];
-        
+
         lines.push(this.formatHeader(`${operation.charAt(0).toUpperCase() + operation.slice(1)} Summary`));
         lines.push('');
-        
+
         const total = stats.created + stats.updated + stats.deleted + stats.skipped + (stats.unchanged || 0);
-        
+
         lines.push(chalk.bold('Operation Statistics:'));
         lines.push('');
         lines.push(`  ${chalk.green(this.symbols.success)} Created: ${chalk.green(stats.created)}`);
@@ -139,15 +140,18 @@ export class FormattingService {
         }
         lines.push(`  ${chalk.red(this.symbols.error)} Deleted: ${chalk.red(stats.deleted)}`);
         lines.push(`  ${chalk.gray('-')} Skipped: ${chalk.gray(stats.skipped)}`);
+        if (stats.deferred !== undefined && stats.deferred > 0) {
+            lines.push(`  ${chalk.yellow('⏳')} Deferred: ${chalk.yellow(stats.deferred)}`);
+        }
         lines.push('');
         lines.push(`  Total Records: ${chalk.bold(total)}`);
         lines.push(`  Duration: ${chalk.cyan(this.formatDuration(stats.duration))}`);
-        
+
         if (stats.errors > 0) {
             lines.push('');
             lines.push(chalk.red(`  ${this.symbols.error} Errors: ${stats.errors}`));
         }
-        
+
         return lines.join('\n');
     }
 

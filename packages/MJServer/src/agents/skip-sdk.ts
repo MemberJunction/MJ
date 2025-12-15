@@ -382,61 +382,50 @@ export class SkipSDK {
         const approvedQueries = md.Queries.filter((q) => q.Status === status);
 
         return approvedQueries.map((q) => ({
-            id: q.ID,
-            name: q.Name,
-            description: q.Description,
-            category: q.Category,
-            categoryPath: this.buildQueryCategoryPath(md, q.CategoryID),
-            sql: q.SQL,
-            originalSQL: q.OriginalSQL,
-            feedback: q.Feedback,
-            status: q.Status,
-            qualityRank: q.QualityRank,
-            createdAt: q.__mj_CreatedAt,
-            updatedAt: q.__mj_UpdatedAt,
-            categoryID: q.CategoryID,
-            embeddingVector: q.EmbeddingVector,
-            embeddingModelID: q.EmbeddingModelID,
-            embeddingModelName: q.EmbeddingModel,
-            fields: q.Fields.map((f) => ({
-                id: f.ID,
-                queryID: f.QueryID,
-                sequence: f.Sequence,
-                name: f.Name,
-                description: f.Description,
-                sqlBaseType: f.SQLBaseType,
-                sqlFullType: f.SQLFullType,
-                sourceEntityID: f.SourceEntityID,
-                sourceEntity: f.SourceEntity,
-                sourceFieldName: f.SourceFieldName,
-                isComputed: f.IsComputed,
-                computationDescription: f.ComputationDescription,
-                isSummary: f.IsSummary,
-                summaryDescription: f.SummaryDescription,
-                createdAt: f.__mj_CreatedAt,
-                updatedAt: f.__mj_UpdatedAt
+            ID: q.ID,
+            Name: q.Name,
+            Description: q.Description,
+            Category: q.Category,
+            CategoryPath: this.buildQueryCategoryPath(md, q.CategoryID),
+            CategoryID: q.CategoryID,
+            SQL: q.SQL,
+            Status: q.Status,
+            QualityRank: q.QualityRank,
+            EmbeddingVector: q.EmbeddingVector,
+            EmbeddingModelID: q.EmbeddingModelID,
+            EmbeddingModelName: q.EmbeddingModel,
+            Fields: q.Fields.map((f) => ({
+                ID: f.ID,
+                QueryID: f.QueryID,
+                Name: f.Name,
+                Description: f.Description,
+                Sequence: f.Sequence,
+                SQLBaseType: f.SQLBaseType,
+                SQLFullType: f.SQLFullType,
+                SourceEntityID: f.SourceEntityID,
+                SourceEntity: f.SourceEntity,
+                SourceFieldName: f.SourceFieldName,
+                IsComputed: f.IsComputed,
+                ComputationDescription: f.ComputationDescription,
+                IsSummary: f.IsSummary,
+                SummaryDescription: f.SummaryDescription
             })),
-            params: q.Parameters.map((p) => ({
-                id: p.ID,
-                queryID: p.QueryID,
-                name: p.Name,
-                description: p.Description,
-                type: p.Type,
-                isRequired: p.IsRequired,
-                // LinkedParameterName and LinkedParameterType may not exist on QueryParameterInfo
-                defaultValue: p.DefaultValue,
-                createdAt: p.__mj_CreatedAt,
-                updatedAt: p.__mj_UpdatedAt
+            Parameters: q.Parameters.map((p) => ({
+                ID: p.ID,
+                QueryID: p.QueryID,
+                Name: p.Name,
+                Description: p.Description,
+                Type: p.Type,
+                IsRequired: p.IsRequired,
+                DefaultValue: p.DefaultValue,
+                SampleValue: p.SampleValue,
+                ValidationFilters: p.ValidationFilters
             })),
-            entities: q.Entities.map((e) => ({
-                id: e.ID,
-                queryID: e.QueryID,
-                entityID: e.EntityID,
-                entityName: e.Entity,
-                detectionMethod: e.DetectionMethod,
-                autoDetectConfidenceScore: e.AutoDetectConfidenceScore,
-                createdAt: e.__mj_CreatedAt,
-                updatedAt: e.__mj_UpdatedAt
+            Entities: q.Entities.map((e) => ({
+                ID: e.ID,
+                QueryID: e.QueryID,
+                EntityID: e.EntityID,
+                Entity: e.Entity
             }))
         }));
     }
@@ -624,12 +613,18 @@ export class SkipSDK {
     private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo[]> {
         try {
             const md = new Metadata();
+
+            // Diagnostic logging
+            LogStatus(`[SkipSDK.refreshSkipEntities] Total entities in metadata: ${md.Entities.length}`);
+            LogStatus(`[SkipSDK.refreshSkipEntities] Config excludeSchemas: ${JSON.stringify(configInfo.askSkip?.entitiesToSend?.excludeSchemas)}`);
+            LogStatus(`[SkipSDK.refreshSkipEntities] Config includeEntitiesFromExcludedSchemas: ${JSON.stringify(configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas)}`);
+
             const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? [])
                 .map((e) => e.trim().toLowerCase());
 
             // Get the list of entities
             const entities = md.Entities.filter((e) => {
-                if (!configInfo.askSkip.entitiesToSend.excludeSchemas.includes(e.SchemaName) ||
+                if (!(configInfo.askSkip?.entitiesToSend?.excludeSchemas ?? []).includes(e.SchemaName) ||
                     skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
                     const sd = e.ScopeDefault?.trim();
                     if (sd && sd.length > 0) {
@@ -643,8 +638,15 @@ export class SkipSDK {
                 return false;
             });
 
+            LogStatus(`[SkipSDK.refreshSkipEntities] Filtered entities count: ${entities.length}`);
+            if (entities.length === 0) {
+                LogError(`[SkipSDK.refreshSkipEntities] WARNING: No entities passed filtering! This will result in empty Skip entities list.`);
+            }
+
             // Now we have our list of entities, pack em up
             const result = await Promise.all(entities.map((e) => this.packSingleSkipEntityInfo(e, dataSource)));
+
+            LogStatus(`[SkipSDK.refreshSkipEntities] Successfully packed ${result.length} entities for Skip`);
 
             SkipSDK.__lastRefreshTime = Date.now(); // Update last refresh time
             return result;

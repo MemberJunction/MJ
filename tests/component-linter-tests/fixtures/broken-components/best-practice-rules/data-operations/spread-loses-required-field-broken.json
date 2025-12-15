@@ -1,0 +1,18 @@
+{
+  "name": "SpreadLosesRequiredFieldBroken",
+  "type": "generic",
+  "title": "Spread Loses Required Field - Broken Pattern",
+  "description": "Tests spread operator that loses required field needed downstream (may fail until linter refactor)",
+  "code": "function SpreadLosesRequiredFieldBroken({ utilities, components }) {\n  const [members, setMembers] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Spread excludes Email field that grid needs\n        const {Email, ...rest} = result.Results[0];\n        const processed = result.Results.map(m => {\n          const {Email, ...memberData} = m;\n          return memberData;\n        });\n        setMembers(processed);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* Grid expects Email field but it was excluded */}\n      <DataGrid \n        data={members} \n        columns={[\n          {field: 'FirstName', title: 'Name'},\n          {field: 'Email', title: 'Email'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email", "Status"]
+    }]
+  }
+}

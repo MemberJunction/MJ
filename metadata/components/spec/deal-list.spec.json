@@ -12,11 +12,25 @@
       {
         "name": "Deals",
         "description": "Deal entities displayed in table format",
-        "displayFields": ["ID", "DealName", "Amount", "CloseDate", "Probability", "Stage", "Account"],
+        "displayFields": [
+          "ID",
+          "DealName",
+          "Amount",
+          "CloseDate",
+          "Probability",
+          "Stage",
+          "Account"
+        ],
         "filterFields": [],
-        "sortFields": ["DealName", "Amount", "Probability"],
+        "sortFields": [
+          "DealName",
+          "Amount",
+          "Probability"
+        ],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Array of deals displayed as sortable table rows"
       }
     ],
@@ -40,5 +54,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "List view component for deals with tabular display"
 }

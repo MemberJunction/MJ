@@ -2464,13 +2464,16 @@ export type ApplicationSettingEntityType = z.infer<typeof ApplicationSettingSche
 export const ApplicationSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     Icon: z.string().nullable().describe(`
         * * Field Name: Icon
@@ -2485,12 +2488,12 @@ export const ApplicationSchema = z.object({
         * * Description: If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     SchemaAutoAddNewEntities: z.string().nullable().describe(`
@@ -2498,6 +2501,76 @@ export const ApplicationSchema = z.object({
         * * Display Name: Schema Auto Add New Entities
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Hex color code for visual theming (e.g., #4caf50)`),
+    DefaultNavItems: z.string().nullable().describe(`
+        * * Field Name: DefaultNavItems
+        * * Display Name: Default Nav Items
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`),
+    ClassName: z.string().nullable().describe(`
+        * * Field Name: ClassName
+        * * Display Name: Class Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: TypeScript class name for ClassFactory registration (e.g., CRMApplication)`),
+    DefaultSequence: z.number().describe(`
+        * * Field Name: DefaultSequence
+        * * Display Name: Default Sequence
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Default sequence position when adding this application to a new user's User Applications. Lower values appear first. Used when DefaultForNewUser is true.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    *   * Pending
+        * * Description: Application lifecycle status. Pending = not yet ready, Active = available for use, Disabled = temporarily unavailable, Deprecated = being phased out. Only Active applications are shown to users.`),
+    NavigationStyle: z.union([z.literal('App Switcher'), z.literal('Both'), z.literal('Nav Bar')]).describe(`
+        * * Field Name: NavigationStyle
+        * * Display Name: Navigation Style
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: App Switcher
+    * * Value List Type: List
+    * * Possible Values 
+    *   * App Switcher
+    *   * Both
+    *   * Nav Bar
+        * * Description: How the application appears in navigation. App Switcher = only in dropdown menu, Nav Bar = permanent icon in top nav, Both = shown in both locations.`),
+    TopNavLocation: z.union([z.literal('Left of App Switcher'), z.literal('Left of User Menu')]).nullable().describe(`
+        * * Field Name: TopNavLocation
+        * * Display Name: Top Nav Location
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Left of App Switcher
+    *   * Left of User Menu
+        * * Description: Position of the permanent nav icon when NavigationStyle is Nav Bar or Both. Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar. Ignored when NavigationStyle is App Switcher.`),
+    HideNavBarIconWhenActive: z.boolean().describe(`
+        * * Field Name: HideNavBarIconWhenActive
+        * * Display Name: Hide Nav Bar Icon When Active
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, the Nav Bar icon for this application is hidden when the application is active. Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app. Only applies when NavigationStyle is Nav Bar or Both.`),
+    Path: z.string().describe(`
+        * * Field Name: Path
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(100)
+        * * Description: URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer"). Used in URLs instead of the full Name. Auto-generated from Name when AutoUpdatePath is true. Must be unique across all applications.`),
+    AutoUpdatePath: z.boolean().describe(`
+        * * Field Name: AutoUpdatePath
+        * * Display Name: Auto Update Path
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.`),
 });
 
 export type ApplicationEntityType = z.infer<typeof ApplicationSchema>;
@@ -6286,7 +6359,7 @@ export const EntityFieldValueSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityFieldID: z.string().describe(`
         * * Field Name: EntityFieldID
-        * * Display Name: Entity Field ID
+        * * Display Name: Entity Field
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)`),
     Sequence: z.number().describe(`
@@ -6310,12 +6383,12 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EntityField: z.string().describe(`
@@ -6328,7 +6401,7 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -6340,20 +6413,23 @@ export type EntityFieldValueEntityType = z.infer<typeof EntityFieldValueSchema>;
 export const EntityFieldSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     Sequence: z.number().describe(`
         * * Field Name: Sequence
+        * * Display Name: Sequence
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Display order of the field within the entity`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the field within the database table`),
     DisplayName: z.string().nullable().describe(`
@@ -6363,6 +6439,7 @@ export const EntityFieldSchema = z.object({
         * * Description: A user friendly alternative to the field name`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Descriptive text explaining the purpose of the field`),
     AutoUpdateDescription: z.boolean().describe(`
@@ -6373,13 +6450,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Is Primary Key
+        * * Display Name: Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)`),
     IsUnique: z.boolean().describe(`
         * * Field Name: IsUnique
-        * * Display Name: Is Unique
+        * * Display Name: Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field must have unique values within the entity.`),
@@ -6390,18 +6467,22 @@ export const EntityFieldSchema = z.object({
         * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category`),
     Type: z.string().describe(`
         * * Field Name: Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)
         * * Description: SQL Data type (auto maintained by CodeGen)`),
     Length: z.number().nullable().describe(`
         * * Field Name: Length
+        * * Display Name: Length
         * * SQL Data Type: int
         * * Description: SQL data length (auto maintained by CodeGen)`),
     Precision: z.number().nullable().describe(`
         * * Field Name: Precision
+        * * Display Name: Precision
         * * SQL Data Type: int
         * * Description: SQL precision (auto maintained by CodeGen)`),
     Scale: z.number().nullable().describe(`
         * * Field Name: Scale
+        * * Display Name: Scale
         * * SQL Data Type: int
         * * Description: SQL scale (auto maintained by CodeGen)`),
     AllowsNull: z.boolean().describe(`
@@ -6529,19 +6610,19 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`),
     IsVirtual: z.boolean().describe(`
         * * Field Name: IsVirtual
-        * * Display Name: Is Virtual
+        * * Display Name: Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: NULL`),
     IsNameField: z.boolean().describe(`
         * * Field Name: IsNameField
-        * * Display Name: Is Name Field
+        * * Display Name: Name Field
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.`),
     RelatedEntityID: z.string().nullable().describe(`
         * * Field Name: RelatedEntityID
-        * * Display Name: RelatedEntity ID
+        * * Display Name: Related Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     RelatedEntityFieldName: z.string().nullable().describe(`
@@ -6568,17 +6649,17 @@ export const EntityFieldSchema = z.object({
         * * Description: Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown`),
     EntityIDFieldName: z.string().nullable().describe(`
         * * Field Name: EntityIDFieldName
-        * * Display Name: Entity IDField Name
+        * * Display Name: Entity ID Field Name
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     ScopeDefault: z.string().nullable().describe(`
@@ -6632,12 +6713,25 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field`),
+    AutoUpdateDisplayName: z.boolean().describe(`
+        * * Field Name: AutoUpdateDisplayName
+        * * Display Name: Auto Update Display Name
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field`),
+    AutoUpdateIncludeInUserSearchAPI: z.boolean().describe(`
+        * * Field Name: AutoUpdateIncludeInUserSearchAPI
+        * * Display Name: Auto Update Include In User Search API
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
         * * SQL Data Type: nvarchar(MAX)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     SchemaName: z.string().describe(`
         * * Field Name: SchemaName
@@ -11694,7 +11788,7 @@ export const ComponentSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Detailed description of the component functionality`),
+        * * Description: [READ-ONLY] Detailed description of the component functionality. This field is automatically synchronized from the Specification.description field and should not be edited directly. To update this value, edit the component spec file.`),
     Type: z.union([z.literal('Chart'), z.literal('Dashboard'), z.literal('Form'), z.literal('Navigation'), z.literal('Other'), z.literal('Report'), z.literal('Search'), z.literal('Table'), z.literal('Utility'), z.literal('Widget')]).nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
@@ -11772,12 +11866,12 @@ export const ComponentSchema = z.object({
         * * Field Name: FunctionalRequirements
         * * Display Name: Functional Requirements
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Functional requirements describing what the component should accomplish`),
+        * * Description: [READ-ONLY] Functional requirements describing what the component should accomplish. This field is automatically synchronized from the Specification.functionalRequirements field and should not be edited directly. To update this value, edit the component spec file.`),
     TechnicalDesign: z.string().nullable().describe(`
         * * Field Name: TechnicalDesign
         * * Display Name: Technical Design
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Technical design describing how the component is implemented`),
+        * * Description: [READ-ONLY] Technical design describing how the component is implemented. This field is automatically synchronized from the Specification.technicalDesign field and should not be edited directly. To update this value, edit the component spec file.`),
     FunctionalRequirementsVector: z.string().nullable().describe(`
         * * Field Name: FunctionalRequirementsVector
         * * Display Name: Functional Requirements Vector
@@ -13918,6 +14012,49 @@ export const TestSchema = z.object({
 export type TestEntityType = z.infer<typeof TestSchema>;
 
 /**
+ * zod schema definition for the entity MJ: User Settings
+ */
+export const UserSettingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user this setting belongs to.`),
+    Setting: z.string().describe(`
+        * * Field Name: Setting
+        * * Display Name: Setting
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The setting key/name. Use namespaced keys like "DataExplorer.ViewMode" or "Dashboard.AI.CollapsedSections" to avoid collisions.`),
+    Value: z.string().nullable().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The setting value. Can be simple text, numbers, booleans, or JSON for complex configuration objects.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type UserSettingEntityType = z.infer<typeof UserSettingSchema>;
+
+/**
  * zod schema definition for the entity Output Delivery Types
  */
 export const OutputDeliveryTypeSchema = z.object({
@@ -15627,6 +15764,11 @@ export const ResourceTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         * * Description: Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The Angular component class name to instantiate for this resource type. NULL for Custom resource type (uses NavItem DriverClass instead).`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -16896,27 +17038,30 @@ export type UserViewRunEntityType = z.infer<typeof UserViewRunSchema>;
 export const UserViewSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)`),
     IsShared: z.boolean().describe(`
@@ -16986,12 +17131,12 @@ export const UserViewSchema = z.object({
         * * Description: JSON storing the view's sort configuration.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     Thumbnail: z.string().nullable().describe(`
@@ -16999,13 +17144,23 @@ export const UserViewSchema = z.object({
         * * Display Name: Thumbnail
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Thumbnail image for the user view that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
+    CardState: z.string().nullable().describe(`
+        * * Field Name: CardState
+        * * Display Name: Card State
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.`),
+    DisplayState: z.string().nullable().describe(`
+        * * Field Name: DisplayState
+        * * Display Name: Display State
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.`),
     UserName: z.string().describe(`
         * * Field Name: UserName
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     UserFirstLast: z.string().nullable().describe(`
         * * Field Name: UserFirstLast
-        * * Display Name: User First Last
+        * * Display Name: User Full Name
         * * SQL Data Type: nvarchar(101)`),
     UserEmail: z.string().describe(`
         * * Field Name: UserEmail
@@ -17576,6 +17731,11 @@ export const WorkspaceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON blob containing all workspace state: tabs, layout configuration, theme preferences, and active tab. Replaces WorkspaceItem table.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -23954,6 +24114,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -23966,6 +24127,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -23977,6 +24139,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string | null {
@@ -24015,7 +24178,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -24025,7 +24188,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -24044,6 +24207,156 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     }
     set SchemaAutoAddNewEntities(value: string | null) {
         this.Set('SchemaAutoAddNewEntities', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Hex color code for visual theming (e.g., #4caf50)
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
+    * * Field Name: DefaultNavItems
+    * * Display Name: Default Nav Items
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
+    */
+    get DefaultNavItems(): string | null {
+        return this.Get('DefaultNavItems');
+    }
+    set DefaultNavItems(value: string | null) {
+        this.Set('DefaultNavItems', value);
+    }
+
+    /**
+    * * Field Name: ClassName
+    * * Display Name: Class Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: TypeScript class name for ClassFactory registration (e.g., CRMApplication)
+    */
+    get ClassName(): string | null {
+        return this.Get('ClassName');
+    }
+    set ClassName(value: string | null) {
+        this.Set('ClassName', value);
+    }
+
+    /**
+    * * Field Name: DefaultSequence
+    * * Display Name: Default Sequence
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Default sequence position when adding this application to a new user's User Applications. Lower values appear first. Used when DefaultForNewUser is true.
+    */
+    get DefaultSequence(): number {
+        return this.Get('DefaultSequence');
+    }
+    set DefaultSequence(value: number) {
+        this.Set('DefaultSequence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    *   * Pending
+    * * Description: Application lifecycle status. Pending = not yet ready, Active = available for use, Disabled = temporarily unavailable, Deprecated = being phased out. Only Active applications are shown to users.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: NavigationStyle
+    * * Display Name: Navigation Style
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: App Switcher
+    * * Value List Type: List
+    * * Possible Values 
+    *   * App Switcher
+    *   * Both
+    *   * Nav Bar
+    * * Description: How the application appears in navigation. App Switcher = only in dropdown menu, Nav Bar = permanent icon in top nav, Both = shown in both locations.
+    */
+    get NavigationStyle(): 'App Switcher' | 'Both' | 'Nav Bar' {
+        return this.Get('NavigationStyle');
+    }
+    set NavigationStyle(value: 'App Switcher' | 'Both' | 'Nav Bar') {
+        this.Set('NavigationStyle', value);
+    }
+
+    /**
+    * * Field Name: TopNavLocation
+    * * Display Name: Top Nav Location
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Left of App Switcher
+    *   * Left of User Menu
+    * * Description: Position of the permanent nav icon when NavigationStyle is Nav Bar or Both. Left of App Switcher = appears before the app switcher, Left of User Menu = appears near the user avatar. Ignored when NavigationStyle is App Switcher.
+    */
+    get TopNavLocation(): 'Left of App Switcher' | 'Left of User Menu' | null {
+        return this.Get('TopNavLocation');
+    }
+    set TopNavLocation(value: 'Left of App Switcher' | 'Left of User Menu' | null) {
+        this.Set('TopNavLocation', value);
+    }
+
+    /**
+    * * Field Name: HideNavBarIconWhenActive
+    * * Display Name: Hide Nav Bar Icon When Active
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, the Nav Bar icon for this application is hidden when the application is active. Useful for launcher-style apps like Home that should only be visible when the user is NOT in that app. Only applies when NavigationStyle is Nav Bar or Both.
+    */
+    get HideNavBarIconWhenActive(): boolean {
+        return this.Get('HideNavBarIconWhenActive');
+    }
+    set HideNavBarIconWhenActive(value: boolean) {
+        this.Set('HideNavBarIconWhenActive', value);
+    }
+
+    /**
+    * * Field Name: Path
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(100)
+    * * Description: URL-friendly slug for the application (e.g., "data-explorer" for "Data Explorer"). Used in URLs instead of the full Name. Auto-generated from Name when AutoUpdatePath is true. Must be unique across all applications.
+    */
+    get Path(): string {
+        return this.Get('Path');
+    }
+    set Path(value: string) {
+        this.Set('Path', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdatePath
+    * * Display Name: Auto Update Path
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.
+    */
+    get AutoUpdatePath(): boolean {
+        return this.Get('AutoUpdatePath');
+    }
+    set AutoUpdatePath(value: boolean) {
+        this.Set('AutoUpdatePath', value);
     }
 }
 
@@ -33882,7 +34195,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityFieldID
-    * * Display Name: Entity Field ID
+    * * Display Name: Entity Field
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)
     */
@@ -33946,7 +34259,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -33956,7 +34269,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -33984,7 +34297,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     */
     get EntityID(): string {
@@ -34025,6 +34338,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -34037,7 +34351,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -34047,6 +34361,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Sequence
+    * * Display Name: Sequence
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Display order of the field within the entity
@@ -34057,6 +34372,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the field within the database table
     */
@@ -34079,6 +34395,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Descriptive text explaining the purpose of the field
     */
@@ -34105,7 +34422,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Is Primary Key
+    * * Display Name: Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
@@ -34119,7 +34436,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsUnique
-    * * Display Name: Is Unique
+    * * Display Name: Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.
@@ -34146,6 +34463,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Type
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     * * Description: SQL Data type (auto maintained by CodeGen)
     */
@@ -34155,6 +34473,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Length
+    * * Display Name: Length
     * * SQL Data Type: int
     * * Description: SQL data length (auto maintained by CodeGen)
     */
@@ -34164,6 +34483,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Precision
+    * * Display Name: Precision
     * * SQL Data Type: int
     * * Description: SQL precision (auto maintained by CodeGen)
     */
@@ -34173,6 +34493,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Scale
+    * * Display Name: Scale
     * * SQL Data Type: int
     * * Description: SQL scale (auto maintained by CodeGen)
     */
@@ -34424,7 +34745,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsVirtual
-    * * Display Name: Is Virtual
+    * * Display Name: Virtual
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: NULL
@@ -34435,7 +34756,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsNameField
-    * * Display Name: Is Name Field
+    * * Display Name: Name Field
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
@@ -34449,7 +34770,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityID
-    * * Display Name: RelatedEntity ID
+    * * Display Name: Related Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -34516,7 +34837,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: EntityIDFieldName
-    * * Display Name: Entity IDField Name
+    * * Display Name: Entity ID Field Name
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.
     */
@@ -34529,7 +34850,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34539,7 +34860,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -34655,6 +34976,34 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
 
     /**
+    * * Field Name: AutoUpdateDisplayName
+    * * Display Name: Auto Update Display Name
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field
+    */
+    get AutoUpdateDisplayName(): boolean {
+        return this.Get('AutoUpdateDisplayName');
+    }
+    set AutoUpdateDisplayName(value: boolean) {
+        this.Set('AutoUpdateDisplayName', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateIncludeInUserSearchAPI
+    * * Display Name: Auto Update Include In User Search API
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field
+    */
+    get AutoUpdateIncludeInUserSearchAPI(): boolean {
+        return this.Get('AutoUpdateIncludeInUserSearchAPI');
+    }
+    set AutoUpdateIncludeInUserSearchAPI(value: boolean) {
+        this.Set('AutoUpdateIncludeInUserSearchAPI', value);
+    }
+
+    /**
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -34665,6 +35014,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: Entity
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -36108,6 +36458,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'Explorer Navigation Items')
 export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationItemEntityType> {
@@ -47833,7 +48184,7 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     * * Field Name: Description
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Detailed description of the component functionality
+    * * Description: [READ-ONLY] Detailed description of the component functionality. This field is automatically synchronized from the Specification.description field and should not be edited directly. To update this value, edit the component spec file.
     */
     get Description(): string | null {
         return this.Get('Description');
@@ -48001,7 +48352,7 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     * * Field Name: FunctionalRequirements
     * * Display Name: Functional Requirements
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Functional requirements describing what the component should accomplish
+    * * Description: [READ-ONLY] Functional requirements describing what the component should accomplish. This field is automatically synchronized from the Specification.functionalRequirements field and should not be edited directly. To update this value, edit the component spec file.
     */
     get FunctionalRequirements(): string | null {
         return this.Get('FunctionalRequirements');
@@ -48014,7 +48365,7 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     * * Field Name: TechnicalDesign
     * * Display Name: Technical Design
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Technical design describing how the component is implemented
+    * * Description: [READ-ONLY] Technical design describing how the component is implemented. This field is automatically synchronized from the Specification.technicalDesign field and should not be edited directly. To update this value, edit the component spec file.
     */
     get TechnicalDesign(): string | null {
         return this.Get('TechnicalDesign');
@@ -53752,6 +54103,120 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
 
 /**
+ * MJ: User Settings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: UserSetting
+ * * Base View: vwUserSettings
+ * * @description Generic key-value store for per-user settings. Allows any application or feature to persist user preferences.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: User Settings')
+export class UserSettingEntity extends BaseEntity<UserSettingEntityType> {
+    /**
+    * Loads the MJ: User Settings record from the database
+    * @param ID: string - primary key value to load the MJ: User Settings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof UserSettingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user this setting belongs to.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Setting
+    * * Display Name: Setting
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The setting key/name. Use namespaced keys like "DataExplorer.ViewMode" or "Dashboard.AI.CollapsedSections" to avoid collisions.
+    */
+    get Setting(): string {
+        return this.Get('Setting');
+    }
+    set Setting(value: string) {
+        this.Set('Setting', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The setting value. Can be simple text, numbers, booleans, or JSON for complex configuration objects.
+    */
+    get Value(): string | null {
+        return this.Get('Value');
+    }
+    set Value(value: string | null) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+}
+
+
+/**
  * Output Delivery Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: OutputDeliveryType
@@ -58277,6 +58742,19 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     }
 
     /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The Angular component class name to instantiate for this resource type. NULL for Custom resource type (uses NavItem DriverClass instead).
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -61641,6 +62119,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -61653,7 +62132,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -61666,7 +62145,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
@@ -61679,6 +62158,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -61690,6 +62170,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string | null {
@@ -61701,7 +62182,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)
     */
@@ -61875,7 +62356,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -61885,7 +62366,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -61907,6 +62388,32 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     }
 
     /**
+    * * Field Name: CardState
+    * * Display Name: Card State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.
+    */
+    get CardState(): string | null {
+        return this.Get('CardState');
+    }
+    set CardState(value: string | null) {
+        this.Set('CardState', value);
+    }
+
+    /**
+    * * Field Name: DisplayState
+    * * Display Name: Display State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.
+    */
+    get DisplayState(): string | null {
+        return this.Get('DisplayState');
+    }
+    set DisplayState(value: string | null) {
+        this.Set('DisplayState', value);
+    }
+
+    /**
     * * Field Name: UserName
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -61917,7 +62424,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
 
     /**
     * * Field Name: UserFirstLast
-    * * Display Name: User First Last
+    * * Display Name: User Full Name
     * * SQL Data Type: nvarchar(101)
     */
     get UserFirstLast(): string | null {
@@ -63158,6 +63665,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'Workspace Items')
 export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
@@ -63418,6 +63926,19 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON blob containing all workspace state: tabs, layout configuration, theme preferences, and active tab. Replaces WorkspaceItem table.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
     }
 
     /**

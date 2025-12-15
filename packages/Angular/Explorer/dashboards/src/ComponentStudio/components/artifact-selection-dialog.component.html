@@ -88,8 +88,7 @@
             <div class="artifacts-list">
                 @if (isLoading) {
                     <div class="loading-state">
-                        <i class="fa-solid fa-spinner fa-spin"></i>
-                        <p>Loading artifacts...</p>
+                        <mj-loading text="Loading artifacts..." size="small"></mj-loading>
                     </div>
                 } 
                 @else if (artifacts.length === 0) {

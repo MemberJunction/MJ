@@ -206,8 +206,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-11-13T23:20:08.228Z",
-      "checksum": "a7c42ac54427b9121116fb169b5e330e7a8eb4ad77910deb70eea096b89c60f8"
+      "lastModified": "2025-12-09T23:10:31.909Z",
+      "checksum": "5959276ccc7c68d48d9f6603fc02b1eb541aba93ac140884a6aa1f54386bac42"
     }
   },
   {
@@ -820,9 +820,10 @@
       "ParallelizationMode": "None",
       "OutputType": "object",
       "ValidationBehavior": "Strict",
-      "MaxRetries": 2,
+      "MaxRetries": 3,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
+      "FailoverMaxAttempts": 3,
       "PromptRole": "System",
       "PromptPosition": "First",
       "OutputExample": "@file:output/system/template-param-extraction.example.json",
@@ -835,29 +836,89 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=Kimi K2",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 1
+            "Priority": 6
           },
           "primaryKey": {
             "ID": "85E70E19-4C33-43E0-A150-016D122E0AA6"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:42.775Z",
-            "checksum": "fe50a890cf18b87174e5be9c8078b1b46f8f60b17abab426738d72729ab42ccb"
+            "lastModified": "2025-12-09T23:10:39.281Z",
+            "checksum": "42a755ac7c7351301d97240744f010a66b2cecd80921c5345a1b2e8ce361057b"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 10
+            "Priority": 5
           },
           "primaryKey": {
             "ID": "8461DF0F-6503-4B40-B08E-17DA533E1873"
           },
           "sync": {
-            "lastModified": "2025-09-02T21:21:19.333Z",
-            "checksum": "045275d858b91ec5a79d85acf787772953462dca85791f46e9cbd258f7dd34ce"
+            "lastModified": "2025-12-09T23:10:39.285Z",
+            "checksum": "9627a3db3c8a682df11c23f64dc84bc83b642c1ac17c313f353502fa6e623724"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "7BD50D6C-6F6F-4C4E-AB84-8A12BDE84051"
+          },
+          "sync": {
+            "lastModified": "2025-12-09T23:10:39.242Z",
+            "checksum": "8ea06573a90e1a2349760edf293d3742a865ccf094e380f5be176e0ee0617463"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "792DF2FC-86BF-4883-B452-868DE445BE90"
+          },
+          "sync": {
+            "lastModified": "2025-12-09T23:10:39.246Z",
+            "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "E0994C98-4CCB-44FF-B7A5-A33CF7BD2F38"
+          },
+          "sync": {
+            "lastModified": "2025-12-09T23:10:39.251Z",
+            "checksum": "fa9c81dcc82da4bb6e438729b2eed340b2d794b9bbb0b65502a0324aa6bdf891"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "4D82EF74-3D7D-4D07-B039-F69117F7A710"
+          },
+          "sync": {
+            "lastModified": "2025-12-09T23:10:39.254Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
           }
         }
       ]
@@ -866,8 +927,8 @@
       "ID": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
     },
     "sync": {
-      "lastModified": "2025-08-25T18:32:41.798Z",
-      "checksum": "382e13b877d260fe0560c62d526f19c73c152f7670f757d44920698d7774fff9"
+      "lastModified": "2025-12-09T23:10:38.629Z",
+      "checksum": "1dccf55296ed2007b44f9f09257688ab9c40f51ece0aa00ea6848bc7ef7147c7"
     }
   },
   {
@@ -883,9 +944,10 @@
       "ParallelizationMode": "None",
       "OutputType": "object",
       "ValidationBehavior": "Strict",
-      "MaxRetries": 2,
+      "MaxRetries": 3,
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
+      "FailoverMaxAttempts": 3,
       "PromptRole": "System",
       "PromptPosition": "First",
       "OutputExample": "@file:output/system/template-param-extraction.example.json",
@@ -896,16 +958,31 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 6
+          },
+          "primaryKey": {
+            "ID": "D9055CF9-CCE6-4724-BCBD-54AF79AEE8F6"
+          },
+          "sync": {
+            "lastModified": "2025-12-09T23:10:39.257Z",
+            "checksum": "42a755ac7c7351301d97240744f010a66b2cecd80921c5345a1b2e8ce361057b"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 3
+            "Priority": 5
           },
           "primaryKey": {
             "ID": "DA560AA4-35DA-4EDA-81AC-A74D196E102F"
           },
           "sync": {
-            "lastModified": "2025-10-04T05:46:47.547Z",
-            "checksum": "2f484cacbf7dd09c5d5d85128757626fbdd971275c06c75142f6f69e5709c25b"
+            "lastModified": "2025-12-09T23:10:39.288Z",
+            "checksum": "9627a3db3c8a682df11c23f64dc84bc83b642c1ac17c313f353502fa6e623724"
           }
         },
         {
@@ -913,14 +990,44 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 2
+            "Priority": 4
           },
           "primaryKey": {
             "ID": "042CAE39-2AEB-4957-A5B3-7182B4D1D9C4"
           },
           "sync": {
-            "lastModified": "2025-10-03T18:42:52.757Z",
-            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
+            "lastModified": "2025-12-09T23:10:39.289Z",
+            "checksum": "8ea06573a90e1a2349760edf293d3742a865ccf094e380f5be176e0ee0617463"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "7D9B05FA-76BE-44C0-AD00-199771BA9233"
+          },
+          "sync": {
+            "lastModified": "2025-12-09T23:10:39.259Z",
+            "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "086A55A9-BE64-4E32-A5FF-2CDFD266F342"
+          },
+          "sync": {
+            "lastModified": "2025-12-09T23:10:39.398Z",
+            "checksum": "fa9c81dcc82da4bb6e438729b2eed340b2d794b9bbb0b65502a0324aa6bdf891"
           }
         },
         {
@@ -944,8 +1051,8 @@
       "ID": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
     },
     "sync": {
-      "lastModified": "2025-11-18T05:35:32.267Z",
-      "checksum": "ce700d1ecebaeca70be95fcae593de91004c47b1db8b9653638690d917520c96"
+      "lastModified": "2025-12-09T23:10:38.634Z",
+      "checksum": "a60d418a5dac9fc45e85edb9ef6c74504dd393ae0ae432badf427f7c84951210"
     }
   },
   {

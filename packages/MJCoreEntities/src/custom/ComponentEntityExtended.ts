@@ -13,52 +13,49 @@ export class ComponentEntityExtended extends ComponentEntity {
      * @returns
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const specField = this.Fields.find(f => f.Name === 'Specification');
-        if (!this.IsSaved || specField.Dirty) {
-            try {
-                // Handle both string (from database) and object (from mj-sync) formats
-                let spec: ComponentSpec;
-                if (typeof this.Specification === 'string') {
-                    spec = SafeJSONParse(this.Specification || '{}') as ComponentSpec;
-                } else if (typeof this.Specification === 'object' && this.Specification !== null) {
-                    // Already an object (e.g., from mj-sync)
-                    spec = this.Specification as ComponentSpec;
-                } else {
-                    spec = {} as ComponentSpec;
+        // Always ensure spec is parsed before save
+        if (!this._spec) {
+            this.SetSpec(this.Specification);
+        }
+
+        try {
+            const spec = this._spec;
+
+            if (spec) {
+                // ALWAYS sync Description, FunctionalRequirements, and TechnicalDesign from spec before save
+                // This ensures Specification is the single source of truth - any manual changes to these
+                // fields will be overwritten with values from the Specification
+                if (spec.description) {
+                    this.Description = spec.description;
+                }
+                if (spec.functionalRequirements) {
+                    this.FunctionalRequirements = spec.functionalRequirements;
+                }
+                if (spec.technicalDesign) {
+                    this.TechnicalDesign = spec.technicalDesign;
                 }
 
-                if (spec) {
-                    // Existing calculated fields
-                    this.HasCustomProps = spec.properties?.length > 0;
-                    this.HasRequiredCustomProps = spec.properties?.some(p => p.required) || false;
-                    this.HasCustomEvents = spec.events?.length > 0;
-                    this.RequiresData = spec.dataRequirements?.mode?.length > 0; // check one element of the dataRequirements
-                    this.DependencyCount = spec.dependencies?.length || 0;
-
-                    // Sync description, functionalRequirements, and technicalDesign from spec (source of truth)
-                    if (spec.description) {
-                        this.Description = spec.description;
-                    }
-                    if (spec.functionalRequirements) {
-                        this.FunctionalRequirements = spec.functionalRequirements;
-                    }
-                    if (spec.technicalDesign) {
-                        this.TechnicalDesign = spec.technicalDesign;
-                    }
-                }
-            }
-            catch (ex) {
-                console.error('Error saving ComponentEntityExtended:', ex);
+                // Calculate other derived fields from spec
+                this.HasCustomProps = spec.properties?.length > 0;
+                this.HasRequiredCustomProps = spec.properties?.some(p => p.required) || false;
+                this.HasCustomEvents = spec.events?.length > 0;
+                this.RequiresData = spec.dataRequirements?.mode?.length > 0;
+                this.DependencyCount = spec.dependencies?.length || 0;
             }
         }
+        catch (ex) {
+            console.error('Error saving ComponentEntityExtended:', ex);
+        }
+
         return await super.Save(options);
     }
 
-    private _spec: ComponentSpec | undefined;
+    protected _spec: ComponentSpec | undefined;
+
     /**
      * Read-only representation of the value in the @see Specification property.
      * **DO NOT** modify this object it is for reference and ease of access only. Writing must be done to the
-     * Specification property which is what persists in the database. Changes to the Specification property will 
+     * Specification property which is what persists in the database. Changes to the Specification property will
      * also result in an automatic update to this object.
      */
     public get spec(): ComponentSpec {
@@ -67,13 +64,15 @@ export class ComponentEntityExtended extends ComponentEntity {
 
     // Below we override various methods that could result in setting of the value of the Specification field which in turn allows us to keep the spec property in sync
     override Set(FieldName: string, Value: any): void {
-        const oldValue = this.Get(FieldName);
+        const fieldNameLower = FieldName?.trim().toLowerCase();
 
+        const oldValue = this.Get(FieldName);
         super.Set(FieldName, Value);
-        if (FieldName?.trim().toLowerCase() === 'specification') {
-            if (oldValue !== Value) { // no need to do json parse
-                this.SetSpec(Value);
-            }
+
+        // When Specification field is set, sync the derived fields from the spec
+        // This ensures Description/FunctionalRequirements/TechnicalDesign stay in sync with the spec
+        if (fieldNameLower === 'specification' && oldValue !== Value) {
+            this.SetSpec(Value);
         }
     }
 
@@ -86,11 +85,28 @@ export class ComponentEntityExtended extends ComponentEntity {
         } else {
             this._spec = {} as ComponentSpec;
         }
+
+        // Sync description, functionalRequirements, and technicalDesign from spec (source of truth)
+        // The Specification is the authoritative source for these fields.
+        // These redundant columns exist for backwards compatibility and database queries,
+        // but should always reflect what's in the spec.
+        if (this._spec) {
+            if (this._spec.description) {
+                this.Description = this._spec.description;
+            }
+            if (this._spec.functionalRequirements) {
+                this.FunctionalRequirements = this._spec.functionalRequirements;
+            }
+            if (this._spec.technicalDesign) {
+                this.TechnicalDesign = this._spec.technicalDesign;
+            }
+        }
     }
     
     override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         const result = await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad)
         if (result) {
+            // After loading from database, re-sync derived fields from Specification to ensure consistency
             this.SetSpec(this.Specification)
         }
         return result;
@@ -107,6 +123,7 @@ export class ComponentEntityExtended extends ComponentEntity {
     override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
         const result = await super.LoadFromData(data, _replaceOldValues);
         if (result) {
+            // After loading, re-sync derived fields from Specification to ensure consistency
             this.SetSpec(this.Specification)
         }
         return result;

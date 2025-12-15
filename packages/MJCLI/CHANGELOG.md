@@ -1,5 +1,97 @@
 # Change Log - @memberjunction/cli
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ai-cli@2.125.0
+  - @memberjunction/codegen-lib@2.125.0
+  - @memberjunction/db-auto-doc@2.125.0
+  - @memberjunction/metadata-sync@2.125.0
+  - @memberjunction/sqlserver-dataprovider@2.125.0
+  - @memberjunction/testing-cli@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+- Updated dependencies [4be0ffa]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/metadata-sync@2.124.0
+  - @memberjunction/ai-cli@2.124.0
+  - @memberjunction/codegen-lib@2.124.0
+  - @memberjunction/db-auto-doc@2.124.0
+  - @memberjunction/sqlserver-dataprovider@2.124.0
+  - @memberjunction/testing-cli@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.123.1
+- @memberjunction/codegen-lib@2.123.1
+- @memberjunction/db-auto-doc@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/metadata-sync@2.123.1
+- @memberjunction/sqlserver-dataprovider@2.123.1
+- @memberjunction/testing-cli@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.123.0
+- @memberjunction/codegen-lib@2.123.0
+- @memberjunction/testing-cli@2.123.0
+- @memberjunction/sqlserver-dataprovider@2.123.0
+- @memberjunction/metadata-sync@2.123.0
+- @memberjunction/db-auto-doc@2.123.0
+- @memberjunction/core@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- Updated dependencies [81f0c44]
+  - @memberjunction/ai-cli@2.122.2
+  - @memberjunction/codegen-lib@2.122.2
+  - @memberjunction/db-auto-doc@2.122.2
+  - @memberjunction/metadata-sync@2.122.2
+  - @memberjunction/sqlserver-dataprovider@2.122.2
+  - @memberjunction/testing-cli@2.122.2
+  - @memberjunction/core@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.122.1
+- @memberjunction/codegen-lib@2.122.1
+- @memberjunction/db-auto-doc@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/metadata-sync@2.122.1
+- @memberjunction/sqlserver-dataprovider@2.122.1
+- @memberjunction/testing-cli@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- 6de83ec: Add component linter enhancements with type inference and control flow analysis, DBAutoDoc query generation features, MCP server diagnostic tools, metadata sync improvements, and enhanced JWKS client with HTTP keep-alive connections and connection pooling to prevent socket hangups
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+- Updated dependencies [390070c]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/db-auto-doc@2.122.0
+  - @memberjunction/metadata-sync@2.122.0
+  - @memberjunction/sqlserver-dataprovider@2.122.0
+  - @memberjunction/codegen-lib@2.122.0
+  - @memberjunction/ai-cli@2.122.0
+  - @memberjunction/testing-cli@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

@@ -218,7 +218,7 @@ interface PermissionDisplay extends CollectionPermission {
             </kendo-window>
         }
     `,
-    styleUrls: ['./collection-share-modal.component.scss']
+    styleUrls: ['./collection-share-modal.component.css']
 })
 export class CollectionShareModalComponent implements OnInit, OnChanges {
     @Input() isOpen: boolean = false;

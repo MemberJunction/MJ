@@ -1,17 +1,18 @@
 # @memberjunction/ng-timeline
 
-The `@memberjunction/ng-timeline` package provides a comprehensive Angular component for displaying chronological data from MemberJunction entities in a timeline format. Built on top of Kendo UI's Timeline component, it offers a flexible and intuitive way to visualize time-based data from multiple entity sources.
+A powerful, flexible, and fully responsive Angular timeline component. Works with both MemberJunction entities and plain JavaScript objects. **No external dependencies** - pure HTML/CSS implementation.
 
 ## Features
 
-- **Multiple Data Sources**: Display data from multiple MemberJunction entities on a unified timeline
-- **Flexible Orientation**: Support for both vertical and horizontal timeline layouts
-- **Data Source Options**: Load data via entity views with filters or provide pre-loaded entity arrays
-- **Customizable Display**: Configure title, date, and summary fields for each timeline item
-- **Visual Customization**: Support for custom icons and colors for different event groups
-- **Interactive UI**: Collapsible event details with alternating layout mode
-- **Dynamic Content**: Custom summary generation via callback functions
-- **Refresh Control**: Manual control over data loading and refresh operations
+- **Universal Compatibility**: Works with MemberJunction BaseEntity objects OR plain JavaScript objects
+- **Responsive Design**: Mobile-first approach with automatic layout adaptation
+- **Virtual Scrolling**: Built-in support for large datasets with dynamic loading
+- **Time Segment Collapsing**: Group events by day/week/month/quarter/year with collapsible sections
+- **Rich Event System**: BeforeX/AfterX event pattern for full control from container components
+- **Customizable Cards**: Configurable fields, images, actions, and custom templates
+- **Keyboard Navigation**: Full accessibility with ARIA support
+- **Theming**: CSS variables for easy customization including dark mode
+- **Zero Dependencies**: No Kendo UI or other external libraries required
 
 ## Installation
 
@@ -21,323 +22,462 @@ npm install @memberjunction/ng-timeline
 
 ## Requirements
 
-- Angular 18.0.2 or higher
-- @memberjunction/core and related MemberJunction packages
-- Kendo UI Angular components:
-  - @progress/kendo-angular-layout (v16.2.0)
-  - @progress/kendo-angular-buttons (v16.2.0)
-  - @progress/kendo-angular-indicators (v16.2.0)
+| Requirement | Version |
+|------------|---------|
+| Angular | 18+ |
+| TypeScript | 5.0+ |
+| @memberjunction/core | Optional (only for entity data sources) |
 
-## Usage
+## Architecture
 
-### Basic Usage
+```mermaid
+graph TB
+    subgraph "Data Layer"
+        A[TimelineGroup&lt;T&gt;] --> B[Plain Objects]
+        A --> C[BaseEntity Objects]
+    end
 
-First, import the TimelineModule in your module:
+    subgraph "Component Layer"
+        D[TimelineComponent] --> E[Segments]
+        E --> F[Event Cards]
+        D --> G[Virtual Scroll]
+    end
+
+    subgraph "Event System"
+        H[BeforeX Events] --> I{Cancel?}
+        I -->|No| J[Default Behavior]
+        I -->|Yes| K[Blocked]
+        J --> L[AfterX Events]
+    end
+
+    A --> D
+    D --> H
+```
+
+## Quick Start
+
+### Import the Module
 
 ```typescript
 import { TimelineModule } from '@memberjunction/ng-timeline';
 
 @NgModule({
-  imports: [
-    // other imports...
-    TimelineModule
-  ],
+  imports: [TimelineModule]
 })
 export class YourModule { }
 ```
 
-Then, use the component in your template:
-
-```html
-<mj-timeline [Groups]="timelineGroups" [DisplayOrientation]="'vertical'"></mj-timeline>
-```
-
-In your component file:
+### Basic Usage with Plain Objects
 
 ```typescript
 import { TimelineGroup } from '@memberjunction/ng-timeline';
 
-export class YourComponent {
-  timelineGroups: TimelineGroup[] = [];
-
-  constructor() {
-    // Create a timeline group using entity data
-    const tasksGroup = new TimelineGroup();
-    tasksGroup.EntityName = 'Tasks';
-    tasksGroup.DataSourceType = 'entity';
-    tasksGroup.TitleFieldName = 'Title';
-    tasksGroup.DateFieldName = 'DueDate';
-    tasksGroup.Filter = "Status = 'Open'";
-    
-    // Add the group to the array
-    this.timelineGroups.push(tasksGroup);
-  }
+interface MyEvent {
+  id: string;
+  title: string;
+  eventDate: Date;
+  description: string;
 }
-```
-
-### Advanced Usage
-
-#### Using Multiple Data Sources
-
-Display data from multiple entity types on the same timeline with different visual treatments:
-
-```typescript
-import { TimelineGroup } from '@memberjunction/ng-timeline';
-import { BaseEntity } from '@memberjunction/core';
-
-export class YourComponent implements OnInit {
-  timelineGroups: TimelineGroup[] = [];
-
-  async ngOnInit() {
-    // First group - Tasks with custom icon and color
-    const tasksGroup = new TimelineGroup();
-    tasksGroup.EntityName = 'Tasks';
-    tasksGroup.DataSourceType = 'entity';
-    tasksGroup.TitleFieldName = 'Title';
-    tasksGroup.DateFieldName = 'DueDate';
-    tasksGroup.Filter = "Status = 'Active'"; // Optional filter
-    tasksGroup.DisplayIconMode = 'custom';
-    tasksGroup.DisplayIcon = 'fa fa-tasks';
-    tasksGroup.DisplayColorMode = 'manual';
-    tasksGroup.DisplayColor = '#4287f5';
-    
-    // Second group - Meetings with custom summary
-    const meetingsGroup = new TimelineGroup();
-    meetingsGroup.EntityName = 'Meetings';
-    meetingsGroup.DataSourceType = 'entity';
-    meetingsGroup.TitleFieldName = 'Subject';
-    meetingsGroup.DateFieldName = 'StartTime';
-    meetingsGroup.SummaryMode = 'custom';
-    meetingsGroup.SummaryFunction = (record: BaseEntity) => {
-      return `<strong>Location:</strong> ${record.Get('Location')}<br/>
-              <strong>Duration:</strong> ${record.Get('DurationMinutes')} minutes`;
-    };
-    
-    // Add groups to array
-    this.timelineGroups.push(tasksGroup, meetingsGroup);
-  }
-}
-```
-
-#### Using RunView Parameters
-
-Create a TimelineGroup using pre-configured RunViewParams:
-
-```typescript
-import { TimelineGroup } from '@memberjunction/ng-timeline';
-import { RunViewParams } from '@memberjunction/core';
-
-export class YourComponent implements OnInit {
-  timelineGroups: TimelineGroup[] = [];
-
-  async ngOnInit() {
-    // Configure RunViewParams for data retrieval
-    const params: RunViewParams = {
-      EntityName: 'Tasks',
-      ExtraFilter: "Status = 'Open' AND Priority = 'High'",
-      Skip: 0,
-      Take: 50,
-      OrderBy: 'DueDate DESC'
-    };
-    
-    // Create TimelineGroup from view parameters
-    const tasksGroup = await TimelineGroup.FromView(params);
-    tasksGroup.TitleFieldName = 'Title';
-    tasksGroup.DateFieldName = 'DueDate';
-    tasksGroup.DisplayIconMode = 'custom';
-    tasksGroup.DisplayIcon = 'fa fa-exclamation-circle';
-    
-    this.timelineGroups.push(tasksGroup);
-  }
-}
-```
-
-#### Using Pre-loaded Entity Arrays
-
-For scenarios where you already have entity data loaded:
-
-```typescript
-import { TimelineGroup } from '@memberjunction/ng-timeline';
-import { BaseEntity } from '@memberjunction/core';
-
-export class YourComponent {
-  timelineGroups: TimelineGroup[] = [];
-
-  displayLoadedData(entities: BaseEntity[]) {
-    const group = new TimelineGroup();
-    group.EntityName = 'Custom Events';
-    group.DataSourceType = 'array'; // Use provided array instead of loading
-    group.EntityObjects = entities;
-    group.TitleFieldName = 'EventName';
-    group.DateFieldName = 'EventDate';
-    group.SummaryMode = 'field';
-    
-    this.timelineGroups = [group];
-  }
-}
-```
-
-#### Deferred Loading
-
-Control when the timeline loads data using the `AllowLoad` property:
-
-```typescript
-import { Component, ViewChild } from '@angular/core';
-import { TimelineComponent, TimelineGroup } from '@memberjunction/ng-timeline';
 
 @Component({
-  template: `
-    <mj-timeline 
-      #timeline
-      [Groups]="timelineGroups" 
-      [AllowLoad]="false">
-    </mj-timeline>
-    <button (click)="loadTimeline()">Load Timeline Data</button>
-  `
+  template: `<mj-timeline [groups]="groups"></mj-timeline>`
 })
-export class YourComponent {
-  @ViewChild('timeline') timeline!: TimelineComponent;
-  timelineGroups: TimelineGroup[] = [];
+export class MyComponent {
+  groups: TimelineGroup<MyEvent>[] = [];
 
-  constructor() {
-    // Configure groups but don't load yet
-    const group = new TimelineGroup();
-    group.EntityName = 'Events';
-    group.TitleFieldName = 'Name';
-    group.DateFieldName = 'EventDate';
-    this.timelineGroups = [group];
+  ngOnInit() {
+    const group = TimelineGroup.FromArray(this.myEvents, {
+      titleField: 'title',
+      dateField: 'eventDate',
+      descriptionField: 'description'
+    });
+    this.groups = [group];
   }
-
-  async loadTimeline() {
-    // Manually trigger data loading
-    await this.timeline.Refresh();
-  }
-}
-
-## API Reference
-
-### TimelineComponent
-
-#### Inputs
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `DisplayOrientation` | `'horizontal' \| 'vertical'` | `'vertical'` | Orientation of the timeline |
-| `Groups` | `TimelineGroup[]` | `[]` | Array of groups to display on the timeline |
-| `AllowLoad` | `boolean` | `true` | Whether to load data automatically |
-
-#### Methods
-
-| Name | Parameters | Return Type | Description |
-|------|------------|-------------|-------------|
-| `Refresh` | None | `Promise<void>` | Refreshes the timeline with current group data |
-
-### TimelineGroup Class
-
-#### Properties
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `EntityName` | `string` | (required) | Entity name for the records to display |
-| `DataSourceType` | `'array' \| 'entity'` | `'entity'` | Specifies data source type |
-| `Filter` | `string` | (optional) | Filter to apply when loading entity data |
-| `EntityObjects` | `BaseEntity[]` | `[]` | Array of entities when using 'array' data source |
-| `TitleFieldName` | `string` | (required) | Field name for event titles |
-| `DateFieldName` | `string` | (required) | Field name for event dates |
-| `DisplayIconMode` | `'standard' \| 'custom'` | `'standard'` | Icon display mode |
-| `DisplayIcon` | `string` | (optional) | Custom icon class for events |
-| `DisplayColorMode` | `'auto' \| 'manual'` | `'auto'` | Color selection mode |
-| `DisplayColor` | `string` | (optional) | Manual color for events |
-| `SummaryMode` | `'field' \| 'custom' \| 'none'` | `'field'` | Mode for summary display |
-| `SummaryFieldName` | `string` | (optional) | Field name for summary when using 'field' mode (Note: Currently uses TitleFieldName) |
-| `SummaryFunction` | `(record: BaseEntity) => string` | (optional) | Function for custom summary generation |
-
-#### Static Methods
-
-| Name | Parameters | Return Type | Description |
-|------|------------|-------------|-------------|
-| `FromView` | `RunViewParams` | `Promise<TimelineGroup>` | Creates a TimelineGroup from RunViewParams |
-
-## Styling
-
-The component uses Kendo UI's Timeline styling with additional customization options:
-
-- The timeline component automatically applies alternating layout mode for better visual separation
-- Events are displayed with collapsible details for better space utilization
-- Custom CSS can be applied by targeting the `.wrapper` class or Kendo UI elements
-- Icon and color customization per group allows for visual categorization
-
-### CSS Example
-
-```css
-/* Custom timeline styling */
-mj-timeline .wrapper {
-  height: 100%;
-  padding: 20px;
-}
-
-/* Custom event styling */
-mj-timeline .k-timeline-event {
-  /* Your custom styles */
 }
 ```
 
-## Integration with MemberJunction
+### Usage with MemberJunction Entities
 
-This component is designed to work seamlessly with the MemberJunction framework:
+```typescript
+import { TimelineGroup } from '@memberjunction/ng-timeline';
+import { TaskEntity } from '@memberjunction/core-entities';
 
-- **Entity System**: Automatically loads and displays data from any MemberJunction entity
-- **Metadata Integration**: Leverages MJ's metadata system for entity field access
-- **View System**: Supports RunView parameters for flexible data retrieval
-- **Container Directives**: Uses `mjFillContainer` directive for responsive layouts
-- **Entity Form Dialog**: Can integrate with entity form dialogs for detailed views (future enhancement)
+@Component({
+  template: `<mj-timeline [groups]="groups"></mj-timeline>`
+})
+export class MyComponent {
+  groups: TimelineGroup<TaskEntity>[] = [];
 
-## Performance Considerations
+  ngOnInit() {
+    const group = new TimelineGroup<TaskEntity>();
+    group.EntityName = 'Tasks';
+    group.DataSourceType = 'entity';
+    group.Filter = "Status = 'Open'";
+    group.TitleFieldName = 'Name';
+    group.DateFieldName = 'DueDate';
+    this.groups = [group];
+  }
+}
+```
 
-- **Data Loading**: The component loads all data at once. For large datasets, consider using filters or pagination
-- **Multiple Groups**: Each group triggers a separate data query. Consolidate groups when possible
-- **Refresh Operations**: The `Refresh()` method reloads all groups. Use judiciously for performance
+## Component API
 
-## Dependencies
+### Inputs
 
-### Production Dependencies
-- @memberjunction/core (^2.43.0)
-- @memberjunction/core-entities (^2.43.0)
-- @memberjunction/global (^2.43.0)
-- @memberjunction/ng-container-directives (^2.43.0)
-- @memberjunction/ng-entity-form-dialog (^2.43.0)
-- @memberjunction/ng-shared (^2.43.0)
-- @progress/kendo-angular-buttons (^16.2.0)
-- @progress/kendo-angular-layout (^16.2.0)
-- @progress/kendo-angular-indicators (^16.2.0)
-- @progress/kendo-angular-scheduler (^16.2.0)
-- tslib (^2.3.0)
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `groups` | `TimelineGroup<T>[]` | `[]` | Data groups to display |
+| `allowLoad` | `boolean` | `true` | Control deferred loading |
+| `orientation` | `'vertical' \| 'horizontal'` | `'vertical'` | Timeline orientation |
+| `layout` | `'single' \| 'alternating'` | `'single'` | Card layout (vertical only) |
+| `sortOrder` | `'asc' \| 'desc'` | `'desc'` | Event sort order |
+| `segmentGrouping` | `'none' \| 'day' \| 'week' \| 'month' \| 'quarter' \| 'year'` | `'month'` | Time segment grouping |
+| `segmentsCollapsible` | `boolean` | `true` | Allow collapsing segments |
+| `segmentsDefaultExpanded` | `boolean` | `true` | Segments start expanded |
+| `defaultCardConfig` | `TimelineCardConfig` | (see below) | Default card configuration |
+| `virtualScroll` | `VirtualScrollConfig` | (see below) | Virtual scroll settings |
+| `emptyMessage` | `string` | `'No events to display'` | Empty state message |
+| `emptyIcon` | `string` | `'fa-regular fa-calendar-xmark'` | Empty state icon |
+| `enableKeyboardNavigation` | `boolean` | `true` | Enable keyboard navigation |
 
-### Peer Dependencies
-- @angular/common (^18.0.2)
-- @angular/core (^18.0.2)
-- @angular/forms (^18.0.2)
-- @angular/router (^18.0.2)
+### Outputs (Events)
+
+The component uses a BeforeX/AfterX event pattern. BeforeX events include a `cancel` property - set it to `true` to prevent the default behavior.
+
+| Event | Args Type | Description |
+|-------|-----------|-------------|
+| `beforeEventClick` | `BeforeEventClickArgs<T>` | Before card click |
+| `afterEventClick` | `AfterEventClickArgs<T>` | After card click |
+| `beforeEventExpand` | `BeforeEventExpandArgs<T>` | Before card expand |
+| `afterEventExpand` | `AfterEventExpandArgs<T>` | After card expand |
+| `beforeEventCollapse` | `BeforeEventCollapseArgs<T>` | Before card collapse |
+| `afterEventCollapse` | `AfterEventCollapseArgs<T>` | After card collapse |
+| `beforeEventHover` | `BeforeEventHoverArgs<T>` | Before hover state change |
+| `afterEventHover` | `AfterEventHoverArgs<T>` | After hover state change |
+| `beforeActionClick` | `BeforeActionClickArgs<T>` | Before action button click |
+| `afterActionClick` | `AfterActionClickArgs<T>` | After action button click |
+| `beforeSegmentExpand` | `BeforeSegmentExpandArgs` | Before segment expand |
+| `afterSegmentExpand` | `AfterSegmentExpandArgs` | After segment expand |
+| `beforeSegmentCollapse` | `BeforeSegmentCollapseArgs` | Before segment collapse |
+| `afterSegmentCollapse` | `AfterSegmentCollapseArgs` | After segment collapse |
+| `beforeLoad` | `BeforeLoadArgs` | Before data load |
+| `afterLoad` | `AfterLoadArgs` | After data load |
+
+### Public Methods
+
+```typescript
+// Refresh all data
+await timeline.refresh();
+
+// Load more (virtual scroll)
+await timeline.loadMore();
+
+// Expand/collapse all events
+timeline.expandAllEvents();
+timeline.collapseAllEvents();
+
+// Expand/collapse all segments
+timeline.expandAllSegments();
+timeline.collapseAllSegments();
+
+// Target specific events
+timeline.expandEvent(eventId);
+timeline.collapseEvent(eventId);
+
+// Navigation
+timeline.scrollToEvent(eventId, 'smooth');
+timeline.scrollToDate(new Date(), 'smooth');
+
+// Data access
+const event = timeline.getEvent(eventId);
+const allEvents = timeline.getAllEvents();
+```
+
+## TimelineGroup Configuration
+
+```typescript
+const group = new TimelineGroup<MyType>();
+
+// Data Source
+group.DataSourceType = 'array';  // or 'entity' for MJ
+group.EntityObjects = myData;    // For array mode
+group.EntityName = 'Tasks';      // For entity mode
+group.Filter = "Status='Open'";  // SQL filter (entity mode)
+group.OrderBy = 'DueDate DESC';  // SQL order (entity mode)
+
+// Field Mappings
+group.TitleFieldName = 'title';
+group.DateFieldName = 'eventDate';
+group.SubtitleFieldName = 'category';
+group.DescriptionFieldName = 'details';
+group.ImageFieldName = 'thumbnailUrl';
+group.IdFieldName = 'id';  // Defaults to 'ID' or 'id'
+
+// Group Display
+group.DisplayIconMode = 'custom';
+group.DisplayIcon = 'fa-solid fa-check-circle';
+group.DisplayColorMode = 'manual';
+group.DisplayColor = '#4caf50';
+group.GroupLabel = 'Completed Tasks';
+
+// Card Configuration
+group.CardConfig = {
+  collapsible: true,
+  defaultExpanded: false,
+  summaryFields: [
+    { fieldName: 'Status', icon: 'fa-solid fa-circle' }
+  ],
+  actions: [
+    { id: 'view', label: 'View', variant: 'primary' }
+  ]
+};
+
+// Custom Functions
+group.SummaryFunction = (record) => `Priority: ${record.priority}`;
+group.EventConfigFunction = (record) => ({
+  color: record.isUrgent ? '#f44336' : undefined
+});
+```
+
+## Card Configuration
+
+```typescript
+interface TimelineCardConfig {
+  // Header
+  showIcon?: boolean;           // Show icon in header
+  showDate?: boolean;           // Show date in header
+  showSubtitle?: boolean;       // Show subtitle
+  dateFormat?: string;          // Angular date format
+
+  // Image
+  imageField?: string;          // Field containing image URL
+  imagePosition?: 'left' | 'top' | 'none';
+  imageSize?: 'small' | 'medium' | 'large';
+
+  // Body
+  descriptionField?: string;    // Description field name
+  descriptionMaxLines?: number; // Max lines before truncate
+  allowHtmlDescription?: boolean;
+
+  // Expansion
+  collapsible?: boolean;        // Allow expand/collapse
+  defaultExpanded?: boolean;    // Start expanded
+  expandedFields?: TimelineDisplayField[];  // Fields in expanded view
+  summaryFields?: TimelineDisplayField[];   // Always visible fields
+
+  // Actions
+  actions?: TimelineAction[];   // Action buttons
+  actionsOnHover?: boolean;     // Show actions only on hover
+
+  // Styling
+  cssClass?: string;
+  minWidth?: string;
+  maxWidth?: string;            // Default: '400px'
+}
+```
+
+## Event Handling
+
+### Preventing Default Behavior
+
+```typescript
+@Component({
+  template: `
+    <mj-timeline
+      [groups]="groups"
+      (beforeEventClick)="onBeforeClick($event)"
+      (afterActionClick)="onAction($event)">
+    </mj-timeline>
+  `
+})
+export class MyComponent {
+  onBeforeClick(args: BeforeEventClickArgs<MyType>) {
+    // Prevent click on archived items
+    if (args.event.entity.status === 'archived') {
+      args.cancel = true;
+      this.showToast('Archived items cannot be opened');
+    }
+  }
+
+  onAction(args: AfterActionClickArgs<MyType>) {
+    switch (args.action.id) {
+      case 'view':
+        this.router.navigate(['/items', args.event.entity.id]);
+        break;
+      case 'edit':
+        this.openEditDialog(args.event.entity);
+        break;
+    }
+  }
+}
+```
+
+## Custom Templates
+
+Override any part of the card rendering:
+
+```html
+<mj-timeline [groups]="groups">
+
+  <!-- Full card override -->
+  <ng-template #cardTemplate let-event="event" let-group="group">
+    <div class="my-card">
+      <h3>{{ event.title }}</h3>
+      <p>{{ event.description }}</p>
+    </div>
+  </ng-template>
+
+  <!-- Just override actions -->
+  <ng-template #actionsTemplate let-event="event" let-actions="actions">
+    <my-action-bar [event]="event"></my-action-bar>
+  </ng-template>
+
+  <!-- Custom empty state -->
+  <ng-template #emptyTemplate>
+    <div class="no-data">
+      <img src="empty.svg" />
+      <p>Nothing here yet!</p>
+    </div>
+  </ng-template>
+
+</mj-timeline>
+```
+
+Available templates: `cardTemplate`, `headerTemplate`, `bodyTemplate`, `actionsTemplate`, `segmentHeaderTemplate`, `emptyTemplate`, `loadingTemplate`
+
+## Theming
+
+Customize via CSS variables:
+
+```scss
+mj-timeline {
+  // Colors
+  --mj-timeline-line-color: #e0e0e0;
+  --mj-timeline-marker-bg: #1976d2;
+  --mj-timeline-card-bg: #ffffff;
+  --mj-timeline-card-border: #e0e0e0;
+  --mj-timeline-card-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  --mj-timeline-text-primary: #212121;
+  --mj-timeline-text-secondary: #757575;
+  --mj-timeline-accent: #1976d2;
+
+  // Sizing
+  --mj-timeline-card-max-width: 400px;
+  --mj-timeline-card-padding: 16px;
+  --mj-timeline-marker-size: 14px;
+
+  // Animation
+  --mj-timeline-transition: 0.25s ease;
+}
+
+// Dark mode
+.dark-theme mj-timeline {
+  --mj-timeline-card-bg: #1e1e1e;
+  --mj-timeline-card-border: #424242;
+  --mj-timeline-text-primary: #ffffff;
+}
+```
+
+## Visual Layout
+
+### Vertical Timeline (Single)
+
+```
+●─── Dec 2, 2025
+│
+│  ┌──────────────────────────┐
+│  │  Task Completed          │
+│  │  Review timeline design  │
+│  │  [View] [Edit]           │
+│  └──────────────────────────┘
+│
+●─── Nov 28, 2025
+│
+│  ┌──────────────────────────┐
+│  │  Feature Released        │
+│  │  New dashboard v2.5      │
+│  └──────────────────────────┘
+```
+
+### Vertical Timeline (Alternating)
+
+```
+     ┌────────────────┐
+     │  Task Done     │────●─── Dec 2
+     └────────────────┘    │
+                           │
+            Nov 28 ───●────┤
+                      │    │
+                      └────┼────┌────────────────┐
+                           │    │  Released      │
+                           │    └────────────────┘
+```
+
+### Time Segments
+
+```
+▼ December 2025 (3 events) ────────────────────
+│
+│  [Events in December...]
+│
+► November 2025 (12 events) ─────────────────── ← Collapsed
+```
+
+## Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| `↓` / `→` | Move to next event |
+| `↑` / `←` | Move to previous event |
+| `Enter` / `Space` | Toggle expand/collapse |
+| `Escape` | Collapse focused event |
+| `Home` | Jump to first event |
+| `End` | Jump to last event |
+
+## Virtual Scrolling
+
+Configure for large datasets:
+
+```typescript
+<mj-timeline
+  [groups]="groups"
+  [virtualScroll]="{
+    enabled: true,
+    batchSize: 25,
+    loadThreshold: 200,
+    showLoadingIndicator: true,
+    loadingMessage: 'Loading more...'
+  }">
+</mj-timeline>
+```
+
+## Browser Support
+
+- Chrome (last 2 versions)
+- Firefox (last 2 versions)
+- Safari (last 2 versions)
+- Edge (last 2 versions)
+- iOS Safari
+- Android Chrome
+
+## Migration from v1
+
+If migrating from the Kendo-based version:
+
+1. **No Kendo dependencies** - Remove all `@progress/kendo-*` packages
+2. **Property names changed** - `Groups` → `groups`, `DisplayOrientation` → `orientation`
+3. **New event system** - Replace Kendo events with BeforeX/AfterX pattern
+4. **Segments are new** - Time-based grouping is now built-in
 
 ## Building
 
-This package is part of the MemberJunction monorepo. To build:
-
 ```bash
-# From the package directory
+# From package directory
 npm run build
 
-# From the monorepo root
+# From monorepo root
 turbo build --filter="@memberjunction/ng-timeline"
 ```
-
-## Future Enhancements
-
-- Support for pagination and virtual scrolling for large datasets
-- Integration with entity form dialogs for inline editing
-- Custom event templates for advanced display scenarios
-- Export functionality for timeline data
-- Real-time updates via entity change notifications
 
 ## License
 

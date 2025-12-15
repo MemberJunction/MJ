@@ -1,5 +1,57 @@
 # Change Log - @memberjunction/core
 
+## 2.125.0
+
+### Minor Changes
+
+- bd4aa3d: Migration file
+
+### Patch Changes
+
+- @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- 75058a9: Fix metadata provider race conditions, add EntityDataGrid component validation, and enforce Component entity Specification field as single source of truth
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/global@2.122.1
+
+## 2.122.0
+
+### Minor Changes
+
+- 6de83ec: Add component linter enhancements with type inference and control flow analysis, DBAutoDoc query generation features, MCP server diagnostic tools, metadata sync improvements, and enhanced JWKS client with HTTP keep-alive connections and connection pooling to prevent socket hangups
+- c989c45: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Minor Changes

@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/ai-prompts-cluster.spec.json",
+  "description": "Valid component demonstrating AI prompts clustering visualization"
+}

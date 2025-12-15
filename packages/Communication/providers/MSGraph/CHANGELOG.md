@@ -1,5 +1,105 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.125.0
+
+### Patch Changes
+
+- e1569fc: no migration
+- a692034: added functionality
+- Updated dependencies [e1569fc]
+- Updated dependencies [bd4aa3d]
+- Updated dependencies [a692034]
+  - @memberjunction/communication-types@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/aiengine@2.125.0
+  - @memberjunction/sqlserver-dataprovider@2.125.0
+  - @memberjunction/ai-provider-bundle@2.125.0
+  - @memberjunction/ai@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- 1fe9db4: fix typo
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/aiengine@2.124.0
+  - @memberjunction/communication-types@2.124.0
+  - @memberjunction/sqlserver-dataprovider@2.124.0
+  - @memberjunction/ai-provider-bundle@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.123.1
+- @memberjunction/aiengine@2.123.1
+- @memberjunction/ai-provider-bundle@2.123.1
+- @memberjunction/communication-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/sqlserver-dataprovider@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.123.0
+- @memberjunction/sqlserver-dataprovider@2.123.0
+- @memberjunction/ai-provider-bundle@2.123.0
+- @memberjunction/ai@2.123.0
+- @memberjunction/communication-types@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/sqlserver-dataprovider@2.122.2
+  - @memberjunction/ai-provider-bundle@2.122.2
+  - @memberjunction/aiengine@2.122.2
+  - @memberjunction/communication-types@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.122.1
+- @memberjunction/aiengine@2.122.1
+- @memberjunction/communication-types@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/core-entities@2.122.1
+- @memberjunction/global@2.122.1
+- @memberjunction/sqlserver-dataprovider@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/sqlserver-dataprovider@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/aiengine@2.122.0
+  - @memberjunction/communication-types@2.122.0
+  - @memberjunction/ai@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

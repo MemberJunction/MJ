@@ -1,5 +1,69 @@
 # @memberjunction/communication-gmail
 
+## 2.125.0
+
+### Patch Changes
+
+- e1569fc: no migration
+- a692034: added functionality
+- Updated dependencies [e1569fc]
+- Updated dependencies [bd4aa3d]
+- Updated dependencies [a692034]
+  - @memberjunction/communication-types@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/communication-types@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.122.2
+- @memberjunction/core@2.122.2
+- @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/global@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/communication-types@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

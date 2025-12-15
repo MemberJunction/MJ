@@ -1,0 +1,22 @@
+{
+  "name": "EntityFieldDestructuringComponent",
+  "description": "Component destructuring invalid fields from entity rows (violates entity-field-validation rule)",
+  "code": "function EntityFieldDestructuringComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [users, setUsers] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadUsers() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Users',\n        MaxRows: 100\n      });\n\n      if (result.Success) {\n        setUsers(result.Results);\n      }\n      setLoading(false);\n    }\n    loadUsers();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Users List</h1>\n      <ul>\n        {users.map((user) => {\n          // VIOLATION: InvalidField doesn't exist on Users entity\n          // VIOLATION: FakeProperty doesn't exist on Users entity\n          // VIOLATION: NonExistentField doesn't exist on Users entity\n          const { ID, Name, Email, InvalidField, FakeProperty, NonExistentField } = user;\n          \n          return (\n            <li key={ID}>\n              <div>\n                <strong>{Name}</strong> - {Email}\n              </div>\n              {/* Using destructured invalid fields */}\n              <div>\n                Invalid: {InvalidField}\n              </div>\n              <div>\n                Fake: {FakeProperty}\n              </div>\n              <div>\n                Non-existent: {NonExistentField}\n              </div>\n            </li>\n          );\n        })}\n      </ul>\n      \n      {/* VIOLATION: Destructuring at top level with invalid fields */}\n      {users.length > 0 && (() => {\n        const firstUser = users[0];\n        // BadField and WrongProperty don't exist on Users entity\n        const { Name, Email, BadField, WrongProperty } = firstUser;\n        \n        return (\n          <div className=\"first-user\">\n            <h2>First User</h2>\n            <p>Name: {Name}</p>\n            <p>Email: {Email}</p>\n            <p>Bad Field: {BadField}</p>\n            <p>Wrong Property: {WrongProperty}</p>\n          </div>\n        );\n      })()}\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Users",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Email", "type": "nvarchar" },
+          { "name": "Status", "type": "nvarchar" }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "OptionalChainRecordsTest",
+  "type": "chart",
+  "title": "Test Component with result?.records bug",
+  "description": "Component that incorrectly uses result?.records instead of result?.Results",
+  "code": "function OptionalChainRecordsTest({ utilities }) {\n  const [data, setData] = React.useState([]);\n\n  React.useEffect(() => {\n    const loadData = async () => {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'TestQuery'\n      });\n      // BUG: Using result?.records instead of result?.Results\n      const rows = result?.records ?? [];\n      setData(rows);\n    };\n    loadData();\n  }, []);\n\n  return React.createElement('div', null, 'Data: ' + data.length);\n}",
+  "location": "embedded",
+  "functionalRequirements": "Test component for linter validation",
+  "technicalDesign": "Simple test component",
+  "exampleUsage": "<OptionalChainRecordsTest />",
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "TestQuery",
+        "categoryPath": "Test",
+        "fields": [],
+        "entityNames": []
+      }
+    ],
+    "entities": []
+  }
+}

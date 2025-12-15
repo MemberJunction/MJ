@@ -23,7 +23,7 @@ interface AgentPrompt {
 @Component({
   selector: 'mj-agent-editor',
   templateUrl: './agent-editor.component.html',
-  styleUrls: ['./agent-editor.component.scss']
+  styleUrls: ['./agent-editor.component.css']
 })
 export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentId: string | null = null;

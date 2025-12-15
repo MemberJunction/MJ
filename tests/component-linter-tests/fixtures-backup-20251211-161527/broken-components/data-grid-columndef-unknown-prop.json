@@ -1,0 +1,29 @@
+{
+  "name": "DataGridColumndefUnknownProp",
+  "description": "DataGrid with ColumnDef containing unknown property 'onClick' not in type definition",
+  "code": "function DataGridColumndefUnknownProp({ components, utilities }) {\n  const { DataGrid } = components;\n  const [products, setProducts] = React.useState(null);\n\n  React.useEffect(() => {\n    async function loadData() {\n      const results = await utilities.rv.RunView({\n        EntityName: 'Products',\n        ExtraFilter: '',\n        MaxRows: 50\n      });\n      setProducts(results.Results);\n    }\n    loadData();\n  }, []);\n\n  if (!products) return <div>Loading...</div>;\n\n  return (\n    <DataGrid\n      entityName=\"Products\"\n      data={products}\n      columns={[\n        { field: 'Name', onClick: true, invalidProp: 'test' },\n        { field: 'Category', onHover: 123, anotherBadProp: false }\n      ]}\n      utilities={utilities}\n    />\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Products",
+        "type": "view",
+        "maxRows": 50,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier", "description": "Primary key" },
+          { "name": "Name", "type": "nvarchar", "description": "Product name" },
+          { "name": "Category", "type": "nvarchar", "description": "Category" },
+          { "name": "Price", "type": "decimal", "description": "Price" }
+        ]
+      }
+    ]
+  }
+}

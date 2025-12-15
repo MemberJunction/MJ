@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component that returns the component itself (violates no-return-component rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  return TestComponent;\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

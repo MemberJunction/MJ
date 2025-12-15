@@ -27,6 +27,18 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
+### 4. NO STANDALONE COMPONENTS - EVER
+- **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
+- **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`
+- **Why**: Standalone components cause style encapsulation issues, ::ng-deep doesn't work properly, and they bypass Angular's module system
+- When creating new components:
+  - Create or add to an NgModule
+  - Declare component in the module's `declarations` array
+  - Import `CommonModule` and other required modules in the module's `imports` array
+  - Export the component in the module's `exports` array if it needs to be used outside the module
+- **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
+- This is **non-negotiable** - standalone components are strictly forbidden
+
 ---
 
 **VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
@@ -794,6 +806,8 @@ CodeGen ensures that your database schema, TypeScript types, and UI components s
 
 ## Angular Development Best Practices
 
+> **See [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md) for comprehensive Angular-specific guidelines** including component patterns, state management, and change detection strategies.
+
 ### Change Detection and ExpressionChangedAfterItHasBeenCheckedError
 When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular components:
 - Add `ChangeDetectorRef` to the component constructor
@@ -823,3 +837,24 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Group related components in dedicated directories
 - Export shared components (like dialogs) for reuse
 - Maintain clear separation between container and presentational components
+
+### Loading Indicators
+- **ALWAYS** use the `<mj-loading>` component from `@memberjunction/ng-shared-generic` for all loading states
+- **NEVER** create custom spinners or loading indicators - use the standard MJ loading component
+- Import `SharedGenericModule` in your module to access `mj-loading`
+- Example usage:
+  ```html
+  <!-- Basic usage -->
+  <mj-loading></mj-loading>
+
+  <!-- With custom text -->
+  <mj-loading text="Loading records..."></mj-loading>
+
+  <!-- With size preset -->
+  <mj-loading text="Please wait..." size="medium"></mj-loading>
+
+  <!-- No text, just the animated logo -->
+  <mj-loading [showText]="false"></mj-loading>
+  ```
+- Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
+- The component displays the animated MJ logo with optional text below

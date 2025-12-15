@@ -3,12 +3,14 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
   console.log('[AIPerformanceDashboard] Available components:', components ? Object.keys(components) : 'none');
   
   // Extract child components with fallbacks
-  const AITimeSeriesChart = components?.AITimeSeriesChart;
-  const AIDistributionChart = components?.AIDistributionChart;
-  const AIDetailTable = components?.AIDetailTable;
-  const AIMetricsSummary = components?.AIMetricsSummary;
-  const AIInsightsPanel = components?.AIInsightsPanel;
-  const DataExportPanel = components?.DataExportPanel;
+  const {
+    AITimeSeriesChart,
+    AIDistributionChart,
+    AIDetailTable,
+    AIMetricsSummary,
+    AIInsightsPanel,
+    DataExportPanel
+  } = components;
   
   // Check if required components are available
   if (!AITimeSeriesChart || !AIDistributionChart || !AIDetailTable || !AIMetricsSummary || !AIInsightsPanel) {
@@ -140,7 +142,7 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
     };
     
     loadData();
-  }, [timeRange, utilities.rv, getDateRange]);
+  }, [timeRange, getDateRange]);
   
   // Aggregate data by time period
   const aggregateData = useCallback((data, dateField, grouping) => {
@@ -187,8 +189,16 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
       grouped[key].cost += (item.TotalCost || 0);
       grouped[key].items.push(item);
     });
-    
-    const result = Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Ensure all numeric values are valid (not NaN) before returning
+    const result = Object.values(grouped)
+      .map(group => ({
+        ...group,
+        runs: Number.isFinite(group.runs) ? group.runs : 0,
+        tokens: Number.isFinite(group.tokens) ? group.tokens : 0,
+        cost: Number.isFinite(group.cost) ? group.cost : 0
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
     console.log(`[AIPerformanceDashboard] Aggregated into ${result.length} groups`);
     return result;
   }, []);
@@ -347,13 +357,13 @@ ${Object.entries(agentDistribution)
   .join('\n')}
 
 ## Recent Performance Trends (Last 5 ${groupBy === 'hour' ? 'Hours' : groupBy === 'day' ? 'Days' : 'Periods'})
-${chartData.slice(-5).map(d => 
-  `- **${d.date}:** ${d.runs} runs, ${d.tokens.toLocaleString()} tokens, $${d.cost.toFixed(2)}`
+${chartData.slice(-5).map(d =>
+  `- **${d.date}:** ${d.runs} runs, ${d.tokens?.toLocaleString() || '0'} tokens, $${d.cost?.toFixed(2) || '0.00'}`
 ).join('\n')}
 
 ## Cost Analysis
-- **Highest Cost Period:** ${chartData.reduce((max, d) => d.cost > max.cost ? d : max, chartData[0] || {}).date || 'N/A'}
-- **Most Active Period:** ${chartData.reduce((max, d) => d.runs > max.runs ? d : max, chartData[0] || {}).date || 'N/A'}
+- **Highest Cost Period:** ${chartData.reduce((max, d) => d.cost > max.cost ? d : max, chartData?.[0] || {}).date || 'N/A'}
+- **Most Active Period:** ${chartData.reduce((max, d) => d.runs > max.runs ? d : max, chartData?.[0] || {}).date || 'N/A'}
 - **Token Efficiency Trend:** ${chartData.length > 1 
   ? (chartData[chartData.length-1].tokens/chartData[chartData.length-1].runs < chartData[0].tokens/chartData[0].runs 
     ? 'Improving' : 'Declining')
@@ -388,7 +398,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
     } finally {
       setLoadingInsights(false);
     }
-  }, [activeTab, agentRuns, promptRuns, utilities.ai]);
+  }, [activeTab, agentRuns, promptRuns]);
   
   console.log('[AIPerformanceDashboard] Current state:', {
     timeRange,

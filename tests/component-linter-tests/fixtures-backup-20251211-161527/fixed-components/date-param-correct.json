@@ -1,0 +1,44 @@
+{
+  "name": "EventsByDateRange",
+  "type": "report",
+  "description": "Events report with proper date handling - FIXED: uses valid ISO dates",
+  "namespace": "reports/events",
+  "version": "1.0.0",
+  "registry": "Test",
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "Events By Date",
+        "categoryPath": "Reports/Events",
+        "description": "Returns events within a date range",
+        "parameters": [
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-01-01",
+            "description": "Start date for events"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "datetime",
+            "sampleValue": "2024-12-31T23:59:59",
+            "description": "End date/time for events"
+          }
+        ],
+        "fields": [
+          {
+            "name": "EventDate",
+            "type": "datetime"
+          },
+          {
+            "name": "EventName",
+            "type": "nvarchar"
+          }
+        ]
+      }
+    ]
+  },
+  "code": "function EventsByDateRange({ utilities }) {\n  const [events, setEvents] = React.useState([]);\n  const [startDate, setStartDate] = React.useState('2024-01-01');\n  const [endDate, setEndDate] = React.useState('2024-12-31T23:59:59');\n\n  React.useEffect(() => {\n    async function loadEvents() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Events By Date',\n        CategoryPath: 'Reports/Events',\n        Parameters: {\n          StartDate: startDate,\n          EndDate: endDate\n        }\n      });\n      if (result?.Success) {\n        setEvents(result.Results || []);\n      }\n    }\n    loadEvents();\n  }, [startDate, endDate]);\n\n  return (\n    <div>\n      <h1>Events Report</h1>\n      <div>\n        <label>Start: <input type=\"date\" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label>\n        <label>End: <input type=\"datetime-local\" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></label>\n      </div>\n      <div>Found {events.length} events</div>\n    </div>\n  );\n}"
+}

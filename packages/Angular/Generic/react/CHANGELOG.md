@@ -1,5 +1,100 @@
 # @memberjunction/ng-react
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [1115143]
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/interactive-component-types@2.125.0
+  - @memberjunction/react-runtime@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/graphql-dataprovider@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ai-vectors-memory@2.125.0
+  - @memberjunction/ng-notifications@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ai-vectors-memory@2.124.0
+  - @memberjunction/ng-notifications@2.124.0
+  - @memberjunction/graphql-dataprovider@2.124.0
+  - @memberjunction/interactive-component-types@2.124.0
+  - @memberjunction/react-runtime@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.123.1
+- @memberjunction/ng-notifications@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/interactive-component-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/react-runtime@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.123.0
+- @memberjunction/ng-notifications@2.123.0
+- @memberjunction/react-runtime@2.123.0
+- @memberjunction/ai-vectors-memory@2.123.0
+- @memberjunction/interactive-component-types@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/core-entities@2.123.0
+- @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/graphql-dataprovider@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/ng-notifications@2.122.2
+  - @memberjunction/react-runtime@2.122.2
+  - @memberjunction/ai-vectors-memory@2.122.2
+  - @memberjunction/interactive-component-types@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+  - @memberjunction/ai-vectors-memory@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/interactive-component-types@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/react-runtime@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/interactive-component-types@2.122.0
+  - @memberjunction/ng-notifications@2.122.0
+  - @memberjunction/react-runtime@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

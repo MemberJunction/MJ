@@ -1,0 +1,17 @@
+{
+  "name": "TestComponent",
+  "description": "Component using OrderBy on field not in sortFields (violates orderby-field-not-sortable rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Invoices',\n        OrderBy: 'CreatedDate DESC',  // CreatedDate not in sortFields\n        MaxRows: 100\n      });\n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Invoices</h1>\n      <p>Count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Invoices",
+        "fields": ["ID", "Amount", "Status", "CreatedDate"],
+        "sortFields": ["Amount", "Status"]
+      }
+    ]
+  }
+}

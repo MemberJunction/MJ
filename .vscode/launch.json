@@ -76,19 +76,7 @@
         "CI": "true"
       },
       "console": "integratedTerminal"
-    },
-    {
-      "type": "chrome",
-      "request": "launch",
-      "name": "Launch Chrome against localhost",
-      "url": "http://localhost:4200",
-      "sourceMaps": true,
-      "webRoot": "${workspaceFolder}/packages",
-      "skipFiles": ["!@memberjunction/**", "<node_internals>/**/*.js", "${workspaceFolder}/node_modules/**/*.js"],
-      "sourceMapPathOverrides": {
-        "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
-      }
-    },
+    }, 
     {
       "type": "node",
       "request": "launch",
@@ -119,9 +107,9 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "MetadataSync CLI - Push (with exclude)",
+      "name": "MetadataSync CLI - Push (with include)",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
-      "args": ["sync", "push", "--dir", "${input:metadataSyncDirectory}", "--exclude", "${input:metadataSyncExclude}"],
+      "args": ["sync", "push", "--dir", "${input:metadataSyncDirectory}", "--include", "${input:metadataSyncInclude}"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
@@ -371,10 +359,10 @@
       "default": "metadata"
     },
     {
-      "id": "metadataSyncExclude",
+      "id": "metadataSyncInclude",
       "type": "promptString",
-      "description": "Directories to exclude (comma-separated, blank to exclude none)",
-      "default": "actions"
+      "description": "Directories to include (comma-separated, blank to include all)",
+      "default": "components"
     },
     {
       "id": "metadataSyncPullDirectory",

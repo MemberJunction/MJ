@@ -10,15 +10,40 @@
     "entities": [
       {
         "name": "Invoices",
-        "displayFields": ["InvoiceNumber", "AccountID", "InvoiceDate", "DueDate", "TotalAmount", "Status", "PaidAmount"],
-        "filterFields": ["Status", "DueDate", "AccountID"],
-        "sortFields": ["DueDate", "TotalAmount"] 
+        "displayFields": [
+          "InvoiceNumber",
+          "AccountID",
+          "InvoiceDate",
+          "DueDate",
+          "TotalAmount",
+          "Status",
+          "PaidAmount"
+        ],
+        "filterFields": [
+          "Status",
+          "DueDate",
+          "AccountID"
+        ],
+        "sortFields": [
+          "DueDate",
+          "TotalAmount"
+        ]
       },
       {
         "name": "Payments",
-        "displayFields": ["InvoiceID", "PaymentDate", "Amount", "PaymentMethod"],
-        "filterFields": ["PaymentDate", "InvoiceID"],
-        "sortFields": ["PaymentDate"] 
+        "displayFields": [
+          "InvoiceID",
+          "PaymentDate",
+          "Amount",
+          "PaymentMethod"
+        ],
+        "filterFields": [
+          "PaymentDate",
+          "InvoiceID"
+        ],
+        "sortFields": [
+          "PaymentDate"
+        ]
       }
     ]
   },
@@ -46,19 +71,10 @@
   ],
   "libraries": [
     {
-      "name": "Plotly",
-      "version": "^2.27.1",
-      "globalVariable": "Plotly"
-    },
-    {
-      "name": "accounting",
-      "version": "^0.4.1",
-      "globalVariable": "accounting"
-    },
-    {
       "name": "Chart.js",
       "version": "^4.4.1",
       "globalVariable": "Chart"
     }
-  ]
+  ],
+  "description": "Track invoice statuses, payment timelines, and accounts receivable aging with actionable insights and collection metrics"
 }

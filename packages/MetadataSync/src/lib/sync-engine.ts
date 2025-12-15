@@ -24,6 +24,40 @@ import {
 } from '../constants/metadata-keywords';
 
 /**
+ * Custom error class for lookup failures that can be deferred.
+ * When a lookup with `?allowDefer` flag fails, this error is thrown instead of a regular Error.
+ * The calling code can catch this specific error type and queue the lookup for later retry.
+ */
+export class DeferrableLookupError extends Error {
+  /** The entity name being looked up */
+  public readonly entityName: string;
+  /** The lookup fields and values that failed */
+  public readonly lookupFields: Array<{fieldName: string, fieldValue: string}>;
+  /** The original lookup string value */
+  public readonly originalValue: string;
+  /** The field name where this lookup was used */
+  public readonly targetFieldName?: string;
+
+  constructor(
+    message: string,
+    entityName: string,
+    lookupFields: Array<{fieldName: string, fieldValue: string}>,
+    originalValue: string,
+    targetFieldName?: string
+  ) {
+    super(message);
+    this.name = 'DeferrableLookupError';
+    this.entityName = entityName;
+    this.lookupFields = lookupFields;
+    this.originalValue = originalValue;
+    this.targetFieldName = targetFieldName;
+
+    // Maintains proper prototype chain for instanceof checks
+    Object.setPrototypeOf(this, DeferrableLookupError.prototype);
+  }
+}
+
+/**
  * Represents the structure of a metadata record with optional sync tracking
  */
 export interface RecordData {
@@ -233,63 +267,73 @@ export class SyncEngine {
     // Check for @lookup: reference
     if (value.startsWith(METADATA_KEYWORDS.LOOKUP)) {
       const lookupStr = extractKeywordValue(value) as string;
-      
-      // Parse lookup with optional create syntax
-      // Format: EntityName.Field1=Value1&Field2=Value2?create&OtherField=Value
+
+      // Parse lookup with optional flags: ?create, ?allowDefer
+      // Format: EntityName.Field1=Value1&Field2=Value2?create&allowDefer&OtherField=Value
       const entityMatch = lookupStr.match(/^([^.]+)\./);
       if (!entityMatch) {
         throw new Error(`Invalid lookup format: ${value}`);
       }
-      
+
       const entityName = entityMatch[1];
       const remaining = lookupStr.substring(entityName.length + 1);
-      
-      // Check if this has ?create syntax
-      const hasCreate = remaining.includes('?create');
-      const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
-      
+
+      // Split into lookup part and flags part
+      const questionMarkIndex = remaining.indexOf('?');
+      const lookupPart = questionMarkIndex >= 0 ? remaining.substring(0, questionMarkIndex) : remaining;
+      const flagsPart = questionMarkIndex >= 0 ? remaining.substring(questionMarkIndex + 1) : '';
+
+      // Parse flags from the query string portion
+      const flags = new Set(flagsPart.split('&').map(f => f.split('=')[0].toLowerCase()));
+      const hasCreate = flags.has('create');
+      const allowDefer = flags.has('allowdefer');
+
       // Parse all lookup fields (can be multiple with &)
       const lookupFields: Array<{fieldName: string, fieldValue: string}> = [];
       const lookupPairs = lookupPart.split('&');
-      
+
       for (const pair of lookupPairs) {
         const fieldMatch = pair.match(/^(.+?)=(.+)$/);
         if (!fieldMatch) {
           throw new Error(`Invalid lookup field format: ${pair} in ${value}`);
         }
         const [, fieldName, fieldValue] = fieldMatch;
-        
+
         // Recursively process the field value to resolve any nested @ commands
         const processedValue = await this.processFieldValue(
-          fieldValue.trim(), 
-          baseDir, 
-          parentRecord, 
+          fieldValue.trim(),
+          baseDir,
+          parentRecord,
           rootRecord,
           depth + 1,
           batchContext
         );
-        
+
         lookupFields.push({ fieldName: fieldName.trim(), fieldValue: processedValue });
       }
-      
+
       if (lookupFields.length === 0) {
         throw new Error(`No lookup fields specified: ${value}`);
       }
-      
+
       // Parse additional fields for creation if ?create is present
+      // These are key=value pairs after the flags (e.g., ?create&Description=Some%20Value)
       let createFields: Record<string, any> = {};
-      if (hasCreate && remaining.includes('?create&')) {
-        const createPart = remaining.split('?create&')[1];
-        const pairs = createPart.split('&');
-        for (const pair of pairs) {
+      if (hasCreate && flagsPart) {
+        const flagPairs = flagsPart.split('&');
+        for (const pair of flagPairs) {
+          // Skip known flags
+          if (pair.toLowerCase() === 'create' || pair.toLowerCase() === 'allowdefer') {
+            continue;
+          }
           const [key, val] = pair.split('=');
           if (key && val) {
             const decodedVal = decodeURIComponent(val);
             // Recursively process the field value to resolve any nested @ commands
             createFields[key] = await this.processFieldValue(
-              decodedVal, 
-              baseDir, 
-              parentRecord, 
+              decodedVal,
+              baseDir,
+              parentRecord,
               rootRecord,
               depth + 1,
               batchContext
@@ -297,8 +341,8 @@ export class SyncEngine {
           }
         }
       }
-      
-      return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext);
+
+      return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value);
     }
     
     // Check for @env: reference
@@ -324,27 +368,43 @@ export class SyncEngine {
    * @param fieldValue - Value to search for
    * @param autoCreate - Whether to create the record if not found
    * @param createFields - Additional fields to set when creating
+   * @param batchContext - Optional batch context for in-memory entity resolution
+   * @param allowDefer - If true, throws DeferrableLookupError on failure instead of regular Error
+   * @param originalValue - Original lookup string (for error context in deferred lookups)
    * @returns The ID of the found or created record
-   * @throws Error if lookup fails and autoCreate is false
-   * 
+   * @throws Error if lookup fails and autoCreate is false and allowDefer is false
+   * @throws DeferrableLookupError if lookup fails and allowDefer is true
+   *
    * @example
    * ```typescript
    * // Simple lookup
-   * const categoryId = await resolveLookup('Categories', 'Name', 'Technology');
-   * 
+   * const categoryId = await resolveLookup('Categories', [{ fieldName: 'Name', fieldValue: 'Technology' }]);
+   *
    * // Lookup with auto-create
-   * const tagId = await resolveLookup('Tags', 'Name', 'New Tag', true, {
+   * const tagId = await resolveLookup('Tags', [{ fieldName: 'Name', fieldValue: 'New Tag' }], true, {
    *   Description: 'Auto-created tag',
    *   Status: 'Active'
    * });
+   *
+   * // Lookup with allowDefer - will throw DeferrableLookupError on failure
+   * try {
+   *   const id = await resolveLookup('Dashboards', [{ fieldName: 'Name', fieldValue: 'My Dashboard' }],
+   *     false, {}, batchContext, true, '@lookup:Dashboards.Name=My Dashboard?allowDefer');
+   * } catch (e) {
+   *   if (e instanceof DeferrableLookupError) {
+   *     // Queue for later retry
+   *   }
+   * }
    * ```
    */
   async resolveLookup(
-    entityName: string, 
+    entityName: string,
     lookupFields: Array<{fieldName: string, fieldValue: string}>,
     autoCreate: boolean = false,
     createFields: Record<string, any> = {},
-    batchContext?: Map<string, BaseEntity>
+    batchContext?: Map<string, BaseEntity>,
+    allowDefer: boolean = false,
+    originalValue?: string
   ): Promise<string> {
     // First check batch context for in-memory entities
     if (batchContext) {
@@ -472,9 +532,21 @@ export class SyncEngine {
     }
     
     const filterDesc = lookupFields.map(({fieldName, fieldValue}) => `${fieldName}='${fieldValue}'`).join(' AND ');
-    throw new Error(`Lookup failed: No record found in '${entityName}' where ${filterDesc}`);
+    const errorMessage = `Lookup failed: No record found in '${entityName}' where ${filterDesc}`;
+
+    // If allowDefer is true, throw DeferrableLookupError so caller can queue for retry
+    if (allowDefer) {
+      throw new DeferrableLookupError(
+        errorMessage,
+        entityName,
+        lookupFields,
+        originalValue || `@lookup:${entityName}.${filterDesc}`
+      );
+    }
+
+    throw new Error(errorMessage);
   }
-  
+
   /**
    * Build cascading defaults for a file path and process field values
    * 
@@ -884,6 +956,14 @@ export class SyncEngine {
   ): Promise<any> {
     // Handle null and undefined
     if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    // Handle top-level strings (important for array elements that are strings with @ syntax)
+    if (typeof obj === 'string') {
+      if (isMetadataKeyword(obj)) {
+        return this.processFieldValue(obj, baseDir, parentRecord, rootRecord, depth, batchContext);
+      }
       return obj;
     }
 

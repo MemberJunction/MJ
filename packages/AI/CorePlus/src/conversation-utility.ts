@@ -191,6 +191,22 @@ export class ConversationUtility {
   }
 
   /**
+   * Check if a message contains form response syntax (@{"_mode":"form",...})
+   * Useful for fast-path routing decisions without running full LLM inference.
+   *
+   * Form responses should always be routed back to the agent that requested the form,
+   * so this can be used to skip intent-checking prompts entirely.
+   *
+   * @param text - The message text to check
+   * @returns true if the message contains form response syntax
+   */
+  public static ContainsFormResponse(text: string): boolean {
+    if (!text) return false;
+    const tokens = this.ParseSpecialContent(text);
+    return tokens.some(token => token.mode === 'form');
+  }
+
+  /**
    * Create a mention token string
    *
    * @param type - Type of mention (agent or user)

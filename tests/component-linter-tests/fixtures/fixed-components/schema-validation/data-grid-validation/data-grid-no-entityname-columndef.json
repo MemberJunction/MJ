@@ -1,0 +1,14 @@
+{
+  "name": "DataGridNoEntitynameColumndef",
+  "description": "DataGrid without entityName can use arbitrary ColumnDef objects - validates conditional constraint skipping",
+  "code": "function DataGridNoEntitynameColumndef({ components, utilities }) {\n  const { DataGrid } = components;\n  const [apiData, setApiData] = React.useState([\n    { productCode: 'ABC123', unitsSold: 50, revenue: 2500 },\n    { productCode: 'XYZ789', unitsSold: 30, revenue: 1800 },\n    { productCode: 'DEF456', unitsSold: 75, revenue: 3750 }\n  ]);\n\n  return (\n    <DataGrid\n      data={apiData}\n      columns={[\n        { field: 'productCode', header: 'Product Code', width: 120 },\n        { field: 'unitsSold', header: 'Units Sold', sortable: true },\n        { field: 'revenue', header: 'Revenue', render: (v) => `$${v.toFixed(2)}` }\n      ]}\n      utilities={utilities}\n    />\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ]
+}

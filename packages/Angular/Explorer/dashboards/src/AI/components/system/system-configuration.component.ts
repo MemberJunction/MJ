@@ -1,6 +1,8 @@
-import { Component, Output, EventEmitter, OnInit } from '@angular/core';
-import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
-import { AIConfigurationEntity } from '@memberjunction/core-entities';
+import { Component, OnInit } from '@angular/core';
+import { RunView, Metadata, LogError, LogStatus, CompositeKey } from '@memberjunction/core';
+import { AIConfigurationEntity, ResourceData } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 interface SystemConfigFilter {
   searchTerm: string;
@@ -8,14 +10,24 @@ interface SystemConfigFilter {
   isDefault: string;
 }
 
+/**
+ * Tree-shaking prevention function - ensures component is included in builds
+ */
+export function LoadAIConfigResource() {
+  // Force inclusion in production builds
+}
+
+/**
+ * AI Configuration Resource - displays AI system configuration management
+ * Extends BaseResourceComponent to work with the resource type system
+ */
+@RegisterClass(BaseResourceComponent, 'AIConfigResource')
 @Component({
   selector: 'app-system-configuration',
   templateUrl: './system-configuration.component.html',
-  styleUrls: ['./system-configuration.component.scss']
+  styleUrls: ['./system-configuration.component.css']
 })
-export class SystemConfigurationComponent implements OnInit {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
-  @Output() stateChange = new EventEmitter<any>();
+export class SystemConfigurationComponent extends BaseResourceComponent implements OnInit {
 
   public isLoading = false;
   public error: string | null = null;
@@ -30,8 +42,13 @@ export class SystemConfigurationComponent implements OnInit {
     isDefault: 'all'
   };
 
+  constructor(private navigationService: NavigationService) {
+    super();
+  }
+
   ngOnInit(): void {
     this.loadData();
+    this.NotifyLoadComplete();
   }
 
   public async loadData(): Promise<void> {
@@ -62,11 +79,10 @@ export class SystemConfigurationComponent implements OnInit {
 
   public toggleFilterPanel(): void {
     this.filterPanelVisible = !this.filterPanelVisible;
-    this.emitStateChange();
   }
 
   public onMainSplitterChange(event: any): void {
-    this.emitStateChange();
+    // No longer need to emit state changes
   }
 
   public onFiltersChange(filters: SystemConfigFilter): void {
@@ -113,16 +129,9 @@ export class SystemConfigurationComponent implements OnInit {
     this.filteredConfigurations = filtered;
   }
 
-  private emitStateChange(): void {
-    const state = {
-      filterPanelVisible: this.filterPanelVisible,
-      filters: this.currentFilters
-    };
-    this.stateChange.emit(state);
-  }
-
   public onOpenEntityRecord(entityName: string, recordId: string): void {
-    this.openEntityRecord.emit({entityName, recordId});
+    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: recordId }]);
+    this.navigationService.OpenEntityRecord(entityName, compositeKey);
   }
 
   public getStatusColor(status: string): string {
@@ -136,6 +145,15 @@ export class SystemConfigurationComponent implements OnInit {
   }
 
   public getConfigIcon(): string {
+    return 'fa-solid fa-cogs';
+  }
+
+  // BaseResourceComponent abstract method implementations
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return 'Configuration';
+  }
+
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
     return 'fa-solid fa-cogs';
   }
 }

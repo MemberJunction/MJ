@@ -1,5 +1,293 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [e1569fc]
+- Updated dependencies [bd4aa3d]
+- Updated dependencies [a692034]
+  - @memberjunction/communication-types@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ng-dashboards@2.125.0
+  - @memberjunction/ng-artifacts@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/skip-types@2.125.0
+  - @memberjunction/ng-user-view-grid@2.125.0
+  - @memberjunction/entity-communications-client@2.125.0
+  - @memberjunction/ai-engine-base@2.125.0
+  - @memberjunction/ai-core-plus@2.125.0
+  - @memberjunction/ng-auth-services@2.125.0
+  - @memberjunction/ng-base-application@2.125.0
+  - @memberjunction/ng-base-forms@2.125.0
+  - @memberjunction/ng-compare-records@2.125.0
+  - @memberjunction/ng-entity-form-dialog@2.125.0
+  - @memberjunction/ng-entity-permissions@2.125.0
+  - @memberjunction/ng-explorer-settings@2.125.0
+  - @memberjunction/ng-record-changes@2.125.0
+  - @memberjunction/ng-shared@2.125.0
+  - @memberjunction/ng-user-view-properties@2.125.0
+  - @memberjunction/ng-ai-test-harness@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-conversations@2.125.0
+  - @memberjunction/ng-entity-viewer@2.125.0
+  - @memberjunction/ng-file-storage@2.125.0
+  - @memberjunction/ng-notifications@2.125.0
+  - @memberjunction/ng-query-grid@2.125.0
+  - @memberjunction/ng-record-selector@2.125.0
+  - @memberjunction/ng-resource-permissions@2.125.0
+  - @memberjunction/ng-shared-generic@2.125.0
+  - @memberjunction/ng-user-avatar@2.125.0
+  - @memberjunction/templates-base-types@2.125.0
+  - @memberjunction/ng-tabstrip@2.125.0
+  - @memberjunction/ng-generic-dialog@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+- Updated dependencies [5033612]
+- Updated dependencies [cabe329]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ng-dashboards@2.124.0
+  - @memberjunction/ai-core-plus@2.124.0
+  - @memberjunction/ai-engine-base@2.124.0
+  - @memberjunction/ng-auth-services@2.124.0
+  - @memberjunction/ng-base-application@2.124.0
+  - @memberjunction/ng-base-forms@2.124.0
+  - @memberjunction/ng-compare-records@2.124.0
+  - @memberjunction/ng-entity-form-dialog@2.124.0
+  - @memberjunction/ng-entity-permissions@2.124.0
+  - @memberjunction/ng-explorer-settings@2.124.0
+  - @memberjunction/ng-record-changes@2.124.0
+  - @memberjunction/ng-shared@2.124.0
+  - @memberjunction/ng-user-view-grid@2.124.0
+  - @memberjunction/ng-user-view-properties@2.124.0
+  - @memberjunction/ng-ai-test-harness@2.124.0
+  - @memberjunction/ng-artifacts@2.124.0
+  - @memberjunction/ng-container-directives@2.124.0
+  - @memberjunction/ng-conversations@2.124.0
+  - @memberjunction/ng-entity-viewer@2.124.0
+  - @memberjunction/ng-file-storage@2.124.0
+  - @memberjunction/ng-notifications@2.124.0
+  - @memberjunction/ng-query-grid@2.124.0
+  - @memberjunction/ng-record-selector@2.124.0
+  - @memberjunction/ng-resource-permissions@2.124.0
+  - @memberjunction/ng-shared-generic@2.124.0
+  - @memberjunction/ng-user-avatar@2.124.0
+  - @memberjunction/communication-types@2.124.0
+  - @memberjunction/entity-communications-client@2.124.0
+  - @memberjunction/skip-types@2.124.0
+  - @memberjunction/templates-base-types@2.124.0
+  - @memberjunction/ng-tabstrip@2.124.0
+  - @memberjunction/ng-generic-dialog@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ng-dashboards@2.123.1
+- @memberjunction/ai-engine-base@2.123.1
+- @memberjunction/ai-core-plus@2.123.1
+- @memberjunction/ng-auth-services@2.123.1
+- @memberjunction/ng-base-application@2.123.1
+- @memberjunction/ng-base-forms@2.123.1
+- @memberjunction/ng-compare-records@2.123.1
+- @memberjunction/ng-entity-form-dialog@2.123.1
+- @memberjunction/ng-entity-permissions@2.123.1
+- @memberjunction/ng-explorer-settings@2.123.1
+- @memberjunction/ng-record-changes@2.123.1
+- @memberjunction/ng-shared@2.123.1
+- @memberjunction/ng-user-view-grid@2.123.1
+- @memberjunction/ng-user-view-properties@2.123.1
+- @memberjunction/ng-ai-test-harness@2.123.1
+- @memberjunction/ng-artifacts@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-conversations@2.123.1
+- @memberjunction/ng-entity-viewer@2.123.1
+- @memberjunction/ng-file-storage@2.123.1
+- @memberjunction/ng-generic-dialog@2.123.1
+- @memberjunction/ng-notifications@2.123.1
+- @memberjunction/ng-query-grid@2.123.1
+- @memberjunction/ng-record-selector@2.123.1
+- @memberjunction/ng-resource-permissions@2.123.1
+- @memberjunction/ng-shared-generic@2.123.1
+- @memberjunction/ng-tabstrip@2.123.1
+- @memberjunction/ng-user-avatar@2.123.1
+- @memberjunction/communication-types@2.123.1
+- @memberjunction/entity-communications-client@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/skip-types@2.123.1
+- @memberjunction/templates-base-types@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- 6cefc87: Fix MSAL Login and restore Logout
+- Updated dependencies [6cefc87]
+- Updated dependencies [52cf482]
+- Updated dependencies [0944f59]
+  - @memberjunction/ng-auth-services@2.123.0
+  - @memberjunction/ng-conversations@2.123.0
+  - @memberjunction/ai-core-plus@2.123.0
+  - @memberjunction/ng-entity-viewer@2.123.0
+  - @memberjunction/ng-dashboards@2.123.0
+  - @memberjunction/ng-explorer-settings@2.123.0
+  - @memberjunction/ng-shared@2.123.0
+  - @memberjunction/ng-user-view-grid@2.123.0
+  - @memberjunction/ng-ai-test-harness@2.123.0
+  - @memberjunction/ng-file-storage@2.123.0
+  - @memberjunction/ng-notifications@2.123.0
+  - @memberjunction/entity-communications-client@2.123.0
+  - @memberjunction/ng-base-forms@2.123.0
+  - @memberjunction/ng-entity-form-dialog@2.123.0
+  - @memberjunction/ng-entity-permissions@2.123.0
+  - @memberjunction/ng-user-view-properties@2.123.0
+  - @memberjunction/ng-query-grid@2.123.0
+  - @memberjunction/ng-record-selector@2.123.0
+  - @memberjunction/ng-record-changes@2.123.0
+  - @memberjunction/ng-artifacts@2.123.0
+  - @memberjunction/ng-resource-permissions@2.123.0
+  - @memberjunction/ai-engine-base@2.123.0
+  - @memberjunction/ng-base-application@2.123.0
+  - @memberjunction/ng-compare-records@2.123.0
+  - @memberjunction/ng-shared-generic@2.123.0
+  - @memberjunction/ng-container-directives@2.123.0
+  - @memberjunction/ng-generic-dialog@2.123.0
+  - @memberjunction/ng-tabstrip@2.123.0
+  - @memberjunction/ng-user-avatar@2.123.0
+  - @memberjunction/communication-types@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+  - @memberjunction/skip-types@2.123.0
+  - @memberjunction/templates-base-types@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 3d763e9: Fix MJExplorer UI rendering issues including conversation messages not displaying, collections page showing duplicate items on reload, dialog containers for deletions, loading spinner flashes during navigation, and improve JWT token handling for WebSocket connections
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/ng-conversations@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/entity-communications-client@2.122.2
+  - @memberjunction/ng-ai-test-harness@2.122.2
+  - @memberjunction/ng-artifacts@2.122.2
+  - @memberjunction/ng-auth-services@2.122.2
+  - @memberjunction/ng-base-forms@2.122.2
+  - @memberjunction/ng-compare-records@2.122.2
+  - @memberjunction/ng-container-directives@2.122.2
+  - @memberjunction/ng-dashboards@2.122.2
+  - @memberjunction/ng-entity-permissions@2.122.2
+  - @memberjunction/ng-explorer-settings@2.122.2
+  - @memberjunction/ng-file-storage@2.122.2
+  - @memberjunction/ng-query-grid@2.122.2
+  - @memberjunction/ng-record-changes@2.122.2
+  - @memberjunction/ng-resource-permissions@2.122.2
+  - @memberjunction/ng-shared@2.122.2
+  - @memberjunction/ng-user-view-grid@2.122.2
+  - @memberjunction/ng-user-view-properties@2.122.2
+  - @memberjunction/ng-notifications@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/ng-base-application@2.122.2
+  - @memberjunction/ng-entity-form-dialog@2.122.2
+  - @memberjunction/ng-record-selector@2.122.2
+  - @memberjunction/ng-shared-generic@2.122.2
+  - @memberjunction/ng-user-avatar@2.122.2
+  - @memberjunction/communication-types@2.122.2
+  - @memberjunction/templates-base-types@2.122.2
+  - @memberjunction/ng-tabstrip@2.122.2
+  - @memberjunction/skip-types@2.122.2
+  - @memberjunction/ng-generic-dialog@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-ai-test-harness@2.122.1
+  - @memberjunction/ng-artifacts@2.122.1
+  - @memberjunction/ng-auth-services@2.122.1
+  - @memberjunction/ng-base-forms@2.122.1
+  - @memberjunction/ng-conversations@2.122.1
+  - @memberjunction/ng-dashboards@2.122.1
+  - @memberjunction/ng-entity-permissions@2.122.1
+  - @memberjunction/ng-explorer-settings@2.122.1
+  - @memberjunction/ng-file-storage@2.122.1
+  - @memberjunction/ng-record-changes@2.122.1
+  - @memberjunction/ng-resource-permissions@2.122.1
+  - @memberjunction/ng-shared@2.122.1
+  - @memberjunction/ng-user-view-grid@2.122.1
+  - @memberjunction/ng-user-view-properties@2.122.1
+  - @memberjunction/ng-entity-form-dialog@2.122.1
+  - @memberjunction/ng-query-grid@2.122.1
+  - @memberjunction/ng-record-selector@2.122.1
+  - @memberjunction/ai-core-plus@2.122.1
+  - @memberjunction/ng-base-application@2.122.1
+  - @memberjunction/ng-compare-records@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-generic-dialog@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/ng-tabstrip@2.122.1
+  - @memberjunction/ng-user-avatar@2.122.1
+  - @memberjunction/communication-types@2.122.1
+  - @memberjunction/entity-communications-client@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/skip-types@2.122.1
+  - @memberjunction/templates-base-types@2.122.1
+
+## 2.122.0
+
+### Minor Changes
+
+- c989c45: migration
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/ng-auth-services@2.122.0
+  - @memberjunction/ng-base-forms@2.122.0
+  - @memberjunction/ng-compare-records@2.122.0
+  - @memberjunction/ng-dashboards@2.122.0
+  - @memberjunction/ng-entity-form-dialog@2.122.0
+  - @memberjunction/ng-explorer-settings@2.122.0
+  - @memberjunction/ng-record-changes@2.122.0
+  - @memberjunction/ng-shared@2.122.0
+  - @memberjunction/ng-user-view-grid@2.122.0
+  - @memberjunction/ng-user-view-properties@2.122.0
+  - @memberjunction/ng-container-directives@2.122.0
+  - @memberjunction/ng-conversations@2.122.0
+  - @memberjunction/ng-file-storage@2.122.0
+  - @memberjunction/ng-query-grid@2.122.0
+  - @memberjunction/ng-record-selector@2.122.0
+  - @memberjunction/ng-resource-permissions@2.122.0
+  - @memberjunction/ng-shared-generic@2.122.0
+  - @memberjunction/ng-user-avatar@2.122.0
+  - @memberjunction/communication-types@2.122.0
+  - @memberjunction/entity-communications-client@2.122.0
+  - @memberjunction/templates-base-types@2.122.0
+  - @memberjunction/ng-tabstrip@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

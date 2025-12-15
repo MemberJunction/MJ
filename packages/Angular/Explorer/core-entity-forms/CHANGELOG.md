@@ -1,5 +1,220 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/graphql-dataprovider@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ng-user-view-grid@2.125.0
+  - @memberjunction/ai-engine-base@2.125.0
+  - @memberjunction/ai-core-plus@2.125.0
+  - @memberjunction/actions-base@2.125.0
+  - @memberjunction/ng-base-forms@2.125.0
+  - @memberjunction/ng-form-toolbar@2.125.0
+  - @memberjunction/ng-link-directives@2.125.0
+  - @memberjunction/ng-shared@2.125.0
+  - @memberjunction/ng-testing@2.125.0
+  - @memberjunction/ng-action-gallery@2.125.0
+  - @memberjunction/ng-ai-test-harness@2.125.0
+  - @memberjunction/ng-code-editor@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-deep-diff@2.125.0
+  - @memberjunction/ng-join-grid@2.125.0
+  - @memberjunction/ng-notifications@2.125.0
+  - @memberjunction/ng-timeline@2.125.0
+  - @memberjunction/templates-base-types@2.125.0
+  - @memberjunction/ng-tabstrip@2.125.0
+  - @memberjunction/ai@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+- Updated dependencies [cabe329]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ai-core-plus@2.124.0
+  - @memberjunction/ai-engine-base@2.124.0
+  - @memberjunction/actions-base@2.124.0
+  - @memberjunction/ng-base-forms@2.124.0
+  - @memberjunction/ng-form-toolbar@2.124.0
+  - @memberjunction/ng-link-directives@2.124.0
+  - @memberjunction/ng-shared@2.124.0
+  - @memberjunction/ng-user-view-grid@2.124.0
+  - @memberjunction/ng-testing@2.124.0
+  - @memberjunction/ng-action-gallery@2.124.0
+  - @memberjunction/ng-ai-test-harness@2.124.0
+  - @memberjunction/ng-code-editor@2.124.0
+  - @memberjunction/ng-container-directives@2.124.0
+  - @memberjunction/ng-deep-diff@2.124.0
+  - @memberjunction/ng-join-grid@2.124.0
+  - @memberjunction/ng-notifications@2.124.0
+  - @memberjunction/ng-timeline@2.124.0
+  - @memberjunction/graphql-dataprovider@2.124.0
+  - @memberjunction/templates-base-types@2.124.0
+  - @memberjunction/ng-tabstrip@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.123.1
+- @memberjunction/ai@2.123.1
+- @memberjunction/ai-core-plus@2.123.1
+- @memberjunction/actions-base@2.123.1
+- @memberjunction/ng-base-forms@2.123.1
+- @memberjunction/ng-form-toolbar@2.123.1
+- @memberjunction/ng-link-directives@2.123.1
+- @memberjunction/ng-shared@2.123.1
+- @memberjunction/ng-user-view-grid@2.123.1
+- @memberjunction/ng-testing@2.123.1
+- @memberjunction/ng-action-gallery@2.123.1
+- @memberjunction/ng-ai-test-harness@2.123.1
+- @memberjunction/ng-code-editor@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-deep-diff@2.123.1
+- @memberjunction/ng-join-grid@2.123.1
+- @memberjunction/ng-notifications@2.123.1
+- @memberjunction/ng-tabstrip@2.123.1
+- @memberjunction/ng-timeline@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/templates-base-types@2.123.1
+
+## 2.123.0
+
+### Minor Changes
+
+- 0944f59: migrations
+
+### Patch Changes
+
+- Updated dependencies [0944f59]
+  - @memberjunction/ai-core-plus@2.123.0
+  - @memberjunction/ng-timeline@2.123.0
+  - @memberjunction/graphql-dataprovider@2.123.0
+  - @memberjunction/ng-shared@2.123.0
+  - @memberjunction/ng-user-view-grid@2.123.0
+  - @memberjunction/ng-testing@2.123.0
+  - @memberjunction/ng-ai-test-harness@2.123.0
+  - @memberjunction/ng-notifications@2.123.0
+  - @memberjunction/ng-form-toolbar@2.123.0
+  - @memberjunction/ng-base-forms@2.123.0
+  - @memberjunction/ng-link-directives@2.123.0
+  - @memberjunction/ng-join-grid@2.123.0
+  - @memberjunction/ng-action-gallery@2.123.0
+  - @memberjunction/ai-engine-base@2.123.0
+  - @memberjunction/ai@2.123.0
+  - @memberjunction/actions-base@2.123.0
+  - @memberjunction/ng-code-editor@2.123.0
+  - @memberjunction/ng-container-directives@2.123.0
+  - @memberjunction/ng-deep-diff@2.123.0
+  - @memberjunction/ng-tabstrip@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+  - @memberjunction/templates-base-types@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/graphql-dataprovider@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/ng-ai-test-harness@2.122.2
+  - @memberjunction/ng-base-forms@2.122.2
+  - @memberjunction/ng-code-editor@2.122.2
+  - @memberjunction/ng-container-directives@2.122.2
+  - @memberjunction/ng-deep-diff@2.122.2
+  - @memberjunction/ng-form-toolbar@2.122.2
+  - @memberjunction/ng-join-grid@2.122.2
+  - @memberjunction/ng-shared@2.122.2
+  - @memberjunction/ng-timeline@2.122.2
+  - @memberjunction/ng-user-view-grid@2.122.2
+  - @memberjunction/ng-testing@2.122.2
+  - @memberjunction/ng-notifications@2.122.2
+  - @memberjunction/ai-engine-base@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/actions-base@2.122.2
+  - @memberjunction/ng-action-gallery@2.122.2
+  - @memberjunction/templates-base-types@2.122.2
+  - @memberjunction/ng-tabstrip@2.122.2
+  - @memberjunction/ng-link-directives@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-action-gallery@2.122.1
+  - @memberjunction/ng-ai-test-harness@2.122.1
+  - @memberjunction/ng-base-forms@2.122.1
+  - @memberjunction/ng-form-toolbar@2.122.1
+  - @memberjunction/ng-join-grid@2.122.1
+  - @memberjunction/ng-shared@2.122.1
+  - @memberjunction/ng-testing@2.122.1
+  - @memberjunction/ng-user-view-grid@2.122.1
+  - @memberjunction/ng-link-directives@2.122.1
+  - @memberjunction/ng-timeline@2.122.1
+  - @memberjunction/ai-engine-base@2.122.1
+  - @memberjunction/ai@2.122.1
+  - @memberjunction/ai-core-plus@2.122.1
+  - @memberjunction/actions-base@2.122.1
+  - @memberjunction/ng-code-editor@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-deep-diff@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/ng-tabstrip@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+  - @memberjunction/templates-base-types@2.122.1
+
+## 2.122.0
+
+### Minor Changes
+
+- c989c45: migration
+
+### Patch Changes
+
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/core-entities@2.122.0
+  - @memberjunction/ai-engine-base@2.122.0
+  - @memberjunction/ai-core-plus@2.122.0
+  - @memberjunction/actions-base@2.122.0
+  - @memberjunction/ng-base-forms@2.122.0
+  - @memberjunction/ng-form-toolbar@2.122.0
+  - @memberjunction/ng-testing@2.122.0
+  - @memberjunction/ng-action-gallery@2.122.0
+  - @memberjunction/ng-ai-test-harness@2.122.0
+  - @memberjunction/ng-code-editor@2.122.0
+  - @memberjunction/ng-container-directives@2.122.0
+  - @memberjunction/ng-deep-diff@2.122.0
+  - @memberjunction/ng-join-grid@2.122.0
+  - @memberjunction/ng-timeline@2.122.0
+  - @memberjunction/ng-tabstrip@2.122.0
+  - @memberjunction/global@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

@@ -4,6 +4,8 @@
     <mj-conversation-navigation
       [activeTab]="activeTab"
       [environmentId]="environmentId"
+      [currentUser]="currentUser"
+      [conversationId]="selectedConversationId"
       (tabChanged)="onTabChanged($event)"
       (sidebarToggled)="toggleSidebar()"
       (searchTriggered)="openSearch()"
@@ -14,10 +16,7 @@
   <!-- Loading spinner while initializing agents -->
   @if (!isWorkspaceReady) {
     <div class="workspace-loading">
-      <div class="loading-spinner">
-        <i class="fa-solid fa-spinner fa-spin"></i>
-      </div>
-      <p>Loading agents...</p>
+      <mj-loading text="Loading agents..." size="large"></mj-loading>
     </div>
   }
 
@@ -38,7 +37,10 @@
         [activeTab]="activeTab"
         [environmentId]="environmentId"
         [currentUser]="currentUser"
-        [renamedConversationId]="renamedConversationId">
+        [selectedConversationId]="selectedConversationId"
+        [renamedConversationId]="renamedConversationId"
+        (conversationSelected)="onConversationSelected($event)"
+        (newConversationRequested)="startNewConversation()">
       </mj-conversation-sidebar>
     </div>
 
@@ -70,10 +72,23 @@
       <mj-conversation-chat-area
         [environmentId]="environmentId"
         [currentUser]="currentUser"
+        [conversationId]="selectedConversationId"
+        [conversation]="selectedConversation"
+        [threadId]="selectedThreadId"
+        [isNewConversation]="isNewUnsavedConversation"
+        [pendingMessage]="pendingMessageToSend"
+        [pendingArtifactId]="pendingArtifactId"
+        [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
         (conversationRenamed)="onConversationRenamed($event)"
         (openEntityRecord)="onOpenEntityRecord($event)"
         (taskClicked)="onTaskClicked($event)"
-        (artifactLinkClicked)="onArtifactLinkNavigation($event)">
+        (artifactLinkClicked)="onArtifactLinkNavigation($event)"
+        (conversationCreated)="onConversationCreated($event)"
+        (threadOpened)="onThreadOpened($event)"
+        (threadClosed)="onThreadClosed()"
+        (pendingArtifactConsumed)="pendingArtifactId = null; pendingArtifactVersionNumber = null"
+        (pendingMessageConsumed)="pendingMessageToSend = null"
+        (pendingMessageRequested)="pendingMessageToSend = $event">
       </mj-conversation-chat-area>
     </div>
 

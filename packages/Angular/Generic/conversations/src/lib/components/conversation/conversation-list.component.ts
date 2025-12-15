@@ -1,7 +1,7 @@
-import { Component, Input, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { ConversationEntity } from '@memberjunction/core-entities';
-import { ConversationStateService } from '../../services/conversation-state.service';
+import { ConversationDataService } from '../../services/conversation-data.service';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -11,18 +11,17 @@ import { takeUntil } from 'rxjs/operators';
 @Component({
   selector: 'mj-conversation-list',
   template: `
-    <div class="conversation-list">
+    <div class="conversation-list" kendoDialogContainer>
       <div class="list-header">
         <div class="header-top">
           <input
             type="text"
             class="search-input"
             placeholder="Search conversations..."
-            [(ngModel)]="conversationState.searchQuery">
+            [(ngModel)]="searchQuery">
           @if (!isSelectionMode) {
             <button class="btn-select" (click)="toggleSelectionMode()" title="Select conversations">
-              <i class="fas fa-check-square"></i>
-              <span>Select</span>
+              <i class="fas fa-check-square"></i> 
             </button>
           }
         </div>
@@ -45,7 +44,7 @@ import { takeUntil } from 'rxjs/operators';
             <div class="chat-list" [class.expanded]="pinnedExpanded">
               @for (conversation of pinnedConversations; track conversation.ID) {
                 <div class="conversation-item"
-                     [class.active]="conversation.ID === conversationState.activeConversationId"
+                     [class.active]="conversation.ID === selectedConversationId"
                      [class.renamed]="conversation.ID === renamedConversationId"
                      (click)="handleConversationClick(conversation)">
                   @if (isSelectionMode) {
@@ -110,7 +109,7 @@ import { takeUntil } from 'rxjs/operators';
           <div class="chat-list" [class.expanded]="directMessagesExpanded">
             @for (conversation of unpinnedConversations; track conversation.ID) {
               <div class="conversation-item"
-                   [class.active]="conversation.ID === conversationState.activeConversationId"
+                   [class.active]="conversation.ID === selectedConversationId"
                    [class.renamed]="conversation.ID === renamedConversationId"
                    (click)="handleConversationClick(conversation)">
                 @if (isSelectionMode) {
@@ -169,7 +168,7 @@ import { takeUntil } from 'rxjs/operators';
         <div class="selection-action-bar">
           <div class="selection-info">
             <span class="selection-count">{{ selectedConversationIds.size }} selected</span>
-            @if (selectedConversationIds.size < conversationState.filteredConversations.length) {
+            @if (selectedConversationIds.size < filteredConversations.length) {
               <button class="link-btn" (click)="selectAll()">Select All</button>
             } @else {
               <button class="link-btn" (click)="deselectAll()">Deselect All</button>
@@ -191,6 +190,7 @@ import { takeUntil } from 'rxjs/operators';
     </div>
   `,
   styles: [`
+    :host { display: block; height: 100%; }
     .conversation-list { display: flex; flex-direction: column; height: 100%; background: #092340; }
     .list-header { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
     .search-input {
@@ -225,7 +225,7 @@ import { takeUntil } from 'rxjs/operators';
     }
     .btn-new-conversation:hover { background: #005A8C; }
     .btn-new-conversation i { font-size: 14px; }
-    .list-content { flex: 1; overflow-y: auto; padding: 4px 0; }
+    .list-content { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; }
 
     /* Collapsible Sections */
     .sidebar-section { margin-bottom: 20px; }
@@ -621,7 +621,11 @@ import { takeUntil } from 'rxjs/operators';
 export class ConversationListComponent implements OnInit, OnDestroy {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  @Input() selectedConversationId: string | null = null;
   @Input() renamedConversationId: string | null = null;
+
+  @Output() conversationSelected = new EventEmitter<string>();
+  @Output() newConversationRequested = new EventEmitter<void>();
 
   public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
@@ -629,28 +633,40 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   public conversationIdsWithTasks = new Set<string>();
   public isSelectionMode: boolean = false;
   public selectedConversationIds = new Set<string>();
+  public searchQuery: string = '';
 
   private destroy$ = new Subject<void>();
 
   constructor(
-    public conversationState: ConversationStateService,
+    public conversationData: ConversationDataService,
     private dialogService: DialogService,
     private notificationService: NotificationService,
     private activeTasksService: ActiveTasksService,
     private cdr: ChangeDetectorRef
   ) {}
 
+  get filteredConversations(): ConversationEntity[] {
+    if (!this.searchQuery || this.searchQuery.trim() === '') {
+      return this.conversationData.conversations;
+    }
+    const lowerQuery = this.searchQuery.toLowerCase();
+    return this.conversationData.conversations.filter(c =>
+      (c.Name?.toLowerCase().includes(lowerQuery)) ||
+      (c.Description?.toLowerCase().includes(lowerQuery))
+    );
+  }
+
   get pinnedConversations() {
-    return this.conversationState.filteredConversations.filter(c => c.IsPinned);
+    return this.filteredConversations.filter(c => c.IsPinned);
   }
 
   get unpinnedConversations() {
-    return this.conversationState.filteredConversations.filter(c => !c.IsPinned);
+    return this.filteredConversations.filter(c => !c.IsPinned);
   }
 
   ngOnInit() {
     // Load conversations on init
-    this.conversationState.loadConversations(this.environmentId, this.currentUser);
+    this.conversationData.loadConversations(this.environmentId, this.currentUser);
 
     // Subscribe to conversation IDs with active tasks (hot set)
     this.activeTasksService.conversationIdsWithTasks$.pipe(
@@ -683,7 +699,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   selectConversation(conversation: ConversationEntity): void {
-    this.conversationState.setActiveConversation(conversation.ID);
+    this.conversationSelected.emit(conversation.ID);
     // Clear unread notifications when conversation is opened
     this.notificationService.markConversationAsRead(conversation.ID);
   }
@@ -691,7 +707,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   async createNewConversation(): Promise<void> {
     // Don't create DB record yet - just show the welcome screen
     // Conversation will be created when user sends first message
-    this.conversationState.startNewConversation();
+    this.newConversationRequested.emit();
   }
 
   async renameConversation(conversation: ConversationEntity): Promise<void> {
@@ -716,7 +732,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
         const newDescription = typeof result === 'string' ? conversation.Description : result.secondValue;
 
         if (newName !== conversation.Name || newDescription !== conversation.Description) {
-          await this.conversationState.saveConversation(
+          await this.conversationData.saveConversation(
             conversation.ID,
             { Name: newName, Description: newDescription || '' },
             this.currentUser
@@ -739,7 +755,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       });
 
       if (confirmed) {
-        await this.conversationState.deleteConversation(conversation.ID, this.currentUser);
+        await this.conversationData.deleteConversation(conversation.ID, this.currentUser);
       }
     } catch (error) {
       console.error('Error deleting conversation:', error);
@@ -759,7 +775,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   async togglePin(conversation: ConversationEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
     try {
-      await this.conversationState.togglePin(conversation.ID, this.currentUser);
+      await this.conversationData.togglePin(conversation.ID, this.currentUser);
       this.closeMenu();
     } catch (error) {
       console.error('Error toggling pin:', error);
@@ -787,7 +803,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   selectAll(): void {
-    this.conversationState.filteredConversations.forEach(c => {
+    this.filteredConversations.forEach(c => {
       this.selectedConversationIds.add(c.ID);
     });
   }
@@ -810,7 +826,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
     if (confirmed) {
       try {
-        const result = await this.conversationState.deleteMultipleConversations(
+        const result = await this.conversationData.deleteMultipleConversations(
           Array.from(this.selectedConversationIds),
           this.currentUser
         );

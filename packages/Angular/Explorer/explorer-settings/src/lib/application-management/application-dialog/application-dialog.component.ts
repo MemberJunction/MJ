@@ -26,8 +26,6 @@ export interface ApplicationDialogResult {
 
 @Component({
   selector: 'mj-application-dialog',
-  standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './application-dialog.component.html',
   styleUrls: ['./application-dialog.component.css']

@@ -669,7 +669,7 @@ export class AIPromptRunner {
     }
 
     // Execute tasks in parallel
-    const parallelResult = await this._parallelCoordinator.executeTasksInParallel(executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
+    const parallelResult = await this._parallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -1119,7 +1119,7 @@ export class AIPromptRunner {
     contextUser?: UserInfo,
     configurationId?: string,
     vendorId?: string,
-    params?: AIPromptParams
+    params?: AIPromptParams 
   ): Promise<{
     model: AIModelEntityExtended | null;
     vendorDriverClass?: string;
@@ -1917,7 +1917,7 @@ export class AIPromptRunner {
         hasKey = checkedDrivers.get(candidate.driverClass)!;
       } else {
         // Check for API key with robust validation
-        const apiKey = GetAIAPIKey(candidate.driverClass);
+        const apiKey = GetAIAPIKey(candidate.driverClass, params.apiKeys, params.verbose);
         hasKey = this.isValidAPIKey(apiKey);
         checkedDrivers.set(candidate.driverClass, hasKey);
       }
@@ -2623,26 +2623,10 @@ export class AIPromptRunner {
         }
       }
 
+      // Check for local API key first, then fall back to global      
+      const apiKey = GetAIAPIKey(driverClass, params.apiKeys, verbose);
+
       // Create LLM instance with vendor-specific driver class
-      // Check for local API key first, then fall back to global
-      let apiKey: string;
-      if (params.apiKeys && params.apiKeys.length > 0) {
-        const localKey = params.apiKeys.find(k => k.driverClass === driverClass);
-        if (localKey) {
-          apiKey = localKey.apiKey;
-          if (verbose) {
-            console.log(`   Using local API key for driver class: ${driverClass}`);
-          }
-        } else {
-          apiKey = GetAIAPIKey(driverClass);
-          if (verbose) {
-            console.log(`   No local API key found for driver class ${driverClass}, using global key`);
-          }
-        }
-      } else {
-        apiKey = GetAIAPIKey(driverClass);
-      }
-      
       llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
@@ -3673,21 +3657,27 @@ export class AIPromptRunner {
         jsonToParse = CleanJSON(rawOutput);
       }
       catch (cleanError) {
-        this.logError(cleanError, {
-          category: 'JSONCleaningFailed',
-          metadata: {
-            originalError: originalError.message,
-            rawOutput: rawOutput.substring(0, 500)
-          },
-          maxErrorLength: params.maxErrorLength
-        });
+        if (params.verbose) {
+          this.logError(cleanError, {
+            category: 'JSONCleaningFailed',
+            metadata: {
+              originalError: originalError.message,
+              rawOutput: rawOutput.substring(0, 500)
+            },
+            maxErrorLength: params.maxErrorLength
+          });
+        }
       }
       const json5Result = JSON5.parse(jsonToParse);
-      this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
+      if (params.verbose) {
+        this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
+      }
       return json5Result;
     } catch (json5Error) {
       // Step 2: Use AI to repair the JSON
-      this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
+      if (params.verbose) {
+        this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
+      }
       
       try {
         // Find the "Repair JSON" prompt in the "MJ: System" category
@@ -3724,16 +3714,18 @@ export class AIPromptRunner {
         return repairedJSON;
       } catch (aiRepairError) {
         // Both repair attempts failed
-        this.logError(aiRepairError, {
-          category: 'JSONRepairFailed',
-          metadata: {
-            originalError: originalError.message,
-            json5Error: json5Error.message,
-            aiError: aiRepairError.message,
-            rawOutput: rawOutput.substring(0, 500)
-          },
-          maxErrorLength: params.maxErrorLength
-        });
+        if (params.verbose) {
+          this.logError(aiRepairError, {
+            category: 'JSONRepairFailed',
+            metadata: {
+              originalError: originalError.message,
+              json5Error: json5Error.message,
+              aiError: aiRepairError.message,
+              rawOutput: rawOutput.substring(0, 500)
+            },
+            maxErrorLength: params.maxErrorLength
+          });
+        }        
         
         throw new Error(`JSON repair failed after both JSON5 and AI attempts: ${originalError.message}`);
       }

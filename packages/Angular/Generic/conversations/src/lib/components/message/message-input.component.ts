@@ -4,13 +4,13 @@ import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, AIAgentEntity
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
-import { ConversationStateService } from '../../services/conversation-state.service';
+import { ConversationDataService } from '../../services/conversation-data.service';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
@@ -34,11 +34,19 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() disabled: boolean = false;
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
-  @Input() conversationHistory: ConversationDetailEntity[] = []; // For agent context
   @Input() initialMessage: string | null = null; // Message to send automatically when component initializes
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
+
+  private _conversationHistory: ConversationDetailEntity[] = [];
+  @Input()
+  public get conversationHistory(): ConversationDetailEntity[] {
+    return this._conversationHistory;
+  }
+  public set conversationHistory(value: ConversationDetailEntity[]) {
+    this._conversationHistory = value;
+  }
 
   // Message IDs that are in-progress and need streaming reconnection
   // Using getter/setter to react immediately when value changes (avoids timing issues with ngOnChanges)
@@ -83,7 +91,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     private dialogService: DialogService,
     private toastService: ToastService,
     private agentService: ConversationAgentService,
-    private conversationState: ConversationStateService,
+    private conversationData: ConversationDataService,
     private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
@@ -528,6 +536,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    * Emits events to show temporary intent checking message in conversation
    */
   private async checkContinuityIntent(agentId: string, message: string) {
+    // FAST PATH: If message contains form response syntax, skip the intent check entirely
+    // Form responses always continue with the agent that requested the form
+    // Don't show "Analyzing intent..." message for this obvious case
+    if (ConversationUtility.ContainsFormResponse(message)) {
+      console.log('✅ Form response detected, skipping intent check UI (fast path)');
+      return {
+        decision: 'YES' as const,
+        reasoning: 'User submitted a form response to the previous agent'
+      };
+    }
+
     // Emit event to show temporary "Analyzing intent..." message in conversation
     this.intentCheckStarted.emit();
 
@@ -1958,7 +1977,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
           if (name) {
             // Update the conversation name and description in database AND state immediately
-            await this.conversationState.saveConversation(
+            await this.conversationData.saveConversation(
               this.conversationId,
               { Name: name, Description: description || '' },
               this.currentUser

@@ -1,5 +1,60 @@
 # @memberjunction/interactive-component-types
 
+## 2.125.0
+
+### Patch Changes
+
+- 1115143: Add comprehensive constraint validation system for component props, enhance type inference engine with function scope tracking, improve date parameter validation in React component linter, and refactor golden example components to demonstrate library usage patterns
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ai-vectors-memory@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/ai-vectors-memory@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.123.1
+- @memberjunction/core@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.123.0
+- @memberjunction/core@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.122.2
+- @memberjunction/core@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.122.1
+- @memberjunction/core@2.122.1
+
+## 2.122.0
+
+### Patch Changes
+
+- 6de83ec: Add component linter enhancements with type inference and control flow analysis, DBAutoDoc query generation features, MCP server diagnostic tools, metadata sync improvements, and enhanced JWKS client with HTTP keep-alive connections and connection pooling to prevent socket hangups
+- Updated dependencies [6de83ec]
+- Updated dependencies [c989c45]
+  - @memberjunction/core@2.122.0
+  - @memberjunction/ai-vectors-memory@2.122.0
+
 ## 2.121.0
 
 ### Patch Changes

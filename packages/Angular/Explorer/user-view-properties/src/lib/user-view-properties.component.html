@@ -25,7 +25,7 @@
             (heightChange)="this.ResizeTab()"
             (widthChange)="this.ResizeTab()"
         >
-            <kendo-loader *ngIf="showloader" type="converging-spinner" ></kendo-loader>
+            <mj-loading *ngIf="showloader" [showText]="false" size="medium"></mj-loading>
             <div class="k-d-flex k-flex-col k-justify-content-between k-h-full" #dialogContainer>
                 <div [class]="showloader ? 'disabled-div' : ''">
                     <kendo-tabstrip [keepTabContent]="true" [animate] = "false" [height]="TabHeight" >

@@ -12,11 +12,21 @@
       {
         "name": "Deals",
         "description": "Deal records for stage details",
-        "displayFields": ["ID", "Name", "Amount", "Probability", "Stage", "CloseDate", "Account"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Amount",
+          "Probability",
+          "Stage",
+          "CloseDate",
+          "Account"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Stage-filtered deal display"
       }
     ],
@@ -51,8 +61,19 @@
   ],
   "events": [],
   "dependencies": [
-    "@include:sales-funnel-deal-card.spec.json",
-    "@include:sales-funnel-deal-list.spec.json"
+    {
+      "name": "SalesFunnelDealCard",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "SalesFunnelDealList",
+      "location": "registry",
+      "namespace": "CRM/Analytics",
+      "version": "^1.0.0"
+    }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "Slide-out panel showing detailed information for a selected sales funnel stage"
 }
