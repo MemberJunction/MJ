@@ -239,8 +239,8 @@
       "ID": "FA000A4D-09F5-4557-858F-AC01E19D8238"
     },
     "sync": {
-      "lastModified": "2025-12-15T18:47:04.704Z",
-      "checksum": "07fe1ca509f6547e7cefc260ebc73ba314640d12413fa581e5b4ebea13740f34"
+      "lastModified": "2025-12-15T20:25:42.761Z",
+      "checksum": "793fc552eb1e50aa22f2976dd44504132761caf15ffcab88039b1a686268519c"
     }
   },
   {
@@ -255,7 +255,7 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
-      "OutputExample": "{\"sql\":\"SELECT c.Name AS CustomerName, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name ORDER BY TotalRevenue DESC\",\"changesSummary\":\"Fixed missing GROUP BY clause and corrected JOIN syntax\",\"changesDetailed\":\"Added 'GROUP BY c.Name' to properly aggregate results. Changed INNER JOIN to LEFT JOIN to include customers with no orders.\"}",
+      "OutputExample": "{\"newSQL\":\"SELECT c.Name AS CustomerName, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name ORDER BY TotalRevenue DESC\",\"reasoning\":\"Fixed missing GROUP BY clause and corrected JOIN syntax. Added 'GROUP BY c.Name' to properly aggregate results. Changed INNER JOIN to LEFT JOIN to include customers with no orders.\"}",
       "ValidationBehavior": "Strict",
       "MaxRetries": 3,
       "FailoverMaxAttempts": 5,
@@ -361,8 +361,8 @@
       "ID": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
     },
     "sync": {
-      "lastModified": "2025-12-15T18:34:37.150Z",
-      "checksum": "885a50a48fadab3579252bc57d465428abf55e748a56d91f64d435290668e16c"
+      "lastModified": "2025-12-15T20:25:42.774Z",
+      "checksum": "3bcf5990f0cb1fc7cb0a27be1540c1b77a351bc4bbc13496020126ce13501924"
     }
   },
   {
