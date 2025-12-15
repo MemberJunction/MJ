@@ -12,6 +12,8 @@
 
 import ora from 'ora';
 import chalk from 'chalk';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Metadata, DatabaseProviderBase } from '@memberjunction/core';
 import { loadConfig } from '../config';
 import { getSystemUser } from '../../utils/user-helpers';
@@ -250,15 +252,39 @@ export async function generateCommand(options: Record<string, unknown>): Promise
 }
 
 /**
- * Load golden queries from database or metadata files
- * Returns empty array if no golden queries available
+ * Load golden queries from JSON file
  *
- * TODO: Implement actual golden query loading from:
- * - Database: Query metadata with golden=true flag
- * - Files: JSON files in golden-queries directory
+ * Golden queries are example queries used for few-shot learning.
+ * They are stored in the data/golden-queries.json file.
+ *
+ * @returns Array of golden queries, or empty array if file not found/invalid
  */
 async function loadGoldenQueries(): Promise<GoldenQuery[]> {
-  // Placeholder - return empty array for now
-  // In production, this would load from database or metadata files
-  return [];
+  try {
+    // Resolve path to golden-queries.json in the data directory
+    // __dirname points to dist/cli/commands, so we go up to dist, then to data
+    const goldenQueriesPath = path.join(__dirname, '../../data/golden-queries.json');
+
+    // Check if file exists
+    if (!fs.existsSync(goldenQueriesPath)) {
+      console.warn(`[Warning] Golden queries file not found at: ${goldenQueriesPath}`);
+      return [];
+    }
+
+    // Read and parse JSON file
+    const fileContent = fs.readFileSync(goldenQueriesPath, 'utf-8');
+    const goldenQueries = JSON.parse(fileContent) as GoldenQuery[];
+
+    // Validate that it's an array
+    if (!Array.isArray(goldenQueries)) {
+      console.warn('[Warning] Golden queries file does not contain an array');
+      return [];
+    }
+
+    console.log(`[Info] Loaded ${goldenQueries.length} golden queries for few-shot learning`);
+    return goldenQueries;
+  } catch (error: unknown) {
+    console.warn(`[Warning] Failed to load golden queries: ${extractErrorMessage(error, 'loadGoldenQueries')}`);
+    return [];
+  }
 }
