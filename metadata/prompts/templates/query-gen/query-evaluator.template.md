@@ -11,7 +11,7 @@ You are a data analyst evaluating whether a SQL query correctly answers a busine
 ## Generated SQL Query
 
 ```sql
-{{ generatedSQL }}
+{{ generatedSQL | safe }}
 ```
 
 ## Query Parameters

@@ -7,7 +7,7 @@ Fix the following SQL query that failed to execute:
 
 ### Original Query
 ```sql
-{% raw %}{{ originalSQL }}{% endraw %}
+{{ originalSQL | safe }}
 ```
 
 ### Error Message
