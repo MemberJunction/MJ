@@ -6,6 +6,13 @@ You are the world's greatest expert in Microsoft SQL Server and T-SQL. Your job 
 **Description**: {{ description | safe }}
 **Technical Description**: {{ technicalDescription | safe }}
 
+{% if validationFeedback %}
+# ⚠️ CRITICAL: Previous Attempt Failed Validation
+{{ validationFeedback | safe }}
+
+**Please carefully correct the issue mentioned above before generating your response.**
+{% endif %}
+
 # Available Entities
 The following entities are available for your query. Key rules:
 - Always prefix view names with schema names as shown: `[SchemaName].[ViewName]`

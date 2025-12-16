@@ -85,8 +85,8 @@ export class QueryWriter {
   }
 
   /**
-   * Execute the SQL Query Writer AI prompt
-   * Parses JSON response and validates structure
+   * Execute the SQL Query Writer AI prompt with retry logic for validation failures
+   * Parses JSON response and validates structure, retrying with feedback if validation fails
    */
   private async executePrompt(
     prompt: AIPromptEntityExtended,
@@ -98,24 +98,64 @@ export class QueryWriter {
       fewShotExamples: GoldenQuery[];
     }
   ): Promise<GeneratedQuery> {
-    const result = await executePromptWithOverrides<GeneratedQuery>(
-      prompt,
-      promptData,
-      this.contextUser,
-      this.config
-    );
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+    let lastResult: GeneratedQuery | null = null;
 
-    if (!result || !result.success) {
-      throw new Error(
-        `AI prompt execution failed: ${result?.errorMessage || 'Unknown error'}`
-      );
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Execute AI prompt
+        const result = await executePromptWithOverrides<GeneratedQuery>(
+          prompt,
+          promptData,
+          this.contextUser,
+          this.config
+        );
+
+        if (!result || !result.success) {
+          throw new Error(
+            `AI prompt execution failed: ${result?.errorMessage || 'Unknown error'}`
+          );
+        }
+
+        if (!result.result) {
+          throw new Error('AI prompt returned no result');
+        }
+
+        lastResult = result.result;
+
+        // Validate the generated query structure
+        // This will throw if validation fails
+        this.validateGeneratedQuery(lastResult);
+
+        // Validation passed, return the query
+        return lastResult;
+      } catch (error: unknown) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        // If this is the last attempt, throw the error
+        if (attempt === maxRetries) {
+          throw new Error(
+            `Query generation failed after ${maxRetries + 1} attempts: ${lastError.message}`
+          );
+        }
+
+        // Log retry attempt
+        console.log(`⚠️ Query validation failed on attempt ${attempt + 1}/${maxRetries + 1}: ${lastError.message}`);
+        console.log(`   Retrying with validation feedback...`);
+
+        // Add validation feedback to the prompt data for next attempt
+        // This helps the LLM correct its mistakes
+        promptData = {
+          ...promptData,
+          // Add feedback about what went wrong
+          validationFeedback: `Previous attempt failed validation: ${lastError.message}. Please correct this issue.`,
+        } as typeof promptData & { validationFeedback: string };
+      }
     }
 
-    if (!result.result) {
-      throw new Error('AI prompt returned no result');
-    }
-
-    return result.result;
+    // Should never reach here due to throw in loop, but TypeScript needs this
+    throw lastError || new Error('Query generation failed');
   }
 
   /**
