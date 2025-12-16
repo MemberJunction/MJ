@@ -124,6 +124,18 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() enableSvgRenderer: boolean = DEFAULT_MARKDOWN_CONFIG.enableSvgRenderer;
 
   /**
+   * Enable raw HTML passthrough in markdown content.
+   * Scripts and event handlers are still stripped unless enableJavaScript is true.
+   */
+  @Input() enableHtml: boolean = DEFAULT_MARKDOWN_CONFIG.enableHtml;
+
+  /**
+   * Enable JavaScript in HTML content (<script> tags and on* handlers).
+   * WARNING: Major security risk - only enable for fully trusted content.
+   */
+  @Input() enableJavaScript: boolean = DEFAULT_MARKDOWN_CONFIG.enableJavaScript;
+
+  /**
    * Enable heading IDs for anchor links
    */
   @Input() enableHeadingIds: boolean = DEFAULT_MARKDOWN_CONFIG.enableHeadingIds;
@@ -198,6 +210,8 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       changes['enableAlerts'] ||
       changes['enableSmartypants'] ||
       changes['enableSvgRenderer'] ||
+      changes['enableHtml'] ||
+      changes['enableJavaScript'] ||
       changes['enableHeadingIds'] ||
       changes['headingIdPrefix'] ||
       changes['mermaidTheme'] ||
@@ -244,6 +258,8 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       enableAlerts: this.enableAlerts,
       enableSmartypants: this.enableSmartypants,
       enableSvgRenderer: this.enableSvgRenderer,
+      enableHtml: this.enableHtml,
+      enableJavaScript: this.enableJavaScript,
       enableHeadingIds: this.enableHeadingIds,
       headingIdPrefix: this.headingIdPrefix,
       mermaidTheme: this.mermaidTheme,
@@ -259,13 +275,18 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.hasCodeBlocks = html.includes('<pre>') && html.includes('<code');
 
     // Sanitize if enabled
-    // Note: We bypass sanitization when SVG renderer is enabled because
-    // Angular's sanitizer strips SVG elements. The SVG extension includes
-    // its own validation, and users can call sanitizeSvgContent() post-render
-    // for additional security if needed.
-    if (this.sanitize && !this.enableSvgRenderer) {
+    // Note: We bypass Angular's sanitizer when SVG renderer or HTML passthrough is enabled
+    // because it strips SVG elements and most HTML layout tags.
+    const bypassAngularSanitizer = this.enableSvgRenderer || this.enableHtml;
+    if (this.sanitize && !bypassAngularSanitizer) {
       const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, html);
       html = sanitized || '';
+    }
+
+    // Strip JavaScript unless explicitly enabled
+    // This removes <script> tags and on* event handlers while keeping layout HTML
+    if (bypassAngularSanitizer && !this.enableJavaScript) {
+      html = this.stripJavaScript(html);
     }
 
     // Trust the HTML for display
@@ -555,5 +576,27 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     if (heading) {
       heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  /**
+   * Strip JavaScript from HTML content while preserving layout HTML.
+   * Removes <script> tags, on* event handlers, and javascript: URLs.
+   */
+  private stripJavaScript(html: string): string {
+    // Remove <script> tags and their content
+    html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+    // Remove on* event handlers (onclick, onload, onerror, etc.)
+    html = html.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+    html = html.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
+
+    // Remove javascript: URLs from href and src attributes
+    html = html.replace(/\s+href\s*=\s*["']javascript:[^"']*["']/gi, '');
+    html = html.replace(/\s+src\s*=\s*["']javascript:[^"']*["']/gi, '');
+
+    // Remove data: URLs that could contain scripts (data:text/html, etc.)
+    html = html.replace(/\s+src\s*=\s*["']data:text\/html[^"']*["']/gi, '');
+
+    return html;
   }
 }

@@ -79,6 +79,29 @@ export interface MarkdownConfig {
   enableSvgRenderer?: boolean;
 
   /**
+   * Enable raw HTML passthrough in markdown content.
+   * When enabled, HTML tags in the markdown are rendered as actual HTML
+   * instead of being sanitized/stripped.
+   *
+   * Note: Even with enableHtml=true, scripts and event handlers are stripped
+   * unless enableJavaScript is also true.
+   *
+   * @default false
+   */
+  enableHtml?: boolean;
+
+  /**
+   * Enable JavaScript execution in HTML content.
+   * When enabled, <script> tags and on* event handlers are allowed.
+   *
+   * WARNING: This is a major security risk. Only enable for fully trusted content.
+   * In most cases, you want enableHtml=true with enableJavaScript=false.
+   *
+   * @default false
+   */
+  enableJavaScript?: boolean;
+
+  /**
    * Enable GitHub-style heading IDs for anchor links
    * @default true
    */
@@ -135,6 +158,8 @@ export const DEFAULT_MARKDOWN_CONFIG: Required<Omit<MarkdownConfig, 'autoExpandL
   enableAlerts: true,
   enableSmartypants: true,
   enableSvgRenderer: true,
+  enableHtml: false,
+  enableJavaScript: false,
   enableHeadingIds: true,
   headingIdPrefix: '',
   enableLineNumbers: false,
