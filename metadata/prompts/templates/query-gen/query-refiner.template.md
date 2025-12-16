@@ -40,6 +40,18 @@ You are an expert SQL developer refining a query based on evaluation feedback.
 - Fix structural issues (JOINs, syntax errors, missing parameters)
 - Don't add formatting logic or nested business rules
 
+**Understanding VIRTUAL Fields:**
+- Entities may have VIRTUAL fields (marked `[VIRTUAL - computed field]`)
+- These are available directly in SELECT statements without JOINs
+- If evaluator says a field "doesn't exist", check if it's a VIRTUAL field first
+- Example: Use `m.MembershipType` directly instead of joining to vwMembershipTypes
+
+**Don't "Fix" Valid Queries:**
+- If evaluation only mentions "no results" or "empty data", **DO NOT change the query**
+- Empty results = data issue, not query issue
+- Only refine if there's an actual SQL error or logical flaw
+- Changing filters to "get data" often makes queries less accurate
+
 **If Evaluation Feedback Requests Complexity:**
 1. **Simplify Instead**: Return the raw components needed for UI calculations
 2. **Add Parameters**: Make filtering flexible, not hardcoded

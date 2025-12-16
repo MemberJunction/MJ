@@ -119,15 +119,19 @@ AND JoinDate >= {% raw %}{{ MinJoinDate | sqlDate }}{% endraw %}
 - Return raw counts and aggregations, not percentages or ratios
 - Don't assume domain logic (e.g., what makes something "active" or "renewed")
 - Over-engineer with CTEs only when genuinely needed for clarity
+- **Use VIRTUAL fields instead of JOINs** - if a field is marked [VIRTUAL], it's already available in the view
+- **Never infer or guess schema** - only query entities/fields explicitly provided in the metadata
 
 ## Technical Best Practices
-1. **Use Base Views**: Query from `vw*` views with schema prefix: `[SchemaName].[vwEntityName]`
-2. **Short Aliases**: Use meaningful short aliases (e.g., `m` for members, `o` for orders)
-3. **Handle NULLs**: Use COALESCE or ISNULL for aggregations
-4. **Prefer LEFT JOIN**: Avoid losing rows unless INNER JOIN is specifically needed
-5. **Add Comments**: Document complex logic with SQL comments
-6. **Parameterize Wisely**: Make queries reusable by parameterizing filter values, but don't over-engineer
-7. **Think About Date Logic**: For "active as of date" queries, consider if records need date range overlap checks (StartDate <= Date AND EndDate >= Date), not just StartDate filtering
+1. **Use Only Available Metadata**: Query ONLY from entities and fields explicitly listed in the metadata above. Do NOT infer, guess, or assume additional tables/views exist.
+2. **Prefer VIRTUAL Fields Over JOINs**: If a field is marked `[VIRTUAL - computed field]`, SELECT it directly instead of joining to another table. VIRTUAL fields are already computed for you.
+3. **Use Base Views**: Query from `vw*` views with schema prefix: `[SchemaName].[vwEntityName]`
+4. **Short Aliases**: Use meaningful short aliases (e.g., `m` for members, `o` for orders)
+5. **Handle NULLs**: Use COALESCE or ISNULL for aggregations
+6. **Prefer LEFT JOIN**: Avoid losing rows unless INNER JOIN is specifically needed
+7. **Add Comments**: Document complex logic with SQL comments
+8. **Parameterize Wisely**: Make queries reusable by parameterizing filter values, but don't over-engineer
+9. **Think About Date Logic**: For "active as of date" queries, consider if records need date range overlap checks (StartDate <= Date AND EndDate >= Date), not just StartDate filtering
 
 # Response Format
 

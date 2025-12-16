@@ -80,14 +80,11 @@ export class QueryTester {
         // 2. Execute SQL on database
         const results = await this.executeSQLQuery(renderedSQL);
 
-        // 3. Validate results
-        if (results.length === 0) {
-          throw new Error(
-            'Query returned no results - may need sample data in database'
-          );
-        }
-
-        // 4. Success!
+        // 3. Success! (Empty results are valid - query executed without errors)
+        // Note: We don't validate rowCount because:
+        // - Empty results may indicate no data in database (not a query error)
+        // - Query structure can be correct even with zero rows returned
+        // - Testing should focus on SQL syntax/execution, not data presence
         return {
           success: true,
           renderedSQL,

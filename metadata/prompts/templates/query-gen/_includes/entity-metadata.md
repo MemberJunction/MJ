@@ -3,6 +3,8 @@ The following entities are available for your query. Key rules:
 - Always prefix view names with schema names as shown: `[SchemaName].[ViewName]`
 - Use T-SQL syntax for SQL Server
 - Query from base views (vw*), not base tables
+- **CRITICAL**: Only use entities and fields explicitly listed below - DO NOT infer or guess schema
+- **VIRTUAL fields** are computed/lookup fields available in the view - use these instead of JOINs when possible
 
 {% for entity in entityMetadata %}
 ## {{ entity.entityName }}
