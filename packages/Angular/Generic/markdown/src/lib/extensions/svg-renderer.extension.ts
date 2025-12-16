@@ -1,4 +1,4 @@
-import { MarkedExtension, Tokens } from 'marked';
+import { MarkedExtension } from 'marked';
 
 /**
  * Creates a marked extension that renders SVG code blocks as actual SVG images.
@@ -31,26 +31,38 @@ import { MarkedExtension, Tokens } from 'marked';
  */
 export function createSvgRendererExtension(): MarkedExtension {
   return {
-    renderer: {
-      code(token: Tokens.Code): string | false {
-        const { text, lang } = token;
+    extensions: [{
+      name: 'svgCodeBlock',
+      level: 'block',
+      start(src: string) {
+        // Look for ```svg at the start of the source
+        const match = src.match(/^```svg\b/);
+        return match ? match.index : undefined;
+      },
+      tokenizer(src: string) {
+        // Match ```svg code blocks
+        const rule = /^```svg\n([\s\S]*?)```(?:\n|$)/;
+        const match = rule.exec(src);
 
-        // Only process svg code blocks
-        if (lang !== 'svg') {
-          return false; // Let the default renderer handle it
+        if (match) {
+          const svgContent = match[1].trim();
+
+          // Only process if it looks like valid SVG
+          if (isSvgContent(svgContent)) {
+            return {
+              type: 'svgCodeBlock',
+              raw: match[0],
+              svgContent: svgContent
+            };
+          }
         }
-
-        // Validate that it looks like SVG
-        const trimmedText = text.trim();
-        if (!isSvgContent(trimmedText)) {
-          // If it doesn't look like valid SVG, fall back to code display
-          return false;
-        }
-
-        // Render as actual SVG wrapped in a container
-        return `<div class="svg-rendered">${trimmedText}</div>\n`;
+        return undefined;
+      },
+      renderer(token) {
+        const svgToken = token as unknown as { svgContent: string };
+        return `<div class="svg-rendered">${svgToken.svgContent}</div>\n`;
       }
-    }
+    }]
   };
 }
 

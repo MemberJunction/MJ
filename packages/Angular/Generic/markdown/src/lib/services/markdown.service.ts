@@ -72,12 +72,22 @@ export class MarkdownService {
     // Apply extensions based on config
     const extensions: any[] = [];
 
+    // SVG code block renderer - MUST be before syntax highlighting
+    // so it can intercept svg blocks before Prism processes them
+    if (this.currentConfig.enableSvgRenderer) {
+      extensions.push(createSvgRendererExtension());
+    }
+
     // Syntax highlighting with Prism
     if (this.currentConfig.enableHighlight) {
       extensions.push(
         markedHighlight({
           langPrefix: 'language-',
           highlight: (code: string, lang: string) => {
+            // Skip SVG blocks - they're handled by the SVG renderer
+            if (lang === 'svg' && this.currentConfig.enableSvgRenderer) {
+              return code;
+            }
             if (lang && Prism.languages[lang]) {
               try {
                 return Prism.highlight(code, Prism.languages[lang], lang);
@@ -120,11 +130,6 @@ export class MarkdownService {
     // Smartypants for typography (curly quotes, em/en dashes, ellipses)
     if (this.currentConfig.enableSmartypants) {
       extensions.push(markedSmartypants());
-    }
-
-    // SVG code block renderer
-    if (this.currentConfig.enableSvgRenderer) {
-      extensions.push(createSvgRendererExtension());
     }
 
     // Apply all extensions

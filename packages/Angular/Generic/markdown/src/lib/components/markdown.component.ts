@@ -259,7 +259,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.hasCodeBlocks = html.includes('<pre>') && html.includes('<code');
 
     // Sanitize if enabled
-    if (this.sanitize) {
+    // Note: We bypass sanitization when SVG renderer is enabled because
+    // Angular's sanitizer strips SVG elements. The SVG extension includes
+    // its own validation, and users can call sanitizeSvgContent() post-render
+    // for additional security if needed.
+    if (this.sanitize && !this.enableSvgRenderer) {
       const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, html);
       html = sanitized || '';
     }
