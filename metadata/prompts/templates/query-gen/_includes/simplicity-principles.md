@@ -1,15 +1,23 @@
 # Simplicity and Reusability Principles
 
-**CRITICAL**: These queries will be stored in a library and reused across many business questions and scenarios. Simple, flexible queries are more valuable than hyper-specific ones.
+**CRITICAL**: These queries will be stored in a library and reused across many business questions and scenarios. Balance simplicity with encoding valuable business logic that can be reused.
 
 ## Core Philosophy
 
-Return **raw data** and **simple aggregations**. Let the UI/reporting layer handle:
-- Percentage calculations
-- Complex derived metrics
+Return **raw data** and **simple aggregations** for presentation concerns, BUT **do encode business logic** that defines meaningful business concepts. The goal is to create a reusable query layer that encapsulates domain knowledge.
+
+### Let the UI/Reporting Layer Handle:
+- Percentage calculations and ratios
 - Formatting (dates, numbers, strings)
-- Business rule categorization
-- Dynamic thresholds
+- Dynamic display thresholds
+- Localization and accessibility
+
+### Encode in the Query (Business Logic):
+- Business concept definitions (e.g., "Current Member", "Active Subscription")
+- Domain-specific rules and validations
+- Multi-table business logic (e.g., checking membership + subscription status)
+- Complex categorizations that represent business understanding
+- Calculations that define business metrics (e.g., lifetime value, tenure)
 
 ## Good Query Characteristics ✅
 
