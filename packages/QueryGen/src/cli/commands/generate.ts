@@ -28,7 +28,8 @@ import { EmbeddingService } from '../../vectors/EmbeddingService';
 import { SimilaritySearch } from '../../vectors/SimilaritySearch';
 import { formatEntityMetadataForPrompt } from '../../utils/entity-helpers';
 import { extractErrorMessage } from '../../utils/error-handlers';
-import { ValidatedQuery, GoldenQuery } from '../../data/schema';
+import { buildQueryCategory, extractUniqueCategories } from '../../utils/category-builder';
+import { ValidatedQuery, GoldenQuery, EntityGroup, QueryCategoryInfo } from '../../data/schema';
 
 /**
  * Execute the generate command
@@ -91,6 +92,17 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     const goldenQueries = await loadGoldenQueries();
     const embeddedGolden = await embeddingService.embedGoldenQueries(goldenQueries);
     spinner.succeed(chalk.green(`Embedded ${goldenQueries.length} golden queries`));
+
+    // 5b. Build category structure for all entity groups upfront
+    spinner.start('Building category structure...');
+    const categoryMap = new Map<string, QueryCategoryInfo>();
+    for (const group of entityGroups) {
+      const category = buildQueryCategory(config, group);
+      // Use primary entity name as key for lookup during query generation
+      categoryMap.set(group.primaryEntity.Name, category);
+    }
+    const uniqueCategories = extractUniqueCategories(Array.from(categoryMap.values()));
+    spinner.succeed(chalk.green(`Created ${uniqueCategories.length} ${uniqueCategories.length === 1 ? 'category' : 'categories'}`));
 
     // 6. Generate queries for each entity group
     const totalGroups = entityGroups.length;
@@ -171,12 +183,19 @@ export async function generateCommand(options: Record<string, unknown>): Promise
             config.maxRefinementIterations
           );
 
+          // Get pre-built category from map
+          const category = categoryMap.get(group.primaryEntity.Name);
+          if (!category) {
+            throw new Error(`Category not found for entity group: ${group.primaryEntity.Name}`);
+          }
+
           allValidatedQueries.push({
             businessQuestion: question,
             query: refinedResult.query,
             testResult: refinedResult.testResult,
             evaluation: refinedResult.evaluation,
             entityGroup: group,
+            category,
           });
 
           if (config.verbose) {
@@ -204,6 +223,7 @@ export async function generateCommand(options: Record<string, unknown>): Promise
       const exporter = new MetadataExporter();
       const exportResult = await exporter.exportQueries(
         allValidatedQueries,
+        uniqueCategories,
         config.outputDirectory
       );
       spinner.succeed(chalk.green(`Exported to ${exportResult.outputPath}`));

@@ -31,11 +31,9 @@ export interface QueryGenConfig {
 
   // Few-Shot Learning
   topSimilarQueries: number;
-  similarityThreshold: number;
 
   // Similarity Weighting
   similarityWeights: {
-    name: number;
     userQuestion: number;
     description: number;
     technicalDescription: number;
@@ -44,6 +42,10 @@ export interface QueryGenConfig {
   // Output Configuration
   outputMode: 'metadata' | 'database' | 'both';
   outputDirectory: string;
+
+  // Query Category Configuration
+  rootQueryCategory: string;
+  autoCreateEntityQueryCategories: boolean;
 
   // Performance
   parallelGenerations: number;
@@ -70,15 +72,15 @@ const DEFAULT_CONFIG: QueryGenConfig = {
   maxRefinementIterations: 3,
   maxFixingIterations: 5,
   topSimilarQueries: 5,
-  similarityThreshold: 0.7,
   similarityWeights: {
-    name: 0.1,
     userQuestion: 0.2,
-    description: 0.35,
-    technicalDescription: 0.35,
+    description: 0.40,
+    technicalDescription: 0.40,
   },
   outputMode: 'metadata',
   outputDirectory: './metadata/queries',
+  rootQueryCategory: 'Auto-Generated',
+  autoCreateEntityQueryCategories: false,
   parallelGenerations: 1,
   enableCaching: true,
   testWithSampleData: true,

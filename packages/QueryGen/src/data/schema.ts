@@ -170,6 +170,20 @@ export interface RefinedQuery {
 }
 
 /**
+ * Query category information for metadata export and database write
+ */
+export interface QueryCategoryInfo {
+  /** Name of the category */
+  name: string;
+  /** Parent category name (null for root categories) */
+  parentName: string | null;
+  /** Category description */
+  description: string;
+  /** Full category path (e.g., "Golden-Queries/Members") */
+  path: string;
+}
+
+/**
  * Validated query ready for export
  */
 export interface ValidatedQuery {
@@ -178,6 +192,7 @@ export interface ValidatedQuery {
   testResult: QueryTestResult;
   evaluation: QueryEvaluation;
   entityGroup: EntityGroup;
+  category: QueryCategoryInfo;
 }
 
 /**

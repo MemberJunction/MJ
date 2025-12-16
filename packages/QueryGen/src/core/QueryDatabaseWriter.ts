@@ -11,7 +11,7 @@ import {
   QueryEntity,
   QueryCategoryEntity
 } from '@memberjunction/core-entities';
-import { ValidatedQuery, WriteResult, BusinessQuestion } from '../data/schema';
+import { ValidatedQuery, WriteResult } from '../data/schema';
 import { extractErrorMessage } from '../utils/error-handlers';
 import { generateQueryName } from '../utils/query-helpers';
 
@@ -20,6 +20,11 @@ import { generateQueryName } from '../utils/query-helpers';
  * Writes validated queries directly to the database
  */
 export class QueryDatabaseWriter {
+  private categoryCache: Map<string, string> = new Map();
+
+  constructor() {
+    // No config needed - category info comes from ValidatedQuery
+  }
   /**
    * Write validated queries to the database
    *
@@ -40,21 +45,12 @@ export class QueryDatabaseWriter {
     const md = new Metadata();
     const results: string[] = [];
 
-    // Get or create the Auto-Generated category once for all queries
-    let categoryId: string;
-    try {
-      categoryId = await this.findOrCreateCategory('Auto-Generated', contextUser);
-    } catch (error: unknown) {
-      const errorMsg = extractErrorMessage(error, 'Category Setup');
-      return {
-        success: false,
-        results: [`Failed to setup category: ${errorMsg}`]
-      };
-    }
-
     // Process each query
     for (const vq of validatedQueries) {
       try {
+        // Get or create the category for this query (with caching)
+        const categoryId = await this.getCategoryId(vq.category, contextUser);
+
         // Create Query entity ONLY (NO manual fields/params creation)
         // QueryEntity.server.ts will automatically:
         // - Detect Nunjucks syntax
@@ -92,22 +88,75 @@ export class QueryDatabaseWriter {
   }
 
   /**
-   * Find or create the Auto-Generated query category
+   * Get or create category ID from QueryCategoryInfo
+   * Uses caching to avoid repeated lookups/creations
+   * Ensures parent categories exist before creating children
+   */
+  private async getCategoryId(
+    category: { name: string; parentName: string | null; description: string; path: string },
+    contextUser: UserInfo
+  ): Promise<string> {
+    // Check cache first (by path for uniqueness)
+    if (this.categoryCache.has(category.path)) {
+      return this.categoryCache.get(category.path)!;
+    }
+
+    // If this category has a parent, ensure parent exists first
+    let parentId: string | null = null;
+    if (category.parentName) {
+      // Create parent category info (it's a root category)
+      const parentCategory = {
+        name: category.parentName,
+        parentName: null,
+        description: 'Automatically generated queries from query-gen tool',
+        path: category.parentName
+      };
+      parentId = await this.getCategoryId(parentCategory, contextUser);
+    }
+
+    // Find or create this category
+    const categoryId = await this.findOrCreateCategory(
+      category.name,
+      parentId,
+      category.description,
+      contextUser
+    );
+
+    // Cache for future use
+    this.categoryCache.set(category.path, categoryId);
+    return categoryId;
+  }
+
+  /**
+   * Find or create a query category
    *
-   * Searches for an existing category with the given name, or creates it if not found.
+   * Searches for an existing category with the given name and parent, or creates it if not found.
    *
    * @param categoryName - Name of the category to find or create
+   * @param parentCategoryId - Parent category ID (null for root categories)
+   * @param description - Description for new categories
    * @param contextUser - User context for entity operations
    * @returns Category ID
    */
   private async findOrCreateCategory(
     categoryName: string,
+    parentCategoryId: string | null,
+    description: string,
     contextUser: UserInfo
   ): Promise<string> {
     const rv = new RunView();
+
+    // Build filter to match both name and parent
+    let filter = `Name='${categoryName.replace(/'/g, "''")}'`;
+    if (parentCategoryId) {
+      filter += ` AND ParentID='${parentCategoryId}'`;
+    } else {
+      filter += ` AND ParentID IS NULL`;
+    }
+
     const result = await rv.RunView<QueryCategoryEntity>({
       EntityName: 'Query Categories',
-      ExtraFilter: `Name='${categoryName.replace(/'/g, "''")}'`,
+      ExtraFilter: filter,
       ResultType: 'entity_object'
     }, contextUser);
 
@@ -125,7 +174,8 @@ export class QueryDatabaseWriter {
     const category = await md.GetEntityObject<QueryCategoryEntity>('Query Categories', contextUser);
     category.NewRecord();
     category.Name = categoryName;
-    category.Description = 'Automatically generated queries from query-gen tool';
+    category.ParentID = parentCategoryId;
+    category.Description = description;
 
     const saved = await category.Save();
     if (!saved) {

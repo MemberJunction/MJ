@@ -7,7 +7,7 @@
 
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { ValidatedQuery, ExportResult, QueryMetadataRecord, BusinessQuestion } from '../data/schema';
+import { ValidatedQuery, ExportResult, QueryMetadataRecord, QueryCategoryInfo } from '../data/schema';
 import { generateQueryName } from '../utils/query-helpers';
 
 /**
@@ -19,43 +19,50 @@ export class MetadataExporter {
    * Export queries to metadata JSON files
    *
    * Transforms validated queries into MemberJunction metadata format
-   * and writes them to a timestamped JSON file.
+   * and writes them to timestamped JSON files:
+   * - .query-categories.json for the categories
+   * - queries-{timestamp}.json for the queries
    *
    * @param validatedQueries - Array of validated queries to export
-   * @param outputDirectory - Directory to write the metadata file
+   * @param uniqueCategories - Pre-built unique categories for all queries
+   * @param outputDirectory - Directory to write the metadata files
    * @returns Export result with file path and query count
    */
   async exportQueries(
     validatedQueries: ValidatedQuery[],
+    uniqueCategories: QueryCategoryInfo[],
     outputDirectory: string
   ): Promise<ExportResult> {
-    // 1. Transform to MJ Query metadata format
-    const metadata = validatedQueries.map(q => this.toQueryMetadata(q));
-
-    // 2. Create metadata file structure
-    const metadataFile = {
-      timestamp: new Date().toISOString(),
-      generatedBy: 'query-gen',
-      version: '1.0',
-      queries: metadata
-    };
+    // 1. Transform to MJ metadata format
+    const queryMetadata = validatedQueries.map(q => this.toQueryMetadata(q));
+    const categoryMetadata = uniqueCategories.map(c => this.toCategoryMetadata(c));
 
     // 3. Ensure output directory exists
     await fs.mkdir(outputDirectory, { recursive: true });
 
-    // 4. Write to file
+    // 4. Write categories file (if categories exist)
+    if (categoryMetadata.length > 0) {
+      const categoriesPath = path.join(outputDirectory, '.query-categories.json');
+      await fs.writeFile(
+        categoriesPath,
+        JSON.stringify(categoryMetadata, null, 2),
+        'utf-8'
+      );
+    }
+
+    // 5. Write queries file
     const timestamp = Date.now();
     const outputPath = path.join(outputDirectory, `queries-${timestamp}.json`);
     await fs.writeFile(
       outputPath,
-      JSON.stringify(metadataFile, null, 2),
+      JSON.stringify(queryMetadata, null, 2),
       'utf-8'
     );
 
     return {
       success: true,
       outputPath,
-      queryCount: metadata.length
+      queryCount: queryMetadata.length
     };
   }
 
@@ -71,10 +78,13 @@ export class MetadataExporter {
    * @returns Query metadata record
    */
   private toQueryMetadata(query: ValidatedQuery): QueryMetadataRecord {
+    // Build category lookup path (e.g., "Golden-Queries/Members" becomes lookup filter)
+    const categoryLookup = this.buildCategoryLookup(query.category);
+
     return {
       fields: {
         Name: generateQueryName(query.businessQuestion),
-        CategoryID: '@lookup:Query Categories.Name=Auto-Generated',
+        CategoryID: categoryLookup,
         UserQuestion: query.businessQuestion.userQuestion,
         Description: query.businessQuestion.description,
         TechnicalDescription: query.businessQuestion.technicalDescription,
@@ -85,5 +95,44 @@ export class MetadataExporter {
       }
       // relatedEntities removed - QueryEntity.server.ts handles extraction automatically
     };
+  }
+
+  /**
+   * Transform a QueryCategoryInfo into MJ metadata format
+   *
+   * @param category - Category information
+   * @returns Category metadata record
+   */
+  private toCategoryMetadata(category: QueryCategoryInfo) {
+    return {
+      fields: {
+        Name: category.name,
+        ParentID: category.parentName
+          ? `@lookup:Query Categories.Name=${category.parentName}&ParentID=null`
+          : null,
+        Description: category.description,
+        UserID: '@lookup:Users.Name=System'
+      }
+    };
+  }
+
+  /**
+   * Build category lookup string for metadata
+   * Uses multi-field lookup to uniquely identify categories in hierarchies
+   *
+   * For root categories: Name=X&ParentID=null
+   * For child categories: Name=X&Parent=Y (where Parent is the parent category name)
+   *
+   * @param category - Category information
+   * @returns Lookup string for CategoryID field
+   */
+  private buildCategoryLookup(category: QueryCategoryInfo): string {
+    if (category.parentName) {
+      // Child category - use Name and Parent field (view field showing parent name)
+      return `@lookup:Query Categories.Name=${category.name}&Parent=${category.parentName}`;
+    } else {
+      // Root category - use Name and ParentID=null
+      return `@lookup:Query Categories.Name=${category.name}&ParentID=null`;
+    }
   }
 }
