@@ -14,7 +14,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Metadata, DatabaseProviderBase, EntityInfo } from '@memberjunction/core';
+import { Metadata, DatabaseProviderBase, EntityInfo, LogStatus } from '@memberjunction/core';
 import { loadConfig } from '../config';
 import { getSystemUser } from '../../utils/user-helpers';
 import { EntityGrouper } from '../../core/EntityGrouper';
@@ -44,6 +44,14 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     // 1. Load configuration
     spinner.text = 'Loading configuration...';
     const config = loadConfig(options);
+
+    // Show model/vendor overrides if configured
+    if (config.modelOverride || config.vendorOverride) {
+      const overrideMsg = [];
+      if (config.modelOverride) overrideMsg.push(`Model: ${config.modelOverride}`);
+      if (config.vendorOverride) overrideMsg.push(`Vendor: ${config.vendorOverride}`);
+      spinner.info(chalk.cyan(`Using overrides - ${overrideMsg.join(', ')}`));
+    }
 
     if (config.verbose) {
       spinner.info(chalk.dim('Configuration loaded'));
@@ -81,56 +89,15 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     }
 
     spinner.text = 'Analyzing entity relationships...';
-    let entityGroups;
-
-    // Load from temp-entity-groups.json (for testing without LLM calls)
-    const tempPath = path.join(__dirname, '../../data/temp-entity-groups.json');
-    if (!fs.existsSync(tempPath)) {
-      throw new Error(`Temp entity groups file not found at ${tempPath}. Run without --use-temp-cache to generate fresh groups.`);
-    }
-    const tempData = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
-
-    // Hydrate entity names with full EntityInfo objects from metadata
-    entityGroups = tempData.groups.map((group: any) => {
-      const hydratedEntities = group.entities
-        .map((entityName: string) => filteredEntities.find((e: EntityInfo) => e.Name === entityName))
-        .filter((e: EntityInfo | undefined) => e !== undefined) as EntityInfo[];
-
-      if (hydratedEntities.length !== group.entities.length) {
-        const missing = group.entities.filter((name: string) =>
-          !filteredEntities.some((e: EntityInfo) => e.Name === name)
-        );
-        spinner.warn(chalk.yellow(`Warning: Group "${group.businessDomain}" has ${missing.length} missing entities: ${missing.join(', ')}`));
-      }
-
-      // Hydrate primaryEntity from entity name string
-      const hydratedPrimaryEntity = typeof group.primaryEntity === 'string'
-        ? filteredEntities.find((e: EntityInfo) => e.Name === group.primaryEntity)
-        : group.primaryEntity;
-
-      if (!hydratedPrimaryEntity) {
-        spinner.warn(chalk.yellow(`Warning: Group "${group.businessDomain}" has missing primary entity: ${group.primaryEntity}`));
-      }
-
-      return {
-        ...group,
-        entities: hydratedEntities,
-        primaryEntity: hydratedPrimaryEntity || group.primaryEntity
-      };
-    });
-
-    spinner.info(chalk.yellow(`Loaded ${entityGroups.length} entity groups from temp cache`));
-  
-
-    // Filter to only groups with relationships and limit for testing
-    entityGroups = entityGroups.filter((e: EntityGroup) => e.relationships.length > 0).slice(0, 1);
+    const grouper = new EntityGrouper(config);
+    const entityGroups = await grouper.generateEntityGroups(filteredEntities, contextUser);
     spinner.succeed(chalk.green(`Found ${entityGroups.length} entity groups`));
 
 
     // 5. Initialize vector similarity search
     spinner.start('Embedding golden queries...');
     const embeddingService = new EmbeddingService(config.embeddingModel);
-    const goldenQueries = await loadGoldenQueries();
+    const goldenQueries = await loadGoldenQueries(config);
     const embeddedGolden = await embeddingService.embedGoldenQueries(goldenQueries);
     spinner.succeed(chalk.green(`Embedded ${goldenQueries.length} golden queries`));
 
@@ -155,20 +122,15 @@ export async function generateCommand(options: Record<string, unknown>): Promise
       const groupPrefix = chalk.cyan(`[${processedGroups}/${totalGroups}]`);
       spinner.start(`${groupPrefix} Processing ${chalk.bold(group.primaryEntity.Name)}...`);
 
+      let queriesCreatedForGroup = 0;
+
       try {
-        // TEMPORARY: Hardcode single question for testing
-        const questions = [{
-          userQuestion: 'How many active members do we have by membership status?',
-          description: 'Shows the count of members grouped by their current status',
-          technicalDescription: 'Aggregates member records by status field to show distribution of member statuses',
-          complexity: 'simple' as const,
-          requiresAggregation: true,
-          requiresJoins: false,
-          entities: group.entities.map((e: EntityInfo) => e.Name)
-        }];
+        // 6a. Generate business questions for this entity group
+        const questionGenerator = new QuestionGenerator(contextUser, config);
+        const questions = await questionGenerator.generateQuestions(group);
 
         if (config.verbose) {
-          spinner.info(`${groupPrefix} Using hardcoded question for testing`);
+          spinner.info(`${groupPrefix} Generated ${questions.length} questions`);
         }
 
         // 6b. For each question, generate and validate query
@@ -246,13 +208,15 @@ export async function generateCommand(options: Record<string, unknown>): Promise
             category,
           });
 
+          queriesCreatedForGroup++;
+
           if (config.verbose) {
             spinner.info(`${groupPrefix} ${chalk.green('✓')} ${question.userQuestion}`);
           }
         }
 
         spinner.succeed(
-          `${groupPrefix} ${chalk.bold(group.primaryEntity.Name)} complete (${chalk.green(questions.length + ' queries')})`
+          `${groupPrefix} ${chalk.bold(group.primaryEntity.Name)} complete (${chalk.green(queriesCreatedForGroup + ' queries')})`
         );
 
       } catch (error: unknown) {
@@ -306,9 +270,10 @@ export async function generateCommand(options: Record<string, unknown>): Promise
  * Golden queries are example queries used for few-shot learning.
  * They are stored in the data/golden-queries.json file.
  *
+ * @param config - QueryGen configuration with verbose flag
  * @returns Array of golden queries, or empty array if file not found/invalid
  */
-async function loadGoldenQueries(): Promise<GoldenQuery[]> {
+async function loadGoldenQueries(config: { verbose: boolean }): Promise<GoldenQuery[]> {
   try {
     // Resolve path to golden-queries.json in the data directory
     // __dirname points to dist/cli/commands, so we go up to dist, then to data
@@ -316,7 +281,9 @@ async function loadGoldenQueries(): Promise<GoldenQuery[]> {
 
     // Check if file exists
     if (!fs.existsSync(goldenQueriesPath)) {
-      console.warn(`[Warning] Golden queries file not found at: ${goldenQueriesPath}`);
+      if (config.verbose) {
+        LogStatus(`[Warning] Golden queries file not found at: ${goldenQueriesPath}`);
+      }
       return [];
     }
 
@@ -326,14 +293,20 @@ async function loadGoldenQueries(): Promise<GoldenQuery[]> {
 
     // Validate that it's an array
     if (!Array.isArray(goldenQueries)) {
-      console.warn('[Warning] Golden queries file does not contain an array');
+      if (config.verbose) {
+        LogStatus('[Warning] Golden queries file does not contain an array');
+      }
       return [];
     }
 
-    console.log(`[Info] Loaded ${goldenQueries.length} golden queries for few-shot learning`);
+    if (config.verbose) {
+      LogStatus(`[Info] Loaded ${goldenQueries.length} golden queries for few-shot learning`);
+    }
     return goldenQueries;
   } catch (error: unknown) {
-    console.warn(`[Warning] Failed to load golden queries: ${extractErrorMessage(error, 'loadGoldenQueries')}`);
+    if (config.verbose) {
+      LogStatus(`[Warning] Failed to load golden queries: ${extractErrorMessage(error, 'loadGoldenQueries')}`);
+    }
     return [];
   }
 }

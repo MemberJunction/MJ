@@ -7,7 +7,7 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus } from '@memberjunction/core';
 import { extractErrorMessage } from '../utils/error-handlers';
 import {
   GeneratedQuery,
@@ -85,7 +85,9 @@ export class QueryRefiner {
 
       // 4. Refine the query based on suggestions
       refinementCount++;
-      console.log(`Refinement iteration ${refinementCount}/${maxRefinements}`);
+      if (this.config.verbose) {
+        LogStatus(`Refinement iteration ${refinementCount}/${maxRefinements}`);
+      }
 
       currentQuery = await this.performRefinement(
         currentQuery,
@@ -257,7 +259,9 @@ export class QueryRefiner {
         GeneratedQuery & { improvementsSummary: string }
       >(prompt, promptData);
 
-      console.log(`Refinements applied: ${refinedQuery.improvementsSummary}`);
+      if (this.config.verbose) {
+        LogStatus(`Refinements applied: ${refinedQuery.improvementsSummary}`);
+      }
 
       return {
         sql: refinedQuery.sql,
@@ -317,18 +321,20 @@ export class QueryRefiner {
    * Log evaluation results for debugging
    */
   private logEvaluation(evaluation: QueryEvaluation): void {
-    console.log(
+    if (!this.config.verbose) return;
+
+    LogStatus(
       `Evaluation: answersQuestion=${evaluation.answersQuestion}, ` +
         `confidence=${evaluation.confidence}, ` +
         `needsRefinement=${evaluation.needsRefinement}`
     );
 
     if (evaluation.reasoning) {
-      console.log(`Reasoning: ${evaluation.reasoning}`);
+      LogStatus(`Reasoning: ${evaluation.reasoning}`);
     }
 
     if (evaluation.suggestions.length > 0) {
-      console.log(`Suggestions: ${evaluation.suggestions.join('; ')}`);
+      LogStatus(`Suggestions: ${evaluation.suggestions.join('; ')}`);
     }
   }
 }

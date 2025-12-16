@@ -7,7 +7,7 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus } from '@memberjunction/core';
 import { QueryGenConfig } from '../cli/config';
 import { extractErrorMessage } from '../utils/error-handlers';
 import { formatEntityGroupForPrompt } from '../utils/entity-helpers';
@@ -55,7 +55,22 @@ export class QuestionGenerator {
       const result = await this.executePrompt(prompt, entityMetadata);
 
       // Validate and filter questions
+      const totalGenerated = result.questions.length;
       const validQuestions = this.validateQuestions(result.questions, entityGroup);
+
+      // Log if questions were filtered out
+      if (this.config.verbose && totalGenerated > validQuestions.length) {
+        LogStatus(
+          `QuestionGenerator: Filtered out ${totalGenerated - validQuestions.length} of ${totalGenerated} questions for ${entityGroup.primaryEntity.Name}`
+        );
+      }
+
+      // Warn if no valid questions generated
+      if (validQuestions.length === 0 && totalGenerated > 0) {
+        LogStatus(
+          `⚠️  QuestionGenerator: All ${totalGenerated} generated questions were filtered out for ${entityGroup.primaryEntity.Name}`
+        );
+      }
 
       return validQuestions;
     } catch (error: unknown) {

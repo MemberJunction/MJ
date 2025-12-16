@@ -50,7 +50,6 @@ export async function executePromptWithOverrides<T>(
  * Resolve model/vendor names to IDs for AIPromptParams.override
  *
  * Looks up model and vendor by name in the AIEngine cache (already loaded).
- * Logs warnings if specified models/vendors are not found.
  *
  * @param config - QueryGen configuration with modelOverride/vendorOverride names
  * @returns Object with modelId and/or vendorId, or empty object if none found
@@ -63,24 +62,16 @@ function resolveModelVendorOverrides(
   // Look up model ID from AIEngine cache if modelOverride is set
   if (config.modelOverride) {
     const model = AIEngine.Instance.Models.find(m => m.Name === config.modelOverride);
-
     if (model && model.ID) {
       result.modelId = model.ID;
-      console.log(`[QueryGen] Using model override: ${config.modelOverride} (ID: ${result.modelId})`);
-    } else {
-      console.warn(`[QueryGen] Model override "${config.modelOverride}" not found. Using prompt's default models.`);
     }
   }
 
   // Look up vendor ID from AIEngine cache if vendorOverride is set
   if (config.vendorOverride) {
     const vendor = AIEngine.Instance.Vendors.find(v => v.Name === config.vendorOverride);
-
     if (vendor && vendor.ID) {
       result.vendorId = vendor.ID;
-      console.log(`[QueryGen] Using vendor override: ${config.vendorOverride} (ID: ${result.vendorId})`);
-    } else {
-      console.warn(`[QueryGen] Vendor override "${config.vendorOverride}" not found. Using prompt's default vendors.`);
     }
   }
 

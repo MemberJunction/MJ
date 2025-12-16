@@ -7,7 +7,7 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus } from '@memberjunction/core';
 import { extractErrorMessage } from '../utils/error-handlers';
 import {
   GeneratedQuery,
@@ -121,8 +121,8 @@ export class QueryFixer {
     }
 
     // Log the reasoning
-    if (result.result.reasoning) {
-      console.log(`Query fix reasoning: ${result.result.reasoning}`);
+    if (this.config.verbose && result.result.reasoning) {
+      LogStatus(`Query fix reasoning: ${result.result.reasoning}`);
     }
 
     // Return GeneratedQuery format, preserving original parameters

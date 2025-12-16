@@ -149,14 +149,14 @@ export class EntityGrouper {
           .filter((e): e is EntityInfo => e !== undefined);
 
         if (groupEntities.length !== llmGroup.entities.length) {
-          console.warn(`Skipping group "${llmGroup.businessDomain}": contains unknown entities`);
+          // Skip logging - verbose debug info that clutters output
           continue;
         }
 
         // Validate primary entity exists
         const primaryEntity = entityMap.get(llmGroup.primaryEntity);
         if (!primaryEntity) {
-          console.warn(`Skipping group "${llmGroup.businessDomain}": primary entity "${llmGroup.primaryEntity}" not found`);
+          // Skip logging - verbose debug info that clutters output
           continue;
         }
 
@@ -165,7 +165,7 @@ export class EntityGrouper {
 
         // Validate connectivity (all entities must be reachable from primary)
         if (groupEntities.length > 1 && !this.isConnected(groupEntities, relationships)) {
-          console.warn(`Skipping group "${llmGroup.businessDomain}": entities are not connected`);
+          // Skip logging - verbose debug info that clutters output
           continue;
         }
 
@@ -180,7 +180,7 @@ export class EntityGrouper {
           expectedQuestionTypes: llmGroup.expectedQuestionTypes
         });
       } catch (error: unknown) {
-        console.warn(`Skipping invalid group: ${extractErrorMessage(error, 'validateGroup')}`);
+        // Skip logging - verbose debug info that clutters output
       }
     }
 

@@ -10,6 +10,7 @@ import {
   DatabaseProviderBase,
   RunQuerySQLFilterManager,
   UserInfo,
+  LogError,
 } from '@memberjunction/core';
 import { extractErrorMessage } from '../utils/error-handlers';
 import {
@@ -94,7 +95,9 @@ export class QueryTester {
         };
       } catch (error: unknown) {
         lastError = extractErrorMessage(error, 'Query Testing');
-        console.error(`Attempt ${attempt}/${maxAttempts} failed:`, lastError);
+        if (this.config.verbose) {
+          LogError(`Attempt ${attempt}/${maxAttempts} failed: ${lastError}`);
+        }
 
         // 5. If not last attempt, try to fix the query
         if (attempt < maxAttempts) {

@@ -7,7 +7,7 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus } from '@memberjunction/core';
 import { QueryGenConfig } from '../cli/config';
 import { extractErrorMessage } from '../utils/error-handlers';
 import { executePromptWithOverrides } from '../utils/prompt-helpers';
@@ -141,8 +141,10 @@ export class QueryWriter {
         }
 
         // Log retry attempt
-        console.log(`⚠️ Query validation failed on attempt ${attempt + 1}/${maxRetries + 1}: ${lastError.message}`);
-        console.log(`   Retrying with validation feedback...`);
+        if (this.config.verbose) {
+          LogStatus(`⚠️ Query validation failed on attempt ${attempt + 1}/${maxRetries + 1}: ${lastError.message}`);
+          LogStatus(`   Retrying with validation feedback...`);
+        }
 
         // Add validation feedback to the prompt data for next attempt
         // This helps the LLM correct its mistakes
