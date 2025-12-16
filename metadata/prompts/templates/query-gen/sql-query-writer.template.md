@@ -13,31 +13,7 @@ You are the world's greatest expert in Microsoft SQL Server and T-SQL. Your job 
 **Please carefully correct the issue mentioned above before generating your response.**
 {% endif %}
 
-# Available Entities
-The following entities are available for your query. Key rules:
-- Always prefix view names with schema names as shown: `[SchemaName].[ViewName]`
-- Use T-SQL syntax for SQL Server
-- Query from base views (vw*), not base tables
-
-{% for entity in entityMetadata %}
-## {{ entity.entityName }}
-**Schema.View**: `[{{ entity.schemaName }}].[{{ entity.baseView }}]`
-{% if entity.description %}- **Description**: {{ entity.description }}{% endif %}
-
-**Available Fields**:
-{% for field in entity.fields %}
-- `{{ field.name }}` ({{ field.type }}){% if field.description %} - {{ field.description }}{% endif %}{% if field.isPrimaryKey %} [PRIMARY KEY]{% endif %}{% if field.isForeignKey %} [FK to {{ field.relatedEntity }}]{% endif %}
-{% endfor %}
-
-{% if entity.relationships.length > 0 %}
-**Join Information**:
-{% for rel in entity.relationships %}
-- To `{{ rel.relatedEntity }}`: `{{ rel.description }}`
-{% endfor %}
-{% endif %}
-
----
-{% endfor %}
+{@include ./_includes/entity-metadata.md}
 
 # Example Queries (Similar Patterns)
 {% for example in fewShotExamples %}

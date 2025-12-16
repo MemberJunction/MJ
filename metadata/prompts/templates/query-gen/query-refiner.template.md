@@ -4,13 +4,13 @@ You are an expert SQL developer refining a query based on evaluation feedback.
 
 ## Original Business Question
 
-**User Question**: {{ userQuestion }}
-**Description**: {{ description }}
+**User Question**: {{ userQuestion | safe }}
+**Description**: {{ description | safe }}
 
 ## Current Query
 
 ```sql
-{% raw %}{{ currentSQL }}{% endraw %}
+{{ currentSQL | safe }}
 ```
 
 ## Evaluation Feedback
@@ -19,36 +19,16 @@ You are an expert SQL developer refining a query based on evaluation feedback.
 **Confidence**: {{ evaluationFeedback.confidence * 100 }}%
 **Needs Refinement**: {% if evaluationFeedback.needsRefinement %}Yes{% else %}No{% endif %}
 
-**Reasoning**: {{ evaluationFeedback.reasoning }}
+**Reasoning**: {{ evaluationFeedback.reasoning | safe }}
 
 {% if evaluationFeedback.suggestions.length > 0 %}
 **Suggestions for Improvement**:
 {% for suggestion in evaluationFeedback.suggestions %}
-{{ loop.index }}. {{ suggestion }}
+{{ loop.index }}. {{ suggestion | safe }}
 {% endfor %}
 {% endif %}
 
-## Available Entities
-
-{% for entity in entityMetadata %}
-### {{ entity.entityName }}
-- **Schema.View**: `[{{ entity.schemaName }}].[{{ entity.baseView }}]`
-- **Description**: {{ entity.description }}
-
-**Available Fields**:
-{% for field in entity.fields %}
-- `{{ field.name }}` ({{ field.type }}){% if field.description %} - {{ field.description }}{% endif %}{% if field.isPrimaryKey %} [PRIMARY KEY]{% endif %}{% if field.isForeignKey %} [FK to {{ field.relatedEntity }}]{% endif %}
-{% endfor %}
-
-{% if entity.relationships.length > 0 %}
-**Join Information**:
-{% for rel in entity.relationships %}
-- To join `{{ rel.relatedEntity }}`: `LEFT JOIN [{{ rel.relatedEntitySchema }}].[{{ rel.relatedEntityView }}] AS alias ON alias.{{ rel.foreignKeyField }} = mainTable.ID`
-{% endfor %}
-{% endif %}
-
----
-{% endfor %}
+{@include ./_includes/entity-metadata.md}
 
 ## Refinement Task
 
@@ -71,7 +51,8 @@ Refine the query to address the evaluation feedback:
 
 Return JSON with four properties:
 
-```json
+Example JSON structure:
+```
 {
   "sql": "SELECT ... FROM ... WHERE ...",
   "selectClause": [

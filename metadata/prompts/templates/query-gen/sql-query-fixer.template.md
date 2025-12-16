@@ -27,28 +27,7 @@ The query is parameterized as a Nunjucks template so syntax such as `{{ '{{' }}p
 - `sqlIdentifier` - Safely handles column/table names
 - `sqlNoKeywordsExpression` - Prevents SQL injection in expressions
 
-# Available Entities
-Here are the views and columns in SQL Server relevant to this query:
-
-{% for entity in entityMetadata %}
-## {{ entity.entityName }}
-- **Schema.View**: `[{{ entity.schemaName }}].[{{ entity.baseView }}]`
-{% if entity.description %}- **Description**: {{ entity.description | safe }}{% endif %}
-
-### Fields
-{% for field in entity.fields %}
-- `{{ field.name }}` ({{ field.type }}){% if field.description %} - {{ field.description | safe }}{% endif %}{% if field.isPrimaryKey %} [PRIMARY KEY]{% endif %}{% if field.isForeignKey %} [FK to {{ field.relatedEntity }}]{% endif %}
-{% endfor %}
-
-{% if entity.relationships.length > 0 %}
-### Join Information
-{% for rel in entity.relationships %}
-- **{{ rel.type }}** to `{{ rel.relatedEntity }}`: `{{ rel.description | safe }}`
-{% endfor %}
-{% endif %}
-
----
-{% endfor %}
+{@include ./_includes/entity-metadata.md}
 
 {% if parameters and parameters.length > 0 %}
 # Query Parameters

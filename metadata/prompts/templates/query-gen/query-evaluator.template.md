@@ -4,9 +4,11 @@ You are a data analyst evaluating whether a SQL query correctly answers a busine
 
 ## Business Question
 
-**User Question**: {{ userQuestion }}
-**Description**: {{ description }}
-**Technical Description**: {{ technicalDescription }}
+**User Question**: {{ userQuestion | safe }}
+**Description**: {{ description | safe }}
+**Technical Description**: {{ technicalDescription | safe }}
+
+{@include ./_includes/entity-metadata.md}
 
 ## Generated SQL Query
 
@@ -18,7 +20,7 @@ You are a data analyst evaluating whether a SQL query correctly answers a busine
 
 {% if parameters.length > 0 %}
 {% for param in parameters %}
-- `{{ param.name }}` ({{ param.type }}){% if param.isRequired %} [REQUIRED]{% endif %} - {{ param.description }}
+- `{{ param.name }}` ({{ param.type }}){% if param.isRequired %} [REQUIRED]{% endif %} - {{ param.description | safe }}
   - Sample value used: `{{ param.sampleValue }}`
 {% endfor %}
 {% else %}
@@ -47,16 +49,18 @@ No parameters defined for this query.
 
 Evaluate if the generated query correctly answers the business question:
 
-1. **Result Relevance**: Do the results match what was asked in the user question?
-2. **Data Completeness**: Are all necessary columns present to answer the question?
-3. **Correctness**: Are calculations and aggregations correct?
-4. **Usability**: Are results formatted appropriately for end users?
+1. **Schema Correctness**: Does the query use the correct entities, views, and fields from the available metadata?
+2. **Result Relevance**: Do the results match what was asked in the user question?
+3. **Data Completeness**: Are all necessary columns present to answer the question?
+4. **Correctness**: Are calculations, aggregations, and JOINs correct?
+5. **Usability**: Are results formatted appropriately for end users?
 
 ## Output Format
 
 Return JSON evaluation with these five fields:
 
-```json
+Example JSON structure:
+```
 {
   "answersQuestion": true,
   "confidence": 0.95,
@@ -83,6 +87,7 @@ Return JSON evaluation with these five fields:
 
 ## Important Notes
 
+- **Verify schema usage**: Check if the query references the correct views and fields from the entity metadata above
 - Focus on whether the query ANSWERS THE QUESTION, not on SQL optimization
 - Consider the user's intent, not just technical correctness
 - Suggest refinements only if they would significantly improve the answer
