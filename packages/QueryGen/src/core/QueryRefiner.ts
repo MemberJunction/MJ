@@ -59,12 +59,41 @@ export class QueryRefiner {
     let currentQuery = query;
     let refinementCount = 0;
 
+    // Track the last successfully tested query and its results
+    let lastWorkingQuery = query;
+    let lastWorkingTestResult: QueryTestResult | null = null;
+    let lastWorkingEvaluation: QueryEvaluation | null = null;
+
     // Ensure AIEngine is configured
     await this.configureAIEngine();
 
     while (refinementCount < maxRefinements) {
       // 1. Test the current query
-      const testResult = await this.testCurrentQuery(currentQuery);
+      let testResult: QueryTestResult;
+      try {
+        testResult = await this.testCurrentQuery(currentQuery);
+        // Success! Save this as our last working version
+        lastWorkingQuery = currentQuery;
+        lastWorkingTestResult = testResult;
+      } catch (error: unknown) {
+        // Query broke during refinement - revert to last working version
+        if (this.config.verbose) {
+          LogStatus(`Refinement produced broken query: ${extractErrorMessage(error, 'Refinement Test')}. Reverting to last working version.`);
+        }
+
+        // If we have a previous working version, use that
+        if (lastWorkingTestResult && lastWorkingEvaluation) {
+          return this.buildSuccessResult(
+            lastWorkingQuery,
+            lastWorkingTestResult,
+            lastWorkingEvaluation,
+            refinementCount
+          );
+        }
+
+        // No previous working version - throw the error
+        throw error;
+      }
 
       // 2. Evaluate if it answers the question
       const evaluation = await this.evaluateQuery(
@@ -72,6 +101,7 @@ export class QueryRefiner {
         businessQuestion,
         testResult
       );
+      lastWorkingEvaluation = evaluation;
 
       // 3. If evaluation passes, we're done!
       if (this.shouldStopRefining(evaluation)) {
@@ -98,6 +128,18 @@ export class QueryRefiner {
     }
 
     // Reached max refinements - return best attempt
+    // Use the last successfully tested query
+    if (lastWorkingTestResult && lastWorkingEvaluation) {
+      return {
+        query: lastWorkingQuery,
+        testResult: lastWorkingTestResult,
+        evaluation: lastWorkingEvaluation,
+        refinementCount,
+        reachedMaxRefinements: true,
+      };
+    }
+
+    // Fallback: try to build final result with current query
     return await this.buildFinalResult(
       currentQuery,
       businessQuestion,
