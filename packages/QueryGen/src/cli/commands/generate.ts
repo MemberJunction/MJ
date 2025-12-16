@@ -88,10 +88,18 @@ export async function generateCommand(options: Record<string, unknown>): Promise
       spinner.info(chalk.dim(`Excluded ${config.excludeEntities.length} entities`));
     }
 
+    // 4. Group entities by schema and generate entity groups
     spinner.text = 'Analyzing entity relationships...';
+
+    // Count entities per schema for informational logging
+    const schemaCount = new Set(filteredEntities.map(e => e.SchemaName)).size;
+    if (config.verbose && schemaCount > 1) {
+      spinner.info(chalk.dim(`Processing ${schemaCount} schemas separately`));
+    }
+
     const grouper = new EntityGrouper(config);
     const entityGroups = await grouper.generateEntityGroups(filteredEntities, contextUser);
-    spinner.succeed(chalk.green(`Found ${entityGroups.length} entity groups`));
+    spinner.succeed(chalk.green(`Found ${entityGroups.length} entity groups across ${schemaCount} ${schemaCount === 1 ? 'schema' : 'schemas'}`));
 
 
     // 5. Initialize vector similarity search
@@ -215,14 +223,24 @@ export async function generateCommand(options: Record<string, unknown>): Promise
           }
         }
 
+        // Format entity list with primary entity in bold
+        const entityDisplay = group.entities
+          .map(e => e.Name === group.primaryEntity.Name ? chalk.bold(e.Name) : e.Name)
+          .join(', ');
+
         spinner.succeed(
-          `${groupPrefix} ${chalk.bold(group.primaryEntity.Name)} complete (${chalk.green(queriesCreatedForGroup + ' queries')})`
+          `${groupPrefix} ${entityDisplay} complete (${chalk.green(queriesCreatedForGroup + ' queries')})`
         );
 
       } catch (error: unknown) {
+        // Format entity list with primary entity in bold
+        const entityDisplay = group.entities
+          .map(e => e.Name === group.primaryEntity.Name ? chalk.bold(e.Name) : e.Name)
+          .join(', ');
+
         spinner.warn(
           chalk.yellow(
-            `${groupPrefix} Error processing ${group.primaryEntity.Name}: ${extractErrorMessage(error, 'Query Generation')}`
+            `${groupPrefix} Error processing ${entityDisplay}: ${extractErrorMessage(error, 'Query Generation')}`
           )
         );
       }

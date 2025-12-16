@@ -6,15 +6,13 @@
  * hub-and-spoke algorithm with intelligent semantic analysis.
  */
 
-import { EntityInfo, EntityRelationshipInfo, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityRelationshipInfo, UserInfo, LogStatus } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EntityGroup } from '../data/schema';
 import { QueryGenConfig } from '../cli/config';
 import { generateRelationshipGraph, formatEntitiesForPrompt } from '../utils/graph-helpers';
 import { extractErrorMessage } from '../utils/error-handlers';
 import { executePromptWithOverrides } from '../utils/prompt-helpers';
-import * as fs from 'fs';
-import * as path from 'path';
 
 /**
  * LLM response format from Entity Group Generator prompt
@@ -49,7 +47,8 @@ export class EntityGrouper {
    * Generate semantically meaningful entity groups using LLM analysis
    *
    * Note: The LLM determines the optimal number and size of entity groups based on
-   * business domain understanding. The number of groups is not strictly enforced.
+   * business domain understanding. Makes separate LLM calls for each schema to
+   * avoid mixing entities from different databases.
    *
    * @param entities - All entities to analyze
    * @param contextUser - User context for server-side operations
@@ -60,17 +59,39 @@ export class EntityGrouper {
     contextUser: UserInfo
   ): Promise<EntityGroup[]> {
     try {
-      // 1. Prepare schema data for LLM
-      const schemaData = this.prepareSchemaData(entities);
+      // 1. Group entities by schema
+      const entitiesBySchema = this.groupEntitiesBySchema(entities);
 
-      // 2. Call LLM to generate groups
-      const llmResponse = await this.callLLMForGrouping(schemaData, contextUser);
+      // 2. Process each schema separately
+      const allGroups: EntityGroup[] = [];
+      let schemaIndex = 0;
+      const totalSchemas = entitiesBySchema.size;
 
-      // 3. Validate and convert to EntityGroup objects
-      const validatedGroups = this.validateAndConvertGroups(llmResponse, entities);
+      for (const [schemaName, schemaEntities] of entitiesBySchema.entries()) {
+        schemaIndex++;
 
-      // 4. Deduplicate any similar groups
-      const deduplicatedGroups = this.deduplicateGroups(validatedGroups);
+        if (this.config.verbose && totalSchemas > 1) {
+          LogStatus(`[${schemaIndex}/${totalSchemas}] Processing schema: ${schemaName} (${schemaEntities.length} entities)`);
+        }
+
+        // 2a. Prepare schema data for LLM
+        const schemaData = this.prepareSchemaData(schemaEntities, schemaName);
+
+        // 2b. Call LLM to generate groups for this schema
+        const llmResponse = await this.callLLMForGrouping(schemaData, contextUser);
+
+        // 2c. Validate and convert to EntityGroup objects
+        const validatedGroups = this.validateAndConvertGroups(llmResponse, schemaEntities);
+
+        if (this.config.verbose && totalSchemas > 1) {
+          LogStatus(`[${schemaIndex}/${totalSchemas}] Generated ${validatedGroups.length} groups for schema: ${schemaName}`);
+        }
+
+        allGroups.push(...validatedGroups);
+      }
+
+      // 3. Deduplicate any similar groups across all schemas
+      const deduplicatedGroups = this.deduplicateGroups(allGroups);
 
       return deduplicatedGroups;
     } catch (error: unknown) {
@@ -79,23 +100,41 @@ export class EntityGrouper {
   }
 
   /**
+   * Group entities by schema name
+   */
+  private groupEntitiesBySchema(entities: EntityInfo[]): Map<string, EntityInfo[]> {
+    const schemaMap = new Map<string, EntityInfo[]>();
+
+    for (const entity of entities) {
+      const schemaName = entity.SchemaName || 'Unknown';
+      const schemaEntities = schemaMap.get(schemaName) || [];
+      schemaEntities.push(entity);
+      schemaMap.set(schemaName, schemaEntities);
+    }
+
+    return schemaMap;
+  }
+
+  /**
    * Prepare schema data for LLM prompt
    *
-   * Note: The LLM will determine appropriate group sizes and count based on
-   * business domain understanding. We provide the full entity schema and
-   * relationship graph for intelligent analysis.
+   * Note: The LLM will determine appropriate group count based on business
+   * domain understanding and schema complexity. We provide the full entity
+   * schema and relationship graph for intelligent analysis.
+   *
+   * @param entities - Entities within a single schema
+   * @param schemaName - Name of the schema being processed
    */
-  private prepareSchemaData(entities: EntityInfo[]): Record<string, unknown> {
+  private prepareSchemaData(entities: EntityInfo[], schemaName: string): Record<string, unknown> {
     const formattedEntities = formatEntitiesForPrompt(entities);
     const relationshipGraph = generateRelationshipGraph(entities);
-
-    // Get schema name from first entity (assume single schema)
-    const schemaName = entities[0]?.SchemaName || 'Unknown';
 
     return {
       schemaName,
       entities: formattedEntities,
-      relationshipGraph
+      relationshipGraph,
+      minGroupSize: this.config.minGroupSize,
+      maxGroupSize: this.config.maxGroupSize
     };
   }
 

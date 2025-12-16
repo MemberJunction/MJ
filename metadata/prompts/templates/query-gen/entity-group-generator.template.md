@@ -32,23 +32,23 @@ Given a database schema, identify logical entity groups that make sense for busi
 ## Guidelines
 
 1. **Business Relevance**: Focus on entity combinations that support real business questions
-   - ✅ GOOD: "Customers + Orders + OrderDetails" (sales analysis)
-   - ❌ BAD: "SystemLogs + UserPreferences + EmailTemplates" (unrelated)
+   - ✅ GOOD: "Customers + Orders" (customer purchasing behavior)
+   - ✅ GOOD: "Events + Event Registrations" (event attendance analysis)
+   - ❌ BAD: "SystemLogs + UserPreferences + EmailTemplates" (unrelated entities)
 
 2. **Relationship Types**:
-   - **Single Entity**: Standalone entities with rich data (all entities should get a single-entity group)
-   - **Parent-Child**: Natural hierarchies (Customer → Orders, Product → Categories)
-   - **Many-to-Many**: Bridge tables connecting related concepts (Products ↔ Categories via ProductCategories)
+   - **Parent-Child**: Natural hierarchies (Customer → Orders, Event → Registrations)
+   - **Many-to-Many**: Bridge tables connecting concepts (Products ↔ Categories via ProductCategories)
    - **Transactional Flow**: Process chains (Lead → Opportunity → Quote → Order)
 
 3. **Size Constraints**:
-   - Minimum: {{ minGroupSize }} entities
-   - Maximum: {{ maxGroupSize }} entities
-   - Target total groups: {{ targetGroupCount }}
+   - Groups must have **{{ minGroupSize }} to {{ maxGroupSize }} entities** (keep groups small and focused)
+   - Generate as many meaningful groups as appropriate for the schema size and complexity
+   - **Do NOT create single-entity groups** - those will be generated separately
 
 4. **Connectivity**: All entities in a group must be connected by foreign key relationships
 
-5. **Coverage**: Prioritize covering all important entities at least once
+5. **Coverage**: Try to include important entities in at least one group, but focus on quality over quantity
 
 6. **Business Domains**: Common domains include:
    - Sales & Revenue (customers, orders, payments)
@@ -83,7 +83,7 @@ Return a JSON array of entity groups. Each group MUST include:
 - `primaryEntity`: The "hub" or most important entity in the group
 - `businessDomain`: Clear business domain label (2-5 words)
 - `businessRationale`: One sentence explaining why this grouping matters
-- `relationshipType`: One of: "single", "parent-child", "many-to-many"
+- `relationshipType`: One of: "parent-child", "many-to-many"
 - `expectedQuestionTypes`: Array of question types this group supports
 
 ## Example Output
@@ -91,14 +91,6 @@ Return a JSON array of entity groups. Each group MUST include:
 ```json
 {
   "groups": [
-    {
-      "entities": ["Customers"],
-      "primaryEntity": "Customers",
-      "businessDomain": "Customer Master Data",
-      "businessRationale": "Core customer information and demographics for segmentation and analysis",
-      "relationshipType": "single",
-      "expectedQuestionTypes": ["segmentation", "demographics", "customer_profiling"]
-    },
     {
       "entities": ["Customers", "Orders"],
       "primaryEntity": "Customers",
@@ -108,12 +100,20 @@ Return a JSON array of entity groups. Each group MUST include:
       "expectedQuestionTypes": ["lifetime_value", "repeat_purchase", "customer_retention"]
     },
     {
-      "entities": ["Products", "Categories", "Suppliers"],
-      "primaryEntity": "Products",
-      "businessDomain": "Product Catalog Management",
-      "businessRationale": "Complete product information including categorization and sourcing for inventory and procurement decisions",
+      "entities": ["Orders", "OrderDetails"],
+      "primaryEntity": "Orders",
+      "businessDomain": "Order Analysis",
+      "businessRationale": "Connects orders with their line items for product mix and basket analysis",
       "relationshipType": "parent-child",
-      "expectedQuestionTypes": ["product_mix", "supplier_analysis", "category_performance"]
+      "expectedQuestionTypes": ["basket_analysis", "product_mix", "order_value"]
+    },
+    {
+      "entities": ["Products", "Categories"],
+      "primaryEntity": "Products",
+      "businessDomain": "Product Catalog",
+      "businessRationale": "Links products to categories for inventory and catalog organization analysis",
+      "relationshipType": "parent-child",
+      "expectedQuestionTypes": ["product_mix", "category_performance", "inventory_levels"]
     }
   ]
 }
