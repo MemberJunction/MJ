@@ -20,29 +20,40 @@ export class MetadataExporter {
    *
    * Transforms validated queries into MemberJunction metadata format
    * and writes them to timestamped JSON files:
-   * - .query-categories.json for the categories
-   * - queries-{timestamp}.json for the queries
+   * - .query-categories-{timestamp}.json for the categories
+   * - .queries-{timestamp}.json for the queries
    *
    * @param validatedQueries - Array of validated queries to export
    * @param uniqueCategories - Pre-built unique categories for all queries
-   * @param outputDirectory - Directory to write the metadata files
+   * @param outputDirectory - Directory to write the queries file
+   * @param outputCategoryDirectory - Optional directory for categories file (defaults to outputDirectory)
    * @returns Export result with file path and query count
    */
   async exportQueries(
     validatedQueries: ValidatedQuery[],
     uniqueCategories: QueryCategoryInfo[],
-    outputDirectory: string
+    outputDirectory: string,
+    outputCategoryDirectory?: string
   ): Promise<ExportResult> {
+    // Generate shared timestamp for both files
+    const timestamp = Date.now();
+
+    // Use category directory if provided, otherwise use queries directory
+    const categoryDir = outputCategoryDirectory || outputDirectory;
+
     // 1. Transform to MJ metadata format
     const queryMetadata = validatedQueries.map(q => this.toQueryMetadata(q));
     const categoryMetadata = uniqueCategories.map(c => this.toCategoryMetadata(c));
 
-    // 3. Ensure output directory exists
+    // 2. Ensure output directories exist
     await fs.mkdir(outputDirectory, { recursive: true });
+    if (categoryDir !== outputDirectory) {
+      await fs.mkdir(categoryDir, { recursive: true });
+    }
 
-    // 4. Write categories file (if categories exist)
+    // 3. Write categories file (if categories exist)
     if (categoryMetadata.length > 0) {
-      const categoriesPath = path.join(outputDirectory, '.query-categories.json');
+      const categoriesPath = path.join(categoryDir, `.query-categories-${timestamp}.json`);
       await fs.writeFile(
         categoriesPath,
         JSON.stringify(categoryMetadata, null, 2),
@@ -50,9 +61,8 @@ export class MetadataExporter {
       );
     }
 
-    // 5. Write queries file
-    const timestamp = Date.now();
-    const outputPath = path.join(outputDirectory, `queries-${timestamp}.json`);
+    // 4. Write queries file
+    const outputPath = path.join(outputDirectory, `.queries-${timestamp}.json`);
     await fs.writeFile(
       outputPath,
       JSON.stringify(queryMetadata, null, 2),

@@ -14,7 +14,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Metadata, DatabaseProviderBase } from '@memberjunction/core';
+import { Metadata, DatabaseProviderBase, EntityInfo } from '@memberjunction/core';
 import { loadConfig } from '../config';
 import { getSystemUser } from '../../utils/user-helpers';
 import { EntityGrouper } from '../../core/EntityGrouper';
@@ -81,8 +81,49 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     }
 
     spinner.text = 'Analyzing entity relationships...';
-    const grouper = new EntityGrouper(config);
-    const entityGroups = (await grouper.generateEntityGroups(filteredEntities, contextUser)).slice(0, 1); //TODO: remove limit
+    let entityGroups;
+
+    // Load from temp-entity-groups.json (for testing without LLM calls)
+    const tempPath = path.join(__dirname, '../../data/temp-entity-groups.json');
+    if (!fs.existsSync(tempPath)) {
+      throw new Error(`Temp entity groups file not found at ${tempPath}. Run without --use-temp-cache to generate fresh groups.`);
+    }
+    const tempData = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
+
+    // Hydrate entity names with full EntityInfo objects from metadata
+    entityGroups = tempData.groups.map((group: any) => {
+      const hydratedEntities = group.entities
+        .map((entityName: string) => filteredEntities.find((e: EntityInfo) => e.Name === entityName))
+        .filter((e: EntityInfo | undefined) => e !== undefined) as EntityInfo[];
+
+      if (hydratedEntities.length !== group.entities.length) {
+        const missing = group.entities.filter((name: string) =>
+          !filteredEntities.some((e: EntityInfo) => e.Name === name)
+        );
+        spinner.warn(chalk.yellow(`Warning: Group "${group.businessDomain}" has ${missing.length} missing entities: ${missing.join(', ')}`));
+      }
+
+      // Hydrate primaryEntity from entity name string
+      const hydratedPrimaryEntity = typeof group.primaryEntity === 'string'
+        ? filteredEntities.find((e: EntityInfo) => e.Name === group.primaryEntity)
+        : group.primaryEntity;
+
+      if (!hydratedPrimaryEntity) {
+        spinner.warn(chalk.yellow(`Warning: Group "${group.businessDomain}" has missing primary entity: ${group.primaryEntity}`));
+      }
+
+      return {
+        ...group,
+        entities: hydratedEntities,
+        primaryEntity: hydratedPrimaryEntity || group.primaryEntity
+      };
+    });
+
+    spinner.info(chalk.yellow(`Loaded ${entityGroups.length} entity groups from temp cache`));
+  
+
+    // Filter to only groups with relationships and limit for testing
+    entityGroups = entityGroups.filter((e: EntityGroup) => e.relationships.length > 0).slice(0, 1);
     spinner.succeed(chalk.green(`Found ${entityGroups.length} entity groups`));
 
 
@@ -115,12 +156,19 @@ export async function generateCommand(options: Record<string, unknown>): Promise
       spinner.start(`${groupPrefix} Processing ${chalk.bold(group.primaryEntity.Name)}...`);
 
       try {
-        // 6a. Generate business questions
-        const questionGen = new QuestionGenerator(contextUser, config);
-        const questions = await questionGen.generateQuestions(group);
+        // TEMPORARY: Hardcode single question for testing
+        const questions = [{
+          userQuestion: 'How many active members do we have by membership status?',
+          description: 'Shows the count of members grouped by their current status',
+          technicalDescription: 'Aggregates member records by status field to show distribution of member statuses',
+          complexity: 'simple' as const,
+          requiresAggregation: true,
+          requiresJoins: false,
+          entities: group.entities.map((e: EntityInfo) => e.Name)
+        }];
 
         if (config.verbose) {
-          spinner.info(`${groupPrefix} Generated ${questions.length} questions for ${group.primaryEntity.Name}`);
+          spinner.info(`${groupPrefix} Using hardcoded question for testing`);
         }
 
         // 6b. For each question, generate and validate query
@@ -224,7 +272,8 @@ export async function generateCommand(options: Record<string, unknown>): Promise
       const exportResult = await exporter.exportQueries(
         allValidatedQueries,
         uniqueCategories,
-        config.outputDirectory
+        config.outputDirectory,
+        config.outputCategoryDirectory
       );
       spinner.succeed(chalk.green(`Exported to ${exportResult.outputPath}`));
     }

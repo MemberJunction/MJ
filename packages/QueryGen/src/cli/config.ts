@@ -42,6 +42,7 @@ export interface QueryGenConfig {
   // Output Configuration
   outputMode: 'metadata' | 'database' | 'both';
   outputDirectory: string;
+  outputCategoryDirectory?: string; // Optional: defaults to outputDirectory if not provided
 
   // Query Category Configuration
   rootQueryCategory: string;
