@@ -27,7 +27,6 @@ export class EmbeddingService {
    * Embed a single query by generating embeddings for all its fields
    *
    * Generates separate embeddings for:
-   * - name: Query name for metadata matching
    * - userQuestion: Natural language question
    * - description: High-level description
    * - technicalDescription: Technical implementation details
@@ -36,7 +35,6 @@ export class EmbeddingService {
    * @returns Embeddings for all fields
    */
   async embedQuery(query: {
-    name: string;
     userQuestion: string;
     description: string;
     technicalDescription: string;
@@ -44,15 +42,13 @@ export class EmbeddingService {
     const aiEngine = AIEngine.Instance;
 
     // Generate embeddings for each field in parallel
-    const [nameResult, userQuestionResult, descResult, techDescResult] = await Promise.all([
-      aiEngine.EmbedTextLocal(query.name),
+    const [userQuestionResult, descResult, techDescResult] = await Promise.all([
       aiEngine.EmbedTextLocal(query.userQuestion),
       aiEngine.EmbedTextLocal(query.description),
       aiEngine.EmbedTextLocal(query.technicalDescription),
     ]);
 
     return {
-      name: nameResult.result.vector,
       userQuestion: userQuestionResult.result.vector,
       description: descResult.result.vector,
       technicalDescription: techDescResult.result.vector,
@@ -64,6 +60,7 @@ export class EmbeddingService {
    *
    * Golden queries are example queries that serve as few-shot learning examples.
    * This method embeds all fields of all golden queries for similarity search.
+   * Note: name field is excluded from embeddings as it's not available during query generation.
    *
    * @param goldenQueries - Array of golden queries to embed
    * @returns Array of golden queries with their embeddings
@@ -73,7 +70,6 @@ export class EmbeddingService {
 
     for (const query of goldenQueries) {
       const embeddings = await this.embedQuery({
-        name: query.name,
         userQuestion: query.userQuestion,
         description: query.description,
         technicalDescription: query.technicalDescription,
@@ -96,7 +92,6 @@ export class EmbeddingService {
    */
   async embedQueries(
     queries: Array<{
-      name: string;
       userQuestion: string;
       description: string;
       technicalDescription: string;

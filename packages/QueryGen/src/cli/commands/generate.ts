@@ -117,7 +117,6 @@ export async function generateCommand(options: Record<string, unknown>): Promise
 
           // Embed question for similarity search
           const questionEmbedding = await embeddingService.embedQuery({
-            name: '',
             userQuestion: question.userQuestion,
             description: question.description,
             technicalDescription: question.technicalDescription,
@@ -136,14 +135,14 @@ export async function generateCommand(options: Record<string, unknown>): Promise
           const queryWriter = new QueryWriter(contextUser, config);
           const generatedQuery = await queryWriter.generateQuery(
             question,
-            group.entities.map(e => formatEntityMetadataForPrompt(e, group.entities)),
+            group.entities.map((e: EntityInfo) => formatEntityMetadataForPrompt(e, group.entities)),
             fewShotExamples
           );
 
           // Test and fix query
           // Access the database provider through Metadata.Provider
           const dataProvider = Metadata.Provider as DatabaseProviderBase;
-          const entityMetadata = group.entities.map(e => formatEntityMetadataForPrompt(e, group.entities));
+          const entityMetadata = group.entities.map((e: EntityInfo) => formatEntityMetadataForPrompt(e, group.entities));
           const queryTester = new QueryTester(
             dataProvider,
             entityMetadata,

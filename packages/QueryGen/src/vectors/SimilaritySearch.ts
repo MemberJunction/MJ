@@ -10,9 +10,9 @@ import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 
 /**
  * Field weights for weighted similarity calculation
+ * Note: name is excluded since queries don't have names until after generation
  */
 interface FieldWeights {
-  name: number;
   userQuestion: number;
   description: number;
   technicalDescription: number;
@@ -26,12 +26,16 @@ export class SimilaritySearch extends SimpleVectorService {
   /**
    * Weights for each field in similarity calculation
    * Total weights sum to 1.0
+   *
+   * Weight distribution prioritizes technical specifications:
+   * - userQuestion: 0.20 (less important - natural language is variable)
+   * - description: 0.40 (high-level business logic matching)
+   * - technicalDescription: 0.40 (technical implementation details)
    */
   private readonly weights: FieldWeights = {
-    name: 0.1,
-    userQuestion: 0.2,
-    description: 0.35,
-    technicalDescription: 0.35
+    userQuestion: 0.20,
+    description: 0.40,
+    technicalDescription: 0.40
   };
 
   /**
@@ -68,13 +72,13 @@ export class SimilaritySearch extends SimpleVectorService {
 
   /**
    * Calculate cosine similarity for each field separately
+   * Note: name field excluded as queries don't have names during generation
    */
   private calculateFieldSimilarities(
     queryEmbeddings: QueryEmbeddings,
     goldenEmbeddings: QueryEmbeddings
   ): SimilarQuery['fieldScores'] {
     return {
-      nameSim: this.CosineSimilarity(queryEmbeddings.name, goldenEmbeddings.name),
       userQuestionSim: this.CosineSimilarity(queryEmbeddings.userQuestion, goldenEmbeddings.userQuestion),
       descSim: this.CosineSimilarity(queryEmbeddings.description, goldenEmbeddings.description),
       techDescSim: this.CosineSimilarity(queryEmbeddings.technicalDescription, goldenEmbeddings.technicalDescription)
@@ -83,10 +87,10 @@ export class SimilaritySearch extends SimpleVectorService {
 
   /**
    * Calculate weighted sum of field similarities
+   * Note: name field excluded, weights adjusted accordingly
    */
   private calculateWeightedScore(fieldScores: SimilarQuery['fieldScores']): number {
     return (
-      fieldScores.nameSim * this.weights.name +
       fieldScores.userQuestionSim * this.weights.userQuestion +
       fieldScores.descSim * this.weights.description +
       fieldScores.techDescSim * this.weights.technicalDescription
