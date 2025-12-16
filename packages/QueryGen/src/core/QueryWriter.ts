@@ -185,16 +185,6 @@ export class QueryWriter {
     for (const param of query.parameters) {
       this.validateParameter(param);
     }
-
-    // Validate selectClause array
-    if (!Array.isArray(query.selectClause) || query.selectClause.length === 0) {
-      throw new Error('Generated query must have at least one output field');
-    }
-
-    // Validate each output field
-    for (const field of query.selectClause) {
-      this.validateOutputField(field);
-    }
   }
 
   /**
@@ -238,36 +228,10 @@ export class QueryWriter {
       throw new Error(`Query parameter '${p.name}' must have usage array`);
     }
 
-    if (!p.sampleValue || typeof p.sampleValue !== 'string') {
+    // sampleValue is required and can be string, number, boolean, or array depending on parameter type
+    if (p.sampleValue === undefined || p.sampleValue === null || p.sampleValue === '') {
       throw new Error(`Query parameter '${p.name}' must have a sampleValue`);
     }
   }
 
-  /**
-   * Validate a single output field
-   * Ensures all required fields are present and valid
-   */
-  private validateOutputField(field: unknown): void {
-    if (!field || typeof field !== 'object') {
-      throw new Error('Query output field must be an object');
-    }
-
-    const f = field as Record<string, unknown>;
-
-    if (!f.name || typeof f.name !== 'string') {
-      throw new Error('Query output field must have a valid name');
-    }
-
-    if (!f.description || typeof f.description !== 'string') {
-      throw new Error(`Query output field '${f.name}' must have a description`);
-    }
-
-    if (!f.type || typeof f.type !== 'string') {
-      throw new Error(`Query output field '${f.name}' must have a valid type`);
-    }
-
-    if (typeof f.optional !== 'boolean') {
-      throw new Error(`Query output field '${f.name}' must have optional boolean`);
-    }
-  }
 }

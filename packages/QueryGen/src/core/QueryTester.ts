@@ -116,20 +116,20 @@ export class QueryTester {
 
   /**
    * Render query template with sample parameter values
-   * Converts string sample values to proper types before rendering
+   * Uses QueryParameterProcessor for proper type handling
    *
    * @param query - Generated query with parameters
    * @returns Rendered SQL string ready for execution
    */
   private renderQueryTemplate(query: GeneratedQuery): string {
-    // Convert sample values to proper types
+    // Build parameter values object
     const paramValues: Record<string, unknown> = {};
 
     for (const param of query.parameters) {
-      paramValues[param.name] = this.parseSampleValue(
-        param.sampleValue,
-        param.type
-      );
+      const rawValue = param.sampleValue;
+      if (rawValue !== undefined && rawValue !== null) {
+        paramValues[param.name] = this.processParameterValue(rawValue, param.type);
+      }
     }
 
     try {
@@ -144,46 +144,72 @@ export class QueryTester {
   }
 
   /**
-   * Parse sample value string to proper type
-   * Handles number, boolean, date, and array conversions
+   * Processes a raw parameter value based on its type, handling special cases like arrays.
+   * Follows Skip-Brain pattern for parameter processing.
+   * For array types, this function will:
+   * - Parse JSON arrays if the value is a JSON string
+   * - Split comma-separated strings as a fallback
+   * - Return as-is for sqlIn filter to handle
    *
-   * @param value - String representation of sample value
-   * @param type - Target data type
-   * @returns Parsed value in correct type
+   * @param rawValue - The raw parameter value (from sampleValue)
+   * @param paramType - The parameter type ('string', 'number', 'date', 'boolean', 'array')
+   * @returns Processed value ready for use in Nunjucks template
    */
-  private parseSampleValue(value: string, type: string): unknown {
-    switch (type) {
-      case 'number':
-        const num = Number(value);
-        if (isNaN(num)) {
-          throw new Error(`Invalid number sample value: ${value}`);
+  private processParameterValue(rawValue: unknown, paramType: string): unknown {
+    if (rawValue === undefined || rawValue === null) {
+      return rawValue;
+    }
+
+    // For array type parameters, ensure value is compatible with sqlIn filter
+    if (paramType === 'array' && typeof rawValue === 'string') {
+      try {
+        // Try to parse as JSON array
+        const parsed = JSON.parse(rawValue);
+        if (Array.isArray(parsed)) {
+          return parsed;
         }
-        return num;
+      } catch {
+        // Not valid JSON - return as-is for sqlIn filter to handle comma-separated strings
+      }
+      // Return comma-separated string as-is - sqlIn filter handles this
+      return rawValue;
+    }
+
+    // For non-array types, convert as needed
+    switch (paramType) {
+      case 'number':
+        if (typeof rawValue === 'string') {
+          const num = Number(rawValue);
+          if (isNaN(num)) {
+            throw new Error(`Invalid number sample value: ${rawValue}`);
+          }
+          return num;
+        }
+        return rawValue;
 
       case 'boolean':
-        const lower = value.toLowerCase();
-        if (lower !== 'true' && lower !== 'false') {
-          throw new Error(`Invalid boolean sample value: ${value}`);
+        if (typeof rawValue === 'string') {
+          const lower = rawValue.toLowerCase();
+          if (lower !== 'true' && lower !== 'false') {
+            throw new Error(`Invalid boolean sample value: ${rawValue}`);
+          }
+          return lower === 'true';
         }
-        return lower === 'true';
+        return rawValue;
 
       case 'date':
-        const date = new Date(value);
-        if (isNaN(date.getTime())) {
-          throw new Error(`Invalid date sample value: ${value}`);
+        if (typeof rawValue === 'string') {
+          const date = new Date(rawValue);
+          if (isNaN(date.getTime())) {
+            throw new Error(`Invalid date sample value: ${rawValue}`);
+          }
+          return date;
         }
-        return date;
-
-      case 'array':
-        try {
-          return JSON.parse(value);
-        } catch {
-          throw new Error(`Invalid array sample value: ${value}`);
-        }
+        return rawValue;
 
       case 'string':
       default:
-        return value;
+        return rawValue;
     }
   }
 

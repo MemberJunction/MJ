@@ -49,20 +49,12 @@ Refine the query to address the evaluation feedback:
 
 ## Output Format
 
-Return JSON with four properties:
+Return JSON with three properties:
 
 Example JSON structure:
 ```
 {
   "sql": "SELECT ... FROM ... WHERE ...",
-  "selectClause": [
-    {
-      "name": "CustomerName",
-      "description": "Name of the customer",
-      "type": "string",
-      "optional": false
-    }
-  ],
   "parameters": [
     {
       "name": "minRevenue",
@@ -71,7 +63,7 @@ Example JSON structure:
       "description": "Minimum revenue threshold",
       "usage": ["WHERE clause: Revenue >= {{ '{{' }} minRevenue | sqlNumber {{ '}}' }}"],
       "defaultValue": null,
-      "sampleValue": "10000"
+      "sampleValue": 10000
     }
   ],
   "improvementsSummary": "Added customer contact columns (Email, Phone) and date range filter (startDate, endDate) as suggested to improve usability and query flexibility"
@@ -81,8 +73,6 @@ Example JSON structure:
 ### Field Definitions:
 
 **sql** (string): The refined SQL query template using Nunjucks syntax
-
-**selectClause** (array): Updated output fields reflecting refinements
 
 **parameters** (array): Updated input parameters (add/modify/remove as needed)
 

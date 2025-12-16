@@ -109,6 +109,49 @@ AND JoinDate >= {{ '{{' }} MinJoinDate | sqlDate {{ '}}' }}
 - Wrap reserved keywords in brackets: `[RowCount]`, `[User]`, `[Order]`
 
 # SQL Best Practices
+
+## Simplicity and Reusability
+Keep queries simple and general-purpose. Return raw data, not calculated metrics.
+
+**DO**:
+- Return base columns that answer the question
+- Use simple aggregations (COUNT, SUM, AVG, MIN, MAX)
+- Let the UI/reporting layer do complex calculations
+- Create queries that work for multiple similar questions
+
+**DON'T**:
+- Calculate complex metrics (retention rates, percentages, ratios) in SQL
+- Use nested CASE statements for business logic
+- Create hyper-specific queries that only work for one exact question
+- Over-engineer with CTEs when a simple SELECT would work
+
+**Example - Good (Simple & Reusable)**:
+```sql
+-- Returns raw data that can answer many questions
+SELECT
+  mt.Name AS MembershipType,
+  COUNT(m.ID) AS TotalMemberships,
+  SUM(CASE WHEN m.RenewalDate IS NOT NULL THEN 1 ELSE 0 END) AS RenewedCount,
+  SUM(CASE WHEN m.Status = 'Lapsed' THEN 1 ELSE 0 END) AS LapsedCount
+FROM [Schema].[vwMembershipTypes] mt
+LEFT JOIN [Schema].[vwMemberships] m ON mt.ID = m.MembershipTypeID
+GROUP BY mt.Name
+ORDER BY RenewedCount DESC
+```
+
+**Example - Bad (Too Complex)**:
+```sql
+-- Calculates specific metrics that limit reusability
+WITH Stats AS (...),
+RatioCalculations AS (...),
+PercentileRanks AS (...)
+SELECT
+  ...,
+  CASE WHEN (x + y) > 0 THEN CAST(ROUND((CAST(x AS DECIMAL(10,2)) / (x + y)) * 100, 2) AS DECIMAL(10,2)) ELSE 0 END AS RetentionRate,
+  ... -- 10 more calculated fields
+```
+
+## Technical Best Practices
 1. **Use Base Views**: Query from `vw*` views with schema prefix: `[SchemaName].[vwEntityName]`
 2. **Short Aliases**: Use meaningful short aliases (e.g., `m` for members, `o` for orders)
 3. **Handle NULLs**: Use COALESCE or ISNULL for aggregations
@@ -130,14 +173,6 @@ Your response must match this exact structure:
 ```
 {
   "sql": "Complete SQL query template with Nunjucks parameter syntax",
-  "selectClause": [
-    {
-      "name": "FieldName",
-      "description": "Clear explanation of what this field represents",
-      "type": "string | number | date | boolean",
-      "optional": false
-    }
-  ],
   "parameters": [
     {
       "name": "ParameterName",
@@ -155,12 +190,6 @@ Your response must match this exact structure:
 ## Field Definitions
 
 **sql** (string): Complete T-SQL query using Nunjucks syntax for parameters
-
-**selectClause** (array): Output fields the query returns
-- `name`: Field name as it appears in SELECT clause
-- `description`: Clear explanation of what this field represents
-- `type`: Data type - must be one of: "string", "number", "date", "boolean"
-- `optional`: Whether field can be NULL (true/false)
 
 **parameters** (array): Input parameters for the query (empty array if no parameters needed)
 - `name`: Parameter name in camelCase

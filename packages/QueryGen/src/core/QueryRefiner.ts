@@ -27,6 +27,8 @@ import { executePromptWithOverrides } from '../utils/prompt-helpers';
  * Iteratively refines queries based on evaluation feedback
  */
 export class QueryRefiner {
+  private entityMetadata: EntityMetadataForPrompt[] = [];
+
   constructor(
     private tester: QueryTester,
     private contextUser: UserInfo,
@@ -51,6 +53,9 @@ export class QueryRefiner {
     entityMetadata: EntityMetadataForPrompt[],
     maxRefinements: number = 3
   ): Promise<RefinedQuery> {
+    // Store entity metadata for use in evaluation
+    this.entityMetadata = entityMetadata;
+
     let currentQuery = query;
     let refinementCount = 0;
 
@@ -202,6 +207,7 @@ export class QueryRefiner {
         userQuestion: businessQuestion.userQuestion,
         description: businessQuestion.description,
         technicalDescription: businessQuestion.technicalDescription,
+        entityMetadata: this.entityMetadata,
         generatedSQL: query.sql,
         parameters: query.parameters,
         sampleResults,
@@ -255,7 +261,6 @@ export class QueryRefiner {
 
       return {
         sql: refinedQuery.sql,
-        selectClause: refinedQuery.selectClause,
         parameters: refinedQuery.parameters,
       };
     } catch (error: unknown) {

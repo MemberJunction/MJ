@@ -57,7 +57,6 @@ export class QueryFixer {
         originalSQL: query.sql,
         errorMessage,
         parameters: query.parameters,
-        selectClause: query.selectClause,
         entityMetadata,
         userQuestion: businessQuestion.userQuestion,
         description: businessQuestion.description,
@@ -100,15 +99,16 @@ export class QueryFixer {
       originalSQL: string;
       errorMessage: string;
       parameters: GeneratedQuery['parameters'];
-      selectClause: GeneratedQuery['selectClause'];
       entityMetadata: EntityMetadataForPrompt[];
       userQuestion: string;
       description: string;
     }
   ): Promise<GeneratedQuery> {
-    const result = await executePromptWithOverrides<
-      GeneratedQuery & { changesSummary: string }
-    >(prompt, promptData, this.contextUser, this.config);
+    // The SQL Query Fixer template returns { newSQL, reasoning }
+    const result = await executePromptWithOverrides<{
+      newSQL: string;
+      reasoning: string;
+    }>(prompt, promptData, this.contextUser, this.config);
 
     if (!result || !result.success) {
       throw new Error(
@@ -120,15 +120,15 @@ export class QueryFixer {
       throw new Error('AI prompt returned no result');
     }
 
-    // Log the changes summary if available
-    if (result.result.changesSummary) {
-      console.log(`Query fix applied: ${result.result.changesSummary}`);
+    // Log the reasoning
+    if (result.result.reasoning) {
+      console.log(`Query fix reasoning: ${result.result.reasoning}`);
     }
 
+    // Return GeneratedQuery format, preserving original parameters
     return {
-      sql: result.result.sql,
-      selectClause: result.result.selectClause,
-      parameters: result.result.parameters,
+      sql: result.result.newSQL,
+      parameters: promptData.parameters,
     };
   }
 
@@ -148,11 +148,6 @@ export class QueryFixer {
     // Validate parameters array
     if (!Array.isArray(query.parameters)) {
       throw new Error('Fixed query parameters must be an array');
-    }
-
-    // Validate selectClause array
-    if (!Array.isArray(query.selectClause) || query.selectClause.length === 0) {
-      throw new Error('Fixed query must have at least one output field');
     }
   }
 }

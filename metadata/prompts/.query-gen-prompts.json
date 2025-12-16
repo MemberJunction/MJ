@@ -133,7 +133,7 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
-      "OutputExample": "{\"sql\":\"SELECT c.Name AS CustomerName, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name ORDER BY TotalRevenue DESC\",\"selectClause\":[{\"name\":\"CustomerName\",\"description\":\"Name of the customer\",\"type\":\"string\",\"optional\":false},{\"name\":\"TotalRevenue\",\"description\":\"Total revenue from all orders\",\"type\":\"number\",\"optional\":false}],\"parameters\":[{\"name\":\"startDate\",\"type\":\"date\",\"isRequired\":true,\"description\":\"Start date for order filtering\",\"usage\":[\"WHERE clause filter on OrderDate\"],\"defaultValue\":null,\"sampleValue\":\"2024-01-01\"}]}",
+      "OutputExample": "{\"sql\":\"SELECT c.Name AS CustomerName, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name ORDER BY TotalRevenue DESC\",\"parameters\":[{\"name\":\"startDate\",\"type\":\"date\",\"isRequired\":true,\"description\":\"Start date for order filtering\",\"usage\":[\"WHERE clause filter on OrderDate\"],\"defaultValue\":null,\"sampleValue\":\"2024-01-01\"}]}",
       "ValidationBehavior": "Strict",
       "MaxRetries": 3,
       "FailoverMaxAttempts": 5,
@@ -239,8 +239,8 @@
       "ID": "FA000A4D-09F5-4557-858F-AC01E19D8238"
     },
     "sync": {
-      "lastModified": "2025-12-16T00:26:42.484Z",
-      "checksum": "9821473c51dd9bedac362e9692ec826040d59d35c30cbf07cf34d98e40478582"
+      "lastModified": "2025-12-16T01:28:44.534Z",
+      "checksum": "8c9d7dac2c74dfdcd18b0ec8ea64a3ec8aeeef7eb4d0fb64aed9a71ea0cdfbe7"
     }
   },
   {
@@ -499,7 +499,7 @@
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "OutputType": "object",
-      "OutputExample": "{\"sql\":\"SELECT c.Name AS CustomerName, c.Region, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name, c.Region ORDER BY TotalRevenue DESC LIMIT 10\",\"improvementsSummary\":\"Added Region field and LIMIT clause\",\"improvementsDetailed\":\"Included c.Region in SELECT and GROUP BY to provide geographical context. Added LIMIT 10 to explicitly return only top 10 customers as specified in the business question.\"}",
+      "OutputExample": "{\"sql\":\"SELECT c.Name AS CustomerName, c.Region, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name, c.Region ORDER BY TotalRevenue DESC LIMIT 10\",\"parameters\":[{\"name\":\"startDate\",\"type\":\"date\",\"isRequired\":true,\"description\":\"Start date for order filtering\",\"usage\":[\"WHERE clause filter on OrderDate\"],\"defaultValue\":null,\"sampleValue\":\"2024-01-01\"}],\"improvementsSummary\":\"Added Region field and LIMIT clause\"}",
       "ValidationBehavior": "Strict",
       "MaxRetries": 3,
       "FailoverMaxAttempts": 5,
@@ -605,8 +605,8 @@
       "ID": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
     },
     "sync": {
-      "lastModified": "2025-12-16T00:26:42.476Z",
-      "checksum": "093e285ae107d07fbde7905f8d2ab727f7bb29d62baebe9a35262886be757558"
+      "lastModified": "2025-12-16T01:28:44.551Z",
+      "checksum": "3fec3f3e873c0fc9675c049f153389790d79cef9c012c7e3b591429bc4b7d372"
     }
   },
   {
