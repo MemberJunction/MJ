@@ -53,16 +53,25 @@ function formatEntityFields(entity: EntityInfo): EntityFieldMetadata[] {
       description = `[VIRTUAL] ${description}`;
     }
 
+    // Extract possible values from EntityFieldValues if available
+    const possibleValues = field.EntityFieldValues && field.EntityFieldValues.length > 0
+      ? field.EntityFieldValues.map(efv => efv.Value)
+      : undefined;
+
     return {
       name: field.Name,
       displayName: field.DisplayName || field.Name,
       type: field.Type,
+      sqlFullType: field.SQLFullType,
       description,
       isPrimaryKey: field.IsPrimaryKey || false,
       isForeignKey: field.RelatedEntityID != null && field.RelatedEntityID.trim().length > 0,
+      isVirtual: isVirtualField,
+      allowsNull: field.AllowsNull,
       relatedEntity: field.RelatedEntity || undefined,
       isRequired: !field.AllowsNull,
       defaultValue: field.DefaultValue || undefined,
+      possibleValues,
     };
   });
 }

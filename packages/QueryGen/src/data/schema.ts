@@ -39,12 +39,16 @@ export interface EntityFieldMetadata {
   name: string;
   displayName: string;
   type: string;
+  sqlFullType: string;
   description: string;
   isPrimaryKey: boolean;
   isForeignKey: boolean;
+  isVirtual: boolean;
+  allowsNull: boolean;
   relatedEntity?: string;
   isRequired: boolean;
   defaultValue?: string;
+  possibleValues?: string[];
 }
 
 /**
