@@ -53,8 +53,7 @@
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-notification": "16.2.0",
     "@progress/kendo-angular-upload": "16.2.0",
-    "marked": "^9.1.6",
-    "ngx-markdown": "18.0.0",
+    "@memberjunction/ng-markdown": "2.125.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

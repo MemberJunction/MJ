@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // Markdown
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 // Kendo UI Angular imports
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
@@ -14,7 +14,6 @@ import { DialogsModule } from '@progress/kendo-angular-dialog';
 
 // MJ
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
-import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 
 // Local to package
@@ -36,10 +35,9 @@ import { BaseFormsModule } from '@memberjunction/ng-base-forms';
     ButtonsModule,
     InputsModule,
     DialogsModule,
-    AskSkipModule,
     IndicatorsModule,
     MemberJunctionSharedModule,
-    MarkdownModule.forRoot()
+    MarkdownModule
   ],
   exports: [
     FormToolbarComponent,

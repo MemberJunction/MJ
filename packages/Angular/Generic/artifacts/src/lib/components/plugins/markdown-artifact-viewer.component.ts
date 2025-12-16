@@ -25,7 +25,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
       <div class="markdown-content-container">
         @if (viewMode === 'preview') {
           <div class="markdown-preview">
-            <markdown [data]="markdownContent"></markdown>
+            <mj-markdown [data]="markdownContent"></mj-markdown>
           </div>
         } @else {
           <mj-code-editor

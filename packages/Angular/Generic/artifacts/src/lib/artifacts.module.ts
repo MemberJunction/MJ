@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -50,7 +50,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
   imports: [
     CommonModule,
     FormsModule,
-    MarkdownModule.forChild(),
+    MarkdownModule,
     CodeEditorModule,
     MJReactModule,
     MJNotificationsModule
