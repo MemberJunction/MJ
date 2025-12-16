@@ -118,7 +118,7 @@ export class MetadataExporter {
       fields: {
         Name: category.name,
         ParentID: category.parentName
-          ? `@lookup:Query Categories.Name=${category.parentName}&ParentID=null`
+          ? `@lookup:Query Categories.Name=${category.parentName}`
           : null,
         Description: category.description,
         UserID: '@lookup:Users.Name=System'
