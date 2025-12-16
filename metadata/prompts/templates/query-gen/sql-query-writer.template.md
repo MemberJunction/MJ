@@ -82,21 +82,21 @@ Our system uses Nunjucks templating for safe parameterization. Available filters
 ### Parameter Examples:
 ```sql
 -- String parameter
-WHERE Country = {{ '{{' }} Country | sqlString {{ '}}' }}
+WHERE Country = {% raw %}{{ Country | sqlString }}{% endraw %}
 
 -- Numeric parameter
-WHERE Revenue >= {{ '{{' }} MinRevenue | sqlNumber {{ '}}' }}
+WHERE Revenue >= {% raw %}{{ MinRevenue | sqlNumber }}{% endraw %}
 
 -- Date parameter
-WHERE OrderDate >= {{ '{{' }} StartDate | sqlDate {{ '}}' }}
+WHERE OrderDate >= {% raw %}{{ StartDate | sqlDate }}{% endraw %}
 
 -- Array parameter for IN clause
-WHERE Status IN {{ '{{' }} StatusList | sqlIn {{ '}}' }}
+WHERE Status IN {% raw %}{{ StatusList | sqlIn }}{% endraw %}
 
 -- Optional conditional parameter
-{{ '{% if MinJoinDate %}' }}
-AND JoinDate >= {{ '{{' }} MinJoinDate | sqlDate {{ '}}' }}
-{{ '{% endif %}' }}
+{% raw %}{% if MinJoinDate %}{% endraw %}
+AND JoinDate >= {% raw %}{{ MinJoinDate | sqlDate }}{% endraw %}
+{% raw %}{% endif %}{% endraw %}
 ```
 
 # Ground Rules
@@ -110,46 +110,15 @@ AND JoinDate >= {{ '{{' }} MinJoinDate | sqlDate {{ '}}' }}
 
 # SQL Best Practices
 
-## Simplicity and Reusability
-Keep queries simple and general-purpose. Return raw data, not calculated metrics.
+{@include ./_includes/simplicity-principles.md}
 
-**DO**:
-- Return base columns that answer the question
-- Use simple aggregations (COUNT, SUM, AVG, MIN, MAX)
-- Let the UI/reporting layer do complex calculations
-- Create queries that work for multiple similar questions
+## Additional Writing Guidance
 
-**DON'T**:
-- Calculate complex metrics (retention rates, percentages, ratios) in SQL
-- Use nested CASE statements for business logic
-- Create hyper-specific queries that only work for one exact question
-- Over-engineer with CTEs when a simple SELECT would work
-
-**Example - Good (Simple & Reusable)**:
-```sql
--- Returns raw data that can answer many questions
-SELECT
-  mt.Name AS MembershipType,
-  COUNT(m.ID) AS TotalMemberships,
-  SUM(CASE WHEN m.RenewalDate IS NOT NULL THEN 1 ELSE 0 END) AS RenewedCount,
-  SUM(CASE WHEN m.Status = 'Lapsed' THEN 1 ELSE 0 END) AS LapsedCount
-FROM [Schema].[vwMembershipTypes] mt
-LEFT JOIN [Schema].[vwMemberships] m ON mt.ID = m.MembershipTypeID
-GROUP BY mt.Name
-ORDER BY RenewedCount DESC
-```
-
-**Example - Bad (Too Complex)**:
-```sql
--- Calculates specific metrics that limit reusability
-WITH Stats AS (...),
-RatioCalculations AS (...),
-PercentileRanks AS (...)
-SELECT
-  ...,
-  CASE WHEN (x + y) > 0 THEN CAST(ROUND((CAST(x AS DECIMAL(10,2)) / (x + y)) * 100, 2) AS DECIMAL(10,2)) ELSE 0 END AS RetentionRate,
-  ... -- 10 more calculated fields
-```
+**When generating queries:**
+- Focus on answering the question with the simplest approach
+- Return raw counts and aggregations, not percentages or ratios
+- Don't assume domain logic (e.g., what makes something "active" or "renewed")
+- Over-engineer with CTEs only when genuinely needed for clarity
 
 ## Technical Best Practices
 1. **Use Base Views**: Query from `vw*` views with schema prefix: `[SchemaName].[vwEntityName]`
@@ -195,8 +164,8 @@ Your response must match this exact structure:
 - `name`: Parameter name in camelCase
 - `type`: Must be one of: "string", "number", "date", "boolean", "array"
 - `isRequired`:
-  - `true` if used without conditional guard (e.g., `WHERE State = {{ '{{' }} State | sqlString {{ '}}' }}`)
-  - `false` if wrapped in conditional block (e.g., `{{ '{% if MinDate %}' }}AND Date >= {{ '{{' }} MinDate | sqlDate {{ '}}' }}{{ '{% endif %}' }}`)
+  - `true` if used without conditional guard (e.g., `WHERE State = {% raw %}{{ State | sqlString }}{% endraw %}`)
+  - `false` if wrapped in conditional block (e.g., `{% raw %}{% if MinDate %}{% endraw %}AND Date >= {% raw %}{{ MinDate | sqlDate }}{% endraw %}{% raw %}{% endif %}{% endraw %}`)
 - `description`: Clear explanation of parameter purpose
 - `usage`: Array of strings describing where/how parameter is used in query
 - `defaultValue`: Default value if not provided (can be null)

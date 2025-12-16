@@ -45,6 +45,16 @@ No parameters defined for this query.
 ⚠️ Query returned no results.
 {% endif %}
 
+{@include ./_includes/simplicity-principles.md}
+
+## Evaluation-Specific Guidance
+
+**When evaluating queries:**
+- Identify unnecessary complexity (calculations, formatting, nested logic)
+- Suggest simplification when complex metrics are calculated in SQL
+- Recommend parameters instead of hardcoded values
+- Don't suggest adding calculations that belong in the UI layer
+
 ## Evaluation Task
 
 Evaluate if the generated query correctly answers the business question:
@@ -53,7 +63,7 @@ Evaluate if the generated query correctly answers the business question:
 2. **Result Relevance**: Do the results match what was asked in the user question?
 3. **Data Completeness**: Are all necessary columns present to answer the question?
 4. **Correctness**: Are calculations, aggregations, and JOINs correct?
-5. **Usability**: Are results formatted appropriately for end users?
+5. **Simplicity**: Does the query return raw data or does it include unnecessary complexity?
 
 ## Output Format
 
