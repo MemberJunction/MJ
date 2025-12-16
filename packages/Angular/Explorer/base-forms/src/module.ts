@@ -21,7 +21,7 @@ import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 // Markdown
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { MJLinkField } from './lib/link-field.component';
 import { FormSectionControlsComponent } from './lib/form-section-controls.component';
 import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
@@ -49,7 +49,7 @@ import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
     ContainerDirectivesModule,
     MemberJunctionSharedModule,
     CodeEditorModule,
-    MarkdownModule.forRoot()
+    MarkdownModule
   ],
   exports: [
     SectionLoaderComponent,

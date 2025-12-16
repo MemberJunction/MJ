@@ -73,7 +73,6 @@ import { ReportBrowserComponent } from './lib/report-browser-component/report-br
 import { DashboardResource } from './lib/resource-wrappers/dashboard-resource.component';
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 import { EntityRecordResource } from './lib/resource-wrappers/record-resource.component';
-import { ReportResource } from './lib/resource-wrappers/report-resource.component';
 import { SearchResultsResource } from './lib/resource-wrappers/search-results-resource.component';
 import { UserViewResource } from './lib/resource-wrappers/view-resource.component';
 import { SingleApplicationComponent } from './lib/single-application/single-application.component';
@@ -84,9 +83,7 @@ import { SingleDashboardComponent } from './lib/single-dashboard/single-dashboar
 import { SingleEntityComponent } from './lib/single-entity/single-entity.component';
 import { SingleQueryComponent } from './lib/single-query/single-query.component';
 import { SingleRecordComponent } from './lib/single-record/single-record.component';
-import { SingleReportComponent } from './lib/single-report/single-report.component';
 import { SingleSearchResultComponent } from './lib/single-search-result/single-search-result.component';
-import { SingleViewComponent } from './lib/single-view/single-view.component';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { UserProfileComponent } from './lib/user-profile/user-profile.component';
 import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansion-panel-component';
@@ -122,7 +119,6 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     QueryBrowserComponent,
     DashboardResource,
     EntityRecordResource,
-    ReportResource,
     SearchResultsResource,
     UserViewResource,
     FilesComponent,
@@ -131,9 +127,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     HeaderComponent,
     SingleEntityComponent,
     SingleRecordComponent,
-    SingleReportComponent,
     SingleSearchResultComponent,
-    SingleViewComponent,
     SingleQueryComponent,
     UserProfileComponent,
     SingleDashboardComponent,
@@ -227,7 +221,6 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     ReportBrowserComponent,
     DashboardResource,
     EntityRecordResource,
-    ReportResource,
     SearchResultsResource,
     UserViewResource,
     SingleApplicationComponent,
@@ -235,9 +228,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     HeaderComponent,
     SingleEntityComponent,
     SingleRecordComponent,
-    SingleReportComponent,
     SingleSearchResultComponent,
-    SingleViewComponent,
     UserProfileComponent,
     SingleDashboardComponent,
     AddItemComponent,

@@ -185,6 +185,14 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    */
   public renderedContent: SafeHtml = '';
 
+  /**
+   * Public accessor for the component's element reference.
+   * Provided for backward compatibility with ngx-markdown API.
+   */
+  public get element(): ElementRef<HTMLElement> {
+    return this.elementRef;
+  }
+
   private renderStartTime: number = 0;
   private hasMermaid: boolean = false;
   private hasCodeBlocks: boolean = false;

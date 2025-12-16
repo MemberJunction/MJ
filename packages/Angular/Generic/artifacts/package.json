@@ -36,8 +36,8 @@
     "@memberjunction/ng-notifications": "2.125.0",
     "@memberjunction/ng-react": "2.125.0",
     "@memberjunction/ng-shared-generic": "2.125.0",
+    "@memberjunction/ng-markdown": "2.125.0",
     "marked": "^9.1.6",
-    "ngx-markdown": "18.0.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

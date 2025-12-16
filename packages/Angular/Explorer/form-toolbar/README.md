@@ -33,7 +33,7 @@ npm install @memberjunction/ng-form-toolbar
 - @memberjunction/ng-container-directives ^2.43.0
 - @progress/kendo-angular-buttons ^16.2.0
 - @progress/kendo-angular-dialog ^16.2.0
-- ngx-markdown ^18.0.0
+- @memberjunction/ng-markdown ^2.125.0
 
 ## Usage
 

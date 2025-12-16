@@ -1,7 +1,8 @@
 {
   "name": "@memberjunction/ng-ask-skip",
   "version": "2.125.0",
-  "description": "MemberJunction Explorer: Ask Skip UI Components",
+  "deprecated": "This package is deprecated. Use @memberjunction/ng-conversations instead.",
+  "description": "DEPRECATED: Use @memberjunction/ng-conversations instead. MemberJunction Explorer: Ask Skip UI Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -50,7 +51,7 @@
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-listview": "16.2.0",
     "@progress/kendo-angular-notification": "16.2.0",
-    "ngx-markdown": "18.0.0",
+    "@memberjunction/ng-markdown": "2.125.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,
