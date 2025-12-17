@@ -81,6 +81,7 @@ export interface BusinessQuestion {
  * Note: selectClause removed - QueryEntity automatically creates QueryFieldEntity records from SQL
  */
 export interface GeneratedQuery {
+  queryName: string;
   sql: string;
   parameters: QueryParameter[];
 }

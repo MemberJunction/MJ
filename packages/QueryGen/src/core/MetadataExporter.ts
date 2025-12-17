@@ -8,7 +8,6 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { ValidatedQuery, ExportResult, QueryMetadataRecord, QueryCategoryInfo } from '../data/schema';
-import { generateQueryName } from '../utils/query-helpers';
 
 /**
  * MetadataExporter class
@@ -93,7 +92,7 @@ export class MetadataExporter {
 
     return {
       fields: {
-        Name: generateQueryName(query.businessQuestion),
+        Name: query.query.queryName,
         CategoryID: categoryLookup,
         UserQuestion: query.businessQuestion.userQuestion,
         Description: query.businessQuestion.description,

@@ -306,6 +306,7 @@ export class QueryRefiner {
       }
 
       return {
+        queryName: refinedQuery.queryName,
         sql: refinedQuery.sql,
         parameters: refinedQuery.parameters,
       };
