@@ -224,7 +224,9 @@
               <div class="dynamic-tab-content">
                 @switch (tabData.type) {
                   @case ('markdown') {
-                    <div class="markdown-viewer" [innerHTML]="RenderMarkdown(tabData.content)"></div>
+                    <div class="markdown-viewer">
+                      <mj-markdown [data]="tabData.content"></mj-markdown>
+                    </div>
                   }
                   @case ('json') {
                     <div class="json-viewer">
