@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, SecurityContext } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
@@ -8,7 +8,6 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 import { ArtifactViewerTab } from './base-artifact-viewer.component';
-import { marked } from 'marked';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
@@ -951,19 +950,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
 
     return null;
-  }
-
-  /**
-   * Render markdown to HTML (for markdown tabs)
-   */
-  public RenderMarkdown(markdown: string): SafeHtml {
-    try {
-      const html = marked.parse(markdown);
-      return this.sanitizer.sanitize(SecurityContext.HTML, html) || '';
-    } catch (e) {
-      console.error('Failed to render markdown:', e);
-      return markdown;
-    }
   }
 
   /**
