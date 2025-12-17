@@ -98,14 +98,17 @@ for pkg_file in $packages; do
 
   mj_checked_count=$((mj_checked_count + 1))
 
-  # Show progress every 20 packages
-  if (( mj_checked_count % 20 == 0 )); then
+  # Show progress every 10 packages (more frequent updates)
+  if (( mj_checked_count % 10 == 0 )); then
     echo "   Checked $mj_checked_count @memberjunction packages..."
   fi
 
   # Check if package exists on npm with retry logic
+  # Disable set -e for this call since we expect non-zero returns for missing packages
+  set +e
   check_package_exists "$pkg_name"
   result=$?
+  set -e
 
   if [ $result -eq 0 ]; then
     # Package exists, continue
