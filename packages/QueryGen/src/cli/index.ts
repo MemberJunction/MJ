@@ -35,8 +35,8 @@ program
   .option('-f, --max-fixes <number>', 'Max error-fixing attempts', '5')
   .option('--model <name>', 'Preferred AI model')
   .option('--vendor <name>', 'Preferred AI vendor')
-  .option('-o, --output <path>', 'Output directory', './metadata/queries')
-  .option('--mode <mode>', 'Output mode: metadata|database|both', 'metadata')
+  .option('-o, --output <path>', 'Output directory')
+  .option('--mode <mode>', 'Output mode: metadata|database|both')
   .option('-v, --verbose', 'Verbose output')
   .action(generateCommand);
 
@@ -50,7 +50,7 @@ program
 program
   .command('export')
   .description('Export queries from database to metadata files')
-  .option('-o, --output <path>', 'Output directory', './metadata/queries')
+  .option('-o, --output <path>', 'Output directory')
   .option('-v, --verbose', 'Verbose output')
   .action(exportCommand);
 

@@ -1,6 +1,7 @@
 /** @import { ConfigInfo as CodeGenConfig } from "./packages/CodeGenLib/src/Config/config" */
 /** @import { ConfigInfo as MJServerConfig } from "./packages/MJServer/src/config" */
 /** @import { ConfigInfo as MCPServerConfig } from "./packages/AI/MCPServer/src/config" */
+/** @import { ConfigInfo as QueryGenConfig } from "./packages/QueryGen/src/cli/config" */
 /** @import { ConfigInfo as A2AServerConfig } from "./packages/AI/A2AServer/src/config" */
 /** @import { MJConfig } from "./packages/MJCLI/src/config" */
 
@@ -410,7 +411,65 @@ const a2aServerConfig = {
     ]
   }
 }
- 
+/** @type {QueryGenConfig} */
+const queryGenConfig = {
+  /**
+   * QueryGen Configuration
+   *
+   * Configuration for automated query generation from entity metadata.
+   */
+
+  // Entity Filtering
+  includeEntities: ["Members"], // If provided, ONLY these entities will be processed (allowlist)
+  excludeEntities: [], // If provided, these entities will be excluded (denylist)
+  excludeSchemas: ['sys', 'INFORMATION_SCHEMA', '__mj'],
+
+  // modelOverride: 'GPT-OSS-120B',    // Override model for all prompts (e.g., "GPT-OSS-120B")
+  // vendorOverride: 'Groq',   // Override vendor for all prompts (e.g., "Groq")
+
+  // Entity Grouping
+  questionsPerGroup: 2, // Number of business questions to generate per entity group
+
+  // AI Configuration
+  // modelOverride: 'GPT-OSS-120B', // Uncomment to override model for all prompts
+  // vendorOverride: 'Groq', // Uncomment to override vendor for all prompts
+  embeddingModel: 'text-embedding-3-small',
+
+  // Iteration Limits
+  maxRefinementIterations: 3, // Maximum times to refine a query
+  maxFixingIterations: 5, // Maximum times to attempt fixing a broken query
+
+  // Few-Shot Learning
+  topSimilarQueries: 5, // Number of similar golden queries to use as examples
+
+  // Similarity Weighting (used for finding similar golden queries)
+  similarityWeights: {
+    userQuestion: 0.2, // Weight for user question similarity
+    description: 0.40, // Weight for description similarity
+    technicalDescription: 0.40, // Weight for technical description similarity
+  },
+
+  // Output Configuration
+  outputMode: 'metadata', // 'metadata' | 'database' | 'both'
+  outputDirectory: './Demos/metadata/queries',
+  outputCategoryDirectory: './Demos/metadata/query-categories', // Optional: directory for category metadata
+
+  // Query Category Configuration
+  rootQueryCategory: 'Golden-Queries', // Root category for all generated queries
+  autoCreateEntityQueryCategories: true, // When true, creates entity-specific sub-categories
+
+  // Performance
+  parallelGenerations: 1, // Number of queries to generate in parallel
+  enableCaching: true,
+
+  // Validation
+  testWithSampleData: true, // Test generated queries against the database
+  requireMinRows: 0, // Minimum rows required for query to be valid
+  maxRefinementRows: 5, // Maximum rows to return when testing during refinement
+
+  // Verbose Logging
+  verbose: true, // Enable detailed logging output
+}
 
 /** @type {CodeGenConfig & MJConfig & MJServerConfig & MCPServerConfig & A2AServerConfig} */
 const config = {
@@ -418,6 +477,7 @@ const config = {
   ...mjServerConfig,
   ...mcpServerConfig,
   ...a2aServerConfig,
+  queryGen: queryGenConfig,
 
   /**
    * Shared Configuration and Environment Variables
