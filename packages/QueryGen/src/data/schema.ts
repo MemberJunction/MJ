@@ -228,7 +228,6 @@ export interface QueryMetadataRecord {
     Description: string;
     TechnicalDescription: string;
     SQL: string;
-    OriginalSQL: string;
     UsesTemplate: boolean;
     Status: string;
   };

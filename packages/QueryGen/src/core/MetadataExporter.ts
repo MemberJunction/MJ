@@ -8,6 +8,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { ValidatedQuery, ExportResult, QueryMetadataRecord, QueryCategoryInfo } from '../data/schema';
+import { QueryGenConfig } from '../cli/config';
 
 /**
  * MetadataExporter class
@@ -21,30 +22,41 @@ export class MetadataExporter {
    * and writes them to timestamped JSON files:
    * - .query-categories-{timestamp}.json for the categories
    * - .queries-{timestamp}.json for the queries
+   * - SQL/{query-name}.sql files if externalizeSQLToFiles is enabled
    *
    * @param validatedQueries - Array of validated queries to export
    * @param uniqueCategories - Pre-built unique categories for all queries
-   * @param outputDirectory - Directory to write the queries file
-   * @param outputCategoryDirectory - Optional directory for categories file (defaults to outputDirectory)
+   * @param config - QueryGen configuration
    * @returns Export result with file path and query count
    */
   async exportQueries(
     validatedQueries: ValidatedQuery[],
     uniqueCategories: QueryCategoryInfo[],
-    outputDirectory: string,
-    outputCategoryDirectory?: string
+    config: QueryGenConfig
   ): Promise<ExportResult> {
     // Generate shared timestamp for both files
     const timestamp = Date.now();
 
-    // Use category directory if provided, otherwise use queries directory
-    const categoryDir = outputCategoryDirectory || outputDirectory;
+    const outputDirectory = config.outputDirectory;
+    const categoryDir = config.outputCategoryDirectory || outputDirectory;
 
-    // 1. Transform to MJ metadata format
-    const queryMetadata = validatedQueries.map(q => this.toQueryMetadata(q));
+    // 1. If externalizing SQL, create SQL directory and write files
+    if (config.externalizeSQLToFiles) {
+      const sqlDir = path.join(outputDirectory, 'SQL');
+      await fs.mkdir(sqlDir, { recursive: true });
+
+      for (const query of validatedQueries) {
+        const fileName = this.sanitizeFileName(query.query.queryName);
+        const sqlFilePath = path.join(sqlDir, `${fileName}.sql`);
+        await fs.writeFile(sqlFilePath, query.query.sql, 'utf-8');
+      }
+    }
+
+    // 2. Transform to MJ metadata format
+    const queryMetadata = validatedQueries.map(q => this.toQueryMetadata(q, config.externalizeSQLToFiles));
     const categoryMetadata = uniqueCategories.map(c => this.toCategoryMetadata(c));
 
-    // 2. Ensure output directories exist
+    // 3. Ensure output directories exist
     await fs.mkdir(outputDirectory, { recursive: true });
     if (categoryDir !== outputDirectory) {
       await fs.mkdir(categoryDir, { recursive: true });
@@ -84,11 +96,17 @@ export class MetadataExporter {
    * This happens asynchronously during the Save() operation.
    *
    * @param query - Validated query to transform
+   * @param externalizeSQLToFiles - Whether SQL is externalized to separate files
    * @returns Query metadata record
    */
-  private toQueryMetadata(query: ValidatedQuery): QueryMetadataRecord {
+  private toQueryMetadata(query: ValidatedQuery, externalizeSQLToFiles: boolean): QueryMetadataRecord {
     // Build category lookup path (e.g., "Golden-Queries/Members" becomes lookup filter)
     const categoryLookup = this.buildCategoryLookup(query.category);
+
+    // If externalizing SQL, use @file: reference; otherwise embed SQL directly
+    const sqlValue = externalizeSQLToFiles
+      ? `@file:SQL/${this.sanitizeFileName(query.query.queryName)}.sql`
+      : query.query.sql;
 
     return {
       fields: {
@@ -97,8 +115,7 @@ export class MetadataExporter {
         UserQuestion: query.businessQuestion.userQuestion,
         Description: query.businessQuestion.description,
         TechnicalDescription: query.businessQuestion.technicalDescription,
-        SQL: query.query.sql,
-        OriginalSQL: query.query.sql,
+        SQL: sqlValue,
         UsesTemplate: true,
         Status: 'Pending'
       }
@@ -143,5 +160,21 @@ export class MetadataExporter {
       // Root category - use Name and ParentID=null
       return `@lookup:Query Categories.Name=${category.name}&ParentID=null`;
     }
+  }
+
+  /**
+   * Sanitize query name for use as a file name
+   * Removes or replaces characters that are invalid in file names
+   *
+   * @param queryName - The query name to sanitize
+   * @returns Sanitized file name
+   */
+  private sanitizeFileName(queryName: string): string {
+    return queryName
+      .replace(/[<>:"/\\|?*]/g, '-') // Replace invalid file name characters with dash
+      .replace(/\s+/g, '-')           // Replace spaces with dash
+      .replace(/-+/g, '-')            // Replace multiple dashes with single dash
+      .replace(/^-|-$/g, '')          // Remove leading/trailing dashes
+      .toLowerCase();                 // Convert to lowercase for consistency
   }
 }
