@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/cli
 
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/metadata-sync@2.126.1
+- @memberjunction/ai-cli@2.126.1
+- @memberjunction/codegen-lib@2.126.1
+- @memberjunction/db-auto-doc@2.126.1
+- @memberjunction/core@2.126.1
+- @memberjunction/query-gen@2.126.1
+- @memberjunction/sqlserver-dataprovider@2.126.1
+- @memberjunction/testing-cli@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes

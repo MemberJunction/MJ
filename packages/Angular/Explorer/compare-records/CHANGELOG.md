@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-compare-records
 
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/core@2.126.1
+- @memberjunction/core-entities@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes

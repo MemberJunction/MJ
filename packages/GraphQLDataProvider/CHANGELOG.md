@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.126.1
+
+### Patch Changes
+
+- d6ae2a0: Auth0 Token Refresh fixes
+  - @memberjunction/ai-core-plus@2.126.1
+  - @memberjunction/actions-base@2.126.1
+  - @memberjunction/interactive-component-types@2.126.1
+  - @memberjunction/core@2.126.1
+  - @memberjunction/core-entities@2.126.1
+  - @memberjunction/global@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes

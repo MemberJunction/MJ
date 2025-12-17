@@ -1,5 +1,21 @@
 # @memberjunction/ng-artifacts
 
+## 2.126.1
+
+### Patch Changes
+
+- 8fa1aa2: no migration
+  - @memberjunction/ng-notifications@2.126.1
+  - @memberjunction/ng-react@2.126.1
+  - @memberjunction/ng-base-types@2.126.1
+  - @memberjunction/ng-code-editor@2.126.1
+  - @memberjunction/ng-markdown@2.126.1
+  - @memberjunction/ng-shared-generic@2.126.1
+  - @memberjunction/interactive-component-types@2.126.1
+  - @memberjunction/core@2.126.1
+  - @memberjunction/core-entities@2.126.1
+  - @memberjunction/global@2.126.1
+
 ## 2.126.0
 
 ### Minor Changes

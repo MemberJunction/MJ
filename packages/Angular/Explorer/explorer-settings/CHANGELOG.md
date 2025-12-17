@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 2.126.1
+
+### Patch Changes
+
+- Updated dependencies [d6ae2a0]
+  - @memberjunction/graphql-dataprovider@2.126.1
+  - @memberjunction/ng-shared@2.126.1
+  - @memberjunction/ng-user-view-grid@2.126.1
+  - @memberjunction/ng-notifications@2.126.1
+  - @memberjunction/ng-base-forms@2.126.1
+  - @memberjunction/ng-entity-form-dialog@2.126.1
+  - @memberjunction/ng-entity-permissions@2.126.1
+  - @memberjunction/ng-join-grid@2.126.1
+  - @memberjunction/ng-simple-record-list@2.126.1
+  - @memberjunction/ng-base-application@2.126.1
+  - @memberjunction/ng-compare-records@2.126.1
+  - @memberjunction/ng-code-editor@2.126.1
+  - @memberjunction/ng-container-directives@2.126.1
+  - @memberjunction/ng-shared-generic@2.126.1
+  - @memberjunction/ng-tabstrip@2.126.1
+  - @memberjunction/ng-user-avatar@2.126.1
+  - @memberjunction/core@2.126.1
+  - @memberjunction/core-entities@2.126.1
+  - @memberjunction/global@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes
