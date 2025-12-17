@@ -1,5 +1,16 @@
 # @memberjunction/db-auto-doc
 
+## 2.126.0
+
+### Patch Changes
+
+- eae1a1f: Add Phase B component linter fixtures, reorganize test structure, refactor financial analytics components, and fix OpenEntityRecord event propagation in artifacts and collections
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-provider-bundle@2.126.0
+  - @memberjunction/ai@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

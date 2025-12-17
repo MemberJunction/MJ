@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.126.0
+
+### Minor Changes
+
+- d424fce: migration for metadata for Sage change
+- 389183e: migration
+
+### Patch Changes
+
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-core-plus@2.126.0
+  - @memberjunction/interactive-component-types@2.126.0
+  - @memberjunction/data-context@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

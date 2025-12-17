@@ -1,5 +1,13 @@
 # @memberjunction/ai-vectors-memory
 
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

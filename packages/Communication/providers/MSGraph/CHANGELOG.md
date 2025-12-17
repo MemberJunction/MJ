@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.126.0
+
+### Patch Changes
+
+- 4d1d468: no migration
+- Updated dependencies [4d1d468]
+- Updated dependencies [703221e]
+  - @memberjunction/communication-types@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/aiengine@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/sqlserver-dataprovider@2.126.0
+  - @memberjunction/ai-provider-bundle@2.126.0
+  - @memberjunction/ai@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

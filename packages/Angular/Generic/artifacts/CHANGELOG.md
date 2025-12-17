@@ -1,5 +1,27 @@
 # @memberjunction/ng-artifacts
 
+## 2.126.0
+
+### Minor Changes
+
+- 389183e: migration
+
+### Patch Changes
+
+- eae1a1f: Add Phase B component linter fixtures, reorganize test structure, refactor financial analytics components, and fix OpenEntityRecord event propagation in artifacts and collections
+- Updated dependencies [389183e]
+- Updated dependencies [703221e]
+  - @memberjunction/ng-markdown@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ng-base-types@2.126.0
+  - @memberjunction/ng-code-editor@2.126.0
+  - @memberjunction/ng-notifications@2.126.0
+  - @memberjunction/ng-react@2.126.0
+  - @memberjunction/ng-shared-generic@2.126.0
+  - @memberjunction/interactive-component-types@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

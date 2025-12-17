@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/cli
 
+## 2.126.0
+
+### Patch Changes
+
+- 142c950: Add new QueryGen package for AI-powered SQL query generation with retry mechanisms, vector similarity search, entity grouping, query validation and refinement, hierarchical category management, and configurable metadata export
+- Updated dependencies [eae1a1f]
+- Updated dependencies [142c950]
+- Updated dependencies [703221e]
+  - @memberjunction/db-auto-doc@2.126.0
+  - @memberjunction/query-gen@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-cli@2.126.0
+  - @memberjunction/codegen-lib@2.126.0
+  - @memberjunction/metadata-sync@2.126.0
+  - @memberjunction/sqlserver-dataprovider@2.126.0
+  - @memberjunction/testing-cli@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

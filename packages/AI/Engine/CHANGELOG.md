@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-engine-base@2.126.0
+  - @memberjunction/ai-core-plus@2.126.0
+  - @memberjunction/ai-vectors-memory@2.126.0
+  - @memberjunction/actions-base@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/ai@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

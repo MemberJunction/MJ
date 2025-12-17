@@ -1,5 +1,12 @@
 # @memberjunction/ai-lmstudio
 
+## 2.126.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.126.0
+- @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

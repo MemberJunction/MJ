@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/ng-form-toolbar
 
+## 2.126.0
+
+### Minor Changes
+
+- 389183e: migration
+
+### Patch Changes
+
+- Updated dependencies [389183e]
+- Updated dependencies [703221e]
+  - @memberjunction/ng-base-forms@2.126.0
+  - @memberjunction/ng-markdown@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ng-record-changes@2.126.0
+  - @memberjunction/ng-shared@2.126.0
+  - @memberjunction/ng-container-directives@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

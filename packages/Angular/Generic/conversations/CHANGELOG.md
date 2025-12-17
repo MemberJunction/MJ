@@ -1,5 +1,35 @@
 # @memberjunction/ng-conversations
 
+## 2.126.0
+
+### Minor Changes
+
+- d424fce: migration for metadata for Sage change
+- 389183e: migration
+
+### Patch Changes
+
+- eae1a1f: Add Phase B component linter fixtures, reorganize test structure, refactor financial analytics components, and fix OpenEntityRecord event propagation in artifacts and collections
+- Updated dependencies [eae1a1f]
+- Updated dependencies [389183e]
+- Updated dependencies [703221e]
+  - @memberjunction/ng-artifacts@2.126.0
+  - @memberjunction/ng-markdown@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-engine-base@2.126.0
+  - @memberjunction/ai-core-plus@2.126.0
+  - @memberjunction/ng-testing@2.126.0
+  - @memberjunction/ng-base-types@2.126.0
+  - @memberjunction/ng-code-editor@2.126.0
+  - @memberjunction/ng-container-directives@2.126.0
+  - @memberjunction/ng-notifications@2.126.0
+  - @memberjunction/ng-shared-generic@2.126.0
+  - @memberjunction/ng-tasks@2.126.0
+  - @memberjunction/graphql-dataprovider@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/ai@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

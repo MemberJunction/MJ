@@ -1,5 +1,19 @@
 # @memberjunction/react-test-harness
 
+## 2.126.0
+
+### Patch Changes
+
+- eae1a1f: Add Phase B component linter fixtures, reorganize test structure, refactor financial analytics components, and fix OpenEntityRecord event propagation in artifacts and collections
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/aiengine@2.126.0
+  - @memberjunction/ai-vectors-memory@2.126.0
+  - @memberjunction/interactive-component-types@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/react-runtime@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes

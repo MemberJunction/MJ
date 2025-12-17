@@ -1,5 +1,21 @@
 # @memberjunction/testing-engine
 
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [d424fce]
+- Updated dependencies [703221e]
+  - @memberjunction/ai-agents@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-core-plus@2.126.0
+  - @memberjunction/aiengine@2.126.0
+  - @memberjunction/ai-prompts@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/testing-engine-base@2.126.0
+  - @memberjunction/ai@2.126.0
+  - @memberjunction/global@2.126.0
+
 ## 2.125.0
 
 ### Patch Changes
