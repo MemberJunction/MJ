@@ -1,0 +1,7 @@
+{
+  "name": "ChildComponent",
+  "description": "Child component invoking callbacks incorrectly (violates event-invocation-pattern rule)",
+  "code": "function ChildComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, callbacks }) {\n  const handleClick = () => {\n    const result = callbacks.onAction();\n    console.log('Result:', result);\n  };\n  \n  return (\n    <div>\n      <h1>Child Component</h1>\n      <button onClick={handleClick}>Trigger Action</button>\n    </div>\n  );\n}",
+  "componentType": "child",
+  "libraries": []
+}

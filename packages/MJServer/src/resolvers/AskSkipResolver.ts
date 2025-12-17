@@ -68,6 +68,7 @@ import e from 'express';
 /**
  * Skip API Endpoints Configuration
  * Defines all available endpoints for the Skip API
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 const SKIP_API_ENDPOINTS = {
   CHAT: '/chat',
@@ -80,6 +81,7 @@ const SKIP_API_ENDPOINTS = {
 /**
  * Store for active conversation streams
  * Maps conversationID to the last status message received
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 class ActiveConversationStreams {
   private static instance: ActiveConversationStreams;
@@ -207,6 +209,7 @@ class ReattachConversationResponse {
 /**
  * Enumeration representing the different phases of a Skip response
  * Corresponds to the lifecycle of a Skip AI interaction
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 enum SkipResponsePhase {
   /** Skip is asking for clarification before proceeding */
@@ -226,6 +229,7 @@ registerEnumType(SkipResponsePhase, {
  * Result type for Skip AI interactions
  * Contains the status of the request, the response phase, the result payload,
  * and references to the conversation and message IDs
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 @ObjectType()
 export class AskSkipResultType {
@@ -435,6 +439,7 @@ export class StopLearningCycleResultType {
 /**
  * Base type for Skip API requests containing common fields
  * Used as the foundation for both chat and learning cycle requests
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 type BaseSkipRequest = {
   /** Entity metadata to send to Skip */
@@ -468,6 +473,7 @@ type BaseSkipRequest = {
  * Resolver for Skip AI interactions
  * Handles conversations with Skip, learning cycles, and related operations.
  * Skip is an AI agent that can analyze data, answer questions, and learn from interactions.
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {

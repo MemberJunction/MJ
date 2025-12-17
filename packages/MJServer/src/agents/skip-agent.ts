@@ -316,6 +316,7 @@ export class SkipProxyAgent extends BaseAgent {
                 terminate: true,
                 step: 'Chat',
                 message: clarifyResponse.clarifyingQuestion,
+                responseForm: clarifyResponse.responseForm,
                 newPayload: undefined
             };
         }

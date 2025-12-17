@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamTypeStringToIntBroken",
+  "type": "generic",
+  "title": "Query Parameter Type String to Int - Broken Pattern",
+  "description": "Tests linter detection of passing string to int parameter",
+  "code": "function QueryParamTypeStringToIntBroken({ utilities }) {\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      // ❌ TopN expects int, but passing string '10'\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Top Members',\n        CategoryPath: 'Membership/Reports',\n        Parameters: { TopN: '10' }\n      });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Top Members</h3>\n      {members.map((m, i) => <div key={i}>{m.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Top Members",
+      "categoryPath": "Membership/Reports",
+      "parameters": [
+        {"name": "TopN", "type": "int", "isRequired": true}
+      ]
+    }]
+  }
+}

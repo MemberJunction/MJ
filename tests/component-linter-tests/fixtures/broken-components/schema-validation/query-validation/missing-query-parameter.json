@@ -1,0 +1,22 @@
+{
+  "name": "TestComponent",
+  "description": "Component calling RunQuery without required parameter (violates missing-query-parameter rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'MonthlyReport',\n        CategoryPath: 'Reports/Monthly',\n        Parameters: {\n          year: 2024\n          // Missing required 'month' parameter\n        }\n      });\n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Monthly Report</h1>\n      <p>Records: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "MonthlyReport",
+        "categoryPath": "Reports/Monthly",
+        "fields": ["ID", "Amount", "Category"],
+        "entityNames": ["Invoices"],
+        "parameters": [
+          { "name": "year", "type": "number", "required": true },
+          { "name": "month", "type": "number", "required": true }
+        ]
+      }
+    ]
+  }
+}

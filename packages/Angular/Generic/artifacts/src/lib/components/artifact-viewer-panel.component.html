@@ -100,7 +100,8 @@
                 [artifactVersion]="artifactVersion"
                 [artifactTypeName]="artifactTypeName"
                 [contentType]="contentType"
-                [readonly]="true">
+                [readonly]="true"
+                (openEntityRecord)="onOpenEntityRecord($event)">
               </mj-artifact-type-plugin-viewer>
             </div>
           }
@@ -120,7 +121,7 @@
                 </div>
                 @if (displayMarkdown) {
                   <div class="markdown-content">
-                    <markdown [data]="displayMarkdown"></markdown>
+                    <mj-markdown [data]="displayMarkdown"></mj-markdown>
                   </div>
                 } @else if (displayHtml) {
                   <div class="html-content" [innerHTML]="displayHtml"></div>

@@ -3,6 +3,7 @@ import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
+import { CompositeKey } from '@memberjunction/core';
 
 /**
  * Viewer component for interactive Component artifacts (React-based UI components)
@@ -21,6 +22,7 @@ import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/inter
 export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnChanges {
   @ViewChild('reactComponent') reactComponent?: MJReactComponent;
   @Output() tabsChanged = new EventEmitter<void>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   // Component data
   public component: ComponentSpec | null = null;
@@ -167,5 +169,17 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
 
   onComponentEvent(event: unknown): void {
     console.log('Component event:', event);
+  }
+
+  /**
+   * Handle entity record open request from React component
+   * Propagates the event up to parent components
+   */
+  onOpenEntityRecord(event: {entityName: string; key: CompositeKey}): void {
+    // Transform to use 'compositeKey' name for consistency with Angular components
+    this.openEntityRecord.emit({
+      entityName: event.entityName,
+      compositeKey: event.key
+    });
   }
 }

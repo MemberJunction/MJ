@@ -89,6 +89,17 @@
         "reveal": "silent",
         "panel": "shared"
       }
+    },
+    {
+      "label": "Build QueryGen",
+      "type": "shell",
+      "command": "npm run build --workspace=@memberjunction/query-gen && npm run build --workspace=@memberjunction/cli",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     }
   ]
 }

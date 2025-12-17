@@ -2,7 +2,6 @@ import { LoadDashboardResource } from "./dashboard-resource.component";
 import { LoadListDetailResource } from "./list-detail-resource.component";
 import { LoadQueryResource } from "./query-resource.component";
 import { LoadRecordResource } from "./record-resource.component";
-import { LoadReportResource } from "./report-resource.component";
 import { LoadSearchResultsResource } from "./search-results-resource.component";
 import { LoadViewResource } from "./view-resource.component";
 import { LoadChatConversationsResource } from "./chat-conversations-resource.component";
@@ -21,7 +20,6 @@ import {
 export function LoadResourceWrappers()
 {
     LoadViewResource();
-    LoadReportResource();
     LoadDashboardResource();
     LoadRecordResource();
     LoadSearchResultsResource();

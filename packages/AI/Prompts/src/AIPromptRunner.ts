@@ -3657,21 +3657,27 @@ export class AIPromptRunner {
         jsonToParse = CleanJSON(rawOutput);
       }
       catch (cleanError) {
-        this.logError(cleanError, {
-          category: 'JSONCleaningFailed',
-          metadata: {
-            originalError: originalError.message,
-            rawOutput: rawOutput.substring(0, 500)
-          },
-          maxErrorLength: params.maxErrorLength
-        });
+        if (params.verbose) {
+          this.logError(cleanError, {
+            category: 'JSONCleaningFailed',
+            metadata: {
+              originalError: originalError.message,
+              rawOutput: rawOutput.substring(0, 500)
+            },
+            maxErrorLength: params.maxErrorLength
+          });
+        }
       }
       const json5Result = JSON5.parse(jsonToParse);
-      this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
+      if (params.verbose) {
+        this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
+      }
       return json5Result;
     } catch (json5Error) {
       // Step 2: Use AI to repair the JSON
-      this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
+      if (params.verbose) {
+        this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
+      }
       
       try {
         // Find the "Repair JSON" prompt in the "MJ: System" category
@@ -3708,16 +3714,18 @@ export class AIPromptRunner {
         return repairedJSON;
       } catch (aiRepairError) {
         // Both repair attempts failed
-        this.logError(aiRepairError, {
-          category: 'JSONRepairFailed',
-          metadata: {
-            originalError: originalError.message,
-            json5Error: json5Error.message,
-            aiError: aiRepairError.message,
-            rawOutput: rawOutput.substring(0, 500)
-          },
-          maxErrorLength: params.maxErrorLength
-        });
+        if (params.verbose) {
+          this.logError(aiRepairError, {
+            category: 'JSONRepairFailed',
+            metadata: {
+              originalError: originalError.message,
+              json5Error: json5Error.message,
+              aiError: aiRepairError.message,
+              rawOutput: rawOutput.substring(0, 500)
+            },
+            maxErrorLength: params.maxErrorLength
+          });
+        }        
         
         throw new Error(`JSON repair failed after both JSON5 and AI attempts: ${originalError.message}`);
       }

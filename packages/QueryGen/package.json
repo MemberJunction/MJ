@@ -1,0 +1,52 @@
+{
+  "name": "@memberjunction/query-gen",
+  "version": "2.125.0",
+  "description": "AI-powered generation of domain-specific SQL query templates with automatic testing, refinement, and metadata export",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mj-querygen": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [
+    "memberjunction",
+    "sql",
+    "query",
+    "generation",
+    "ai",
+    "templates"
+  ],
+  "author": "MemberJunction",
+  "license": "MIT",
+  "dependencies": {
+    "@memberjunction/ai": "2.125.0",
+    "@memberjunction/ai-core-plus": "2.125.0",
+    "@memberjunction/aiengine": "2.125.0",
+    "@memberjunction/ai-prompts": "2.125.0",
+    "@memberjunction/ai-vectors-memory": "2.125.0",
+    "@memberjunction/core": "2.125.0",
+    "@memberjunction/core-entities": "2.125.0",
+    "@memberjunction/global": "2.125.0",
+    "@memberjunction/sqlserver-dataprovider": "2.125.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "nunjucks": "^3.2.4",
+    "ora": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.2",
+    "@types/nunjucks": "^3.2.6",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

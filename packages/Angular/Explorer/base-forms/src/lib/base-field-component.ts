@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterVie
 import { BaseEntity, EntityField, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormContext } from './base-form-context';
-import { MarkdownComponent } from 'ngx-markdown';
+import { MarkdownComponent } from '@memberjunction/ng-markdown';
 import { languages } from '@codemirror/language-data';
 
 /**

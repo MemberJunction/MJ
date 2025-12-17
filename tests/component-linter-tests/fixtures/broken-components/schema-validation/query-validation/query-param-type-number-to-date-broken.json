@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamTypeNumberToDateBroken",
+  "type": "generic",
+  "title": "Query Parameter Type Number to Date - Broken Pattern",
+  "description": "Tests linter detection of passing number to date parameter",
+  "code": "function QueryParamTypeNumberToDateBroken({ utilities }) {\n  const [registrations, setRegistrations] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      // ❌ StartDate expects date string, but passing number\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Event Registrations',\n        CategoryPath: 'Events/Reports',\n        Parameters: { StartDate: 20240101 }\n      });\n      if (result?.Success) {\n        setRegistrations(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Event Registrations</h3>\n      {registrations.map((r, i) => <div key={i}>{r.EventName}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Event Registrations",
+      "categoryPath": "Events/Reports",
+      "parameters": [
+        {"name": "StartDate", "type": "datetime", "isRequired": true}
+      ]
+    }]
+  }
+}

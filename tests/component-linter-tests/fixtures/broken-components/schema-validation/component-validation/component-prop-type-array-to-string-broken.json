@@ -1,0 +1,21 @@
+{
+  "name": "ComponentPropTypeArrayToStringBroken",
+  "type": "generic",
+  "title": "Component Property Type Array to String - Broken Pattern",
+  "description": "Tests linter detection of passing array to string property",
+  "code": "function ComponentPropTypeArrayToStringBroken({ utilities, components }) {\n  const [selectedIds, setSelectedIds] = useState(['id1', 'id2', 'id3']);\n  const { RecordSelector } = components;\n\n  return (\n    <div>\n      <h3>Select Record</h3>\n      {/* ❌ selectedId expects string, passing array */}\n      <RecordSelector entityName=\"Members\" selectedId={selectedIds} />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "components": [{
+      "name": "RecordSelector",
+      "properties": [
+        {"name": "entityName", "type": "string", "isRequired": true},
+        {"name": "selectedId", "type": "string", "isRequired": false}
+      ]
+    }]
+  }
+}

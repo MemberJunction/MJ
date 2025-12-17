@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // Markdown
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 // LOCAL
 import { ChatComponent } from './chat/chat.component';
@@ -25,7 +25,7 @@ import { DialogModule } from '@progress/kendo-angular-dialog';
     IndicatorsModule,
     ButtonsModule,
     DialogModule,
-    MarkdownModule.forRoot()
+    MarkdownModule
   ],
   exports: [
     ChatComponent

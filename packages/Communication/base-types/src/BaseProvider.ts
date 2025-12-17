@@ -155,6 +155,15 @@ export type BaseMessageResult = {
 
 export type GetMessagesParams<T = Record<string, any>> = {
     /**
+     * The identifier to get messages for - an email address, mailbox ID, in the case of SMS, could be a 
+     * phone number. In the case of other systems could be a User ID for FB Messenger/WhatsApp, etc.
+     * 
+     * This is optional if the provider supports getting messages based on credentials alone as some
+     * credentials/providers can be scoped to a specific mailbox/user.
+     */
+    Identifier?: string;
+
+    /**
      * The number of messages to return
      */
     NumMessages: number;

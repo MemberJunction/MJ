@@ -1,6 +1,8 @@
 import {
   Component,
   Input,
+  Output,
+  EventEmitter,
   OnInit,
   OnChanges,
   SimpleChanges,
@@ -10,7 +12,7 @@ import {
   Type
 } from '@angular/core';
 import { ArtifactVersionEntity, ArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
-import { Metadata, LogError, RunView } from '@memberjunction/core';
+import { Metadata, LogError, RunView, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.component';
@@ -82,6 +84,8 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   @Input() height?: string;
   @Input() readonly: boolean = true;
   @Input() cssClass?: string;
+
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
   viewerContainer!: ViewContainerRef;
@@ -185,6 +189,13 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       }
       if (this.contentType !== undefined) {
         (componentInstance as any).contentType = this.contentType;
+      }
+
+      // Subscribe to openEntityRecord event if the plugin emits it
+      if ((componentInstance as any).openEntityRecord) {
+        (componentInstance as any).openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
+          this.openEntityRecord.emit(event);
+        });
       }
 
       // Trigger change detection
