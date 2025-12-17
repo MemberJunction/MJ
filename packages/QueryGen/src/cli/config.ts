@@ -118,6 +118,7 @@ export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig 
   }
 
   // Override with CLI options
+
   if (cliOptions.entities) {
     config.includeEntities = parseArrayOption(cliOptions.entities);
   }
