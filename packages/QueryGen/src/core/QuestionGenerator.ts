@@ -139,16 +139,17 @@ export class QuestionGenerator {
     return questions.filter((q) => {
       // Must have required fields
       if (!this.hasRequiredFields(q)) {
+        if (this.config.verbose) {
+          LogStatus(`  ❌ Filtered: Missing required fields - "${q.userQuestion?.substring(0, 60)}..."`);
+        }
         return false;
       }
 
       // Must reference entities in the group
       if (!this.referencesGroupEntities(q, entityNames)) {
-        return false;
-      }
-
-      // Must not be overly generic
-      if (this.isTooGeneric(q)) {
+        if (this.config.verbose) {
+          LogStatus(`  ❌ Filtered: Doesn't reference group entities - "${q.userQuestion.substring(0, 60)}..." (references: ${q.entities.join(', ')})`);
+        }
         return false;
       }
 
@@ -180,20 +181,4 @@ export class QuestionGenerator {
     return question.entities.some((entityName) => entityNames.has(entityName));
   }
 
-  /**
-   * Check if question is too generic to be useful
-   */
-  private isTooGeneric(question: BusinessQuestion): boolean {
-    const genericPatterns = [
-      /show\s+me\s+all/i,
-      /list\s+all/i,
-      /get\s+all/i,
-      /display\s+all/i,
-      /^what\s+is/i,
-    ];
-
-    return genericPatterns.some((pattern) =>
-      pattern.test(question.userQuestion)
-    );
-  }
 }
