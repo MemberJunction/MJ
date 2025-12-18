@@ -1,5 +1,21 @@
 # @memberjunction/ng-testing
 
+## 2.126.1
+
+### Patch Changes
+
+- Updated dependencies [d6ae2a0]
+  - @memberjunction/graphql-dataprovider@2.126.1
+  - @memberjunction/ng-shared@2.126.1
+  - @memberjunction/ng-notifications@2.126.1
+  - @memberjunction/ng-base-types@2.126.1
+  - @memberjunction/ng-code-editor@2.126.1
+  - @memberjunction/ng-container-directives@2.126.1
+  - @memberjunction/core@2.126.1
+  - @memberjunction/core-entities@2.126.1
+  - @memberjunction/global@2.126.1
+  - @memberjunction/testing-engine-base@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes

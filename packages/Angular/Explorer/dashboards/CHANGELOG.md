@@ -1,5 +1,35 @@
 # @memberjunction/ng-dashboards
 
+## 2.126.1
+
+### Patch Changes
+
+- Updated dependencies [d6ae2a0]
+  - @memberjunction/graphql-dataprovider@2.126.1
+  - @memberjunction/ng-core-entity-forms@2.126.1
+  - @memberjunction/ng-explorer-settings@2.126.1
+  - @memberjunction/ng-shared@2.126.1
+  - @memberjunction/ng-user-view-grid@2.126.1
+  - @memberjunction/ng-testing@2.126.1
+  - @memberjunction/ng-ai-test-harness@2.126.1
+  - @memberjunction/ng-notifications@2.126.1
+  - @memberjunction/ng-react@2.126.1
+  - @memberjunction/ng-action-gallery@2.126.1
+  - @memberjunction/ai-engine-base@2.126.1
+  - @memberjunction/ng-base-application@2.126.1
+  - @memberjunction/ng-code-editor@2.126.1
+  - @memberjunction/ng-container-directives@2.126.1
+  - @memberjunction/ng-entity-viewer@2.126.1
+  - @memberjunction/ng-filter-builder@2.126.1
+  - @memberjunction/ng-shared-generic@2.126.1
+  - @memberjunction/interactive-component-types@2.126.1
+  - @memberjunction/core@2.126.1
+  - @memberjunction/core-entities@2.126.1
+  - @memberjunction/global@2.126.1
+  - @memberjunction/skip-types@2.126.1
+  - @memberjunction/templates-base-types@2.126.1
+  - @memberjunction/testing-engine-base@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes

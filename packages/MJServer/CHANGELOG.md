@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/server
 
+## 2.126.1
+
+### Patch Changes
+
+- Updated dependencies [d6ae2a0]
+  - @memberjunction/graphql-dataprovider@2.126.1
+  - @memberjunction/ai-agent-manager-actions@2.126.1
+  - @memberjunction/ai-agent-manager@2.126.1
+  - @memberjunction/ai-agents@2.126.1
+  - @memberjunction/ai@2.126.1
+  - @memberjunction/ai-core-plus@2.126.1
+  - @memberjunction/aiengine@2.126.1
+  - @memberjunction/ai-prompts@2.126.1
+  - @memberjunction/ai-provider-bundle@2.126.1
+  - @memberjunction/ai-vectors-pinecone@2.126.1
+  - @memberjunction/actions-apollo@2.126.1
+  - @memberjunction/actions-bizapps-accounting@2.126.1
+  - @memberjunction/actions-bizapps-crm@2.126.1
+  - @memberjunction/actions-bizapps-formbuilders@2.126.1
+  - @memberjunction/actions-bizapps-lms@2.126.1
+  - @memberjunction/actions-bizapps-social@2.126.1
+  - @memberjunction/core-actions@2.126.1
+  - @memberjunction/actions@2.126.1
+  - @memberjunction/entity-communications-server@2.126.1
+  - @memberjunction/communication-ms-graph@2.126.1
+  - @memberjunction/communication-sendgrid@2.126.1
+  - @memberjunction/component-registry-client-sdk@2.126.1
+  - @memberjunction/doc-utils@2.126.1
+  - @memberjunction/external-change-detection@2.126.1
+  - @memberjunction/interactive-component-types@2.126.1
+  - @memberjunction/core@2.126.1
+  - @memberjunction/core-entities@2.126.1
+  - @memberjunction/core-entities-server@2.126.1
+  - @memberjunction/data-context@2.126.1
+  - @memberjunction/data-context-server@2.126.1
+  - @memberjunction/global@2.126.1
+  - @memberjunction/queue@2.126.1
+  - @memberjunction/storage@2.126.1
+  - @memberjunction/sqlserver-dataprovider@2.126.1
+  - @memberjunction/scheduling-actions@2.126.1
+  - @memberjunction/scheduling-engine-base@2.126.1
+  - @memberjunction/scheduling-base-types@2.126.1
+  - @memberjunction/scheduling-engine@2.126.1
+  - @memberjunction/skip-types@2.126.1
+  - @memberjunction/templates@2.126.1
+  - @memberjunction/testing-engine@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes

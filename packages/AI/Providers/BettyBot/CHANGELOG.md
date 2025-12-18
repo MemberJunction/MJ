@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-betty-bot
 
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.126.1
+- @memberjunction/global@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes

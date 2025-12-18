@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.126.1
+
+### Patch Changes
+
+- d6ae2a0: Auth0 Token Refresh fixes
+  - @memberjunction/core@2.126.1
+  - @memberjunction/global@2.126.1
+
 ## 2.126.0
 
 ### Patch Changes

@@ -44,9 +44,18 @@ export class AppComponent implements OnInit {
         console.log('Setting up GraphQL client...');
         const start = Date.now();
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
+          console.log('[GraphQL] Token expired, refreshing...');
           const refresh$ = await this.authBase.refresh();
           const claims = await lastValueFrom(refresh$);
-          const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
+          // Auth0 uses __raw, MSAL uses idToken
+          const token = claims?.__raw || claims?.idToken;
+
+          if (!token) {
+            console.error('[GraphQL] Token refresh failed - no token returned');
+            throw new Error('Failed to refresh authentication token');
+          }
+
+          console.log('[GraphQL] Token refreshed successfully');
           return token;
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
@@ -147,7 +156,9 @@ export class AppComponent implements OnInit {
     this.authBase.getUserClaims().then(claims => {
       claims.subscribe((claims: any) => {
       if (claims) {
-        const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
+        // Extract ID token - for Auth0, it's in __raw; for MSAL, it's in idToken
+        // This matches pre-refactor behavior
+        const token = claims?.__raw || claims?.idToken;
         const result = claims.idTokenClaims ?
                         {...claims, ...claims.idTokenClaims} : // combine the values from the two claims objects because in auth0 and MSAL they have different structures, this pushes them all together into one
                         claims; // or if idTokenClaims doesn't exist, just use the claims object as is
