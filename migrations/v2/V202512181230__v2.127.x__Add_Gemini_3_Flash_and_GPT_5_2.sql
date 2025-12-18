@@ -62,13 +62,13 @@ VALUES
         @Gemini3FlashModelID,
         @GoogleVendorID,
         @InferenceProviderTypeID,
-        'gemini-3-flash', -- API name
+        'gemini-3-flash-preview', -- API name
         1, -- Priority
         'Active',
         'Any, JSON',
         0, -- SupportsEffortLevel (has reasoning variant available)
         1, -- SupportsStreaming
-        'GoogleLLM', -- Driver class
+        'GeminiLLM', -- Driver class
         NULL, -- DriverImportPath (usually NULL)
         1000000, -- MaxInputTokens (1M token context window)
         64000  -- MaxOutputTokens (64k output capacity)
@@ -91,7 +91,7 @@ VALUES
         3.00, -- Output price per M tokens
         '54208f7d-331c-40ab-84e8-163338ee9ea1', -- Per 1M tokens unit type
         'Realtime',
-        'Gemini 3 Flash pricing on Google as of December 2025. Released December 17, 2025 (also known as Gemini 2.0 Flash). API name is gemini-3-flash (Host API ID: fiercefalcon). Features 1 million token input context window, 64,000 output capacity, and knowledge cutoff of January 1, 2025. Achieves state-of-the-art performance with Intelligence Index of 71, including top scores in MMLU-Pro (89%), GPQA Diamond (90%), and second highest on MMMU-Pro for multimodal reasoning. Highest score on AA-Omniscience knowledge benchmark. Supports multimodal input (text, image, video, audio), tool calling, structured outputs, and JSON mode. Output speed: 218 tokens per second. Blended rate: $1.125 per 1M tokens.'
+        'Gemini 3 Flash pricing on Google as of December 2025. Released December 17, 2025 (also known as Gemini 2.0 Flash). API name is gemini-3-flash-preview (Host API ID: fiercefalcon). Features 1 million token input context window, 64,000 output capacity, and knowledge cutoff of January 1, 2025. Achieves state-of-the-art performance with Intelligence Index of 71, including top scores in MMLU-Pro (89%), GPQA Diamond (90%), and second highest on MMMU-Pro for multimodal reasoning. Highest score on AA-Omniscience knowledge benchmark. Supports multimodal input (text, image, video, audio), tool calling, structured outputs, and JSON mode. Output speed: 218 tokens per second. Blended rate: $1.125 per 1M tokens.'
     );
 
 -- ============================================
