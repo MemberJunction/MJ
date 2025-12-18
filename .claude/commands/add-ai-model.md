@@ -140,7 +140,7 @@ VALUES
         '{Any, JSON or JSON only}',
         {0 or 1}, -- SupportsEffortLevel (reasoning capability)
         1, -- SupportsStreaming
-        '{VendorDriverClass}', -- Driver class (e.g., AnthropicLLM, OpenAILLM, GoogleLLM)
+        '{VendorDriverClass}', -- Driver class (e.g., AnthropicLLM, OpenAILLM, GeminiLLM)
         NULL, -- DriverImportPath (usually NULL)
         {MaxInputTokens}, -- MaxInputTokens
         {MaxOutputTokens}  -- MaxOutputTokens
@@ -189,7 +189,7 @@ VALUES
 
 - **Anthropic**: `AnthropicLLM`
 - **OpenAI**: `OpenAILLM`
-- **Google**: `GoogleLLM`
+- **Google/Gemini**: `GeminiLLM`
 - **Mistral**: `MistralLLM`
 - **Groq**: `GroqLLM`
 - **Cerebras**: `CerebrasLLM`
