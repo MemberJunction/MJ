@@ -3,7 +3,7 @@
     "Name": "Communication",
     "Description": "Manage and monitor system communications, providers, and logs",
     "Icon": "fa-solid fa-comments",
-    "DefaultForNewUser": true,
+    "DefaultForNewUser": false,
     "Color": "#00bcd4",
     "DefaultSequence": 1004,
     "DefaultNavItems": [
