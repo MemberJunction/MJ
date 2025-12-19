@@ -68,6 +68,13 @@ export interface ForEachOperation {
         name: string;
         message: string;
         templateParameters?: Record<string, string>;
+        /**
+         * Runtime context propagated to the sub-agent.
+         * Allows sub-agents to access API keys, environment settings, and other
+         * runtime configuration from the parent agent.
+         * @since 2.127.0
+         */
+        context?: unknown;
     };
 }
 
@@ -101,6 +108,13 @@ export interface WhileOperation {
         name: string;
         message: string;
         templateParameters?: Record<string, string>;
+        /**
+         * Runtime context propagated to the sub-agent.
+         * Allows sub-agents to access API keys, environment settings, and other
+         * runtime configuration from the parent agent.
+         * @since 2.127.0
+         */
+        context?: unknown;
     };
 }
 

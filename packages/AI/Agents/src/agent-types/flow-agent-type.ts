@@ -205,7 +205,8 @@ export class FlowAgentType extends BaseAgentType {
             }
 
             // Find valid paths from current step
-            const paths = await this.getValidPaths(flowState.currentStepId, payload, flowState);
+            // Pass params to enable data/context access in path conditions (Phase 1)
+            const paths = await this.getValidPaths(flowState.currentStepId, payload, flowState, params);
             
             if (paths.length === 0) {
                 // No valid paths - flow is complete
@@ -317,20 +318,33 @@ export class FlowAgentType extends BaseAgentType {
     }
     
     /**
-     * Gets all paths from a step and evaluates their conditions
-     * 
+     * Gets all paths from a step and evaluates their conditions.
+     *
+     * The evaluation context includes:
+     * - payload: The current agent payload (persistent state)
+     * - stepResult: Result from the last executed step
+     * - flowContext: Flow execution metadata (current step, completed steps, path)
+     * - data: Transient template data from ExecuteAgentParams (NEW in Phase 1)
+     * - context: Runtime context from ExecuteAgentParams (NEW in Phase 1)
+     *
+     * This allows path conditions to access runtime parameters like:
+     * - `data.userApproval === true`
+     * - `context.environment === 'production'`
+     * - `data.retryCount < 3 && payload.status === 'pending'`
+     *
      * @private
      */
-    private async getValidPaths(
-        stepId: string, 
+    private async getValidPaths<P>(
+        stepId: string,
         payload: unknown,
-        flowState: FlowExecutionState
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<unknown, P>
     ): Promise<AIAgentStepPathEntity[]> {
         // Load all paths from this step
         const allPaths = AIEngine.Instance.GetPathsFromStep(stepId)
             .sort((a, b) => b.Priority - a.Priority);
         const validPaths: AIAgentStepPathEntity[] = [];
-        
+
         // Evaluate each path's condition
         for (const path of allPaths) {
             // If no condition, path is always valid
@@ -338,10 +352,12 @@ export class FlowAgentType extends BaseAgentType {
                 validPaths.push(path);
                 continue;
             }
-            
+
             try {
-                // Create evaluation context
+                // Create enhanced evaluation context
+                // Phase 1: Read-only access to data and context for path conditions
                 const context = {
+                    // Existing context properties
                     payload,
                     stepResult: this.getLastStepResult(flowState),
                     flowContext: {
@@ -349,10 +365,15 @@ export class FlowAgentType extends BaseAgentType {
                         completedSteps: Array.from(flowState.completedStepIds),
                         executionPath: flowState.executionPath,
                         stepCount: flowState.completedStepIds.size
-                    }
+                    },
+                    // NEW: Map params.data and params.context directly
+                    // These enable deterministic routing based on runtime state
+                    // without polluting the persistent payload
+                    data: params.data || {},
+                    context: params.context || {}
                 };
-                
-                
+
+
                 const evalResult = this._evaluator.evaluate(path.Condition, context);
 
                 if (evalResult.success && evalResult.value) {
@@ -366,12 +387,12 @@ export class FlowAgentType extends BaseAgentType {
                 LogError(`Failed to evaluate path condition: ${error.message}`);
             }
         }
-        
+
         // If no valid paths with conditions, include paths with priority <= 0 (defaults)
         if (validPaths.length === 0) {
             return allPaths.filter(p => p.Priority <= 0 && !p.Condition);
         }
-        
+
         // Sort by priority (already sorted by query, but re-sort valid subset)
         return validPaths.sort((a, b) => b.Priority - a.Priority);
     }
@@ -605,11 +626,14 @@ export class FlowAgentType extends BaseAgentType {
                 // Use node description to define the sub-agent's task
                 // The full conversation history is preserved in params.conversationMessages
                 // and will be available to the sub-agent through BaseAgent.ExecuteSubAgent()
+                // Propagate context to sub-agent so it has access to runtime configuration,
+                // API keys, environment settings, etc. from the parent agent
                 return this.createNextStep('Sub-Agent', {
                     subAgent: {
                         name: subAgentName,
                         message: node.Description || '',
-                        terminateAfter: false
+                        terminateAfter: false,
+                        context: params.context // Propagate runtime context to sub-agent
                     },
                     terminate: false,
                     newPayload: payload,
@@ -838,13 +862,20 @@ export class FlowAgentType extends BaseAgentType {
     }
     
     /**
-     * Recursively resolves payload and static references in nested objects
+     * Recursively resolves payload, static, data, context, and conversation references in nested objects.
+     *
+     * Supported prefixes:
+     * - `payload.path.to.value` - reads from persistent payload
+     * - `static:value` - literal static value
+     * - `data.path.to.value` - reads from params.data (template data)
+     * - `context.path.to.value` - reads from params.context (runtime context, e.g., API keys, environment)
+     * - `conversation[N].content` - reads from conversation messages
      *
      * @private
      */
-    private resolveNestedValue(value: unknown, currentPayload: any, params?: ExecuteAgentParams): unknown {
+    private resolveNestedValue(value: unknown, currentPayload: unknown, params?: ExecuteAgentParams): unknown {
         if (typeof value === 'string') {
-            // Handle string values with payload/static/data/conversation resolution (case-insensitive)
+            // Handle string values with payload/static/data/context/conversation resolution (case-insensitive)
             const trimmedValue = value.trim();
 
             // Check for conversation message references
@@ -860,6 +891,12 @@ export class FlowAgentType extends BaseAgentType {
                 const pathStart = value.indexOf('.') + 1;
                 const path = value.substring(pathStart);
                 return this.getValueFromPath(params.data, path);
+            } else if (trimmedValue.toLowerCase().startsWith('context.') && params?.context) {
+                // NEW: Support context. prefix for accessing runtime context
+                // This allows action input mappings to reference API keys, environment settings, etc.
+                const pathStart = value.indexOf('.') + 1;
+                const path = value.substring(pathStart);
+                return this.getValueFromPath(params.context, path);
             } else {
                 return value;
             }
@@ -1065,7 +1102,8 @@ export class FlowAgentType extends BaseAgentType {
         flowState.completedStepIds.add(flowState.currentStepId);
 
         // Find valid paths from current step using updated payload
-        const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
+        // Pass params to enable data/context access in path conditions (Phase 1)
+        const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState, params);
 
         if (paths.length === 0) {
             // No valid paths found
@@ -1246,7 +1284,8 @@ export class FlowAgentType extends BaseAgentType {
             forEach.subAgent = {
                 name: subAgent.Name,
                 message: node.Description || `Execute sub-agent: ${subAgent.Name}`,
-                templateParameters: {}
+                templateParameters: {},
+                context: params.context // Propagate runtime context to sub-agent in loop
             };
         } else if (node.LoopBodyType === 'Prompt') {
             return this.createNextStep('Failed', {
@@ -1329,7 +1368,8 @@ export class FlowAgentType extends BaseAgentType {
             whileOp.subAgent = {
                 name: subAgent.Name,
                 message: node.Description || `Execute sub-agent: ${subAgent.Name}`,
-                templateParameters: {}
+                templateParameters: {},
+                context: params.context // Propagate runtime context to sub-agent in loop
             };
         } else if (node.LoopBodyType === 'Prompt') {
             return this.createNextStep('Failed', {
