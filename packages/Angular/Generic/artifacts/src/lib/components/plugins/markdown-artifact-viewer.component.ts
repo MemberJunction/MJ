@@ -25,7 +25,11 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
       <div class="markdown-content-container">
         @if (viewMode === 'preview') {
           <div class="markdown-preview">
-            <mj-markdown [data]="markdownContent"></mj-markdown>
+            <mj-markdown [data]="markdownContent"
+                         [enableCollapsibleHeadings]="true"
+                         [enableLineNumbers]="true"
+                         [enableSmartypants]="true"
+                         [enableHtml]="true"></mj-markdown>
           </div>
         } @else {
           <mj-code-editor

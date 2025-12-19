@@ -42,7 +42,11 @@ import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
           </iframe>
         } @else if (displayMarkdown) {
           <div class="markdown-content">
-            <mj-markdown [data]="displayMarkdown"></mj-markdown>
+            <mj-markdown [data]="displayMarkdown"
+                         [enableCollapsibleHeadings]="true"
+                         [enableLineNumbers]="true"
+                         [enableSmartypants]="true"
+                         [enableHtml]="true"></mj-markdown>
           </div>
         } @else {
           <div class="json-editor-container">
