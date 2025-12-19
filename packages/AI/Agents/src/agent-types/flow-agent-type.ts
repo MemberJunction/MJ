@@ -72,7 +72,64 @@ interface ActionOutputMapping {
     [outputParam: string]: string; // Maps output param name to payload path
     '*'?: string; // Optional wildcard to capture entire result
 }
- 
+
+/**
+ * Flow Agent-specific execution parameters.
+ *
+ * These parameters allow callers to customize how a Flow Agent executes,
+ * including starting at a specific step or skipping certain steps.
+ * Use with ExecuteAgentParams.agentTypeParams for type-safe configuration.
+ *
+ * @example
+ * ```typescript
+ * import { FlowAgentExecuteParams } from '@memberjunction/ai-agents';
+ *
+ * // Get the step to start at
+ * const approvalStep = AIEngine.Instance.GetAgentSteps(agentId)
+ *   .find(s => s.Name === 'Approval Review');
+ *
+ * const params: ExecuteAgentParams<any, any, FlowAgentExecuteParams> = {
+ *   agent: myFlowAgent,
+ *   conversationMessages: messages,
+ *   agentTypeParams: {
+ *     startAtStep: approvalStep,  // Skip initial steps, start here
+ *   }
+ * };
+ * ```
+ *
+ * @since 2.127.0
+ */
+export interface FlowAgentExecuteParams {
+    /**
+     * Start execution at a specific step instead of the flow's entry point.
+     *
+     * When provided, the flow agent will begin execution at this step,
+     * skipping all steps that would normally precede it. This is useful for:
+     * - Resuming a flow from a specific point
+     * - Testing specific branches of a flow
+     * - Re-running a portion of a flow after a failure
+     *
+     * The step must belong to the agent being executed.
+     * Use AIEngine.Instance.GetAgentSteps(agentId) to retrieve available steps.
+     */
+    startAtStep?: AIAgentStepEntity;
+
+    /**
+     * Steps to skip during execution.
+     *
+     * When the flow would normally execute one of these steps, it will instead
+     * immediately evaluate the step's outgoing paths and continue to the next
+     * valid step. This is useful for:
+     * - Bypassing steps that have already been completed externally
+     * - Testing flows without certain side effects
+     * - Conditional step execution based on runtime state
+     *
+     * Skipped steps are still recorded in the execution path but marked as skipped.
+     * The step's output mapping is not applied when skipped.
+     */
+    skipSteps?: AIAgentStepEntity[];
+}
+
 /**
  * Implementation of the Flow Agent Type pattern.
  * 
@@ -548,8 +605,11 @@ export class FlowAgentType extends BaseAgentType {
     }
     
     /**
-     * Creates a BaseAgentNextStep for a flow node
-     * 
+     * Creates a BaseAgentNextStep for a flow node.
+     *
+     * If the node is in agentTypeParams.skipSteps, the step is marked as skipped
+     * and we immediately evaluate paths to find the next step.
+     *
      * @private
      */
     private async createStepForFlowNode<P>(
@@ -558,6 +618,48 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         flowState: FlowExecutionState
     ): Promise<BaseAgentNextStep<P>> {
+        // Check if this step should be skipped
+        const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
+        if (flowParams?.skipSteps && flowParams.skipSteps.some(s => s.ID === node.ID)) {
+            LogStatus(`Flow Agent: Skipping step '${node.Name}' (via agentTypeParams.skipSteps)`);
+
+            // Update flow state to mark this as current step (for path evaluation)
+            flowState.currentStepId = node.ID;
+
+            // Mark the step as completed (skipped)
+            flowState.completedStepIds.add(node.ID);
+            flowState.executionPath.push(node.ID);
+
+            // Store a skip marker as the step result
+            flowState.stepResults.set(node.ID, { skipped: true, stepName: node.Name });
+
+            // Find the next step by evaluating paths from this skipped step
+            const paths = await this.getValidPaths(node.ID, payload, flowState, params);
+
+            if (paths.length === 0) {
+                // No more paths - flow is complete
+                return this.createSuccessStep({
+                    message: `Flow completed after skipping step '${node.Name}' - no more paths to follow`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            // Get the destination step for the highest priority path
+            const nextStep = await this.getStepById(paths[0].DestinationStepID);
+
+            if (!nextStep) {
+                return this.createNextStep('Failed', {
+                    errorMessage: `Destination step not found after skipping '${node.Name}': ${paths[0].DestinationStepID}`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            // Recursively create the step for the next node (which may also be skipped)
+            return await this.createStepForFlowNode(params, nextStep, payload, flowState);
+        }
+
         // Update flow state to mark this as current step
         flowState.currentStepId = node.ID;
 
@@ -1007,27 +1109,47 @@ export class FlowAgentType extends BaseAgentType {
 
     /**
      * Determines the initial step for flow agent types.
-     * 
+     *
      * Flow agents look up their configured starting step instead of executing a prompt.
-     * 
+     * If agentTypeParams.startAtStep is provided, the flow will begin at that step
+     * instead of the configured entry point.
+     *
      * @param {ExecuteAgentParams} params - The full execution parameters
      * @returns {Promise<BaseAgentNextStep<P> | null>} The initial step to execute, or null if flow context not ready
-     * 
+     *
      * @override
      * @since 2.76.0
      */
     public async DetermineInitialStep<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null> {
         const flowState = agentTypeState as FlowExecutionState;
         const payloadToUse = payload || {} as P;
-                
+
+        // Check for startAtStep in agentTypeParams (FlowAgentExecuteParams)
+        const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
+        if (flowParams?.startAtStep) {
+            // Validate the step belongs to this agent
+            const agentSteps = AIEngine.Instance.GetAgentSteps(flowState.agentId);
+            const validStep = agentSteps.find(s => s.ID === flowParams.startAtStep!.ID);
+
+            if (!validStep) {
+                return this.createNextStep('Failed', {
+                    errorMessage: `startAtStep '${flowParams.startAtStep.Name}' (ID: ${flowParams.startAtStep.ID}) does not belong to agent '${params.agent.Name}'`
+                });
+            }
+
+            LogStatus(`Flow Agent: Starting at step '${validStep.Name}' (override via agentTypeParams.startAtStep)`);
+            return await this.createStepForFlowNode(params, validStep, payloadToUse, flowState);
+        }
+
+        // Default behavior: start at the configured entry point
         const startingSteps = await this.getStartingSteps(flowState.agentId);
-        
+
         if (startingSteps.length === 0) {
             return this.createNextStep('Failed', {
                 errorMessage: 'No starting steps defined for flow agent'
             });
         }
-        
+
         // Execute the first starting step
         // Future enhancement: support parallel starting steps
         return await this.createStepForFlowNode(params, startingSteps[0], payloadToUse, flowState);
