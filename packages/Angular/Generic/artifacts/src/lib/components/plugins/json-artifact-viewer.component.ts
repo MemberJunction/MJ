@@ -136,6 +136,13 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   private versionAttributes: ArtifactVersionAttributeEntity[] = [];
   private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
 
+  /**
+   * JSON artifacts always have content to display (JSON editor, displayHtml, or displayMarkdown)
+   */
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
+
   constructor(
     private cdr: ChangeDetectorRef,
     private sanitizer: DomSanitizer

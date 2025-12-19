@@ -112,6 +112,13 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   public safeSvgContent: SafeHtml = '';
   public viewMode: 'preview' | 'source' = 'preview';
 
+  /**
+   * SVG artifacts always have content to display
+   */
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
+
   constructor(private sanitizer: DomSanitizer) {
     super();
   }

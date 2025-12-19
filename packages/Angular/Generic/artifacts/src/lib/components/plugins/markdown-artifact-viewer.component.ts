@@ -154,6 +154,13 @@ export class MarkdownArtifactViewerComponent extends BaseArtifactViewerPluginCom
   public markdownContent = '';
   public viewMode: 'preview' | 'source' = 'preview';
 
+  /**
+   * Markdown artifacts always have content to display
+   */
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
+
   ngOnInit(): void {
     this.markdownContent = this.getContent();
   }

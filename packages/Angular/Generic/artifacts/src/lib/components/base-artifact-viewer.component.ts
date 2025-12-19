@@ -73,6 +73,19 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
   }
 
   /**
+   * Whether this plugin has content to display in the Display tab.
+   * Used by the parent wrapper to determine if the Display tab should be shown.
+   *
+   * Subclasses should override this getter to return true when they have
+   * meaningful content to display.
+   *
+   * Default: false (subclasses must opt-in to showing Display tab)
+   */
+  public get hasDisplayContent(): boolean {
+    return false;
+  }
+
+  /**
    * Get the content from the artifact version.
    * Handles both string content and JSON objects.
    */

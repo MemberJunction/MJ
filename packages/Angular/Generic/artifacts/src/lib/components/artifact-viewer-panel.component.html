@@ -101,7 +101,8 @@
                 [artifactTypeName]="artifactTypeName"
                 [contentType]="contentType"
                 [readonly]="true"
-                (openEntityRecord)="onOpenEntityRecord($event)">
+                (openEntityRecord)="onOpenEntityRecord($event)"
+                (pluginLoaded)="onPluginLoaded()">
               </mj-artifact-type-plugin-viewer>
             </div>
           }
