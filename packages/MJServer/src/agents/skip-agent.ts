@@ -139,6 +139,7 @@ export class SkipProxyAgent extends BaseAgent {
 
         // Prepare Skip SDK call options
         const skipOptions: SkipCallOptions = {
+            payload: params.payload,
             messages: skipMessages,
             conversationId,
             dataContext: context.dataContext,
