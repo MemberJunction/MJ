@@ -145,6 +145,7 @@ Your response must match this exact structure:
 
 ```
 {
+  "queryName": "Active Members By Organization",
   "sql": "Complete SQL query template with Nunjucks parameter syntax",
   "parameters": [
     {
@@ -161,6 +162,11 @@ Your response must match this exact structure:
 ```
 
 ## Field Definitions
+
+**queryName** (string): Short, descriptive name for this query (3-6 words in title case)
+- Focuses on the **result** or **purpose** (not the method)
+- Example good names: "Active Members By Organization", "Certifications Expiring Soon", "Most Certified Members"
+- Example bad names: "Which Members Have The Most" (truncated), "Query For Getting Data" (generic)
 
 **sql** (string): Complete T-SQL query using Nunjucks syntax for parameters
 

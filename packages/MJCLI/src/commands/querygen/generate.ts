@@ -53,12 +53,10 @@ export default class Generate extends Command {
     vendor: Flags.string({ description: 'Preferred AI vendor' }),
     output: Flags.string({
       char: 'o',
-      description: 'Output directory',
-      default: './metadata/queries'
+      description: 'Output directory'
     }),
     mode: Flags.string({
       description: 'Output mode: metadata|database|both',
-      default: 'metadata',
       options: ['metadata', 'database', 'both']
     }),
     verbose: Flags.boolean({ char: 'v', description: 'Verbose output' }),

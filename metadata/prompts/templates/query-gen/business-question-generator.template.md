@@ -42,6 +42,12 @@ Generate 1-2 realistic business questions that:
 - **NO markdown formatting** like \`\`\`json - just the raw JSON
 - Your response **must** match this exact structure:
 
+**IMPORTANT: Entity Names**
+- The `entities` array MUST contain the **Entity names** from the "Entity: X" headers above
+- DO NOT use view names (e.g., "vwCustomers"), schema names, or table names
+- Use ONLY the entity display names (e.g., "Customers", "Orders")
+- These names appear after "Entity: " in each section header
+
 Example JSON structure:
 ```
 {

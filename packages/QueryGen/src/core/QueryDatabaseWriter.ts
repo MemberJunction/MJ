@@ -13,7 +13,6 @@ import {
 } from '@memberjunction/core-entities';
 import { ValidatedQuery, WriteResult } from '../data/schema';
 import { extractErrorMessage } from '../utils/error-handlers';
-import { generateQueryName } from '../utils/query-helpers';
 
 /**
  * QueryDatabaseWriter class
@@ -60,7 +59,7 @@ export class QueryDatabaseWriter {
         // - Set UsesTemplate flag
         const query = await md.GetEntityObject<QueryEntity>('Queries', contextUser);
         query.NewRecord();
-        query.Name = generateQueryName(vq.businessQuestion);
+        query.Name = vq.query.queryName;
         query.CategoryID = categoryId;
         query.UserQuestion = vq.businessQuestion.userQuestion;
         query.Description = vq.businessQuestion.description;
