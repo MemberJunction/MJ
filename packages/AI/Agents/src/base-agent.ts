@@ -4994,12 +4994,13 @@ The context is now within limits. Please retry your request with the recovered c
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
                 // Return the Chat step, including responseForm and commands from sub-agent
+                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
                 return {
                     step: 'Chat',
                     terminate: true, // Bubble up to the main loop to handle Chat
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
-                    newPayload: previousDecision?.newPayload, // Don't modify payload on Chat
+                    newPayload: mergedPayload, // Preserve sub-agent payload changes
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands
@@ -5344,12 +5345,13 @@ The context is now within limits. Please retry your request with the recovered c
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
                 // Return the Chat step, including responseForm and commands from sub-agent
+                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
                 return {
                     step: 'Chat',
                     terminate: true,
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
-                    newPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload, // Preserve sub-agent payload changes
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands
