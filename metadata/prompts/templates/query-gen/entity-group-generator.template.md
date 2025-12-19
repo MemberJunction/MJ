@@ -43,14 +43,23 @@ Given a database schema, identify logical entity groups that make sense for busi
 
 3. **Size Constraints**:
    - Groups must have **{{ minGroupSize }} to {{ maxGroupSize }} entities** (keep groups small and focused)
-   - Generate as many meaningful groups as appropriate for the schema size and complexity
+   - Entities can appear in multiple groups if they fit different business contexts
    - **Do NOT create single-entity groups** - those will be generated separately
 
-4. **Connectivity**: All entities in a group must be connected by foreign key relationships
+4. **Coverage Goal**:
+   - Schema has **{{ entities.length }} entities** with an average of **{{ avgDegree }}** relationships per entity
+   {% if hubCount > 0 %}
+   - Contains **{{ hubCount }} hub entities** with >5 relationships (largest hub: {{ maxHubDegree }} relationships)
+   - Hub entities are especially valuable - create multiple groups pairing hubs with different related entities
+   {% endif %}
+   - Aim for **{{ targetGroupCount }}-{{ targetGroupCount + 5 }}** groups as a rough guideline
+   - Focus on business-meaningful combinations - not all possible relationship pairs make sense
 
-5. **Coverage**: Try to include important entities in at least one group, but focus on quality over quantity
+5. **Connectivity**: All entities in a group must be connected by foreign key relationships
 
-6. **Business Domains**: Common domains include:
+6. **Quality Over Quantity**: Prioritize groups that support real business questions over achieving full entity coverage
+
+7. **Business Domains**: Common domains include:
    - Sales & Revenue (customers, orders, payments)
    - Inventory & Products (products, categories, suppliers, stock)
    - Marketing (campaigns, leads, conversions)

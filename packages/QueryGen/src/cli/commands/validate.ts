@@ -179,6 +179,7 @@ async function loadQueryFiles(queryPath: string): Promise<Array<{ file: string; 
  */
 function convertMetadataToGeneratedQuery(record: QueryMetadataRecord): GeneratedQuery {
   return {
+    queryName: record.fields.Name,
     sql: record.fields.SQL,
     parameters: [],    // Not needed for validation - QueryEntity will extract
   };
