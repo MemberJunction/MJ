@@ -217,12 +217,7 @@ export class GeminiLLM extends BaseLLM {
 
             // Create chat config - only include thinkingConfig if model supports it and effortLevel is specified
             const chatConfig: Record<string, unknown> = {};
-            if (useThinking) {
-                chatConfig.thinkingConfig = {
-                    includeThoughts: true,
-                    thinkingBudget: thinkingBudget
-                };
-            }
+            this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
 
             // Create chat with history (all messages except the last)
             // Don't use systemInstruction parameter - we're bundling it with the user message
@@ -293,6 +288,57 @@ export class GeminiLLM extends BaseLLM {
                 errorMessage: e.message,
                 exception: e,
                 errorInfo: ErrorAnalyzer.analyzeError(e, 'Gemini')
+            }
+        }
+    }
+
+    private setThinkingConfig(chatConfig: any, useThinking: boolean, effortLevel: string | undefined, modelName: string, thinkingBudget: number) {
+        // this is a hack, need a cleaner way of doing this
+        const gemini3AndAbove: boolean = modelName?.toLowerCase().includes("-3") ||
+                                         modelName?.toLowerCase().includes("-4") ||
+                                         modelName?.toLowerCase().includes("-5") ||
+                                         modelName?.toLowerCase().includes("-6") ||
+                                         modelName?.toLowerCase().includes("-7");
+                                         
+        if (useThinking) {
+            if (gemini3AndAbove) {
+                // no budget used, we map the effortLevel to 4 buckets
+                let geminiLevel = undefined;
+                // Parse string to number if needed
+                let numericLevel = typeof effortLevel === 'string' ? parseInt(effortLevel, 10) : effortLevel;
+                if (isNaN(numericLevel)) {
+                    numericLevel = 0;
+                }
+
+                if (!numericLevel || numericLevel <= 1) {
+                    geminiLevel = "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
+                }
+                else if(numericLevel <= 33) {
+                    geminiLevel = "LOW" 
+                }
+                else if (numericLevel <= 66) {
+                    geminiLevel = "MEDIUM" 
+                }
+                else {
+                    geminiLevel = "HIGH" 
+                }
+
+                chatConfig.thinkingConfig = {
+                    thinkingLevel: geminiLevel
+                }
+            }
+            else {
+                chatConfig.thinkingConfig = {
+                    includeThoughts: true,
+                    thinkingBudget: thinkingBudget
+                };
+            }
+        }
+        else {
+            if (gemini3AndAbove) {
+                chatConfig.thinkingConfig = {
+                    thinkingLevel: "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
+                }
             }
         }
     }
