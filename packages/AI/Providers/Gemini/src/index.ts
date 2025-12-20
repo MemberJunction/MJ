@@ -428,12 +428,7 @@ export class GeminiLLM extends BaseLLM {
 
         // Create chat config - only include thinkingConfig if model supports it and effortLevel is specified
         const chatConfig: Record<string, unknown> = {};
-        if (useThinking) {
-            chatConfig.thinkingConfig = {
-                includeThoughts: true,
-                thinkingBudget: thinkingBudget
-            };
-        }
+        this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
 
         // Create chat with history (all messages except the last)
         // Don't use systemInstruction parameter - we're bundling it with the user message
