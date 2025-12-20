@@ -198,7 +198,17 @@ export class SkipAPIRequest {
      * Optional, if the calling server requires the use of an additional short-lived access token beyond the API key, this is the token that the AI agent can use to call back to the source server during the lifecycle
      * of the request
      */
-    callingServerAccessToken?: string
+    callingServerAccessToken?: string;
+
+    /**
+     * Optional payload data that was returned from a previous response. When the Skip API returns a response
+     * with a payload (e.g., a PRD from Requirements Expert), the client should pass that payload back in the
+     * next request so the agent can continue building on it.
+     *
+     * This enables incremental artifact building where structured data accumulates throughout the conversation.
+     * The payload is separate from artifacts - it represents work-in-progress data that hasn't been finalized yet.
+     */
+    payload?: Record<string, any>;
 }
 
 /**
@@ -212,16 +222,28 @@ export class SkipAPIResponse {
     /**
      * This property is only used if success is false, and contains an error message that describes the reason for the failure
      */
-    error: string; 
+    error: string;
     /**
      * The Skip API server response phase, defined within the SkipResponsePhase type
      */
     responsePhase: SkipResponsePhase;
     /**
-     * An array of messages including the messaged passed in with the SkipAPIRequest object as well as 
+     * An array of messages including the messaged passed in with the SkipAPIRequest object as well as
      * any additional messages that Skip generates as part of the conversation.
      */
     messages: SkipMessage[];
+
+    /**
+     * Optional payload data from the agent. When provided, the calling application can render this
+     * payload as an artifact for the user to review/edit. This enables incremental artifact building
+     * where the payload is passed back and forth between the user and agent, accumulating structured
+     * data throughout the conversation.
+     *
+     * Common use case: Requirements Expert emits a PRD with functionalRequirements, title, type,
+     * userExplanation etc. in the payload. The client renders this as an artifact for user review.
+     * When user responds, the client passes the payload back in the next SkipAPIRequest.payload field.
+     */
+    payload?: Record<string, any>;
 }
 
 /**

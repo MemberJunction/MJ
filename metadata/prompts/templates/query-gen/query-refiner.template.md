@@ -83,6 +83,7 @@ Return JSON with three properties:
 Example JSON structure:
 ```
 {
+  "queryName": "High Revenue Customers With Contact Details",
   "sql": "SELECT ... FROM ... WHERE ...",
   "parameters": [
     {
@@ -100,6 +101,12 @@ Example JSON structure:
 ```
 
 ### Field Definitions:
+
+**queryName** (string): Short, descriptive name for this query (3-6 words in title case)
+- If the query purpose changed during refinement, update the name accordingly
+- Otherwise, keep the original name if it's still accurate
+- Example good names: "Active Members By Organization", "Certifications Expiring Soon"
+- Example bad names: "Which Members Have The Most" (truncated), "Query For Getting Data" (generic)
 
 **sql** (string): The refined SQL query template using Nunjucks syntax
 

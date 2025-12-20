@@ -254,8 +254,7 @@ export async function generateCommand(options: Record<string, unknown>): Promise
       const exportResult = await exporter.exportQueries(
         allValidatedQueries,
         uniqueCategories,
-        config.outputDirectory,
-        config.outputCategoryDirectory
+        config
       );
       spinner.succeed(chalk.green(`Exported to ${exportResult.outputPath}`));
     }

@@ -118,9 +118,8 @@ export class EntityGrouper {
   /**
    * Prepare schema data for LLM prompt
    *
-   * Note: The LLM will determine appropriate group count based on business
-   * domain understanding and schema complexity. We provide the full entity
-   * schema and relationship graph for intelligent analysis.
+   * Calculates a target group count based on entity count and group size constraints
+   * to guide the LLM toward appropriate coverage.
    *
    * @param entities - Entities within a single schema
    * @param schemaName - Name of the schema being processed
@@ -129,12 +128,64 @@ export class EntityGrouper {
     const formattedEntities = formatEntitiesForPrompt(entities);
     const relationshipGraph = generateRelationshipGraph(entities);
 
+    // Calculate target group count using graph theory metrics
+    // This approach uses actual schema connectivity instead of arbitrary thresholds
+    const avgGroupSize = (this.config.minGroupSize + this.config.maxGroupSize) / 2;
+
+    // Calculate graph metrics
+    const totalRelationships = entities.reduce((sum, e) => sum + e.RelatedEntities.length, 0);
+    const avgDegree = totalRelationships / entities.length;
+
+    // Identify hub entities (>5 relationships) - these create many group opportunities
+    const hubEntities = entities.filter(e => e.RelatedEntities.length > 5);
+    const hubCount = hubEntities.length;
+    const maxHubDegree = hubCount > 0 ? Math.max(...hubEntities.map(e => e.RelatedEntities.length)) : 0;
+
+    // Base coverage: Start with full coverage (1.0) for any connected schema
+    // Boost if there are hub entities that create multiple grouping opportunities
+    let baseCoverage = 1.0;
+
+    // Hub multiplier: Each hub entity can participate in many groups
+    // A hub with 30 relationships can create ~15 meaningful 2-entity groups
+    if (hubCount > 0) {
+      // Each hub adds potential groups proportional to its degree
+      const hubBoost = (maxHubDegree / entities.length) * 0.5;
+      baseCoverage = Math.min(1.0 + hubBoost, 1.5);
+    }
+
+    // Connectivity multiplier: Higher average degree = more overlapping groups possible
+    const connectivityMultiplier = Math.min(1.0 + (avgDegree / 10), 1.3);
+
+    // Final target combining both metrics
+    const targetGroupCount = Math.ceil(
+      (entities.length * baseCoverage * connectivityMultiplier) / avgGroupSize
+    );
+
+    // Log metrics in verbose mode
+    if (this.config.verbose) {
+      LogStatus(`\nSchema Graph Metrics (${schemaName}):`);
+      LogStatus(`  Total entities: ${entities.length}`);
+      LogStatus(`  Total relationships: ${totalRelationships}`);
+      LogStatus(`  Average degree: ${avgDegree.toFixed(2)}`);
+      LogStatus(`  Hub entities (>5 rels): ${hubCount}`);
+      if (hubCount > 0) {
+        LogStatus(`  Largest hub degree: ${maxHubDegree}`);
+      }
+      LogStatus(`  Base coverage: ${baseCoverage.toFixed(2)}`);
+      LogStatus(`  Connectivity multiplier: ${connectivityMultiplier.toFixed(2)}`);
+      LogStatus(`  → Target group count: ${targetGroupCount}\n`);
+    }
+
     return {
       schemaName,
       entities: formattedEntities,
       relationshipGraph,
       minGroupSize: this.config.minGroupSize,
-      maxGroupSize: this.config.maxGroupSize
+      maxGroupSize: this.config.maxGroupSize,
+      targetGroupCount,
+      avgDegree: avgDegree.toFixed(1),
+      hubCount,
+      maxHubDegree: hubCount > 0 ? maxHubDegree : undefined
     };
   }
 

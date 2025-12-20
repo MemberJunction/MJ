@@ -45,6 +45,7 @@ export interface QueryGenConfig {
   outputMode: 'metadata' | 'database' | 'both';
   outputDirectory: string;
   outputCategoryDirectory?: string; // Optional: defaults to outputDirectory if not provided
+  externalizeSQLToFiles: boolean; // When true, creates separate .sql files and uses @file: references
 
   // Query Category Configuration
   rootQueryCategory: string;
@@ -84,6 +85,7 @@ const DEFAULT_CONFIG: QueryGenConfig = {
   },
   outputMode: 'metadata',
   outputDirectory: './metadata/queries',
+  externalizeSQLToFiles: true,
   rootQueryCategory: 'Auto-Generated',
   autoCreateEntityQueryCategories: false,
   parallelGenerations: 1,
@@ -116,6 +118,7 @@ export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig 
   }
 
   // Override with CLI options
+
   if (cliOptions.entities) {
     config.includeEntities = parseArrayOption(cliOptions.entities);
   }

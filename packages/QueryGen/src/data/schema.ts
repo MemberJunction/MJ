@@ -81,6 +81,7 @@ export interface BusinessQuestion {
  * Note: selectClause removed - QueryEntity automatically creates QueryFieldEntity records from SQL
  */
 export interface GeneratedQuery {
+  queryName: string;
   sql: string;
   parameters: QueryParameter[];
 }
@@ -227,7 +228,6 @@ export interface QueryMetadataRecord {
     Description: string;
     TechnicalDescription: string;
     SQL: string;
-    OriginalSQL: string;
     UsesTemplate: boolean;
     Status: string;
   };
