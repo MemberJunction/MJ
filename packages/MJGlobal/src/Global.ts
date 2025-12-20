@@ -10,7 +10,12 @@ import { BaseSingleton } from './BaseSingleton';
 export class MJGlobal extends BaseSingleton<MJGlobal> {
     // subjects for observables to handle eventing
     private _eventsSubject: Subject<MJ.MJEvent> = new Subject();
-    private _eventsReplaySubject: ReplaySubject<MJ.MJEvent> = new ReplaySubject();
+    // ReplaySubject configured to prevent memory leaks while supporting late subscribers:
+    // - bufferSize: 100 events (sufficient for initialization scenarios like login events)
+    // - windowTime: 30000ms (30 seconds - adequate for slow-loading components)
+    // Note: Backend services primarily use non-replay mode, but events are still stored in
+    // this buffer via RaiseEvent(). Time-based expiration prevents unbounded memory growth.
+    private _eventsReplaySubject: ReplaySubject<MJ.MJEvent> = new ReplaySubject(100, 30000);
 
     // Convert the Subjects to Observables for public use.
     private _events$: Observable<MJ.MJEvent> = this._eventsSubject.asObservable();
@@ -40,7 +45,7 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
         this._components = [];
 
         this._eventsSubject  = new Subject();
-        this._eventsReplaySubject = new ReplaySubject();
+        this._eventsReplaySubject = new ReplaySubject(100, 30000);
 
         // Convert the Subjects to Observables for public use.
         this._events$ = this._eventsSubject.asObservable();
