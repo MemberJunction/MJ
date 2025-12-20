@@ -413,6 +413,27 @@ export class ResourceResolver implements Resolve<void> {
       return;
     }
 
+    if (route.params['searchInput'] !== undefined) {
+      // /resource/search/:searchInput
+      const searchInput = decodeURIComponent(route.params['searchInput']);
+      const entityName = route.queryParams['Entity'] || '';
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `Search: ${searchInput}`,
+        Configuration: {
+          resourceType: 'Search Results',
+          Entity: entityName,
+          SearchInput: searchInput,
+          recordId: searchInput
+        },
+        ResourceRecordId: searchInput,
+        IsPinned: false
+      });
+      return;
+    }
+
     LogError(`Unable to parse resource route parameters from URL: ${state.url}`);
   }
 }
@@ -495,6 +516,12 @@ const routes: Routes = [
   },
   {
     path: 'resource/query/:queryId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/search/:searchInput',
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard],
     component: SingleRecordComponent,

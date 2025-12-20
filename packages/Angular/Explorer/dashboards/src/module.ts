@@ -53,6 +53,7 @@ import { TextImportDialogComponent } from './ComponentStudio/components/text-imp
 import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/artifact-selection-dialog.component';
 import { ArtifactLoadDialogComponent } from './ComponentStudio/components/artifact-load-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
+import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SplitterModule } from '@progress/kendo-angular-layout';
 // Scheduling Dashboard Components
@@ -192,6 +193,7 @@ import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
     AITestHarnessModule,
     MemberJunctionCoreEntityFormsModule,
     GridModule,
+    ExcelExportModule,
     MJReactModule,
     SplitterModule,
     TabStripModule,
