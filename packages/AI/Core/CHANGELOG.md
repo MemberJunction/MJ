@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai
 
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+  - @memberjunction/global@2.127.0
+
 ## 2.126.1
 
 ### Patch Changes

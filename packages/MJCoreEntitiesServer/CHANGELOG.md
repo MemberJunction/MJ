@@ -1,5 +1,28 @@
 # @memberjunction/core-entities-server
 
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [65318c4]
+- Updated dependencies [0e56e97]
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/skip-types@2.127.0
+  - @memberjunction/ai-core-plus@2.127.0
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/aiengine@2.127.0
+  - @memberjunction/ai-prompts@2.127.0
+  - @memberjunction/ai-engine-base@2.127.0
+  - @memberjunction/ai-vector-dupe@2.127.0
+  - @memberjunction/actions-base@2.127.0
+  - @memberjunction/doc-utils@2.127.0
+  - @memberjunction/sqlserver-dataprovider@2.127.0
+  - @memberjunction/ai@2.127.0
+  - @memberjunction/ai-provider-bundle@2.127.0
+
 ## 2.126.1
 
 ### Patch Changes

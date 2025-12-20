@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/cli
 
+## 2.127.0
+
+### Patch Changes
+
+- b748848: Add Gemini 3 Flash and GPT-5.2 AI models, enhance QueryGen with graph-based entity targeting, AI-powered semantic query naming, and optional external SQL file generation
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/query-gen@2.127.0
+  - @memberjunction/ai-cli@2.127.0
+  - @memberjunction/codegen-lib@2.127.0
+  - @memberjunction/db-auto-doc@2.127.0
+  - @memberjunction/metadata-sync@2.127.0
+  - @memberjunction/sqlserver-dataprovider@2.127.0
+  - @memberjunction/testing-cli@2.127.0
+
 ## 2.126.1
 
 ### Patch Changes

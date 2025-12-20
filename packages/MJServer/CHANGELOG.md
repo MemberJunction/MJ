@@ -1,5 +1,59 @@
 # Change Log - @memberjunction/server
 
+## 2.127.0
+
+### Minor Changes
+
+- 65318c4: migration
+
+### Patch Changes
+
+- Updated dependencies [65318c4]
+- Updated dependencies [0e56e97]
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/interactive-component-types@2.127.0
+  - @memberjunction/skip-types@2.127.0
+  - @memberjunction/ai-agents@2.127.0
+  - @memberjunction/ai-core-plus@2.127.0
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/component-registry-client-sdk@2.127.0
+  - @memberjunction/graphql-dataprovider@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/core-entities-server@2.127.0
+  - @memberjunction/ai-agent-manager@2.127.0
+  - @memberjunction/core-actions@2.127.0
+  - @memberjunction/scheduling-engine@2.127.0
+  - @memberjunction/testing-engine@2.127.0
+  - @memberjunction/aiengine@2.127.0
+  - @memberjunction/ai-prompts@2.127.0
+  - @memberjunction/actions@2.127.0
+  - @memberjunction/ai-agent-manager-actions@2.127.0
+  - @memberjunction/ai-vectors-pinecone@2.127.0
+  - @memberjunction/actions-apollo@2.127.0
+  - @memberjunction/actions-bizapps-accounting@2.127.0
+  - @memberjunction/actions-bizapps-crm@2.127.0
+  - @memberjunction/actions-bizapps-formbuilders@2.127.0
+  - @memberjunction/actions-bizapps-lms@2.127.0
+  - @memberjunction/actions-bizapps-social@2.127.0
+  - @memberjunction/entity-communications-server@2.127.0
+  - @memberjunction/communication-ms-graph@2.127.0
+  - @memberjunction/communication-sendgrid@2.127.0
+  - @memberjunction/doc-utils@2.127.0
+  - @memberjunction/external-change-detection@2.127.0
+  - @memberjunction/data-context@2.127.0
+  - @memberjunction/data-context-server@2.127.0
+  - @memberjunction/queue@2.127.0
+  - @memberjunction/storage@2.127.0
+  - @memberjunction/sqlserver-dataprovider@2.127.0
+  - @memberjunction/scheduling-actions@2.127.0
+  - @memberjunction/scheduling-engine-base@2.127.0
+  - @memberjunction/templates@2.127.0
+  - @memberjunction/ai@2.127.0
+  - @memberjunction/scheduling-base-types@2.127.0
+  - @memberjunction/ai-provider-bundle@2.127.0
+
 ## 2.126.1
 
 ### Patch Changes

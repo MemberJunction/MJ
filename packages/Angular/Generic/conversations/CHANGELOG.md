@@ -1,5 +1,35 @@
 # @memberjunction/ng-conversations
 
+## 2.127.0
+
+### Minor Changes
+
+- 65318c4: migration
+
+### Patch Changes
+
+- c7c3378: Fix memory leaks and improve conversation naming performance
+- Updated dependencies [65318c4]
+- Updated dependencies [0e56e97]
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/ng-artifacts@2.127.0
+  - @memberjunction/ai-core-plus@2.127.0
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/graphql-dataprovider@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/ai-engine-base@2.127.0
+  - @memberjunction/ng-testing@2.127.0
+  - @memberjunction/ng-base-types@2.127.0
+  - @memberjunction/ng-code-editor@2.127.0
+  - @memberjunction/ng-container-directives@2.127.0
+  - @memberjunction/ng-notifications@2.127.0
+  - @memberjunction/ng-shared-generic@2.127.0
+  - @memberjunction/ng-tasks@2.127.0
+  - @memberjunction/ai@2.127.0
+  - @memberjunction/ng-markdown@2.127.0
+
 ## 2.126.1
 
 ### Patch Changes
