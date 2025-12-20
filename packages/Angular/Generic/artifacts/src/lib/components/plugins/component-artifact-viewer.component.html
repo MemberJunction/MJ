@@ -14,13 +14,22 @@
         }
       </div>
     } @else {
-      @if (component) {
+      <!-- Only render React component if there's code to execute -->
+      @if (component && (component.code || component.namespace)) {
         <mj-react-component
           #reactComponent
           [component]="component"
           (componentEvent)="onComponentEvent($event)"
           (openEntityRecord)="onOpenEntityRecord($event)">
         </mj-react-component>
+      } @else if (component) {
+        <!-- Component spec exists but no code - show informational message -->
+        <div class="no-code-state">
+          <i class="fa-solid fa-file-lines"></i>
+          <h3>Component Specification</h3>
+          <p>This component has specifications but no executable code yet.</p>
+          <p>View the Functional, Data, or Spec tabs for details.</p>
+        </div>
       } @else {
         <div class="error-state">
           <i class="fa-solid fa-exclamation-circle"></i>

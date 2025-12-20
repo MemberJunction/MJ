@@ -54,6 +54,7 @@ export class QueryFixer {
 
       // Prepare prompt data
       const promptData = {
+        queryName: query.queryName,
         originalSQL: query.sql,
         errorMessage,
         parameters: query.parameters,
@@ -96,6 +97,7 @@ export class QueryFixer {
   private async executePrompt(
     prompt: AIPromptEntityExtended,
     promptData: {
+      queryName: string;
       originalSQL: string;
       errorMessage: string;
       parameters: GeneratedQuery['parameters'];
@@ -125,8 +127,9 @@ export class QueryFixer {
       LogStatus(`Query fix reasoning: ${result.result.reasoning}`);
     }
 
-    // Return GeneratedQuery format, preserving original parameters
+    // Return GeneratedQuery format, preserving original parameters and queryName
     return {
+      queryName: promptData.queryName,
       sql: result.result.newSQL,
       parameters: promptData.parameters,
     };

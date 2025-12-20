@@ -13,7 +13,11 @@ import { ComponentSpec } from "./component-spec";
  */
 export function BuildComponentCompleteCode(spec: ComponentSpec): string {
     // Start with the base code for the root component
-    let code = spec.code || '// Generation Error: No root component code provided! \n\n';
+    // Return empty string if no code provided (allows UI to hide Code tab)
+    if (!spec.code || !spec.code.trim()) {
+        return '';
+    }
+    let code = spec.code;
     // Recursively replace placeholders for dependency components with their generated code
     if (!spec.dependencies || spec.dependencies.length === 0) {
         // If there are no dependency components, return the base code for this component

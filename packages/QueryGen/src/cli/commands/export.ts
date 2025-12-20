@@ -155,7 +155,6 @@ async function convertQueryToMetadata(
       Description: query.Description || '',
       TechnicalDescription: query.TechnicalDescription || '',
       SQL: query.SQL || '',
-      OriginalSQL: query.OriginalSQL || query.SQL || '',
       UsesTemplate: query.UsesTemplate || false,
       Status: query.Status || 'Active',
     },

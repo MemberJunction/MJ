@@ -98,6 +98,13 @@ export class HtmlArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public safeHtmlContent: SafeHtml = '';
   public viewMode: 'preview' | 'source' = 'preview';
 
+  /**
+   * HTML artifacts always have content to display
+   */
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
+
   constructor(private sanitizer: DomSanitizer) {
     super();
   }

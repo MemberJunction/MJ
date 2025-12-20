@@ -453,6 +453,7 @@ const queryGenConfig = {
   outputMode: 'metadata', // 'metadata' | 'database' | 'both'
   outputDirectory: './Demos/metadata/queries',
   outputCategoryDirectory: './Demos/metadata/query-categories', // Optional: directory for category metadata
+  externalizeSQLToFiles: true, // When true, creates separate .sql files and uses @file: references
 
   // Query Category Configuration
   rootQueryCategory: 'Golden-Queries', // Root category for all generated queries

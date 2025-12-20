@@ -86,6 +86,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   @Input() cssClass?: string;
 
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() pluginLoaded = new EventEmitter<void>();
 
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
   viewerContainer!: ViewContainerRef;
@@ -174,24 +175,26 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
 
       // Create and configure the viewer component
       this.componentRef = this.viewerContainer.createComponent(componentType);
-      const componentInstance = this.componentRef.instance as IArtifactViewerComponent;
 
-      // Set inputs
-      componentInstance.artifactVersion = this.artifactVersion;
+      // Set inputs using setInput() which properly triggers ngOnChanges
+      // This is critical for plugins like ComponentArtifactViewerComponent that
+      // need to process the artifactVersion in ngOnChanges before pluginLoaded fires
+      this.componentRef.setInput('artifactVersion', this.artifactVersion);
       if (this.height !== undefined) {
-        (componentInstance as any).height = this.height;
+        this.componentRef.setInput('height', this.height);
       }
       if (this.readonly !== undefined) {
-        (componentInstance as any).readonly = this.readonly;
+        this.componentRef.setInput('readonly', this.readonly);
       }
       if (this.cssClass !== undefined) {
-        (componentInstance as any).cssClass = this.cssClass;
+        this.componentRef.setInput('cssClass', this.cssClass);
       }
       if (this.contentType !== undefined) {
-        (componentInstance as any).contentType = this.contentType;
+        this.componentRef.setInput('contentType', this.contentType);
       }
 
       // Subscribe to openEntityRecord event if the plugin emits it
+      const componentInstance = this.componentRef.instance;
       if ((componentInstance as any).openEntityRecord) {
         (componentInstance as any).openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
           this.openEntityRecord.emit(event);
@@ -202,6 +205,9 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       this.componentRef.changeDetectorRef.detectChanges();
 
       this.isLoading = false;
+
+      // Notify parent that plugin has loaded (for tab selection timing)
+      this.pluginLoaded.emit();
     } catch (err) {
       console.error('Error loading artifact viewer:', err);
       LogError(err);
