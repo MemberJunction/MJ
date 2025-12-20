@@ -101,7 +101,8 @@
                 [artifactTypeName]="artifactTypeName"
                 [contentType]="contentType"
                 [readonly]="true"
-                (openEntityRecord)="onOpenEntityRecord($event)">
+                (openEntityRecord)="onOpenEntityRecord($event)"
+                (pluginLoaded)="onPluginLoaded()">
               </mj-artifact-type-plugin-viewer>
             </div>
           }
@@ -121,7 +122,11 @@
                 </div>
                 @if (displayMarkdown) {
                   <div class="markdown-content">
-                    <mj-markdown [data]="displayMarkdown"></mj-markdown>
+                    <mj-markdown [data]="displayMarkdown"
+                                 [enableCollapsibleHeadings]="true"
+                                 [enableLineNumbers]="true"
+                                 [enableSmartypants]="true"
+                                 [enableHtml]="true"></mj-markdown>
                   </div>
                 } @else if (displayHtml) {
                   <div class="html-content" [innerHTML]="displayHtml"></div>
@@ -225,7 +230,11 @@
                 @switch (tabData.type) {
                   @case ('markdown') {
                     <div class="markdown-viewer">
-                      <mj-markdown [data]="tabData.content"></mj-markdown>
+                      <mj-markdown [data]="tabData.content"
+                                   [enableCollapsibleHeadings]="true"
+                                   [enableLineNumbers]="true"
+                                   [enableSmartypants]="true"
+                                   [enableHtml]="true"></mj-markdown>
                     </div>
                   }
                   @case ('json') {

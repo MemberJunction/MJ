@@ -42,7 +42,11 @@ import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
           </iframe>
         } @else if (displayMarkdown) {
           <div class="markdown-content">
-            <mj-markdown [data]="displayMarkdown"></mj-markdown>
+            <mj-markdown [data]="displayMarkdown"
+                         [enableCollapsibleHeadings]="true"
+                         [enableLineNumbers]="true"
+                         [enableSmartypants]="true"
+                         [enableHtml]="true"></mj-markdown>
           </div>
         } @else {
           <div class="json-editor-container">
@@ -131,6 +135,13 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public htmlBlobUrl: SafeResourceUrl | null = null;
   private versionAttributes: ArtifactVersionAttributeEntity[] = [];
   private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
+
+  /**
+   * JSON artifacts always have content to display (JSON editor, displayHtml, or displayMarkdown)
+   */
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
 
   constructor(
     private cdr: ChangeDetectorRef,

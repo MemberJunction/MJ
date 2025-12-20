@@ -130,6 +130,14 @@ export interface SkipCallOptions {
      * Callback for streaming status updates during execution
      */
     onStatusUpdate?: (message: string, responsePhase?: string) => void;
+
+    /**
+     * Optional payload data from a previous response (e.g., PRD in progress).
+     * This enables incremental artifact building where structured data accumulates
+     * throughout the conversation. When Skip returns a response with a payload,
+     * the client should pass that payload back in the next request.
+     */
+    payload?: Record<string, any>;
 }
 
 /**
@@ -253,7 +261,8 @@ export class SkipSDK {
             includeNotes = true,
             includeRequests = false,
             forceEntityRefresh = false,
-            includeCallbackAuth = true
+            includeCallbackAuth = true,
+            payload
         } = options;
 
         // Build base request with metadata
@@ -282,6 +291,7 @@ export class SkipSDK {
             dataContext: dataContext ? CopyScalarsAndArrays(dataContext) as DataContext : undefined,
             requestPhase,
             artifacts,
+            payload, // Pass through payload for incremental artifact building (e.g., PRD in progress)
             entities: baseRequest.entities || [],
             queries: baseRequest.queries || [],
             notes: baseRequest.notes,

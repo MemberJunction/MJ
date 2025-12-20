@@ -125,35 +125,61 @@ export class QuestionGenerator {
   /**
    * Validate and filter business questions
    * Removes low-quality or unanswerable questions
+   * Corrects entity name casing to match exact entity group names
    *
    * @param questions - Raw questions from AI
    * @param entityGroup - Entity group for validation context
-   * @returns Filtered array of valid questions
+   * @returns Filtered array of valid questions with corrected entity names
    */
   private validateQuestions(
     questions: BusinessQuestion[],
     entityGroup: EntityGroup
   ): BusinessQuestion[] {
-    const entityNames = new Set(entityGroup.entities.map((e) => e.Name));
+    // Create case-insensitive lookup map: lowercase -> exact entity name
+    // Also map BaseView names to correct entity names (in case LLM returns view names)
+    const entityNameLookup = new Map<string, string>();
+    for (const entity of entityGroup.entities) {
+      // Map entity name (case-insensitive)
+      entityNameLookup.set(entity.Name.toLowerCase(), entity.Name);
 
-    return questions.filter((q) => {
-      // Must have required fields
-      if (!this.hasRequiredFields(q)) {
-        return false;
+      // Map base view name to entity name (case-insensitive) as backup
+      if (entity.BaseView) {
+        entityNameLookup.set(entity.BaseView.toLowerCase(), entity.Name);
       }
+    }
 
-      // Must reference entities in the group
-      if (!this.referencesGroupEntities(q, entityNames)) {
-        return false;
-      }
+    return questions
+      .filter((q) => {
+        // Must have required fields
+        if (!this.hasRequiredFields(q)) {
+          if (this.config.verbose) {
+            LogStatus(`  ❌ Filtered: Missing required fields - "${q.userQuestion?.substring(0, 60)}..."`);
+          }
+          return false;
+        }
 
-      // Must not be overly generic
-      if (this.isTooGeneric(q)) {
-        return false;
-      }
+        // Must reference entities in the group (by name or base view)
+        if (!this.referencesGroupEntities(q, entityNameLookup)) {
+          if (this.config.verbose) {
+            LogStatus(`  ❌ Filtered: Doesn't reference group entities - "${q.userQuestion.substring(0, 60)}..." (references: ${q.entities.join(', ')})`);
+          }
+          return false;
+        }
 
-      return true;
-    });
+        return true;
+      })
+      .map((q) => {
+        // Correct entity name casing to match exact entity group names
+        const correctedEntities = q.entities.map((entityName) => {
+          const exactName = entityNameLookup.get(entityName.toLowerCase());
+          return exactName || entityName; // Use exact name if found, otherwise keep original
+        });
+
+        return {
+          ...q,
+          entities: correctedEntities
+        };
+      });
   }
 
   /**
@@ -172,28 +198,16 @@ export class QuestionGenerator {
 
   /**
    * Check if question references entities in the group
+   * Uses case-insensitive matching to handle minor casing differences
+   * Also accepts base view names as valid references
    */
   private referencesGroupEntities(
     question: BusinessQuestion,
-    entityNames: Set<string>
+    entityNameLookup: Map<string, string>
   ): boolean {
-    return question.entities.some((entityName) => entityNames.has(entityName));
-  }
-
-  /**
-   * Check if question is too generic to be useful
-   */
-  private isTooGeneric(question: BusinessQuestion): boolean {
-    const genericPatterns = [
-      /show\s+me\s+all/i,
-      /list\s+all/i,
-      /get\s+all/i,
-      /display\s+all/i,
-      /^what\s+is/i,
-    ];
-
-    return genericPatterns.some((pattern) =>
-      pattern.test(question.userQuestion)
+    return question.entities.some((entityName) =>
+      entityNameLookup.has(entityName.toLowerCase())
     );
   }
+
 }

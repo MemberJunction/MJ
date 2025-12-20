@@ -38,22 +38,43 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   public errorMessage = '';
   public errorDetails = '';
 
+  /**
+   * Whether this plugin has content to display in the Display tab.
+   * Returns true only if the component has code that can be rendered.
+   *
+   * IMPORTANT: Uses this.component (synchronously loaded from artifact JSON)
+   * instead of resolvedComponentSpec (which depends on async React loading).
+   * This ensures hasDisplayContent returns correct value immediately when
+   * pluginLoaded fires, before React component finishes loading.
+   */
+  public override get hasDisplayContent(): boolean {
+    // Use this.component directly - it's available synchronously after loadComponentSpec()
+    return !!this.component?.namespace || !!this.component?.code
+  }
+
   constructor(private adapter: AngularAdapterService) {
     super();
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     // When artifactVersion input changes, reload the component spec
-    if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
-      await this.loadComponentSpec();
-      // Notify parent that tabs may have changed
-      this.tabsChanged.emit();
+    if (changes['artifactVersion']) {
+      this.loadComponentSpec();
+      // Notify parent that tabs may have changed (on subsequent changes)
+      if (!changes['artifactVersion'].firstChange) {
+        this.tabsChanged.emit();
+      }
     }
   }
 
-  private async loadComponentSpec(): Promise<void> {
+  /**
+   * Synchronously load the component spec from artifact content.
+   * This is intentionally synchronous so that tabs are available immediately
+   * when the parent queries GetAdditionalTabs() after pluginLoaded fires.
+   */
+  private loadComponentSpec(): void {
     try {
-      if (this.artifactVersion.Content) {
+      if (this.artifactVersion?.Content) {
         this.component = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec;
         this.extractComponentParts();
       } else {
@@ -67,11 +88,14 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
   }
 
+  /**
+   * Component initialization.
+   * Note: loadComponentSpec() is called in ngOnChanges which runs before ngOnInit,
+   * ensuring tabs are available when pluginLoaded fires.
+   * The async adapter initialization happens here and doesn't block tab availability.
+   */
   async ngOnInit(): Promise<void> {
-    // Load initial component spec
-    await this.loadComponentSpec();
-
-    // Initialize Angular adapter for React components
+    // Initialize Angular adapter for React components (async operation)
     try {
       await this.adapter.initialize();
     } catch (error) {
@@ -129,14 +153,16 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       });
     }
 
-    // Code tab (lazy-loaded)
-    tabs.push({
-      label: 'Code',
-      icon: 'fa-code',
-      contentType: 'code',
-      language: 'typescript',
-      content: () => BuildComponentCompleteCode(resolvedComponent)
-    });
+    // Code tab (lazy-loaded) - only show if there's actual code
+    if (resolvedComponent.code && resolvedComponent.code.trim()) {
+      tabs.push({
+        label: 'Code',
+        icon: 'fa-code',
+        contentType: 'code',
+        language: 'typescript',
+        content: () => BuildComponentCompleteCode(resolvedComponent)
+      });
+    }
 
     // Spec tab - Shows fully resolved component spec in JSON format (rightmost)
     tabs.push({
