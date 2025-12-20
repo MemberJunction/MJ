@@ -83,6 +83,13 @@ export class CodeArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   @Input() contentType?: string;
 
+  /**
+   * Code artifacts always have content to display
+   */
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
+
   ngOnInit(): void {
     this.codeContent = this.getContent();
     this.detectLanguage();

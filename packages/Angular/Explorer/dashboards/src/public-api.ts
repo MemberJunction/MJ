@@ -7,6 +7,8 @@ import { LoadComponentStudioDashboard } from './ComponentStudio/component-studio
 import { LoadSchedulingDashboard } from './Scheduling/scheduling-dashboard.component';
 import { LoadTestingDashboard } from './Testing/testing-dashboard.component';
 import { LoadDataExplorerDashboard } from './DataExplorer/data-explorer-dashboard.component';
+import { LoadCommunicationDashboard } from './Communication/communication-dashboard.component';
+
 import {
   LoadActionsOverviewResource,
   LoadActionsMonitorResource,
@@ -15,6 +17,11 @@ import {
   LoadActionsEntitiesResource,
   LoadActionsSecurityResource
 } from './Actions';
+import { LoadCommunicationMonitorResource } from './Communication/communication-monitor-resource.component';
+import { LoadCommunicationLogsResource } from './Communication/communication-logs-resource.component';
+import { LoadCommunicationProvidersResource } from './Communication/communication-providers-resource.component';
+import { LoadCommunicationRunsResource } from './Communication/communication-runs-resource.component';
+
 import {
   LoadTestingOverviewResource,
   LoadTestingExecutionResource,
@@ -36,6 +43,8 @@ export * from './ComponentStudio';
 export * from './Scheduling/scheduling-dashboard.component';
 export * from './Testing/testing-dashboard.component';
 export * from './DataExplorer';
+export * from './Communication/communication-dashboard.component';
+
 
 // Export AI components as resources (BaseResourceComponent-based)
 export {
@@ -87,6 +96,25 @@ export {
   LoadSchedulingHealthResource
 } from './Scheduling/components';
 
+// Export Communication components as resources
+export {
+  CommunicationMonitorResourceComponent,
+  LoadCommunicationMonitorResource
+} from './Communication/communication-monitor-resource.component';
+export {
+  CommunicationLogsResourceComponent,
+  LoadCommunicationLogsResource
+} from './Communication/communication-logs-resource.component';
+export {
+  CommunicationProvidersResourceComponent,
+  LoadCommunicationProvidersResource
+} from './Communication/communication-providers-resource.component';
+export {
+  CommunicationRunsResourceComponent,
+  LoadCommunicationRunsResource
+} from './Communication/communication-runs-resource.component';
+
+
 // Export Testing components as resources (BaseResourceComponent-based)
 export {
   TestingOverviewResourceComponent,
@@ -134,3 +162,12 @@ LoadTestingFeedbackResource();
 
 // Data Explorer Dashboard loader
 LoadDataExplorerDashboard();
+
+// Communication Dashboard loader
+LoadCommunicationDashboard();
+
+// Communication resource loaders
+LoadCommunicationMonitorResource();
+LoadCommunicationLogsResource();
+LoadCommunicationProvidersResource();
+LoadCommunicationRunsResource();

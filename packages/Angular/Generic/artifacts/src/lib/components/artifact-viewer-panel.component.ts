@@ -66,8 +66,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   // Dynamic tabs from plugin
   public get allTabs(): string[] {
-    // Start with Display tab (cannot be removed)
-    const tabs = ['Display'];
+    const tabs: string[] = [];
+
+    // Only add Display tab if there's content to display
+    if (this.hasDisplayTab) {
+      tabs.push('Display');
+    }
 
     // Get plugin tabs directly from plugin instance (no caching needed - plugin always exists)
     if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
@@ -328,15 +332,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           this.displayHtml = this.cleanEscapedCharacters(this.displayHtml);
         }
 
-        // Default to display tab if we have a plugin or extracted display content
-        // Otherwise default to JSON tab for JSON types, or Details tab as last resort
-        if (this.hasDisplayTab) {
-          this.activeTab = 'display';
-        } else if (this.jsonContent) {
-          this.activeTab = 'json';
-        } else {
-          this.activeTab = 'details';
-        }
+        // Set active tab to the first available tab
+        this.setActiveTabToFirstAvailable();
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
@@ -359,9 +356,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   get hasDisplayTab(): boolean {
     // Show Display tab if:
-    // 1. We have a plugin for this artifact type (check if artifact type exists), OR
+    // 1. We have a plugin AND it reports having content to display, OR
     // 2. We have displayMarkdown or displayHtml attributes from extract rules
-    return this.hasPlugin || !!this.displayMarkdown || !!this.displayHtml;
+    //
+    // Note: hasDisplayContent defaults to false in base class, so plugins must
+    // explicitly opt-in by overriding to return true when they have content.
+    // This prevents showing Display tab before plugin loads or when plugin has no content.
+    const pluginHasContent = this.pluginViewer?.pluginInstance?.hasDisplayContent ?? false;
+
+    return pluginHasContent || !!this.displayMarkdown || !!this.displayHtml;
   }
 
   get hasPlugin(): boolean {
@@ -396,6 +399,37 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   setActiveTab(tab: 'display' | 'json' | 'details' | 'links'): void {
     this.activeTab = tab;
+  }
+
+  /**
+   * Sets the active tab to the first available tab in the list.
+   * Called when tabs change or when the currently active tab becomes unavailable.
+   */
+  private setActiveTabToFirstAvailable(): void {
+    const tabs = this.allTabs;
+    if (tabs.length > 0) {
+      // If current tab is still available, keep it; otherwise switch to first
+      const currentTabStillAvailable = tabs.some(t => t.toLowerCase() === this.activeTab.toLowerCase());
+      if (!currentTabStillAvailable) {
+        this.activeTab = tabs[0].toLowerCase();
+      }
+    } else {
+      // Fallback to details if no tabs available (shouldn't happen)
+      this.activeTab = 'details';
+    }
+  }
+
+  /**
+   * Called when the plugin viewer finishes loading.
+   * Selects the first available tab now that plugin tabs are available.
+   */
+  onPluginLoaded(): void {
+    // Now that plugin is loaded, we have accurate tab information
+    // Always select the first tab since this is the initial load
+    const tabs = this.allTabs;
+    if (tabs.length > 0) {
+      this.activeTab = tabs[0].toLowerCase();
+    }
   }
 
   private parseAttributeValue(value: string | null | undefined): string | null {
