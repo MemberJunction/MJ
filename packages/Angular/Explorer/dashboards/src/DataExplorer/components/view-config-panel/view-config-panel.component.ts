@@ -126,7 +126,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
   // UI state
   public activeTab: 'columns' | 'filters' | 'settings' = 'columns';
-  public isSaving: boolean = false;
+  @Input() isSaving: boolean = false;
   public columnSearchText: string = '';
 
   // Drag state for column reordering

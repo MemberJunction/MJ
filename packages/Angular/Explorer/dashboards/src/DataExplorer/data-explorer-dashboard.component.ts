@@ -479,6 +479,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public filterDialogState: CompositeFilterDescriptor = createEmptyFilter();
   public filterDialogDisabled: boolean = false;
 
+  // View save state
+  public isSavingView: boolean = false;
+
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
@@ -960,6 +963,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public async onSaveView(event: ViewSaveEvent): Promise<void> {
     if (!this.selectedEntity) return;
 
+    this.isSavingView = true;
+    this.cdr.detectChanges();
+
     try {
       const md = new Metadata();
 
@@ -1056,6 +1062,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.cdr.detectChanges();
     } catch (error) {
       console.error('[DataExplorer] Error saving view:', error);
+    } finally {
+      this.isSavingView = false;
+      this.cdr.detectChanges();
     }
   }
 
