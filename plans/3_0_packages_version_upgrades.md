@@ -6,26 +6,34 @@
 > - **Phase 2**: ✅ COMPLETE - Node.js types & build tools (77% build success, stable)
 > - **Phase 3**: ✅ COMPLETE - Angular 18 → 21 + TypeScript 5.9.3 (83% build success)
 > - **Phase 4**: ✅ COMPLETE - Kendo UI 16 → 21 (77% build success, stable)
-> - **Phase 5**: ⏳ NEXT - RxJS and other dependencies
+> - **Phase 5**: ✅ COMPLETE - RxJS & supporting libraries (77% build success, stable)
+> - **Phase 6**: ⏳ NEXT - Warning elimination and failing package fixes
 >
 > **Critical Dependencies Discovered**:
 > 1. TypeScript 5.9.3 requires Angular 21+ (Phase 1 finding)
 > 2. Node.js types & build tools require Angular 21 peer deps (Phase 2 finding)
 > 3. npm with --legacy-peer-deps resolves Angular to 21.0.6 despite overrides
 >
-> **Completed Phases (Correct Order)**:
+> **Completed Phases (Execution Order)**:
 > 1. Phase 0: Baseline ✅
 > 2. Phase 1: TypeScript Consolidation to 5.4.5 ✅
 > 3. Phase 3: Angular 18 → 21 + TypeScript 5.9.3 ✅ (moved ahead due to dependencies)
 > 4. Phase 4: Kendo UI 16 → 21 ✅
 > 5. Phase 2: Node.js types & build tools ✅ (completed after Angular 21)
+> 6. Phase 5: RxJS & supporting libraries ✅ (rxjs 7.8.2, tslib 2.8.1, zone.js 0.16.0)
 >
-> **Next Steps**:
-> - Phase 5: RxJS and other dependencies
-> - Phase 6: Warning elimination and failing package fixes (33 packages)
->   - ESLint configuration migration to flat format
->   - D3 type compatibility fixes
->   - Angular HTTP import resolution
+> **Current State**:
+> - Build: 110/143 packages (77% success rate, stable)
+> - Security: 10 vulnerabilities (down from 11 after audit fix)
+> - All major dependencies upgraded to latest stable versions
+>
+> **Next Steps (Phase 6)**:
+> - Fix 33 failing packages
+> - ESLint configuration migration to flat format
+> - D3 type compatibility fixes
+> - Angular HTTP import resolution
+> - Security vulnerability fixes (10 remaining)
+> - RxJS operator usage review
 >
 > **See**:
 > - `plans/upgrade-baseline/phase1-findings.md` - TypeScript/Angular dependency
@@ -34,6 +42,7 @@
 > - `plans/upgrade-baseline/phase2-complete.md` - Phase 2 results
 > - `plans/upgrade-baseline/phase3-complete.md` - Phase 3 results
 > - `plans/upgrade-baseline/phase4-complete.md` - Phase 4 results
+> - `plans/upgrade-baseline/phase5-complete.md` - Phase 5 results
 
 ## Executive Summary
 
