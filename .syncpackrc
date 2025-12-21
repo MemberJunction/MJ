@@ -78,6 +78,28 @@
         "@progress/kendo-theme-default"
       ],
       "pinVersion": "12.3.0"
+    },
+    {
+      "dependencies": [
+        "eslint"
+      ],
+      "dependencyTypes": ["dev"],
+      "pinVersion": "9.39.2"
+    },
+    {
+      "dependencies": [
+        "@typescript-eslint/eslint-plugin",
+        "@typescript-eslint/parser"
+      ],
+      "dependencyTypes": ["dev"],
+      "pinVersion": "8.50.0"
+    },
+    {
+      "dependencies": [
+        "@types/node"
+      ],
+      "dependencyTypes": ["dev"],
+      "pinVersion": "24.10.4"
     }
   ]
 }

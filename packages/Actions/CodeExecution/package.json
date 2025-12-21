@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@types/lodash": "^4.14.202",
-    "@types/node": "^20.14.10",
+    "@types/node": "24.10.4",
     "@types/papaparse": "^5.3.14",
     "@types/uuid": "^10.0.0",
     "@types/validator": "^13.11.7",

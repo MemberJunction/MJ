@@ -39,7 +39,7 @@
     "node-sql-parser": "^5.3.13",
     "ora": "^5.4.1",
     "playwright": "^1.40.0",
-    "typescript": "^5.4.5"
+    "typescript": "5.9.3"
   },
   "repository": {
     "type": "git",

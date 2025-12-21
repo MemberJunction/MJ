@@ -30,7 +30,7 @@
     "@memberjunction/global": "2.127.0"
   },
   "devDependencies": {
-    "@types/node": "^20.14.10",
+    "@types/node": "24.10.4",
     "rimraf": "5.0.7",
     "typescript": "^5.9.3"
   },
