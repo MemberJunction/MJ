@@ -23,7 +23,7 @@
     "@memberjunction/core": "2.127.0",
     "@memberjunction/templates-base-types": "2.127.0",
     "@memberjunction/core-entities": "2.127.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.2"
   },
   "repository": {
     "type": "git",

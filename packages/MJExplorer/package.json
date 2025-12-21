@@ -68,9 +68,9 @@
     "karma-jasmine": "latest",
     "karma-jasmine-html-reporter": "latest",
     "mj_generatedentities": "1.0.0",
-    "rxjs": "^7.8.1",
-    "tslib": "^2.4.0",
-    "zone.js": "^0.14.0",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1",
+    "zone.js": "^0.16.0",
     "@progress/kendo-angular-intl": "21.3.0"
   },
   "devDependencies": {

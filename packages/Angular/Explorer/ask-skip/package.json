@@ -52,7 +52,7 @@
     "@progress/kendo-angular-listview": "21.3.0",
     "@progress/kendo-angular-notification": "21.3.0",
     "@memberjunction/ng-markdown": "2.127.0",
-    "tslib": "^2.4.0",
+    "tslib": "^2.8.1",
     "@progress/kendo-angular-intl": "21.3.0",
     "@progress/kendo-angular-icons": "21.3.0"
   },

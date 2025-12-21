@@ -35,7 +35,7 @@
     "@memberjunction/core": "2.127.0",
     "@memberjunction/ng-container-directives": "2.127.0",
     "@memberjunction/ng-shared": "2.127.0",
-    "tslib": "^2.4.0"
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

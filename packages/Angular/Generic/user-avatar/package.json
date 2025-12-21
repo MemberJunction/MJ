@@ -27,13 +27,13 @@
   "peerDependencies": {
     "@angular/common": "21.0.6",
     "@angular/core": "21.0.6",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.2"
   },
   "dependencies": {
     "@memberjunction/core": "2.127.0",
     "@memberjunction/core-entities": "2.127.0",
     "@memberjunction/global": "2.127.0",
-    "tslib": "^2.4.0"
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

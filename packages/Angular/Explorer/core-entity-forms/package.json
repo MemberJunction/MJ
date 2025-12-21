@@ -67,8 +67,8 @@
     "rete-area-plugin": "^2.0.3",
     "rete-connection-plugin": "^2.0.1",
     "rete-render-utils": "^2.0.2",
-    "rxjs": "^7.8.1",
-    "tslib": "^2.4.0",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1",
     "@progress/kendo-angular-intl": "21.3.0",
     "@progress/kendo-angular-icons": "21.3.0"
   },

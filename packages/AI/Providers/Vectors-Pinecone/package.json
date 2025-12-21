@@ -23,7 +23,7 @@
     "@pinecone-database/pinecone": "2.2.2",
     "dotenv": "^16.4.5",
     "openai": "5.12.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@types/node": "24.10.4",

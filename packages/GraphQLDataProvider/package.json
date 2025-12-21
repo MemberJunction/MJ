@@ -44,7 +44,7 @@
     "graphql": "^16.8.0",
     "graphql-request": "^5.2.0",
     "graphql-ws": "^5.14.0",
-    "rxjs": "^7.8.1",
+    "rxjs": "^7.8.2",
     "uuid": "^10.0.0"
   },
   "repository": {

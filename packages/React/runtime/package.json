@@ -33,7 +33,7 @@
     "@memberjunction/core-entities": "2.127.0",
     "@memberjunction/graphql-dataprovider": "2.127.0",
     "@babel/standalone": "^7.23.5",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@types/node": "24.10.4",

@@ -24,7 +24,7 @@
     "@memberjunction/ai-engine-base": "2.127.0",
     "@memberjunction/ai-vectors-memory": "2.127.0",
     "dotenv": "^16.4.5",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@types/node": "24.10.4",
