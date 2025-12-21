@@ -32,12 +32,14 @@
     "@memberjunction/ng-entity-form-dialog": "2.127.0",
     "@memberjunction/ng-notifications": "2.127.0",
     "@memberjunction/ng-shared-generic": "2.127.0",
-    "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-angular-dialog": "16.2.0",
-    "@progress/kendo-angular-dropdowns": "16.2.0",
-    "@progress/kendo-angular-indicators": "16.2.0",
-    "@progress/kendo-angular-layout": "16.2.0",
-    "tslib": "^2.4.0"
+    "@progress/kendo-angular-buttons": "21.3.0",
+    "@progress/kendo-angular-dialog": "21.3.0",
+    "@progress/kendo-angular-dropdowns": "21.3.0",
+    "@progress/kendo-angular-indicators": "21.3.0",
+    "@progress/kendo-angular-layout": "21.3.0",
+    "tslib": "^2.4.0",
+    "@progress/kendo-angular-intl": "21.3.0",
+    "@progress/kendo-angular-icons": "21.3.0"
   },
   "sideEffects": false,
   "repository": {

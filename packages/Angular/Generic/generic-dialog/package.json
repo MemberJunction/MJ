@@ -21,8 +21,10 @@
   "peerDependencies": {
     "@angular/common": "21.0.6",
     "@angular/core": "21.0.6",
-    "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-angular-dialog": "16.2.0"
+    "@progress/kendo-angular-buttons": "21.3.0",
+    "@progress/kendo-angular-dialog": "21.3.0",
+    "@progress/kendo-angular-intl": "21.3.0",
+    "@progress/kendo-angular-icons": "21.3.0"
   },
   "dependencies": {
     "tslib": "^2.4.0"

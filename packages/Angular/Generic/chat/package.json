@@ -27,11 +27,13 @@
     "@memberjunction/core": "2.127.0",
     "@memberjunction/ng-container-directives": "2.127.0",
     "@memberjunction/ng-shared-generic": "2.127.0",
-    "@progress/kendo-angular-indicators": "16.2.0",
-    "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-angular-dialog": "16.2.0",
+    "@progress/kendo-angular-indicators": "21.3.0",
+    "@progress/kendo-angular-buttons": "21.3.0",
+    "@progress/kendo-angular-dialog": "21.3.0",
     "tslib": "^2.4.0",
-    "@memberjunction/ng-markdown": "2.127.0"
+    "@memberjunction/ng-markdown": "2.127.0",
+    "@progress/kendo-angular-intl": "21.3.0",
+    "@progress/kendo-angular-icons": "21.3.0"
   },
   "sideEffects": false,
   "repository": {

@@ -23,10 +23,12 @@
     "@angular/core": "21.0.6",
     "@angular/forms": "21.0.6",
     "@angular/router": "21.0.6",
-    "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-angular-dialog": "16.2.0",
-    "@progress/kendo-angular-listbox": "16.2.0",
-    "@progress/kendo-angular-indicators": "16.2.0"
+    "@progress/kendo-angular-buttons": "21.3.0",
+    "@progress/kendo-angular-dialog": "21.3.0",
+    "@progress/kendo-angular-listbox": "21.3.0",
+    "@progress/kendo-angular-indicators": "21.3.0",
+    "@progress/kendo-angular-intl": "21.3.0",
+    "@progress/kendo-angular-icons": "21.3.0"
   },
   "dependencies": {
     "@memberjunction/communication-types": "2.127.0",

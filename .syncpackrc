@@ -41,6 +41,43 @@
       ],
       "dependencyTypes": ["dev"],
       "pinVersion": "21.0.4"
+    },
+    {
+      "dependencies": [
+        "@progress/kendo-angular-buttons",
+        "@progress/kendo-angular-charts",
+        "@progress/kendo-angular-common",
+        "@progress/kendo-angular-dateinputs",
+        "@progress/kendo-angular-dialog",
+        "@progress/kendo-angular-dropdowns",
+        "@progress/kendo-angular-excel-export",
+        "@progress/kendo-angular-filter",
+        "@progress/kendo-angular-grid",
+        "@progress/kendo-angular-icons",
+        "@progress/kendo-angular-indicators",
+        "@progress/kendo-angular-inputs",
+        "@progress/kendo-angular-intl",
+        "@progress/kendo-angular-label",
+        "@progress/kendo-angular-layout",
+        "@progress/kendo-angular-listbox",
+        "@progress/kendo-angular-listview",
+        "@progress/kendo-angular-menu",
+        "@progress/kendo-angular-navigation",
+        "@progress/kendo-angular-notification",
+        "@progress/kendo-angular-progressbar",
+        "@progress/kendo-angular-scheduler",
+        "@progress/kendo-angular-sortable",
+        "@progress/kendo-angular-tooltip",
+        "@progress/kendo-angular-treeview",
+        "@progress/kendo-angular-upload"
+      ],
+      "pinVersion": "21.3.0"
+    },
+    {
+      "dependencies": [
+        "@progress/kendo-theme-default"
+      ],
+      "pinVersion": "12.3.0"
     }
   ]
 }
