@@ -578,6 +578,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
   /**
    * Executes a routing function, optionally with conversation naming for first message
+   *
+   * IMPORTANT: Conversation naming runs asynchronously in the background and does NOT
+   * block the agent invocation. This prevents UI blocking if naming times out.
    */
   private async executeRouteWithNaming(
     routeFunction: () => Promise<void>,
@@ -585,10 +588,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     isFirstMessage: boolean
   ): Promise<void> {
     if (isFirstMessage) {
-      await Promise.all([
-        routeFunction(),
-        this.nameConversation(userMessage)
-      ]);
+      // Fire conversation naming in background (don't await)
+      // This prevents 2+ minute UI blocking if naming times out
+      this.nameConversation(userMessage);
+
+      // Execute route immediately (don't wait for naming)
+      await routeFunction();
     } else {
       await routeFunction();
     }
@@ -1941,6 +1946,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
   /**
    * Name the conversation based on the first message using GraphQL AI client
+   *
+   * IMPORTANT: This runs asynchronously in the background and has a 30-second timeout
+   * to prevent long delays. Failures are logged but don't affect the user experience.
    */
   private async nameConversation(message: string): Promise<void> {
     try {
@@ -1962,10 +1970,20 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       }
 
       const aiClient = new GraphQLAIClient(provider);
-      const result = await aiClient.RunAIPrompt({
-        promptId: promptId,
-        messages: [{ role: 'user', content: message }],
+
+      // Add 30-second timeout to prevent long delays
+      // If this times out, the conversation will keep its default name
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Conversation naming timed out after 30 seconds')), 30000);
       });
+
+      const result = await Promise.race([
+        aiClient.RunAIPrompt({
+          promptId: promptId,
+          messages: [{ role: 'user', content: message }],
+        }),
+        timeoutPromise
+      ]);
 
       if (result && result.success && (result.parsedResult || result.output)) {
         // Use parsedResult if available, otherwise parse output
@@ -1989,13 +2007,20 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
               name: name,
               description: description || ''
             });
+
+            console.log(`✅ Conversation renamed to: "${name}"`);
           }
         }
       } else {
-        console.warn('⚠️ Failed to generate conversation name');
+        console.warn('⚠️ Failed to generate conversation name - using default');
       }
     } catch (error) {
-      console.error('❌ Error naming conversation:', error);
+      // Log timeout or other errors but don't disrupt user experience
+      if (error instanceof Error && error.message.includes('timed out')) {
+        console.warn('⏱️ Conversation naming timed out - conversation will keep default name');
+      } else {
+        console.error('❌ Error naming conversation:', error);
+      }
       // Don't show error to user - naming failures should be silent
     }
   }

@@ -1,5 +1,17 @@
 # @memberjunction/ng-action-gallery
 
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/ng-ai-test-harness@2.127.0
+  - @memberjunction/ng-container-directives@2.127.0
+  - @memberjunction/ng-shared-generic@2.127.0
+
 ## 2.126.1
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core
 
+## 2.127.0
+
+### Minor Changes
+
+- c7c3378: Fix memory leaks and improve conversation naming performance
+- b748848: Add Gemini 3 Flash and GPT-5.2 AI models, enhance QueryGen with graph-based entity targeting, AI-powered semantic query naming, and optional external SQL file generation
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+  - @memberjunction/global@2.127.0
+
 ## 2.126.1
 
 ### Patch Changes

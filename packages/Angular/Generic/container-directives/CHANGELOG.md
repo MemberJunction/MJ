@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-container-directives
 
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+
 ## 2.126.1
 
 ### Patch Changes

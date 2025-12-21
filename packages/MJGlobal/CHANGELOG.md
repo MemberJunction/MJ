@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.127.0
+
+### Patch Changes
+
+- c7c3378: Fix memory leaks and improve conversation naming performance
+
 ## 2.126.1
 
 ## 2.126.0
