@@ -15,6 +15,7 @@ import { MarkdownArtifactViewerComponent } from './components/plugins/markdown-a
 import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-viewer.component';
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
+import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 
 // Import artifact type plugin viewer component
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
@@ -45,7 +46,10 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MarkdownArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
-    ComponentArtifactViewerComponent
+    ComponentArtifactViewerComponent,
+
+    // Custom tab components (used by plugins via dynamic component tabs)
+    DataRequirementsViewerComponent
   ],
   imports: [
     CommonModule,

@@ -148,7 +148,8 @@ export class MarkdownService {
       startOnLoad: false,
       theme: this.currentConfig.mermaidTheme,
       securityLevel: 'loose',
-      fontFamily: 'inherit'
+      fontFamily: 'inherit',
+      suppressErrorRendering: true // Suppress visual error diagrams - errors go to console only
     });
 
     this.mermaidInitialized = true;

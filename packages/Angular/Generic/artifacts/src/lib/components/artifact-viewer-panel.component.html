@@ -225,62 +225,69 @@
 
           <!-- Dynamic Plugin Tabs and Base Tabs (JSON, etc.) -->
           @if (activeTab !== 'display' && activeTab !== 'details' && activeTab !== 'links') {
-            @if (GetTabContent(activeTab); as tabData) {
-              <div class="dynamic-tab-content">
-                @switch (tabData.type) {
-                  @case ('markdown') {
-                    <div class="markdown-viewer">
-                      <mj-markdown [data]="tabData.content"
-                                   [enableCollapsibleHeadings]="true"
-                                   [enableLineNumbers]="true"
-                                   [enableSmartypants]="true"
-                                   [enableHtml]="true"></mj-markdown>
-                    </div>
-                  }
-                  @case ('json') {
-                    <div class="json-viewer">
-                      <div class="json-toolbar">
-                        <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
-                          <i class="fas fa-copy"></i> Copy
-                        </button>
-                      </div>
-                      <div class="json-editor-container">
-                        <mj-code-editor
-                          [value]="tabData.content"
-                          [language]="'json'"
-                          [readonly]="true"
-                          [lineWrapping]="true"
-                          style="width: 100%; height: 100%;">
-                        </mj-code-editor>
-                      </div>
-                    </div>
-                  }
-                  @case ('code') {
-                    <div class="code-viewer">
-                      <div class="code-toolbar">
-                        <button class="btn-icon" title="Copy Code" (click)="onCopyToClipboard()">
-                          <i class="fas fa-copy"></i> Copy
-                        </button>
-                      </div>
-                      <div class="code-editor-container">
-                        <mj-code-editor
-                          [value]="tabData.content"
-                          [language]="tabData.language || 'typescript'"
-                          [readonly]="true"
-                          [lineWrapping]="true"
-                          style="width: 100%; height: 100%;">
-                        </mj-code-editor>
-                      </div>
-                    </div>
-                  }
-                  @case ('html') {
-                    <div class="html-viewer" [innerHTML]="tabData.content"></div>
-                  }
-                  @case ('plaintext') {
-                    <pre class="plaintext-viewer">{{ tabData.content }}</pre>
-                  }
-                }
+            <!-- Check if this is a component tab -->
+            @if (GetComponentTabType(activeTab); as componentType) {
+              <div class="component-tab-content">
+                <ng-container *ngComponentOutlet="componentType; inputs: GetComponentInputs(activeTab)"></ng-container>
               </div>
+            } @else {
+              @if (GetTabContent(activeTab); as tabData) {
+                <div class="dynamic-tab-content">
+                  @switch (tabData.type) {
+                    @case ('markdown') {
+                      <div class="markdown-viewer">
+                        <mj-markdown [data]="tabData.content"
+                                     [enableCollapsibleHeadings]="true"
+                                     [enableLineNumbers]="true"
+                                     [enableSmartypants]="true"
+                                     [enableHtml]="true"></mj-markdown>
+                      </div>
+                    }
+                    @case ('json') {
+                      <div class="json-viewer">
+                        <div class="json-toolbar">
+                          <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
+                            <i class="fas fa-copy"></i> Copy
+                          </button>
+                        </div>
+                        <div class="json-editor-container">
+                          <mj-code-editor
+                            [value]="tabData.content"
+                            [language]="'json'"
+                            [readonly]="true"
+                            [lineWrapping]="true"
+                            style="width: 100%; height: 100%;">
+                          </mj-code-editor>
+                        </div>
+                      </div>
+                    }
+                    @case ('code') {
+                      <div class="code-viewer">
+                        <div class="code-toolbar">
+                          <button class="btn-icon" title="Copy Code" (click)="onCopyToClipboard()">
+                            <i class="fas fa-copy"></i> Copy
+                          </button>
+                        </div>
+                        <div class="code-editor-container">
+                          <mj-code-editor
+                            [value]="tabData.content"
+                            [language]="tabData.language || 'typescript'"
+                            [readonly]="true"
+                            [lineWrapping]="true"
+                            style="width: 100%; height: 100%;">
+                          </mj-code-editor>
+                        </div>
+                      </div>
+                    }
+                    @case ('html') {
+                      <div class="html-viewer" [innerHTML]="tabData.content"></div>
+                    }
+                    @case ('plaintext') {
+                      <pre class="plaintext-viewer">{{ tabData.content }}</pre>
+                    }
+                  }
+                </div>
+              }
             }
           }
         </div>

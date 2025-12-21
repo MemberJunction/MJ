@@ -1,0 +1,264 @@
+<div class="data-requirements-viewer">
+  @if (!hasData) {
+    <div class="empty-state">
+      <i class="fas fa-database"></i>
+      <h3>No Data Requirements</h3>
+      <p>This component doesn't have any data requirements defined.</p>
+    </div>
+  } @else {
+    <!-- Header Summary -->
+    <div class="summary-header">
+      <div class="mode-badge">
+        <i class="fas" [ngClass]="modeIcon"></i>
+        <span>{{ modeLabel }}</span>
+      </div>
+      <div class="stats">
+        <div class="stat-item" *ngIf="entities.length > 0">
+          <span class="stat-value">{{ entities.length }}</span>
+          <span class="stat-label">{{ entities.length === 1 ? 'Entity' : 'Entities' }}</span>
+        </div>
+        <div class="stat-item" *ngIf="queries.length > 0">
+          <span class="stat-value">{{ queries.length }}</span>
+          <span class="stat-label">{{ queries.length === 1 ? 'Query' : 'Queries' }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">{{ totalFieldCount }}</span>
+          <span class="stat-label">{{ totalFieldCount === 1 ? 'Field' : 'Fields' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Description / Overview (supports markdown including mermaid diagrams) -->
+    @if (description) {
+      <div class="description-section">
+        <h4 class="description-title">
+          <i class="fas fa-info-circle"></i>
+          Overview
+        </h4>
+        <div class="description-content">
+          <mj-markdown [data]="description"
+                       [enableCollapsibleHeadings]="false"
+                       [enableLineNumbers]="false"
+                       [enableSmartypants]="true"
+                       [enableHtml]="true"></mj-markdown>
+        </div>
+      </div>
+    }
+
+    <!-- Entities Section -->
+    @if (entities.length > 0) {
+      <div class="section entities-section">
+        <h3 class="section-title">
+          <i class="fas fa-table"></i>
+          Entities
+        </h3>
+        <div class="cards-container">
+          @for (entity of entities; track entity.name) {
+            <div class="data-card entity-card" [class.expanded]="isEntityExpanded(entity.name)">
+              <div class="card-header" (click)="toggleEntity(entity.name)">
+                <div class="card-title-row">
+                  <div class="card-icon">
+                    <i class="fas fa-table"></i>
+                  </div>
+                  <div class="card-title-info">
+                    <h4 class="card-title">{{ entity.name }}</h4>
+                    @if (entity.description) {
+                      <p class="card-description">{{ entity.description }}</p>
+                    }
+                  </div>
+                  <div class="expand-icon">
+                    <i class="fas" [ngClass]="isEntityExpanded(entity.name) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                  </div>
+                </div>
+                <div class="card-meta">
+                  <div class="permissions-row">
+                    @for (perm of entity.permissionLevelNeeded; track perm) {
+                      <span class="permission-badge" [style.background-color]="getPermissionColor(perm)">
+                        <i class="fas" [ngClass]="getPermissionIcon(perm)"></i>
+                        {{ perm }}
+                      </span>
+                    }
+                  </div>
+                  <span class="field-count">{{ entity.fieldMetadata?.length || 0 }} fields</span>
+                </div>
+              </div>
+
+              @if (isEntityExpanded(entity.name)) {
+                <div class="card-body">
+                  @if (entity.usageContext) {
+                    <div class="usage-context">
+                      <i class="fas fa-info-circle"></i>
+                      <span>{{ entity.usageContext }}</span>
+                    </div>
+                  }
+
+                  <!-- Fields Table -->
+                  @if (entity.fieldMetadata && entity.fieldMetadata.length > 0) {
+                    <div class="fields-section">
+                      <h5 class="fields-title">Fields</h5>
+                      <div class="fields-table">
+                        <div class="fields-header">
+                          <span class="field-col name-col">Name</span>
+                          <span class="field-col type-col">Type</span>
+                          <span class="field-col tags-col">Usage</span>
+                          <span class="field-col desc-col">Description</span>
+                        </div>
+                        @for (field of entity.fieldMetadata; track field.name) {
+                          <div class="field-row">
+                            <span class="field-col name-col">
+                              <i class="fas" [ngClass]="getFieldTypeIcon(field.type)" [style.color]="getFieldTypeColor(field.type)"></i>
+                              <span class="field-name">{{ field.name }}</span>
+                              @if (!field.allowsNull) {
+                                <span class="required-indicator" title="Required">*</span>
+                              }
+                            </span>
+                            <span class="field-col type-col">
+                              <code class="field-type">{{ formatFieldType(field.type) }}</code>
+                            </span>
+                            <span class="field-col tags-col">
+                              @for (tag of getFieldUsageTags(field, entity); track tag) {
+                                <span class="usage-tag" [style.background-color]="getTagColor(tag)">{{ tag }}</span>
+                              }
+                            </span>
+                            <span class="field-col desc-col">
+                              {{ field.description || '—' }}
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Queries Section -->
+    @if (queries.length > 0) {
+      <div class="section queries-section">
+        <h3 class="section-title">
+          <i class="fas fa-database"></i>
+          Queries
+        </h3>
+        <div class="cards-container">
+          @for (query of queries; track getQueryKey(query)) {
+            <div class="data-card query-card" [class.expanded]="isQueryExpanded(getQueryKey(query))">
+              <div class="card-header" (click)="toggleQuery(getQueryKey(query))">
+                <div class="card-title-row">
+                  <div class="card-icon query-icon">
+                    <i class="fas fa-code"></i>
+                  </div>
+                  <div class="card-title-info">
+                    <h4 class="card-title">{{ query.name }}</h4>
+                    <p class="card-path">{{ query.categoryPath }}</p>
+                    @if (query.description) {
+                      <p class="card-description">{{ query.description }}</p>
+                    }
+                  </div>
+                  <div class="expand-icon">
+                    <i class="fas" [ngClass]="isQueryExpanded(getQueryKey(query)) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                  </div>
+                </div>
+                <div class="card-meta">
+                  @if (query.entityNames && query.entityNames.length > 0) {
+                    <div class="entity-badges">
+                      @for (entityName of query.entityNames; track entityName) {
+                        <span class="entity-badge">
+                          <i class="fas fa-table"></i>
+                          {{ entityName }}
+                        </span>
+                      }
+                    </div>
+                  }
+                  <span class="field-count">{{ query.fields?.length || 0 }} fields</span>
+                </div>
+              </div>
+
+              @if (isQueryExpanded(getQueryKey(query))) {
+                <div class="card-body">
+                  <!-- Parameters -->
+                  @if (query.parameters && query.parameters.length > 0) {
+                    <div class="parameters-section">
+                      <h5 class="parameters-title">
+                        <i class="fas fa-sliders-h"></i>
+                        Parameters
+                      </h5>
+                      <div class="parameters-list">
+                        @for (param of query.parameters; track param.name) {
+                          <div class="parameter-item">
+                            <div class="param-header">
+                              <span class="param-name">{{ param.name }}</span>
+                              @if (param.isRequired) {
+                                <span class="required-badge">Required</span>
+                              } @else {
+                                <span class="optional-badge">Optional</span>
+                              }
+                              @if (param.type) {
+                                <code class="param-type">{{ param.type }}</code>
+                              }
+                            </div>
+                            @if (param.description) {
+                              <p class="param-description">{{ param.description }}</p>
+                            }
+                            @if (param.sampleValue || param.testValue) {
+                              <div class="param-sample">
+                                <span class="sample-label">Sample:</span>
+                                <code>{{ param.sampleValue || param.testValue }}</code>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Fields Table -->
+                  @if (query.fields && query.fields.length > 0) {
+                    <div class="fields-section">
+                      <h5 class="fields-title">Output Fields</h5>
+                      <div class="fields-table">
+                        <div class="fields-header">
+                          <span class="field-col name-col">Name</span>
+                          <span class="field-col type-col">Type</span>
+                          <span class="field-col desc-col">Description</span>
+                        </div>
+                        @for (field of query.fields; track field.name) {
+                          <div class="field-row">
+                            <span class="field-col name-col">
+                              <i class="fas" [ngClass]="getFieldTypeIcon(field.type)" [style.color]="getFieldTypeColor(field.type)"></i>
+                              <span class="field-name">{{ field.name }}</span>
+                            </span>
+                            <span class="field-col type-col">
+                              <code class="field-type">{{ formatFieldType(field.type) }}</code>
+                            </span>
+                            <span class="field-col desc-col">
+                              {{ field.description || '—' }}
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- New Query SQL -->
+                  @if (query.newQuerySQL) {
+                    <div class="sql-section">
+                      <h5 class="sql-title">
+                        <i class="fas fa-terminal"></i>
+                        Query SQL
+                      </h5>
+                      <pre class="sql-code">{{ query.newQuerySQL }}</pre>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+</div>
