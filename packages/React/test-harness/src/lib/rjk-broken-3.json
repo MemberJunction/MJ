@@ -1,0 +1,713 @@
+{
+    "title": "Members Attending Both 2023 and 2024 CTA Leadership Conferences",
+    "type": "Report",
+    "name": "CtaLeadershipConferenceRepeatAttendees",
+    "userExplanation": "Provides a concise list of members who participated in both the 2023 and 2024 CTA Leadership Conferences, enabling quick identification of repeat attendees.",
+    "functionalRequirements": "## Business Objective\nIdentify members who have attended the CTA Leadership Conference in both 2023 and 2024 to support engagement analysis and follow‑up initiatives.\n\n## Functional Requirements\n- Retrieve a list of members who have a recorded attendance for the **2023 CTA Leadership Conference**.\n- Retrieve a list of members who have a recorded attendance for the **2024 CTA Leadership Conference**.\n- Determine the intersection of the two lists (members present in both years).\n- For each member in the intersection, display:\n  - Member name\n  - Member identifier (e.g., member ID)\n  - Any relevant contact information (e.g., email) if available in the system.\n- Present the results in a simple, sortable table with columns for **Member Name**, **Member ID**, and **Contact Email**.\n- Include a brief header summarizing the total count of repeat attendees.\n- Allow the report to be exported as CSV for further analysis.\n",
+    "dataRequirements": {
+      "mode": "queries",
+      "description": "Retrieve members who attended both the 2023 and 2024 CTA Leadership Conference for reporting and follow‑up.",
+      "entities": [
+        {
+          "name": "Accounts",
+          "description": "Member account records containing personal and contact information.",
+          "displayFields": [
+            "Id",
+            "Name",
+            "PersonEmail"
+          ],
+          "sortFields": [
+            "Name"
+          ],
+          "fieldMetadata": [
+            {
+              "name": "Id",
+              "sequence": 1,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "allowsNull": false,
+              "isPrimaryKey": true,
+              "description": "Primary key of the account record."
+            },
+            {
+              "name": "Name",
+              "sequence": 4,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Full name of the person/account."
+            },
+            {
+              "name": "PersonEmail",
+              "sequence": 75,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Primary email address for the person account."
+            }
+          ],
+          "usageContext": "Used to display member identifier and contact email in the final report.",
+          "permissionLevelNeeded": [
+            "read"
+          ]
+        },
+        {
+          "name": "Registrations",
+          "description": "Records linking members (accounts) to events they attended.",
+          "displayFields": [
+            "NU__FullName__c",
+            "Member_ID__c",
+            "NU__RegistrantEmail__c",
+            "NU__Account__c",
+            "NU__Event__c"
+          ],
+          "fieldMetadata": [
+            {
+              "name": "Id",
+              "sequence": 1,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "allowsNull": false,
+              "isPrimaryKey": true,
+              "description": "Primary key of the registration record."
+            },
+            {
+              "name": "NU__FullName__c",
+              "sequence": 20,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Full name of the registrant as recorded on the registration."
+            },
+            {
+              "name": "Member_ID__c",
+              "sequence": 33,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Member identifier (often matching the account Id)."
+            },
+            {
+              "name": "NU__RegistrantEmail__c",
+              "sequence": 25,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Email address of the registrant."
+            },
+            {
+              "name": "NU__Account__c",
+              "sequence": 11,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Lookup to the Accounts entity (member who registered)."
+            },
+            {
+              "name": "NU__Event__c",
+              "sequence": 12,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Lookup to the Events entity (event attended)."
+            }
+          ],
+          "usageContext": "Provides the link between members and the specific conference events.",
+          "permissionLevelNeeded": [
+            "read"
+          ]
+        },
+        {
+          "name": "Events",
+          "description": "Event definitions including the CTA Leadership Conference records.",
+          "displayFields": [
+            "Id",
+            "Name",
+            "NU__ShortName__c",
+            "NU__StartDate__c"
+          ],
+          "sortFields": [
+            "Name"
+          ],
+          "fieldMetadata": [
+            {
+              "name": "Id",
+              "sequence": 1,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "allowsNull": false,
+              "isPrimaryKey": true,
+              "description": "Primary key of the event record."
+            },
+            {
+              "name": "Name",
+              "sequence": 3,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Full name of the event."
+            },
+            {
+              "name": "NU__ShortName__c",
+              "sequence": 53,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Short name / code for the event."
+            },
+            {
+              "name": "NU__StartDate__c",
+              "sequence": 55,
+              "defaultInView": false,
+              "type": "datetimeoffset",
+              "allowsNull": true,
+              "isPrimaryKey": false,
+              "description": "Start date of the event."
+            }
+          ],
+          "usageContext": "Used to identify the specific 2023 and 2024 CTA Leadership Conference events.",
+          "permissionLevelNeeded": [
+            "read"
+          ]
+        }
+      ],
+      "queries": [
+        {
+          "name": "CTA Leadership Conference Repeat Attendees",
+          "categoryPath": "Skip/Reporting/Conferences/CTA Leadership",
+          "description": "Select members who have registrations for both the 2023 and 2024 CTA Leadership Conference events. Returns Member Name, Member ID, and Contact Email, sortable by name.",
+          "fields": [
+            {
+              "name": "AccountId",
+              "sequence": 1,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "allowsNull": false,
+              "description": "Accounts.Id of the member."
+            },
+            {
+              "name": "MemberName",
+              "sequence": 2,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "description": "Accounts.Name (member full name)."
+            },
+            {
+              "name": "MemberEmail",
+              "sequence": 3,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "allowsNull": true,
+              "description": "Accounts.PersonEmail (contact email)."
+            }
+          ],
+          "entityNames": [
+            "Registrations",
+            "Events",
+            "Accounts"
+          ],
+          "newQuerySQL": "WITH members2023 AS (\n    SELECT DISTINCT [NU__Account__c] AS AccountId\n    FROM [nams].[vwNU__Registration2__cs]\n    WHERE ISNULL([IsDeleted], 0) = 0\n      AND [NU__Event__c] IN (\n          SELECT [Id]\n          FROM [nams].[vwNU__Event__cs]\n          WHERE ISNULL([IsDeleted], 0) = 0\n            AND [Name] LIKE '%2023 CTA Leadership Conference%'\n      )\n),\nmembers2024 AS (\n    SELECT DISTINCT [NU__Account__c] AS AccountId\n    FROM [nams].[vwNU__Registration2__cs]\n    WHERE ISNULL([IsDeleted], 0) = 0\n      AND [NU__Event__c] IN (\n          SELECT [Id]\n          FROM [nams].[vwNU__Event__cs]\n          WHERE ISNULL([IsDeleted], 0) = 0\n            AND [Name] LIKE '%2024 CTA Leadership Conference%'\n      )\n),\nrepeat_members AS (\n    SELECT m2023.AccountId\n    FROM members2023 m2023\n    INNER JOIN members2024 m2024 ON m2023.AccountId = m2024.AccountId\n)\nSELECT a.[Id] AS AccountId,\n       a.[Name] AS MemberName,\n       a.[PersonEmail] AS MemberEmail\nFROM [nams].[vwAccounts] a\nINNER JOIN repeat_members rm ON a.[Id] = rm.AccountId\nWHERE ISNULL(a.[IsDeleted], 0) = 0\nORDER BY MemberName;"
+        }
+      ]
+    },
+    "location": "registry",
+    "description": "Provides a concise list of members who participated in both the 2023 and 2024 CTA Leadership Conferences, displayed in a sortable table with CSV export capability.",
+    "technicalDesign": "## Component Architecture\nThe **CtaLeadershipConferenceRepeatAttendees** component is an embedded React component responsible for fetching, displaying, and exporting the list of repeat attendees.\n\n### Data Flow\n1. **Data Retrieval**: Uses the predefined query *\"CTA Leadership Conference Repeat Attendees\"* via MJ RunQuery to obtain `AccountId`, `MemberName`, and `MemberEmail`.\n2. **State Management**: The component owns internal UI state (`loading`, `data`) initialized from the query result. All state is managed with React `useState`.\n3. **Presentation**: Renders the data in a **DataGrid** (generic Ant Design based table) for sorting and pagination. A header displays the total count of attendees.\n4. **Export**: Integrates **DataExportPanel** to allow users to export the displayed data as CSV. Export logic leverages `xlsx` (for CSV generation) and `jspdf` (optional PDF generation) libraries.\n5. **Callbacks**: Emits `onExportCompleted` with the file URL when export finishes.\n\n### Dependencies\n- **DataGrid** (`Generic/UI/Table`): Provides a powerful, sortable, pageable table UI.\n- **DataExportPanel** (`Generic/UI/Export`): Handles CSV (and optionally PDF) export of the table data.\n\n### Libraries Used\n- **antd** – UI components and styling for the table.\n- **lodash** – Utility functions for data manipulation (e.g., sorting helpers).\n- **xlsx** – Generates CSV files from the data array.\n- **jspdf** – (optional) Supports PDF export if needed.\n\n### Props\n- `repeatAttendees` (Array of attendee objects) – Data fetched from the query.\n- `loading` (boolean) – Indicates query execution status.\n- `onExportRequested` (function) – Callback when user initiates export.\n\n### Events\n- `onExportCompleted` – Fired after successful export; provides `fileUrl`.\n\n### Example Usage\n```tsx\n<CtaLeadershipConferenceRepeatAttendees\n  repeatAttendees={data}\n  loading={isLoading}\n  onExportRequested={() => console.log('Export requested')}\n/>\n```",
+    "libraries": [
+      {
+        "name": "antd",
+        "globalVariable": "antd",
+        "version": "^5.20.2"
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "DataGrid",
+        "title": "Data Grid",
+        "description": "Flexible, feature-rich data grid component wrapping Ant Design Table 5.12.0 for displaying tabular data with sorting, filtering, paging, and row selection. Perfect for drill-down targets (final level showing detail records), master-detail patterns, search results, or standalone tables. Supports custom column rendering with two modes: simple (string array) or advanced (ColumnDef objects with {field, header, render, width, sortable}). Metadata-aware formatting: dates (locale with time), booleans (Yes/No), value lists (colored tags with 50+ status colors + 50 fallback colors), money ($USD), decimals (2 places), integers (commas). Long text handling modes: truncate (ellipsis), expand (click 'show more/less'), tooltip (hover), wrap (word-break), none. USE for lists/tables of records. DO NOT USE for single record (use SingleRecordView) or charts (use SimpleChart/SimpleDrilldownChart).",
+        "type": "table",
+        "location": "registry",
+        "functionalRequirements": "WHEN TO USE: Displaying lists or tables of records; Drill-down destination (bottom level of hierarchy showing detail records); Master-detail detail panel; Search results or filtered record lists; Data exploration with sorting/filtering/paging; Bulk operations requiring multi-select; Report tables; Any tabular data display. WHEN NOT TO USE: Single record display (use SingleRecordView instead); Chart/graph visualizations (use SimpleChart or SimpleDrilldownChart); Need built-in chart-to-table drill-down (use SimpleDrilldownChart). CORE FEATURES: Universal table component for any entity type or data structure; Configurable columns with two modes: (1) Simple mode - string array of field names ['Name', 'SKU', 'Price'] uses smart defaults, (2) Advanced mode - ColumnDef objects [{field: 'Price', header: 'Unit Price', render: (value, record, fieldInfo) => `$${value}`, width: '120px', sortable: true}] for full control; Auto-detects columns from data if columns prop omitted; Smart type detection from entity metadata for alignment (numbers right-aligned) and formatting; Column-level and global text filtering with configurable debounce (default 300ms); Search highlighting with match count display ('Found N matching records'); Pagination with configurable page sizes and range display; Row selection modes: none (default), checkbox (multi-select), radio (single-select), row (click anywhere to select); Row click events with full record data for drill-down or navigation; Metadata-aware field formatting: dates (formatDate to locale with hour/minute), booleans (Yes/No text), value lists (colored Tag components), money fields (Intl.NumberFormat $USD), decimals/floats (2 decimal places with commas), integers (commas); Value list coloring system: statusColorMap with 50+ predefined colors for active/pending/complete/failed/error states, 50 fallback colors for other values, consistent color assignment per value; Long text field handling with 5 modes: truncate (substring+'...'), expand (click to toggle 'show more/less' with expandedCells state tracking), tooltip (Ant Tooltip on hover), wrap (word-break normal), none (default); Auto-fit columns to container width OR fixed widths with horizontal scroll (autoFitColumns prop); Column widths intelligently set based on SQL type and field length: GUIDs (280px), long text varchar(max) or >200 chars (400px), dates (160px), bit (80px), int (100px), money (130px); Loading state (spinner) when data===null; Empty state with contextual message 'No {entityName} records found'; Filter match highlighting using Typography.Text mark prop; Debounced filter input prevents thrashing on large datasets; CSS overrides disable Ant Design animations to prevent render loop detection; Responsive design adapts to any container. COLUMN SYSTEM: Accepts Array<string | ColumnDef>; ColumnDef structure: {field: string (required), header: string (optional, uses DisplayName from metadata or field name), render: function(value, record, fieldInfo) => ReactNode (optional custom renderer), width: string|number (optional like '200px' or 200), sortable: boolean (optional, overrides global sorting prop)}; Backward compatible - existing code using string arrays continues to work; If columns omitted, auto-discovers from first data record filtering out 'key' field. ROW SELECTION: selectionMode='none'|'checkbox'|'radio'|'row'; Manages selectedRowKeys state; Fires selectionChanged event with full selected record objects. EVENTS: rowClick(record: object) - fired on row click; selectionChanged(selectedRows: Array<object>) - fired when selection changes; pageChanged(pageNumber: number 0-based, visibleRows: Array<object>) - fired on page change; sortChanged(sortState: {column: string, direction: 'asc'|'desc'}) - fired when sort changes; filterChanged(filterValue: string, matchingData: Array<object>) - fired when filter text changes with all matching records. FILTERING: Searches specified filterFields array or all display fields if not provided; Debounces input by filterDebounceTime (default 300ms); Highlights matching text across all visible cells; Shows 'Found N matching records' count below search box.",
+        "technicalDesign": "Wraps Ant Design Table component with MJ-aware enhancements. React hooks: useState for filterText (raw input), debouncedFilter (processed search term), selectedRowKeys (selection state), currentPage (pagination), sortConfig (sort state), entityInfo (entity metadata), expandedCells (object tracking which long text cells are expanded with keys like ${recordKey}_${fieldName}). Loads entity metadata from utilities.md.Entities on mount for field type detection (Type, Length, DisplayName, ValueListType, EntityFieldValues). Library unwrapping: Uses unwrapLibraryComponents(antd, 'Table', 'Input', 'Space', 'Typography', 'Tag', 'Tooltip') to handle various Ant Design package formats (ESM/CJS/UMD). Column normalization (useMemo): Accepts columns as strings OR ColumnDef objects; If not provided, auto-discovers from Object.keys(data[0]) excluding 'key' field; Normalizes all to standard format {field, header, render, width, sortable}; Handles invalid configs gracefully with console.warn. Column building (useMemo): Maps normalized columns to Ant Design column configs; Determines alignment based on SQL type (int/decimal/float/numeric/money/bit → right-aligned, others left); Sets column widths based on SQL type and field length (only when autoFitColumns=false): uniqueidentifier→280px, long text (text type OR varchar(max) with length=-1 OR varchar with length>200)→400px, varchar/char based on length (≤50→100-200px, ≤100→250px, ≤200→300px, else→350px), date/time→160px, bit→80px, int→100px, decimal/numeric→120px, money→130px; When autoFitColumns=true, no widths set so table auto-sizes; Uses colDef.width if provided to override calculated width; Sets ellipsis=false (handle manually for click expansion); Creates sorter function if sortable (string localeCompare, number subtraction, null handling); render function priority: (1) Custom colDef.render if provided, (2) Metadata-driven default formatting. Field rendering logic: If custom render, call it with (value, record, fieldInfo); If value is null, return '-'; Create unique cellKey ${record.key/ID/id}_${fieldName} for expandedCells tracking; Format based on field type: date/time (formatDate with locale, hour/minute), bit (Yes/No), value lists (Tag component with getValueColor), money (Intl.NumberFormat USD currency), decimal/float (toLocaleString 2 decimals), int (toLocaleString); Long text handling: Check if field is long text (SQL types: text, varchar/char with length=-1 for (max), varchar/char with length>200); If length > longTextThreshold AND not value list: truncate mode (substring+'...'), expand mode (click toggles expandedCells[cellKey], shows 'show more/less' links), tooltip mode (Ant Tooltip wrapper), wrap mode (whiteSpace:normal, wordBreak:break-word), none (default); Apply filter highlighting: If filtering enabled and debouncedFilter exists, find match index in string, split and wrap match in Typography.Text mark component. Value list coloring: statusColorMap object with 50+ colors (active→#389e0d green, pending→#d48806 orange, failed→#a8071a red, processing→#096dd9 blue, etc.); fallbackColors array with 50 distinct colors (purple #722ed1, magenta #c41d7f, teal #08979c, indigo #1d39c4, vermillion #fa541c, brown #614700, etc.); getValueColor function: Build colorAssignments Map, iterate possibleValues from entity metadata, assign statusColorMap color if exists else next fallbackColor, ensures consistent colors for all values; For unknown values, check statusColorMap first then use hash-based fallback index. Filter debouncing (useEffect): setTimeout with filterDebounceTime (300ms), updates debouncedFilter; Cleanup clears timer. Filtered data (useMemo): If !filtering or !debouncedFilter, return original data; Determine searchFields (filterFields prop or all displayFields); Filter rows where any searchField value includes searchTerm (case-insensitive); Handle null/undefined rows gracefully. Filter change effect (useEffect): Fires onFilterChanged event with {filterValue: debouncedFilter, matchingData: filteredData}. Row selection config: If selectionMode !== 'none', create rowSelection object with type ('radio' or 'checkbox'), selectedRowKeys state, onChange handler (updates state, fires onSelectionChanged); For 'row' mode, adds onSelect handler. Pagination config: If paging=true, create pagination object with current (currentPage), pageSize, total (filteredData.length), showSizeChanger=false, showTotal formatter, onChange handler (updates currentPage, fires onPageChanged with 0-based page number and visible rows slice). Sort change handler: handleTableChange extracts sorter from Ant Table onChange, updates sortConfig state, fires onSortChanged with {sortState: {column: sorter.field, direction: sorter.order === 'ascend' ? 'asc' : 'desc'}}. Data with keys (useMemo): Maps filteredData to add unique key prop (uses existing key/ID/id or falls back to index); Required for Ant Design Table row selection. CSS style injection: Disables all Ant Design animations (animation: none, transition: none, animation-duration: 0s, transition-duration: 0s) on .data-grid-component and descendants to prevent render loop detection. Render output: Wrapper div with .data-grid-component class; If filtering=true: Search input (Ant Input.Search) with value/onChange/allowClear/onClear, placeholder shows filterFields or 'all fields', full width style, fix for search button alignment; Text showing 'Found N matching records' if debouncedFilter exists; Ant Table component with columns (tableColumns), dataSource (dataWithKeys), rowSelection (if enabled), pagination (if enabled), onChange (handleTableChange for sort), scroll (x: 'max-content' only if autoFitColumns=false for horizontal scrolling), loading (true only when data===null), locale with emptyText, size='middle', onRow returns object with onClick handler (fires onRowClick) and cursor style (pointer if onRowClick exists).",
+        "dataRequirements": {
+          "mode": "views",
+          "description": "Component is data-agnostic and works with any entity data passed via props"
+        },
+        "properties": [
+          {
+            "name": "entityName",
+            "type": "string",
+            "description": "Name of the entity being displayed",
+            "required": true
+          },
+          {
+            "name": "data",
+            "type": "Array<object>",
+            "description": "Array of entity objects to display",
+            "required": true
+          },
+          {
+            "name": "columns",
+            "type": "Array<string | object>",
+            "description": "Array of column definitions. Can be simple strings (field names) for default behavior, or column definition objects with properties: field (required), header, render, width, sortable. If not provided, all fields will be displayed. See technical design section for complete ColumnDef structure.",
+            "required": false,
+            "exampleValue": "[\"Name\", { field: \"Price\", header: \"Unit Price\", render: (v) => `$${v}`, width: \"120px\", sortable: true }]"
+          },
+          {
+            "name": "sorting",
+            "type": "boolean",
+            "description": "Enable/disable column sorting",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "paging",
+            "type": "boolean",
+            "description": "Enable/disable pagination",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "pageSize",
+            "type": "number",
+            "description": "Number of rows per page when paging is enabled",
+            "required": false,
+            "defaultValue": 10
+          },
+          {
+            "name": "filtering",
+            "type": "boolean",
+            "description": "Enable/disable text filtering",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "highlightFilterMatches",
+            "type": "boolean",
+            "description": "Highlight matching text when filtering",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "filterFields",
+            "type": "Array<string>",
+            "description": "Fields to search when filtering. If not specified, searches all fields",
+            "required": false
+          },
+          {
+            "name": "filterDebounceTime",
+            "type": "number",
+            "description": "Debounce time in ms for filter input",
+            "required": false,
+            "defaultValue": 300
+          },
+          {
+            "name": "selectionMode",
+            "type": "'none' | 'checkbox' | 'radio' | 'row'",
+            "description": "Row selection mode: 'none', 'checkbox', 'radio', or 'row'",
+            "required": false,
+            "defaultValue": "none",
+            "possibleValues": [
+              "none",
+              "checkbox",
+              "radio",
+              "row"
+            ]
+          },
+          {
+            "name": "longTextDisplay",
+            "type": "'truncate' | 'expand' | 'tooltip' | 'wrap' | 'none'",
+            "description": "How to display long text that exceeds the threshold: 'truncate' shows ellipsis, 'expand' allows click to expand/collapse, 'tooltip' shows full text on hover, 'wrap' shows all text with wrapping, 'none' uses default behavior",
+            "required": false,
+            "defaultValue": "expand",
+            "possibleValues": [
+              "truncate",
+              "expand",
+              "tooltip",
+              "wrap",
+              "none"
+            ]
+          },
+          {
+            "name": "longTextThreshold",
+            "type": "number",
+            "description": "Number of characters before long text display behavior is triggered",
+            "required": false,
+            "defaultValue": 100
+          },
+          {
+            "name": "autoFitColumns",
+            "type": "boolean",
+            "description": "When true, columns auto-fit to container width. When false, columns use fixed widths with horizontal scrolling",
+            "required": false,
+            "defaultValue": true
+          }
+        ],
+        "events": [
+          {
+            "name": "rowClick",
+            "description": "Fired when a row is clicked",
+            "parameters": [
+              {
+                "name": "record",
+                "type": "object",
+                "description": "The entity object of the clicked row"
+              }
+            ]
+          },
+          {
+            "name": "selectionChanged",
+            "description": "Fired when row selection changes",
+            "parameters": [
+              {
+                "name": "selectedRows",
+                "type": "Array<object>",
+                "description": "Array of selected entity objects"
+              }
+            ]
+          },
+          {
+            "name": "pageChanged",
+            "description": "Fired when page changes",
+            "parameters": [
+              {
+                "name": "pageNumber",
+                "type": "number",
+                "description": "Current page number (0-based)"
+              },
+              {
+                "name": "visibleRows",
+                "type": "Array<object>",
+                "description": "Array of entity objects visible on current page"
+              }
+            ]
+          },
+          {
+            "name": "sortChanged",
+            "description": "Fired when sort configuration changes",
+            "parameters": [
+              {
+                "name": "sortState",
+                "type": "{column: string, direction: 'asc' | 'desc'}",
+                "description": "Object with 'column' and 'direction' properties"
+              }
+            ]
+          },
+          {
+            "name": "filterChanged",
+            "description": "Fired when filter changes",
+            "parameters": [
+              {
+                "name": "filterValue",
+                "type": "string",
+                "description": "Current filter text"
+              },
+              {
+                "name": "matchingData",
+                "type": "Array<object>",
+                "description": "Array of all matching entity objects"
+              }
+            ]
+          }
+        ],
+        "libraries": [
+          {
+            "name": "antd",
+            "version": "5.12.0",
+            "globalVariable": "antd"
+          }
+        ],
+        "dependencies": [],
+        "code": "function DataGrid({\n  entityName,\n  data,\n  columns, // Array of column definitions: [{field: 'Name', header: 'Product Name', render: fn, width: '200px', sortable: true}]\n  sorting = true,\n  paging = true,\n  pageSize = 20,\n  showPageSizeChanger = true,\n  filtering = true,  // Changed default to true\n  highlightFilterMatches = true,\n  filterFields,\n  filterDebounceTime = 300,\n  selectionMode = 'none',\n  longTextDisplay = 'expand', // Options: 'truncate', 'expand', 'tooltip', 'wrap', 'none'\n  longTextThreshold = 100, // Characters before truncation\n  autoFitColumns = true, // Auto-fit columns to container width vs fixed widths with scroll\n  onSelectionChanged,\n  onPageChanged,\n  onSortChanged,\n  onFilterChanged,\n  onRowClick,\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings\n}) {\n  // Always use the MJ unwrapLibraryComponents function to get components from global libraries like antd, this ensures\n  // that various library build/package formats are handled correctly and transparently for your code!\n  const { Table, Input, Space, Typography, Tag, Tooltip } = unwrapLibraryComponents(antd, 'Table', 'Input', 'Space', 'Typography', 'Tag', 'Tooltip');\n  const { Search } = Input;\n  const { Text } = Typography;\n  const [filterText, setFilterText] = React.useState('');\n  const [debouncedFilter, setDebouncedFilter] = React.useState('');\n  const [selectedRowKeys, setSelectedRowKeys] = React.useState([]);\n  const [currentPage, setCurrentPage] = React.useState(1);\n  const [currentPageSize, setCurrentPageSize] = React.useState(pageSize);\n  const [sortConfig, setSortConfig] = React.useState(null);\n  const [entityInfo, setEntityInfo] = React.useState(null);\n  const [expandedCells, setExpandedCells] = React.useState({}); // Track which cells are expanded\n\n\n  // Update current page size when pageSize prop changes\n  React.useEffect(() => {\n    setCurrentPageSize(pageSize);\n  }, [pageSize]);\n\n  // Load entity metadata if we have an entity name\n  React.useEffect(() => {\n    if (entityName && utilities?.md?.Entities) {\n      const entity = utilities.md.Entities.find(e => e.Name === entityName);\n      setEntityInfo(entity || null);\n    }\n  }, [entityName, utilities]);\n  \n  // Helper function to format dates\n  const formatDate = (value) => {\n    if (!value) return '-';\n    try {\n      const date = new Date(value);\n      if (isNaN(date.getTime())) return value; // Invalid date, return as-is\n      // Format as YYYY-MM-DD HH:MM\n      return date.toLocaleString('en-US', {\n        year: 'numeric',\n        month: '2-digit',\n        day: '2-digit',\n        hour: '2-digit',\n        minute: '2-digit'\n      });\n    } catch {\n      return value;\n    }\n  };\n  \n  // Color mapping for common status values (darker for better contrast with white text)\n  const statusColorMap = {\n    // Green colors for positive states\n    active: '#389e0d',      // darker green\n    approved: '#52c41a',    // green\n    complete: '#237804',    // dark green\n    completed: '#135200',   // very dark green\n    success: '#3f6600',     // olive green\n    successful: '#5b8c00',  // light olive\n    enabled: '#7cb305',     // lime\n    published: '#a0d911',   // light lime\n    \n    // Red colors for negative states\n    inactive: '#cf1322',    // darker red\n    rejected: '#f5222d',    // red\n    failed: '#a8071a',      // dark red\n    error: '#820014',       // very dark red\n    disabled: '#ff4d4f',    // light red\n    cancelled: '#ff7875',   // salmon\n    canceled: '#ff9c9c',    // light salmon\n    terminated: '#873800',  // burnt orange\n    expired: '#ad4e00',     // dark orange\n    deprecated: '#d4380d',  // rust orange\n    \n    // Yellow/Orange for pending states\n    pending: '#d48806',     // darker orange\n    paused: '#fa8c16',      // orange\n    temporary: '#faad14',   // gold\n    draft: '#d4b106',       // dark gold\n    review: '#ad8b00',      // darker gold\n    waiting: '#ffc53d',     // light gold\n    \n    // Blue for informational states\n    processing: '#096dd9',  // darker blue\n    running: '#1890ff',     // blue\n    inprogress: '#0050b3',  // dark blue\n    'in progress': '#003a8c', // very dark blue\n    'in-progress': '#40a9ff' // light blue\n  };\n  \n  // 50 distinct colors for value lists (excluding colors used in statusColorMap)\n  // These are carefully selected to be visually distinct from each other\n  const fallbackColors = [\n    '#722ed1', // purple\n    '#9254de', // light purple\n    '#531dab', // dark purple\n    '#391085', // very dark purple\n    '#b37feb', // lavender\n    \n    '#c41d7f', // magenta\n    '#eb2f96', // pink\n    '#f759ab', // light pink\n    '#9e1068', // dark magenta\n    '#780650', // very dark magenta\n    \n    '#08979c', // teal\n    '#13c2c2', // cyan\n    '#006d75', // dark teal\n    '#36cfc9', // light cyan\n    '#5cdbd3', // pale cyan\n    \n    '#1d39c4', // indigo\n    '#2f54eb', // royal blue\n    '#597ef7', // periwinkle\n    '#10239e', // dark indigo\n    '#061178', // navy\n    \n    '#fa541c', // vermillion\n    '#ff7a45', // coral\n    '#ff9c6e', // peach\n    '#d4380d', // rust (if not used above)\n    '#ad2102', // brick red\n    \n    '#8c8c8c', // gray\n    '#595959', // dark gray\n    '#bfbfbf', // light gray\n    '#434343', // charcoal\n    '#262626', // near black\n    \n    '#614700', // brown\n    '#874d00', // tan\n    '#a8730f', // amber\n    '#c79816', // mustard\n    '#d4a017', // goldenrod\n    \n    '#00474f', // dark cyan\n    '#006064', // petrol\n    '#004851', // dark petrol\n    '#1a535c', // ocean\n    '#2c5f2d', // forest green\n    \n    '#4a7c59', // sage\n    '#6b8e23', // olive drab\n    '#556b2f', // dark olive\n    '#8fbc8f', // dark sea green\n    '#3cb371', // medium sea green\n    \n    '#cd5c5c', // indian red\n    '#bc8f8f', // rosy brown\n    '#daa520', // goldenrod\n    '#b8860b', // dark goldenrod\n    '#ff6347'  // tomato\n  ];\n  \n  // Get color for a value in a value list - ensures unique colors for all values\n  const getValueColor = (value, possibleValues) => {\n    if (!value) return null;\n    \n    const normalized = value.toString().toLowerCase().trim();\n    \n    // Build a complete color assignment map for this column\n    const colorAssignments = new Map();\n    let nextColorIndex = 0;\n    \n    // First, assign colors to all possible values in order\n    if (possibleValues && Array.isArray(possibleValues)) {\n      possibleValues.forEach(pv => {\n        const pvValue = (pv.Value || pv.Code || '').toLowerCase().trim();\n        if (pvValue && !colorAssignments.has(pvValue)) {\n          // Check if this value has a predefined color in statusColorMap\n          if (statusColorMap[pvValue]) {\n            colorAssignments.set(pvValue, statusColorMap[pvValue]);\n          } else {\n            // Assign next available fallback color\n            colorAssignments.set(pvValue, fallbackColors[nextColorIndex % fallbackColors.length]);\n            nextColorIndex++;\n          }\n        }\n      });\n    }\n    \n    // Return the assigned color for this value\n    if (colorAssignments.has(normalized)) {\n      return colorAssignments.get(normalized);\n    }\n    \n    // If value wasn't in possibleValues, check statusColorMap first\n    if (statusColorMap[normalized]) {\n      return statusColorMap[normalized];\n    }\n    \n    // Otherwise assign a fallback color based on hash\n    // This ensures consistency even for unexpected values\n    let hash = 0;\n    for (let i = 0; i < normalized.length; i++) {\n      hash = normalized.charCodeAt(i) + ((hash << 5) - hash);\n    }\n    return fallbackColors[Math.abs(hash) % fallbackColors.length];\n  };\n  \n  // Debounce filter input\n  React.useEffect(() => {\n    const timer = setTimeout(() => {\n      setDebouncedFilter(filterText);\n    }, filterDebounceTime);\n    return () => clearTimeout(timer);\n  }, [filterText, filterDebounceTime]);\n  \n  // Normalize column definitions - support both simple strings and full column definitions\n  const normalizedColumns = React.useMemo(() => {\n    if (!columns || columns.length === 0) {\n      // Auto-discover columns from data if none provided\n      if (data && Array.isArray(data) && data.length > 0) {\n        const allKeys = new Set();\n        data.forEach(row => {\n          if (row && typeof row === 'object') {\n            Object.keys(row).forEach(key => {\n              if (key !== 'key') {\n                allKeys.add(key);\n              }\n            });\n          }\n        });\n        return Array.from(allKeys).map(key => ({ field: key }));\n      }\n      return [];\n    }\n\n    // Normalize columns to standard format\n    return columns.map(col => {\n      if (typeof col === 'string') {\n        // Simple string field name - use defaults\n        return { field: col };\n      } else if (typeof col === 'object' && col.field) {\n        // Already a column definition object\n        return col;\n      } else {\n        console.warn('Invalid column configuration:', col);\n        return null;\n      }\n    }).filter(Boolean);\n  }, [columns, data]);\n\n  // Extract just the field names for filtering and other operations\n  const displayFields = React.useMemo(() => {\n    return normalizedColumns.map(col => col.field);\n  }, [normalizedColumns]);\n  \n  // Build table columns from column definitions with metadata-aware formatting\n  const tableColumns = React.useMemo(() => {\n    return normalizedColumns.map(colDef => {\n      const fieldName = colDef.field;\n\n      // Get field metadata if available\n      const fieldInfo = entityInfo?.Fields?.find(f => f.Name === fieldName);\n      const fieldType = fieldInfo?.Type?.toLowerCase() || '';\n      const hasValueList = fieldInfo?.ValueListType === 'List' || fieldInfo?.ValueListType === 'ListOrUserEntry';\n      const possibleValues = fieldInfo?.EntityFieldValues;\n      \n      \n      // Determine alignment based on field type\n      let align = 'left';\n      if (fieldType.includes('int') || fieldType.includes('decimal') || \n          fieldType.includes('float') || fieldType.includes('numeric') || \n          fieldType.includes('money') || fieldType === 'bit') {\n        align = 'right';\n      }\n      \n      // Set column width based on field metadata (type and length)\n      // In autoFit mode, we don't set widths (let table auto-size)\n      // In fixed mode, set proper widths for all columns with horizontal scroll\n      let columnWidth = autoFitColumns ? undefined : 150; // Default width or auto\n      const fieldLength = fieldInfo?.Length;\n      \n      // Determine if this is a long text field based on SQL type\n      // Note: SQL Server returns length = -1 for max fields (varchar(max), nvarchar(max))\n      const isLongTextField = fieldType.includes('text') || // text, ntext types\n                              (fieldType.includes('varchar') && fieldLength === -1) || // varchar(max) or nvarchar(max)\n                              (fieldType.includes('char') && fieldLength === -1) || // char(max) or nchar(max)\n                              (fieldType.includes('varchar') && fieldLength && fieldLength > 200) ||\n                              (fieldType.includes('char') && fieldLength && fieldLength > 200);\n      \n      \n      // Set appropriate widths based on data type (only when not auto-fitting)\n      if (!autoFitColumns) {\n        if (fieldType.includes('uniqueidentifier')) {\n          columnWidth = 280; // GUIDs need space\n        } else if (isLongTextField) {\n          columnWidth = 400; // Generous width for long text fields\n        } else if (fieldType.includes('varchar') || fieldType.includes('char')) {\n          // Scale width based on field length\n          if (fieldLength && fieldLength <= 50) {\n            columnWidth = Math.min(200, Math.max(100, fieldLength * 3));\n          } else if (fieldLength && fieldLength <= 100) {\n            columnWidth = 250;\n          } else if (fieldLength && fieldLength <= 200) {\n            columnWidth = 300;\n          } else {\n            columnWidth = 350; // Default for varchar without length\n          }\n        } else if (fieldType.includes('date') || fieldType.includes('time')) {\n          columnWidth = 160;\n        } else if (fieldType === 'bit') {\n          columnWidth = 80;\n        } else if (fieldType.includes('int')) {\n          columnWidth = 100;\n        } else if (fieldType.includes('decimal') || fieldType.includes('numeric')) {\n          columnWidth = 120;\n        } else if (fieldType.includes('money')) {\n          columnWidth = 130;\n        }\n      }\n      \n      // If no metadata available, use default width\n      // We don't make assumptions based on field names\n      \n      \n      // Enable ellipsis for long text fields\n      const useEllipsis = isLongTextField;\n      \n      // Handle special __mj fields display names\n      // Priority: colDef.header > fieldInfo.DisplayName > default handling\n      let displayName = colDef.header || fieldInfo?.DisplayName || fieldName;\n      if (!colDef.header) {\n        if (fieldName === '__mj_CreatedAt') {\n          displayName = 'Created At';\n        } else if (fieldName === '__mj_UpdatedAt') {\n          displayName = 'Updated At';\n        } else if (fieldName === '__mj_DeletedAt') {\n          displayName = 'Deleted At';\n        }\n      }\n\n      return {\n        title: displayName,\n        dataIndex: fieldName,\n        key: fieldName,\n        align: align,\n        width: colDef.width || columnWidth, // Use column-specific width if provided\n        ellipsis: false, // We'll handle ellipsis manually for click expansion\n        sorter: (colDef.sortable !== undefined ? colDef.sortable : sorting) ? (a, b) => {\n          const valA = a[fieldName];\n          const valB = b[fieldName];\n          if (valA == null) return 1;\n          if (valB == null) return -1;\n          if (typeof valA === 'string') {\n            return valA.localeCompare(valB);\n          }\n          return valA - valB;\n        } : false,\n        render: (value, record) => {\n          // Check for custom render function first\n          if (colDef.render && typeof colDef.render === 'function') {\n            return colDef.render(value, record, fieldInfo);\n          }\n\n          // Default handling for null values\n          if (value == null) return '-';\n\n          // Create a unique key for this cell\n          const cellKey = `${record.key || record.ID || record.id}_${fieldName}`;\n          const isExpanded = expandedCells[cellKey];\n\n          // Format based on field type (default behavior)\n          let displayValue = value;\n          let formattedContent = null;\n          \n          // Handle date/time fields\n          if (fieldType.includes('date') || fieldType.includes('time')) {\n            displayValue = formatDate(value);\n            formattedContent = displayValue;\n          }\n          // Handle boolean fields\n          else if (fieldType === 'bit') {\n            displayValue = value ? 'Yes' : 'No';\n            formattedContent = displayValue;\n          }\n          // Handle fields with value lists - render as tags\n          else if (hasValueList && possibleValues) {\n            const color = getValueColor(value, possibleValues);\n            formattedContent = (\n              <Tag \n                color={color}\n                style={{ \n                  borderRadius: '12px',\n                  fontSize: '12px',\n                  padding: '2px 8px'\n                }}\n              >\n                {value}\n              </Tag>\n            );\n          }\n          // Handle numeric fields with formatting\n          else if (fieldType.includes('money')) {\n            displayValue = typeof value === 'number'\n              ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)\n              : value;\n            formattedContent = displayValue;\n          }\n          else if (fieldType.includes('decimal') || fieldType.includes('float')) {\n            displayValue = typeof value === 'number' \n              ? value.toLocaleString('en-US', { maximumFractionDigits: 2 })\n              : value;\n            formattedContent = displayValue;\n          }\n          else if (fieldType.includes('int')) {\n            displayValue = typeof value === 'number' \n              ? value.toLocaleString('en-US')\n              : value;\n            formattedContent = displayValue;\n          }\n          else {\n            formattedContent = displayValue;\n          }\n          \n          // Handle long text fields based on longTextDisplay mode\n          if (useEllipsis && typeof displayValue === 'string' && displayValue.length > longTextThreshold && !hasValueList) {\n            const shouldTruncate = displayValue.length > longTextThreshold;\n            \n            // Mode: truncate - simple ellipsis\n            if (longTextDisplay === 'truncate') {\n              const truncated = displayValue.substring(0, longTextThreshold) + '...';\n              return (\n                <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>\n                  {truncated}\n                </div>\n              );\n            }\n            \n            // Mode: tooltip - show full text on hover\n            if (longTextDisplay === 'tooltip') {\n              const truncated = displayValue.substring(0, longTextThreshold) + '...';\n              return (\n                <Tooltip title={displayValue} placement=\"topLeft\">\n                  <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>\n                    {truncated}\n                  </div>\n                </Tooltip>\n              );\n            }\n            \n            // Mode: wrap - show all text with wrapping\n            if (longTextDisplay === 'wrap') {\n              return (\n                <div style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>\n                  {displayValue}\n                </div>\n              );\n            }\n            \n            // Mode: expand (default) - click to expand/collapse\n            if (longTextDisplay === 'expand') {\n              const shouldTruncate = !isExpanded && displayValue.length > longTextThreshold;\n              const displayText = shouldTruncate \n                ? displayValue.substring(0, longTextThreshold) \n                : displayValue;\n              \n              // Apply highlight for filter matches\n              let finalContent = displayText;\n              if (filtering && highlightFilterMatches && debouncedFilter) {\n                const str = String(displayText);\n                const searchTerm = debouncedFilter.toLowerCase();\n                const index = str.toLowerCase().indexOf(searchTerm);\n                if (index >= 0) {\n                  finalContent = (\n                    <span>\n                      {str.substring(0, index)}\n                      <Text mark>{str.substring(index, index + searchTerm.length)}</Text>\n                      {str.substring(index + searchTerm.length)}\n                    </span>\n                  );\n                }\n              }\n              \n              return (\n                <div \n                  style={{ \n                    cursor: shouldTruncate ? 'pointer' : 'default',\n                    whiteSpace: isExpanded ? 'normal' : 'nowrap',\n                    wordBreak: isExpanded ? 'break-word' : 'normal'\n                  }}\n                  onClick={() => {\n                    if (displayValue.length > longTextThreshold) {\n                      setExpandedCells(prev => ({\n                        ...prev,\n                        [cellKey]: !prev[cellKey]\n                      }));\n                    }\n                  }}\n                >\n                  {finalContent}\n                  {shouldTruncate && (\n                    <Text type=\"secondary\" style={{ marginLeft: 2 }}>\n                      ... <Text type=\"link\">[show more]</Text>\n                    </Text>\n                  )}\n                  {isExpanded && displayValue.length > longTextThreshold && (\n                    <Text type=\"link\" style={{ marginLeft: 4 }}>\n                      [show less]\n                    </Text>\n                  )}\n                </div>\n              );\n            }\n            \n            // Mode: none - no special handling\n            // Falls through to regular display\n          }\n          \n          // Apply highlight for filter matches (for non-expandable content)\n          if (filtering && highlightFilterMatches && debouncedFilter && !hasValueList) {\n            const str = String(displayValue);\n            const index = str.toLowerCase().indexOf(debouncedFilter.toLowerCase());\n            if (index >= 0) {\n              return (\n                <span>\n                  {str.substring(0, index)}\n                  <Text mark>{str.substring(index, index + debouncedFilter.length)}</Text>\n                  {str.substring(index + debouncedFilter.length)}\n                </span>\n              );\n            }\n          }\n          \n          return formattedContent;\n        }\n      };\n    });\n  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);\n  \n  // Filter data based on search term\n  // Handles null/undefined data gracefully and returns appropriate defaults\n  const filteredData = React.useMemo(() => {\n    // If data is null/undefined, return empty array\n    if (!data || !Array.isArray(data)) {\n      return [];\n    }\n    \n    // If filtering is disabled or no filter text, return original data\n    if (!filtering || !debouncedFilter) {\n      return data;\n    }\n    \n    // Determine which fields to search - use specified fields or all display fields\n    const searchFields = filterFields || displayFields;\n    const searchTerm = debouncedFilter.toLowerCase();\n    \n    // Filter rows that match the search term in any of the specified fields\n    return data.filter(row => {\n      // Skip null/undefined rows\n      if (!row || typeof row !== 'object') return false;\n      \n      return searchFields.some(field => {\n        const value = row[field];\n        if (value == null) return false;\n        return String(value).toLowerCase().includes(searchTerm);\n      });\n    });\n  }, [data, displayFields, filtering, filterFields, debouncedFilter]);\n  \n  // Handle filter change\n  React.useEffect(() => {\n    if (onFilterChanged && filtering) {\n      onFilterChanged({ filterValue: debouncedFilter, matchingData: filteredData });\n    }\n  }, [debouncedFilter, filteredData, onFilterChanged, filtering]);\n  \n  // Selection configuration\n  const rowSelection = selectionMode !== 'none' ? {\n    type: selectionMode === 'radio' ? 'radio' : 'checkbox',\n    selectedRowKeys,\n    onChange: (keys, rows) => {\n      setSelectedRowKeys(keys);\n      if (onSelectionChanged) {\n        onSelectionChanged({ selectedRows: rows });\n      }\n    },\n    ...(selectionMode === 'row' ? {\n      onSelect: (record) => {\n        const key = record.key || record.ID || record.id;\n        const isSelected = selectedRowKeys.includes(key);\n        const newKeys = isSelected \n          ? selectedRowKeys.filter(k => k !== key)\n          : [...selectedRowKeys, key];\n        setSelectedRowKeys(newKeys);\n        if (onSelectionChanged) {\n          const rows = filteredData.filter(r => \n            newKeys.includes(r.key || r.ID || r.id)\n          );\n          onSelectionChanged({ selectedRows: rows });\n        }\n      }\n    } : {})\n  } : undefined;\n  \n  // Pagination configuration\n  const pagination = paging ? {\n    current: currentPage,\n    pageSize: currentPageSize,\n    total: filteredData.length,\n    showSizeChanger: showPageSizeChanger,\n    pageSizeOptions: ['5', '10', '20', '50', '100'],\n    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,\n    onChange: (page, newPageSize) => {\n      setCurrentPage(page);\n      if (newPageSize !== currentPageSize) {\n        setCurrentPageSize(newPageSize);\n      }\n      if (onPageChanged) {\n        const startIdx = (page - 1) * (newPageSize || currentPageSize);\n        const endIdx = Math.min(startIdx + (newPageSize || currentPageSize), filteredData.length);\n        onPageChanged({\n          pageNumber: page - 1,\n          pageSize: newPageSize || currentPageSize,\n          visibleRows: filteredData.slice(startIdx, endIdx)\n        });\n      }\n    },\n    onShowSizeChange: (current, size) => {\n      setCurrentPageSize(size);\n      setCurrentPage(1); // Reset to first page when changing page size\n      if (onPageChanged) {\n        const endIdx = Math.min(size, filteredData.length);\n        onPageChanged({\n          pageNumber: 0,\n          pageSize: size,\n          visibleRows: filteredData.slice(0, endIdx)\n        });\n      }\n    }\n  } : false;\n  \n  // Handle table sort change\n  const handleTableChange = (pag, filters, sorter) => {\n    if (sorter && onSortChanged) {\n      setSortConfig(sorter);\n      onSortChanged({ \n        sortState: {\n          column: sorter.field,\n          direction: sorter.order === 'ascend' ? 'asc' : 'desc'\n        }\n      });\n    }\n  };\n  \n  // Add keys to data for row selection\n  // React tables need a unique key for each row to track selection state\n  const dataWithKeys = React.useMemo(() => {\n    // Handle empty/null data gracefully\n    if (!filteredData || !Array.isArray(filteredData)) {\n      return [];\n    }\n    \n    return filteredData.map((row, index) => ({\n      ...row,\n      // Use existing key, ID fields, or fall back to index\n      key: row?.key || row?.ID || row?.id || index\n    }));\n  }, [filteredData]);\n  \n  return (\n    <div className=\"data-grid-component\" style={{ width: '100%' }}>\n      <style>{`\n        .data-grid-component .ant-table-wrapper,\n        .data-grid-component .ant-table,\n        .data-grid-component .ant-table-tbody,\n        .data-grid-component .ant-table-row,\n        .data-grid-component .ant-table-cell,\n        .data-grid-component .ant-table-tbody > tr {\n          animation: none !important;\n          transition: none !important;\n        }\n        .data-grid-component .ant-table-tbody > tr.ant-table-row {\n          animation: none !important;\n        }\n        .data-grid-component * {\n          animation-duration: 0s !important;\n          transition-duration: 0s !important;\n        }\n      `}</style>\n      {filtering && (\n        <Space direction=\"vertical\" style={{ width: '100%', marginBottom: 16 }}>\n          <div style={{ position: 'relative' }}>\n            <Search\n              placeholder={`Search in ${filterFields ? filterFields.join(', ') : 'all fields'}`}\n              value={filterText}\n              onChange={e => setFilterText(e.target.value)}\n              allowClear\n              onClear={() => setFilterText('')}\n              style={{ width: '100%' }}  // Full width to match grid\n            />\n            <style>{`\n              .data-grid-component .ant-btn.ant-input-search-button {\n                margin-top: -1px;\n              }\n            `}</style>\n          </div>\n          {debouncedFilter && (\n            <Text type=\"secondary\">\n              Found {filteredData.length} matching records\n            </Text>\n          )}\n        </Space>\n      )}\n      \n      <Table\n        columns={tableColumns}\n        dataSource={dataWithKeys}\n        rowSelection={rowSelection}\n        pagination={pagination}\n        onChange={handleTableChange}\n        scroll={autoFitColumns ? undefined : { x: 'max-content' }}  // Enable horizontal scrolling only when not auto-fitting\n        loading={data === null}  // Only show loading when data is explicitly null (not yet loaded)\n        locale={{\n          emptyText: `No ${entityName || 'records'} found`\n        }}\n        size=\"middle\"\n        onRow={(record) => ({\n          onClick: () => {\n            if (onRowClick) {\n              onRowClick(record);\n            }\n          },\n          style: {\n            cursor: onRowClick ? 'pointer' : 'default'\n          }\n        })}\n      />\n    </div>\n  );\n} ",
+        "exampleUsage": "// Simple column configuration (backward compatible)\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={['Name', 'SKU', 'Price', 'Category', 'InStock']}\n  onRowClick={handleRowClick}\n/>\n\n// Advanced column configuration with custom rendering\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={[\n    { field: 'Name', header: 'Product Name', width: '200px' },\n    { \n      field: 'Price',\n      header: 'Unit Price',\n      render: (value) => (\n        <span style={{ fontWeight: 'bold', color: '#059669' }}>\n          {value >= 1000 ? `$${(value/1000).toFixed(1)}K` : `$${value}`}\n        </span>\n      ),\n      width: '120px',\n      sortable: true\n    },\n    {\n      field: 'InStock',\n      header: 'Availability',\n      render: (value) => (\n        <span style={{ \n          padding: '2px 8px',\n          borderRadius: '12px',\n          backgroundColor: value ? '#D1FAE5' : '#FEE2E2',\n          color: value ? '#065F46' : '#991B1B'\n        }}>\n          {value ? 'In Stock' : 'Out of Stock'}\n        </span>\n      ),\n      width: '130px',\n      sortable: false\n    },\n    'Category'  // Simple string still works\n  ]}\n  sorting={true}\n  paging={true}\n  pageSize={20}\n  filtering={true}\n  filterFields={['Name', 'SKU', 'Category']}\n  selectionMode=\"none\"\n  onRowClick={handleRowClick}\n  onSelectionChanged={handleSelection}\n  onPageChanged={handlePageChange}\n  onSortChanged={handleSortChange}\n  onFilterChanged={handleFilterChange}\n/>",
+        "namespace": "Generic/UI/Table",
+        "version": "1.0.0",
+        "registry": "Skip"
+      },
+      {
+        "name": "DataExportPanel",
+        "namespace": "Generic/UI/Export",
+        "location": "registry",
+        "code": "function DataExportPanel({ \n  mode = 'ui',\n  data = [],\n  columns = [],\n  filename = 'export',\n  formats = ['csv', 'excel', 'pdf'],\n  position = 'inline',\n  buttonStyle = 'dropdown',\n  buttonText = 'Export',\n  icon = 'fa-download',\n  showPreview = false,\n  allowColumnSelection = true,\n  includeHeaders = true,\n  dateFormat = 'YYYY-MM-DD',\n  numberFormat = { decimals: 2, thousandsSeparator: ',', decimalSeparator: '.' },\n  pdfOptions = { orientation: 'portrait', pageSize: 'a4', margins: { top: 40, bottom: 40, left: 40, right: 40 } },\n  excelOptions = { sheetName: 'Data', includeFilters: true, autoWidth: true },\n  getHtmlElement = null,  // Function to get element at export time\n  aiInsightsText = null,  // Raw markdown text for AI insights\n  onExportStart = () => {},\n  onExportComplete = () => {},\n  onExportError = () => {},\n  customStyles = {},\n  visible = true,\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings\n}) {\n  const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);\n  const [isExporting, setIsExporting] = React.useState(false);\n  const [exportProgress, setExportProgress] = React.useState(0);\n  \n  // Validate and normalize columns on initialization\n  const validateColumns = (cols) => {\n    if (!cols || cols.length === 0) {\n      console.warn('⚠️ [DataExportPanel] No columns provided for export');\n      return [];\n    }\n    \n    return cols.map((col, index) => {\n      // Check for required properties\n      if (!col.key && !col.field) {\n        console.warn(`⚠️ [DataExportPanel] Column at index ${index} missing 'key' property. Expected format: { key: 'fieldName', label: 'Display Name' }. Got:`, col);\n      }\n      if (!col.label && !col.header && !col.name) {\n        console.warn(`⚠️ [DataExportPanel] Column at index ${index} missing 'label' property. Will fallback to key/field value.`);\n      }\n      \n      const key = col.key || col.field;\n      const label = col.label || col.header || col.name || key;\n      \n      if (!key) {\n        console.error(`❌ [DataExportPanel] Column at index ${index} has no valid key identifier. This will cause export to fail. Column:`, col);\n      }\n      \n      return {\n        ...col,\n        key: key,\n        label: label,\n        selected: true\n      };\n    });\n  };\n  \n  const [selectedColumns, setSelectedColumns] = React.useState(\n    validateColumns(columns)\n  );\n  const [showColumnSelector, setShowColumnSelector] = React.useState(false);\n  const [showPreviewDialog, setShowPreviewDialog] = React.useState(false);\n  const [previewFormat, setPreviewFormat] = React.useState(null);\n  \n  const exportRef = React.useRef(null);\n  const dropdownRef = React.useRef(null);\n  \n  // Re-validate columns if they change\n  React.useEffect(() => {\n    setSelectedColumns(validateColumns(columns));\n  }, [columns]);\n  \n  // Merge default styles with custom styles\n  const panelStyles = {\n    container: {\n      position: position === 'floating' ? 'fixed' : 'relative',\n      display: position === 'inline' ? 'inline-block' : 'block',\n      ...customStyles.container\n    },\n    button: {\n      padding: '8px 16px',\n      backgroundColor: styles?.colors?.primary || '#3B82F6',\n      color: 'white',\n      border: 'none',\n      borderRadius: '6px',\n      cursor: 'pointer',\n      display: 'flex',\n      alignItems: 'center',\n      gap: '8px',\n      fontSize: '14px',\n      fontWeight: '500',\n      transition: 'all 0.2s',\n      ...customStyles.button\n    },\n    dropdown: {\n      position: 'absolute',\n      top: '100%',\n      right: 0,\n      marginTop: '4px',\n      backgroundColor: 'white',\n      border: '1px solid #E5E7EB',\n      borderRadius: '8px',\n      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',\n      zIndex: 1000,\n      minWidth: '200px',\n      ...customStyles.dropdown\n    },\n    dropdownItem: {\n      padding: '10px 16px',\n      cursor: 'pointer',\n      display: 'flex',\n      alignItems: 'center',\n      gap: '10px',\n      fontSize: '14px',\n      transition: 'background-color 0.15s',\n      borderBottom: '1px solid #F3F4F6',\n      ...customStyles.dropdownItem\n    },\n    progressBar: {\n      position: 'absolute',\n      bottom: 0,\n      left: 0,\n      right: 0,\n      height: '3px',\n      backgroundColor: '#E5E7EB',\n      borderRadius: '0 0 6px 6px',\n      overflow: 'hidden',\n      ...customStyles.progressBar\n    },\n    progressFill: {\n      height: '100%',\n      backgroundColor: styles?.colors?.success || '#10B981',\n      transition: 'width 0.3s ease',\n      ...customStyles.progressFill\n    }\n  };\n  \n  // Format value based on type\n  const formatValue = (value, type) => {\n    if (value == null) return '';\n    \n    if (type === 'date' && dayjs) {\n      return dayjs(value).format(dateFormat);\n    }\n    \n    if (type === 'number' && numberFormat) {\n      const num = parseFloat(value);\n      if (!isNaN(num)) {\n        const parts = num.toFixed(numberFormat.decimals).split('.');\n        parts[0] = parts[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, numberFormat.thousandsSeparator);\n        return parts.join(numberFormat.decimalSeparator);\n      }\n    }\n    \n    if (type === 'currency' && numberFormat) {\n      const num = parseFloat(value);\n      if (!isNaN(num)) {\n        const formatted = formatValue(num, 'number');\n        return `$${formatted}`;\n      }\n    }\n    \n    return String(value);\n  };\n  \n  // Prepare data for export\n  const prepareData = () => {\n    const activeColumns = allowColumnSelection \n      ? selectedColumns.filter(col => col.selected)\n      : selectedColumns; // Use validated selectedColumns instead of raw columns\n      \n    if (!data || data.length === 0) {\n      console.warn('⚠️ [DataExportPanel] No data to export');\n      return { headers: [], rows: [] };\n    }\n    \n    // Validate data structure\n    if (data.length > 0) {\n      const sampleRow = data[0];\n      activeColumns.forEach(col => {\n        if (!(col.key in sampleRow)) {\n          console.warn(`⚠️ [DataExportPanel] Data missing key '${col.key}' that was defined in columns. First row keys:`, Object.keys(sampleRow));\n        }\n      });\n    }\n    \n    const headers = activeColumns.map(col => col.label || col.key);\n    const rows = data.map((row, rowIndex) => \n      activeColumns.map(col => {\n        if (!(col.key in row) && rowIndex === 0) {\n          console.warn(`⚠️ [DataExportPanel] Row ${rowIndex} missing value for key '${col.key}'`);\n        }\n        return formatValue(row[col.key], col.type);\n      })\n    );\n    \n    console.log(`✅ [DataExportPanel] Prepared ${rows.length} rows with ${headers.length} columns for export`);\n    \n    return { headers, rows };\n  };\n  \n  // Export to CSV\n  const exportToCSV = async () => {\n    try {\n      setIsExporting(true);\n      setExportProgress(10);\n      onExportStart('csv');\n      \n      const { headers, rows } = prepareData();\n      setExportProgress(30);\n      \n      // Build CSV content\n      let csvContent = '';\n      \n      if (includeHeaders) {\n        csvContent += headers.map(h => `\"${h}\"`).join(',') + '\\n';\n      }\n      \n      setExportProgress(50);\n      \n      // Process rows in chunks for large datasets\n      const chunkSize = 1000;\n      for (let i = 0; i < rows.length; i += chunkSize) {\n        const chunk = rows.slice(i, i + chunkSize);\n        csvContent += chunk.map(row => \n          row.map(cell => `\"${cell.replace(/\"/g, '\"\"')}\"`).join(',')\n        ).join('\\n');\n        \n        if (i + chunkSize < rows.length) {\n          csvContent += '\\n';\n        }\n        \n        setExportProgress(50 + (i / rows.length) * 40);\n      }\n      \n      setExportProgress(90);\n      \n      // Create and download file\n      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });\n      const url = URL.createObjectURL(blob);\n      const link = document.createElement('a');\n      link.href = url;\n      link.download = `${filename}.csv`;\n      document.body.appendChild(link);\n      link.click();\n      document.body.removeChild(link);\n      URL.revokeObjectURL(url);\n      \n      setExportProgress(100);\n      onExportComplete('csv', `${filename}.csv`);\n      \n      setTimeout(() => {\n        setIsExporting(false);\n        setExportProgress(0);\n      }, 500);\n      \n    } catch (error) {\n      console.error('CSV export failed:', error);\n      onExportError(error);\n      setIsExporting(false);\n      setExportProgress(0);\n    }\n  };\n  \n  // Export to Excel\n  const exportToExcel = async () => {\n    try {\n      setIsExporting(true);\n      setExportProgress(10);\n      onExportStart('excel');\n      \n      const { headers, rows } = prepareData();\n      setExportProgress(30);\n      \n      // Create workbook and worksheet\n      const wb = XLSX.utils.book_new();\n      \n      // Combine headers and rows\n      const worksheetData = includeHeaders ? [headers, ...rows] : rows;\n      setExportProgress(50);\n      \n      const ws = XLSX.utils.aoa_to_sheet(worksheetData);\n      \n      // Apply column widths if autoWidth is enabled\n      if (excelOptions.autoWidth && selectedColumns) {\n        const colWidths = selectedColumns\n          .filter(col => !allowColumnSelection || col.selected)\n          .map(col => ({ wch: col.width ? col.width / 7 : 15 }));\n        ws['!cols'] = colWidths;\n      }\n      \n      setExportProgress(70);\n      \n      // Add filters if enabled\n      if (excelOptions.includeFilters && includeHeaders) {\n        ws['!autofilter'] = { \n          ref: XLSX.utils.encode_range({\n            s: { r: 0, c: 0 },\n            e: { r: worksheetData.length - 1, c: headers.length - 1 }\n          })\n        };\n      }\n      \n      setExportProgress(80);\n      \n      // Add worksheet to workbook\n      XLSX.utils.book_append_sheet(wb, ws, excelOptions.sheetName || 'Data');\n      \n      // Generate file\n      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });\n      \n      // Convert to blob\n      const buf = new ArrayBuffer(wbout.length);\n      const view = new Uint8Array(buf);\n      for (let i = 0; i < wbout.length; i++) {\n        view[i] = wbout.charCodeAt(i) & 0xFF;\n      }\n      \n      setExportProgress(90);\n      \n      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });\n      const url = URL.createObjectURL(blob);\n      const link = document.createElement('a');\n      link.href = url;\n      link.download = `${filename}.xlsx`;\n      document.body.appendChild(link);\n      link.click();\n      document.body.removeChild(link);\n      URL.revokeObjectURL(url);\n      \n      setExportProgress(100);\n      onExportComplete('excel', `${filename}.xlsx`);\n      \n      setTimeout(() => {\n        setIsExporting(false);\n        setExportProgress(0);\n      }, 500);\n      \n    } catch (error) {\n      console.error('Excel export failed:', error);\n      onExportError(error);\n      setIsExporting(false);\n      setExportProgress(0);\n    }\n  };\n  \n  // Export to PDF\n  const exportToPDF = async () => {\n    // Get elements at export time\n    const exportHtmlElement = getHtmlElement ? getHtmlElement() : null;\n    \n    console.log('=== PDF Export Debug ===');\n    console.log('getHtmlElement provided:', !!getHtmlElement);\n    console.log('exportHtmlElement:', !!exportHtmlElement, exportHtmlElement);\n    console.log('aiInsightsText provided:', !!aiInsightsText);\n    console.log('pdfOptions:', pdfOptions);\n    console.log('data length:', data?.length || 0);\n    \n    try {\n      setIsExporting(true);\n      setExportProgress(10);\n      onExportStart('pdf');\n      \n      const { jsPDF } = jspdf;\n      const doc = new jsPDF({\n        orientation: pdfOptions.orientation || 'portrait',\n        unit: 'mm',\n        format: pdfOptions.pageSize || 'a4',\n        compress: true  // Enable PDF compression\n      });\n      \n      setExportProgress(20);\n      \n      if (exportHtmlElement) {\n        console.log('HTML element path - capturing dashboard');\n        console.log('exportHtmlElement dimensions:', {\n          scrollWidth: exportHtmlElement.scrollWidth,\n          scrollHeight: exportHtmlElement.scrollHeight,\n          clientWidth: exportHtmlElement.clientWidth,\n          clientHeight: exportHtmlElement.clientHeight\n        });\n        \n        // Capture HTML element as image (for charts, dashboards, etc.)\n        setExportProgress(30);\n        \n        // Add title and metadata\n        doc.setFontSize(16);\n        doc.text(pdfOptions.title || filename, pdfOptions.margins.left, pdfOptions.margins.top - 10);\n        \n        doc.setFontSize(10);\n        doc.text(\n          `Generated: ${dayjs().format('YYYY-MM-DD HH:mm')}`,\n          pdfOptions.margins.left,\n          pdfOptions.margins.top - 5\n        );\n        \n        setExportProgress(40);\n        \n        // Wait longer for ApexCharts to fully render\n        console.log('Waiting 1000ms for charts to render...');\n        await new Promise(resolve => setTimeout(resolve, 1000));\n        console.log('Wait complete, starting html2canvas...');\n        \n        // Capture the element with better options for dashboards\n        let canvas = null;\n        let imgData = null;\n        try {\n          canvas = await html2canvas(exportHtmlElement, {\n            scale: 2,\n            logging: false,\n            useCORS: true,\n            backgroundColor: '#ffffff',\n            windowWidth: exportHtmlElement.scrollWidth,\n            windowHeight: exportHtmlElement.scrollHeight,\n            ignoreElements: (element) => {\n              // Ignore elements that shouldn't be in the PDF\n              return element.classList?.contains('no-print') || \n                     element.tagName === 'BUTTON';\n            }\n          });\n          console.log('Dashboard canvas captured successfully');\n          imgData = canvas.toDataURL('image/jpeg', 0.95);  // Use JPEG for better compression\n        } catch (canvasError) {\n          console.error('Error capturing dashboard canvas:', canvasError);\n          console.warn('⚠️ Continuing PDF export without visualization - will include data table only');\n          // Don't throw - continue with data table export\n          canvas = null;\n          imgData = null;\n        }\n        \n        setExportProgress(60);\n        \n        // Calculate proper aspect ratio\n        const pageWidth = doc.internal.pageSize.getWidth();\n        const pageHeight = doc.internal.pageSize.getHeight();\n        const marginLeft = pdfOptions.margins.left || 20;\n        const marginRight = pdfOptions.margins.right || 20;\n        const marginTop = pdfOptions.margins.top || 20;\n        const marginBottom = pdfOptions.margins.bottom || 20;\n        \n        const maxWidth = pageWidth - marginLeft - marginRight;\n        const maxHeight = pageHeight - marginTop - marginBottom - 10;\n        \n        // Only process image if canvas was captured successfully\n        if (canvas && imgData) {\n          // Calculate dimensions maintaining aspect ratio\n          const canvasAspectRatio = canvas.width / canvas.height;\n          const pageAspectRatio = maxWidth / maxHeight;\n          \n          let imgWidth, imgHeight;\n          \n          if (canvasAspectRatio > pageAspectRatio) {\n            // Image is wider than page ratio - fit to width\n            imgWidth = maxWidth;\n            imgHeight = maxWidth / canvasAspectRatio;\n          } else {\n            // Image is taller than page ratio - fit to height\n            imgHeight = maxHeight;\n            imgWidth = maxHeight * canvasAspectRatio;\n          }\n          \n          // For cluster visualization, maximize the image size on the first page\n          // since we'll put the data table on subsequent pages\n          if (exportHtmlElement && exportHtmlElement.id === 'cluster-graph-container') {\n            console.log('Detected cluster graph - maximizing image size for PDF');\n            // Use more of the page for the visualization\n            const availableHeight = pageHeight - marginTop - marginBottom;\n            const availableWidth = pageWidth - marginLeft - marginRight;\n            \n            // Recalculate to use full available space\n            if (canvasAspectRatio > (availableWidth / availableHeight)) {\n              imgWidth = availableWidth;\n              imgHeight = availableWidth / canvasAspectRatio;\n            } else {\n              imgHeight = availableHeight;\n              imgWidth = availableHeight * canvasAspectRatio;\n            }\n          }\n          \n          console.log('Image sizing:', {\n            canvas: { width: canvas.width, height: canvas.height, ratio: canvasAspectRatio },\n            page: { maxWidth, maxHeight, ratio: pageAspectRatio },\n            final: { width: imgWidth, height: imgHeight }\n          });\n          \n          // Skip AI Insights canvas capture - we only want the markdown text\n          // The aiInsightsText parameter provides the markdown content directly\n          \n          // Image data and dimensions are already calculated above\n          let yPosition = marginTop;\n          const bottomMargin = pageHeight - marginBottom;\n          \n          // Check if we need multi-page support for tall dashboards\n          if (pdfOptions.multiPage && imgHeight > bottomMargin - yPosition) {\n            console.log('Using multi-page mode for tall dashboard');\n            // Split the image across multiple pages\n            const pageHeight = bottomMargin - yPosition;\n            let remainingHeight = imgHeight;\n            let currentY = 0;\n          \n          while (remainingHeight > 0) {\n            const currentPageHeight = Math.min(pageHeight, remainingHeight);\n            \n            // Create a temporary canvas for this page's portion\n            const pageCanvas = document.createElement('canvas');\n            pageCanvas.width = canvas.width;\n            pageCanvas.height = (currentPageHeight / imgWidth) * canvas.width;\n            \n            const ctx = pageCanvas.getContext('2d');\n            ctx.drawImage(\n              canvas,\n              0, currentY * (canvas.height / imgHeight),\n              canvas.width, pageCanvas.height * (canvas.height / imgHeight),\n              0, 0,\n              pageCanvas.width, pageCanvas.height\n            );\n            \n            const pageImgData = pageCanvas.toDataURL('image/png');\n            \n            doc.addImage(\n              pageImgData,\n              'PNG',\n              pdfOptions.margins.left,\n              yPosition,\n              imgWidth,\n              currentPageHeight\n            );\n            \n            remainingHeight -= currentPageHeight;\n            currentY += currentPageHeight;\n            \n            if (remainingHeight > 0) {\n              doc.addPage();\n              yPosition = pdfOptions.margins.top;\n            }\n          }\n          } else if (yPosition + imgHeight > bottomMargin) {\n            // Single page mode - scale to fit\n          const maxHeight = bottomMargin - yPosition;\n          const scaledWidth = (maxHeight * canvas.width) / canvas.height;\n          \n          doc.addImage(\n            imgData, \n            'PNG', \n            pdfOptions.margins.left, \n            yPosition, \n            scaledWidth > imgWidth ? imgWidth : scaledWidth,\n            scaledWidth > imgWidth ? imgHeight : maxHeight\n          );\n          } else {\n            // Center the image horizontally if it's narrower than the page\n            const xPosition = marginLeft + Math.max(0, (maxWidth - imgWidth) / 2);\n            \n            doc.addImage(\n              imgData, \n              'JPEG', \n              xPosition, \n              yPosition, \n              imgWidth, \n              imgHeight\n            );\n            \n            // For cluster graphs, always put data table on next page for better layout\n            if (exportHtmlElement && exportHtmlElement.id === 'cluster-graph-container') {\n              console.log('Cluster graph exported - data table will be on next page');\n              // Force data table to next page by setting a flag\n              doc.addPage();\n            }\n          }\n        } else {\n          // No image captured - add a note\n          doc.setFontSize(10);\n          doc.setTextColor(150, 150, 150);\n          doc.text('Note: Visualization could not be captured', pageWidth / 2, marginTop + 20, { align: 'center' });\n        }\n        \n        // Add AI Insights on a new page - only use markdown text\n        if (aiInsightsText) {\n          console.log('Adding AI Insights to PDF on new page');\n          doc.addPage();\n          \n          // Add AI Insights header\n          doc.setFontSize(16);\n          doc.setFont(undefined, 'bold');\n          doc.text('AI-Generated Insights', marginLeft, marginTop);\n          \n          doc.setFontSize(10);\n          doc.setFont(undefined, 'normal');\n          doc.setTextColor(100);\n          doc.text(\n            `Generated: ${dayjs().format('YYYY-MM-DD HH:mm')}`,\n            marginLeft,\n            marginTop + 7\n          );\n          doc.setTextColor(0);\n          \n          if (aiInsightsText) {\n            // Render markdown as text\n            let yPos = marginTop + 20;\n            const lineHeight = 5;\n            const maxLineWidth = pageWidth - marginLeft - marginRight;\n            \n            // Clean the markdown text to handle special characters\n            let cleanText = aiInsightsText\n              .replace(/[\"\"]/g, '\"')  // Smart quotes to regular quotes\n              .replace(/['']/g, \"'\")  // Smart apostrophes to regular apostrophes\n              .replace(/—/g, '-')     // Em dash to hyphen\n              .replace(/–/g, '-')     // En dash to hyphen\n              .replace(/…/g, '...')   // Ellipsis\n              .replace(/•/g, '* ')    // Bullet points\n              .replace(/\\u200B/g, '') // Zero-width space\n              .replace(/\\u00A0/g, ' ') // Non-breaking space\n              .replace(/[\\u2000-\\u206F]/g, '') // Various Unicode spaces and formatting\n              .replace(/[\\u2070-\\u209F]/g, '') // Superscripts and subscripts\n              .replace(/[\\u20A0-\\u20CF]/g, '') // Currency symbols (except common ones)\n              .replace(/[\\u2100-\\u214F]/g, '') // Letterlike symbols\n              .replace(/[\\uFE00-\\uFE0F]/g, '') // Variation selectors\n              .replace(/[^\\x00-\\x7F\\u0080-\\u00FF]/g, ''); // Remove other non-ASCII chars except Latin-1\n            \n            // Parse markdown to extract structure\n            const lines = cleanText.split('\\n');\n            \n            for (const line of lines) {\n              // Check if we need a new page\n              if (yPos > pageHeight - marginBottom - 10) {\n                doc.addPage();\n                yPos = marginTop;\n              }\n              \n              // Handle different markdown elements\n              if (line.startsWith('# ')) {\n                // H1 heading\n                doc.setFontSize(14);\n                doc.setFont(undefined, 'bold');\n                const text = line.substring(2).trim();\n                doc.text(text, marginLeft, yPos);\n                yPos += lineHeight * 1.5;\n                doc.setFont(undefined, 'normal');\n                doc.setFontSize(10);\n              } else if (line.startsWith('## ')) {\n                // H2 heading\n                doc.setFontSize(12);\n                doc.setFont(undefined, 'bold');\n                const text = line.substring(3).trim();\n                doc.text(text, marginLeft, yPos);\n                yPos += lineHeight * 1.3;\n                doc.setFont(undefined, 'normal');\n                doc.setFontSize(10);\n              } else if (line.startsWith('### ')) {\n                // H3 heading\n                doc.setFontSize(11);\n                doc.setFont(undefined, 'bold');\n                const text = line.substring(4).trim();\n                doc.text(text, marginLeft, yPos);\n                yPos += lineHeight * 1.2;\n                doc.setFont(undefined, 'normal');\n                doc.setFontSize(10);\n              } else if (line.startsWith('- ') || line.startsWith('* ')) {\n                // Bullet point\n                const text = line.substring(2).trim();\n                const bulletX = marginLeft + 5;\n                doc.text('•', marginLeft, yPos);\n                const splitText = doc.splitTextToSize(text, maxLineWidth - 5);\n                doc.text(splitText, bulletX, yPos);\n                yPos += lineHeight * splitText.length;\n              } else if (line.startsWith('**') && line.endsWith('**')) {\n                // Bold text\n                doc.setFont(undefined, 'bold');\n                const text = line.substring(2, line.length - 2).trim();\n                const splitText = doc.splitTextToSize(text, maxLineWidth);\n                doc.text(splitText, marginLeft, yPos);\n                yPos += lineHeight * splitText.length;\n                doc.setFont(undefined, 'normal');\n              } else if (line.trim() === '') {\n                // Empty line\n                yPos += lineHeight * 0.5;\n              } else {\n                // Regular text - also strip inline markdown formatting for now\n                // Remove bold markers and other inline formatting\n                let processedLine = line\n                  .replace(/\\*\\*(.*?)\\*\\*/g, '$1')  // Remove bold markers\n                  .replace(/\\*(.*?)\\*/g, '$1')      // Remove italic markers\n                  .replace(/`(.*?)`/g, '$1');       // Remove inline code markers\n                \n                const splitText = doc.splitTextToSize(processedLine, maxLineWidth);\n                doc.text(splitText, marginLeft, yPos);\n                yPos += lineHeight * splitText.length;\n              }\n            }\n          }\n        }\n        \n        // Optionally add data table below the image if both are provided\n        if (pdfOptions.includeDataTable && data && data.length > 0) {\n          console.log('Adding data table to PDF on new page');\n          doc.addPage();\n          \n          // Add table title\n          doc.setFontSize(14);\n          doc.text('Data Table', pdfOptions.margins.left, pdfOptions.margins.top);\n          \n          // Generate the data table on the new page\n          const { headers, rows } = prepareData();\n          let tableY = pdfOptions.margins.top + 10;\n          \n          // Add headers\n          doc.setFontSize(10);\n          doc.setFont(undefined, 'bold');\n          \n          if (includeHeaders) {\n            const colWidth = (doc.internal.pageSize.getWidth() - (pdfOptions.margins.left + pdfOptions.margins.right)) / headers.length;\n            headers.forEach((header, i) => {\n              doc.text(\n                header, \n                pdfOptions.margins.left + (i * colWidth), \n                tableY,\n                { maxWidth: colWidth - 2 }\n              );\n            });\n            tableY += 7;\n            \n            // Add separator line\n            doc.line(\n              pdfOptions.margins.left,\n              tableY - 2,\n              doc.internal.pageSize.getWidth() - pdfOptions.margins.right,\n              tableY - 2\n            );\n          }\n          \n          // Add all data rows\n          doc.setFont(undefined, 'normal');\n          rows.forEach((row) => {\n            // Check if we need a new page\n            if (tableY > doc.internal.pageSize.getHeight() - pdfOptions.margins.bottom - 10) {\n              doc.addPage();\n              tableY = pdfOptions.margins.top;\n              \n              // Re-add headers on new page\n              doc.setFont(undefined, 'bold');\n              const headerColWidth = (doc.internal.pageSize.getWidth() - (pdfOptions.margins.left + pdfOptions.margins.right)) / headers.length;\n              headers.forEach((header, i) => {\n                doc.text(\n                  header,\n                  pdfOptions.margins.left + (i * headerColWidth),\n                  tableY,\n                  { maxWidth: headerColWidth - 2 }\n                );\n              });\n              tableY += 10;\n              doc.setFont(undefined, 'normal');\n            }\n            \n            const colWidth = (doc.internal.pageSize.getWidth() - (pdfOptions.margins.left + pdfOptions.margins.right)) / row.length;\n            row.forEach((cell, i) => {\n              doc.text(\n                String(cell),\n                pdfOptions.margins.left + (i * colWidth),\n                tableY,\n                { maxWidth: colWidth - 2 }\n              );\n            });\n            tableY += 6;\n          });\n        }\n        \n        setExportProgress(90);\n        \n      } else {\n        console.log('No HTML element provided - using data table only path');\n        // Generate table from data\n        const { headers, rows } = prepareData();\n        setExportProgress(30);\n        \n        // Add title\n        doc.setFontSize(16);\n        doc.text(filename, pdfOptions.margins.left, pdfOptions.margins.top - 10);\n        \n        // Add date\n        doc.setFontSize(10);\n        doc.text(\n          `Generated: ${dayjs().format('YYYY-MM-DD HH:mm')}`,\n          pdfOptions.margins.left,\n          pdfOptions.margins.top - 5\n        );\n        \n        setExportProgress(40);\n        \n        // Calculate column widths\n        const pageWidth = doc.internal.pageSize.getWidth() - (pdfOptions.margins.left + pdfOptions.margins.right);\n        const colWidth = pageWidth / headers.length;\n        \n        // Add headers\n        let y = pdfOptions.margins.top + 5;\n        doc.setFontSize(11);\n        doc.setFont(undefined, 'bold');\n        \n        if (includeHeaders) {\n          headers.forEach((header, i) => {\n            doc.text(\n              header, \n              pdfOptions.margins.left + (i * colWidth), \n              y,\n              { maxWidth: colWidth - 2 }\n            );\n          });\n          y += 10;\n          \n          // Add separator line\n          doc.line(\n            pdfOptions.margins.left,\n            y - 3,\n            doc.internal.pageSize.getWidth() - pdfOptions.margins.right,\n            y - 3\n          );\n        }\n        \n        setExportProgress(60);\n        \n        // Add data rows\n        doc.setFont(undefined, 'normal');\n        doc.setFontSize(10);\n        \n        const pageHeight = doc.internal.pageSize.getHeight();\n        const bottomMargin = pageHeight - pdfOptions.margins.bottom;\n        \n        for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {\n          const row = rows[rowIdx];\n          \n          // Check if we need a new page\n          if (y > bottomMargin) {\n            doc.addPage();\n            y = pdfOptions.margins.top;\n            \n            // Re-add headers on new page\n            if (includeHeaders) {\n              doc.setFont(undefined, 'bold');\n              headers.forEach((header, i) => {\n                doc.text(\n                  header,\n                  pdfOptions.margins.left + (i * colWidth),\n                  y,\n                  { maxWidth: colWidth - 2 }\n                );\n              });\n              doc.setFont(undefined, 'normal');\n              y += 10;\n              doc.line(\n                pdfOptions.margins.left,\n                y - 3,\n                doc.internal.pageSize.getWidth() - pdfOptions.margins.right,\n                y - 3\n              );\n            }\n          }\n          \n          row.forEach((cell, i) => {\n            doc.text(\n              String(cell),\n              pdfOptions.margins.left + (i * colWidth),\n              y,\n              { maxWidth: colWidth - 2 }\n            );\n          });\n          \n          y += 7;\n          setExportProgress(60 + (rowIdx / rows.length) * 30);\n        }\n        \n        setExportProgress(90);\n      }\n      \n      // Save the PDF\n      doc.save(`${filename}.pdf`);\n      \n      setExportProgress(100);\n      onExportComplete('pdf', `${filename}.pdf`);\n      \n      setTimeout(() => {\n        setIsExporting(false);\n        setExportProgress(0);\n      }, 500);\n      \n    } catch (error) {\n      console.error('PDF export failed:', error);\n      onExportError(error);\n      setIsExporting(false);\n      setExportProgress(0);\n    }\n  };\n  \n  // Export methods for headless mode\n  React.useImperativeHandle(exportRef, () => ({\n    exportToCSV,\n    exportToExcel,\n    exportToPDF,\n    setData: (newData) => { data = newData; },\n    setColumns: (newColumns) => { \n      columns = newColumns;\n      setSelectedColumns(newColumns.map(col => ({ ...col, selected: true })));\n    }\n  }));\n  \n  // Handle export based on format\n  const handleExport = (format) => {\n    console.log('🎯 [DataExportPanel] handleExport called with format:', format);\n    console.log('  - data:', data);\n    console.log('  - data length:', data?.length);\n    console.log('  - columns:', columns);\n    setIsDropdownOpen(false);\n    \n    if (showPreview) {\n      setPreviewFormat(format);\n      setShowPreviewDialog(true);\n    } else {\n      switch (format) {\n        case 'csv':\n          exportToCSV();\n          break;\n        case 'excel':\n          exportToExcel();\n          break;\n        case 'pdf':\n          exportToPDF();\n          break;\n      }\n    }\n  };\n  \n  // Close dropdown when clicking outside\n  React.useEffect(() => {\n    const handleClickOutside = (event) => {\n      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {\n        setIsDropdownOpen(false);\n      }\n    };\n    \n    document.addEventListener('mousedown', handleClickOutside);\n    return () => document.removeEventListener('mousedown', handleClickOutside);\n  }, []);\n  \n  // Column selector dialog\n  const renderColumnSelector = () => {\n    if (!showColumnSelector) return null;\n    \n    return (\n      <div style={{\n        position: 'fixed',\n        top: 0,\n        left: 0,\n        right: 0,\n        bottom: 0,\n        backgroundColor: 'rgba(0, 0, 0, 0.5)',\n        display: 'flex',\n        alignItems: 'center',\n        justifyContent: 'center',\n        zIndex: 2000\n      }}>\n        <div style={{\n          backgroundColor: 'white',\n          borderRadius: '12px',\n          padding: '20px',\n          maxWidth: '400px',\n          width: '90%',\n          maxHeight: '70vh',\n          overflow: 'auto'\n        }}>\n          <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Select Columns to Export</h3>\n          \n          <div style={{ marginBottom: '16px' }}>\n            {selectedColumns.map((col, idx) => (\n              <label key={col.key} style={{\n                display: 'flex',\n                alignItems: 'center',\n                padding: '8px',\n                cursor: 'pointer',\n                borderRadius: '4px',\n                transition: 'background-color 0.15s'\n              }}\n              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}\n              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>\n                <input\n                  type=\"checkbox\"\n                  checked={col.selected}\n                  onChange={(e) => {\n                    const updated = [...selectedColumns];\n                    updated[idx].selected = e.target.checked;\n                    setSelectedColumns(updated);\n                  }}\n                  style={{ marginRight: '10px' }}\n                />\n                <span>{col.label || col.key}</span>\n              </label>\n            ))}\n          </div>\n          \n          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>\n            <button\n              onClick={() => setShowColumnSelector(false)}\n              style={{\n                padding: '8px 16px',\n                border: '1px solid #D1D5DB',\n                borderRadius: '6px',\n                backgroundColor: 'white',\n                cursor: 'pointer'\n              }}\n            >\n              Cancel\n            </button>\n            <button\n              onClick={() => setShowColumnSelector(false)}\n              style={{\n                padding: '8px 16px',\n                border: 'none',\n                borderRadius: '6px',\n                backgroundColor: styles?.colors?.primary || '#3B82F6',\n                color: 'white',\n                cursor: 'pointer'\n              }}\n            >\n              Apply\n            </button>\n          </div>\n        </div>\n      </div>\n    );\n  };\n  \n  // Preview dialog\n  const renderPreviewDialog = () => {\n    if (!showPreviewDialog) return null;\n    \n    const { headers, rows } = prepareData();\n    const previewRows = rows.slice(0, 10);\n    \n    return (\n      <div style={{\n        position: 'fixed',\n        top: 0,\n        left: 0,\n        right: 0,\n        bottom: 0,\n        backgroundColor: 'rgba(0, 0, 0, 0.5)',\n        display: 'flex',\n        alignItems: 'center',\n        justifyContent: 'center',\n        zIndex: 2000\n      }}>\n        <div style={{\n          backgroundColor: 'white',\n          borderRadius: '12px',\n          padding: '20px',\n          maxWidth: '90%',\n          width: '800px',\n          maxHeight: '80vh',\n          display: 'flex',\n          flexDirection: 'column'\n        }}>\n          <h3 style={{ marginTop: 0, marginBottom: '16px' }}>\n            Preview Export - {previewFormat?.toUpperCase()} Format\n          </h3>\n          \n          <div style={{\n            flex: 1,\n            overflow: 'auto',\n            border: '1px solid #E5E7EB',\n            borderRadius: '6px',\n            padding: '10px',\n            marginBottom: '16px'\n          }}>\n            <table style={{ width: '100%', borderCollapse: 'collapse' }}>\n              {includeHeaders && (\n                <thead>\n                  <tr>\n                    {headers.map((header, idx) => (\n                      <th key={idx} style={{\n                        padding: '8px',\n                        borderBottom: '2px solid #E5E7EB',\n                        textAlign: 'left',\n                        fontWeight: '600'\n                      }}>\n                        {header}\n                      </th>\n                    ))}\n                  </tr>\n                </thead>\n              )}\n              <tbody>\n                {previewRows.map((row, rowIdx) => (\n                  <tr key={rowIdx}>\n                    {row.map((cell, cellIdx) => (\n                      <td key={cellIdx} style={{\n                        padding: '8px',\n                        borderBottom: '1px solid #F3F4F6'\n                      }}>\n                        {cell}\n                      </td>\n                    ))}\n                  </tr>\n                ))}\n              </tbody>\n            </table>\n            {rows.length > 10 && (\n              <p style={{ textAlign: 'center', color: '#6B7280', marginTop: '10px' }}>\n                ... and {rows.length - 10} more rows\n              </p>\n            )}\n          </div>\n          \n          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>\n            <button\n              onClick={() => {\n                setShowPreviewDialog(false);\n                setPreviewFormat(null);\n              }}\n              style={{\n                padding: '8px 16px',\n                border: '1px solid #D1D5DB',\n                borderRadius: '6px',\n                backgroundColor: 'white',\n                cursor: 'pointer'\n              }}\n            >\n              Cancel\n            </button>\n            <button\n              onClick={() => {\n                setShowPreviewDialog(false);\n                handleExport(previewFormat);\n                setPreviewFormat(null);\n              }}\n              style={{\n                padding: '8px 16px',\n                border: 'none',\n                borderRadius: '6px',\n                backgroundColor: styles?.colors?.primary || '#3B82F6',\n                color: 'white',\n                cursor: 'pointer'\n              }}\n            >\n              Export\n            </button>\n          </div>\n        </div>\n      </div>\n    );\n  };\n  \n  // Render UI based on button style\n  const renderButton = () => {\n    if (buttonStyle === 'icon') {\n      return (\n        <button\n          onClick={() => setIsDropdownOpen(!isDropdownOpen)}\n          style={{\n            ...panelStyles.button,\n            padding: '8px',\n            borderRadius: '50%',\n            width: '36px',\n            height: '36px',\n            display: 'flex',\n            alignItems: 'center',\n            justifyContent: 'center'\n          }}\n          disabled={isExporting}\n        >\n          <i className={`fa-solid ${icon}`}></i>\n        </button>\n      );\n    }\n    \n    if (buttonStyle === 'menu') {\n      return (\n        <div style={{ display: 'flex', gap: '4px' }}>\n          {formats.includes('csv') && (\n            <button\n              onClick={() => handleExport('csv')}\n              style={{ ...panelStyles.button, fontSize: '12px', padding: '6px 12px' }}\n              disabled={isExporting}\n            >\n              CSV\n            </button>\n          )}\n          {formats.includes('excel') && (\n            <button\n              onClick={() => handleExport('excel')}\n              style={{ ...panelStyles.button, fontSize: '12px', padding: '6px 12px' }}\n              disabled={isExporting}\n            >\n              Excel\n            </button>\n          )}\n          {formats.includes('pdf') && (\n            <button\n              onClick={() => handleExport('pdf')}\n              style={{ ...panelStyles.button, fontSize: '12px', padding: '6px 12px' }}\n              disabled={isExporting}\n            >\n              PDF\n            </button>\n          )}\n        </div>\n      );\n    }\n    \n    // Default dropdown or button style\n    return (\n      <button\n        onClick={() => {\n          console.log('🖱️ [DataExportPanel] Button clicked!');\n          console.log('  - buttonStyle:', buttonStyle);\n          console.log('  - formats:', formats);\n          console.log('  - isDropdownOpen:', isDropdownOpen);\n          console.log('  - data at click:', data);\n          console.log('  - data length at click:', data?.length);\n          \n          if (buttonStyle === 'dropdown') {\n            setIsDropdownOpen(!isDropdownOpen);\n          } else if (formats.length === 1) {\n            handleExport(formats[0]);\n          } else {\n            setIsDropdownOpen(!isDropdownOpen);\n          }\n        }}\n        style={panelStyles.button}\n        disabled={isExporting}\n      >\n        <i className={`fa-solid ${icon}`}></i>\n        <span>{buttonText}</span>\n        {buttonStyle === 'dropdown' && formats.length > 1 && (\n          <i className=\"fa-solid fa-chevron-down\" style={{ fontSize: '10px' }}></i>\n        )}\n      </button>\n    );\n  };\n  \n  // Headless mode - no UI\n  if (mode === 'headless') {\n    return <div ref={exportRef} style={{ display: 'none' }} />;\n  }\n  \n  // UI mode\n  if (!visible) {\n    return null;\n  }\n  \n  return (\n    <div ref={dropdownRef} style={panelStyles.container}>\n      {renderButton()}\n      \n      {isExporting && (\n        <div style={panelStyles.progressBar}>\n          <div style={{\n            ...panelStyles.progressFill,\n            width: `${exportProgress}%`\n          }} />\n        </div>\n      )}\n      \n      {isDropdownOpen && buttonStyle === 'dropdown' && (\n        <div style={panelStyles.dropdown}>\n          {allowColumnSelection && (\n            <div\n              style={{\n                ...panelStyles.dropdownItem,\n                backgroundColor: '#F9FAFB'\n              }}\n              onClick={() => {\n                setShowColumnSelector(true);\n                setIsDropdownOpen(false);\n              }}\n            >\n              <i className=\"fa-solid fa-columns\" style={{ width: '16px' }}></i>\n              <span>Select Columns...</span>\n            </div>\n          )}\n          \n          {formats.includes('csv') && (\n            <div\n              style={panelStyles.dropdownItem}\n              onClick={() => handleExport('csv')}\n              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}\n              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}\n            >\n              <i className=\"fa-solid fa-file-csv\" style={{ width: '16px', color: '#10B981' }}></i>\n              <span>Export as CSV</span>\n            </div>\n          )}\n          \n          {formats.includes('excel') && (\n            <div\n              style={panelStyles.dropdownItem}\n              onClick={() => handleExport('excel')}\n              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}\n              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}\n            >\n              <i className=\"fa-solid fa-file-excel\" style={{ width: '16px', color: '#059669' }}></i>\n              <span>Export as Excel</span>\n            </div>\n          )}\n          \n          {formats.includes('pdf') && (\n            <div\n              style={{\n                ...panelStyles.dropdownItem,\n                borderBottom: 'none'\n              }}\n              onClick={() => handleExport('pdf')}\n              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}\n              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}\n            >\n              <i className=\"fa-solid fa-file-pdf\" style={{ width: '16px', color: '#DC2626' }}></i>\n              <span>Export as PDF</span>\n            </div>\n          )}\n        </div>\n      )}\n      \n      {renderColumnSelector()}\n      {renderPreviewDialog()}\n    </div>\n  );\n}",
+        "description": "Reusable component for exporting data to CSV, Excel (XLSX), and PDF formats with optional UI",
+        "category": "Utility",
+        "type": "panel",
+        "properties": [
+          {
+            "name": "mode",
+            "type": "string",
+            "description": "Display mode: 'ui' for visible interface, 'headless' for programmatic-only usage",
+            "default": "ui"
+          },
+          {
+            "name": "data",
+            "type": "array",
+            "description": "Array of objects to export (for table data)"
+          },
+          {
+            "name": "columns",
+            "type": "array",
+            "description": "Column configuration: [{key: 'field', label: 'Display Name', width: 100}]"
+          },
+          {
+            "name": "filename",
+            "type": "string",
+            "description": "Base filename for exports (without extension)",
+            "default": "export"
+          },
+          {
+            "name": "formats",
+            "type": "array",
+            "description": "Available export formats: ['csv', 'excel', 'pdf']",
+            "default": [
+              "csv",
+              "excel",
+              "pdf"
+            ]
+          },
+          {
+            "name": "position",
+            "type": "string",
+            "description": "UI position: 'top', 'bottom', 'inline', 'floating'",
+            "default": "inline"
+          },
+          {
+            "name": "buttonStyle",
+            "type": "string",
+            "description": "Button style: 'button', 'icon', 'dropdown', 'menu'",
+            "default": "dropdown"
+          },
+          {
+            "name": "buttonText",
+            "type": "string",
+            "description": "Custom button text",
+            "default": "Export"
+          },
+          {
+            "name": "icon",
+            "type": "string",
+            "description": "Font Awesome icon class for the export button",
+            "default": "fa-download"
+          },
+          {
+            "name": "showPreview",
+            "type": "boolean",
+            "description": "Show preview before export (UI mode only)",
+            "default": false
+          },
+          {
+            "name": "allowColumnSelection",
+            "type": "boolean",
+            "description": "Allow users to select which columns to export",
+            "default": true
+          },
+          {
+            "name": "includeHeaders",
+            "type": "boolean",
+            "description": "Include column headers in export",
+            "default": true
+          },
+          {
+            "name": "dateFormat",
+            "type": "string",
+            "description": "Date format for date values",
+            "default": "YYYY-MM-DD"
+          },
+          {
+            "name": "numberFormat",
+            "type": "object",
+            "description": "Number formatting options: {decimals: 2, thousandsSeparator: ',', decimalSeparator: '.'}"
+          },
+          {
+            "name": "pdfOptions",
+            "type": "object",
+            "description": "PDF-specific options: {orientation: 'portrait'|'landscape', pageSize: 'a4'|'letter', margins: {top: 40, bottom: 40, left: 40, right: 40}, title: 'Custom Title', includeDataTable: boolean, multiPage: boolean, includeAIInsights: boolean}"
+          },
+          {
+            "name": "excelOptions",
+            "type": "object",
+            "description": "Excel-specific options: {sheetName: 'Data', includeFilters: true, autoWidth: true}"
+          },
+          {
+            "name": "getHtmlElement",
+            "type": "function",
+            "description": "Function that returns the HTML element to capture for PDF export (alternative to data array)"
+          },
+          {
+            "name": "getAiInsightsElement",
+            "type": "function",
+            "description": "Function that returns the AI insights element to include in PDF export (optional)"
+          },
+          {
+            "name": "aiInsightsText",
+            "type": "string",
+            "description": "Raw markdown text of AI insights to render as text in PDF (preferred over element capture)"
+          },
+          {
+            "name": "onExportStart",
+            "type": "function",
+            "description": "Callback fired when export begins"
+          },
+          {
+            "name": "onExportComplete",
+            "type": "function",
+            "description": "Callback fired when export completes successfully"
+          },
+          {
+            "name": "onExportError",
+            "type": "function",
+            "description": "Callback fired if export fails"
+          },
+          {
+            "name": "customStyles",
+            "type": "object",
+            "description": "Custom styles for the export panel UI"
+          },
+          {
+            "name": "visible",
+            "type": "boolean",
+            "description": "Control visibility of the UI (for UI mode)",
+            "default": true
+          }
+        ],
+        "events": [
+          {
+            "name": "exportStarted",
+            "description": "Fired when export process begins",
+            "parameters": [
+              {
+                "name": "format",
+                "type": "string",
+                "description": "Export format being used"
+              }
+            ]
+          },
+          {
+            "name": "exportCompleted",
+            "description": "Fired when export completes successfully",
+            "parameters": [
+              {
+                "name": "format",
+                "type": "string",
+                "description": "Export format used"
+              },
+              {
+                "name": "filename",
+                "type": "string",
+                "description": "Filename of exported file"
+              }
+            ]
+          },
+          {
+            "name": "exportFailed",
+            "description": "Fired if export fails",
+            "parameters": [
+              {
+                "name": "error",
+                "type": "object",
+                "description": "Error details"
+              }
+            ]
+          }
+        ],
+        "libraries": [
+          {
+            "name": "xlsx",
+            "version": "0.18.5",
+            "globalVariable": "XLSX"
+          },
+          {
+            "name": "jspdf",
+            "version": "2.5.1",
+            "globalVariable": "jspdf"
+          },
+          {
+            "name": "html2canvas",
+            "version": "1.4.1",
+            "globalVariable": "html2canvas"
+          },
+          {
+            "name": "dayjs",
+            "version": "1.11.10",
+            "globalVariable": "dayjs"
+          }
+        ],
+        "usageExample": "// UI Mode with dropdown\n<DataExportPanel\n  data={tableData}\n  columns={columns}\n  getHtmlElement={() => dashboardRef.current}\n  getAiInsightsElement={() => aiInsightsRef.current}\n  filename=\"sales-report\"\n  formats={['csv', 'excel', 'pdf']}\n  buttonStyle=\"dropdown\"\n/>\n\n// Headless mode for programmatic export\nconst exportPanel = <DataExportPanel\n  mode=\"headless\"\n  data={data}\n  columns={columns}\n/>;\n// Then call: exportPanel.exportToCSV() or exportPanel.exportToPDF()",
+        "functionalRequirements": "• Support CSV, Excel (XLSX), and PDF export formats\n• Provide both UI and headless modes for flexibility\n• Allow column selection and customization\n• Support both data arrays and HTML element capture\n• Handle large datasets efficiently with progress indication\n• Provide format-specific options (PDF orientation, Excel sheet names)\n• Include preview capability before export\n• Support various button styles and positions\n• Fire events for export lifecycle\n• Format dates and numbers consistently",
+        "technicalDesign": "• Uses SheetJS (XLSX) for Excel/CSV generation\n• Uses jsPDF with html2canvas for PDF creation\n• Implements ref-based API for headless mode access\n• Manages export state with React hooks\n• Provides dropdown UI with format selection\n• Handles data transformation and formatting\n• Supports chunked processing for large datasets\n• Implements progress indication for long exports\n• Uses dayjs for date formatting\n• Provides customizable styling options",
+        "version": "1.0.0",
+        "registry": "Skip"
+      }
+    ],
+    "properties": [
+      {
+        "name": "repeatAttendees",
+        "type": "Array<{AccountId:string, MemberName:string, MemberEmail:string}>",
+        "required": false,
+        "description": "Array of repeat attendees records fetched by the query. If not provided, the component will load data internally using the predefined query."
+      },
+      {
+        "name": "loading",
+        "type": "boolean",
+        "required": false,
+        "description": "Indicates whether the data is being loaded."
+      },
+      {
+        "name": "onExportRequested",
+        "type": "function",
+        "required": false,
+        "description": "Callback invoked when user requests data export."
+      }
+    ],
+    "events": [
+      {
+        "name": "onExportCompleted",
+        "description": "Fired after the data export operation completes successfully.",
+        "parameters": [
+          {
+            "name": "fileUrl",
+            "type": "string",
+            "description": "URL or reference to the generated export file."
+          }
+        ]
+      }
+    ],
+    "exampleUsage": "<CtaLeadershipConferenceRepeatAttendees\\n  repeatAttendees={data}\\n  loading={isLoading}\\n  onExportRequested={() => console.log('Export requested')}\\n/>",
+    "relevantExamples": [
+      {
+        "name": "DealVelocityMetrics",
+        "namespace": "CRM/Analytics",
+        "version": "1.0.0",
+        "description": "Analyze and visualize the speed of deals through the sales pipeline with detailed stage-by-stage metrics",
+        "relevance": 0.7346827103091046
+      },
+      {
+        "name": "DealsByStageBoard",
+        "namespace": "CRM/Sales",
+        "version": "1.0.0",
+        "description": "Kanban-style board showing deals grouped by stage with drag-and-drop support",
+        "relevance": 0.6767734097894109
+      },
+      {
+        "name": "RecentDealsList",
+        "namespace": "CRM/Sales",
+        "version": "1.0.0",
+        "description": "Displays a list of the most recent deals with stage indicators and key metrics",
+        "relevance": 0.6737848834272213
+      }
+    ],
+    "code": "function CtaLeadershipConferenceRepeatAttendees({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings, repeatAttendees, loading: propLoading, onExportRequested, onExportCompleted }) {\n  const { DataGrid, DataExportPanel } = components;\n  const { Spin, Alert } = unwrapLibraryComponents(antd, 'Spin', 'Alert');\n\n  const [data, setData] = useState(repeatAttendees || []);\n  const [loading, setLoading] = useState(propLoading ?? false);\n  const [error, setError] = useState(null);\n  const [pageSize] = useState(savedUserSettings?.pageSize || 20);\n\n  // Load data via RunQuery if not supplied via props\n  const loadData = async () => {\n    setLoading(true);\n    setError(null);\n    try {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'CTA Leadership Conference Repeat Attendees',\n        CategoryPath: 'Skip/Reporting/Conferences/CTA Leadership'\n      });\n      if (result && result.Success) {\n        setData(result.Results || []);\n      } else {\n        setError(result?.ErrorMessage || 'Failed to load repeat attendees');\n      }\n    } catch (err) {\n      setError(err?.message || 'Unexpected error while loading data');\n    } finally {\n      setLoading(false);\n    }\n  };\n\n  // React to external repeatAttendees prop changes\n  useEffect(() => {\n    if (repeatAttendees && Array.isArray(repeatAttendees)) {\n      setData(repeatAttendees);\n      setLoading(false);\n    } else {\n      loadData();\n    }\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [repeatAttendees]);\n\n  const gridColumns = [\n    { field: 'MemberName', header: 'Name', sortable: true, width: '200px' },\n    { field: 'MemberEmail', header: 'Email', sortable: true, width: '250px' },\n    { field: 'AccountId', header: 'Account ID', sortable: false, width: '150px' }\n  ];\n\n  const exportColumns = [\n    { key: 'MemberName', label: 'Name' },\n    { key: 'MemberEmail', label: 'Email' },\n    { key: 'AccountId', label: 'Account ID' }\n  ];\n\n  const handleRowClick = (record) => {\n    if (callbacks?.OpenEntityRecord && record?.AccountId) {\n      callbacks.OpenEntityRecord('Accounts', [{ FieldName: 'ID', Value: record.AccountId }]);\n    }\n  };\n\n  const handleExportStart = () => {\n    if (typeof onExportRequested === 'function') {\n      onExportRequested();\n    }\n  };\n\n  const handleExportComplete = (format, filename) => {\n    onExportCompleted?.(filename);\n  };\n\n  if (loading) {\n    return (\n      <div style={{ padding: '40px', textAlign: 'center' }}>\n        <Spin tip=\"Loading repeat attendees...\" />\n      </div>\n    );\n  }\n\n  if (error) {\n    return (\n      <div style={{ padding: '20px' }}>\n        <Alert message=\"Error loading data\" description={error} type=\"error\" showIcon />\n      </div>\n    );\n  }\n\n  return (\n    <div style={{ padding: '20px' }}>\n      <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>\n        <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>CTA Leadership Conference Repeat Attendees</h2>\n        <span style={{ fontSize: '14px', color: '#6B7280' }}>Total: {data.length}</span>\n      </div>\n\n      {DataExportPanel && (\n        <DataExportPanel\n          mode=\"ui\"\n          data={data}\n          columns={exportColumns}\n          filename=\"CTA_Leadership_Repeat_Attendees\"\n          formats={[\"csv\", \"excel\"]}\n          position=\"top\"\n          buttonText=\"Export\"\n          onExportStart={handleExportStart}\n          onExportComplete={handleExportComplete}\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n          savedUserSettings={savedUserSettings}\n          onSaveUserSettings={onSaveUserSettings}\n        />\n      )}\n\n      {DataGrid && (\n        <DataGrid\n          entityName=\"Accounts\"\n          data={data}\n          columns={gridColumns}\n          sorting={true}\n          paging={true}\n          pageSize={pageSize}\n          filtering={true}\n          filterFields={[\"MemberName\", \"MemberEmail\", \"AccountId\"]}\n          selectionMode=\"none\"\n          rowClick={handleRowClick}\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n          savedUserSettings={savedUserSettings}\n          onSaveUserSettings={onSaveUserSettings}\n        />\n      )}\n    </div>\n  );\n}",
+    "namespace": "analytics/reports",
+    "version": "1.0.0",
+    "registry": "Skip"
+  }

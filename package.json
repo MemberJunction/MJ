@@ -82,6 +82,7 @@
     "typedoc-plugin-missing-exports": "~2.2.0"
   },
   "overrides": {
-    "@types/node": "20.14.2"
+    "@types/node": "20.14.2",
+    "typescript": "5.4.5"
   }
 }

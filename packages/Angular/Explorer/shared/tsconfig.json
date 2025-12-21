@@ -1,23 +1,26 @@
 {
-    "compilerOptions": {
-      "target": "es2022",
-      "module": "es2022",
-      "moduleResolution": "node",
-      "declaration": true,
-      "declarationMap": true,
-      "experimentalDecorators": true,
-      "sourceMap": true,
-      "outDir": "./dist",
-      "strict": true,
-      "lib": ["es2022", "dom"]
-    },
-    "angularCompilerOptions": {
-      "skipTemplateCodegen": true,
-      "strictMetadataEmit": true,
-      "enableResourceInlining": true
-    },
-    "include": [
-      "src/**/*.ts"
-    ]
-  }
-  
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "node",
+    "declaration": true,
+    "declarationMap": true,
+    "experimentalDecorators": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "strict": true,
+    "lib": [
+      "es2022",
+      "dom"
+    ],
+    "skipLibCheck": true
+  },
+  "angularCompilerOptions": {
+    "skipTemplateCodegen": true,
+    "strictMetadataEmit": true,
+    "enableResourceInlining": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}

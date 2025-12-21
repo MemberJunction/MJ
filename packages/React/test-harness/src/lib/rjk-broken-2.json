@@ -1,0 +1,1235 @@
+{
+    "title": "Member Profile for Jon Sorens",
+    "type": "profile",
+    "name": "JonSorensProfile",
+    "userExplanation": "A concise member profile page presenting Jon Sorens' teaching districts, committee assignments, membership history, and attended events.",
+    "functionalRequirements": "## Business Objective\nCreate a single, easily navigable profile view for a member that consolidates all relevant affiliations and activity history, enabling quick insight into Jon Sorens' contributions and involvement.\n\n## Functional Requirements\n- **Header Section**: Display the member's full name prominently (Accounts.Name).\n- **Teaching Districts**: Show the teaching district information from the member's account, using the Institution__c and Region__c fields.\n- **Committee Assignments**: List current and past committees, including the committee name (NU__Committee__c), role (CommitteePositionName__c), service period (NU__StartDate__c to NU__EndDate__c), and status.\n- **Membership History**: Provide a chronological list of memberships (e.g., board, committee, special groups) showing the membership product name (Membership_Product_Name__c), membership type (NU__MembershipType__c), end date (NU__EndDate__c), and status. Items should be ordered by the end date.\n- **Event Attendance**: Present a table or list of events attended, showing the event name (Events.Name), start and end dates (Events.NU__StartDate__c, Events.NU__EndDate__c), and the registration status (Registrations.NU__Status__c).\n- **Navigation**: Include a simple sidebar or tabs to jump between the four sections.\n- **Responsive Design**: Ensure the profile renders well on desktop and mobile devices.\n- **Export Option**: Allow the user to download the profile as a PDF.\n- **Accessibility**: Follow basic accessibility guidelines (e.g., proper headings, alt text for icons).\n\n## Non‑Functional Notes\n- Keep the UI clean and focused; avoid adding unrelated analytics or dashboards.\n- Use a consistent visual style throughout the component.\n- Provide subtle enhancements like a search/filter within each section for large lists, but keep the default view simple.",
+    "dataRequirements": {
+      "mode": "hybrid",
+      "description": "Data requirements for a member profile page for Jon Sorens, covering header, teaching districts, committee assignments, membership history and event attendance.",
+      "entities": [
+        {
+          "name": "Accounts",
+          "description": "Member account record.",
+          "displayFields": [
+            "Id",
+            "Name",
+            "Institution__c",
+            "Region__c"
+          ],
+          "filterFields": [
+            "Id"
+          ],
+          "sortFields": [
+            "Name"
+          ],
+          "fieldMetadata": [
+            {
+              "name": "Id",
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "Name",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "Institution__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "Region__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ],
+          "permissionLevelNeeded": [
+            "read"
+          ]
+        },
+        {
+          "name": "Committee Memberships",
+          "description": "Member's committee memberships.",
+          "displayFields": [
+            "Id",
+            "Name",
+            "NU__Committee__c",
+            "CommitteePositionName__c",
+            "NU__StartDate__c",
+            "NU__EndDate__c"
+          ],
+          "filterFields": [
+            "NU__Account__c"
+          ],
+          "sortFields": [
+            "NU__StartDate__c"
+          ],
+          "fieldMetadata": [
+            {
+              "name": "Id",
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "Name",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__Committee__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "CommitteePositionName__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__StartDate__c",
+              "type": "datetime2",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__EndDate__c",
+              "type": "datetime2",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__Account__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ],
+          "permissionLevelNeeded": [
+            "read"
+          ]
+        },
+        {
+          "name": "Memberships",
+          "description": "Member's membership records.",
+          "displayFields": [
+            "Id",
+            "Membership_Product_Name__c",
+            "NU__MembershipType__c",
+            "NU__EndDate__c",
+            "NU__Status__c"
+          ],
+          "filterFields": [
+            "NU__Account__c"
+          ],
+          "sortFields": [
+            "NU__EndDate__c"
+          ],
+          "fieldMetadata": [
+            {
+              "name": "Id",
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "Membership_Product_Name__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__MembershipType__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__EndDate__c",
+              "type": "datetimeoffset",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__Status__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ]
+        },
+        {
+          "name": "Events",
+          "description": "Event details for attendance.",
+          "displayFields": [
+            "Id",
+            "Name",
+            "NU__StartDate__c",
+            "NU__EndDate__c",
+            "NU__Type__c"
+          ],
+          "filterFields": [
+            "Id"
+          ],
+          "sortFields": [
+            "NU__StartDate__c"
+          ],
+          "fieldMetadata": [
+            {
+              "name": "Id",
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "Name",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__StartDate__c",
+              "type": "datetimeoffset",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__EndDate__c",
+              "type": "datetimeoffset",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__Type__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ]
+        },
+        {
+          "name": "Registrations",
+          "description": "Member's event registrations.",
+          "displayFields": [
+            "Id",
+            "NU__EventName__c",
+            "NU__FullName__c",
+            "NU__Status__c",
+            "NU__Event__c"
+          ],
+          "filterFields": [
+            "NU__Account__c"
+          ],
+          "sortFields": [
+            "NU__EventStartDate__c"
+          ],
+          "fieldMetadata": [
+            {
+              "name": "Id",
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "NU__EventName__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__FullName__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__Status__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__Event__c",
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ]
+        }
+      ],
+      "queries": [
+        {
+          "name": "MemberProfile_Account",
+          "categoryPath": "Skip/Member/Profile",
+          "description": "Fetch the person account for Jon Sorens with core fields needed for the header and teaching district.",
+          "fields": [
+            {
+              "name": "Id",
+              "sequence": 1,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "Name",
+              "sequence": 4,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "Institution__c",
+              "sequence": 193,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "Region__c",
+              "sequence": 192,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ],
+          "entityNames": [
+            "Accounts"
+          ],
+          "parameters": [
+            {
+              "name": "Name",
+              "value": "@runtime",
+              "testValue": "Jon Sorens",
+              "description": "Filter by the member's full name."
+            }
+          ],
+          "newQuerySQL": "SELECT\n    a.[Id],\n    a.[Name],\n    a.[Institution__c],\n    a.[Region__c]\nFROM\n    [nams].[vwAccounts] a\nWHERE\n    a.[IsDeleted] = 0\n    AND a.[Name] = {{ Name | sqlString }};"
+        },
+        {
+          "name": "MemberProfile_CommitteeMemberships",
+          "categoryPath": "Skip/Member/Profile",
+          "description": "All committee memberships (current and past) for the member.",
+          "fields": [
+            {
+              "name": "Id",
+              "sequence": 1,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "NU__Committee__c",
+              "sequence": 12,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "CommitteePositionName__c",
+              "sequence": 29,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__StartDate__c",
+              "sequence": 20,
+              "defaultInView": false,
+              "type": "datetime2",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__EndDate__c",
+              "sequence": 14,
+              "defaultInView": false,
+              "type": "datetime2",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__Status__c",
+              "sequence": 21,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ],
+          "entityNames": [
+            "Committee Memberships"
+          ],
+          "parameters": [
+            {
+              "name": "NU__Account__c",
+              "value": "@runtime",
+              "testValue": "AccountId_of_Jon_Sorens",
+              "description": "Account identifier for Jon Sorens, obtained from the Account query."
+            }
+          ],
+          "newQuerySQL": "SELECT\n    [Id],\n    [NU__Committee__c],\n    [CommitteePositionName__c],\n    [NU__StartDate__c],\n    [NU__EndDate__c],\n    [NU__StatusFlag__c] AS [NU__Status__c]\nFROM\n    [nams].[vwNU__CommitteeMembership__cs]\nWHERE\n    ([NU__Account__c] = {{ NU__Account__c | sqlString }})\n    AND (ISNULL([IsDeleted],0) = 0)\nORDER BY\n    [NU__StartDate__c] DESC;"
+        },
+        {
+          "name": "MemberProfile_Memberships",
+          "categoryPath": "Skip/Member/Profile",
+          "description": "Membership history for the member, including product name, type and period.",
+          "fields": [
+            {
+              "name": "Id",
+              "sequence": 1,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "Membership_Product_Name__c",
+              "sequence": 37,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__MembershipType__c",
+              "sequence": 12,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__EndDate__c",
+              "sequence": 17,
+              "defaultInView": false,
+              "type": "datetimeoffset",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "NU__Status__c",
+              "sequence": 30,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ],
+          "entityNames": [
+            "Memberships"
+          ],
+          "parameters": [
+            {
+              "name": "NU__Account__c",
+              "value": "@runtime",
+              "testValue": "AccountId_of_Jon_Sorens",
+              "description": "Account identifier for Jon Sorens."
+            }
+          ],
+          "newQuerySQL": "SELECT\n    [Id],\n    [Membership_Product_Name__c],\n    [NU__MembershipType__c],\n    [NU__EndDate__c],\n    [NU__Status__c]\nFROM\n    nams.[vwNU__Membership__cs]\nWHERE\n    [NU__Account__c] = {{ NU__Account__c | sqlString }}\nORDER BY\n    [Id];"
+        },
+        {
+          "name": "MemberProfile_EventAttendance",
+          "categoryPath": "Skip/Member/Profile",
+          "description": "Events the member attended, with event name and dates. Join Registrations to Events on NU__Event__c = Events.Id.",
+          "fields": [
+            {
+              "name": "Registrations.Id",
+              "sequence": 1,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "isPrimaryKey": true,
+              "allowsNull": false
+            },
+            {
+              "name": "Registrations.NU__EventName__c",
+              "sequence": 16,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "Registrations.NU__Status__c",
+              "sequence": 28,
+              "defaultInView": false,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "Events.Name",
+              "sequence": 3,
+              "defaultInView": true,
+              "type": "nvarchar",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "Events.NU__StartDate__c",
+              "sequence": 55,
+              "defaultInView": false,
+              "type": "datetimeoffset",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            },
+            {
+              "name": "Events.NU__EndDate__c",
+              "sequence": 31,
+              "defaultInView": false,
+              "type": "datetimeoffset",
+              "isPrimaryKey": false,
+              "allowsNull": true
+            }
+          ],
+          "entityNames": [
+            "Registrations",
+            "Events"
+          ],
+          "parameters": [
+            {
+              "name": "Registrations.NU__Account__c",
+              "value": "@runtime",
+              "testValue": "AccountId_of_Jon_Sorens",
+              "description": "Filter registrations for Jon Sorens."
+            }
+          ],
+          "newQuerySQL": "SELECT\n    r.Id,\n    r.NU__EventName__c,\n    r.NU__Status__c,\n    e.Name,\n    e.NU__StartDate__c,\n    e.NU__EndDate__c\nFROM\n    [nams].[vwNU__Registration2__cs] AS r\nLEFT JOIN\n    [nams].[vwNU__Event__cs] AS e\n    ON r.NU__Event__c = e.Id\nWHERE\n    r.NU__Account__c = {{ Registrations_NU__Account__c | sqlString }}"
+        }
+      ]
+    },
+    "description": "A comprehensive member profile page presenting Jon Sorens' teaching districts, committee assignments, membership history, and event attendance, with navigation tabs, responsive layout, and PDF export capability.",
+    "technicalDesign": "## Component Architecture\n- **Root Component (JonSorensProfile)** – embedded React component that orchestrates data fetching via the defined queries, holds minimal UI state (active tab, export loading), and composes child components.\n- **Dependencies**:\n  - `SingleRecordView` (registry: Generic/UI/Form) – renders the header section with member name and teaching district fields.\n  - `DataGrid` (registry: Generic/UI/Table) – used for Committee Memberships, Membership History, and Event Attendance tables, providing sorting, filtering, and pagination out‑of‑the‑box.\n  - `DataExportPanel` (registry: Generic/UI/Export) – offers CSV/Excel/PDF export of the entire profile; PDF generation utilizes `jspdf`.\n- **Libraries**:\n  - `antd` – Ant Design components for layout, Tabs, Grid, Buttons, and responsive design.\n  - `jspdf` – client‑side PDF generation for the Export panel.\n- **Props**:\n  - `memberName: string` – name of the member to display (used as runtime parameter for queries).\n- **Events**:\n  - `onExportPDF: (url: string) => void` – emitted when PDF export completes, providing the generated file URL.\n- **State Management** – Root component manages only UI state (`activeTab`, `exportInProgress`). All data is passed as props to child components; child components manage their own internal UI state.\n- **Data Flow**:\n  1. Queries run via MJ runtime using the `@runtime` parameters defined in `dataRequirements`.\n  2. Results are passed to `SingleRecordView` and three `DataGrid` instances.\n  3. `DataExportPanel` receives all query results; on PDF export it uses `jspdf` and emits `onExportPDF`.\n- **Responsive Design** – Ant Design's Grid and responsive breakpoints ensure layout adapts to mobile devices.\n- **Accessibility** – Semantic headings, ARIA labels on tabs and export buttons, and sufficient color contrast.\n\n## UI Layout (Ant Design)\n```\n<Tabs activeKey={activeTab} onChange={setActiveTab}>\n  <TabPane key=\"header\" tab=\"Header\">\n    <SingleRecordView record={accountRecord} />\n  </TabPane>\n  <TabPane key=\"committees\" tab=\"Committees\">\n    <DataGrid data={committeeRecords} columns={committeeColumns} />\n  </TabPane>\n  <TabPane key=\"memberships\" tab=\"Memberships\">\n    <DataGrid data={membershipRecords} columns={membershipColumns} />\n  </TabPane>\n  <TabPane key=\"events\" tab=\"Events\">\n    <DataGrid data={eventRecords} columns={eventColumns} />\n  </TabPane>\n</Tabs>\n<DataExportPanel\n  data={[accountRecord, ...committeeRecords, ...membershipRecords, ...eventRecords]}\n  onExportPDF={handleExportPDF}\n/>\n```",
+    "libraries": [
+      {
+        "name": "antd",
+        "globalVariable": "antd",
+        "version": "^5.20.2"
+      }
+    ],
+    "properties": [
+      {
+        "name": "memberName",
+        "type": "string",
+        "description": "Full name of the member whose profile is displayed. If not provided, the component will load the member data internally using the defined queries.",
+        "required": false
+      }
+    ],
+    "events": [
+      {
+        "name": "onExportPDF",
+        "description": "Fired after the profile PDF has been generated.",
+        "parameters": [
+          {
+            "name": "url",
+            "type": "string",
+            "description": "Download URL of the generated PDF document."
+          }
+        ]
+      }
+    ],
+    "exampleUsage": "<JonSorensProfile memberName=\"Jon Sorens\" onExportPDF={(url) => console.log('PDF ready:', url)} />",
+    "dependencies": [
+      {
+        "name": "SingleRecordView",
+        "title": "Single Record View",
+        "description": "Read-only component that displays a SINGLE entity record's fields in formatted, human-readable layout with metadata-driven field type formatting. Four layout modes: list (vertical label-value pairs), table (2-column), inline (horizontal compact), card (styled with border/shadow). Formats dates (short/long/relative), numbers (commas), currency ($ for Amount/Price/Cost or money type), booleans (✓ Yes / ✗ No). Supports field selection/ordering, text truncation (maxTextLength default 200), empty value handling, field highlighting. Optional OpenRecordButton integration with cancelable openRecord event. USE for: detail panels, drill-down destinations showing one record, master-detail detail views, record previews, profile pages. DO NOT USE for: multiple records/lists (use DataGrid), editable forms (read-only only), aggregated data (use charts).",
+        "type": "form",
+        "location": "registry",
+        "functionalRequirements": "WHEN TO USE: Displaying details of a single specific record; Master-detail detail panel showing one record; Drill-down destination for individual record inspection; Record preview or tooltip; Profile pages or detail views; Summary cards; Read-only record display. WHEN NOT TO USE: Multiple records or lists (use DataGrid instead); Editable forms (this is read-only display only); Aggregated or summary data across multiple records (use charts); Any scenario requiring more than one record. CORE FEATURES: Displays single record's fields in clean, readable format; Metadata-driven formatting based on field SQL types from entity metadata; Selective field display in specified order via fields prop (auto-detects if omitted: filters Object.keys(record) for !startsWith('__mj'), !== 'ID', typeof !== 'object'); Four layout modes: list (vertical with uppercase labels, 12px margins), table (2-column table with labelWidth prop default 150px), inline (horizontal spans with colons, 20px margins), card (wrapper with border/shadow/padding); Auto-formats by field type: dates (short: month short/day/year, long: weekday long/month long/day/year, relative: Today/Yesterday/X days-weeks-months-years ago), booleans (✓ Yes / ✗ No symbols), numbers (int/bigint → parseInt().toLocaleString()), decimals (decimal/float/money → parseFloat with 2 decimals and commas), currency (money type OR field name includes Amount/Price/Cost → Intl.NumberFormat $USD), null/empty (returns '-' or styled 'Empty' italic gray based on showEmptyFields prop); Text truncation: Strings > maxTextLength (default 200) → substring with '...' and full text in title attribute for hover; Field highlighting: Fields in highlightFields array get yellow background (#fffbe6), border (#ffe58f), padding, borderRadius; Optional OpenRecordButton integration: When allowOpenRecord=true, loads OpenRecordButton from components registry, renders button with variant/size based on layout (primary/medium for card, default/medium for table/list, link/small for inline), wires up click handler; Field click events: If onFieldClicked provided, each field gets cursor:pointer and onClick handler, fires event with {fieldName, value, fieldType, record}; Cancelable openRecord event: Creates eventData object {record, entityName, cancel: false, primaryKeys: Array<{FieldName, Value}>}, fires onOpenRecord if provided, checks eventData.cancel flag, if false calls callbacks.OpenEntityRecord(entityName, primaryKeys); Primary key extraction: Handles entityInfo.PrimaryKey as Columns array, Name property, or string, fallback to 'ID' field; Special __mj field handling: __mj_CreatedAt/UpdatedAt/DeletedAt get proper DisplayName ('Created At', 'Updated At', 'Deleted At'). LAYOUT MODES: list (vertical divs with label div and value div stacked), table (table/tbody with tr per field, td for label with labelWidth, td for value), inline (horizontal span elements with label: and value separated), card (container div with border: 1px solid #d9d9d9, borderRadius: 8px, padding: 16px, backgroundColor: #fff, boxShadow: 0 2px 4px rgba(0,0,0,0.05), renders fields inside then optional button with top border separator). Empty state: If !record, returns centered div with 'No record to display' gray text.",
+        "technicalDesign": "Read-only display for single record only. React hooks: useState for entityInfo; useCallback for handleOpenRecordClick (extracts primary keys, creates cancelable eventData, fires onOpenRecord, checks cancel flag, calls OpenEntityRecord callback); useMemo for WrappedOpenRecordButton (wraps OpenRecordButton with custom click handler). Loads entity metadata from utilities.md.Entities on mount (useEffect), finds entity by Name, stores in entityInfo for field info access (Type, DisplayName). Field selection: Uses fields prop if provided; Else calls getDisplayFields: Object.keys(record).filter(key => !key.startsWith('__mj') && key !== 'ID' && typeof record[key] !== 'object') - auto-filters system fields, ID, and nested objects. Field info lookup: getFieldInfo function finds field in entityInfo.Fields array by Name, returns field object with Type/DisplayName/etc or null. Format value function (formatValue): Takes value and fieldInfo; Returns null if value null/empty AND !showEmptyFields, else returns styled 'Empty' span (color: #999, fontStyle: italic); Bit fields → value ? '✓ Yes' : '✗ No'; Datetime/date fields → try/catch Date parsing, format based on dateFormat prop: short (toLocaleDateString month: short, day: numeric, year: numeric), long (weekday: long, month: long, day: numeric, year: numeric), relative (calculates diff: 0 days→Today, 1→Yesterday, <7→X days ago, <30→X weeks ago, <365→X months ago, else→X years ago); Int/bigint → parseInt(value).toLocaleString(); Decimal/float/money → parseFloat, check if fieldInfo.Name.toLowerCase() includes 'amount'/'price'/'cost' OR Type === 'money', if yes Intl.NumberFormat USD currency style 2 decimal places, else toLocaleString 2 min/max decimals; Strings > maxTextLength → span with title={value} (full text hover), displays substring(0, maxTextLength) + '...'. Render field function (renderField): Gets fieldInfo from getFieldInfo; Gets value from record[fieldName]; Calls formatValue; Returns null if !showEmptyFields and !formattedValue; Checks if field in highlightFields array, creates highlightStyle object (backgroundColor: #fffbe6, padding: 4px 8px, borderRadius: 4px, border: 1px solid #ffe58f); Creates fieldStyle with cursor (pointer if onFieldClicked else default); Adds onClick handler if onFieldClicked (calls with fieldName, value); Layout-specific rendering: list (div with marginBottom: 12px, highlightStyle, label div with fontWeight: 500, color: #666, fontSize: 12px, marginBottom: 4px, textTransform: uppercase, value div with fontSize: 14px, color: #333), table (tr with highlightStyle, label td with fontWeight: 500, color: #666, fontSize: 14px, padding: 8px, width: labelWidth, verticalAlign: top, value td with fontSize: 14px, color: #333, padding: 8px), inline (span with marginRight: 20px, display: inline-block, highlightStyle, label span with fontWeight: 500, color: #666, fontSize: 12px, marginRight: 4px, colon separator, value span with fontSize: 14px, color: #333), card (same as list but wrapped in card container). OpenRecordButton integration: When allowOpenRecord=true, checks if OpenRecordButton exists in components registry; Creates WrappedOpenRecordButton using useMemo: Returns wrapper function (props) => div onClick handler; handleWrapperClick: e.preventDefault(), e.stopPropagation(), calls handleOpenRecordClick(props.record, props.entityName); Renders button manually (not actual OpenRecordButton to avoid its onClick): padding: 8px 16px, backgroundColor: #3B82F6, color: #fff, border: none, borderRadius: 6px, cursor: pointer, fontSize: 14px, fontWeight: 500, display: inline-flex, alignItems: center, gap: 6px, pointerEvents: none (prevents button from handling clicks), shows props.text or 'Open Record', arrow icon →; handleOpenRecordClick: Extracts primary keys from entityInfo.PrimaryKey (handles different structures: Columns array, Name property, string, fallback to ['ID']), maps to primaryKeys array [{FieldName, Value}], creates eventData {record, entityName, cancel: false, primaryKeys}, fires onOpenRecord if exists, checks eventData.cancel, if !cancel calls callbacks.OpenEntityRecord(entityName, primaryKeys); Button rendered after fields with margin/padding/border based on layout mode. Four layout render paths: card (container div with border/shadow styles, maps displayFields calling renderField, if allowOpenRecord && WrappedOpenRecordButton renders button with marginTop, paddingTop, borderTop separator), table (table with width: 100%, borderCollapse: collapse, tbody maps displayFields calling renderField, if allowOpenRecord renders button div with marginTop: 12px), inline (div with padding: 8px, lineHeight: 1.8, maps displayFields calling renderField, if allowOpenRecord renders button span with marginLeft: 20px inline-block), list default (div with padding: 8px, maps displayFields calling renderField, if allowOpenRecord renders button div with marginTop: 12px). Empty state: If !record, returns div with padding: 20px, textAlign: center, color: #999, 'No record to display' text.",
+        "dataRequirements": {
+          "mode": "props",
+          "description": "Receives record data through props"
+        },
+        "properties": [
+          {
+            "name": "record",
+            "type": "Record<string, any>",
+            "description": "The entity record to display",
+            "required": true
+          },
+          {
+            "name": "entityName",
+            "type": "string",
+            "description": "Name of the entity for metadata lookup",
+            "required": true
+          },
+          {
+            "name": "fields",
+            "type": "Array<string>",
+            "description": "Fields to display in order. If not provided, shows all non-system fields",
+            "required": false
+          },
+          {
+            "name": "layout",
+            "type": "'list' | 'table' | 'inline' | 'card'",
+            "description": "Display layout style",
+            "required": false,
+            "defaultValue": "list",
+            "possibleValues": [
+              "list",
+              "table",
+              "inline",
+              "card"
+            ]
+          },
+          {
+            "name": "showLabels",
+            "type": "boolean",
+            "description": "Whether to show field labels",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "labelWidth",
+            "type": "number",
+            "description": "Width of label column in pixels (table layout)",
+            "required": false,
+            "defaultValue": 150
+          },
+          {
+            "name": "dateFormat",
+            "type": "'short' | 'long' | 'relative'",
+            "description": "Date formatting style",
+            "required": false,
+            "defaultValue": "short",
+            "possibleValues": [
+              "short",
+              "long",
+              "relative"
+            ]
+          },
+          {
+            "name": "showEmptyFields",
+            "type": "boolean",
+            "description": "Whether to show fields with no value",
+            "required": false,
+            "defaultValue": false
+          },
+          {
+            "name": "maxTextLength",
+            "type": "number",
+            "description": "Maximum characters for text fields before truncation",
+            "required": false,
+            "defaultValue": 200
+          },
+          {
+            "name": "highlightFields",
+            "type": "Array<string>",
+            "description": "Fields to highlight visually",
+            "required": false
+          },
+          {
+            "name": "allowOpenRecord",
+            "type": "boolean",
+            "description": "Whether to show an Open Record button for the record",
+            "required": false,
+            "defaultValue": false
+          }
+        ],
+        "events": [
+          {
+            "name": "fieldClicked",
+            "description": "Fired when a field value is clicked",
+            "parameters": [
+              {
+                "name": "eventData",
+                "type": "{ fieldName: string; value: any; fieldType?: string; record: Record<string, any> }",
+                "description": "Object containing field name, value, optional field type, and the full record"
+              }
+            ]
+          },
+          {
+            "name": "openRecord",
+            "description": "Cancelable event fired before opening a record. Set eventData.cancel = true to prevent default behavior",
+            "cancelable": true,
+            "parameters": [
+              {
+                "name": "eventData",
+                "type": "{ record: Record<string, any>; entityName: string; cancel: boolean; primaryKeys: Array<{ FieldName: string; Value: any }> }",
+                "description": "Cancelable event object. Set cancel to true to prevent the record from opening"
+              }
+            ]
+          }
+        ],
+        "dependencies": [
+          {
+            "name": "OpenRecordButton",
+            "title": "Open Record Button",
+            "description": "A simple button component that intelligently opens entity records using metadata to determine primary keys",
+            "type": "navigation",
+            "location": "registry",
+            "functionalRequirements": "Button that opens entity records using metadata-determined primary keys. Requires only entity name and record object. Auto-detects single/composite primary keys from metadata, extracts values from record. Configurable text, style, size. Uses: grid row actions, record cards, drill-down navigation, dashboard quick links.",
+            "technicalDesign": "Looks up entity in utilities.md.Entities → finds primary key fields → extracts values from record → calls OpenEntityRecord with field/value pairs. Handles single and composite keys automatically. Minimal props: just entityName and record. Error handling for missing metadata or key values.",
+            "dataRequirements": {
+              "mode": "props",
+              "description": "Receives record data through props, uses metadata for key information"
+            },
+            "properties": [
+              {
+                "name": "record",
+                "type": "Record<string, any>",
+                "description": "The entity record to open (must contain primary key fields)",
+                "required": true
+              },
+              {
+                "name": "entityName",
+                "type": "string",
+                "description": "Name of the entity (used to look up metadata)",
+                "required": true
+              },
+              {
+                "name": "text",
+                "type": "string",
+                "description": "Button text",
+                "required": false,
+                "defaultValue": "Open Record"
+              },
+              {
+                "name": "variant",
+                "type": "'primary' | 'default' | 'text' | 'link'",
+                "description": "Button style variant",
+                "required": false,
+                "defaultValue": "default",
+                "possibleValues": [
+                  "primary",
+                  "default",
+                  "text",
+                  "link"
+                ]
+              },
+              {
+                "name": "size",
+                "type": "'small' | 'medium' | 'large'",
+                "description": "Button size",
+                "required": false,
+                "defaultValue": "medium",
+                "possibleValues": [
+                  "small",
+                  "medium",
+                  "large"
+                ]
+              },
+              {
+                "name": "icon",
+                "type": "string",
+                "description": "Icon to show (emoji or unicode)",
+                "required": false,
+                "defaultValue": "📂"
+              },
+              {
+                "name": "showIcon",
+                "type": "boolean",
+                "description": "Whether to show the icon",
+                "required": false,
+                "defaultValue": true
+              },
+              {
+                "name": "fullWidth",
+                "type": "boolean",
+                "description": "Whether button takes full width",
+                "required": false,
+                "defaultValue": false
+              }
+            ],
+            "events": [
+              {
+                "name": "recordOpened",
+                "description": "Fired after record is successfully opened",
+                "parameters": [
+                  {
+                    "name": "record",
+                    "type": "Record<string, any>",
+                    "description": "The opened record"
+                  },
+                  {
+                    "name": "entityName",
+                    "type": "string",
+                    "description": "Entity name"
+                  },
+                  {
+                    "name": "primaryKeys",
+                    "type": "Array<{ FieldName: string; Value: any }>",
+                    "description": "Primary key field/value pairs used to open"
+                  }
+                ]
+              }
+            ],
+            "dependencies": [],
+            "code": "function OpenRecordButton({\n  record,\n  entityName,\n  text = 'Open Record',\n  variant = 'default',\n  size = 'medium',\n  icon,\n  showIcon = false,\n  fullWidth = false,\n  onRecordOpened,\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings\n}) {\n  // State for button interaction\n  const [isHovered, setIsHovered] = React.useState(false);\n  const [primaryKeyFields, setPrimaryKeyFields] = React.useState([]);\n  const [entityInfo, setEntityInfo] = React.useState(null);\n  \n  // Load entity metadata and determine primary key fields\n  React.useEffect(() => {\n    if (!entityName || !utilities?.md?.Entities) {\n      if (!entityName) console.error('Entity name not provided');\n      if (!utilities?.md?.Entities) console.error('Entity metadata not loaded.');\n      return;\n    }\n    \n    // Find the entity in metadata\n    const entity = utilities.md.Entities.find(e => e.Name === entityName);\n    if (entity) {\n      setEntityInfo(entity);\n      \n      // Get primary key fields from the entity object\n      // The entity has a PrimaryKeys property that returns an array of primary key fields\n      const keyFields = [];\n      \n      if (entity.PrimaryKeys && entity.PrimaryKeys.length > 0) {\n        // Use the PrimaryKeys property from the entity\n        entity.PrimaryKeys.forEach(field => {\n          keyFields.push({\n            FieldName: field.Name,\n            DisplayName: field.DisplayName || field.Name\n          });\n        });\n      } else if (entity.FirstPrimaryKey) {\n        // Fallback to FirstPrimaryKey if available\n        keyFields.push({\n          FieldName: entity.FirstPrimaryKey.Name,\n          DisplayName: entity.FirstPrimaryKey.DisplayName || entity.FirstPrimaryKey.Name\n        });\n      } else {\n        // Final fallback to ID field\n        keyFields.push({\n          FieldName: 'ID',\n          DisplayName: 'ID'\n        });\n      }\n      \n      setPrimaryKeyFields(keyFields);\n    }\n  }, [entityName, utilities]);\n  \n  // Check if we can open the record\n  const canOpen = React.useMemo(() => {\n    if (!record || !entityName || !callbacks?.OpenEntityRecord) return false;\n    if (primaryKeyFields.length === 0) return false;\n    \n    // Check that all primary key fields have values\n    for (const keyField of primaryKeyFields) {\n      if (!record[keyField.FieldName]) {\n        return false;\n      }\n    }\n    \n    return true;\n  }, [record, entityName, callbacks, primaryKeyFields]);\n  \n  // Handle button click\n  const handleClick = () => {\n    if (!canOpen) return;\n    \n    try {\n      // Build the key-value pairs for OpenEntityRecord\n      const keyValues = primaryKeyFields.map(keyField => ({\n        FieldName: keyField.FieldName,\n        Value: record[keyField.FieldName]\n      }));\n      \n      // Use MJ's OpenEntityRecord callback with the primary key fields\n      callbacks.OpenEntityRecord(entityName, keyValues);\n      \n      // Fire event with details\n      if (onRecordOpened) {\n        onRecordOpened({ \n          record, \n          entityName,\n          primaryKeys: keyValues\n        });\n      }\n      \n      // Log opening action\n      console.log(`Opening ${entityName}`);\n    } catch (err) {\n      console.error('[OpenRecordButton] Error opening record:', err);\n    }\n  };\n  \n  // Button styles based on variant and size\n  const getButtonStyles = () => {\n    const baseStyles = {\n      display: 'inline-flex',\n      alignItems: 'center',\n      justifyContent: 'center',\n      gap: '6px',\n      border: 'none',\n      borderRadius: '4px',\n      cursor: canOpen ? 'pointer' : 'not-allowed',\n      transition: 'all 0.3s ease',\n      fontFamily: 'inherit',\n      width: fullWidth ? '100%' : 'auto',\n      opacity: canOpen ? 1 : 0.5\n    };\n    \n    // Size styles\n    const sizeStyles = {\n      small: {\n        padding: '4px 8px',\n        fontSize: '12px'\n      },\n      medium: {\n        padding: '6px 12px',\n        fontSize: '14px'\n      },\n      large: {\n        padding: '8px 16px',\n        fontSize: '16px'\n      }\n    };\n    \n    // Variant styles\n    const variantStyles = {\n      primary: {\n        backgroundColor: '#1890ff',\n        color: '#fff',\n        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'\n      },\n      default: {\n        backgroundColor: '#3B82F6',\n        color: '#fff',\n        border: 'none'\n      },\n      text: {\n        backgroundColor: 'transparent',\n        color: '#1890ff',\n        padding: '2px 4px'\n      },\n      link: {\n        backgroundColor: 'transparent',\n        color: '#1890ff',\n        textDecoration: 'underline',\n        padding: '0'\n      }\n    };\n    \n    return {\n      ...baseStyles,\n      ...sizeStyles[size],\n      ...variantStyles[variant]\n    };\n  };\n  \n  // Hover styles\n  const getHoverStyles = () => {\n    if (!canOpen || !isHovered) return {};\n    \n    const hoverStyles = {\n      primary: {\n        backgroundColor: '#40a9ff'\n      },\n      default: {\n        backgroundColor: '#2563EB'\n      },\n      text: {\n        backgroundColor: '#f0f5ff'\n      },\n      link: {\n        color: '#40a9ff'\n      }\n    };\n    \n    return hoverStyles[variant] || {};\n  };\n  \n  // Combined styles\n  const buttonStyles = {\n    ...getButtonStyles(),\n    ...getHoverStyles()\n  };\n  \n  // Tooltip text\n  const getTooltipText = () => {\n    if (!record) return 'No record selected';\n    if (!entityName) return 'Entity name not provided';\n    if (!entityInfo) return `Entity '${entityName}' not found in metadata`;\n    if (primaryKeyFields.length === 0) return 'No primary key fields found';\n    \n    // Check for missing key values\n    for (const keyField of primaryKeyFields) {\n      if (!record[keyField.FieldName]) {\n        return `Missing value for primary key field: ${keyField.DisplayName}`;\n      }\n    }\n    \n    // Build descriptive text\n    const displayValue = record.Name || record.Title || record.DisplayName || \n                        primaryKeyFields.map(kf => record[kf.FieldName]).join('-');\n    return `Open ${entityName}: ${displayValue}`;\n  };\n  \n  return (\n    <button\n      onClick={handleClick}\n      disabled={!canOpen}\n      style={buttonStyles}\n      onMouseEnter={() => setIsHovered(true)}\n      onMouseLeave={() => setIsHovered(false)}\n      title={getTooltipText()}\n      aria-label={`Open ${entityName} record`}\n    >\n      {showIcon && icon && (\n        <span style={{ fontSize: size === 'small' ? '14px' : size === 'large' ? '18px' : '16px' }}>\n          {icon}\n        </span>\n      )}\n      <span>{text}</span>\n      <span style={{ fontSize: '14px', marginLeft: '4px' }}>↗</span>\n    </button>\n  );\n}",
+            "exampleUsage": "<OpenRecordButton\n  record={selectedDeal}\n  entityName=\"Deals\"\n  text=\"View Deal\"\n  variant=\"primary\"\n/>",
+            "namespace": "Generic/Navigation",
+            "version": "1.0.0",
+            "registry": "Skip"
+          }
+        ],
+        "code": "function SingleRecordView({\n  record,\n  entityName,\n  fields,\n  layout = 'list',\n  showLabels = true,\n  labelWidth = 150,\n  dateFormat = 'short',\n  showEmptyFields = false,\n  maxTextLength = 200,\n  highlightFields = [],\n  allowOpenRecord = false,\n  onFieldClicked,\n  onOpenRecord,\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings\n}) {\n  console.log('[SingleRecordView] RENDER CALLED');\n  console.log('[SingleRecordView] record:', record);\n  console.log('[SingleRecordView] entityName:', entityName);\n  console.log('[SingleRecordView] layout:', layout);\n  console.log('[SingleRecordView] showEmptyFields:', showEmptyFields);\n  console.log('[SingleRecordView] utilities:', utilities);\n  \n  const [entityInfo, setEntityInfo] = React.useState(null);\n  \n  // Get OpenRecordButton component from registry if needed\n  const OpenRecordButton = allowOpenRecord ? components?.['OpenRecordButton'] : null;\n  \n  // Handle open record button click with cancelable event - moved outside useMemo\n  const handleOpenRecordClick = React.useCallback((recordToOpen, entityNameToOpen) => {\n    console.log('handleOpenRecordClick called for:', entityNameToOpen, recordToOpen);\n    \n    // Get primary keys from entity metadata\n    let primaryKeys = [];\n    if (entityInfo) {\n      // Handle different PrimaryKey structures in MJ metadata\n      let primaryKeyFields = [];\n      \n      if (entityInfo.PrimaryKey) {\n        if (entityInfo.PrimaryKey.Columns && Array.isArray(entityInfo.PrimaryKey.Columns)) {\n          // Multi-column primary key\n          primaryKeyFields = entityInfo.PrimaryKey.Columns;\n        } else if (entityInfo.PrimaryKey.Name) {\n          // Single column primary key with Name property\n          primaryKeyFields = [entityInfo.PrimaryKey.Name];\n        } else if (typeof entityInfo.PrimaryKey === 'string') {\n          // Primary key as string\n          primaryKeyFields = [entityInfo.PrimaryKey];\n        }\n      }\n      \n      // Fallback to ID if no primary key found\n      if (primaryKeyFields.length === 0) {\n        primaryKeyFields = ['ID'];\n      }\n      \n      primaryKeys = primaryKeyFields.map(fieldName => ({\n        FieldName: fieldName,\n        Value: recordToOpen[fieldName]\n      }));\n    }\n    \n    // Create cancelable event object\n    const eventData = {\n      record: recordToOpen,\n      entityName: entityNameToOpen,\n      cancel: false, // Parent can set this to true to cancel\n      primaryKeys // Populated with actual primary key values\n    };\n    \n    // Fire the event if handler exists\n    if (onOpenRecord) {\n      onOpenRecord(eventData);\n    }\n    \n    // Check if the event was canceled\n    if (eventData.cancel) {\n      return false; // Return false to prevent default action\n    }\n    \n    // If not canceled (or no handler), proceed with default behavior\n    // Call the OpenEntityRecord callback directly\n    if (callbacks && callbacks.OpenEntityRecord && primaryKeys.length > 0) {\n      callbacks.OpenEntityRecord(entityNameToOpen, primaryKeys);\n    } else {\n      console.error('Unable to open record - missing callback or primary keys', {\n        hasCallbacks: !!callbacks,\n        hasOpenEntityRecord: !!(callbacks && callbacks.OpenEntityRecord),\n        primaryKeysLength: primaryKeys.length\n      });\n    }\n    \n    return true;\n  }, [entityInfo, onOpenRecord, callbacks]);\n  \n  // Create wrapped OpenRecordButton with intercepted click\n  const WrappedOpenRecordButton = React.useMemo(() => {\n    if (!OpenRecordButton) return null;\n    \n    return (props) => {\n      const handleWrapperClick = (e) => {\n        // Stop all propagation first\n        e.preventDefault();\n        e.stopPropagation();\n        \n        // Call the centralized handler\n        handleOpenRecordClick(props.record, props.entityName);\n      };\n      \n      return (\n        <div \n          onClick={handleWrapperClick} \n          style={{ \n            display: 'inline-block',\n            cursor: 'pointer'\n          }}\n        >\n          {/* Render a button that looks like OpenRecordButton but doesn't have onClick */}\n          <button\n            style={{\n              padding: '8px 16px',\n              backgroundColor: '#3B82F6',\n              color: '#fff',\n              border: 'none',\n              borderRadius: '6px',\n              cursor: 'pointer',\n              fontSize: '14px',\n              fontWeight: '500',\n              display: 'inline-flex',\n              alignItems: 'center',\n              gap: '6px',\n              transition: 'none',\n              pointerEvents: 'none' // Prevent button from handling clicks\n            }}\n          >\n            {props.text || 'Open Record'}\n            <span style={{ fontSize: '14px' }}>↗</span>\n          </button>\n        </div>\n      );\n    };\n  }, [OpenRecordButton, handleOpenRecordClick]);\n  \n  // Load entity metadata\n  React.useEffect(() => {\n    if (!entityName || !utilities?.md?.Entities) return;\n    \n    const entity = utilities.md.Entities.find(e => e.Name === entityName);\n    if (entity) {\n      setEntityInfo(entity);\n    }\n  }, [entityName, utilities]);\n  \n  // Format value based on field type\n  const formatValue = (value, fieldInfo) => {\n    if (value == null || value === '') {\n      return showEmptyFields ? <span style={{ color: '#999', fontStyle: 'italic' }}>Empty</span> : null;\n    }\n    \n    // Handle different field types\n    if (fieldInfo) {\n      // Boolean fields\n      if (fieldInfo.Type === 'bit') {\n        return value ? '✓ Yes' : '✗ No';\n      }\n      \n      // Date fields\n      if (fieldInfo.Type === 'datetime' || fieldInfo.Type === 'date') {\n        try {\n          const date = new Date(value);\n          if (isNaN(date.getTime())) return value;\n          \n          if (dateFormat === 'long') {\n            return date.toLocaleDateString('en-US', { \n              weekday: 'long', \n              year: 'numeric', \n              month: 'long', \n              day: 'numeric' \n            });\n          } else if (dateFormat === 'relative') {\n            const now = new Date();\n            const diff = now - date;\n            const days = Math.floor(diff / (1000 * 60 * 60 * 24));\n            if (days === 0) return 'Today';\n            if (days === 1) return 'Yesterday';\n            if (days < 7) return `${days} days ago`;\n            if (days < 30) return `${Math.floor(days / 7)} weeks ago`;\n            if (days < 365) return `${Math.floor(days / 30)} months ago`;\n            return `${Math.floor(days / 365)} years ago`;\n          } else {\n            return date.toLocaleDateString('en-US', { \n              year: 'numeric', \n              month: 'short', \n              day: 'numeric' \n            });\n          }\n        } catch {\n          return value;\n        }\n      }\n      \n      // Number fields\n      if (fieldInfo.Type === 'int' || fieldInfo.Type === 'bigint') {\n        return parseInt(value).toLocaleString();\n      }\n      \n      // Decimal/currency fields\n      if (fieldInfo.Type === 'decimal' || fieldInfo.Type === 'float' || fieldInfo.Type === 'money') {\n        const num = parseFloat(value);\n        // Check if field name suggests currency\n        if (fieldInfo.Name.toLowerCase().includes('amount') || \n            fieldInfo.Name.toLowerCase().includes('price') ||\n            fieldInfo.Name.toLowerCase().includes('cost') ||\n            fieldInfo.Type === 'money') {\n          return new Intl.NumberFormat('en-US', {\n            style: 'currency',\n            currency: 'USD',\n            minimumFractionDigits: 2,\n            maximumFractionDigits: 2\n          }).format(num);\n        }\n        return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n      }\n    }\n    \n    // Text fields - truncate if needed\n    if (typeof value === 'string' && value.length > maxTextLength) {\n      return (\n        <span title={value}>\n          {value.substring(0, maxTextLength)}...\n        </span>\n      );\n    }\n    \n    return value;\n  };\n  \n  // Get fields to display\n  const getDisplayFields = () => {\n    if (fields && fields.length > 0) {\n      return fields;\n    }\n    \n    // Auto-select fields if not specified\n    if (!record) return [];\n    \n    return Object.keys(record).filter(key => \n      !key.startsWith('__mj') && \n      key !== 'ID' &&\n      typeof record[key] !== 'object'\n    );\n  };\n  \n  // Get field info from entity\n  const getFieldInfo = (fieldName) => {\n    if (!entityInfo || !entityInfo.Fields) return null;\n    return entityInfo.Fields.find(f => f.Name === fieldName);\n  };\n  \n  // Handle field click\n  const handleFieldClick = (fieldName, value) => {\n    if (onFieldClicked) {\n      const fieldInfo = getFieldInfo(fieldName);\n      onFieldClicked({ \n        fieldName, \n        value, \n        fieldType: fieldInfo?.Type,\n        record \n      });\n    }\n  };\n  \n  \n  // Render field based on layout\n  const renderField = (fieldName) => {\n    const fieldInfo = getFieldInfo(fieldName);\n    const value = record[fieldName];\n    const formattedValue = formatValue(value, fieldInfo);\n    \n    if (!showEmptyFields && !formattedValue) return null;\n    \n    const isHighlighted = highlightFields.includes(fieldName);\n    const label = fieldInfo?.DisplayName || fieldName;\n    \n    const fieldStyle = {\n      cursor: onFieldClicked ? 'pointer' : 'default'\n    };\n    \n    const highlightStyle = isHighlighted ? {\n      backgroundColor: '#fffbe6',\n      padding: '4px 8px',\n      borderRadius: '4px',\n      border: '1px solid #ffe58f'\n    } : {};\n    \n    if (layout === 'list') {\n      return (\n        <div \n          key={fieldName}\n          style={{ \n            marginBottom: '12px',\n            ...highlightStyle\n          }}\n          onClick={() => handleFieldClick(fieldName, value)}\n        >\n          {showLabels && (\n            <div style={{ \n              fontWeight: 500, \n              color: '#666', \n              fontSize: '12px',\n              marginBottom: '4px',\n              textTransform: 'uppercase'\n            }}>\n              {label}\n            </div>\n          )}\n          <div style={{ \n            fontSize: '14px', \n            color: '#333',\n            ...fieldStyle\n          }}>\n            {formattedValue || '-'}\n          </div>\n        </div>\n      );\n    }\n    \n    if (layout === 'table') {\n      return (\n        <tr \n          key={fieldName}\n          style={highlightStyle}\n          onClick={() => handleFieldClick(fieldName, value)}\n        >\n          {showLabels && (\n            <td style={{ \n              fontWeight: 500, \n              color: '#666', \n              fontSize: '14px',\n              padding: '8px',\n              width: labelWidth,\n              verticalAlign: 'top'\n            }}>\n              {label}\n            </td>\n          )}\n          <td style={{ \n            fontSize: '14px', \n            color: '#333',\n            padding: '8px',\n            ...fieldStyle\n          }}>\n            {formattedValue || '-'}\n          </td>\n        </tr>\n      );\n    }\n    \n    if (layout === 'inline') {\n      return (\n        <span \n          key={fieldName}\n          style={{ \n            marginRight: '20px',\n            display: 'inline-block',\n            ...highlightStyle\n          }}\n          onClick={() => handleFieldClick(fieldName, value)}\n        >\n          {showLabels && (\n            <span style={{ \n              fontWeight: 500, \n              color: '#666', \n              fontSize: '12px',\n              marginRight: '4px'\n            }}>\n              {label}:\n            </span>\n          )}\n          <span style={{ \n            fontSize: '14px', \n            color: '#333',\n            ...fieldStyle\n          }}>\n            {formattedValue || '-'}\n          </span>\n        </span>\n      );\n    }\n    \n    return null;\n  };\n  \n  // No record provided\n  if (!record) {\n    return (\n      <div style={{ \n        padding: '20px', \n        textAlign: 'center', \n        color: '#999' \n      }}>\n        No record to display\n      </div>\n    );\n  }\n\n  const displayFields = getDisplayFields();\n  console.log('[SingleRecordView] displayFields:', displayFields);\nconsole.log('[SingleRecordView] About to map renderField over', displayFields.length, 'fields');\n\n// Render based on layout\nif (layout === 'card') {\n  const renderedFields = displayFields.map(renderField);\n  console.log('[SingleRecordView] renderedFields:', renderedFields);\n  console.log('[SingleRecordView] renderedFields filtered nulls:', renderedFields.filter(x => x !== null));\n  \n    return (\n      <div style={{\n        border: '1px solid #d9d9d9',\n        borderRadius: '8px',\n        padding: '16px',\n        backgroundColor: '#fff',\n        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'\n      }}>\n        {displayFields.map(renderField)}\n        {allowOpenRecord && WrappedOpenRecordButton && (\n          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>\n            <WrappedOpenRecordButton\n              record={record}\n              entityName={entityName}\n              variant=\"primary\"\n              size=\"medium\"\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n            />\n          </div>\n        )}\n      </div>\n    );\n  }\n  \n  if (layout === 'table') {\n    return (\n      <div>\n        <table style={{\n          width: '100%',\n          borderCollapse: 'collapse'\n        }}>\n          <tbody>\n            {displayFields.map(renderField)}\n          </tbody>\n        </table>\n        {allowOpenRecord && WrappedOpenRecordButton && (\n          <div style={{ marginTop: '12px' }}>\n            <WrappedOpenRecordButton\n              record={record}\n              entityName={entityName}\n              variant=\"default\"\n              size=\"medium\"\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n            />\n          </div>\n        )}\n      </div>\n    );\n  }\n  \n  if (layout === 'inline') {\n    return (\n      <div style={{\n        padding: '8px',\n        lineHeight: '1.8'\n      }}>\n        {displayFields.map(renderField)}\n        {allowOpenRecord && WrappedOpenRecordButton && (\n          <span style={{ marginLeft: '20px', display: 'inline-block' }}>\n            <WrappedOpenRecordButton\n              record={record}\n              entityName={entityName}\n              variant=\"link\"\n              size=\"small\"\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n            />\n          </span>\n        )}\n      </div>\n    );\n  }\n  \n  // Default list layout\n  return (\n    <div style={{ padding: '8px' }}>\n      {displayFields.map(renderField)}\n      {allowOpenRecord && OpenRecordButton && (\n        <div style={{ marginTop: '12px' }}>\n          <OpenRecordButton\n            record={record}\n            entityName={entityName}\n            variant=\"default\"\n            size=\"medium\"\n            utilities={utilities}\n            styles={styles}\n            components={components}\n            callbacks={callbacks}\n            savedUserSettings={savedUserSettings}\n            onSaveUserSettings={onSaveUserSettings}\n          />\n        </div>\n      )}\n    </div>\n  );\n}",
+        "exampleUsage": "<SingleRecordView\n  record={selectedDeal}\n  entityName=\"Deals\"\n  fields={['DealName', 'Stage', 'Amount', 'CloseDate', 'OwnerID']}\n  layout=\"card\"\n  highlightFields={['Amount', 'Stage']}\n  allowOpenRecord={true}\n  onOpenRecord={(eventData) => {\n    // Example: Cancel if deal is in certain stage\n    if (selectedDeal.Stage === 'Lost') {\n      eventData.cancel = true;\n      alert('Cannot open lost deals');\n    }\n  }}\n/>",
+        "namespace": "Generic/UI/Form",
+        "version": "1.0.0",
+        "registry": "Skip"
+      },
+      {
+        "name": "DataGrid",
+        "title": "Data Grid",
+        "description": "Flexible, feature-rich data grid component wrapping Ant Design Table 5.12.0 for displaying tabular data with sorting, filtering, paging, and row selection. Perfect for drill-down targets (final level showing detail records), master-detail patterns, search results, or standalone tables. Supports custom column rendering with two modes: simple (string array) or advanced (ColumnDef objects with {field, header, render, width, sortable}). Metadata-aware formatting: dates (locale with time), booleans (Yes/No), value lists (colored tags with 50+ status colors + 50 fallback colors), money ($USD), decimals (2 places), integers (commas). Long text handling modes: truncate (ellipsis), expand (click 'show more/less'), tooltip (hover), wrap (word-break), none. USE for lists/tables of records. DO NOT USE for single record (use SingleRecordView) or charts (use SimpleChart/SimpleDrilldownChart).",
+        "type": "table",
+        "location": "registry",
+        "functionalRequirements": "WHEN TO USE: Displaying lists or tables of records; Drill-down destination (bottom level of hierarchy showing detail records); Master-detail detail panel; Search results or filtered record lists; Data exploration with sorting/filtering/paging; Bulk operations requiring multi-select; Report tables; Any tabular data display. WHEN NOT TO USE: Single record display (use SingleRecordView instead); Chart/graph visualizations (use SimpleChart or SimpleDrilldownChart); Need built-in chart-to-table drill-down (use SimpleDrilldownChart). CORE FEATURES: Universal table component for any entity type or data structure; Configurable columns with two modes: (1) Simple mode - string array of field names ['Name', 'SKU', 'Price'] uses smart defaults, (2) Advanced mode - ColumnDef objects [{field: 'Price', header: 'Unit Price', render: (value, record, fieldInfo) => `$${value}`, width: '120px', sortable: true}] for full control; Auto-detects columns from data if columns prop omitted; Smart type detection from entity metadata for alignment (numbers right-aligned) and formatting; Column-level and global text filtering with configurable debounce (default 300ms); Search highlighting with match count display ('Found N matching records'); Pagination with configurable page sizes and range display; Row selection modes: none (default), checkbox (multi-select), radio (single-select), row (click anywhere to select); Row click events with full record data for drill-down or navigation; Metadata-aware field formatting: dates (formatDate to locale with hour/minute), booleans (Yes/No text), value lists (colored Tag components), money fields (Intl.NumberFormat $USD), decimals/floats (2 decimal places with commas), integers (commas); Value list coloring system: statusColorMap with 50+ predefined colors for active/pending/complete/failed/error states, 50 fallback colors for other values, consistent color assignment per value; Long text field handling with 5 modes: truncate (substring+'...'), expand (click to toggle 'show more/less' with expandedCells state tracking), tooltip (Ant Tooltip on hover), wrap (word-break normal), none (default); Auto-fit columns to container width OR fixed widths with horizontal scroll (autoFitColumns prop); Column widths intelligently set based on SQL type and field length: GUIDs (280px), long text varchar(max) or >200 chars (400px), dates (160px), bit (80px), int (100px), money (130px); Loading state (spinner) when data===null; Empty state with contextual message 'No {entityName} records found'; Filter match highlighting using Typography.Text mark prop; Debounced filter input prevents thrashing on large datasets; CSS overrides disable Ant Design animations to prevent render loop detection; Responsive design adapts to any container. COLUMN SYSTEM: Accepts Array<string | ColumnDef>; ColumnDef structure: {field: string (required), header: string (optional, uses DisplayName from metadata or field name), render: function(value, record, fieldInfo) => ReactNode (optional custom renderer), width: string|number (optional like '200px' or 200), sortable: boolean (optional, overrides global sorting prop)}; Backward compatible - existing code using string arrays continues to work; If columns omitted, auto-discovers from first data record filtering out 'key' field. ROW SELECTION: selectionMode='none'|'checkbox'|'radio'|'row'; Manages selectedRowKeys state; Fires selectionChanged event with full selected record objects. EVENTS: rowClick(record: object) - fired on row click; selectionChanged(selectedRows: Array<object>) - fired when selection changes; pageChanged(pageNumber: number 0-based, visibleRows: Array<object>) - fired on page change; sortChanged(sortState: {column: string, direction: 'asc'|'desc'}) - fired when sort changes; filterChanged(filterValue: string, matchingData: Array<object>) - fired when filter text changes with all matching records. FILTERING: Searches specified filterFields array or all display fields if not provided; Debounces input by filterDebounceTime (default 300ms); Highlights matching text across all visible cells; Shows 'Found N matching records' count below search box.",
+        "technicalDesign": "Wraps Ant Design Table component with MJ-aware enhancements. React hooks: useState for filterText (raw input), debouncedFilter (processed search term), selectedRowKeys (selection state), currentPage (pagination), sortConfig (sort state), entityInfo (entity metadata), expandedCells (object tracking which long text cells are expanded with keys like ${recordKey}_${fieldName}). Loads entity metadata from utilities.md.Entities on mount for field type detection (Type, Length, DisplayName, ValueListType, EntityFieldValues). Library unwrapping: Uses unwrapLibraryComponents(antd, 'Table', 'Input', 'Space', 'Typography', 'Tag', 'Tooltip') to handle various Ant Design package formats (ESM/CJS/UMD). Column normalization (useMemo): Accepts columns as strings OR ColumnDef objects; If not provided, auto-discovers from Object.keys(data[0]) excluding 'key' field; Normalizes all to standard format {field, header, render, width, sortable}; Handles invalid configs gracefully with console.warn. Column building (useMemo): Maps normalized columns to Ant Design column configs; Determines alignment based on SQL type (int/decimal/float/numeric/money/bit → right-aligned, others left); Sets column widths based on SQL type and field length (only when autoFitColumns=false): uniqueidentifier→280px, long text (text type OR varchar(max) with length=-1 OR varchar with length>200)→400px, varchar/char based on length (≤50→100-200px, ≤100→250px, ≤200→300px, else→350px), date/time→160px, bit→80px, int→100px, decimal/numeric→120px, money→130px; When autoFitColumns=true, no widths set so table auto-sizes; Uses colDef.width if provided to override calculated width; Sets ellipsis=false (handle manually for click expansion); Creates sorter function if sortable (string localeCompare, number subtraction, null handling); render function priority: (1) Custom colDef.render if provided, (2) Metadata-driven default formatting. Field rendering logic: If custom render, call it with (value, record, fieldInfo); If value is null, return '-'; Create unique cellKey ${record.key/ID/id}_${fieldName} for expandedCells tracking; Format based on field type: date/time (formatDate with locale, hour/minute), bit (Yes/No), value lists (Tag component with getValueColor), money (Intl.NumberFormat USD currency), decimal/float (toLocaleString 2 decimals), int (toLocaleString); Long text handling: Check if field is long text (SQL types: text, varchar/char with length=-1 for (max), varchar/char with length>200); If length > longTextThreshold AND not value list: truncate mode (substring+'...'), expand mode (click toggles expandedCells[cellKey], shows 'show more/less' links), tooltip mode (Ant Tooltip wrapper), wrap mode (whiteSpace:normal, wordBreak:break-word), none (default); Apply filter highlighting: If filtering enabled and debouncedFilter exists, find match index in string, split and wrap match in Typography.Text mark component. Value list coloring: statusColorMap object with 50+ colors (active→#389e0d green, pending→#d48806 orange, failed→#a8071a red, processing→#096dd9 blue, etc.); fallbackColors array with 50 distinct colors (purple #722ed1, magenta #c41d7f, teal #08979c, indigo #1d39c4, vermillion #fa541c, brown #614700, etc.); getValueColor function: Build colorAssignments Map, iterate possibleValues from entity metadata, assign statusColorMap color if exists else next fallbackColor, ensures consistent colors for all values; For unknown values, check statusColorMap first then use hash-based fallback index. Filter debouncing (useEffect): setTimeout with filterDebounceTime (300ms), updates debouncedFilter; Cleanup clears timer. Filtered data (useMemo): If !filtering or !debouncedFilter, return original data; Determine searchFields (filterFields prop or all displayFields); Filter rows where any searchField value includes searchTerm (case-insensitive); Handle null/undefined rows gracefully. Filter change effect (useEffect): Fires onFilterChanged event with {filterValue: debouncedFilter, matchingData: filteredData}. Row selection config: If selectionMode !== 'none', create rowSelection object with type ('radio' or 'checkbox'), selectedRowKeys state, onChange handler (updates state, fires onSelectionChanged); For 'row' mode, adds onSelect handler. Pagination config: If paging=true, create pagination object with current (currentPage), pageSize, total (filteredData.length), showSizeChanger=false, showTotal formatter, onChange handler (updates currentPage, fires onPageChanged with 0-based page number and visible rows slice). Sort change handler: handleTableChange extracts sorter from Ant Table onChange, updates sortConfig state, fires onSortChanged with {sortState: {column: sorter.field, direction: sorter.order === 'ascend' ? 'asc' : 'desc'}}. Data with keys (useMemo): Maps filteredData to add unique key prop (uses existing key/ID/id or falls back to index); Required for Ant Design Table row selection. CSS style injection: Disables all Ant Design animations (animation: none, transition: none, animation-duration: 0s, transition-duration: 0s) on .data-grid-component and descendants to prevent render loop detection. Render output: Wrapper div with .data-grid-component class; If filtering=true: Search input (Ant Input.Search) with value/onChange/allowClear/onClear, placeholder shows filterFields or 'all fields', full width style, fix for search button alignment; Text showing 'Found N matching records' if debouncedFilter exists; Ant Table component with columns (tableColumns), dataSource (dataWithKeys), rowSelection (if enabled), pagination (if enabled), onChange (handleTableChange for sort), scroll (x: 'max-content' only if autoFitColumns=false for horizontal scrolling), loading (true only when data===null), locale with emptyText, size='middle', onRow returns object with onClick handler (fires onRowClick) and cursor style (pointer if onRowClick exists).",
+        "dataRequirements": {
+          "mode": "views",
+          "description": "Component is data-agnostic and works with any entity data passed via props"
+        },
+        "properties": [
+          {
+            "name": "entityName",
+            "type": "string",
+            "description": "Name of the entity being displayed",
+            "required": true
+          },
+          {
+            "name": "data",
+            "type": "Array<object>",
+            "description": "Array of entity objects to display",
+            "required": true
+          },
+          {
+            "name": "columns",
+            "type": "Array<string | object>",
+            "description": "Array of column definitions. Can be simple strings (field names) for default behavior, or column definition objects with properties: field (required), header, render, width, sortable. If not provided, all fields will be displayed. See technical design section for complete ColumnDef structure.",
+            "required": false,
+            "exampleValue": "[\"Name\", { field: \"Price\", header: \"Unit Price\", render: (v) => `$${v}`, width: \"120px\", sortable: true }]"
+          },
+          {
+            "name": "sorting",
+            "type": "boolean",
+            "description": "Enable/disable column sorting",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "paging",
+            "type": "boolean",
+            "description": "Enable/disable pagination",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "pageSize",
+            "type": "number",
+            "description": "Number of rows per page when paging is enabled",
+            "required": false,
+            "defaultValue": 10
+          },
+          {
+            "name": "filtering",
+            "type": "boolean",
+            "description": "Enable/disable text filtering",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "highlightFilterMatches",
+            "type": "boolean",
+            "description": "Highlight matching text when filtering",
+            "required": false,
+            "defaultValue": true
+          },
+          {
+            "name": "filterFields",
+            "type": "Array<string>",
+            "description": "Fields to search when filtering. If not specified, searches all fields",
+            "required": false
+          },
+          {
+            "name": "filterDebounceTime",
+            "type": "number",
+            "description": "Debounce time in ms for filter input",
+            "required": false,
+            "defaultValue": 300
+          },
+          {
+            "name": "selectionMode",
+            "type": "'none' | 'checkbox' | 'radio' | 'row'",
+            "description": "Row selection mode: 'none', 'checkbox', 'radio', or 'row'",
+            "required": false,
+            "defaultValue": "none",
+            "possibleValues": [
+              "none",
+              "checkbox",
+              "radio",
+              "row"
+            ]
+          },
+          {
+            "name": "longTextDisplay",
+            "type": "'truncate' | 'expand' | 'tooltip' | 'wrap' | 'none'",
+            "description": "How to display long text that exceeds the threshold: 'truncate' shows ellipsis, 'expand' allows click to expand/collapse, 'tooltip' shows full text on hover, 'wrap' shows all text with wrapping, 'none' uses default behavior",
+            "required": false,
+            "defaultValue": "expand",
+            "possibleValues": [
+              "truncate",
+              "expand",
+              "tooltip",
+              "wrap",
+              "none"
+            ]
+          },
+          {
+            "name": "longTextThreshold",
+            "type": "number",
+            "description": "Number of characters before long text display behavior is triggered",
+            "required": false,
+            "defaultValue": 100
+          },
+          {
+            "name": "autoFitColumns",
+            "type": "boolean",
+            "description": "When true, columns auto-fit to container width. When false, columns use fixed widths with horizontal scrolling",
+            "required": false,
+            "defaultValue": true
+          }
+        ],
+        "events": [
+          {
+            "name": "rowClick",
+            "description": "Fired when a row is clicked",
+            "parameters": [
+              {
+                "name": "record",
+                "type": "object",
+                "description": "The entity object of the clicked row"
+              }
+            ]
+          },
+          {
+            "name": "selectionChanged",
+            "description": "Fired when row selection changes",
+            "parameters": [
+              {
+                "name": "selectedRows",
+                "type": "Array<object>",
+                "description": "Array of selected entity objects"
+              }
+            ]
+          },
+          {
+            "name": "pageChanged",
+            "description": "Fired when page changes",
+            "parameters": [
+              {
+                "name": "pageNumber",
+                "type": "number",
+                "description": "Current page number (0-based)"
+              },
+              {
+                "name": "visibleRows",
+                "type": "Array<object>",
+                "description": "Array of entity objects visible on current page"
+              }
+            ]
+          },
+          {
+            "name": "sortChanged",
+            "description": "Fired when sort configuration changes",
+            "parameters": [
+              {
+                "name": "sortState",
+                "type": "{column: string, direction: 'asc' | 'desc'}",
+                "description": "Object with 'column' and 'direction' properties"
+              }
+            ]
+          },
+          {
+            "name": "filterChanged",
+            "description": "Fired when filter changes",
+            "parameters": [
+              {
+                "name": "filterValue",
+                "type": "string",
+                "description": "Current filter text"
+              },
+              {
+                "name": "matchingData",
+                "type": "Array<object>",
+                "description": "Array of all matching entity objects"
+              }
+            ]
+          }
+        ],
+        "libraries": [
+          {
+            "name": "antd",
+            "version": "5.12.0",
+            "globalVariable": "antd"
+          }
+        ],
+        "dependencies": [],
+        "code": "function DataGrid({\n  entityName,\n  data,\n  columns, // Array of column definitions: [{field: 'Name', header: 'Product Name', render: fn, width: '200px', sortable: true}]\n  sorting = true,\n  paging = true,\n  pageSize = 10,\n  filtering = true,  // Changed default to true\n  highlightFilterMatches = true,\n  filterFields,\n  filterDebounceTime = 300,\n  selectionMode = 'none',\n  longTextDisplay = 'expand', // Options: 'truncate', 'expand', 'tooltip', 'wrap', 'none'\n  longTextThreshold = 100, // Characters before truncation\n  autoFitColumns = true, // Auto-fit columns to container width vs fixed widths with scroll\n  onSelectionChanged,\n  onPageChanged,\n  onSortChanged,\n  onFilterChanged,\n  onRowClick,\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings\n}) {\n  // Always use the MJ unwrapLibraryComponents function to get components from global libraries like antd, this ensures\n  // that various library build/package formats are handled correctly and transparently for your code!\n  const { Table, Input, Space, Typography, Tag, Tooltip } = unwrapLibraryComponents(antd, 'Table', 'Input', 'Space', 'Typography', 'Tag', 'Tooltip');\n  const { Search } = Input;\n  const { Text } = Typography;\n  const [filterText, setFilterText] = React.useState('');\n  const [debouncedFilter, setDebouncedFilter] = React.useState('');\n  const [selectedRowKeys, setSelectedRowKeys] = React.useState([]);\n  const [currentPage, setCurrentPage] = React.useState(1);\n  const [sortConfig, setSortConfig] = React.useState(null);\n  const [entityInfo, setEntityInfo] = React.useState(null);\n  const [expandedCells, setExpandedCells] = React.useState({}); // Track which cells are expanded\n\n  \n  // Load entity metadata if we have an entity name\n  React.useEffect(() => {\n    if (entityName && utilities?.md?.Entities) {\n      const entity = utilities.md.Entities.find(e => e.Name === entityName);\n      setEntityInfo(entity || null);\n    }\n  }, [entityName, utilities]);\n  \n  // Helper function to format dates\n  const formatDate = (value) => {\n    if (!value) return '-';\n    try {\n      const date = new Date(value);\n      if (isNaN(date.getTime())) return value; // Invalid date, return as-is\n      // Format as YYYY-MM-DD HH:MM\n      return date.toLocaleString('en-US', {\n        year: 'numeric',\n        month: '2-digit',\n        day: '2-digit',\n        hour: '2-digit',\n        minute: '2-digit'\n      });\n    } catch {\n      return value;\n    }\n  };\n  \n  // Color mapping for common status values (darker for better contrast with white text)\n  const statusColorMap = {\n    // Green colors for positive states\n    active: '#389e0d',      // darker green\n    approved: '#52c41a',    // green\n    complete: '#237804',    // dark green\n    completed: '#135200',   // very dark green\n    success: '#3f6600',     // olive green\n    successful: '#5b8c00',  // light olive\n    enabled: '#7cb305',     // lime\n    published: '#a0d911',   // light lime\n    \n    // Red colors for negative states\n    inactive: '#cf1322',    // darker red\n    rejected: '#f5222d',    // red\n    failed: '#a8071a',      // dark red\n    error: '#820014',       // very dark red\n    disabled: '#ff4d4f',    // light red\n    cancelled: '#ff7875',   // salmon\n    canceled: '#ff9c9c',    // light salmon\n    terminated: '#873800',  // burnt orange\n    expired: '#ad4e00',     // dark orange\n    deprecated: '#d4380d',  // rust orange\n    \n    // Yellow/Orange for pending states\n    pending: '#d48806',     // darker orange\n    paused: '#fa8c16',      // orange\n    temporary: '#faad14',   // gold\n    draft: '#d4b106',       // dark gold\n    review: '#ad8b00',      // darker gold\n    waiting: '#ffc53d',     // light gold\n    \n    // Blue for informational states\n    processing: '#096dd9',  // darker blue\n    running: '#1890ff',     // blue\n    inprogress: '#0050b3',  // dark blue\n    'in progress': '#003a8c', // very dark blue\n    'in-progress': '#40a9ff' // light blue\n  };\n  \n  // 50 distinct colors for value lists (excluding colors used in statusColorMap)\n  // These are carefully selected to be visually distinct from each other\n  const fallbackColors = [\n    '#722ed1', // purple\n    '#9254de', // light purple\n    '#531dab', // dark purple\n    '#391085', // very dark purple\n    '#b37feb', // lavender\n    \n    '#c41d7f', // magenta\n    '#eb2f96', // pink\n    '#f759ab', // light pink\n    '#9e1068', // dark magenta\n    '#780650', // very dark magenta\n    \n    '#08979c', // teal\n    '#13c2c2', // cyan\n    '#006d75', // dark teal\n    '#36cfc9', // light cyan\n    '#5cdbd3', // pale cyan\n    \n    '#1d39c4', // indigo\n    '#2f54eb', // royal blue\n    '#597ef7', // periwinkle\n    '#10239e', // dark indigo\n    '#061178', // navy\n    \n    '#fa541c', // vermillion\n    '#ff7a45', // coral\n    '#ff9c6e', // peach\n    '#d4380d', // rust (if not used above)\n    '#ad2102', // brick red\n    \n    '#8c8c8c', // gray\n    '#595959', // dark gray\n    '#bfbfbf', // light gray\n    '#434343', // charcoal\n    '#262626', // near black\n    \n    '#614700', // brown\n    '#874d00', // tan\n    '#a8730f', // amber\n    '#c79816', // mustard\n    '#d4a017', // goldenrod\n    \n    '#00474f', // dark cyan\n    '#006064', // petrol\n    '#004851', // dark petrol\n    '#1a535c', // ocean\n    '#2c5f2d', // forest green\n    \n    '#4a7c59', // sage\n    '#6b8e23', // olive drab\n    '#556b2f', // dark olive\n    '#8fbc8f', // dark sea green\n    '#3cb371', // medium sea green\n    \n    '#cd5c5c', // indian red\n    '#bc8f8f', // rosy brown\n    '#daa520', // goldenrod\n    '#b8860b', // dark goldenrod\n    '#ff6347'  // tomato\n  ];\n  \n  // Get color for a value in a value list - ensures unique colors for all values\n  const getValueColor = (value, possibleValues) => {\n    if (!value) return null;\n    \n    const normalized = value.toString().toLowerCase().trim();\n    \n    // Build a complete color assignment map for this column\n    const colorAssignments = new Map();\n    let nextColorIndex = 0;\n    \n    // First, assign colors to all possible values in order\n    if (possibleValues && Array.isArray(possibleValues)) {\n      possibleValues.forEach(pv => {\n        const pvValue = (pv.Value || pv.Code || '').toLowerCase().trim();\n        if (pvValue && !colorAssignments.has(pvValue)) {\n          // Check if this value has a predefined color in statusColorMap\n          if (statusColorMap[pvValue]) {\n            colorAssignments.set(pvValue, statusColorMap[pvValue]);\n          } else {\n            // Assign next available fallback color\n            colorAssignments.set(pvValue, fallbackColors[nextColorIndex % fallbackColors.length]);\n            nextColorIndex++;\n          }\n        }\n      });\n    }\n    \n    // Return the assigned color for this value\n    if (colorAssignments.has(normalized)) {\n      return colorAssignments.get(normalized);\n    }\n    \n    // If value wasn't in possibleValues, check statusColorMap first\n    if (statusColorMap[normalized]) {\n      return statusColorMap[normalized];\n    }\n    \n    // Otherwise assign a fallback color based on hash\n    // This ensures consistency even for unexpected values\n    let hash = 0;\n    for (let i = 0; i < normalized.length; i++) {\n      hash = normalized.charCodeAt(i) + ((hash << 5) - hash);\n    }\n    return fallbackColors[Math.abs(hash) % fallbackColors.length];\n  };\n  \n  // Debounce filter input\n  React.useEffect(() => {\n    const timer = setTimeout(() => {\n      setDebouncedFilter(filterText);\n    }, filterDebounceTime);\n    return () => clearTimeout(timer);\n  }, [filterText, filterDebounceTime]);\n  \n  // Normalize column definitions - support both simple strings and full column definitions\n  const normalizedColumns = React.useMemo(() => {\n    if (!columns || columns.length === 0) {\n      // Auto-discover columns from data if none provided\n      if (data && Array.isArray(data) && data.length > 0) {\n        const allKeys = new Set();\n        data.forEach(row => {\n          if (row && typeof row === 'object') {\n            Object.keys(row).forEach(key => {\n              if (key !== 'key') {\n                allKeys.add(key);\n              }\n            });\n          }\n        });\n        return Array.from(allKeys).map(key => ({ field: key }));\n      }\n      return [];\n    }\n\n    // Normalize columns to standard format\n    return columns.map(col => {\n      if (typeof col === 'string') {\n        // Simple string field name - use defaults\n        return { field: col };\n      } else if (typeof col === 'object' && col.field) {\n        // Already a column definition object\n        return col;\n      } else {\n        console.warn('Invalid column configuration:', col);\n        return null;\n      }\n    }).filter(Boolean);\n  }, [columns, data]);\n\n  // Extract just the field names for filtering and other operations\n  const displayFields = React.useMemo(() => {\n    return normalizedColumns.map(col => col.field);\n  }, [normalizedColumns]);\n  \n  // Build table columns from column definitions with metadata-aware formatting\n  const tableColumns = React.useMemo(() => {\n    return normalizedColumns.map(colDef => {\n      const fieldName = colDef.field;\n\n      // Get field metadata if available\n      const fieldInfo = entityInfo?.Fields?.find(f => f.Name === fieldName);\n      const fieldType = fieldInfo?.Type?.toLowerCase() || '';\n      const hasValueList = fieldInfo?.ValueListType === 'List' || fieldInfo?.ValueListType === 'ListOrUserEntry';\n      const possibleValues = fieldInfo?.EntityFieldValues;\n      \n      \n      // Determine alignment based on field type\n      let align = 'left';\n      if (fieldType.includes('int') || fieldType.includes('decimal') || \n          fieldType.includes('float') || fieldType.includes('numeric') || \n          fieldType.includes('money') || fieldType === 'bit') {\n        align = 'right';\n      }\n      \n      // Set column width based on field metadata (type and length)\n      // In autoFit mode, we don't set widths (let table auto-size)\n      // In fixed mode, set proper widths for all columns with horizontal scroll\n      let columnWidth = autoFitColumns ? undefined : 150; // Default width or auto\n      const fieldLength = fieldInfo?.Length;\n      \n      // Determine if this is a long text field based on SQL type\n      // Note: SQL Server returns length = -1 for max fields (varchar(max), nvarchar(max))\n      const isLongTextField = fieldType.includes('text') || // text, ntext types\n                              (fieldType.includes('varchar') && fieldLength === -1) || // varchar(max) or nvarchar(max)\n                              (fieldType.includes('char') && fieldLength === -1) || // char(max) or nchar(max)\n                              (fieldType.includes('varchar') && fieldLength && fieldLength > 200) ||\n                              (fieldType.includes('char') && fieldLength && fieldLength > 200);\n      \n      \n      // Set appropriate widths based on data type (only when not auto-fitting)\n      if (!autoFitColumns) {\n        if (fieldType.includes('uniqueidentifier')) {\n          columnWidth = 280; // GUIDs need space\n        } else if (isLongTextField) {\n          columnWidth = 400; // Generous width for long text fields\n        } else if (fieldType.includes('varchar') || fieldType.includes('char')) {\n          // Scale width based on field length\n          if (fieldLength && fieldLength <= 50) {\n            columnWidth = Math.min(200, Math.max(100, fieldLength * 3));\n          } else if (fieldLength && fieldLength <= 100) {\n            columnWidth = 250;\n          } else if (fieldLength && fieldLength <= 200) {\n            columnWidth = 300;\n          } else {\n            columnWidth = 350; // Default for varchar without length\n          }\n        } else if (fieldType.includes('date') || fieldType.includes('time')) {\n          columnWidth = 160;\n        } else if (fieldType === 'bit') {\n          columnWidth = 80;\n        } else if (fieldType.includes('int')) {\n          columnWidth = 100;\n        } else if (fieldType.includes('decimal') || fieldType.includes('numeric')) {\n          columnWidth = 120;\n        } else if (fieldType.includes('money')) {\n          columnWidth = 130;\n        }\n      }\n      \n      // If no metadata available, use default width\n      // We don't make assumptions based on field names\n      \n      \n      // Enable ellipsis for long text fields\n      const useEllipsis = isLongTextField;\n      \n      // Handle special __mj fields display names\n      // Priority: colDef.header > fieldInfo.DisplayName > default handling\n      let displayName = colDef.header || fieldInfo?.DisplayName || fieldName;\n      if (!colDef.header) {\n        if (fieldName === '__mj_CreatedAt') {\n          displayName = 'Created At';\n        } else if (fieldName === '__mj_UpdatedAt') {\n          displayName = 'Updated At';\n        } else if (fieldName === '__mj_DeletedAt') {\n          displayName = 'Deleted At';\n        }\n      }\n\n      return {\n        title: displayName,\n        dataIndex: fieldName,\n        key: fieldName,\n        align: align,\n        width: colDef.width || columnWidth, // Use column-specific width if provided\n        ellipsis: false, // We'll handle ellipsis manually for click expansion\n        sorter: (colDef.sortable !== undefined ? colDef.sortable : sorting) ? (a, b) => {\n          const valA = a[fieldName];\n          const valB = b[fieldName];\n          if (valA == null) return 1;\n          if (valB == null) return -1;\n          if (typeof valA === 'string') {\n            return valA.localeCompare(valB);\n          }\n          return valA - valB;\n        } : false,\n        render: (value, record) => {\n          // Check for custom render function first\n          if (colDef.render && typeof colDef.render === 'function') {\n            return colDef.render(value, record, fieldInfo);\n          }\n\n          // Default handling for null values\n          if (value == null) return '-';\n\n          // Create a unique key for this cell\n          const cellKey = `${record.key || record.ID || record.id}_${fieldName}`;\n          const isExpanded = expandedCells[cellKey];\n\n          // Format based on field type (default behavior)\n          let displayValue = value;\n          let formattedContent = null;\n          \n          // Handle date/time fields\n          if (fieldType.includes('date') || fieldType.includes('time')) {\n            displayValue = formatDate(value);\n            formattedContent = displayValue;\n          }\n          // Handle boolean fields\n          else if (fieldType === 'bit') {\n            displayValue = value ? 'Yes' : 'No';\n            formattedContent = displayValue;\n          }\n          // Handle fields with value lists - render as tags\n          else if (hasValueList && possibleValues) {\n            const color = getValueColor(value, possibleValues);\n            formattedContent = (\n              <Tag \n                color={color}\n                style={{ \n                  borderRadius: '12px',\n                  fontSize: '12px',\n                  padding: '2px 8px'\n                }}\n              >\n                {value}\n              </Tag>\n            );\n          }\n          // Handle numeric fields with formatting\n          else if (fieldType.includes('money')) {\n            displayValue = typeof value === 'number'\n              ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)\n              : value;\n            formattedContent = displayValue;\n          }\n          else if (fieldType.includes('decimal') || fieldType.includes('float')) {\n            displayValue = typeof value === 'number' \n              ? value.toLocaleString('en-US', { maximumFractionDigits: 2 })\n              : value;\n            formattedContent = displayValue;\n          }\n          else if (fieldType.includes('int')) {\n            displayValue = typeof value === 'number' \n              ? value.toLocaleString('en-US')\n              : value;\n            formattedContent = displayValue;\n          }\n          else {\n            formattedContent = displayValue;\n          }\n          \n          // Handle long text fields based on longTextDisplay mode\n          if (useEllipsis && typeof displayValue === 'string' && displayValue.length > longTextThreshold && !hasValueList) {\n            const shouldTruncate = displayValue.length > longTextThreshold;\n            \n            // Mode: truncate - simple ellipsis\n            if (longTextDisplay === 'truncate') {\n              const truncated = displayValue.substring(0, longTextThreshold) + '...';\n              return (\n                <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>\n                  {truncated}\n                </div>\n              );\n            }\n            \n            // Mode: tooltip - show full text on hover\n            if (longTextDisplay === 'tooltip') {\n              const truncated = displayValue.substring(0, longTextThreshold) + '...';\n              return (\n                <Tooltip title={displayValue} placement=\"topLeft\">\n                  <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>\n                    {truncated}\n                  </div>\n                </Tooltip>\n              );\n            }\n            \n            // Mode: wrap - show all text with wrapping\n            if (longTextDisplay === 'wrap') {\n              return (\n                <div style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>\n                  {displayValue}\n                </div>\n              );\n            }\n            \n            // Mode: expand (default) - click to expand/collapse\n            if (longTextDisplay === 'expand') {\n              const shouldTruncate = !isExpanded && displayValue.length > longTextThreshold;\n              const displayText = shouldTruncate \n                ? displayValue.substring(0, longTextThreshold) \n                : displayValue;\n              \n              // Apply highlight for filter matches\n              let finalContent = displayText;\n              if (filtering && highlightFilterMatches && debouncedFilter) {\n                const str = String(displayText);\n                const searchTerm = debouncedFilter.toLowerCase();\n                const index = str.toLowerCase().indexOf(searchTerm);\n                if (index >= 0) {\n                  finalContent = (\n                    <span>\n                      {str.substring(0, index)}\n                      <Text mark>{str.substring(index, index + searchTerm.length)}</Text>\n                      {str.substring(index + searchTerm.length)}\n                    </span>\n                  );\n                }\n              }\n              \n              return (\n                <div \n                  style={{ \n                    cursor: shouldTruncate ? 'pointer' : 'default',\n                    whiteSpace: isExpanded ? 'normal' : 'nowrap',\n                    wordBreak: isExpanded ? 'break-word' : 'normal'\n                  }}\n                  onClick={() => {\n                    if (displayValue.length > longTextThreshold) {\n                      setExpandedCells(prev => ({\n                        ...prev,\n                        [cellKey]: !prev[cellKey]\n                      }));\n                    }\n                  }}\n                >\n                  {finalContent}\n                  {shouldTruncate && (\n                    <Text type=\"secondary\" style={{ marginLeft: 2 }}>\n                      ... <Text type=\"link\">[show more]</Text>\n                    </Text>\n                  )}\n                  {isExpanded && displayValue.length > longTextThreshold && (\n                    <Text type=\"link\" style={{ marginLeft: 4 }}>\n                      [show less]\n                    </Text>\n                  )}\n                </div>\n              );\n            }\n            \n            // Mode: none - no special handling\n            // Falls through to regular display\n          }\n          \n          // Apply highlight for filter matches (for non-expandable content)\n          if (filtering && highlightFilterMatches && debouncedFilter && !hasValueList) {\n            const str = String(displayValue);\n            const index = str.toLowerCase().indexOf(debouncedFilter.toLowerCase());\n            if (index >= 0) {\n              return (\n                <span>\n                  {str.substring(0, index)}\n                  <Text mark>{str.substring(index, index + debouncedFilter.length)}</Text>\n                  {str.substring(index + debouncedFilter.length)}\n                </span>\n              );\n            }\n          }\n          \n          return formattedContent;\n        }\n      };\n    });\n  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);\n  \n  // Filter data based on search term\n  // Handles null/undefined data gracefully and returns appropriate defaults\n  const filteredData = React.useMemo(() => {\n    // If data is null/undefined, return empty array\n    if (!data || !Array.isArray(data)) {\n      return [];\n    }\n    \n    // If filtering is disabled or no filter text, return original data\n    if (!filtering || !debouncedFilter) {\n      return data;\n    }\n    \n    // Determine which fields to search - use specified fields or all display fields\n    const searchFields = filterFields || displayFields;\n    const searchTerm = debouncedFilter.toLowerCase();\n    \n    // Filter rows that match the search term in any of the specified fields\n    return data.filter(row => {\n      // Skip null/undefined rows\n      if (!row || typeof row !== 'object') return false;\n      \n      return searchFields.some(field => {\n        const value = row[field];\n        if (value == null) return false;\n        return String(value).toLowerCase().includes(searchTerm);\n      });\n    });\n  }, [data, displayFields, filtering, filterFields, debouncedFilter]);\n  \n  // Handle filter change\n  React.useEffect(() => {\n    if (onFilterChanged && filtering) {\n      onFilterChanged({ filterValue: debouncedFilter, matchingData: filteredData });\n    }\n  }, [debouncedFilter, filteredData, onFilterChanged, filtering]);\n  \n  // Selection configuration\n  const rowSelection = selectionMode !== 'none' ? {\n    type: selectionMode === 'radio' ? 'radio' : 'checkbox',\n    selectedRowKeys,\n    onChange: (keys, rows) => {\n      setSelectedRowKeys(keys);\n      if (onSelectionChanged) {\n        onSelectionChanged({ selectedRows: rows });\n      }\n    },\n    ...(selectionMode === 'row' ? {\n      onSelect: (record) => {\n        const key = record.key || record.ID || record.id;\n        const isSelected = selectedRowKeys.includes(key);\n        const newKeys = isSelected \n          ? selectedRowKeys.filter(k => k !== key)\n          : [...selectedRowKeys, key];\n        setSelectedRowKeys(newKeys);\n        if (onSelectionChanged) {\n          const rows = filteredData.filter(r => \n            newKeys.includes(r.key || r.ID || r.id)\n          );\n          onSelectionChanged({ selectedRows: rows });\n        }\n      }\n    } : {})\n  } : undefined;\n  \n  // Pagination configuration\n  const pagination = paging ? {\n    current: currentPage,\n    pageSize: pageSize,\n    total: filteredData.length,\n    showSizeChanger: false,\n    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,\n    onChange: (page) => {\n      setCurrentPage(page);\n      if (onPageChanged) {\n        const startIdx = (page - 1) * pageSize;\n        const endIdx = Math.min(startIdx + pageSize, filteredData.length);\n        onPageChanged({ \n          pageNumber: page - 1,\n          visibleRows: filteredData.slice(startIdx, endIdx)\n        });\n      }\n    }\n  } : false;\n  \n  // Handle table sort change\n  const handleTableChange = (pag, filters, sorter) => {\n    if (sorter && onSortChanged) {\n      setSortConfig(sorter);\n      onSortChanged({ \n        sortState: {\n          column: sorter.field,\n          direction: sorter.order === 'ascend' ? 'asc' : 'desc'\n        }\n      });\n    }\n  };\n  \n  // Add keys to data for row selection\n  // React tables need a unique key for each row to track selection state\n  const dataWithKeys = React.useMemo(() => {\n    // Handle empty/null data gracefully\n    if (!filteredData || !Array.isArray(filteredData)) {\n      return [];\n    }\n    \n    return filteredData.map((row, index) => ({\n      ...row,\n      // Use existing key, ID fields, or fall back to index\n      key: row?.key || row?.ID || row?.id || index\n    }));\n  }, [filteredData]);\n  \n  return (\n    <div className=\"data-grid-component\" style={{ width: '100%' }}>\n      <style>{`\n        .data-grid-component .ant-table-wrapper,\n        .data-grid-component .ant-table,\n        .data-grid-component .ant-table-tbody,\n        .data-grid-component .ant-table-row,\n        .data-grid-component .ant-table-cell,\n        .data-grid-component .ant-table-tbody > tr {\n          animation: none !important;\n          transition: none !important;\n        }\n        .data-grid-component .ant-table-tbody > tr.ant-table-row {\n          animation: none !important;\n        }\n        .data-grid-component * {\n          animation-duration: 0s !important;\n          transition-duration: 0s !important;\n        }\n      `}</style>\n      {filtering && (\n        <Space direction=\"vertical\" style={{ width: '100%', marginBottom: 16 }}>\n          <div style={{ position: 'relative' }}>\n            <Search\n              placeholder={`Search in ${filterFields ? filterFields.join(', ') : 'all fields'}`}\n              value={filterText}\n              onChange={e => setFilterText(e.target.value)}\n              allowClear\n              onClear={() => setFilterText('')}\n              style={{ width: '100%' }}  // Full width to match grid\n            />\n            <style>{`\n              .data-grid-component .ant-btn.ant-input-search-button {\n                margin-top: -1px;\n              }\n            `}</style>\n          </div>\n          {debouncedFilter && (\n            <Text type=\"secondary\">\n              Found {filteredData.length} matching records\n            </Text>\n          )}\n        </Space>\n      )}\n      \n      <Table\n        columns={tableColumns}\n        dataSource={dataWithKeys}\n        rowSelection={rowSelection}\n        pagination={pagination}\n        onChange={handleTableChange}\n        scroll={autoFitColumns ? undefined : { x: 'max-content' }}  // Enable horizontal scrolling only when not auto-fitting\n        loading={data === null}  // Only show loading when data is explicitly null (not yet loaded)\n        locale={{\n          emptyText: `No ${entityName || 'records'} found`\n        }}\n        size=\"middle\"\n        onRow={(record) => ({\n          onClick: () => {\n            if (onRowClick) {\n              onRowClick(record);\n            }\n          },\n          style: {\n            cursor: onRowClick ? 'pointer' : 'default'\n          }\n        })}\n      />\n    </div>\n  );\n} ",
+        "exampleUsage": "// Simple column configuration (backward compatible)\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={['Name', 'SKU', 'Price', 'Category', 'InStock']}\n  onRowClick={handleRowClick}\n/>\n\n// Advanced column configuration with custom rendering\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={[\n    { field: 'Name', header: 'Product Name', width: '200px' },\n    { \n      field: 'Price',\n      header: 'Unit Price',\n      render: (value) => (\n        <span style={{ fontWeight: 'bold', color: '#059669' }}>\n          {value >= 1000 ? `$${(value/1000).toFixed(1)}K` : `$${value}`}\n        </span>\n      ),\n      width: '120px',\n      sortable: true\n    },\n    {\n      field: 'InStock',\n      header: 'Availability',\n      render: (value) => (\n        <span style={{ \n          padding: '2px 8px',\n          borderRadius: '12px',\n          backgroundColor: value ? '#D1FAE5' : '#FEE2E2',\n          color: value ? '#065F46' : '#991B1B'\n        }}>\n          {value ? 'In Stock' : 'Out of Stock'}\n        </span>\n      ),\n      width: '130px',\n      sortable: false\n    },\n    'Category'  // Simple string still works\n  ]}\n  sorting={true}\n  paging={true}\n  pageSize={20}\n  filtering={true}\n  filterFields={['Name', 'SKU', 'Category']}\n  selectionMode=\"none\"\n  onRowClick={handleRowClick}\n  onSelectionChanged={handleSelection}\n  onPageChanged={handlePageChange}\n  onSortChanged={handleSortChange}\n  onFilterChanged={handleFilterChange}\n/>",
+        "namespace": "Generic/UI/Table",
+        "version": "1.0.0",
+        "registry": "Skip"
+      },
+      {
+        "name": "DataExportPanel",
+        "namespace": "Generic/UI/Export",
+        "location": "registry",
+        "code": "function DataExportPanel({ \n  mode = 'ui',\n  data = [],\n  columns = [],\n  filename = 'export',\n  formats = ['csv', 'excel', 'pdf'],\n  position = 'inline',\n  buttonStyle = 'dropdown',\n  buttonText = 'Export',\n  icon = 'fa-download',\n  showPreview = false,\n  allowColumnSelection = true,\n  includeHeaders = true,\n  dateFormat = 'YYYY-MM-DD',\n  numberFormat = { decimals: 2, thousandsSeparator: ',', decimalSeparator: '.' },\n  pdfOptions = { orientation: 'portrait', pageSize: 'a4', margins: { top: 40, bottom: 40, left: 40, right: 40 } },\n  excelOptions = { sheetName: 'Data', includeFilters: true, autoWidth: true },\n  getHtmlElement = null,  // Function to get element at export time\n  aiInsightsText = null,  // Raw markdown text for AI insights\n  onExportStart = () => {},\n  onExportComplete = () => {},\n  onExportError = () => {},\n  customStyles = {},\n  visible = true,\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings\n}) {\n  const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);\n  const [isExporting, setIsExporting] = React.useState(false);\n  const [exportProgress, setExportProgress] = React.useState(0);\n  \n  // Validate and normalize columns on initialization\n  const validateColumns = (cols) => {\n    if (!cols || cols.length === 0) {\n      console.warn('⚠️ [DataExportPanel] No columns provided for export');\n      return [];\n    }\n    \n    return cols.map((col, index) => {\n      // Check for required properties\n      if (!col.key && !col.field) {\n        console.warn(`⚠️ [DataExportPanel] Column at index ${index} missing 'key' property. Expected format: { key: 'fieldName', label: 'Display Name' }. Got:`, col);\n      }\n      if (!col.label && !col.header && !col.name) {\n        console.warn(`⚠️ [DataExportPanel] Column at index ${index} missing 'label' property. Will fallback to key/field value.`);\n      }\n      \n      const key = col.key || col.field;\n      const label = col.label || col.header || col.name || key;\n      \n      if (!key) {\n        console.error(`❌ [DataExportPanel] Column at index ${index} has no valid key identifier. This will cause export to fail. Column:`, col);\n      }\n      \n      return {\n        ...col,\n        key: key,\n        label: label,\n        selected: true\n      };\n    });\n  };\n  \n  const [selectedColumns, setSelectedColumns] = React.useState(\n    validateColumns(columns)\n  );\n  const [showColumnSelector, setShowColumnSelector] = React.useState(false);\n  const [showPreviewDialog, setShowPreviewDialog] = React.useState(false);\n  const [previewFormat, setPreviewFormat] = React.useState(null);\n  \n  const exportRef = React.useRef(null);\n  const dropdownRef = React.useRef(null);\n  \n  // Re-validate columns if they change\n  React.useEffect(() => {\n    setSelectedColumns(validateColumns(columns));\n  }, [columns]);\n  \n  // Merge default styles with custom styles\n  const panelStyles = {\n    container: {\n      position: position === 'floating' ? 'fixed' : 'relative',\n      display: position === 'inline' ? 'inline-block' : 'block',\n      ...customStyles.container\n    },\n    button: {\n      padding: '8px 16px',\n      backgroundColor: styles?.colors?.primary || '#3B82F6',\n      color: 'white',\n      border: 'none',\n      borderRadius: '6px',\n      cursor: 'pointer',\n      display: 'flex',\n      alignItems: 'center',\n      gap: '8px',\n      fontSize: '14px',\n      fontWeight: '500',\n      transition: 'all 0.2s',\n      ...customStyles.button\n    },\n    dropdown: {\n      position: 'absolute',\n      top: '100%',\n      right: 0,\n      marginTop: '4px',\n      backgroundColor: 'white',\n      border: '1px solid #E5E7EB',\n      borderRadius: '8px',\n      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',\n      zIndex: 1000,\n      minWidth: '200px',\n      ...customStyles.dropdown\n    },\n    dropdownItem: {\n      padding: '10px 16px',\n      cursor: 'pointer',\n      display: 'flex',\n      alignItems: 'center',\n      gap: '10px',\n      fontSize: '14px',\n      transition: 'background-color 0.15s',\n      borderBottom: '1px solid #F3F4F6',\n      ...customStyles.dropdownItem\n    },\n    progressBar: {\n      position: 'absolute',\n      bottom: 0,\n      left: 0,\n      right: 0,\n      height: '3px',\n      backgroundColor: '#E5E7EB',\n      borderRadius: '0 0 6px 6px',\n      overflow: 'hidden',\n      ...customStyles.progressBar\n    },\n    progressFill: {\n      height: '100%',\n      backgroundColor: styles?.colors?.success || '#10B981',\n      transition: 'width 0.3s ease',\n      ...customStyles.progressFill\n    }\n  };\n  \n  // Format value based on type\n  const formatValue = (value, type) => {\n    if (value == null) return '';\n    \n    if (type === 'date' && dayjs) {\n      return dayjs(value).format(dateFormat);\n    }\n    \n    if (type === 'number' && numberFormat) {\n      const num = parseFloat(value);\n      if (!isNaN(num)) {\n        const parts = num.toFixed(numberFormat.decimals).split('.');\n        parts[0] = parts[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, numberFormat.thousandsSeparator);\n        return parts.join(numberFormat.decimalSeparator);\n      }\n    }\n    \n    if (type === 'currency' && numberFormat) {\n      const num = parseFloat(value);\n      if (!isNaN(num)) {\n        const formatted = formatValue(num, 'number');\n        return `$${formatted}`;\n      }\n    }\n    \n    return String(value);\n  };\n  \n  // Prepare data for export\n  const prepareData = () => {\n    const activeColumns = allowColumnSelection \n      ? selectedColumns.filter(col => col.selected)\n      : selectedColumns; // Use validated selectedColumns instead of raw columns\n      \n    if (!data || data.length === 0) {\n      console.warn('⚠️ [DataExportPanel] No data to export');\n      return { headers: [], rows: [] };\n    }\n    \n    // Validate data structure\n    if (data.length > 0) {\n      const sampleRow = data[0];\n      activeColumns.forEach(col => {\n        if (!(col.key in sampleRow)) {\n          console.warn(`⚠️ [DataExportPanel] Data missing key '${col.key}' that was defined in columns. First row keys:`, Object.keys(sampleRow));\n        }\n      });\n    }\n    \n    const headers = activeColumns.map(col => col.label || col.key);\n    const rows = data.map((row, rowIndex) => \n      activeColumns.map(col => {\n        if (!(col.key in row) && rowIndex === 0) {\n          console.warn(`⚠️ [DataExportPanel] Row ${rowIndex} missing value for key '${col.key}'`);\n        }\n        return formatValue(row[col.key], col.type);\n      })\n    );\n    \n    console.log(`✅ [DataExportPanel] Prepared ${rows.length} rows with ${headers.length} columns for export`);\n    \n    return { headers, rows };\n  };\n  \n  // Export to CSV\n  const exportToCSV = async () => {\n    try {\n      setIsExporting(true);\n      setExportProgress(10);\n      onExportStart('csv');\n      \n      const { headers, rows } = prepareData();\n      setExportProgress(30);\n      \n      // Build CSV content\n      let csvContent = '';\n      \n      if (includeHeaders) {\n        csvContent += headers.map(h => `\"${h}\"`).join(',') + '\\n';\n      }\n      \n      setExportProgress(50);\n      \n      // Process rows in chunks for large datasets\n      const chunkSize = 1000;\n      for (let i = 0; i < rows.length; i += chunkSize) {\n        const chunk = rows.slice(i, i + chunkSize);\n        csvContent += chunk.map(row => \n          row.map(cell => `\"${cell.replace(/\"/g, '\"\"')}\"`).join(',')\n        ).join('\\n');\n        \n        if (i + chunkSize < rows.length) {\n          csvContent += '\\n';\n        }\n        \n        setExportProgress(50 + (i / rows.length) * 40);\n      }\n      \n      setExportProgress(90);\n      \n      // Create and download file\n      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });\n      const url = URL.createObjectURL(blob);\n      const link = document.createElement('a');\n      link.href = url;\n      link.download = `${filename}.csv`;\n      document.body.appendChild(link);\n      link.click();\n      document.body.removeChild(link);\n      URL.revokeObjectURL(url);\n      \n      setExportProgress(100);\n      onExportComplete('csv', `${filename}.csv`);\n      \n      setTimeout(() => {\n        setIsExporting(false);\n        setExportProgress(0);\n      }, 500);\n      \n    } catch (error) {\n      console.error('CSV export failed:', error);\n      onExportError(error);\n      setIsExporting(false);\n      setExportProgress(0);\n    }\n  };\n  \n  // Export to Excel\n  const exportToExcel = async () => {\n    try {\n      setIsExporting(true);\n      setExportProgress(10);\n      onExportStart('excel');\n      \n      const { headers, rows } = prepareData();\n      setExportProgress(30);\n      \n      // Create workbook and worksheet\n      const wb = XLSX.utils.book_new();\n      \n      // Combine headers and rows\n      const worksheetData = includeHeaders ? [headers, ...rows] : rows;\n      setExportProgress(50);\n      \n      const ws = XLSX.utils.aoa_to_sheet(worksheetData);\n      \n      // Apply column widths if autoWidth is enabled\n      if (excelOptions.autoWidth && selectedColumns) {\n        const colWidths = selectedColumns\n          .filter(col => !allowColumnSelection || col.selected)\n          .map(col => ({ wch: col.width ? col.width / 7 : 15 }));\n        ws['!cols'] = colWidths;\n      }\n      \n      setExportProgress(70);\n      \n      // Add filters if enabled\n      if (excelOptions.includeFilters && includeHeaders) {\n        ws['!autofilter'] = { \n          ref: XLSX.utils.encode_range({\n            s: { r: 0, c: 0 },\n            e: { r: worksheetData.length - 1, c: headers.length - 1 }\n          })\n        };\n      }\n      \n      setExportProgress(80);\n      \n      // Add worksheet to workbook\n      XLSX.utils.book_append_sheet(wb, ws, excelOptions.sheetName || 'Data');\n      \n      // Generate file\n      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });\n      \n      // Convert to blob\n      const buf = new ArrayBuffer(wbout.length);\n      const view = new Uint8Array(buf);\n      for (let i = 0; i < wbout.length; i++) {\n        view[i] = wbout.charCodeAt(i) & 0xFF;\n      }\n      \n      setExportProgress(90);\n      \n      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });\n      const url = URL.createObjectURL(blob);\n      const link = document.createElement('a');\n      link.href = url;\n      link.download = `${filename}.xlsx`;\n      document.body.appendChild(link);\n      link.click();\n      document.body.removeChild(link);\n      URL.revokeObjectURL(url);\n      \n      setExportProgress(100);\n      onExportComplete('excel', `${filename}.xlsx`);\n      \n      setTimeout(() => {\n        setIsExporting(false);\n        setExportProgress(0);\n      }, 500);\n      \n    } catch (error) {\n      console.error('Excel export failed:', error);\n      onExportError(error);\n      setIsExporting(false);\n      setExportProgress(0);\n    }\n  };\n  \n  // Export to PDF\n  const exportToPDF = async () => {\n    // Get elements at export time\n    const exportHtmlElement = getHtmlElement ? getHtmlElement() : null;\n    \n    console.log('=== PDF Export Debug ===');\n    console.log('getHtmlElement provided:', !!getHtmlElement);\n    console.log('exportHtmlElement:', !!exportHtmlElement, exportHtmlElement);\n    console.log('aiInsightsText provided:', !!aiInsightsText);\n    console.log('pdfOptions:', pdfOptions);\n    console.log('data length:', data?.length || 0);\n    \n    try {\n      setIsExporting(true);\n      setExportProgress(10);\n      onExportStart('pdf');\n      \n      const { jsPDF } = jspdf;\n      const doc = new jsPDF({\n        orientation: pdfOptions.orientation || 'portrait',\n        unit: 'mm',\n        format: pdfOptions.pageSize || 'a4',\n        compress: true  // Enable PDF compression\n      });\n      \n      setExportProgress(20);\n      \n      if (exportHtmlElement) {\n        console.log('HTML element path - capturing dashboard');\n        console.log('exportHtmlElement dimensions:', {\n          scrollWidth: exportHtmlElement.scrollWidth,\n          scrollHeight: exportHtmlElement.scrollHeight,\n          clientWidth: exportHtmlElement.clientWidth,\n          clientHeight: exportHtmlElement.clientHeight\n        });\n        \n        // Capture HTML element as image (for charts, dashboards, etc.)\n        setExportProgress(30);\n        \n        // Add title and metadata\n        doc.setFontSize(16);\n        doc.text(pdfOptions.title || filename, pdfOptions.margins.left, pdfOptions.margins.top - 10);\n        \n        doc.setFontSize(10);\n        doc.text(\n          `Generated: ${dayjs().format('YYYY-MM-DD HH:mm')}`,\n          pdfOptions.margins.left,\n          pdfOptions.margins.top - 5\n        );\n        \n        setExportProgress(40);\n        \n        // Wait longer for ApexCharts to fully render\n        console.log('Waiting 1000ms for charts to render...');\n        await new Promise(resolve => setTimeout(resolve, 1000));\n        console.log('Wait complete, starting html2canvas...');\n        \n        // Capture the element with better options for dashboards\n        let canvas = null;\n        let imgData = null;\n        try {\n          canvas = await html2canvas(exportHtmlElement, {\n            scale: 2,\n            logging: false,\n            useCORS: true,\n            backgroundColor: '#ffffff',\n            windowWidth: exportHtmlElement.scrollWidth,\n            windowHeight: exportHtmlElement.scrollHeight,\n            ignoreElements: (element) => {\n              // Ignore elements that shouldn't be in the PDF\n              return element.classList?.contains('no-print') || \n                     element.tagName === 'BUTTON';\n            }\n          });\n          console.log('Dashboard canvas captured successfully');\n          imgData = canvas.toDataURL('image/jpeg', 0.95);  // Use JPEG for better compression\n        } catch (canvasError) {\n          console.error('Error capturing dashboard canvas:', canvasError);\n          console.warn('⚠️ Continuing PDF export without visualization - will include data table only');\n          // Don't throw - continue with data table export\n          canvas = null;\n          imgData = null;\n        }\n        \n        setExportProgress(60);\n        \n        // Calculate proper aspect ratio\n        const pageWidth = doc.internal.pageSize.getWidth();\n        const pageHeight = doc.internal.pageSize.getHeight();\n        const marginLeft = pdfOptions.margins.left || 20;\n        const marginRight = pdfOptions.margins.right || 20;\n        const marginTop = pdfOptions.margins.top || 20;\n        const marginBottom = pdfOptions.margins.bottom || 20;\n        \n        const maxWidth = pageWidth - marginLeft - marginRight;\n        const maxHeight = pageHeight - marginTop - marginBottom - 10;\n        \n        // Only process image if canvas was captured successfully\n        if (canvas && imgData) {\n          // Calculate dimensions maintaining aspect ratio\n          const canvasAspectRatio = canvas.width / canvas.height;\n          const pageAspectRatio = maxWidth / maxHeight;\n          \n          let imgWidth, imgHeight;\n          \n          if (canvasAspectRatio > pageAspectRatio) {\n            // Image is wider than page ratio - fit to width\n            imgWidth = maxWidth;\n            imgHeight = maxWidth / canvasAspectRatio;\n          } else {\n            // Image is taller than page ratio - fit to height\n            imgHeight = maxHeight;\n            imgWidth = maxHeight * canvasAspectRatio;\n          }\n          \n          // For cluster visualization, maximize the image size on the first page\n          // since we'll put the data table on subsequent pages\n          if (exportHtmlElement && exportHtmlElement.id === 'cluster-graph-container') {\n            console.log('Detected cluster graph - maximizing image size for PDF');\n            // Use more of the page for the visualization\n            const availableHeight = pageHeight - marginTop - marginBottom;\n            const availableWidth = pageWidth - marginLeft - marginRight;\n            \n            // Recalculate to use full available space\n            if (canvasAspectRatio > (availableWidth / availableHeight)) {\n              imgWidth = availableWidth;\n              imgHeight = availableWidth / canvasAspectRatio;\n            } else {\n              imgHeight = availableHeight;\n              imgWidth = availableHeight * canvasAspectRatio;\n            }\n          }\n          \n          console.log('Image sizing:', {\n            canvas: { width: canvas.width, height: canvas.height, ratio: canvasAspectRatio },\n            page: { maxWidth, maxHeight, ratio: pageAspectRatio },\n            final: { width: imgWidth, height: imgHeight }\n          });\n          \n          // Skip AI Insights canvas capture - we only want the markdown text\n          // The aiInsightsText parameter provides the markdown content directly\n          \n          // Image data and dimensions are already calculated above\n          let yPosition = marginTop;\n          const bottomMargin = pageHeight - marginBottom;\n          \n          // Check if we need multi-page support for tall dashboards\n          if (pdfOptions.multiPage && imgHeight > bottomMargin - yPosition) {\n            console.log('Using multi-page mode for tall dashboard');\n            // Split the image across multiple pages\n            const pageHeight = bottomMargin - yPosition;\n            let remainingHeight = imgHeight;\n            let currentY = 0;\n          \n          while (remainingHeight > 0) {\n            const currentPageHeight = Math.min(pageHeight, remainingHeight);\n            \n            // Create a temporary canvas for this page's portion\n            const pageCanvas = document.createElement('canvas');\n            pageCanvas.width = canvas.width;\n            pageCanvas.height = (currentPageHeight / imgWidth) * canvas.width;\n            \n            const ctx = pageCanvas.getContext('2d');\n            ctx.drawImage(\n              canvas,\n              0, currentY * (canvas.height / imgHeight),\n              canvas.width, pageCanvas.height * (canvas.height / imgHeight),\n              0, 0,\n              pageCanvas.width, pageCanvas.height\n            );\n            \n            const pageImgData = pageCanvas.toDataURL('image/png');\n            \n            doc.addImage(\n              pageImgData,\n              'PNG',\n              pdfOptions.margins.left,\n              yPosition,\n              imgWidth,\n              currentPageHeight\n            );\n            \n            remainingHeight -= currentPageHeight;\n            currentY += currentPageHeight;\n            \n            if (remainingHeight > 0) {\n              doc.addPage();\n              yPosition = pdfOptions.margins.top;\n            }\n          }\n          } else if (yPosition + imgHeight > bottomMargin) {\n            // Single page mode - scale to fit\n          const maxHeight = bottomMargin - yPosition;\n          const scaledWidth = (maxHeight * canvas.width) / canvas.height;\n          \n          doc.addImage(\n            imgData, \n            'PNG', \n            pdfOptions.margins.left, \n            yPosition, \n            scaledWidth > imgWidth ? imgWidth : scaledWidth,\n            scaledWidth > imgWidth ? imgHeight : maxHeight\n          );\n          } else {\n            // Center the image horizontally if it's narrower than the page\n            const xPosition = marginLeft + Math.max(0, (maxWidth - imgWidth) / 2);\n            \n            doc.addImage(\n              imgData, \n              'JPEG', \n              xPosition, \n              yPosition, \n              imgWidth, \n              imgHeight\n            );\n            \n            // For cluster graphs, always put data table on next page for better layout\n            if (exportHtmlElement && exportHtmlElement.id === 'cluster-graph-container') {\n              console.log('Cluster graph exported - data table will be on next page');\n              // Force data table to next page by setting a flag\n              doc.addPage();\n            }\n          }\n        } else {\n          // No image captured - add a note\n          doc.setFontSize(10);\n          doc.setTextColor(150, 150, 150);\n          doc.text('Note: Visualization could not be captured', pageWidth / 2, marginTop + 20, { align: 'center' });\n        }\n        \n        // Add AI Insights on a new page - only use markdown text\n        if (aiInsightsText) {\n          console.log('Adding AI Insights to PDF on new page');\n          doc.addPage();\n          \n          // Add AI Insights header\n          doc.setFontSize(16);\n          doc.setFont(undefined, 'bold');\n          doc.text('AI-Generated Insights', marginLeft, marginTop);\n          \n          doc.setFontSize(10);\n          doc.setFont(undefined, 'normal');\n          doc.setTextColor(100);\n          doc.text(\n            `Generated: ${dayjs().format('YYYY-MM-DD HH:mm')}`,\n            marginLeft,\n            marginTop + 7\n          );\n          doc.setTextColor(0);\n          \n          if (aiInsightsText) {\n            // Render markdown as text\n            let yPos = marginTop + 20;\n            const lineHeight = 5;\n            const maxLineWidth = pageWidth - marginLeft - marginRight;\n            \n            // Clean the markdown text to handle special characters\n            let cleanText = aiInsightsText\n              .replace(/[\"\"]/g, '\"')  // Smart quotes to regular quotes\n              .replace(/['']/g, \"'\")  // Smart apostrophes to regular apostrophes\n              .replace(/—/g, '-')     // Em dash to hyphen\n              .replace(/–/g, '-')     // En dash to hyphen\n              .replace(/…/g, '...')   // Ellipsis\n              .replace(/•/g, '* ')    // Bullet points\n              .replace(/\\u200B/g, '') // Zero-width space\n              .replace(/\\u00A0/g, ' ') // Non-breaking space\n              .replace(/[\\u2000-\\u206F]/g, '') // Various Unicode spaces and formatting\n              .replace(/[\\u2070-\\u209F]/g, '') // Superscripts and subscripts\n              .replace(/[\\u20A0-\\u20CF]/g, '') // Currency symbols (except common ones)\n              .replace(/[\\u2100-\\u214F]/g, '') // Letterlike symbols\n              .replace(/[\\uFE00-\\uFE0F]/g, '') // Variation selectors\n              .replace(/[^\\x00-\\x7F\\u0080-\\u00FF]/g, ''); // Remove other non-ASCII chars except Latin-1\n            \n            // Parse markdown to extract structure\n            const lines = cleanText.split('\\n');\n            \n            for (const line of lines) {\n              // Check if we need a new page\n              if (yPos > pageHeight - marginBottom - 10) {\n                doc.addPage();\n                yPos = marginTop;\n              }\n              \n              // Handle different markdown elements\n              if (line.startsWith('# ')) {\n                // H1 heading\n                doc.setFontSize(14);\n                doc.setFont(undefined, 'bold');\n                const text = line.substring(2).trim();\n                doc.text(text, marginLeft, yPos);\n                yPos += lineHeight * 1.5;\n                doc.setFont(undefined, 'normal');\n                doc.setFontSize(10);\n              } else if (line.startsWith('## ')) {\n                // H2 heading\n                doc.setFontSize(12);\n                doc.setFont(undefined, 'bold');\n                const text = line.substring(3).trim();\n                doc.text(text, marginLeft, yPos);\n                yPos += lineHeight * 1.3;\n                doc.setFont(undefined, 'normal');\n                doc.setFontSize(10);\n              } else if (line.startsWith('### ')) {\n                // H3 heading\n                doc.setFontSize(11);\n                doc.setFont(undefined, 'bold');\n                const text = line.substring(4).trim();\n                doc.text(text, marginLeft, yPos);\n                yPos += lineHeight * 1.2;\n                doc.setFont(undefined, 'normal');\n                doc.setFontSize(10);\n              } else if (line.startsWith('- ') || line.startsWith('* ')) {\n                // Bullet point\n                const text = line.substring(2).trim();\n                const bulletX = marginLeft + 5;\n                doc.text('•', marginLeft, yPos);\n                const splitText = doc.splitTextToSize(text, maxLineWidth - 5);\n                doc.text(splitText, bulletX, yPos);\n                yPos += lineHeight * splitText.length;\n              } else if (line.startsWith('**') && line.endsWith('**')) {\n                // Bold text\n                doc.setFont(undefined, 'bold');\n                const text = line.substring(2, line.length - 2).trim();\n                const splitText = doc.splitTextToSize(text, maxLineWidth);\n                doc.text(splitText, marginLeft, yPos);\n                yPos += lineHeight * splitText.length;\n                doc.setFont(undefined, 'normal');\n              } else if (line.trim() === '') {\n                // Empty line\n                yPos += lineHeight * 0.5;\n              } else {\n                // Regular text - also strip inline markdown formatting for now\n                // Remove bold markers and other inline formatting\n                let processedLine = line\n                  .replace(/\\*\\*(.*?)\\*\\*/g, '$1')  // Remove bold markers\n                  .replace(/\\*(.*?)\\*/g, '$1')      // Remove italic markers\n                  .replace(/`(.*?)`/g, '$1');       // Remove inline code markers\n                \n                const splitText = doc.splitTextToSize(processedLine, maxLineWidth);\n                doc.text(splitText, marginLeft, yPos);\n                yPos += lineHeight * splitText.length;\n              }\n            }\n          }\n        }\n        \n        // Optionally add data table below the image if both are provided\n        if (pdfOptions.includeDataTable && data && data.length > 0) {\n          console.log('Adding data table to PDF on new page');\n          doc.addPage();\n          \n          // Add table title\n          doc.setFontSize(14);\n          doc.text('Data Table', pdfOptions.margins.left, pdfOptions.margins.top);\n          \n          // Generate the data table on the new page\n          const { headers, rows } = prepareData();\n          let tableY = pdfOptions.margins.top + 10;\n          \n          // Add headers\n          doc.setFontSize(10);\n          doc.setFont(undefined, 'bold');\n          \n          if (includeHeaders) {\n            const colWidth = (doc.internal.pageSize.getWidth() - (pdfOptions.margins.left + pdfOptions.margins.right)) / headers.length;\n            headers.forEach((header, i) => {\n              doc.text(\n                header, \n                pdfOptions.margins.left + (i * colWidth), \n                tableY,\n                { maxWidth: colWidth - 2 }\n              );\n            });\n            tableY += 7;\n            \n            // Add separator line\n            doc.line(\n              pdfOptions.margins.left,\n              tableY - 2,\n              doc.internal.pageSize.getWidth() - pdfOptions.margins.right,\n              tableY - 2\n            );\n          }\n          \n          // Add all data rows\n          doc.setFont(undefined, 'normal');\n          rows.forEach((row) => {\n            // Check if we need a new page\n            if (tableY > doc.internal.pageSize.getHeight() - pdfOptions.margins.bottom - 10) {\n              doc.addPage();\n              tableY = pdfOptions.margins.top;\n              \n              // Re-add headers on new page\n              doc.setFont(undefined, 'bold');\n              const headerColWidth = (doc.internal.pageSize.getWidth() - (pdfOptions.margins.left + pdfOptions.margins.right)) / headers.length;\n              headers.forEach((header, i) => {\n                doc.text(\n                  header,\n                  pdfOptions.margins.left + (i * headerColWidth),\n                  tableY,\n                  { maxWidth: headerColWidth - 2 }\n                );\n              });\n              tableY += 10;\n              doc.setFont(undefined, 'normal');\n            }\n            \n            const colWidth = (doc.internal.pageSize.getWidth() - (pdfOptions.margins.left + pdfOptions.margins.right)) / row.length;\n            row.forEach((cell, i) => {\n              doc.text(\n                String(cell),\n                pdfOptions.margins.left + (i * colWidth),\n                tableY,\n                { maxWidth: colWidth - 2 }\n              );\n            });\n            tableY += 6;\n          });\n        }\n        \n        setExportProgress(90);\n        \n      } else {\n        console.log('No HTML element provided - using data table only path');\n        // Generate table from data\n        const { headers, rows } = prepareData();\n        setExportProgress(30);\n        \n        // Add title\n        doc.setFontSize(16);\n        doc.text(filename, pdfOptions.margins.left, pdfOptions.margins.top - 10);\n        \n        // Add date\n        doc.setFontSize(10);\n        doc.text(\n          `Generated: ${dayjs().format('YYYY-MM-DD HH:mm')}`,\n          pdfOptions.margins.left,\n          pdfOptions.margins.top - 5\n        );\n        \n        setExportProgress(40);\n        \n        // Calculate column widths\n        const pageWidth = doc.internal.pageSize.getWidth() - (pdfOptions.margins.left + pdfOptions.margins.right);\n        const colWidth = pageWidth / headers.length;\n        \n        // Add headers\n        let y = pdfOptions.margins.top + 5;\n        doc.setFontSize(11);\n        doc.setFont(undefined, 'bold');\n        \n        if (includeHeaders) {\n          headers.forEach((header, i) => {\n            doc.text(\n              header, \n              pdfOptions.margins.left + (i * colWidth), \n              y,\n              { maxWidth: colWidth - 2 }\n            );\n          });\n          y += 10;\n          \n          // Add separator line\n          doc.line(\n            pdfOptions.margins.left,\n            y - 3,\n            doc.internal.pageSize.getWidth() - pdfOptions.margins.right,\n            y - 3\n          );\n        }\n        \n        setExportProgress(60);\n        \n        // Add data rows\n        doc.setFont(undefined, 'normal');\n        doc.setFontSize(10);\n        \n        const pageHeight = doc.internal.pageSize.getHeight();\n        const bottomMargin = pageHeight - pdfOptions.margins.bottom;\n        \n        for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {\n          const row = rows[rowIdx];\n          \n          // Check if we need a new page\n          if (y > bottomMargin) {\n            doc.addPage();\n            y = pdfOptions.margins.top;\n            \n            // Re-add headers on new page\n            if (includeHeaders) {\n              doc.setFont(undefined, 'bold');\n              headers.forEach((header, i) => {\n                doc.text(\n                  header,\n                  pdfOptions.margins.left + (i * colWidth),\n                  y,\n                  { maxWidth: colWidth - 2 }\n                );\n              });\n              doc.setFont(undefined, 'normal');\n              y += 10;\n              doc.line(\n                pdfOptions.margins.left,\n                y - 3,\n                doc.internal.pageSize.getWidth() - pdfOptions.margins.right,\n                y - 3\n              );\n            }\n          }\n          \n          row.forEach((cell, i) => {\n            doc.text(\n              String(cell),\n              pdfOptions.margins.left + (i * colWidth),\n              y,\n              { maxWidth: colWidth - 2 }\n            );\n          });\n          \n          y += 7;\n          setExportProgress(60 + (rowIdx / rows.length) * 30);\n        }\n        \n        setExportProgress(90);\n      }\n      \n      // Save the PDF\n      doc.save(`${filename}.pdf`);\n      \n      setExportProgress(100);\n      onExportComplete('pdf', `${filename}.pdf`);\n      \n      setTimeout(() => {\n        setIsExporting(false);\n        setExportProgress(0);\n      }, 500);\n      \n    } catch (error) {\n      console.error('PDF export failed:', error);\n      onExportError(error);\n      setIsExporting(false);\n      setExportProgress(0);\n    }\n  };\n  \n  // Export methods for headless mode\n  React.useImperativeHandle(exportRef, () => ({\n    exportToCSV,\n    exportToExcel,\n    exportToPDF,\n    setData: (newData) => { data = newData; },\n    setColumns: (newColumns) => { \n      columns = newColumns;\n      setSelectedColumns(newColumns.map(col => ({ ...col, selected: true })));\n    }\n  }));\n  \n  // Handle export based on format\n  const handleExport = (format) => {\n    console.log('🎯 [DataExportPanel] handleExport called with format:', format);\n    console.log('  - data:', data);\n    console.log('  - data length:', data?.length);\n    console.log('  - columns:', columns);\n    setIsDropdownOpen(false);\n    \n    if (showPreview) {\n      setPreviewFormat(format);\n      setShowPreviewDialog(true);\n    } else {\n      switch (format) {\n        case 'csv':\n          exportToCSV();\n          break;\n        case 'excel':\n          exportToExcel();\n          break;\n        case 'pdf':\n          exportToPDF();\n          break;\n      }\n    }\n  };\n  \n  // Close dropdown when clicking outside\n  React.useEffect(() => {\n    const handleClickOutside = (event) => {\n      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {\n        setIsDropdownOpen(false);\n      }\n    };\n    \n    document.addEventListener('mousedown', handleClickOutside);\n    return () => document.removeEventListener('mousedown', handleClickOutside);\n  }, []);\n  \n  // Column selector dialog\n  const renderColumnSelector = () => {\n    if (!showColumnSelector) return null;\n    \n    return (\n      <div style={{\n        position: 'fixed',\n        top: 0,\n        left: 0,\n        right: 0,\n        bottom: 0,\n        backgroundColor: 'rgba(0, 0, 0, 0.5)',\n        display: 'flex',\n        alignItems: 'center',\n        justifyContent: 'center',\n        zIndex: 2000\n      }}>\n        <div style={{\n          backgroundColor: 'white',\n          borderRadius: '12px',\n          padding: '20px',\n          maxWidth: '400px',\n          width: '90%',\n          maxHeight: '70vh',\n          overflow: 'auto'\n        }}>\n          <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Select Columns to Export</h3>\n          \n          <div style={{ marginBottom: '16px' }}>\n            {selectedColumns.map((col, idx) => (\n              <label key={col.key} style={{\n                display: 'flex',\n                alignItems: 'center',\n                padding: '8px',\n                cursor: 'pointer',\n                borderRadius: '4px',\n                transition: 'background-color 0.15s'\n              }}\n              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}\n              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>\n                <input\n                  type=\"checkbox\"\n                  checked={col.selected}\n                  onChange={(e) => {\n                    const updated = [...selectedColumns];\n                    updated[idx].selected = e.target.checked;\n                    setSelectedColumns(updated);\n                  }}\n                  style={{ marginRight: '10px' }}\n                />\n                <span>{col.label || col.key}</span>\n              </label>\n            ))}\n          </div>\n          \n          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>\n            <button\n              onClick={() => setShowColumnSelector(false)}\n              style={{\n                padding: '8px 16px',\n                border: '1px solid #D1D5DB',\n                borderRadius: '6px',\n                backgroundColor: 'white',\n                cursor: 'pointer'\n              }}\n            >\n              Cancel\n            </button>\n            <button\n              onClick={() => setShowColumnSelector(false)}\n              style={{\n                padding: '8px 16px',\n                border: 'none',\n                borderRadius: '6px',\n                backgroundColor: styles?.colors?.primary || '#3B82F6',\n                color: 'white',\n                cursor: 'pointer'\n              }}\n            >\n              Apply\n            </button>\n          </div>\n        </div>\n      </div>\n    );\n  };\n  \n  // Preview dialog\n  const renderPreviewDialog = () => {\n    if (!showPreviewDialog) return null;\n    \n    const { headers, rows } = prepareData();\n    const previewRows = rows.slice(0, 10);\n    \n    return (\n      <div style={{\n        position: 'fixed',\n        top: 0,\n        left: 0,\n        right: 0,\n        bottom: 0,\n        backgroundColor: 'rgba(0, 0, 0, 0.5)',\n        display: 'flex',\n        alignItems: 'center',\n        justifyContent: 'center',\n        zIndex: 2000\n      }}>\n        <div style={{\n          backgroundColor: 'white',\n          borderRadius: '12px',\n          padding: '20px',\n          maxWidth: '90%',\n          width: '800px',\n          maxHeight: '80vh',\n          display: 'flex',\n          flexDirection: 'column'\n        }}>\n          <h3 style={{ marginTop: 0, marginBottom: '16px' }}>\n            Preview Export - {previewFormat?.toUpperCase()} Format\n          </h3>\n          \n          <div style={{\n            flex: 1,\n            overflow: 'auto',\n            border: '1px solid #E5E7EB',\n            borderRadius: '6px',\n            padding: '10px',\n            marginBottom: '16px'\n          }}>\n            <table style={{ width: '100%', borderCollapse: 'collapse' }}>\n              {includeHeaders && (\n                <thead>\n                  <tr>\n                    {headers.map((header, idx) => (\n                      <th key={idx} style={{\n                        padding: '8px',\n                        borderBottom: '2px solid #E5E7EB',\n                        textAlign: 'left',\n                        fontWeight: '600'\n                      }}>\n                        {header}\n                      </th>\n                    ))}\n                  </tr>\n                </thead>\n              )}\n              <tbody>\n                {previewRows.map((row, rowIdx) => (\n                  <tr key={rowIdx}>\n                    {row.map((cell, cellIdx) => (\n                      <td key={cellIdx} style={{\n                        padding: '8px',\n                        borderBottom: '1px solid #F3F4F6'\n                      }}>\n                        {cell}\n                      </td>\n                    ))}\n                  </tr>\n                ))}\n              </tbody>\n            </table>\n            {rows.length > 10 && (\n              <p style={{ textAlign: 'center', color: '#6B7280', marginTop: '10px' }}>\n                ... and {rows.length - 10} more rows\n              </p>\n            )}\n          </div>\n          \n          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>\n            <button\n              onClick={() => {\n                setShowPreviewDialog(false);\n                setPreviewFormat(null);\n              }}\n              style={{\n                padding: '8px 16px',\n                border: '1px solid #D1D5DB',\n                borderRadius: '6px',\n                backgroundColor: 'white',\n                cursor: 'pointer'\n              }}\n            >\n              Cancel\n            </button>\n            <button\n              onClick={() => {\n                setShowPreviewDialog(false);\n                handleExport(previewFormat);\n                setPreviewFormat(null);\n              }}\n              style={{\n                padding: '8px 16px',\n                border: 'none',\n                borderRadius: '6px',\n                backgroundColor: styles?.colors?.primary || '#3B82F6',\n                color: 'white',\n                cursor: 'pointer'\n              }}\n            >\n              Export\n            </button>\n          </div>\n        </div>\n      </div>\n    );\n  };\n  \n  // Render UI based on button style\n  const renderButton = () => {\n    if (buttonStyle === 'icon') {\n      return (\n        <button\n          onClick={() => setIsDropdownOpen(!isDropdownOpen)}\n          style={{\n            ...panelStyles.button,\n            padding: '8px',\n            borderRadius: '50%',\n            width: '36px',\n            height: '36px',\n            display: 'flex',\n            alignItems: 'center',\n            justifyContent: 'center'\n          }}\n          disabled={isExporting}\n        >\n          <i className={`fa-solid ${icon}`}></i>\n        </button>\n      );\n    }\n    \n    if (buttonStyle === 'menu') {\n      return (\n        <div style={{ display: 'flex', gap: '4px' }}>\n          {formats.includes('csv') && (\n            <button\n              onClick={() => handleExport('csv')}\n              style={{ ...panelStyles.button, fontSize: '12px', padding: '6px 12px' }}\n              disabled={isExporting}\n            >\n              CSV\n            </button>\n          )}\n          {formats.includes('excel') && (\n            <button\n              onClick={() => handleExport('excel')}\n              style={{ ...panelStyles.button, fontSize: '12px', padding: '6px 12px' }}\n              disabled={isExporting}\n            >\n              Excel\n            </button>\n          )}\n          {formats.includes('pdf') && (\n            <button\n              onClick={() => handleExport('pdf')}\n              style={{ ...panelStyles.button, fontSize: '12px', padding: '6px 12px' }}\n              disabled={isExporting}\n            >\n              PDF\n            </button>\n          )}\n        </div>\n      );\n    }\n    \n    // Default dropdown or button style\n    return (\n      <button\n        onClick={() => {\n          console.log('🖱️ [DataExportPanel] Button clicked!');\n          console.log('  - buttonStyle:', buttonStyle);\n          console.log('  - formats:', formats);\n          console.log('  - isDropdownOpen:', isDropdownOpen);\n          console.log('  - data at click:', data);\n          console.log('  - data length at click:', data?.length);\n          \n          if (buttonStyle === 'dropdown') {\n            setIsDropdownOpen(!isDropdownOpen);\n          } else if (formats.length === 1) {\n            handleExport(formats[0]);\n          } else {\n            setIsDropdownOpen(!isDropdownOpen);\n          }\n        }}\n        style={panelStyles.button}\n        disabled={isExporting}\n      >\n        <i className={`fa-solid ${icon}`}></i>\n        <span>{buttonText}</span>\n        {buttonStyle === 'dropdown' && formats.length > 1 && (\n          <i className=\"fa-solid fa-chevron-down\" style={{ fontSize: '10px' }}></i>\n        )}\n      </button>\n    );\n  };\n  \n  // Headless mode - no UI\n  if (mode === 'headless') {\n    return <div ref={exportRef} style={{ display: 'none' }} />;\n  }\n  \n  // UI mode\n  if (!visible) {\n    return null;\n  }\n  \n  return (\n    <div ref={dropdownRef} style={panelStyles.container}>\n      {renderButton()}\n      \n      {isExporting && (\n        <div style={panelStyles.progressBar}>\n          <div style={{\n            ...panelStyles.progressFill,\n            width: `${exportProgress}%`\n          }} />\n        </div>\n      )}\n      \n      {isDropdownOpen && buttonStyle === 'dropdown' && (\n        <div style={panelStyles.dropdown}>\n          {allowColumnSelection && (\n            <div\n              style={{\n                ...panelStyles.dropdownItem,\n                backgroundColor: '#F9FAFB'\n              }}\n              onClick={() => {\n                setShowColumnSelector(true);\n                setIsDropdownOpen(false);\n              }}\n            >\n              <i className=\"fa-solid fa-columns\" style={{ width: '16px' }}></i>\n              <span>Select Columns...</span>\n            </div>\n          )}\n          \n          {formats.includes('csv') && (\n            <div\n              style={panelStyles.dropdownItem}\n              onClick={() => handleExport('csv')}\n              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}\n              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}\n            >\n              <i className=\"fa-solid fa-file-csv\" style={{ width: '16px', color: '#10B981' }}></i>\n              <span>Export as CSV</span>\n            </div>\n          )}\n          \n          {formats.includes('excel') && (\n            <div\n              style={panelStyles.dropdownItem}\n              onClick={() => handleExport('excel')}\n              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}\n              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}\n            >\n              <i className=\"fa-solid fa-file-excel\" style={{ width: '16px', color: '#059669' }}></i>\n              <span>Export as Excel</span>\n            </div>\n          )}\n          \n          {formats.includes('pdf') && (\n            <div\n              style={{\n                ...panelStyles.dropdownItem,\n                borderBottom: 'none'\n              }}\n              onClick={() => handleExport('pdf')}\n              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}\n              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}\n            >\n              <i className=\"fa-solid fa-file-pdf\" style={{ width: '16px', color: '#DC2626' }}></i>\n              <span>Export as PDF</span>\n            </div>\n          )}\n        </div>\n      )}\n      \n      {renderColumnSelector()}\n      {renderPreviewDialog()}\n    </div>\n  );\n}",
+        "description": "Reusable component for exporting data to CSV, Excel (XLSX), and PDF formats with optional UI",
+        "category": "Utility",
+        "type": "panel",
+        "properties": [
+          {
+            "name": "mode",
+            "type": "string",
+            "description": "Display mode: 'ui' for visible interface, 'headless' for programmatic-only usage",
+            "default": "ui"
+          },
+          {
+            "name": "data",
+            "type": "array",
+            "description": "Array of objects to export (for table data)"
+          },
+          {
+            "name": "columns",
+            "type": "array",
+            "description": "Column configuration: [{key: 'field', label: 'Display Name', width: 100}]"
+          },
+          {
+            "name": "filename",
+            "type": "string",
+            "description": "Base filename for exports (without extension)",
+            "default": "export"
+          },
+          {
+            "name": "formats",
+            "type": "array",
+            "description": "Available export formats: ['csv', 'excel', 'pdf']",
+            "default": [
+              "csv",
+              "excel",
+              "pdf"
+            ]
+          },
+          {
+            "name": "position",
+            "type": "string",
+            "description": "UI position: 'top', 'bottom', 'inline', 'floating'",
+            "default": "inline"
+          },
+          {
+            "name": "buttonStyle",
+            "type": "string",
+            "description": "Button style: 'button', 'icon', 'dropdown', 'menu'",
+            "default": "dropdown"
+          },
+          {
+            "name": "buttonText",
+            "type": "string",
+            "description": "Custom button text",
+            "default": "Export"
+          },
+          {
+            "name": "icon",
+            "type": "string",
+            "description": "Font Awesome icon class for the export button",
+            "default": "fa-download"
+          },
+          {
+            "name": "showPreview",
+            "type": "boolean",
+            "description": "Show preview before export (UI mode only)",
+            "default": false
+          },
+          {
+            "name": "allowColumnSelection",
+            "type": "boolean",
+            "description": "Allow users to select which columns to export",
+            "default": true
+          },
+          {
+            "name": "includeHeaders",
+            "type": "boolean",
+            "description": "Include column headers in export",
+            "default": true
+          },
+          {
+            "name": "dateFormat",
+            "type": "string",
+            "description": "Date format for date values",
+            "default": "YYYY-MM-DD"
+          },
+          {
+            "name": "numberFormat",
+            "type": "object",
+            "description": "Number formatting options: {decimals: 2, thousandsSeparator: ',', decimalSeparator: '.'}"
+          },
+          {
+            "name": "pdfOptions",
+            "type": "object",
+            "description": "PDF-specific options: {orientation: 'portrait'|'landscape', pageSize: 'a4'|'letter', margins: {top: 40, bottom: 40, left: 40, right: 40}, title: 'Custom Title', includeDataTable: boolean, multiPage: boolean, includeAIInsights: boolean}"
+          },
+          {
+            "name": "excelOptions",
+            "type": "object",
+            "description": "Excel-specific options: {sheetName: 'Data', includeFilters: true, autoWidth: true}"
+          },
+          {
+            "name": "getHtmlElement",
+            "type": "function",
+            "description": "Function that returns the HTML element to capture for PDF export (alternative to data array)"
+          },
+          {
+            "name": "getAiInsightsElement",
+            "type": "function",
+            "description": "Function that returns the AI insights element to include in PDF export (optional)"
+          },
+          {
+            "name": "aiInsightsText",
+            "type": "string",
+            "description": "Raw markdown text of AI insights to render as text in PDF (preferred over element capture)"
+          },
+          {
+            "name": "onExportStart",
+            "type": "function",
+            "description": "Callback fired when export begins"
+          },
+          {
+            "name": "onExportComplete",
+            "type": "function",
+            "description": "Callback fired when export completes successfully"
+          },
+          {
+            "name": "onExportError",
+            "type": "function",
+            "description": "Callback fired if export fails"
+          },
+          {
+            "name": "customStyles",
+            "type": "object",
+            "description": "Custom styles for the export panel UI"
+          },
+          {
+            "name": "visible",
+            "type": "boolean",
+            "description": "Control visibility of the UI (for UI mode)",
+            "default": true
+          }
+        ],
+        "events": [
+          {
+            "name": "exportStarted",
+            "description": "Fired when export process begins",
+            "parameters": [
+              {
+                "name": "format",
+                "type": "string",
+                "description": "Export format being used"
+              }
+            ]
+          },
+          {
+            "name": "exportCompleted",
+            "description": "Fired when export completes successfully",
+            "parameters": [
+              {
+                "name": "format",
+                "type": "string",
+                "description": "Export format used"
+              },
+              {
+                "name": "filename",
+                "type": "string",
+                "description": "Filename of exported file"
+              }
+            ]
+          },
+          {
+            "name": "exportFailed",
+            "description": "Fired if export fails",
+            "parameters": [
+              {
+                "name": "error",
+                "type": "object",
+                "description": "Error details"
+              }
+            ]
+          }
+        ],
+        "libraries": [
+          {
+            "name": "xlsx",
+            "version": "0.18.5",
+            "globalVariable": "XLSX"
+          },
+          {
+            "name": "jspdf",
+            "version": "2.5.1",
+            "globalVariable": "jspdf"
+          },
+          {
+            "name": "html2canvas",
+            "version": "1.4.1",
+            "globalVariable": "html2canvas"
+          },
+          {
+            "name": "dayjs",
+            "version": "1.11.10",
+            "globalVariable": "dayjs"
+          }
+        ],
+        "usageExample": "// UI Mode with dropdown\n<DataExportPanel\n  data={tableData}\n  columns={columns}\n  getHtmlElement={() => dashboardRef.current}\n  getAiInsightsElement={() => aiInsightsRef.current}\n  filename=\"sales-report\"\n  formats={['csv', 'excel', 'pdf']}\n  buttonStyle=\"dropdown\"\n/>\n\n// Headless mode for programmatic export\nconst exportPanel = <DataExportPanel\n  mode=\"headless\"\n  data={data}\n  columns={columns}\n/>;\n// Then call: exportPanel.exportToCSV() or exportPanel.exportToPDF()",
+        "functionalRequirements": "• Support CSV, Excel (XLSX), and PDF export formats\n• Provide both UI and headless modes for flexibility\n• Allow column selection and customization\n• Support both data arrays and HTML element capture\n• Handle large datasets efficiently with progress indication\n• Provide format-specific options (PDF orientation, Excel sheet names)\n• Include preview capability before export\n• Support various button styles and positions\n• Fire events for export lifecycle\n• Format dates and numbers consistently",
+        "technicalDesign": "• Uses SheetJS (XLSX) for Excel/CSV generation\n• Uses jsPDF with html2canvas for PDF creation\n• Implements ref-based API for headless mode access\n• Manages export state with React hooks\n• Provides dropdown UI with format selection\n• Handles data transformation and formatting\n• Supports chunked processing for large datasets\n• Implements progress indication for long exports\n• Uses dayjs for date formatting\n• Provides customizable styling options",
+        "version": "1.0.0",
+        "registry": "Skip"
+      }
+    ],
+    "relevantExamples": [
+      {
+        "name": "SalesPipelineDashboard",
+        "namespace": "CRM/Dashboards",
+        "version": "1.0.0",
+        "description": "Comprehensive sales pipeline dashboard with metrics, visualizations, and drill-down capabilities",
+        "relevance": 0.7311874987247555
+      },
+      {
+        "name": "AIPerformanceDashboard",
+        "namespace": "AI/Analytics/Performance",
+        "version": "1.0.0",
+        "description": "Comprehensive dashboard for analyzing AI agent and prompt performance with time-series charts, cost analysis, and drill-down capabilities",
+        "relevance": 0.7294842362404159
+      },
+      {
+        "name": "USAccountHeatmap",
+        "namespace": "CRM/Geography",
+        "version": "1.0.0",
+        "description": "Interactive choropleth map showing account distribution across US states with drill-down capability",
+        "relevance": 0.7334790872078782
+      }
+    ],
+    "code": "function JonSorensProfile({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings, onExportPDF, memberName }) {\n  const { useState, useEffect } = React;\n  const { SingleRecordView, DataGrid, DataExportPanel } = components;\n  const { Tabs, TabPane, Spin, Alert, Button } = unwrapLibraryComponents(antd, 'Tabs', 'Tabs.TabPane', 'Spin', 'Alert', 'Button');\n\n  const [account, setAccount] = useState(null);\n  const [committees, setCommittees] = useState([]);\n  const [memberships, setMemberships] = useState([]);\n  const [events, setEvents] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n  const [activeTab, setActiveTab] = useState(savedUserSettings?.activeTab || 'header');\n\n  const loadData = async () => {\n    setLoading(true);\n    setError(null);\n    try {\n      // Account query\n      const accountResult = await utilities.rq.RunQuery({\n        QueryName: 'MemberProfile_Account',\n        CategoryPath: 'Skip/Member/Profile',\n        Parameters: { Name: (typeof memberName === 'string' && memberName) ? memberName : 'Jon Sorens' }\n      });\n      if (!accountResult.Success) {\n        throw new Error(accountResult.ErrorMessage || 'Failed to load account');\n      }\n      const acct = accountResult.Results?.[0] || null;\n      setAccount(acct);\n      const acctId = acct?.Id;\n\n      // Committee memberships\n      const committeeResult = await utilities.rq.RunQuery({\n        QueryName: 'MemberProfile_CommitteeMemberships',\n        CategoryPath: 'Skip/Member/Profile',\n        Parameters: { NU__Account__c: acctId || '@runtime' }\n      });\n      if (!committeeResult.Success) {\n        throw new Error(committeeResult.ErrorMessage || 'Failed to load committees');\n      }\n      setCommittees(committeeResult.Results || []);\n\n      // Membership history\n      const membershipResult = await utilities.rq.RunQuery({\n        QueryName: 'MemberProfile_Memberships',\n        CategoryPath: 'Skip/Member/Profile',\n        Parameters: { NU__Account__c: acctId || '@runtime' }\n      });\n      if (!membershipResult.Success) {\n        throw new Error(membershipResult.ErrorMessage || 'Failed to load memberships');\n      }\n      setMemberships(membershipResult.Results || []);\n\n      // Event attendance\n      const eventResult = await utilities.rq.RunQuery({\n        QueryName: 'MemberProfile_EventAttendance',\n        CategoryPath: 'Skip/Member/Profile',\n        Parameters: {\n          Registrations_NU__Account__c : acctId || '@runtime'\n        }\n      });\n      if (!eventResult.Success) {\n        throw new Error(eventResult.ErrorMessage || 'Failed to load events');\n      }\n      setEvents(eventResult.Results || []);\n    } catch (e) {\n      setError(e.message || 'Unexpected error');\n    } finally {\n      setLoading(false);\n    }\n  };\n\n  useEffect(() => {\n    loadData();\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, []);\n\n  useEffect(() => {\n    if (onSaveUserSettings) {\n      const timeout = setTimeout(() => {\n        onSaveUserSettings({ activeTab });\n      }, 300);\n      return () => clearTimeout(timeout);\n    }\n  }, [activeTab, onSaveUserSettings]);\n\n  const handleTabChange = (key) => {\n    setActiveTab(key);\n  };\n\n  const handleExportComplete = (format, filename) => {\n    if (typeof onExportPDF === 'function') {\n      onExportPDF(filename);\n    }\n  };\n\n  if (loading) {\n    return (\n      <div style={{ padding: '40px', textAlign: 'center' }}>\n        <Spin tip=\"Loading profile...\" />\n      </div>\n    );\n  }\n\n  if (error) {\n    return (\n      <div style={{ padding: '20px' }}>\n        <Alert message=\"Error loading profile\" description={error} type=\"error\" showIcon />\n        <Button onClick={loadData} style={{ marginTop: '12px' }}>\n          Retry\n        </Button>\n      </div>\n    );\n  }\n\n  const committeeColumns = [\n    { field: 'NU__Committee__c', header: 'Committee' },\n    { field: 'CommitteePositionName__c', header: 'Position' },\n    { field: 'NU__StartDate__c', header: 'Start Date' },\n    { field: 'NU__EndDate__c', header: 'End Date' },\n    { field: 'NU__Status__c', header: 'Status' }\n  ];\n\n  const membershipColumns = [\n    { field: 'Membership_Product_Name__c', header: 'Product' },\n    { field: 'NU__MembershipType__c', header: 'Type' },\n    { field: 'NU__EndDate__c', header: 'End Date' },\n    { field: 'NU__Status__c', header: 'Status' }\n  ];\n\n  const eventColumns = [\n    { field: 'Registrations.NU__EventName__c', header: 'Event Name' },\n    { field: 'Registrations.NU__Status__c', header: 'Status' },\n    { field: 'Events.Name', header: 'Title' },\n    { field: 'Events.NU__StartDate__c', header: 'Start Date' },\n    { field: 'Events.NU__EndDate__c', header: 'End Date' }\n  ];\n\n  const exportData = [account, ...committees, ...memberships, ...events].filter(Boolean);\n  const exportColumns = [\n    { key: 'Name', label: 'Name' },\n    { key: 'Institution__c', label: 'Institution' },\n    { key: 'Region__c', label: 'Region' },\n    { key: 'NU__Committee__c', label: 'Committee' },\n    { key: 'CommitteePositionName__c', label: 'Position' },\n    { key: 'NU__StartDate__c', label: 'Start Date' },\n    { key: 'NU__EndDate__c', label: 'End Date' },\n    { key: 'NU__Status__c', label: 'Status' },\n    { key: 'Membership_Product_Name__c', label: 'Product' },\n    { key: 'NU__MembershipType__c', label: 'Membership Type' },\n    { key: 'Registrations.NU__EventName__c', label: 'Event Name' },\n    { key: 'Registrations.NU__Status__c', label: 'Event Status' },\n    { key: 'Events.Name', label: 'Event Title' },\n    { key: 'Events.NU__StartDate__c', label: 'Event Start' },\n    { key: 'Events.NU__EndDate__c', label: 'Event End' }\n  ];\n\n  return (\n    <div style={{ padding: '20px' }}>\n      <Tabs activeKey={activeTab} onChange={handleTabChange}>\n        <TabPane tab=\"Header\" key=\"header\">\n          {account && (\n            <SingleRecordView\n              record={account}\n              entityName=\"Accounts\"\n              // fields={[\"Name\", \"Institution__c\", \"Region__c\"]}\n              layout=\"card\"\n              allowOpenRecord={false}\n              utilities={utilities}\n              components={components}\n              styles={styles}\n              callbacks={callbacks}\n            />\n          )}\n        </TabPane>\n        <TabPane tab=\"Committees\" key=\"committees\">\n          <DataGrid\n            entityName=\"Committee Memberships\"\n            data={committees}\n            columns={committeeColumns}\n            sorting={true}\n            paging={true}\n            pageSize={10}\n            utilities={utilities}\n            components={components}\n            styles={styles}\n            callbacks={callbacks}\n          />\n        </TabPane>\n        <TabPane tab=\"Memberships\" key=\"memberships\">\n          <DataGrid\n            entityName=\"Memberships\"\n            data={memberships}\n            columns={membershipColumns}\n            sorting={true}\n            paging={true}\n            pageSize={10}\n            utilities={utilities}\n            components={components}\n            styles={styles}\n            callbacks={callbacks}\n          />\n        </TabPane>\n        <TabPane tab=\"Events\" key=\"events\">\n          <DataGrid\n            entityName=\"Events\"\n            data={events}\n            columns={eventColumns}\n            sorting={true}\n            paging={true}\n            pageSize={10}\n            utilities={utilities}\n            components={components}\n            styles={styles}\n            callbacks={callbacks}\n          />\n        </TabPane>\n      </Tabs>\n      <div style={{ marginTop: '20px' }}>\n        <DataExportPanel\n          mode=\"ui\"\n          data={exportData}\n          columns={exportColumns}\n          filename=\"JonSorensProfile\"\n          formats={[\"pdf\", \"csv\", \"excel\"]}\n          buttonText=\"Export Profile\"\n          onExportComplete={handleExportComplete}\n          utilities={utilities}\n          components={components}\n          styles={styles}\n          callbacks={callbacks}\n        />\n      </div>\n    </div>\n  );\n}\n",
+    "namespace": "customer/profiles",
+    "version": "1.0.0",
+    "location": "registry",
+    "registry": "Skip"
+  }
