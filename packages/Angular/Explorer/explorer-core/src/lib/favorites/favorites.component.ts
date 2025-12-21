@@ -5,6 +5,7 @@ import { UserFavoriteEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'app-favorites',
   templateUrl: './favorites.component.html',
   styleUrls: ['./favorites.component.css', '../../shared/first-tab-styles.css']

@@ -6,6 +6,7 @@ import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form
 
 @RegisterClass(BaseFormComponent, 'Entities') 
 @Component({
+  standalone: false,
     selector: 'mj-entities-form',
     templateUrl: './entities-form.component.html',
     styleUrls: ['../../../shared/form-styles.css']

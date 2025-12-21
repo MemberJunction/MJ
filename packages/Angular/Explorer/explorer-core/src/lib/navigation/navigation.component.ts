@@ -32,6 +32,7 @@ export interface Tab {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-navigation',
   templateUrl: './navigation.component.html',
   styleUrls: ['./navigation.component.css']

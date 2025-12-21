@@ -9,6 +9,7 @@ interface AnalyticsTimeRange {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-testing-analytics',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

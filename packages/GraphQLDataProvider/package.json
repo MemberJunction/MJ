@@ -27,7 +27,7 @@
   "license": "ISC",
   "devDependencies": {
     "pkgroll": "2.1.1",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.17.2",

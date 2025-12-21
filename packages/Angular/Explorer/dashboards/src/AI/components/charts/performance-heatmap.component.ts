@@ -19,6 +19,7 @@ export interface HeatmapConfig {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-performance-heatmap',
   template: `
     <div class="performance-heatmap">

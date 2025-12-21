@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Action Filters') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-entityactionfilter-form',
     templateUrl: './entityactionfilter.form.component.html'
 })

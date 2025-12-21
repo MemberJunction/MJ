@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Workspaces') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-workspace-form',
     templateUrl: './workspace.form.component.html'
 })

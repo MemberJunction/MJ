@@ -20,6 +20,7 @@ type ViewMode = 'category' | 'list' | 'panel';
 type SortOption = 'name-asc' | 'name-desc' | 'updated-desc' | 'updated-asc' | 'status';
 
 @Component({
+  standalone: false,
   selector: 'mj-query-browser',
   templateUrl: './query-browser.component.html',
   styleUrls: ['./query-browser.component.css', '../../shared/first-tab-styles.css']

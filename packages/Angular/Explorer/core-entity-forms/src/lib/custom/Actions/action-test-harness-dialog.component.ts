@@ -3,6 +3,7 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
 import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
 
 @Component({
+  standalone: false,
     selector: 'mj-action-test-harness-dialog',
     template: `
         <kendo-dialog-titlebar>

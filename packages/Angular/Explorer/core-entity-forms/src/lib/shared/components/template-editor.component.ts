@@ -16,6 +16,7 @@ export interface TemplateEditorConfig {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-template-editor',
     templateUrl: './template-editor.component.html',
     styleUrls: ['./template-editor.component.css']

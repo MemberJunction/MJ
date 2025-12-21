@@ -14,6 +14,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
  * Comprehensive collection management with artifacts display
  */
 @Component({
+  standalone: false,
   selector: 'mj-collections-full-view',
   template: `
     <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">

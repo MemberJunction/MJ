@@ -21,6 +21,7 @@ interface AgentPrompt {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-agent-editor',
   templateUrl: './agent-editor.component.html',
   styleUrls: ['./agent-editor.component.css']

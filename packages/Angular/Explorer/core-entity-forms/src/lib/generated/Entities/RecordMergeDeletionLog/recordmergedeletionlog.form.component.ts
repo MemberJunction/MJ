@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Record Merge Deletion Logs') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-recordmergedeletionlog-form',
     templateUrl: './recordmergedeletionlog.form.component.html'
 })

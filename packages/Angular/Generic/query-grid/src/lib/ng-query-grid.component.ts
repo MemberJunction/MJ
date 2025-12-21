@@ -14,6 +14,7 @@ export type GridRowClickedEvent = {
 }
  
 @Component({
+  standalone: false,
   selector: 'mj-query-grid',
   templateUrl: './ng-query-grid.component.html',
   styleUrls: ['./ng-query-grid.component.css']

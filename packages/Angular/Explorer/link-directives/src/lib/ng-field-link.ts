@@ -4,6 +4,7 @@ import { NavigationService } from '@memberjunction/ng-shared';
 import { BaseLink } from './ng-base-link';
 
 @Directive({
+  standalone: false,
   selector: '[mjFieldLink]'
 })
 export class FieldLink extends BaseLink implements OnInit {

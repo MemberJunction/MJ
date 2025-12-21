@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Model Vendors') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-aimodelvendor-form',
     templateUrl: './aimodelvendor.form.component.html'
 })

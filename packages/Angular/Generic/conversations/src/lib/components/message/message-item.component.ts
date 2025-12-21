@@ -28,6 +28,7 @@ import { UICommandHandlerService } from '../../services/ui-command-handler.servi
  * This component is created dynamically via ViewContainerRef.createComponent()
  */
 @Component({
+  standalone: false,
   selector: 'mj-conversation-message-item',
   templateUrl: './message-item.component.html',
   styleUrls: [

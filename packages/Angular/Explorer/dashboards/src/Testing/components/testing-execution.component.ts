@@ -28,6 +28,7 @@ interface ExecutionFilters {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-testing-execution',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

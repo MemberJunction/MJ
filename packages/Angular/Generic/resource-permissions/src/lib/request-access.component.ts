@@ -8,6 +8,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  * Use this component to display to the user the ability to request access to a resource they do not own and do not currently have permission to access
  */
 @Component({
+  standalone: false,
   selector: 'mj-request-resource-access',
   templateUrl: './request-access.component.html',
   styleUrls: ['./request-access.component.css']

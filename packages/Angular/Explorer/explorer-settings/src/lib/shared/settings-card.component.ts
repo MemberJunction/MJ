@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-settings-card',
   template: `
     <div class="settings-card" [class.expanded]="expanded">

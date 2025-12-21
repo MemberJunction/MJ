@@ -38,6 +38,7 @@ export class ApplicationEntityEntity_Ext extends ApplicationEntityEntity {
 
  
 @Component({
+  standalone: false,
   selector: 'mj-application-entities-grid',
   templateUrl: './application-entities-grid.component.html',
   styleUrls: ['./application-entities-grid.component.css']

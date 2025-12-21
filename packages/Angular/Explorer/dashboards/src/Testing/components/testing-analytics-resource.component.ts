@@ -16,6 +16,7 @@ export function LoadTestingAnalyticsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'TestingAnalyticsResource')
 @Component({
+  standalone: false,
   selector: 'mj-testing-analytics-resource',
   template: `
     <div class="resource-container">

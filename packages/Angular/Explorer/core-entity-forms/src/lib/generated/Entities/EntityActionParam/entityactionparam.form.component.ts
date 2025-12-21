@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Action Params') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-entityactionparam-form',
     templateUrl: './entityactionparam.form.component.html'
 })

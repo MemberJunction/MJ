@@ -5,6 +5,7 @@ import { BaseEntity  } from '@memberjunction/core';
 import { ListBoxComponent, ListBoxToolbarConfig } from '@progress/kendo-angular-listbox';
  
 @Component({
+  standalone: false,
   selector: 'mj-record-selector',
   templateUrl: './record-selector.component.html',
   styleUrls: ['./record-selector.component.css']

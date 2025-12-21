@@ -3,6 +3,7 @@ import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-enti
 import { UserInfo, RunView } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-artifact-version-history',
   template: `
     <div class="version-history">

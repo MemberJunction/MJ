@@ -21,6 +21,7 @@ interface EnhancedFeedbackPending extends FeedbackPending {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-testing-feedback',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

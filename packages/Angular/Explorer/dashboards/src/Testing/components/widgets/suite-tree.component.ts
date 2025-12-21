@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { SuiteHierarchyNode } from '../../services/testing-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-suite-tree',
   template: `
     <div class="suite-tree">

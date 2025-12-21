@@ -20,6 +20,7 @@ export function LoadChatTasksResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ChatTasksResource')
 @Component({
+  standalone: false,
   selector: 'mj-chat-tasks-resource',
   template: `
     <div class="chat-tasks-container">

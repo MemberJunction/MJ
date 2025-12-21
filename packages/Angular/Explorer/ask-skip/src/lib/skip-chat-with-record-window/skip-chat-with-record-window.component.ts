@@ -4,6 +4,7 @@ import { SharedService } from '@memberjunction/ng-shared';
  
 
 @Component({
+  standalone: false,
   selector: 'mj-skip-chat-with-record-window',
   templateUrl: './skip-chat-with-record-window.component.html',
   styleUrls: ['./skip-chat-with-record-window.component.css']

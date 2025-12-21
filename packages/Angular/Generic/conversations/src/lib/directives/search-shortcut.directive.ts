@@ -6,6 +6,7 @@ import { Directive, HostListener, Output, EventEmitter } from '@angular/core';
  * <div mjSearchShortcut (searchTriggered)="openSearch()">
  */
 @Directive({
+  standalone: false,
   selector: '[mjSearchShortcut]'
 })
 export class SearchShortcutDirective {

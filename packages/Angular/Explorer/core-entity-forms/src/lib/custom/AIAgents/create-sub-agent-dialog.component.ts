@@ -41,6 +41,7 @@ export interface CreateSubAgentResult {
  * This ensures atomicity with the parent form's save operation.
  */
 @Component({
+  standalone: false,
   selector: 'mj-create-sub-agent-dialog',
   templateUrl: './create-sub-agent-dialog.component.html',
   styleUrls: ['./create-sub-agent-dialog.component.css']

@@ -17,7 +17,7 @@
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/actions-base": "2.127.0",
@@ -28,7 +28,7 @@
     "@memberjunction/core-entities-server": "2.127.0",
     "@memberjunction/ai": "2.127.0",
     "@memberjunction/aiengine": "2.127.0",
-    "zod": "^3.23.8"
+    "zod": "^3.24.2"
   },
   "repository": {
     "type": "git",

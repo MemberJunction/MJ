@@ -49,6 +49,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-grid',
   templateUrl: './entity-grid.component.html',
   styleUrls: ['./entity-grid.component.css']

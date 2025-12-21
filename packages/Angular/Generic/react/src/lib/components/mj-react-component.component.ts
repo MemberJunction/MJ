@@ -65,6 +65,7 @@ export interface UserSettingsChangedEvent {
  * to be used seamlessly within Angular applications.
  */
 @Component({
+  standalone: false,
   selector: 'mj-react-component',
   template: `
     <div class="react-component-wrapper">

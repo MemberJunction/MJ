@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-empty-state',
   templateUrl: './conversation-empty-state.component.html',
   styleUrls: ['./conversation-empty-state.component.css']

@@ -86,6 +86,7 @@ export class PillColorUtil {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-pill',
   template: `
     <span class="pill" [class]="'pill-' + effectiveColorType">

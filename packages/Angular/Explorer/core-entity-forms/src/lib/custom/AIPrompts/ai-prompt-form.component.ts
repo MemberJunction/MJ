@@ -14,6 +14,7 @@ import { AIPromptManagementService } from './ai-prompt-management.service';
 
 @RegisterClass(BaseFormComponent, 'AI Prompts')
 @Component({
+  standalone: false,
     selector: 'mj-ai-prompt-form',
     templateUrl: './ai-prompt-form.component.html',
     styleUrls: ['./ai-prompt-form.component.css']

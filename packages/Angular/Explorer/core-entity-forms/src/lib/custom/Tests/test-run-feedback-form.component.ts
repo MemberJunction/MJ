@@ -9,6 +9,7 @@ import { TestRunFeedbackFormComponent } from '../../generated/Entities/TestRunFe
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Run Feedbacks')
 @Component({
+  standalone: false,
   selector: 'mj-test-run-feedback-form',
   template: `
     <div class="feedback-form">

@@ -35,6 +35,7 @@ export interface PromptSelectorResult {
  * - Any other prompt selection scenario
  */
 @Component({
+  standalone: false,
   selector: 'mj-prompt-selector-dialog',
   templateUrl: './prompt-selector-dialog.component.html',
   styleUrls: ['./prompt-selector-dialog.component.css']

@@ -40,10 +40,10 @@
     "ora": "^5.4.1"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "^20.14.10",
     "@types/nunjucks": "^3.2.6",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

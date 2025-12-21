@@ -11,6 +11,7 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 
 @Component({
+  standalone: false,
     selector: 'mj-header-component',
     templateUrl: './header.component.html',
     styleUrls: ['header.component.css']

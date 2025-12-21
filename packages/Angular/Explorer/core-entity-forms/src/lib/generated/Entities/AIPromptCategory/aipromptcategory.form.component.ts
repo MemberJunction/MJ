@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'AI Prompt Categories') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-aipromptcategory-form',
     templateUrl: './aipromptcategory.form.component.html'
 })

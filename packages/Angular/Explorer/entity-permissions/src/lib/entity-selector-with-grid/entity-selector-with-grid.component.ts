@@ -6,6 +6,7 @@ import { EntityPermissionChangedEvent } from '../grid/entity-permissions-grid.co
  
  
 @Component({
+  standalone: false,
   selector: 'mj-entity-permissions-selector-with-grid',
   templateUrl: './entity-selector-with-grid.component.html',
   styleUrls: ['./entity-selector-with-grid.component.css']

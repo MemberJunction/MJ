@@ -15,6 +15,7 @@ export type PanelWidthMode = 'normal' | 'full-width';
  * - Panel width modes: normal (default), full-width (spans entire row)
  */
 @Component({
+  standalone: false,
     selector: 'mj-collapsible-panel',
     template: `
         <div

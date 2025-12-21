@@ -16,6 +16,7 @@ export function LoadTestingVersionResource() {
  */
 @RegisterClass(BaseResourceComponent, 'TestingVersionResource')
 @Component({
+  standalone: false,
   selector: 'mj-testing-version-resource',
   template: `
     <div class="resource-container">

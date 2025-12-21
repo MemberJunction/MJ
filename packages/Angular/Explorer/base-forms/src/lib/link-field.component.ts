@@ -11,6 +11,7 @@ import { SharedService, NavigationService } from "@memberjunction/ng-shared";
  * components for field rendering/editing when needed.
  */
 @Component({
+  standalone: false,
     selector: 'mj-link-field',
     styleUrl: './link-field.component.css',
     templateUrl: './link-field.component.html'

@@ -10,6 +10,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'mj-single-dashboard',
   templateUrl: './single-dashboard.component.html',
   styleUrls: ['./single-dashboard.component.css']

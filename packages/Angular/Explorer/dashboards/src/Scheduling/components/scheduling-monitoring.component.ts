@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { SchedulingInstrumentationService, SchedulingKPIs, JobExecution, UpcomingExecution } from '../services/scheduling-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-scheduling-monitoring',
   templateUrl: './scheduling-monitoring.component.html',
   styleUrls: ['./scheduling-monitoring.component.css']

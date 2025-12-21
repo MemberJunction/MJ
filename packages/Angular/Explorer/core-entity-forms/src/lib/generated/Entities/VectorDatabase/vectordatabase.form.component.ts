@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Vector Databases') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-vectordatabase-form',
     templateUrl: './vectordatabase.form.component.html'
 })

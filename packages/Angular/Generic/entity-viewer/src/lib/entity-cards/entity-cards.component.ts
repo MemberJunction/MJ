@@ -27,6 +27,7 @@ import { HighlightUtil } from '../utils/highlight.util';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-cards',
   templateUrl: './entity-cards.component.html',
   styleUrls: ['./entity-cards.component.css'],

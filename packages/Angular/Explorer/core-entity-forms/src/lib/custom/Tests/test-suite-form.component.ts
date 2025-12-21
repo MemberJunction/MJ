@@ -11,6 +11,7 @@ import { TestingDialogService } from '@memberjunction/ng-testing';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suites')
 @Component({
+  standalone: false,
   selector: 'mj-test-suite-form',
   templateUrl: './test-suite-form.component.html',
   styleUrls: ['./test-suite-form.component.css'],

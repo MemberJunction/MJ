@@ -32,16 +32,16 @@
     "@memberjunction/scheduled-actions": "2.127.0",
     "@memberjunction/sqlserver-dataprovider": "2.127.0",
     "@types/axios": "^0.14.0",
-    "dotenv": "^16.4.1",
-    "env-var": "^7.3.0",
+    "dotenv": "^16.4.5",
+    "env-var": "^7.5.0",
     "express": "^5.1.0",
     "mssql": "^11.0.1",
     "typescript": "^5.4.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
-    "@types/node": "^18.15.11",
-    "rimraf": "^4.4.0"
+    "@types/node": "^20.14.10",
+    "rimraf": "5.0.7"
   },
   "repository": {
     "type": "git",

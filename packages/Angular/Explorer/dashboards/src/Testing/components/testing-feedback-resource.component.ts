@@ -16,6 +16,7 @@ export function LoadTestingFeedbackResource() {
  */
 @RegisterClass(BaseResourceComponent, 'TestingFeedbackResource')
 @Component({
+  standalone: false,
   selector: 'mj-testing-feedback-resource',
   template: `
     <div class="resource-container">

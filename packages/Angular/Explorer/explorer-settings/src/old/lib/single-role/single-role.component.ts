@@ -42,6 +42,7 @@ export class UserRoleEntity_Ext extends UserRoleEntity {
 }
  
 @Component({
+  standalone: false,
   selector: 'mj-single-role',
   templateUrl: './single-role.component.html',
   styleUrls: ['./single-role.component.css']

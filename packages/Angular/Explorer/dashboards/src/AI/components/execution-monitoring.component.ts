@@ -73,6 +73,7 @@ export function LoadAIMonitorResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIMonitorResource')
 @Component({
+  standalone: false,
   selector: 'app-execution-monitoring',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

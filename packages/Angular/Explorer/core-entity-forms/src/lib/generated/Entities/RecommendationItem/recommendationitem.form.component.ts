@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Recommendation Items') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-recommendationitem-form',
     templateUrl: './recommendationitem.form.component.html'
 })

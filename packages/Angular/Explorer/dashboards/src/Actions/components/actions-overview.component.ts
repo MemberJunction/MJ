@@ -44,6 +44,7 @@ interface ExecutionWithExpanded extends ActionExecutionLogEntity {
  */
 @RegisterClass(BaseResourceComponent, 'ActionsOverviewResource')
 @Component({
+  standalone: false,
   selector: 'mj-actions-overview',
   templateUrl: './actions-overview.component.html',
   styleUrls: ['./actions-overview.component.css']

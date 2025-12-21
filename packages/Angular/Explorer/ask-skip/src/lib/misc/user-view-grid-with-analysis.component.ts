@@ -5,6 +5,7 @@ import { SharedService } from "@memberjunction/ng-shared";
 import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 
 @Component({
+  standalone: false,
     selector: 'mj-user-view-grid-with-analysis',
     template: ` 
     <mj-tabstrip (TabSelectedabSelect)="selectTabHandler()" (ResizeContainer)="sharedService.InvokeManualResize()">

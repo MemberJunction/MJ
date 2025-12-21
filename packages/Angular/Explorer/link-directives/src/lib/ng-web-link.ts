@@ -3,6 +3,7 @@ import { EntityField, LogError } from '@memberjunction/core';
 import { BaseLink } from './ng-base-link';
 
 @Directive({
+  standalone: false,
   selector: '[mjWebLink]'
 })
 export class WebLink extends BaseLink implements OnInit {

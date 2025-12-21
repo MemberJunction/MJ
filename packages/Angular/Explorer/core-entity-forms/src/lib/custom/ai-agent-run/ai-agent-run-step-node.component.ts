@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-step-node',
   templateUrl: './ai-agent-run-step-node.component.html',
   styleUrls: ['./ai-agent-run-step-node.component.css']

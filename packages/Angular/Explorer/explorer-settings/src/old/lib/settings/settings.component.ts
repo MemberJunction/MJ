@@ -19,6 +19,7 @@ export enum SettingsItem {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-settings',
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.css'],

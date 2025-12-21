@@ -6,6 +6,7 @@ import { ActionableCommand } from '@memberjunction/ai-core-plus';
  * These are actions the user can trigger after an agent completes a task
  */
 @Component({
+  standalone: false,
   selector: 'mj-actionable-commands',
   templateUrl: './actionable-commands.component.html',
   styleUrls: ['./actionable-commands.component.css']

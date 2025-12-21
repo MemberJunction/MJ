@@ -5,6 +5,7 @@ import { BaseEntity, EntityDependency, EntityField, EntityFieldInfo, EntityInfo,
 import { ViewColumnInfo } from '@memberjunction/core-entities'
 
 @Component({
+  standalone: false,
   selector: 'mj-compare-records',
   templateUrl: './ng-compare-records.component.html',
   styleUrls: ['./ng-compare-records.component.css']

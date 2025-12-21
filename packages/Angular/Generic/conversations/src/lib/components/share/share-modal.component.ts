@@ -13,6 +13,7 @@ interface SharePermission {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-share-modal',
   template: `
     <kendo-dialog

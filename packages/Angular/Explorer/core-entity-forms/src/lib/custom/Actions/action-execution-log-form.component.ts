@@ -15,6 +15,7 @@ interface ActionParameter {
 
 @RegisterClass(BaseFormComponent, 'Action Execution Logs')
 @Component({
+  standalone: false,
     selector: 'mj-action-execution-log-form',
     templateUrl: './action-execution-log-form.component.html',
     styleUrls: ['./action-execution-log-form.component.css']

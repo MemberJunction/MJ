@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { SchedulingInstrumentationService, LockInfo } from '../services/scheduling-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-scheduling-health',
   templateUrl: './scheduling-health.component.html',
   styleUrls: ['./scheduling-health.component.css']

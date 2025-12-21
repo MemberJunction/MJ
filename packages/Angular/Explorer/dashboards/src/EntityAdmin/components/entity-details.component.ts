@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-entity-details',
   templateUrl: './entity-details.component.html',
   styleUrls: ['./entity-details.component.css']

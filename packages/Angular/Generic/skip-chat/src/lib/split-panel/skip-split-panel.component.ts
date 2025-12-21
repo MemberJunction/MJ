@@ -5,6 +5,7 @@ import { SplitterPaneComponent } from '@progress/kendo-angular-layout';
 export type SplitPanelMode = 'LeftOnly' | 'RightOnly' | 'BothSides';
 
 @Component({
+  standalone: false,
   selector: 'skip-split-panel',
   templateUrl: './skip-split-panel.component.html',
   styleUrls: ['./skip-split-panel.component.css']

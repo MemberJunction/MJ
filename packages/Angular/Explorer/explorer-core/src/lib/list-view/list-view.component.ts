@@ -11,6 +11,7 @@ import { MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ResourceBrowserComponent } from '../resource-browser/resource-browser.component';
 
 @Component({
+  standalone: false,
   selector: 'mj-list-view',
   templateUrl: './list-view.component.html',
   styleUrls: ['./list-view.component.css', '../../shared/first-tab-styles.css']

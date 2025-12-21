@@ -13,6 +13,7 @@ export function LoadCommunicationProvidersResource() {
 
 @RegisterClass(BaseResourceComponent, 'CommunicationProvidersResource')
 @Component({
+  standalone: false,
     selector: 'mj-communication-providers-resource',
     template: `
     <div class="providers-container">

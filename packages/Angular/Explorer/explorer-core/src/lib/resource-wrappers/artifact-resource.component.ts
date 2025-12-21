@@ -15,6 +15,7 @@ export function LoadArtifactResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ArtifactResource')
 @Component({
+  standalone: false,
   selector: 'mj-artifact-resource',
   template: `
     <div class="artifact-container">

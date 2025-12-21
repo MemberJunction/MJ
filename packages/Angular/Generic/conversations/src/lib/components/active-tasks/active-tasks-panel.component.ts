@@ -7,6 +7,7 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
  * Shows as a floating panel in bottom-right corner when tasks are active.
  */
 @Component({
+  standalone: false,
   selector: 'mj-active-tasks-panel',
   template: `
     <div class="active-tasks-panel" *ngIf="(taskCount$ | async)! > 0">

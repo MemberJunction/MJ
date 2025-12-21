@@ -32,6 +32,7 @@ import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plu
  * Supports context-based navigation (library or task views)
  */
 @Component({
+  standalone: false,
   selector: 'mj-conversation-workspace',
   templateUrl: './conversation-workspace.component.html',
   styleUrls: ['./conversation-workspace.component.css']

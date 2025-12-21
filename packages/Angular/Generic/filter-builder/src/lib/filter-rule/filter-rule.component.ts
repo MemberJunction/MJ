@@ -14,6 +14,7 @@ import { getOperatorsForType, OperatorInfo, operatorRequiresValue } from '../typ
  * based on the field type.
  */
 @Component({
+  standalone: false,
   selector: 'mj-filter-rule',
   templateUrl: './filter-rule.component.html',
   styleUrls: ['./filter-rule.component.css'],

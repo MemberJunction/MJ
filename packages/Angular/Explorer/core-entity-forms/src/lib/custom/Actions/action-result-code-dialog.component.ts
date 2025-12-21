@@ -3,6 +3,7 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
 import { ActionResultCodeEntity } from '@memberjunction/core-entities';
 
 @Component({
+  standalone: false,
     selector: 'mj-action-result-code-dialog',
     templateUrl: './action-result-code-dialog.component.html',
     styleUrls: ['./action-result-code-dialog.component.css']

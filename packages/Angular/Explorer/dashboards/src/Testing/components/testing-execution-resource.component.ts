@@ -16,6 +16,7 @@ export function LoadTestingExecutionResource() {
  */
 @RegisterClass(BaseResourceComponent, 'TestingExecutionResource')
 @Component({
+  standalone: false,
   selector: 'mj-testing-execution-resource',
   template: `
     <div class="resource-container">

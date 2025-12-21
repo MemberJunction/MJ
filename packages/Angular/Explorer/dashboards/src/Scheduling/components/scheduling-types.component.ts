@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { SchedulingInstrumentationService, JobTypeStatistics } from '../services/scheduling-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-scheduling-types',
   templateUrl: './scheduling-types.component.html',
   styleUrls: ['./scheduling-types.component.css']

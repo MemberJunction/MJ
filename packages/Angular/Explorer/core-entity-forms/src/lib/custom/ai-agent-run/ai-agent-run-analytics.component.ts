@@ -61,6 +61,7 @@ interface SimpleActionLog {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-analytics',
   templateUrl: './ai-agent-run-analytics.component.html',
   styleUrls: ['./ai-agent-run-analytics.component.css'],

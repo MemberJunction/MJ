@@ -20,19 +20,19 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2"
+    "@angular/compiler": "21.0.6",
+    "@angular/compiler-cli": "21.0.4"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
+    "@angular/common": "21.0.6",
+    "@angular/core": "21.0.6",
+    "@angular/forms": "21.0.6",
     "rxjs": "^7.8.1"
   },
   "dependencies": {
-    "@angular/platform-browser": "18.0.2",
+    "@angular/platform-browser": "21.0.6",
     "@memberjunction/core": "2.127.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.4.0"
   },
   "sideEffects": false,
   "repository": {

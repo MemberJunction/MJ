@@ -8,6 +8,7 @@ import { CollectionPermissionService } from '../../services/collection-permissio
  * Modal for creating new artifacts and adding them to collections
  */
 @Component({
+  standalone: false,
   selector: 'mj-artifact-create-modal',
   template: `
     <kendo-dialog

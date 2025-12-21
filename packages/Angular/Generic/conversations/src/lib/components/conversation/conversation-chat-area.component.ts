@@ -16,6 +16,7 @@ import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-chat-area',
   templateUrl: `./conversation-chat-area.component.html`,
   styleUrls: ['./conversation-chat-area.component.css']

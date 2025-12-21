@@ -13,6 +13,7 @@ export function LoadCommunicationMonitorResource() {
 
 @RegisterClass(BaseResourceComponent, 'CommunicationMonitorResource')
 @Component({
+  standalone: false,
     selector: 'mj-communication-monitor-resource',
     template: `
     <div class="monitor-wrapper">

@@ -36,6 +36,7 @@ export type GridPendingRecordItem = {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-list-detail-grid',
   templateUrl: './ng-list-detail-grid.component.html',
   styleUrls: ['./ng-list-detail-grid.component.css']

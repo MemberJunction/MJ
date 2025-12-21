@@ -10,6 +10,7 @@ export interface ProjectWithStats extends ProjectEntity {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-project-selector',
   template: `
     <div class="project-selector">

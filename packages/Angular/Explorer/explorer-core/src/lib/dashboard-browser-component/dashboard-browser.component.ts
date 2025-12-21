@@ -10,6 +10,7 @@ import { LogError, Metadata, RunView } from '@memberjunction/core';
 import { ResourceBrowserComponent } from '../resource-browser/resource-browser.component';
 
 @Component({
+  standalone: false,
   selector: 'app-dashboard-browser',
   templateUrl: './dashboard-browser.component.html',
   styleUrls: ['./dashboard-browser.component.css', '../../shared/first-tab-styles.css']

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Duplicate Run Details') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-duplicaterundetail-form',
     templateUrl: './duplicaterundetail.form.component.html'
 })

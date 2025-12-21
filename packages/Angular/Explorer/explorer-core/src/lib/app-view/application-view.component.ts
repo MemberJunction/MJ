@@ -11,6 +11,7 @@ import { BaseEvent, BeforeAddItemEvent, BeforeUpdateItemEvent, DropdownOptionCli
 import { AvailableResourcesComponent } from '@memberjunction/ng-resource-permissions';
 
 @Component({
+  standalone: false,
   selector: 'mj-application-view',
   templateUrl: './application-view.component.html',
   styleUrls: ['./application-view.component.css', '../../shared/first-tab-styles.css']

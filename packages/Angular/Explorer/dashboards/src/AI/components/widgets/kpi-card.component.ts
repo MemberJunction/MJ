@@ -15,6 +15,7 @@ export interface KPICardData {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-kpi-card',
   template: `
     <div class="kpi-card" [class]="'kpi-card--' + data.color">

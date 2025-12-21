@@ -5,6 +5,7 @@ import { Metadata } from '@memberjunction/core';
 import { DialogService } from '@progress/kendo-angular-dialog';
 
 @Component({
+  standalone: false,
   selector: 'mj-flow-agent-diagram',
   template: `
     <div class="flow-diagram-container">

@@ -9,6 +9,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-report-browser',
   templateUrl: './report-browser.component.html',
   styleUrls: ['./report-browser.component.css', '../../shared/first-tab-styles.css']

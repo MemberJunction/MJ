@@ -8,6 +8,7 @@ import { UserRoleEntity_Ext } from '../single-role/single-role.component';
  
  
 @Component({
+  standalone: false,
   selector: 'mj-user-roles-grid',
   templateUrl: './user-roles-grid.component.html',
   styleUrls: ['./user-roles-grid.component.css']

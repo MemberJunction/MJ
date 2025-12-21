@@ -16,6 +16,7 @@ export function LoadSchedulingMonitorResource() {
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingMonitorResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-monitor-resource',
   template: `
     <div class="resource-container">

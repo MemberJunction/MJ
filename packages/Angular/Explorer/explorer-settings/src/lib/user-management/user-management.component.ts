@@ -21,6 +21,7 @@ interface FilterOptions {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-user-management',
   templateUrl: './user-management.component.html',
   styleUrls: ['./user-management.component.css']

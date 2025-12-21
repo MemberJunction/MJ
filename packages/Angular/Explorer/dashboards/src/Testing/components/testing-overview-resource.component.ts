@@ -16,6 +16,7 @@ export function LoadTestingOverviewResource() {
  */
 @RegisterClass(BaseResourceComponent, 'TestingOverviewResource')
 @Component({
+  standalone: false,
   selector: 'mj-testing-overview-resource',
   template: `
     <div class="resource-container">

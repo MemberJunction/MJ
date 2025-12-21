@@ -16,6 +16,7 @@ export interface RoleDialogResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-role-dialog',
   encapsulation: ViewEncapsulation.None,
   templateUrl: './role-dialog.component.html',

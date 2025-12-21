@@ -17,6 +17,7 @@ export interface UserDialogResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-user-dialog',
   encapsulation: ViewEncapsulation.None,
   templateUrl: './user-dialog.component.html',

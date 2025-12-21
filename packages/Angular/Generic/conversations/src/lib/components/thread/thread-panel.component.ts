@@ -10,6 +10,7 @@ import { takeUntil } from 'rxjs/operators';
  * Shows parent message at top with all replies in chronological order
  */
 @Component({
+  standalone: false,
   selector: 'mj-thread-panel',
   templateUrl: './thread-panel.component.html',
   styleUrls: ['./thread-panel.component.css']

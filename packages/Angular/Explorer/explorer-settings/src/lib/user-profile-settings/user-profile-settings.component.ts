@@ -13,6 +13,7 @@ interface IconCategory {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-user-profile-settings',
   templateUrl: './user-profile-settings.component.html',
   styleUrls: ['./user-profile-settings.component.css']

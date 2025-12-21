@@ -5,6 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Record Changes') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-recordchange-form',
     templateUrl: './recordchange.form.component.html'
 })

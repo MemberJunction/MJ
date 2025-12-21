@@ -11,6 +11,7 @@ export class SkipClickedEvent {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-skip-button',
   templateUrl: './skip-button.component.html',
   styleUrls: ['./skip-button.component.css']

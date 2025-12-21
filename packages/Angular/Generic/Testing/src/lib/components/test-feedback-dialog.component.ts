@@ -10,6 +10,7 @@ export interface TestFeedbackDialogData {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-test-feedback-dialog',
   template: `
     <kendo-dialog

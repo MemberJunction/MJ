@@ -16,6 +16,7 @@ export function LoadDashboardResource() {
  */
 @RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
+  standalone: false,
     selector: 'mj-dashboard-resource',
     template: `
         <div #container class="dashboard-resource-container">

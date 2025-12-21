@@ -22,6 +22,7 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
  * </div>
  */
 @Directive({
+  standalone: false,
   selector: '[mjFillContainer]'
 })
 export class FillContainer implements OnInit, OnDestroy {

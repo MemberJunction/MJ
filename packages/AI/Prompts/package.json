@@ -24,17 +24,17 @@
     "@memberjunction/global": "2.127.0",
     "@memberjunction/templates": "2.127.0",
     "@memberjunction/templates-base-types": "2.127.0",
-    "date-fns": "^2.30.0",
-    "date-fns-tz": "^2.0.0",
-    "dotenv": "^16.4.1",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "dotenv": "^16.4.5",
     "json5": "^2.2.3",
     "rxjs": "^7.8.1",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "^20.14.10",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

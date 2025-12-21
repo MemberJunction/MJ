@@ -13,14 +13,14 @@
   },
   "private": true,
   "dependencies": {
-    "@angular/animations": "18.0.2",
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/localize": "18.0.2",
-    "@angular/platform-browser": "18.0.2",
-    "@angular/platform-browser-dynamic": "18.0.2",
-    "@angular/router": "18.0.2",
+    "@angular/animations": "21.0.6",
+    "@angular/common": "21.0.6",
+    "@angular/core": "21.0.6",
+    "@angular/forms": "21.0.6",
+    "@angular/localize": "21.0.6",
+    "@angular/platform-browser": "21.0.6",
+    "@angular/platform-browser-dynamic": "21.0.6",
+    "@angular/router": "21.0.6",
     "@azure/msal-angular": "^3.0.11",
     "@azure/msal-browser": "^3.17.0",
     "@memberjunction/core": "2.127.0",
@@ -69,15 +69,15 @@
     "karma-jasmine-html-reporter": "latest",
     "mj_generatedentities": "1.0.0",
     "rxjs": "^7.8.1",
-    "tslib": "^2.3.0",
+    "tslib": "^2.4.0",
     "zone.js": "^0.14.0"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "18.0.3",
-    "@angular/cli": "18.0.3",
-    "@angular/compiler-cli": "18.0.2",
+    "@angular-devkit/build-angular": "21.0.4",
+    "@angular/cli": "21.0.4",
+    "@angular/compiler-cli": "21.0.4",
     "@types/body-parser": "^1.19.4",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-arm64": "3.0.8",

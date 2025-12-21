@@ -2,6 +2,7 @@ import { Component, Input } from '@angular/core';
 import { AIAgentStepEntity } from '@memberjunction/core-entities';
 
 @Component({
+  standalone: false,
     selector: 'mj-step-info-control',
     template: `
         <div class="step-info-control">

@@ -18,7 +18,7 @@
     "@types/uuid": "^10.0.0",
     "@types/nunjucks": "^3.2.6",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@memberjunction/actions": "2.127.0",

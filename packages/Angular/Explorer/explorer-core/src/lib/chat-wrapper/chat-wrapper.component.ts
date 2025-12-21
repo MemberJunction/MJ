@@ -12,6 +12,7 @@ import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plu
  * Handles route params for conversation, library, and task context
  */
 @Component({
+  standalone: false,
   selector: 'mj-chat-wrapper',
   template: `
     <div class="chat-wrapper" *ngIf="currentUser">

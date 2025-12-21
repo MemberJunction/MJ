@@ -9,6 +9,7 @@ interface MessageDisplay {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-chat-message-viewer',
     templateUrl: './chat-message-viewer.component.html',
     styleUrls: ['./chat-message-viewer.component.css']

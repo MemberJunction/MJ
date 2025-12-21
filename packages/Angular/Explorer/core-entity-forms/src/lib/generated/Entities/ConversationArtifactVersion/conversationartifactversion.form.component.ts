@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: Conversation Artifact Versions') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-conversationartifactversion-form',
     templateUrl: './conversationartifactversion.form.component.html'
 })

@@ -6,6 +6,7 @@ import { MJAuthBase } from './mjexplorer-auth-base.service';
  * This replaces the MSAL-specific redirect component to work with any auth provider
  */
 @Component({
+  standalone: false,
   selector: 'app-redirect',
   template: `
     <div *ngIf="isProcessing" style="display: flex; justify-content: center; align-items: center; height: 100vh;">

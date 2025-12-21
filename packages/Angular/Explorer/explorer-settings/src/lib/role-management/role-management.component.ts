@@ -20,6 +20,7 @@ interface FilterOptions {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-role-management',
   templateUrl: './role-management.component.html',
   styleUrls: ['./role-management.component.css']

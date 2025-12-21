@@ -11,6 +11,7 @@ import { TaskEntity } from '@memberjunction/core-entities';
  * - Tasks tab (full task list with filters)
  */
 @Component({
+  standalone: false,
   selector: 'mj-task-widget',
   template: `
     <div

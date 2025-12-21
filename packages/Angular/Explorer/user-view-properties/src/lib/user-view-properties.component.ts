@@ -19,6 +19,7 @@ import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permis
 
 
 @Component({
+  standalone: false,
   selector: 'mj-user-view-properties-dialog',
   templateUrl: './user-view-properties.component.html',
   styleUrls: ['./user-view-properties.component.scss']

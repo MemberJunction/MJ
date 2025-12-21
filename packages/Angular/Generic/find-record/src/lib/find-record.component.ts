@@ -4,6 +4,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
  
 @Component({
+  standalone: false,
   selector: 'mj-find-record',
   templateUrl: './find-record.component.html',
   styleUrls: ['./find-record.component.css']

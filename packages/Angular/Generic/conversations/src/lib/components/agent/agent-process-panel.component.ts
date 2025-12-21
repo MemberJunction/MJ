@@ -11,6 +11,7 @@ interface AgentProcess extends AgentWithStatus {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-agent-process-panel',
   template: `
     @if (activeProcesses.length > 0) {

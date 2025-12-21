@@ -9,6 +9,7 @@ import { ResourceLinkEntity, ResourceTypeEntity } from '@memberjunction/core-ent
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
 
 @Component({
+  standalone: false,
   selector: 'app-generic-browser-list',
   templateUrl: './generic-browser-list.component.html',
   styleUrls: ['./generic-browser-list.component.css', '../../shared/first-tab-styles.css']

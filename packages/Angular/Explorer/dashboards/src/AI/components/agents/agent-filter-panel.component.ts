@@ -12,6 +12,7 @@ interface AgentFilter {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-agent-filter-panel',
   templateUrl: './agent-filter-panel.component.html',
   styleUrls: ['./agent-filter-panel.component.css']

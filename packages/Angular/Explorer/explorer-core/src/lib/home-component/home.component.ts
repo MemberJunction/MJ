@@ -5,6 +5,7 @@ import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-share
 import { ChipThemeColor } from '@progress/kendo-angular-buttons';
 
 @Component({
+  standalone: false,
   selector: 'mj-home',
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css', '../../shared/first-tab-styles.css']

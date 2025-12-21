@@ -28,15 +28,15 @@
     "@memberjunction/core": "2.127.0",
     "@memberjunction/core-entities": "2.127.0",
     "@memberjunction/global": "2.127.0",
-    "axios": "^1.6.0",
+    "axios": "^1.7.7",
     "exceljs": "^4.4.0",
     "mammoth": "^1.8.0",
     "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "20.8.7",
-    "rimraf": "^5.0.5",
-    "typescript": "^5.4.5"
+    "@types/node": "^20.14.10",
+    "rimraf": "5.0.7",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=16"

@@ -21,6 +21,7 @@ export interface TemplateRunResult {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-template-param-dialog',
     templateUrl: './template-param-dialog.component.html',
     styleUrls: ['./template-param-dialog.component.css']

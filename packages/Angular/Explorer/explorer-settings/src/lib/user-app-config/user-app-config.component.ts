@@ -23,6 +23,7 @@ interface AppConfigItem {
  * - Reorder applications via drag-and-drop
  */
 @Component({
+  standalone: false,
   selector: 'mj-user-app-config',
   templateUrl: './user-app-config.component.html',
   styleUrls: ['./user-app-config.component.css']

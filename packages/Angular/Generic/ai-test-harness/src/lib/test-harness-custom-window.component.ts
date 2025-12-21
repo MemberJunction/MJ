@@ -20,6 +20,7 @@ export interface CustomWindowData {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-test-harness-custom-window',
     template: `
         <kendo-window

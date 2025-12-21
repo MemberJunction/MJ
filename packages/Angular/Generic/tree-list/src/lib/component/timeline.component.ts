@@ -78,6 +78,7 @@ export class TimelineGroup {
  * Displays data on a timeline UI so that information can see a chronolgoical display of the provided data.
  */
 @Component({
+  standalone: false,
   selector: 'mj-timeline',
   templateUrl: './timeline.component.html',
   styleUrls: ['./timeline.component.css']

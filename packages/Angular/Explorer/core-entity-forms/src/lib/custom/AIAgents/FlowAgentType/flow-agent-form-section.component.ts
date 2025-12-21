@@ -8,6 +8,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { MJIntegratedFlowEditorComponent } from './mj-integrated-flow-editor.component';
 
 @Component({
+  standalone: false,
     selector: 'mj-flow-agent-form-section',
     templateUrl: './flow-agent-form-section.component.html',
     styleUrls: ['./flow-agent-form-section.component.css']

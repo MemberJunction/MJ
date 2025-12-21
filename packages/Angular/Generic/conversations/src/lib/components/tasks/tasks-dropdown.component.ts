@@ -10,6 +10,7 @@ import { takeUntil } from 'rxjs/operators';
  * Shows ALL active tasks across ALL conversations, grouped by current vs other
  */
 @Component({
+  standalone: false,
   selector: 'mj-tasks-dropdown',
   template: `
     <div class="tasks-dropdown-container">

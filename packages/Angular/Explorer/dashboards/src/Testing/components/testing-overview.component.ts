@@ -8,6 +8,7 @@ import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
 @Component({
+  standalone: false,
   selector: 'app-testing-overview',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

@@ -16,6 +16,7 @@ import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-form',
   templateUrl: './ai-agent-run.component.html',
   styleUrls: ['./ai-agent-run.component.css']

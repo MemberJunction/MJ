@@ -57,6 +57,7 @@ const DEFAULT_PROJECT_ICONS = [
 ];
 
 @Component({
+  standalone: false,
   selector: 'mj-project-form-modal',
   template: `
     <kendo-dialog

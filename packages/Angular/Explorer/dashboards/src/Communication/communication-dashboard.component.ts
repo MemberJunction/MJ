@@ -10,6 +10,7 @@ interface CommunicationDashboardState {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-communication-dashboard',
     templateUrl: './communication-dashboard.component.html',
     styleUrls: ['./communication-dashboard.component.css'],

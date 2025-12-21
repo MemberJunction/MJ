@@ -11,6 +11,7 @@ import { State, SortDescriptor, CompositeFilterDescriptor, process } from '@prog
  * Allows viewing, adding, editing, and removing permission records for an agent.
  */
 @Component({
+  standalone: false,
     selector: 'mj-agent-permissions-dialog',
     template: `
         <kendo-dialog

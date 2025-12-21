@@ -16,6 +16,7 @@ export function LoadSchedulingHealthResource() {
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingHealthResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-health-resource',
   template: `
     <div class="resource-container">

@@ -83,6 +83,15 @@
   },
   "overrides": {
     "@types/node": "20.14.2",
-    "typescript": "5.4.5"
+    "typescript": "5.9.3",
+    "@angular/animations": "21.0.6",
+    "@angular/common": "21.0.6",
+    "@angular/compiler": "21.0.6",
+    "@angular/compiler-cli": "21.0.4",
+    "@angular/core": "21.0.6",
+    "@angular/forms": "21.0.6",
+    "@angular/platform-browser": "21.0.6",
+    "@angular/platform-browser-dynamic": "21.0.6",
+    "@angular/router": "21.0.6"
   }
 }

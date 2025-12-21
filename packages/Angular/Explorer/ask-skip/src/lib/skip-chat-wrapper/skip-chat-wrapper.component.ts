@@ -11,6 +11,7 @@ import { DrillDownInfo } from '@memberjunction/ng-skip-chat';
  * Simple wrapper component to handle generic Skip Chat component events and handle within MJ Explorer
  */
 @Component({
+  standalone: false,
   selector: 'mj-skip-chat-wrapper',
   templateUrl: './skip-chat-wrapper.component.html',
   styleUrls: ['./skip-chat-wrapper.component.css']

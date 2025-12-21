@@ -4,6 +4,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { SchedulingInstrumentationService, JobStatistics } from '../services/scheduling-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-scheduling-jobs',
   templateUrl: './scheduling-jobs.component.html',
   styleUrls: ['./scheduling-jobs.component.css']

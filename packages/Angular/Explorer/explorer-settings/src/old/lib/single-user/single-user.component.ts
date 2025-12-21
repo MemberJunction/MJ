@@ -7,6 +7,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 
  
 @Component({
+  standalone: false,
   selector: 'mj-single-user',
   templateUrl: './single-user.component.html',
   styleUrls: ['./single-user.component.css']

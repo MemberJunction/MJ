@@ -11,6 +11,7 @@ export interface OracleResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-oracle-breakdown-table',
   template: `
     <div class="oracle-breakdown">

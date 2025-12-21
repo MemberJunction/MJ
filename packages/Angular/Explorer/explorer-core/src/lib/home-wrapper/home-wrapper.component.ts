@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseNavigationComponent } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'mj-home-wrapper',
   templateUrl: './home-wrapper.component.html',
   styleUrls: ['./home-wrapper.component.css']

@@ -39,6 +39,7 @@ interface PermissionLevel {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-entity-permissions',
   templateUrl: './entity-permissions.component.html',
   styleUrls: ['./entity-permissions.component.css']

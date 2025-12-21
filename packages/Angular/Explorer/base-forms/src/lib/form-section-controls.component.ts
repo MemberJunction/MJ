@@ -5,6 +5,7 @@ import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from 
  * Designed to be projected into form toolbars via ng-content with [toolbar-additional-controls] selector
  */
 @Component({
+  standalone: false,
     selector: 'mj-form-section-controls[toolbar-additional-controls]',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `

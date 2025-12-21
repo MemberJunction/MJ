@@ -2,6 +2,7 @@ import { Component, EventEmitter, Output } from '@angular/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 @Component({
+  standalone: false,
   selector: 'app-text-import-dialog',
   template: `
     <div class="text-import-dialog-content">

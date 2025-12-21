@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseNavigationComponent } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'app-files',
   templateUrl: './files.component.html',
   styleUrls: ['./files.component.css'],

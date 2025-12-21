@@ -11,6 +11,7 @@ import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
  * All content is displayed in the parent's Display tab.
  */
 @Component({
+  standalone: false,
   selector: 'mj-json-artifact-viewer',
   template: `
     <div class="json-artifact-viewer" [ngClass]="cssClass">

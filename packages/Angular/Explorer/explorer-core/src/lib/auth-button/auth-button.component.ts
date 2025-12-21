@@ -3,6 +3,7 @@ import { DOCUMENT } from '@angular/common';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 
 @Component({
+  standalone: false,
   selector: 'app-auth-button',
   templateUrl: './auth-button.component.html',
   styleUrls: ['./auth-button.component.css']

@@ -59,6 +59,7 @@ import {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-viewer',
   templateUrl: './entity-viewer.component.html',
   styleUrls: ['./entity-viewer.component.css'],

@@ -25,6 +25,7 @@ interface MatrixCell {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-model-prompt-priority-matrix',
   templateUrl: './model-prompt-priority-matrix.component.html',
   styleUrls: ['./model-prompt-priority-matrix.component.css']

@@ -10,6 +10,7 @@ import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.c
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'mj-tabbed-dashboard',
   templateUrl: './tabbed-dashboard.component.html',
   styleUrls: ['./tabbed-dashboard.component.css']

@@ -7,6 +7,7 @@ import { SharedService } from "@memberjunction/ng-shared";
 import { SkipAPIChatWithRecordResponse } from "@memberjunction/skip-types";
 
 @Component({
+  standalone: false,
     selector: 'mj-skip-chat-with-record',
     templateUrl: './skip-chat-with-record.component.html',
     styleUrls: ['./skip-chat-with-record.component.css']

@@ -4,6 +4,7 @@ import { BaseEntity, EntityFieldInfo } from '@memberjunction/core';
    
  
 @Component({
+  standalone: false,
   selector: 'mj-find-record-dialog',
   templateUrl: './dialog.component.html',
   styleUrls: ['./dialog.component.css']

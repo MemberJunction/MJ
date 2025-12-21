@@ -6,6 +6,7 @@ import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@me
 import { ListBoxToolbarConfig } from '@progress/kendo-angular-listbox';
  
 @Component({
+  standalone: false,
   selector: 'mj-entity-communications-preview-window',
   templateUrl: './window.component.html',
   styleUrls: ['./window.component.css']

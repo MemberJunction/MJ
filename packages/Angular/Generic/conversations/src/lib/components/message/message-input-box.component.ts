@@ -19,6 +19,7 @@ import { MentionEditorComponent } from '../mention/mention-editor.component';
  * - Conversation management
  */
 @Component({
+  standalone: false,
   selector: 'mj-message-input-box',
   templateUrl: './message-input-box.component.html',
   styleUrls: ['./message-input-box.component.css']

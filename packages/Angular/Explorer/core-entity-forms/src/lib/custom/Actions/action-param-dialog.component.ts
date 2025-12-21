@@ -3,6 +3,7 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
 import { ActionParamEntity } from '@memberjunction/core-entities';
 
 @Component({
+  standalone: false,
     selector: 'mj-action-param-dialog',
     templateUrl: './action-param-dialog.component.html',
     styleUrls: ['./action-param-dialog.component.css']

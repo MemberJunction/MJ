@@ -8,6 +8,7 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
  * Shows aggregate ratings and allows users to provide their own rating.
  */
 @Component({
+  standalone: false,
     selector: 'mj-conversation-message-rating',
     template: `
         <div class="rating-container">

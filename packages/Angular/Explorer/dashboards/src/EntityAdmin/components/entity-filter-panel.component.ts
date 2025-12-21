@@ -11,6 +11,7 @@ interface EntityFilter {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-entity-filter-panel',
   templateUrl: './entity-filter-panel.component.html',
   styleUrls: ['./entity-filter-panel.component.css']

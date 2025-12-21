@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Row Level Security Filters') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-rowlevelsecurityfilter-form',
     templateUrl: './rowlevelsecurityfilter.form.component.html'
 })

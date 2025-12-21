@@ -15,6 +15,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  * with quick access navigation and configuration options.
  */
 @Component({
+  standalone: false,
   selector: 'mj-home-dashboard',
   templateUrl: './home-dashboard.component.html',
   styleUrls: ['./home-dashboard.component.css']

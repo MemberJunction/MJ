@@ -5,6 +5,7 @@ import { ArtifactPermissionService } from '../../services/artifact-permission.se
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 
 @Component({
+  standalone: false,
   selector: 'mj-collection-artifact-card',
   template: `
     <div class="artifact-card" (click)="onSelect()">

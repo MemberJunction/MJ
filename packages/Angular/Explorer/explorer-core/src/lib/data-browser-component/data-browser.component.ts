@@ -6,6 +6,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'app-data-browser',
   templateUrl: './data-browser.component.html',
   styleUrls: ['./data-browser.component.css', '../../shared/first-tab-styles.css']

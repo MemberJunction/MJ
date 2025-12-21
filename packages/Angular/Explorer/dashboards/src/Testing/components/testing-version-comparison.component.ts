@@ -23,6 +23,7 @@ interface VersionTestData {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-testing-version-comparison',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

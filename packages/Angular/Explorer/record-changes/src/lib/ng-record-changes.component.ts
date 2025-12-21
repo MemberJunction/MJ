@@ -7,6 +7,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { diffChars, diffWords, Change } from 'diff';
 
 @Component({
+  standalone: false,
   selector: 'mj-record-changes',
   templateUrl: './ng-record-changes.component.html',
   styleUrls: ['./ng-record-changes.component.css'],

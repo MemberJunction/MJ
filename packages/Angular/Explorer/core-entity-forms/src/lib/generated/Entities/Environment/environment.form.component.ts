@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: Environments') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-environment-form',
     templateUrl: './environment.form.component.html'
 })

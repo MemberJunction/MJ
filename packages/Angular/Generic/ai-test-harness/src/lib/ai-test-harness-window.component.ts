@@ -19,6 +19,7 @@ export interface AITestHarnessWindowData {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-ai-test-harness-window',
     template: `
         <div class="window-content">

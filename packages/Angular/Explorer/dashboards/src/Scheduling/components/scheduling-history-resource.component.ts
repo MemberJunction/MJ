@@ -16,6 +16,7 @@ export function LoadSchedulingHistoryResource() {
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingHistoryResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduling-history-resource',
   template: `
     <div class="resource-container">

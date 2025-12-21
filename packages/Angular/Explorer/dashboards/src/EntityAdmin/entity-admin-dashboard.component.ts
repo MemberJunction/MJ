@@ -19,6 +19,7 @@ interface DashboardState {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-entity-admin-dashboard',
   templateUrl: './entity-admin-dashboard.component.html',
   styleUrls: ['./entity-admin-dashboard.component.css']

@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Vendors') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-aivendor-form',
     templateUrl: './aivendor.form.component.html'
 })

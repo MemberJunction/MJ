@@ -27,6 +27,7 @@ import { Component, Input } from '@angular/core';
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-loading',
   templateUrl: './loading.component.html',
   styleUrls: ['./loading.component.css']

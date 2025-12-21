@@ -6,6 +6,7 @@ import { MJTabStripComponent } from '../tab-strip/tab-strip.component';
  * Represents the tab in the header of a given tab strip
  */
 @Component({
+  standalone: false,
   selector: 'mj-tab',
   templateUrl: './tab.component.html',
   styleUrl: './tab.component.css'

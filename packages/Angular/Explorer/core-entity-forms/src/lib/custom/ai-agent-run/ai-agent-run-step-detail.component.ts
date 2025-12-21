@@ -4,6 +4,7 @@ import { AIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-step-detail',
   templateUrl: './ai-agent-run-step-detail.component.html',
   styleUrls: ['./ai-agent-run-step-detail.component.css']

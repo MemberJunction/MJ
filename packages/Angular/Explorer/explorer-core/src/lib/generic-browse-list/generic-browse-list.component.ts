@@ -3,6 +3,7 @@ import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'app-generic-browse-list',
   templateUrl: './generic-browse-list.component.html',
   styleUrls: ['./generic-browse-list.component.css', '../../shared/first-tab-styles.css']

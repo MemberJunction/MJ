@@ -12,6 +12,7 @@ interface CategoryNode {
 }
 
 @Component({
+  standalone: false,
     selector: 'mj-query-category-dialog',
     templateUrl: './query-category-dialog.component.html',
     styleUrls: ['./query-category-dialog.component.css']

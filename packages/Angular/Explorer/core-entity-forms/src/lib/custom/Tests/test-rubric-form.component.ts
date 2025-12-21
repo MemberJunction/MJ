@@ -8,6 +8,7 @@ import { TestRubricFormComponent } from '../../generated/Entities/TestRubric/tes
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Rubrics')
 @Component({
+  standalone: false,
   selector: 'mj-test-rubric-form',
   template: `
     <div class="rubric-form">

@@ -35,6 +35,7 @@ interface ExecutionTrend {
  */
 @RegisterClass(BaseResourceComponent, 'ActionsMonitorResource')
 @Component({
+  standalone: false,
   selector: 'mj-execution-monitoring',
   templateUrl: './execution-monitoring.component.html',
   styleUrls: ['./execution-monitoring.component.css']

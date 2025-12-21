@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { DashboardItem } from '../../single-dashboard.component';
 
 @Component({
+  standalone: false,
   selector: 'app-delete-item-dialog',
   templateUrl: './delete-item.component.html',
   styleUrls: ['./delete-item.component.css']

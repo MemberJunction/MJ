@@ -7,6 +7,7 @@ type ViewMode = 'grid' | 'list';
 type SortBy = 'name' | 'date' | 'type';
 
 @Component({
+  standalone: false,
   selector: 'mj-collection-view',
   template: `
     <div class="collection-view">

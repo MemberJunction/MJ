@@ -51,6 +51,7 @@ export interface ExecutionStats {
  * - Input/output preview
  */
 @Component({
+  standalone: false,
     selector: 'mj-agent-execution-monitor',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `

@@ -7,6 +7,7 @@ import { NotificationService } from "@progress/kendo-angular-notification";
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'mj-single-entity',
   templateUrl: './single-entity.component.html',
   styleUrls: ['./single-entity.component.css', '../../shared/first-tab-styles.css']

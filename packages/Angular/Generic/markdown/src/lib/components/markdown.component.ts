@@ -46,6 +46,7 @@ import {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-markdown',
   template: `
     <div

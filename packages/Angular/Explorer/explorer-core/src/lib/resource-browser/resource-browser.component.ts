@@ -8,6 +8,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { BeforeDeleteItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
 
 @Component({
+  standalone: false,
   selector: 'mj-resource-browser',
   templateUrl: './resource-browser.component.html',
   styleUrls: ['./resource-browser.component.css', '../../shared/first-tab-styles.css']

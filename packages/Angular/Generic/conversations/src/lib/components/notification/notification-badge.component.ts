@@ -9,6 +9,7 @@ import { NotificationService } from '../../services/notification.service';
  * Supports count, dot, pulse, and new badge types
  */
 @Component({
+  standalone: false,
   selector: 'mj-notification-badge',
   template: `
     @if (badgeConfig?.show) {

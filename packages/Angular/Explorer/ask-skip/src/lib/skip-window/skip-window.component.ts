@@ -4,6 +4,7 @@ import { SharedService } from '@memberjunction/ng-shared';
  
 
 @Component({
+  standalone: false,
   selector: 'mj-skip-window',
   templateUrl: './skip-window.component.html',
   styleUrls: ['./skip-window.component.css']

@@ -15,6 +15,7 @@ export function LoadActionsCodeResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ActionsCodeResource')
 @Component({
+  standalone: false,
   selector: 'mj-code-management',
   template: `
     <div class="code-management-placeholder" >

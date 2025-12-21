@@ -24,6 +24,7 @@ interface RolePermissions {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-permission-dialog',
   encapsulation: ViewEncapsulation.None,
   templateUrl: './permission-dialog.component.html',

@@ -10,6 +10,7 @@ export function LoadRecordResource() {
 
 @RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
+  standalone: false,
     selector: 'mj-record-resource',
     template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" ></mj-single-record>`
 })

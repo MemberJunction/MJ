@@ -15,6 +15,7 @@ export function LoadActionsEntitiesResource() {
  */
 @RegisterClass(BaseResourceComponent, 'ActionsEntitiesResource')
 @Component({
+  standalone: false,
   selector: 'mj-entity-integration',
   template: `
     <div class="entity-integration-placeholder" >

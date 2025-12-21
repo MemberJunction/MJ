@@ -6,6 +6,7 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Content Source Types') // Tell MemberJunction about this class
 @Component({
+  standalone: false,
     selector: 'gen-contentsourcetype-form',
     templateUrl: './contentsourcetype.form.component.html'
 })

@@ -16,6 +16,7 @@ interface DragData {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-collection-tree',
   template: `
     <div class="collection-tree">

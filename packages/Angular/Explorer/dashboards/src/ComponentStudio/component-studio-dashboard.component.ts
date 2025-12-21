@@ -42,6 +42,7 @@ interface Category {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-component-studio-dashboard',
   templateUrl: './component-studio-dashboard.component.html',
   styleUrls: ['./component-studio-dashboard.component.scss']

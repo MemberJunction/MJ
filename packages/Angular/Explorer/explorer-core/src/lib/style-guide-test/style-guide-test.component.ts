@@ -6,6 +6,7 @@ import { ChipThemeColor } from '@progress/kendo-angular-buttons';
 import { BadgeThemeColor, BadgeAlign } from '@progress/kendo-angular-indicators';
 
 @Component({
+  standalone: false,
   selector: 'mj-style-guide-test',
   templateUrl: './style-guide-test.component.html',
   styleUrls: ['./style-guide-test.component.css']

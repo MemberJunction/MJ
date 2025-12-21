@@ -29,6 +29,7 @@ import { SettingsDialogService } from './services/settings-dialog.service';
  * - Unified workspace state management
  */
 @Component({
+  standalone: false,
   selector: 'mj-shell',
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']

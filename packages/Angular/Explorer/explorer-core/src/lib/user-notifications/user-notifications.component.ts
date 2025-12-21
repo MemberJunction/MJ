@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { SafeJSONParse } from '@memberjunction/global';
 
 @Component({
+  standalone: false,
   selector: 'app-user-notifications',
   templateUrl: './user-notifications.component.html',
   styleUrls: ['./user-notifications.component.css']
