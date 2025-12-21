@@ -268,7 +268,10 @@ export class GeminiLLM extends BaseLLM {
                         finish_reason: "completed",
                         index: 0
                     }],
-                    usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
+                    usage: new ModelUsage(
+                        result.usageMetadata?.promptTokenCount || 0,
+                        result.usageMetadata?.candidatesTokenCount || 0
+                    )
                 },
                 errorMessage: "",
                 exception: null,
@@ -483,12 +486,20 @@ export class GeminiLLM extends BaseLLM {
         if (chunk.candidates && chunk.candidates[0] && chunk.candidates[0].finishReason) {
             finishReason = chunk.candidates[0].finishReason;
         }
-        
-        // Gemini doesn't provide usage in chunks
+
+        // Extract usage from chunk if available (appears on final chunk)
+        let usage = null;
+        if (chunk.usageMetadata) {
+            usage = new ModelUsage(
+                chunk.usageMetadata.promptTokenCount || 0,
+                chunk.usageMetadata.candidatesTokenCount || 0
+            );
+        }
+
         return {
             content,
             finishReason,
-            usage: null
+            usage
         };
     }
     
@@ -605,13 +616,13 @@ export class GeminiLLM extends BaseLLM {
                 finish_reason: finishReason,
                 index: 0
             }],
-            usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
+            usage: usage || new ModelUsage(0, 0)
         };
-        
+
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
-        
+
         return result;
     }
     SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
