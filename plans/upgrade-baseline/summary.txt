@@ -1,0 +1,12 @@
+=== MemberJunction 3.0 Upgrade Baseline Summary ===
+Date: $(date)
+
+=== Install Warning Count ===
+       0
+
+=== Build Warning Count ===
+       2
+
+=== Peer Dependency Warnings ===
+
+=== Deprecation Warnings ===

@@ -1,0 +1,638 @@
+# npm audit report
+
+@angular/common  <19.2.16
+Severity: high
+Angular is Vulnerable to XSRF Token Leakage via Protocol-Relative URLs in Angular HTTP Client - https://github.com/advisories/GHSA-58c5-g7wp-6w37
+fix available via `npm audit fix --force`
+Will install @angular/common@21.0.6, which is a breaking change
+node_modules/@angular/common
+  @angular/forms  <=19.2.15
+  Depends on vulnerable versions of @angular/common
+  Depends on vulnerable versions of @angular/platform-browser
+  node_modules/@angular/forms
+    @progress/kendo-angular-dateinputs  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/forms
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-buttons
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-intl
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-navigation
+    Depends on vulnerable versions of @progress/kendo-angular-popup
+    node_modules/@progress/kendo-angular-dateinputs
+      @progress/kendo-angular-grid  <=17.0.2-develop.12
+      Depends on vulnerable versions of @angular/common
+      Depends on vulnerable versions of @angular/forms
+      Depends on vulnerable versions of @angular/platform-browser
+      Depends on vulnerable versions of @progress/kendo-angular-buttons
+      Depends on vulnerable versions of @progress/kendo-angular-common
+      Depends on vulnerable versions of @progress/kendo-angular-dateinputs
+      Depends on vulnerable versions of @progress/kendo-angular-dropdowns
+      Depends on vulnerable versions of @progress/kendo-angular-excel-export
+      Depends on vulnerable versions of @progress/kendo-angular-icons
+      Depends on vulnerable versions of @progress/kendo-angular-inputs
+      Depends on vulnerable versions of @progress/kendo-angular-intl
+      Depends on vulnerable versions of @progress/kendo-angular-l10n
+      Depends on vulnerable versions of @progress/kendo-angular-label
+      Depends on vulnerable versions of @progress/kendo-angular-layout
+      Depends on vulnerable versions of @progress/kendo-angular-pdf-export
+      Depends on vulnerable versions of @progress/kendo-angular-popup
+      Depends on vulnerable versions of @progress/kendo-angular-utils
+      node_modules/@progress/kendo-angular-grid
+    @progress/kendo-angular-dropdowns  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/forms
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-navigation
+    Depends on vulnerable versions of @progress/kendo-angular-popup
+    Depends on vulnerable versions of @progress/kendo-angular-treeview
+    node_modules/@progress/kendo-angular-dropdowns
+    @progress/kendo-angular-inputs  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/forms
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-buttons
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-dialog
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-intl
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-popup
+    node_modules/@progress/kendo-angular-inputs
+      @progress/kendo-angular-treeview  <=17.0.2-develop.12
+      Depends on vulnerable versions of @angular/common
+      Depends on vulnerable versions of @angular/platform-browser
+      Depends on vulnerable versions of @progress/kendo-angular-common
+      Depends on vulnerable versions of @progress/kendo-angular-icons
+      Depends on vulnerable versions of @progress/kendo-angular-inputs
+      Depends on vulnerable versions of @progress/kendo-angular-l10n
+      node_modules/@progress/kendo-angular-treeview
+    @progress/kendo-angular-label  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/forms
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    node_modules/@progress/kendo-angular-label
+      @progress/kendo-angular-scheduler  <=17.0.2-develop.12
+      Depends on vulnerable versions of @angular/common
+      Depends on vulnerable versions of @angular/forms
+      Depends on vulnerable versions of @angular/platform-browser
+      Depends on vulnerable versions of @progress/kendo-angular-buttons
+      Depends on vulnerable versions of @progress/kendo-angular-common
+      Depends on vulnerable versions of @progress/kendo-angular-dateinputs
+      Depends on vulnerable versions of @progress/kendo-angular-dialog
+      Depends on vulnerable versions of @progress/kendo-angular-dropdowns
+      Depends on vulnerable versions of @progress/kendo-angular-icons
+      Depends on vulnerable versions of @progress/kendo-angular-inputs
+      Depends on vulnerable versions of @progress/kendo-angular-intl
+      Depends on vulnerable versions of @progress/kendo-angular-l10n
+      Depends on vulnerable versions of @progress/kendo-angular-label
+      Depends on vulnerable versions of @progress/kendo-angular-popup
+      Depends on vulnerable versions of @progress/kendo-angular-tooltip
+      node_modules/@progress/kendo-angular-scheduler
+    @progress/kendo-angular-listview  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/forms
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-buttons
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-pager
+    node_modules/@progress/kendo-angular-listview
+    @progress/kendo-angular-upload  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/forms
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-buttons
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-progressbar
+    node_modules/@progress/kendo-angular-upload
+  @angular/platform-browser  <=19.2.15
+  Depends on vulnerable versions of @angular/common
+  node_modules/@angular/platform-browser
+    @progress/kendo-angular-buttons  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-popup
+    node_modules/@progress/kendo-angular-buttons
+      @progress/kendo-angular-dialog  <=17.0.2-develop.12
+      Depends on vulnerable versions of @angular/common
+      Depends on vulnerable versions of @angular/platform-browser
+      Depends on vulnerable versions of @progress/kendo-angular-buttons
+      Depends on vulnerable versions of @progress/kendo-angular-common
+      Depends on vulnerable versions of @progress/kendo-angular-icons
+      Depends on vulnerable versions of @progress/kendo-angular-l10n
+      node_modules/@progress/kendo-angular-dialog
+      @progress/kendo-angular-layout  <=17.0.2-develop.12
+      Depends on vulnerable versions of @angular/common
+      Depends on vulnerable versions of @angular/platform-browser
+      Depends on vulnerable versions of @progress/kendo-angular-buttons
+      Depends on vulnerable versions of @progress/kendo-angular-common
+      Depends on vulnerable versions of @progress/kendo-angular-icons
+      Depends on vulnerable versions of @progress/kendo-angular-intl
+      Depends on vulnerable versions of @progress/kendo-angular-l10n
+      Depends on vulnerable versions of @progress/kendo-angular-progressbar
+      node_modules/@progress/kendo-angular-layout
+    @progress/kendo-angular-charts  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-intl
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-navigation
+    Depends on vulnerable versions of @progress/kendo-angular-popup
+    node_modules/@progress/kendo-angular-charts
+    @progress/kendo-angular-excel-export  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    node_modules/@progress/kendo-angular-excel-export
+    @progress/kendo-angular-filter  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-buttons
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-dateinputs
+    Depends on vulnerable versions of @progress/kendo-angular-dropdowns
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-inputs
+    Depends on vulnerable versions of @progress/kendo-angular-intl
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-label
+    node_modules/@progress/kendo-angular-filter
+    @progress/kendo-angular-icons  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    node_modules/@progress/kendo-angular-icons
+    @progress/kendo-angular-indicators  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-intl
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    node_modules/@progress/kendo-angular-indicators
+    @progress/kendo-angular-intl  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    node_modules/@progress/kendo-angular-intl
+    @progress/kendo-angular-listbox  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-buttons
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-popup
+    node_modules/@progress/kendo-angular-listbox
+    @progress/kendo-angular-menu  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-popup
+    node_modules/@progress/kendo-angular-menu
+    @progress/kendo-angular-navigation  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    node_modules/@progress/kendo-angular-navigation
+    @progress/kendo-angular-notification  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    node_modules/@progress/kendo-angular-notification
+    @progress/kendo-angular-pager  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-dropdowns
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-inputs
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    node_modules/@progress/kendo-angular-pager
+    @progress/kendo-angular-pdf-export  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    node_modules/@progress/kendo-angular-pdf-export
+    @progress/kendo-angular-popup  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    node_modules/@progress/kendo-angular-popup
+    @progress/kendo-angular-progressbar  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    node_modules/@progress/kendo-angular-progressbar
+    @progress/kendo-angular-sortable  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    node_modules/@progress/kendo-angular-sortable
+    @progress/kendo-angular-tooltip  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    Depends on vulnerable versions of @progress/kendo-angular-icons
+    Depends on vulnerable versions of @progress/kendo-angular-l10n
+    Depends on vulnerable versions of @progress/kendo-angular-popup
+    node_modules/@progress/kendo-angular-tooltip
+    @progress/kendo-angular-utils  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    node_modules/@progress/kendo-angular-utils
+  @angular/platform-browser-dynamic  <=19.2.15
+  Depends on vulnerable versions of @angular/common
+  Depends on vulnerable versions of @angular/compiler
+  Depends on vulnerable versions of @angular/platform-browser
+  node_modules/@angular/platform-browser-dynamic
+  @angular/router  <=0.0.0-ROUTERPLACEHOLDER || 2.0.0-rc.0 - 19.2.15
+  Depends on vulnerable versions of @angular/common
+  Depends on vulnerable versions of @angular/platform-browser
+  node_modules/@angular/router
+  @progress/kendo-angular-common  <=17.0.2-develop.12
+  Depends on vulnerable versions of @angular/common
+  node_modules/@progress/kendo-angular-common
+    @progress/kendo-angular-l10n  <=17.0.2-develop.12
+    Depends on vulnerable versions of @angular/common
+    Depends on vulnerable versions of @angular/platform-browser
+    Depends on vulnerable versions of @progress/kendo-angular-common
+    node_modules/@progress/kendo-angular-l10n
+
+@angular/compiler  <=18.2.14
+Severity: high
+Angular Stored XSS Vulnerability via SVG Animation, SVG URL and MathML Attributes - https://github.com/advisories/GHSA-v4hv-rgfq-gp49
+fix available via `npm audit fix --force`
+Will install @angular/compiler@21.0.6, which is a breaking change
+node_modules/@angular/compiler
+  @angular/compiler-cli  <=18.2.14
+  Depends on vulnerable versions of @angular/compiler
+  node_modules/@angular/compiler-cli
+    @angular-devkit/build-angular  <=19.2.14 || 20.0.0-next.0 - 20.0.0-rc.4
+    Depends on vulnerable versions of @angular/build
+    Depends on vulnerable versions of @angular/compiler-cli
+    Depends on vulnerable versions of @angular/localize
+    Depends on vulnerable versions of @babel/runtime
+    Depends on vulnerable versions of @ngtools/webpack
+    Depends on vulnerable versions of esbuild
+    Depends on vulnerable versions of http-proxy-middleware
+    Depends on vulnerable versions of inquirer
+    Depends on vulnerable versions of undici
+    Depends on vulnerable versions of vite
+    Depends on vulnerable versions of webpack
+    Depends on vulnerable versions of webpack-dev-server
+    node_modules/@angular-devkit/build-angular
+    @ngtools/webpack  <=1.2.13 || 7.0.0-beta.0 - 18.2.21
+    Depends on vulnerable versions of @angular/compiler-cli
+    node_modules/@ngtools/webpack
+  @angular/localize  10.0.0-next.0 - 18.2.14
+  Depends on vulnerable versions of @angular/compiler
+  Depends on vulnerable versions of @angular/compiler-cli
+  node_modules/@angular/localize
+    @angular/build  <=19.2.0-rc.0
+    Depends on vulnerable versions of @angular/compiler-cli
+    Depends on vulnerable versions of @angular/localize
+    Depends on vulnerable versions of esbuild
+    Depends on vulnerable versions of inquirer
+    Depends on vulnerable versions of undici
+    Depends on vulnerable versions of vite
+    node_modules/@angular-devkit/build-angular/node_modules/@angular/build
+
+@azure/identity  <4.2.1
+Severity: moderate
+Azure Identity Libraries and Microsoft Authentication Library Elevation of Privilege Vulnerability - https://github.com/advisories/GHSA-m5vv-6r4h-3vj9
+fix available via `npm audit fix --force`
+Will install mssql@12.2.0, which is a breaking change
+packages/DBAutoDoc/node_modules/@azure/identity
+  tedious  11.0.9 - 18.2.0
+  Depends on vulnerable versions of @azure/identity
+  packages/DBAutoDoc/node_modules/tedious
+    mssql  7.2.1 - 10.0.4
+    Depends on vulnerable versions of tedious
+    packages/DBAutoDoc/node_modules/mssql
+
+@babel/runtime  <7.26.10
+Severity: moderate
+Babel has inefficient RegExp complexity in generated code with .replace when transpiling named capturing groups - https://github.com/advisories/GHSA-968p-4wvh-cqc8
+fix available via `npm audit fix --force`
+Will install @angular-devkit/build-angular@18.2.21, which is outside the stated dependency range
+node_modules/@babel/runtime
+node_modules/broadcast-channel/node_modules/@babel/runtime
+  broadcast-channel  2.1.1 - 2.2.0 || 4.19.0 - 7.0.0
+  Depends on vulnerable versions of @babel/runtime
+  node_modules/broadcast-channel
+    @okta/okta-auth-js  7.5.0 - 7.12.0-rc1 || 7.12.2 || >=7.13.2
+    Depends on vulnerable versions of broadcast-channel
+    node_modules/@okta/okta-auth-js
+
+@babel/runtime-corejs3  <7.26.10
+Severity: moderate
+Babel has inefficient RegExp complexity in generated code with .replace when transpiling named capturing groups - https://github.com/advisories/GHSA-968p-4wvh-cqc8
+fix available via `npm audit fix`
+node_modules/@babel/runtime-corejs3
+
+@modelcontextprotocol/sdk  <1.24.0
+Severity: high
+Model Context Protocol (MCP) TypeScript SDK does not enable DNS rebinding protection by default - https://github.com/advisories/GHSA-w48q-cv73-mx4w
+fix available via `npm audit fix`
+node_modules/@modelcontextprotocol/sdk
+
+axios  1.0.0 - 1.11.0
+Severity: high
+Axios is vulnerable to DoS attack through lack of data size check - https://github.com/advisories/GHSA-4hjh-wcwx-xvwj
+axios Requests Vulnerable To Possible SSRF and Credential Leakage via Absolute URL - https://github.com/advisories/GHSA-jr5f-v2jv-69x6
+fix available via `npm audit fix`
+node_modules/axios
+
+body-parser  <=1.20.2 || 2.2.0
+Severity: high
+body-parser vulnerable to denial of service when url encoding is enabled - https://github.com/advisories/GHSA-qwcr-r2fm-qrc7
+body-parser is vulnerable to denial of service when url encoding is used - https://github.com/advisories/GHSA-wqch-xfxh-vrr4
+fix available via `npm audit fix`
+node_modules/@modelcontextprotocol/sdk/node_modules/body-parser
+node_modules/body-parser
+packages/Actions/node_modules/body-parser
+packages/AI/A2AServer/node_modules/body-parser
+packages/ComponentRegistry/node_modules/body-parser
+packages/MJCodeGenAPI/node_modules/body-parser
+packages/MJServer/node_modules/express/node_modules/body-parser
+  express  <=4.21.0 || 5.0.0-alpha.1 - 5.0.0
+  Depends on vulnerable versions of body-parser
+  Depends on vulnerable versions of cookie
+  Depends on vulnerable versions of path-to-regexp
+  Depends on vulnerable versions of send
+  Depends on vulnerable versions of serve-static
+  node_modules/express
+
+brace-expansion  1.0.0 - 1.1.11 || 2.0.0 - 2.0.1
+brace-expansion Regular Expression Denial of Service vulnerability - https://github.com/advisories/GHSA-v6h2-p8h4-qcjw
+brace-expansion Regular Expression Denial of Service vulnerability - https://github.com/advisories/GHSA-v6h2-p8h4-qcjw
+fix available via `npm audit fix`
+node_modules/@eslint/eslintrc/node_modules/brace-expansion
+node_modules/@humanwhocodes/config-array/node_modules/brace-expansion
+node_modules/brace-expansion
+node_modules/eslint-plugin-import/node_modules/brace-expansion
+node_modules/eslint-plugin-jsx-a11y/node_modules/brace-expansion
+node_modules/eslint/node_modules/brace-expansion
+node_modules/jake/node_modules/brace-expansion
+node_modules/karma-coverage/node_modules/brace-expansion
+node_modules/karma/node_modules/brace-expansion
+node_modules/nodemon/node_modules/brace-expansion
+node_modules/officeparser/node_modules/brace-expansion
+node_modules/rimraf/node_modules/brace-expansion
+node_modules/shelljs/node_modules/brace-expansion
+node_modules/temp/node_modules/brace-expansion
+node_modules/test-exclude/node_modules/brace-expansion
+node_modules/ts-node-dev/node_modules/brace-expansion
+
+cookie  <0.7.0
+cookie accepts cookie name, path, and domain with out of bounds characters - https://github.com/advisories/GHSA-pxg6-pf52-xh8x
+fix available via `npm audit fix`
+node_modules/cookie
+node_modules/engine.io/node_modules/cookie
+  engine.io  1.8.0 - 6.6.1
+  Depends on vulnerable versions of cookie
+  node_modules/engine.io
+    socket.io  1.6.0 - 4.7.5
+    Depends on vulnerable versions of engine.io
+    node_modules/socket.io
+
+esbuild  <=0.24.2
+Severity: moderate
+esbuild enables any website to send any requests to the development server and read the response - https://github.com/advisories/GHSA-67mh-4wv8-2f99
+fix available via `npm audit fix --force`
+Will install @angular-devkit/build-angular@18.2.21, which is outside the stated dependency range
+node_modules/esbuild
+node_modules/pkgroll/node_modules/esbuild
+node_modules/vite/node_modules/esbuild
+  pkgroll  <=2.12.0
+  Depends on vulnerable versions of esbuild
+  node_modules/pkgroll
+  vite  <=6.1.6
+  Depends on vulnerable versions of esbuild
+  node_modules/vite
+
+
+fast-xml-parser  4.3.5 - 4.4.0
+Severity: high
+fast-xml-parser vulnerable to ReDOS at currency parsing - https://github.com/advisories/GHSA-mpg4-rc92-vx8v
+fix available via `npm audit fix`
+node_modules/@azure/core-xml/node_modules/fast-xml-parser
+node_modules/@google-cloud/storage/node_modules/fast-xml-parser
+
+form-data  >=3.0.0 <3.0.4 || <2.5.4
+Severity: critical
+form-data uses unsafe random function in form-data for choosing boundary - https://github.com/advisories/GHSA-fjxv-7rqg-78g4
+form-data uses unsafe random function in form-data for choosing boundary - https://github.com/advisories/GHSA-fjxv-7rqg-78g4
+fix available via `npm audit fix`
+node_modules/@types/request/node_modules/form-data
+node_modules/graphql-request/node_modules/form-data
+node_modules/jest-environment-jsdom/node_modules/form-data
+
+glob  10.2.0 - 10.4.5
+Severity: high
+glob CLI: Command injection via -c/--cmd executes matches with shell:true - https://github.com/advisories/GHSA-5j98-mcp5-4vw2
+fix available via `npm audit fix`
+node_modules/glob
+
+http-proxy-middleware  <=2.0.8 || 3.0.0 - 3.0.4
+Severity: high
+Denial of service in http-proxy-middleware - https://github.com/advisories/GHSA-c7qv-q95q-8v27
+Denial of service in http-proxy-middleware - https://github.com/advisories/GHSA-c7qv-q95q-8v27
+http-proxy-middleware allows fixRequestBody to proceed even if bodyParser has failed - https://github.com/advisories/GHSA-9gqv-wp59-fq42
+http-proxy-middleware can call writeBody twice because "else if" is not used - https://github.com/advisories/GHSA-4www-5p9h-95mh
+http-proxy-middleware allows fixRequestBody to proceed even if bodyParser has failed - https://github.com/advisories/GHSA-9gqv-wp59-fq42
+http-proxy-middleware can call writeBody twice because "else if" is not used - https://github.com/advisories/GHSA-4www-5p9h-95mh
+fix available via `npm audit fix --force`
+Will install @angular-devkit/build-angular@18.2.21, which is outside the stated dependency range
+node_modules/http-proxy-middleware
+node_modules/webpack-dev-server/node_modules/http-proxy-middleware
+
+js-yaml  <3.14.2
+Severity: moderate
+js-yaml has prototype pollution in merge (<<) - https://github.com/advisories/GHSA-mh29-5h37-fv8m
+fix available via `npm audit fix`
+node_modules/@changesets/parse/node_modules/js-yaml
+node_modules/@istanbuljs/load-nyc-config/node_modules/js-yaml
+node_modules/@manypkg/get-packages/node_modules/js-yaml
+node_modules/@oclif/core/node_modules/js-yaml
+
+jsonpath-plus  <=10.2.0
+Severity: critical
+JSONPath Plus Remote Code Execution (RCE) Vulnerability - https://github.com/advisories/GHSA-pppg-cpfq-h7wr
+JSONPath Plus allows Remote Code Execution - https://github.com/advisories/GHSA-hw8r-x6gr-5gjp
+fix available via `npm audit fix --force`
+Will install jsonpath-plus@10.3.0, which is a breaking change
+node_modules/jsonpath-plus
+
+jws  =4.0.0 || <3.2.3
+Severity: high
+auth0/node-jws Improperly Verifies HMAC Signature - https://github.com/advisories/GHSA-869p-cjfg-cm3x
+auth0/node-jws Improperly Verifies HMAC Signature - https://github.com/advisories/GHSA-869p-cjfg-cm3x
+fix available via `npm audit fix`
+node_modules/jsonwebtoken/node_modules/jws
+node_modules/jws
+
+nanoid  <3.3.8
+Severity: moderate
+Predictable results in nanoid generation when given non-integer values - https://github.com/advisories/GHSA-mwcw-c2x4-8c55
+fix available via `npm audit fix`
+node_modules/nanoid
+
+node-forge  <=1.3.1
+Severity: high
+node-forge has ASN.1 Unbounded Recursion - https://github.com/advisories/GHSA-554w-wpv2-vw27
+node-forge has an Interpretation Conflict vulnerability via its ASN.1 Validator Desynchronization - https://github.com/advisories/GHSA-5gfm-wpxj-wjgq
+node-forge is vulnerable to ASN.1 OID Integer Truncation - https://github.com/advisories/GHSA-65ch-62r8-g69g
+fix available via `npm audit fix`
+node_modules/node-forge
+
+on-headers  <1.1.0
+on-headers is vulnerable to http response header manipulation - https://github.com/advisories/GHSA-76c9-3jph-rj3q
+fix available via `npm audit fix`
+node_modules/on-headers
+  compression  1.0.3 - 1.8.0
+  Depends on vulnerable versions of on-headers
+  node_modules/compression
+
+path-to-regexp  <=0.1.11
+Severity: high
+path-to-regexp outputs backtracking regular expressions - https://github.com/advisories/GHSA-9wv6-86v2-598j
+path-to-regexp contains a ReDoS - https://github.com/advisories/GHSA-rhx6-c78j-4q9w
+fix available via `npm audit fix`
+node_modules/path-to-regexp
+
+playwright  <1.55.1
+Severity: high
+Playwright downloads and installs browsers without verifying the authenticity of the SSL certificate - https://github.com/advisories/GHSA-7mvr-c777-76hp
+fix available via `npm audit fix`
+node_modules/playwright
+  @playwright/test  0.9.7 - 0.1112.0-alpha2 || 1.38.0-alpha-1692262648000 - 1.55.1-beta-1758616458000
+  Depends on vulnerable versions of playwright
+  node_modules/@playwright/test
+
+prismjs  <1.30.0
+Severity: moderate
+PrismJS DOM Clobbering vulnerability - https://github.com/advisories/GHSA-x7hr-w5r2-h6wg
+fix available via `npm audit fix`
+node_modules/prismjs
+
+rollup  4.0.0 - 4.22.3
+Severity: high
+DOM Clobbering Gadget found in rollup bundled scripts that leads to XSS - https://github.com/advisories/GHSA-gcx4-mw62-g8wm
+fix available via `npm audit fix`
+node_modules/rollup
+
+send  <0.19.0
+send vulnerable to template injection that can lead to XSS - https://github.com/advisories/GHSA-m6fv-jmcg-4jfg
+fix available via `npm audit fix`
+node_modules/send
+  serve-static  <=1.16.0
+  Depends on vulnerable versions of send
+  node_modules/serve-static
+
+
+sha.js  <=2.4.11
+Severity: critical
+sha.js is missing type checks leading to hash rewind and passing on crafted data - https://github.com/advisories/GHSA-95m3-7q98-8xr5
+fix available via `npm audit fix`
+node_modules/sha.js
+
+tar-fs  2.0.0 - 2.1.3 || 3.0.0 - 3.1.0
+Severity: high
+tar-fs has a symlink validation bypass if destination directory is predictable with a specific tarball - https://github.com/advisories/GHSA-vj76-c3g6-qr5v
+tar-fs has a symlink validation bypass if destination directory is predictable with a specific tarball - https://github.com/advisories/GHSA-vj76-c3g6-qr5v
+fix available via `npm audit fix`
+node_modules/prebuild-install/node_modules/tar-fs
+node_modules/tar-fs
+
+tmp  <=0.2.3
+tmp allows arbitrary temporary file / directory write via symbolic link `dir` parameter - https://github.com/advisories/GHSA-52f5-9888-hmc6
+fix available via `npm audit fix --force`
+Will install @inquirer/prompts@8.1.0, which is a breaking change
+node_modules/exceljs/node_modules/tmp
+node_modules/karma/node_modules/tmp
+node_modules/tmp
+  external-editor  >=1.1.1
+  Depends on vulnerable versions of tmp
+  node_modules/external-editor
+    @changesets/cli  2.10.0 - 2.29.5 || 3.0.0-next.0
+    Depends on vulnerable versions of external-editor
+    node_modules/@changesets/cli
+    @inquirer/editor  <=4.2.15
+    Depends on vulnerable versions of external-editor
+    node_modules/@inquirer/editor
+      @inquirer/prompts  <=6.0.1
+      Depends on vulnerable versions of @inquirer/editor
+      node_modules/@inquirer/prompts
+    inquirer  3.0.0 - 8.2.6 || 9.0.0 - 9.3.7
+    Depends on vulnerable versions of external-editor
+    node_modules/inquirer
+      @angular/cli  <=1.4.0-rc.2 || 7.0.0-beta.0 - 18.1.0-rc.1
+      Depends on vulnerable versions of inquirer
+      node_modules/@angular/cli
+
+undici  6.0.0 - 6.21.1
+Severity: moderate
+Undici vulnerable to data leak when using response.arrayBuffer() - https://github.com/advisories/GHSA-3g92-w8c5-73pq
+Use of Insufficiently Random Values in undici - https://github.com/advisories/GHSA-c76h-2ccp-4975
+undici Denial of Service attack via bad certificate data - https://github.com/advisories/GHSA-cxrh-j4jr-qwg3
+fix available via `npm audit fix --force`
+Will install @angular-devkit/build-angular@18.2.21, which is outside the stated dependency range
+node_modules/cheerio/node_modules/undici
+node_modules/undici
+
+validator  <=13.15.20
+Severity: high
+validator.js has a URL validation bypass vulnerability in its isURL function - https://github.com/advisories/GHSA-9965-vmph-33xx
+Validator is Vulnerable to Incomplete Filtering of One or More Instances of Special Elements - https://github.com/advisories/GHSA-vghf-hv5q-vc2g
+fix available via `npm audit fix`
+node_modules/validator
+
+
+webpack  5.0.0-alpha.0 - 5.93.0
+Severity: moderate
+Webpack's AutoPublicPathRuntimeModule has a DOM Clobbering Gadget that leads to XSS - https://github.com/advisories/GHSA-4vvj-4cpr-p986
+fix available via `npm audit fix --force`
+Will install @angular-devkit/build-angular@18.2.21, which is outside the stated dependency range
+node_modules/@angular-devkit/build-angular/node_modules/webpack
+node_modules/webpack
+
+webpack-dev-server  <=5.2.0
+Severity: moderate
+webpack-dev-server users' source code may be stolen when they access a malicious web site with non-Chromium based browser - https://github.com/advisories/GHSA-9jgg-88mc-972h
+webpack-dev-server users' source code may be stolen when they access a malicious web site - https://github.com/advisories/GHSA-4v9v-hfq4-rm2v
+fix available via `npm audit fix --force`
+Will install @angular-devkit/build-angular@18.2.21, which is outside the stated dependency range
+node_modules/webpack-dev-server
+
+91 vulnerabilities (15 low, 16 moderate, 57 high, 3 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force

@@ -1,0 +1,464 @@
+=== Angular Versions ===
+memberjunction-workspace@1.0.10 /Users/rkihm/Documents/GitHub/rkihm-BC/MJ
++-- @memberjunction/ng-action-gallery@2.127.0 -> ./packages/Angular/Generic/action-gallery
+| `-- @angular/core@18.0.2
++-- @memberjunction/ng-ai-test-harness@2.127.0 -> ./packages/Angular/Generic/ai-test-harness
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-artifacts@2.127.0 -> ./packages/Angular/Generic/artifacts
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-ask-skip@2.127.0 -> ./packages/Angular/Explorer/ask-skip
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-auth-services@2.127.0 -> ./packages/Angular/Explorer/auth-services
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-base-application@2.127.0 -> ./packages/Angular/Explorer/base-application
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-base-forms@2.127.0 -> ./packages/Angular/Explorer/base-forms
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-base-types@2.127.0 -> ./packages/Angular/Generic/base-types
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-chat@2.127.0 -> ./packages/Angular/Generic/chat
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-code-editor@2.127.0 -> ./packages/Angular/Generic/code-editor
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-compare-records@2.127.0 -> ./packages/Angular/Explorer/compare-records
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-container-directives@2.127.0 -> ./packages/Angular/Generic/container-directives
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-conversations@2.127.0 -> ./packages/Angular/Generic/conversations
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-core-entity-forms@2.127.0 -> ./packages/Angular/Explorer/core-entity-forms
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-dashboards@2.127.0 -> ./packages/Angular/Explorer/dashboards
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-data-context@2.127.0 -> ./packages/Angular/Generic/data-context
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-deep-diff@2.127.0 -> ./packages/Angular/Generic/deep-diff
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-entity-communications@2.127.0 -> ./packages/Angular/Generic/entity-communication
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-entity-form-dialog@2.127.0 -> ./packages/Angular/Explorer/entity-form-dialog
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-entity-permissions@2.127.0 -> ./packages/Angular/Explorer/entity-permissions
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-entity-viewer@2.127.0 -> ./packages/Angular/Generic/entity-viewer
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-explorer-core@2.127.0 -> ./packages/Angular/Explorer/explorer-core
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-explorer-settings@2.127.0 -> ./packages/Angular/Explorer/explorer-settings
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-file-storage@2.127.0 -> ./packages/Angular/Generic/file-storage
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-filter-builder@2.127.0 -> ./packages/Angular/Generic/filter-builder
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-find-record@2.127.0 -> ./packages/Angular/Generic/find-record
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-form-toolbar@2.127.0 -> ./packages/Angular/Explorer/form-toolbar
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-generic-dialog@2.127.0 -> ./packages/Angular/Generic/generic-dialog
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-join-grid@2.127.0 -> ./packages/Angular/Generic/join-grid
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-link-directives@2.127.0 -> ./packages/Angular/Explorer/link-directives
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-list-detail-grid@2.127.0 -> ./packages/Angular/Explorer/list-detail-grid
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-markdown@2.127.0 -> ./packages/Angular/Generic/markdown
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-notifications@2.127.0 -> ./packages/Angular/Generic/notifications
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-query-grid@2.127.0 -> ./packages/Angular/Generic/query-grid
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-react@2.127.0 -> ./packages/Angular/Generic/react
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-record-changes@2.127.0 -> ./packages/Angular/Explorer/record-changes
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-record-selector@2.127.0 -> ./packages/Angular/Generic/record-selector
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-resource-permissions@2.127.0 -> ./packages/Angular/Generic/resource-permissions
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-shared-generic@2.127.0 -> ./packages/Angular/Generic/shared
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-shared@2.127.0 -> ./packages/Angular/Explorer/shared
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-simple-record-list@2.127.0 -> ./packages/Angular/Explorer/simple-record-list
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-skip-chat@2.127.0 -> ./packages/Angular/Generic/skip-chat
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-tabstrip@2.127.0 -> ./packages/Angular/Generic/tab-strip
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-tasks@2.127.0 -> ./packages/Angular/Generic/tasks
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-testing@2.127.0 -> ./packages/Angular/Generic/Testing
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-timeline@2.127.0 -> ./packages/Angular/Generic/timeline
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-treelist@2.127.0 -> ./packages/Angular/Generic/tree-list
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-user-avatar@2.127.0 -> ./packages/Angular/Generic/user-avatar
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-user-view-grid@2.127.0 -> ./packages/Angular/Explorer/user-view-grid
+| `-- @angular/core@18.0.2 deduped
++-- @memberjunction/ng-user-view-properties@2.127.0 -> ./packages/Angular/Explorer/user-view-properties
+| `-- @angular/core@18.0.2 deduped
++-- mj_angular_elements_demo@0.0.0 -> ./packages/AngularElements/mj-angular-elements-demo
+| `-- @angular/core@18.0.2 deduped
+`-- mj_explorer@1.0.0 -> ./packages/MJExplorer
+  `-- @angular/core@18.0.2 deduped
+
+
+=== Kendo UI Versions ===
+memberjunction-workspace@1.0.10 /Users/rkihm/Documents/GitHub/rkihm-BC/MJ
++-- @memberjunction/ng-ask-skip@2.127.0 -> ./packages/Angular/Explorer/ask-skip
+| `-- @progress/kendo-angular-grid@16.2.0
++-- @memberjunction/ng-compare-records@2.127.0 -> ./packages/Angular/Explorer/compare-records
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-core-entity-forms@2.127.0 -> ./packages/Angular/Explorer/core-entity-forms
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-dashboards@2.127.0 -> ./packages/Angular/Explorer/dashboards
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-data-context@2.127.0 -> ./packages/Angular/Generic/data-context
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-entity-permissions@2.127.0 -> ./packages/Angular/Explorer/entity-permissions
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-explorer-core@2.127.0 -> ./packages/Angular/Explorer/explorer-core
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-explorer-settings@2.127.0 -> ./packages/Angular/Explorer/explorer-settings
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-file-storage@2.127.0 -> ./packages/Angular/Generic/file-storage
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-find-record@2.127.0 -> ./packages/Angular/Generic/find-record
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-join-grid@2.127.0 -> ./packages/Angular/Generic/join-grid
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-list-detail-grid@2.127.0 -> ./packages/Angular/Explorer/list-detail-grid
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-query-grid@2.127.0 -> ./packages/Angular/Generic/query-grid
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-record-changes@2.127.0 -> ./packages/Angular/Explorer/record-changes
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-resource-permissions@2.127.0 -> ./packages/Angular/Generic/resource-permissions
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-skip-chat@2.127.0 -> ./packages/Angular/Generic/skip-chat
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-testing@2.127.0 -> ./packages/Angular/Generic/Testing
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
++-- @memberjunction/ng-user-view-grid@2.127.0 -> ./packages/Angular/Explorer/user-view-grid
+| `-- @progress/kendo-angular-grid@16.2.0 deduped
+`-- mj_explorer@1.0.0 -> ./packages/MJExplorer
+  `-- @progress/kendo-angular-grid@16.2.0 deduped
+
+
+=== TypeScript Version ===
+memberjunction-workspace@1.0.10 /Users/rkihm/Documents/GitHub/rkihm-BC/MJ
++-- @memberjunction/a2aserver@2.127.0 -> ./packages/AI/A2AServer
+| `-- typescript@5.4.5 invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/actions-apollo@2.127.0 -> ./packages/Actions/ApolloEnrichment
+| `-- typescript@5.4.5 deduped
++-- @memberjunction/actions-base@2.127.0 -> ./packages/Actions/Base
+| `-- typescript@5.4.5 deduped
++-- @memberjunction/actions-bizapps-accounting@2.127.0 -> ./packages/Actions/BizApps/Accounting
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting
++-- @memberjunction/actions-bizapps-crm@2.127.0 -> ./packages/Actions/BizApps/CRM
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM
++-- @memberjunction/actions-bizapps-formbuilders@2.127.0 -> ./packages/Actions/BizApps/FormBuilders
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders
++-- @memberjunction/actions-bizapps-lms@2.127.0 -> ./packages/Actions/BizApps/LMS
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/actions-bizapps-social@2.127.0 -> ./packages/Actions/BizApps/Social
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/actions-content-autotag@2.127.0 -> ./packages/Actions/ContentAutotag
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/actions@2.127.0 -> ./packages/Actions/Engine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-agent-manager-actions@2.127.0 -> ./packages/AI/AgentManager/actions
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-agent-manager@2.127.0 -> ./packages/AI/AgentManager/core
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-agents@2.127.0 -> ./packages/AI/Agents
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-anthropic@2.127.0 -> ./packages/AI/Providers/Anthropic
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-azure@2.127.0 -> ./packages/AI/Providers/Azure
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-bedrock@2.127.0 -> ./packages/AI/Providers/Bedrock
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-betty-bot@2.127.0 -> ./packages/AI/Providers/BettyBot
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-cerebras@2.127.0 -> ./packages/AI/Providers/Cerebras
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-cli@2.127.0 -> ./packages/AI/AICLI
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-core-plus@2.127.0 -> ./packages/AI/CorePlus
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-elevenlabs@2.127.0 -> ./packages/AI/Providers/ElevenLabs
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-engine-base@2.127.0 -> ./packages/AI/BaseAIEngine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-gemini@2.127.0 -> ./packages/AI/Providers/Gemini
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-groq@2.127.0 -> ./packages/AI/Providers/Groq
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-heygen@2.127.0 -> ./packages/AI/Providers/HeyGen
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-lmstudio@2.127.0 -> ./packages/AI/Providers/LMStudio
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-local-embeddings@2.127.0 -> ./packages/AI/Providers/LocalEmbeddings
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-mcp-server@2.127.0 -> ./packages/AI/MCPServer
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-mistral@2.127.0 -> ./packages/AI/Providers/Mistral
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-ollama@2.127.0 -> ./packages/AI/Providers/Ollama
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-openai@2.127.0 -> ./packages/AI/Providers/OpenAI
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-openrouter@2.127.0 -> ./packages/AI/Providers/OpenRouter
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-prompts@2.127.0 -> ./packages/AI/Prompts
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-provider-bundle@2.127.0 -> ./packages/AI/Providers/Bundle
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-recommendations-rex@2.127.0 -> ./packages/AI/Providers/Recommendations-Rex
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-recommendations@2.127.0 -> ./packages/AI/Recommendations/Engine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-vector-dupe@2.127.0 -> ./packages/AI/Vectors/Dupe
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-vector-sync@2.127.0 -> ./packages/AI/Vectors/Sync
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-vectordb@2.127.0 -> ./packages/AI/Vectors/Database
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-vectors-memory@2.127.0 -> ./packages/AI/Vectors/Memory
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-vectors-pinecone@2.127.0 -> ./packages/AI/Providers/Vectors-Pinecone
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-vectors@2.127.0 -> ./packages/AI/Vectors/Core
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-vertex@2.127.0 -> ./packages/AI/Providers/Vertex
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai-xai@2.127.0 -> ./packages/AI/Providers/xAI
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ai@2.127.0 -> ./packages/AI/Core
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/aiengine@2.127.0 -> ./packages/AI/Engine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/cli@2.127.0 -> ./packages/MJCLI
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/code-execution@2.127.0 -> ./packages/Actions/CodeExecution
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/codegen-lib@2.127.0 -> ./packages/CodeGenLib
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/communication-engine@2.127.0 -> ./packages/Communication/engine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/communication-gmail@2.127.0 -> ./packages/Communication/providers/gmail
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/communication-ms-graph@2.127.0 -> ./packages/Communication/providers/MSGraph
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/communication-sendgrid@2.127.0 -> ./packages/Communication/providers/sendgrid
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/communication-twilio@2.127.0 -> ./packages/Communication/providers/twilio
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/communication-types@2.127.0 -> ./packages/Communication/base-types
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/component-registry-client-sdk@2.127.0 -> ./packages/ComponentRegistryClientSDK
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/component-registry-server@2.127.0 -> ./packages/ComponentRegistry
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/content-autotagging@2.127.0 -> ./packages/ContentAutotagging
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/core-actions@2.127.0 -> ./packages/Actions/CoreActions
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/core-entities-server@2.127.0 -> ./packages/MJCoreEntitiesServer
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/core-entities@2.127.0 -> ./packages/MJCoreEntities
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/core@2.127.0 -> ./packages/MJCore
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/data-context-server@2.127.0 -> ./packages/MJDataContextServer
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/data-context@2.127.0 -> ./packages/MJDataContext
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/db-auto-doc@2.127.0 -> ./packages/DBAutoDoc
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/doc-utils@2.127.0 -> ./packages/DocUtils
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/entity-communications-base@2.127.0 -> ./packages/Communication/entity-comm-base
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/entity-communications-client@2.127.0 -> ./packages/Communication/entity-comm-client
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/entity-communications-server@2.127.0 -> ./packages/Communication/entity-comm-server
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/external-change-detection@2.127.0 -> ./packages/ExternalChangeDetection
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/global@2.127.0 -> ./packages/MJGlobal
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/graphql-dataprovider@2.127.0 -> ./packages/GraphQLDataProvider
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/interactive-component-types@2.127.0 -> ./packages/InteractiveComponents
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/metadata-sync@2.127.0 -> ./packages/MetadataSync
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/ng-react@2.127.0 -> ./packages/Angular/Generic/react
+| `-- typescript@5.3.3
++-- @memberjunction/query-gen@2.127.0 -> ./packages/QueryGen
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/queue@2.127.0 -> ./packages/MJQueue
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/react-runtime@2.127.0 -> ./packages/React/runtime
+| `-- typescript@5.3.3
++-- @memberjunction/react-test-harness@2.127.0 -> ./packages/React/test-harness
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS
++-- @memberjunction/scheduled-actions-server@2.127.0 -> ./packages/Actions/ScheduledActionsServer
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/scheduled-actions@2.127.0 -> ./packages/Actions/ScheduledActions
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/scheduling-actions@2.127.0 -> ./packages/Scheduling/actions
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/scheduling-base-types@2.127.0 -> ./packages/Scheduling/base-types
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/scheduling-engine-base@2.127.0 -> ./packages/Scheduling/base-engine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/scheduling-engine@2.127.0 -> ./packages/Scheduling/engine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/server@2.127.0 -> ./packages/MJServer
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/skip-types@2.127.0 -> ./packages/SkipTypes
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/sqlserver-dataprovider@2.127.0 -> ./packages/SQLServerDataProvider
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/storage@2.127.0 -> ./packages/MJStorage
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/templates-base-types@2.127.0 -> ./packages/Templates/base-types
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/templates@2.127.0 -> ./packages/Templates/engine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/testing-cli@2.127.0 -> ./packages/TestingFramework/CLI
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/testing-engine-base@2.127.0 -> ./packages/TestingFramework/EngineBase
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- @memberjunction/testing-engine@2.127.0 -> ./packages/TestingFramework/Engine
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- mj_angular_elements_demo@0.0.0 -> ./packages/AngularElements/mj-angular-elements-demo
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- mj_api@1.0.0 -> ./packages/MJAPI
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- mj_codegen_api@1.0.0 -> ./packages/MJCodeGenAPI
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- mj_explorer@1.0.0 -> ./packages/MJExplorer
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
++-- mj_generatedactions@1.0.0 -> ./packages/GeneratedActions
+| `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
+`-- mj_generatedentities@1.0.0 -> ./packages/GeneratedEntities
+  `-- typescript@5.4.5 deduped invalid: "~5.3.3" from packages/Actions/BizApps/Accounting, "~5.3.3" from packages/Actions/BizApps/CRM, "~5.3.3" from packages/Actions/BizApps/FormBuilders, "~5.3.3" from packages/Actions/BizApps/LMS, "^4.9.5" from packages/Actions/ScheduledActionsServer
+
+npm error code ELSPROBLEMS
+npm error invalid: typescript@5.4.5 /Users/rkihm/Documents/GitHub/rkihm-BC/MJ/node_modules/typescript
+npm error A complete log of this run can be found in: /Users/rkihm/.npm/_logs/2025-12-21T01_58_40_138Z-debug-0.log
+
+=== RxJS Version ===
+memberjunction-workspace@1.0.10 /Users/rkihm/Documents/GitHub/rkihm-BC/MJ
++-- @memberjunction/ai-agents@2.127.0 -> ./packages/AI/Agents
+| `-- rxjs@7.8.1
++-- @memberjunction/ai-core-plus@2.127.0 -> ./packages/AI/CorePlus
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ai-engine-base@2.127.0 -> ./packages/AI/BaseAIEngine
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ai-prompts@2.127.0 -> ./packages/AI/Prompts
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ai-vectors-pinecone@2.127.0 -> ./packages/AI/Providers/Vectors-Pinecone
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ai@2.127.0 -> ./packages/AI/Core
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/aiengine@2.127.0 -> ./packages/AI/Engine
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/communication-engine@2.127.0 -> ./packages/Communication/engine
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/communication-types@2.127.0 -> ./packages/Communication/base-types
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/content-autotagging@2.127.0 -> ./packages/ContentAutotagging
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/core-actions@2.127.0 -> ./packages/Actions/CoreActions
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/core@2.127.0 -> ./packages/MJCore
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/global@2.127.0 -> ./packages/MJGlobal
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/graphql-dataprovider@2.127.0 -> ./packages/GraphQLDataProvider
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-action-gallery@2.127.0 -> ./packages/Angular/Generic/action-gallery
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-ai-test-harness@2.127.0 -> ./packages/Angular/Generic/ai-test-harness
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-artifacts@2.127.0 -> ./packages/Angular/Generic/artifacts
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-auth-services@2.127.0 -> ./packages/Angular/Explorer/auth-services
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-base-application@2.127.0 -> ./packages/Angular/Explorer/base-application
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-base-forms@2.127.0 -> ./packages/Angular/Explorer/base-forms
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-compare-records@2.127.0 -> ./packages/Angular/Explorer/compare-records
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-container-directives@2.127.0 -> ./packages/Angular/Generic/container-directives
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-conversations@2.127.0 -> ./packages/Angular/Generic/conversations
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-core-entity-forms@2.127.0 -> ./packages/Angular/Explorer/core-entity-forms
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-dashboards@2.127.0 -> ./packages/Angular/Explorer/dashboards
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-entity-viewer@2.127.0 -> ./packages/Angular/Generic/entity-viewer
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-explorer-core@2.127.0 -> ./packages/Angular/Explorer/explorer-core
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-explorer-settings@2.127.0 -> ./packages/Angular/Explorer/explorer-settings
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-filter-builder@2.127.0 -> ./packages/Angular/Generic/filter-builder
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-find-record@2.127.0 -> ./packages/Angular/Generic/find-record
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-list-detail-grid@2.127.0 -> ./packages/Angular/Explorer/list-detail-grid
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-notifications@2.127.0 -> ./packages/Angular/Generic/notifications
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-react@2.127.0 -> ./packages/Angular/Generic/react
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-shared-generic@2.127.0 -> ./packages/Angular/Generic/shared
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-shared@2.127.0 -> ./packages/Angular/Explorer/shared
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-skip-chat@2.127.0 -> ./packages/Angular/Generic/skip-chat
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-tasks@2.127.0 -> ./packages/Angular/Generic/tasks
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-testing@2.127.0 -> ./packages/Angular/Generic/Testing
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-timeline@2.127.0 -> ./packages/Angular/Generic/timeline
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-user-avatar@2.127.0 -> ./packages/Angular/Generic/user-avatar
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/ng-user-view-grid@2.127.0 -> ./packages/Angular/Explorer/user-view-grid
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/react-runtime@2.127.0 -> ./packages/React/runtime
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/server@2.127.0 -> ./packages/MJServer
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/sqlserver-dataprovider@2.127.0 -> ./packages/SQLServerDataProvider
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/testing-cli@2.127.0 -> ./packages/TestingFramework/CLI
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/testing-engine-base@2.127.0 -> ./packages/TestingFramework/EngineBase
+| `-- rxjs@7.8.1 deduped
++-- @memberjunction/testing-engine@2.127.0 -> ./packages/TestingFramework/Engine
+| `-- rxjs@7.8.1 deduped
++-- mj_angular_elements_demo@0.0.0 -> ./packages/AngularElements/mj-angular-elements-demo
+| `-- rxjs@7.8.1 deduped
++-- mj_codegen_api@1.0.0 -> ./packages/MJCodeGenAPI
+| `-- rxjs@7.8.1 deduped
+`-- mj_explorer@1.0.0 -> ./packages/MJExplorer
+  `-- rxjs@7.8.1 deduped
+
+
+=== Runtime Versions ===
+Node.js: v24.11.1
+npm: 11.6.2
