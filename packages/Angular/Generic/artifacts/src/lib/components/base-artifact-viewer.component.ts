@@ -1,16 +1,49 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, Type } from '@angular/core';
 import { ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 
 /**
- * Represents an additional tab that a plugin can provide to the artifact viewer
+ * Represents an additional tab that a plugin can provide to the artifact viewer.
+ *
+ * Tabs can render content in two ways:
+ * 1. **String content** - Use `contentType` with `content` for built-in renderers (markdown, json, code, etc.)
+ * 2. **Custom component** - Use `contentType: 'component'` with `component` and optional `componentInputs`
+ *
+ * @example
+ * // String content tab
+ * {
+ *   label: 'Code',
+ *   icon: 'fa-code',
+ *   contentType: 'code',
+ *   content: () => this.getCodeContent(),
+ *   language: 'typescript'
+ * }
+ *
+ * @example
+ * // Custom component tab
+ * {
+ *   label: 'Data',
+ *   icon: 'fa-database',
+ *   contentType: 'component',
+ *   component: DataRequirementsViewerComponent,
+ *   componentInputs: { dataRequirements: this.spec.dataRequirements }
+ * }
  */
 export interface ArtifactViewerTab {
+  /** Display label for the tab */
   label: string;
+  /** Font Awesome icon class (without 'fas' prefix) */
   icon?: string;
-  contentType: 'plaintext' | 'html' | 'markdown' | 'json' | 'code';
-  content: string | (() => string); // Static or lazy-loaded
-  language?: string; // For code type (typescript, json, etc.)
+  /** Type of content to render */
+  contentType: 'plaintext' | 'html' | 'markdown' | 'json' | 'code' | 'component';
+  /** String content or function returning string (for non-component tabs) */
+  content?: string | (() => string);
+  /** Language hint for code highlighting (used with 'code' contentType) */
+  language?: string;
+  /** Angular component class to render (used with 'component' contentType) */
+  component?: Type<any>;
+  /** Inputs to pass to the custom component */
+  componentInputs?: Record<string, any> | (() => Record<string, any>);
 }
 
 /**
