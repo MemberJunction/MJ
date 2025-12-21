@@ -1,5 +1,13 @@
 # MemberJunction 3.0: Package Version Upgrade Plan
 
+> **📋 STATUS UPDATE** (December 20, 2025):
+> - **Phase 0**: ✅ COMPLETE - Baseline established
+> - **Phase 1**: ⚠️ REVISED - Critical dependency discovered
+> - **Discovery**: TypeScript 5.9.3 requires Angular 21+. Angular 18 only supports TypeScript 5.4.x.
+> - **Impact**: Phase 1 changed from "TypeScript Upgrade to 5.9.3" to "TypeScript Consolidation to 5.4.5"
+> - **New Phase 3.5**: TypeScript 5.9.3 upgrade added after Angular 21 installation
+> - **See**: `plans/upgrade-baseline/phase1-findings.md` for detailed analysis
+
 ## Executive Summary
 
 This plan outlines the strategy for upgrading MemberJunction's core dependencies to their latest stable versions, including Node.js, Angular, Kendo UI, TypeScript, and other critical packages. The goal is to eliminate build warnings, improve performance, leverage new features, and ensure long-term support.
@@ -42,8 +50,10 @@ This plan outlines the strategy for upgrading MemberJunction's core dependencies
   - Compatible with Angular 21
   - Latest component features and bug fixes
 - **TypeScript**: v5.9.3 (latest stable 5.x)
-  - Required by Angular 21 (minimum 5.9+)
-  - Stable release with all latest features
+  - ⚠️ **IMPORTANT**: Can only upgrade AFTER Angular 21
+  - Angular 18 requires TypeScript 5.4.x
+  - Angular 21 requires TypeScript 5.9+
+  - See Phase 1 findings for details
 - **RxJS**: v7.8.2 (latest stable)
   - RxJS 8 is still in alpha, not recommended for production
 - **@types/node**: v24.12.0 (matching Node.js LTS)
@@ -112,61 +122,66 @@ This plan outlines the strategy for upgrading MemberJunction's core dependencies
 
 ---
 
-### Phase 1: TypeScript Standardization (Week 1-2)
+### Phase 1: TypeScript Consolidation (Week 1-2) - REVISED
 
-**Goal**: Standardize TypeScript to v5.9.3 across all packages
+**Goal**: Consolidate TypeScript to v5.4.5 across all packages
+
+**⚠️ CRITICAL DISCOVERY**: TypeScript 5.9.3 requires Angular 21+. Angular 18 only supports TypeScript 5.4.x. Therefore, Phase 1 focuses on **consolidation** to 5.4.5, not upgrade to 5.9.3. The TypeScript 5.9.3 upgrade will occur in Phase 3.5 after Angular 21 is installed.
+
+**See**: `plans/upgrade-baseline/phase1-findings.md` for detailed analysis
 
 #### Tasks:
-1. **Update Root TypeScript Override**
+1. **Update Syncpack Configuration**
+   Add TypeScript pinning to `.syncpackrc`:
    ```json
-   "overrides": {
-     "@types/node": "24.12.0",
-     "typescript": "5.9.3"
+   {
+     "dependencies": ["typescript"],
+     "dependencyTypes": ["dev"],
+     "pinVersion": "^5.4.5"
    }
    ```
 
 2. **Use Syncpack to Update All Packages**
    ```bash
-   # Update TypeScript in all package.json files
-   npx syncpack set-semver-ranges --semver-range "^5.9.3" --filter "typescript"
+   # Update TypeScript to 5.4.5 in all package.json files
+   npx syncpack fix-mismatches --filter "typescript"
    ```
 
-3. **Update Individual Packages**
-   - Focus on packages with old TypeScript versions:
-     - `Actions/ScheduledActionsServer` (4.9.5)
-     - `AI/A2AServer` (5.0.2)
-     - `Communication/providers/twilio` (5.0.2)
-     - `Communication/providers/gmail` (5.0.2)
-     - `AI/AgentManager/core` (5.0.0)
-     - `AI/AgentManager/actions` (5.0.0)
-     - `AI/Providers/Azure` (5.0.2)
+3. **Packages Requiring Updates**
+   Will update ~100 packages with older/newer versions:
+   - Packages on 4.9.x → ^5.4.5
+   - Packages on 5.0.x-5.3.x → ^5.4.5
+   - Packages on 5.6.x-5.9.x → ^5.4.5 (temporary downgrade)
+   - Already on 5.4.5: No change needed (~415 packages)
 
 4. **Install Dependencies**
    ```bash
-   npm install
+   rm -rf node_modules package-lock.json
+   npm install --legacy-peer-deps
    ```
 
 5. **Build and Test**
    ```bash
    npm run build
-   # Review TypeScript compilation errors
+   # All packages should compile with TypeScript 5.4.5
    ```
 
-6. **Fix TypeScript 5.9 Breaking Changes**
-   - Review TypeScript 5.9 release notes for breaking changes
-   - Fix any type errors introduced by stricter checks
-   - Update tsconfig.json files if needed
+6. **Verify Consistency**
+   ```bash
+   npm run deps:check
+   # Should show no TypeScript version mismatches
+   ```
 
-**Known Breaking Changes to Address**:
-- Stricter generic constraints
-- Improved inference in conditional types
-- Changes to module resolution
-- New strict checks
+**Known Compatibility**:
+- ✅ TypeScript 5.4.5 is compatible with Angular 18.0.2
+- ✅ Most packages already use 5.4.5 (361+ packages)
+- ✅ No breaking changes vs current majority version
 
 **Success Criteria**:
-- All packages use TypeScript 5.9.3
+- All packages use TypeScript ^5.4.5
 - Clean build with no TypeScript errors
 - All existing tests pass
+- Ready for Angular 21 upgrade in Phase 3
 
 ---
 
@@ -302,6 +317,70 @@ This plan outlines the strategy for upgrading MemberJunction's core dependencies
 - All forms and components functional
 - Change detection working correctly
 - No console errors or warnings
+
+---
+
+### Phase 3.5: TypeScript Upgrade to 5.9.3 (Week 4) - NEW PHASE
+
+**Goal**: Upgrade TypeScript from 5.4.5 to 5.9.3 (now that Angular 21 is installed)
+
+**Why This Phase Exists**: Angular 21 requires TypeScript >=5.9.0. This upgrade was deferred from Phase 1 due to the Angular 18 constraint (which only supported TypeScript 5.4.x).
+
+#### Tasks:
+1. **Update Syncpack Configuration**
+   Update TypeScript pinning in `.syncpackrc`:
+   ```json
+   {
+     "dependencies": ["typescript"],
+     "dependencyTypes": ["dev"],
+     "pinVersion": "^5.9.3"
+   }
+   ```
+
+2. **Update Root TypeScript Override**
+   Update `package.json`:
+   ```json
+   "overrides": {
+     "@types/node": "24.12.0",
+     "typescript": "5.9.3"
+   }
+   ```
+
+3. **Use Syncpack to Update All Packages**
+   ```bash
+   npx syncpack fix-mismatches --filter "typescript"
+   ```
+
+4. **Install Dependencies**
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install --legacy-peer-deps
+   ```
+
+5. **Build All Packages**
+   ```bash
+   npm run build
+   ```
+
+6. **Fix TypeScript 5.9 Compatibility Issues**
+   - Review TypeScript 5.5-5.9 release notes for breaking changes
+   - Fix any type errors introduced by stricter checks
+   - Update tsconfig.json files if needed
+
+**TypeScript 5.5-5.9 Breaking Changes to Watch For**:
+- Stricter generic constraints
+- Improved inference in conditional types
+- Better enum checking
+- Stricter property access
+- Changes to decorator emit
+- Improved type narrowing
+
+**Success Criteria**:
+- All packages use TypeScript ^5.9.3
+- Clean build with no TypeScript errors
+- All existing tests pass
+- Angular 21 compiler accepts TypeScript 5.9.3
+- No runtime errors
 
 ---
 
@@ -743,9 +822,10 @@ If critical issues arise during any phase:
 | Phase | Duration | Deliverable |
 |-------|----------|-------------|
 | 0. Preparation | Week 1 | Baseline, pinned Node.js, branch created |
-| 1. TypeScript | Week 1-2 | All packages on TypeScript 5.9.3 |
+| 1. TypeScript Consolidation | Week 1-2 | All packages on TypeScript 5.4.5 (REVISED) |
 | 2. Node.js | Week 2 | Node.js 24.12.0, updated types |
 | 3. Angular | Week 3-4 | Angular 21.0.6 across all packages |
+| 3.5. TypeScript Upgrade | Week 4 | All packages on TypeScript 5.9.3 (NEW) |
 | 4. Kendo UI | Week 4-5 | Kendo UI 21.3.0, updated syntax |
 | 5. RxJS | Week 5 | RxJS 7.8.2, cleaned dependencies |
 | 6. Warnings | Week 6 | Zero warnings in build |
@@ -753,7 +833,7 @@ If critical issues arise during any phase:
 | 8. Documentation | Week 7 | Migration guide, updated docs |
 | 9. Merge | Week 8 | PR merged, v3.0.0 released |
 
-**Total Duration**: 8 weeks
+**Total Duration**: 8 weeks (unchanged - Phase 3.5 runs concurrently with Phase 4)
 
 ---
 
