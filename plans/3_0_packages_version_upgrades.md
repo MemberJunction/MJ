@@ -2,11 +2,26 @@
 
 > **📋 STATUS UPDATE** (December 20, 2025):
 > - **Phase 0**: ✅ COMPLETE - Baseline established
-> - **Phase 1**: ⚠️ REVISED - Critical dependency discovered
-> - **Discovery**: TypeScript 5.9.3 requires Angular 21+. Angular 18 only supports TypeScript 5.4.x.
-> - **Impact**: Phase 1 changed from "TypeScript Upgrade to 5.9.3" to "TypeScript Consolidation to 5.4.5"
-> - **New Phase 3.5**: TypeScript 5.9.3 upgrade added after Angular 21 installation
-> - **See**: `plans/upgrade-baseline/phase1-findings.md` for detailed analysis
+> - **Phase 1**: ✅ COMPLETE - TypeScript consolidated to 5.4.5 (81% build success)
+> - **Phase 2**: ⚠️ BLOCKED - Dependency ordering issue discovered
+> - **Phase 3**: ⏳ NEXT - Angular upgrade must come before Phase 2
+>
+> **Critical Dependencies Discovered**:
+> 1. TypeScript 5.9.3 requires Angular 21+ (Phase 1 finding)
+> 2. Node.js types & build tools require Angular 21 peer deps (Phase 2 finding)
+> 3. npm with --legacy-peer-deps resolves Angular to 21.0.6 despite overrides
+>
+> **Corrected Phase Order**:
+> - Phase 1: TypeScript Consolidation ✅
+> - **Phase 3: Angular 18 → 21** ← Must come next
+> - Phase 2: Node.js types & build tools (moved after Angular)
+> - Phase 3.5: TypeScript 5.9.3 upgrade
+> - Phase 4: Kendo UI 16 → 21
+>
+> **See**:
+> - `plans/upgrade-baseline/phase1-findings.md` - TypeScript/Angular dependency
+> - `plans/upgrade-baseline/phase1-complete.md` - Phase 1 results
+> - `plans/upgrade-baseline/phase2-findings.md` - Phase 2 blocker analysis
 
 ## Executive Summary
 
