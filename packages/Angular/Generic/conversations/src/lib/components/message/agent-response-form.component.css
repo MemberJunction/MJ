@@ -1,9 +1,8 @@
 .agent-response-form {
   margin-top: 16px;
-  display: inline-block;
-  max-width: min(800px, 100%);
-  min-width: 400px;
-  width: auto;
+  display: block;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Simple Choice Mode */
@@ -96,27 +95,41 @@
 }
 
 /* Responsive Design */
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .agent-response-form {
-    min-width: 300px;
+    margin-top: 12px;
+  }
+
+  .response-form {
+    border-radius: 10px;
   }
 
   .form-questions {
     padding: 12px;
   }
 
+  .form-actions {
+    padding: 10px 12px;
+  }
+
   .simple-choice-buttons {
-    flex-direction: column;
+    gap: 8px;
   }
 
   .choice-button {
-    width: 100%;
+    padding: 10px 14px;
+    font-size: 13px;
   }
 }
 
-@media (max-width: 400px) {
+@media (max-width: 480px) {
   .agent-response-form {
-    min-width: 100%;
+    margin-top: 10px;
+  }
+
+  .response-form {
+    border-radius: 8px;
+    border-width: 1.5px;
   }
 
   .form-title {
@@ -127,5 +140,29 @@
   .form-description {
     font-size: 12px;
     padding: 10px 12px;
+  }
+
+  .form-questions {
+    padding: 10px;
+  }
+
+  .form-actions {
+    padding: 8px 10px;
+  }
+
+  .simple-choice-buttons {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .choice-button {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .submit-button {
+    min-width: 100px;
+    font-size: 13px;
   }
 }

@@ -240,9 +240,11 @@
     width: 100%;
     left: 0;
     right: 0;
-    top: 48px;
+    top: 56px; /* 48px nav + 8px dark strip above blue border */
+    bottom: 0;
     z-index: 1000;
     max-width: 100%;
+    height: auto;
   }
 
   .sidebar-resize-handle,
