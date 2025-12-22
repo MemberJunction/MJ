@@ -33,6 +33,7 @@
          *ngIf="activeTab !== 'collections' && activeTab !== 'tasks'"
          [class.open]="isSidebarVisible"
          [class.collapsed]="isSidebarCollapsed"
+         [class.no-transition]="!sidebarTransitionsEnabled"
          [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
       <mj-conversation-sidebar
         [activeTab]="activeTab"

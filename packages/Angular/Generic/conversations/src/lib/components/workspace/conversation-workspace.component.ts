@@ -125,6 +125,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
   public isSidebarCollapsed: boolean = false; // Collapsed state for sidebar
+  public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
   private isSidebarResizing: boolean = false;
   private sidebarResizeStartX: number = 0;
   private sidebarResizeStartWidth: number = 0;
@@ -306,10 +307,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     if (this.isMobileView) {
       this.isSidebarCollapsed = true;
       this.isSidebarVisible = false;
+      // Enable transitions after a brief delay to ensure initial state is applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
     } else {
       // Load from User Settings (async) - don't block UI initialization
       this.loadSidebarState().then(() => {
         this.cdr.detectChanges();
+        // Enable transitions after state is loaded and applied
+        setTimeout(() => {
+          this.sidebarTransitionsEnabled = true;
+        }, 50);
       });
     }
 

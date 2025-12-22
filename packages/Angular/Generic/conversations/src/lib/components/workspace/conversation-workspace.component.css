@@ -30,6 +30,11 @@
   transition: width 0.3s ease;
 }
 
+/* Disable transitions during initial load to prevent jarring animation */
+.workspace-sidebar.no-transition {
+  transition: none !important;
+}
+
 .workspace-sidebar.collapsed {
   width: 0 !important;
   min-width: 0;

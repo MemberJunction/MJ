@@ -32,7 +32,8 @@ export function LoadChatConversationsResource() {
     <div class="chat-conversations-container" *ngIf="isReady; else loadingTemplate">
       <!-- Left sidebar: Conversation list -->
       <div class="conversation-sidebar"
-           [class.collapsed]="isSidebarCollapsed">
+           [class.collapsed]="isSidebarCollapsed"
+           [class.no-transition]="!sidebarTransitionsEnabled">
         <mj-conversation-list
           #conversationList
           *ngIf="currentUser"
@@ -115,6 +116,11 @@ export function LoadChatConversationsResource() {
       transition: width 0.3s ease;
     }
 
+    /* Disable transitions during initial load to prevent jarring animation */
+    .conversation-sidebar.no-transition {
+      transition: none !important;
+    }
+
     .conversation-sidebar.collapsed {
       width: 0;
       min-width: 0;
@@ -186,6 +192,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   public isSidebarCollapsed: boolean = false;
   public isSidebarPinned: boolean = true; // Whether sidebar stays open after selection
   public isMobileView: boolean = false;
+  public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
 
   // Pending navigation state
   public pendingArtifactId: string | null = null;
@@ -215,10 +222,18 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.checkMobileView();
     if (this.isMobileView) {
       this.isSidebarCollapsed = true;
+      // Enable transitions after a brief delay to ensure initial state is applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
     } else {
       // Load sidebar state from User Settings (non-blocking)
       this.loadSidebarState().then(() => {
         this.cdr.detectChanges();
+        // Enable transitions after state is loaded and applied
+        setTimeout(() => {
+          this.sidebarTransitionsEnabled = true;
+        }, 50);
       });
     }
 
