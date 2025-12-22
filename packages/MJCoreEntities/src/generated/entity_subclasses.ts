@@ -10202,6 +10202,11 @@ export const AIPromptModelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EffortLevel: z.number().nullable().describe(`
+        * * Field Name: EffortLevel
+        * * Display Name: Effort Level
+        * * SQL Data Type: int
+        * * Description: Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -43872,6 +43877,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
     * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
     * * ParallelCount: This rule ensures that the ParallelCount value must always be at least 1.
     * * Priority: This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
@@ -43882,6 +43888,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateEffortLevelRange(result);
         this.ValidateExecutionGroupNonNegative(result);
         this.ValidateParallelCountAtLeastOne(result);
         this.ValidatePriorityIsNonNegative(result);
@@ -43889,6 +43896,24 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelRange(result: ValidationResult) {
+    	// Only validate when a value is provided
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EffortLevel",
+    			"Effort level must be between 1 and 100.",
+    			this.EffortLevel,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -44139,6 +44164,19 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EffortLevel
+    * * Display Name: Effort Level
+    * * SQL Data Type: int
+    * * Description: Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.
+    */
+    get EffortLevel(): number | null {
+        return this.Get('EffortLevel');
+    }
+    set EffortLevel(value: number | null) {
+        this.Set('EffortLevel', value);
     }
 
     /**
