@@ -423,10 +423,12 @@ export interface FormResponseContent {
     name: string;
     /** Field value */
     value: any;
-    /** Optional display label */
+    /** Optional display label for the question */
     label?: string;
     /** Optional field type for formatting (date, datetime, slider, etc.) */
     type?: string;
+    /** Optional display value (e.g., option label for choice fields) */
+    displayValue?: string;
   }>;
 }
 
