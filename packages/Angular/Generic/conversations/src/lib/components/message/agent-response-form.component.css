@@ -1,15 +1,15 @@
 .agent-response-form {
   margin-top: 16px;
   display: block;
-  width: 100%;
-  max-width: 100%;
+  width: fit-content;
+  max-width: 600px;
 }
 
 /* Simple Choice Mode */
 .simple-choice-buttons {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 12px;
 }
 
@@ -70,7 +70,9 @@
 
 .form-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
   padding: 12px 16px;
   background: rgba(16, 185, 129, 0.05);
   border-top: 1px solid rgba(16, 185, 129, 0.15);
@@ -78,6 +80,19 @@
 
 .submit-button {
   min-width: 120px;
+}
+
+/* Footer choice buttons - horizontal on desktop */
+.footer-choice-button {
+  min-width: 120px;
+}
+
+.footer-choice-button i.fa {
+  margin-right: 6px;
+}
+
+.footer-choice-button .k-icon {
+  animation: spin 1s linear infinite;
 }
 
 .submit-button i.fa {
@@ -125,6 +140,8 @@
 @media (max-width: 480px) {
   .agent-response-form {
     margin-top: 10px;
+    width: 100%;
+    max-width: 100%;
   }
 
   .response-form {
@@ -148,21 +165,25 @@
 
   .form-actions {
     padding: 8px 10px;
-  }
-
-  .simple-choice-buttons {
     flex-direction: column;
-    gap: 6px;
   }
 
   .choice-button {
     width: 100%;
+    min-height: 44px;
     padding: 12px 16px;
     font-size: 14px;
   }
 
+  .footer-choice-button {
+    width: 100%;
+    min-height: 44px;
+    font-size: 14px;
+  }
+
   .submit-button {
-    min-width: 100px;
+    width: 100%;
+    min-height: 44px;
     font-size: 13px;
   }
 }
