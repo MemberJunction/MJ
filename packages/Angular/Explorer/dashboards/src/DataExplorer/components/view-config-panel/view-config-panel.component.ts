@@ -126,7 +126,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
   // UI state
   public activeTab: 'columns' | 'filters' | 'settings' = 'columns';
-  public isSaving: boolean = false;
+  @Input() isSaving: boolean = false;
   public columnSearchText: string = '';
 
   // Drag state for column reordering
@@ -179,9 +179,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       return;
     }
 
-    // Initialize columns from entity fields
+    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info)
     this.columns = this.entity.Fields
-      .filter(f => !f.Name.startsWith('__mj_'))
       .map((field, index) => ({
         fieldId: field.ID,
         fieldName: field.Name,
@@ -257,6 +256,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       } else {
         // Default to smart mode for new/empty filters (promote AI filtering)
         this.filterMode = 'smart';
+        this.smartFilterEnabled = true; // Enable smart filter when defaulting to smart mode
       }
     } else {
       // Default view - use entity defaults
@@ -267,25 +267,25 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         this.sortField = null;
         this.sortDirection = 'asc';
       }
-      this.smartFilterEnabled = false;
       this.smartFilterPrompt = '';
       this.smartFilterExplanation = '';
       this.filterState = createEmptyFilter();
       // Default to smart mode (promote AI filtering)
       this.filterMode = 'smart';
+      this.smartFilterEnabled = true; // Enable smart filter when defaulting to smart mode
     }
 
     this.cdr.detectChanges();
   }
 
   /**
-   * Build filter fields from entity fields
+   * Build filter fields from entity fields (including __mj_ fields for filtering by timestamps)
    */
   private buildFilterFields(): FilterFieldInfo[] {
     if (!this.entity) return [];
 
     return this.entity.Fields
-      .filter(f => !f.Name.startsWith('__mj_') && !f.IsBinaryFieldType)
+      .filter(f => !f.IsBinaryFieldType)
       .map(field => ({
         name: field.Name,
         displayName: field.DisplayNameOrName,
@@ -453,12 +453,11 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Get sortable fields for dropdown
+   * Get sortable fields for dropdown (including __mj_ fields for sorting by timestamps)
    */
   get sortableFields(): EntityFieldInfo[] {
     if (!this.entity) return [];
     return this.entity.Fields.filter(f =>
-      !f.Name.startsWith('__mj_') &&
       !f.IsBinaryFieldType // Exclude binary fields from sorting
     );
   }

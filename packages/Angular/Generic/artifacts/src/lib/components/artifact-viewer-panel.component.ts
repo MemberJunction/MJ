@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
@@ -100,36 +100,88 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     return tabs;
   }
 
-  public GetTabContent(tabName: string): { type: string; content: string; language?: string } | null {
-    // Check if this is a plugin-provided tab (query directly from plugin - no cache needed)
+  /**
+   * Get the full tab definition for a given tab name.
+   * Returns the ArtifactViewerTab which may include component info for custom component tabs.
+   */
+  public GetTabDefinition(tabName: string): ArtifactViewerTab | null {
+    // Check if this is a plugin-provided tab
     if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
       const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
       const pluginTab = pluginTabs.find((t: ArtifactViewerTab) =>
         t.label.toLowerCase() === tabName.toLowerCase()
       );
-
       if (pluginTab) {
-        const content = typeof pluginTab.content === 'function'
-          ? pluginTab.content()
-          : pluginTab.content;
-
-        return {
-          type: pluginTab.contentType,
-          content: content,
-          language: pluginTab.language
-        };
+        return pluginTab;
       }
     }
 
     // Handle base tabs
     switch (tabName.toLowerCase()) {
       case 'json':
-        return { type: 'json', content: this.jsonContent, language: 'json' };
+        return { label: 'JSON', contentType: 'json', content: this.jsonContent, language: 'json' };
       case 'details':
-        return { type: 'html', content: this.displayMarkdown || this.displayHtml || '' };
+        return { label: 'Details', contentType: 'html', content: this.displayMarkdown || this.displayHtml || '' };
       default:
         return null;
     }
+  }
+
+  /**
+   * Get resolved tab content for string-based tabs (non-component tabs).
+   * For component tabs, use GetTabDefinition() and render the component directly.
+   */
+  public GetTabContent(tabName: string): { type: string; content: string; language?: string } | null {
+    const tabDef = this.GetTabDefinition(tabName);
+    if (!tabDef) return null;
+
+    // Component tabs don't have string content
+    if (tabDef.contentType === 'component') {
+      return null;
+    }
+
+    const content = typeof tabDef.content === 'function'
+      ? tabDef.content()
+      : tabDef.content || '';
+
+    return {
+      type: tabDef.contentType,
+      content: content,
+      language: tabDef.language
+    };
+  }
+
+  /**
+   * Check if a tab is a component tab (renders a custom Angular component)
+   */
+  public IsComponentTab(tabName: string): boolean {
+    const tabDef = this.GetTabDefinition(tabName);
+    return tabDef?.contentType === 'component' && !!tabDef.component;
+  }
+
+  /**
+   * Get the component type for a component tab.
+   * Returns null if the tab is not a component tab (used for template type safety).
+   */
+  public GetComponentTabType(tabName: string): Type<any> | null {
+    const tabDef = this.GetTabDefinition(tabName);
+    if (tabDef?.contentType === 'component' && tabDef.component) {
+      return tabDef.component;
+    }
+    return null;
+  }
+
+  /**
+   * Get the component inputs for a component tab
+   */
+  public GetComponentInputs(tabName: string): Record<string, any> {
+    const tabDef = this.GetTabDefinition(tabName);
+    if (!tabDef || tabDef.contentType !== 'component') {
+      return {};
+    }
+    return typeof tabDef.componentInputs === 'function'
+      ? tabDef.componentInputs()
+      : tabDef.componentInputs || {};
   }
 
   private recentAccessService: RecentAccessService;

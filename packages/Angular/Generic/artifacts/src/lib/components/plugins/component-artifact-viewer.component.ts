@@ -4,6 +4,7 @@ import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-ar
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import { CompositeKey } from '@memberjunction/core';
+import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
 
 /**
  * Viewer component for interactive Component artifacts (React-based UI components)
@@ -142,14 +143,14 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       });
     }
 
-    // Data Requirements tab
+    // Data Requirements tab - uses custom component for rich visualization
     if (resolvedComponent.dataRequirements) {
       tabs.push({
         label: 'Data',
         icon: 'fa-database',
-        contentType: 'json',
-        content: JSON.stringify(resolvedComponent.dataRequirements, null, 2),
-        language: 'json'
+        contentType: 'component',
+        component: DataRequirementsViewerComponent,
+        componentInputs: { dataRequirements: resolvedComponent.dataRequirements }
       });
     }
 
