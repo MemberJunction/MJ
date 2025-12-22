@@ -1,5 +1,24 @@
 # @memberjunction/ng-artifacts
 
+## 2.128.0
+
+### Patch Changes
+
+- e41becd: no migration file
+- Updated dependencies [f407abe]
+- Updated dependencies [3dde14d]
+- Updated dependencies [0863f85]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ng-notifications@2.128.0
+  - @memberjunction/ng-markdown@2.128.0
+  - @memberjunction/ng-base-types@2.128.0
+  - @memberjunction/ng-code-editor@2.128.0
+  - @memberjunction/ng-react@2.128.0
+  - @memberjunction/ng-shared-generic@2.128.0
+  - @memberjunction/interactive-component-types@2.128.0
+  - @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Minor Changes

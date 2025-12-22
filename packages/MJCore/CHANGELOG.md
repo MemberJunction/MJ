@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.128.0
+
+### Minor Changes
+
+- f407abe: Add EffortLevel support to AIPromptModel with priority hierarchy and fix GPT 5.2 naming convention to align with standards
+
+### Patch Changes
+
+- @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Minor Changes

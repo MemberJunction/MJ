@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.128.0
+
+### Patch Changes
+
+- f407abe: Add EffortLevel support to AIPromptModel with priority hierarchy and fix GPT 5.2 naming convention to align with standards
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/interactive-component-types@2.128.0
+  - @memberjunction/ai@2.128.0
+  - @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Patch Changes

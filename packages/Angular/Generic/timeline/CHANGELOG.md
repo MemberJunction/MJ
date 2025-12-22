@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+
 ## 2.127.0
 
 ### Patch Changes

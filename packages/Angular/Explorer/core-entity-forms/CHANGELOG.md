@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.128.0
+
+### Patch Changes
+
+- f407abe: Add EffortLevel support to AIPromptModel with priority hierarchy and fix GPT 5.2 naming convention to align with standards
+- Updated dependencies [f407abe]
+- Updated dependencies [3dde14d]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ng-notifications@2.128.0
+  - @memberjunction/ai-engine-base@2.128.0
+  - @memberjunction/ai-core-plus@2.128.0
+  - @memberjunction/actions-base@2.128.0
+  - @memberjunction/ng-base-forms@2.128.0
+  - @memberjunction/ng-form-toolbar@2.128.0
+  - @memberjunction/ng-link-directives@2.128.0
+  - @memberjunction/ng-shared@2.128.0
+  - @memberjunction/ng-user-view-grid@2.128.0
+  - @memberjunction/ng-testing@2.128.0
+  - @memberjunction/ng-action-gallery@2.128.0
+  - @memberjunction/ng-ai-test-harness@2.128.0
+  - @memberjunction/ng-code-editor@2.128.0
+  - @memberjunction/ng-container-directives@2.128.0
+  - @memberjunction/ng-deep-diff@2.128.0
+  - @memberjunction/ng-join-grid@2.128.0
+  - @memberjunction/ng-timeline@2.128.0
+  - @memberjunction/graphql-dataprovider@2.128.0
+  - @memberjunction/templates-base-types@2.128.0
+  - @memberjunction/ng-tabstrip@2.128.0
+  - @memberjunction/ai@2.128.0
+  - @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Patch Changes

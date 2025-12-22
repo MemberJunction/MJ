@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/ai-core-plus@2.128.0
+  - @memberjunction/interactive-component-types@2.128.0
+  - @memberjunction/data-context@2.128.0
+
 ## 2.127.0
 
 ### Minor Changes

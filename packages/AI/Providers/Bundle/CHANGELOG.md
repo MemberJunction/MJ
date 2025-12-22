@@ -1,5 +1,34 @@
 # @memberjunction/ai-provider-bundle
 
+## 2.128.0
+
+### Minor Changes
+
+- 5f70858: migration
+
+### Patch Changes
+
+- Updated dependencies [0863f85]
+  - @memberjunction/ai-gemini@2.128.0
+  - @memberjunction/ai-recommendations-rex@2.128.0
+  - @memberjunction/ai-vectors-pinecone@2.128.0
+  - @memberjunction/ai-anthropic@2.128.0
+  - @memberjunction/ai-azure@2.128.0
+  - @memberjunction/ai-bedrock@2.128.0
+  - @memberjunction/ai-betty-bot@2.128.0
+  - @memberjunction/ai-cerebras@2.128.0
+  - @memberjunction/ai-elevenlabs@2.128.0
+  - @memberjunction/ai-groq@2.128.0
+  - @memberjunction/ai-heygen@2.128.0
+  - @memberjunction/ai-lmstudio@2.128.0
+  - @memberjunction/ai-local-embeddings@2.128.0
+  - @memberjunction/ai-mistral@2.128.0
+  - @memberjunction/ai-ollama@2.128.0
+  - @memberjunction/ai-openai@2.128.0
+  - @memberjunction/ai-openrouter@2.128.0
+  - @memberjunction/ai-vertex@2.128.0
+  - @memberjunction/ai-xai@2.128.0
+
 ## 2.127.0
 
 ### Patch Changes

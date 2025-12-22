@@ -1,5 +1,23 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+- Updated dependencies [3dde14d]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ng-notifications@2.128.0
+  - @memberjunction/ai-engine-base@2.128.0
+  - @memberjunction/ng-shared@2.128.0
+  - @memberjunction/ng-code-editor@2.128.0
+  - @memberjunction/ng-container-directives@2.128.0
+  - @memberjunction/ng-shared-generic@2.128.0
+  - @memberjunction/graphql-dataprovider@2.128.0
+  - @memberjunction/ai@2.128.0
+  - @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Patch Changes
