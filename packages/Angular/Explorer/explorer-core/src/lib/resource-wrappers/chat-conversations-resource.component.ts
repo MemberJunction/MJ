@@ -1,4 +1,4 @@
-import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
@@ -31,7 +31,8 @@ export function LoadChatConversationsResource() {
   template: `
     <div class="chat-conversations-container" *ngIf="isReady; else loadingTemplate">
       <!-- Left sidebar: Conversation list -->
-      <div class="conversation-sidebar">
+      <div class="conversation-sidebar"
+           [class.collapsed]="isSidebarCollapsed">
         <mj-conversation-list
           #conversationList
           *ngIf="currentUser"
@@ -39,9 +40,21 @@ export function LoadChatConversationsResource() {
           [currentUser]="currentUser"
           [selectedConversationId]="selectedConversationId"
           [renamedConversationId]="renamedConversationId"
+          [isSidebarPinned]="isSidebarPinned"
+          [isMobileView]="isMobileView"
           (conversationSelected)="onConversationSelected($event)"
-          (newConversationRequested)="onNewConversationRequested()">
+          (newConversationRequested)="onNewConversationRequested()"
+          (pinSidebarRequested)="pinSidebar()"
+          (unpinSidebarRequested)="unpinSidebar()">
         </mj-conversation-list>
+      </div>
+
+      <!-- Sidebar expand handle (only visible when collapsed) -->
+      <div class="sidebar-expand-handle"
+           *ngIf="isSidebarCollapsed"
+           (click)="expandSidebar()"
+           title="Expand sidebar">
+        <i class="fas fa-chevron-right"></i>
       </div>
 
       <!-- Main area: Chat interface -->
@@ -90,6 +103,7 @@ export function LoadChatConversationsResource() {
       height: 100%;
       flex: 1;
       overflow: hidden;
+      position: relative;
     }
 
     .conversation-sidebar {
@@ -98,6 +112,39 @@ export function LoadChatConversationsResource() {
       border-right: 1px solid #e0e0e0;
       overflow-y: auto;
       background: #f5f5f5;
+      transition: width 0.3s ease;
+    }
+
+    .conversation-sidebar.collapsed {
+      width: 0;
+      min-width: 0;
+      border-right: none;
+      overflow: hidden;
+    }
+
+    .sidebar-expand-handle {
+      flex-shrink: 0;
+      width: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: #092340;
+      border-right: 1px solid rgba(255, 255, 255, 0.15);
+      transition: background 0.15s ease;
+    }
+
+    .sidebar-expand-handle:hover {
+      background: #1a3a5c;
+    }
+
+    .sidebar-expand-handle i {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 11px;
+    }
+
+    .sidebar-expand-handle:hover i {
+      color: white;
     }
 
     .conversation-main {
@@ -136,6 +183,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   public selectedThreadId: string | null = null;
   public isNewUnsavedConversation: boolean = false;
   public renamedConversationId: string | null = null;
+  public isSidebarCollapsed: boolean = false;
+  public isSidebarPinned: boolean = true; // Whether sidebar stays open after selection
+  public isMobileView: boolean = false;
 
   // Pending navigation state
   public pendingArtifactId: string | null = null;
@@ -155,6 +205,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   async ngOnInit() {
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
+
+    // Check initial mobile state and set default collapsed
+    this.checkMobileView();
+    if (this.isMobileView) {
+      this.isSidebarCollapsed = true;
+    }
 
     // CRITICAL: Initialize AIEngine and mention service BEFORE children render
     // This prevents the slow first-load issue where each child would trigger initialization
@@ -466,6 +522,59 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedThreadId = null; // Clear thread when switching conversations
     this.isNewUnsavedConversation = false;
     this.updateUrl();
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.checkMobileView();
+  }
+
+  /**
+   * Check if we're in mobile view and handle state accordingly
+   */
+  private checkMobileView(): void {
+    const wasMobile = this.isMobileView;
+    this.isMobileView = window.innerWidth < 768;
+
+    if (this.isMobileView && !wasMobile) {
+      // Switched to mobile - default to collapsed
+      this.isSidebarCollapsed = true;
+    }
+  }
+
+  /**
+   * Collapse sidebar
+   */
+  collapseSidebar(): void {
+    this.isSidebarCollapsed = true;
+  }
+
+  /**
+   * Expand sidebar (unpinned - will auto-collapse on selection)
+   */
+  expandSidebar(): void {
+    this.isSidebarCollapsed = false;
+    this.isSidebarPinned = false;
+  }
+
+  /**
+   * Pin sidebar - keep it open after selection
+   */
+  pinSidebar(): void {
+    this.isSidebarPinned = true;
+  }
+
+  /**
+   * Unpin sidebar - will auto-collapse on next selection
+   */
+  unpinSidebar(): void {
+    this.isSidebarPinned = false;
+    this.collapseSidebar();
   }
 
   /**
@@ -477,6 +586,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedThreadId = null;
     this.isNewUnsavedConversation = true;
     this.updateUrl();
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
   }
 
   /**

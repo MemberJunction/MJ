@@ -32,20 +32,36 @@
     <div class="workspace-sidebar"
          *ngIf="activeTab !== 'collections' && activeTab !== 'tasks'"
          [class.open]="isSidebarVisible"
-         [style.width.px]="sidebarWidth">
+         [class.collapsed]="isSidebarCollapsed"
+         [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
       <mj-conversation-sidebar
         [activeTab]="activeTab"
         [environmentId]="environmentId"
         [currentUser]="currentUser"
         [selectedConversationId]="selectedConversationId"
         [renamedConversationId]="renamedConversationId"
+        [isSidebarPinned]="isSidebarPinned"
+        [isMobileView]="isMobileView"
         (conversationSelected)="onConversationSelected($event)"
-        (newConversationRequested)="startNewConversation()">
+        (newConversationRequested)="startNewConversation()"
+        (pinSidebarRequested)="pinSidebar()"
+        (unpinSidebarRequested)="unpinSidebar()">
       </mj-conversation-sidebar>
     </div>
 
-    <!-- Resize handle for sidebar -->
-    <div class="sidebar-resize-handle" *ngIf="isSidebarVisible && activeTab !== 'collections' && activeTab !== 'tasks'" (mousedown)="onSidebarResizeStart($event)"></div>
+    <!-- Sidebar expand handle (only visible when collapsed) -->
+    @if (activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarCollapsed) {
+      <div class="sidebar-expand-handle"
+           (click)="expandSidebar()"
+           title="Expand sidebar">
+        <i class="fas fa-chevron-right"></i>
+      </div>
+    }
+
+    <!-- Resize handle for sidebar (only when expanded) -->
+    <div class="sidebar-resize-handle"
+         *ngIf="isSidebarVisible && !isSidebarCollapsed && activeTab !== 'collections' && activeTab !== 'tasks'"
+         (mousedown)="onSidebarResizeStart($event)"></div>
 
     <!-- Collections Full-Panel View -->
     <div class="workspace-main" *ngIf="activeTab === 'collections'">

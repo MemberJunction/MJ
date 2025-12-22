@@ -19,6 +19,7 @@
   display: flex;
   overflow: hidden;
   min-height: 0;
+  position: relative;
 }
 
 .workspace-sidebar {
@@ -26,6 +27,42 @@
   background-color: #092340;
   border-right: 1px solid #D9D9D9;
   overflow-y: auto;
+  transition: width 0.3s ease;
+}
+
+.workspace-sidebar.collapsed {
+  width: 0 !important;
+  min-width: 0;
+  border-right: none;
+  overflow: hidden;
+}
+
+/* Sidebar expand handle (only visible when sidebar is collapsed) */
+.sidebar-expand-handle {
+  flex-shrink: 0;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: #092340;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+  transition: background 0.15s ease;
+  z-index: 10;
+}
+
+.sidebar-expand-handle:hover {
+  background: #1a3a5c;
+}
+
+.sidebar-expand-handle i {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  transition: color 0.15s ease;
+}
+
+.sidebar-expand-handle:hover i {
+  color: white;
 }
 
 .sidebar-resize-handle {
@@ -204,7 +241,8 @@
   }
 
   .sidebar-resize-handle,
-  .artifact-panel-resize-handle {
+  .artifact-panel-resize-handle,
+  .sidebar-expand-handle {
     display: none;
   }
 

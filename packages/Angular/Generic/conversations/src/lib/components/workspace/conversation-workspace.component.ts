@@ -112,6 +112,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public activeVersionNumber: number | null = null;
   public activeVersionId: string | null = null;
   public isMobileView: boolean = false;
+  public isSidebarPinned: boolean = true; // Whether sidebar stays open after selection
 
   // Artifact permissions
   public canShareActiveArtifact: boolean = false;
@@ -123,6 +124,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
+  public isSidebarCollapsed: boolean = false; // Collapsed state for sidebar
   private isSidebarResizing: boolean = false;
   private sidebarResizeStartX: number = 0;
   private sidebarResizeStartWidth: number = 0;
@@ -143,6 +145,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // LocalStorage keys
   private readonly SIDEBAR_WIDTH_KEY = 'mj-conversations-sidebar-width';
+  private readonly SIDEBAR_COLLAPSED_KEY = 'mj-conversations-sidebar-collapsed';
   private readonly ARTIFACT_PANEL_WIDTH_KEY = 'mj-artifact-panel-width';
 
   // Task filter for conversation-specific filtering
@@ -201,6 +204,11 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.selectedConversation = null;
     this.isNewUnsavedConversation = true;
     this.pendingMessageToSend = null;
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
   }
 
   /**
@@ -231,6 +239,11 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    */
   onConversationSelected(conversationId: string): void {
     this.setActiveConversation(conversationId);
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
   }
 
   /**
@@ -277,12 +290,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         this.onAutomaticCommand(command);
       });
 
-    // Check initial mobile state
+    // Check initial mobile state FIRST
     this.checkMobileView();
 
     // Load saved widths from localStorage
     this.loadSidebarWidth();
     this.loadArtifactPanelWidth();
+
+    // Load sidebar state - but on mobile, always default to collapsed
+    if (this.isMobileView) {
+      this.isSidebarCollapsed = true;
+      this.isSidebarVisible = false;
+    } else {
+      this.loadSidebarState();
+    }
 
     // Setup resize listeners
     window.addEventListener('mousemove', this.onResizeMove.bind(this));
@@ -467,9 +488,88 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.isMobileView = window.innerWidth < 768;
 
     if (this.isMobileView && !wasMobile) {
+      // Switched to mobile - hide sidebar and default to collapsed
       this.isSidebarVisible = false;
+      this.isSidebarCollapsed = true;
     } else if (!this.isMobileView && wasMobile) {
+      // Switched to desktop - show sidebar, restore state from localStorage
       this.isSidebarVisible = true;
+      this.loadSidebarState();
+    }
+  }
+
+  /**
+   * Collapse sidebar
+   */
+  collapseSidebar(): void {
+    this.isSidebarCollapsed = true;
+    if (this.isMobileView) {
+      this.isSidebarVisible = false;
+    }
+  }
+
+  /**
+   * Expand sidebar (unpinned - will auto-collapse on selection)
+   */
+  expandSidebar(): void {
+    this.isSidebarCollapsed = false;
+    this.isSidebarPinned = false;
+  }
+
+  /**
+   * Pin sidebar - keep it open after selection
+   */
+  pinSidebar(): void {
+    this.isSidebarPinned = true;
+    this.saveSidebarState();
+  }
+
+  /**
+   * Unpin sidebar - will auto-collapse on next selection
+   */
+  unpinSidebar(): void {
+    this.isSidebarPinned = false;
+    this.collapseSidebar();
+    this.saveSidebarState();
+  }
+
+  /**
+   * Save sidebar pinned state to localStorage
+   */
+  private saveSidebarState(): void {
+    try {
+      localStorage.setItem(this.SIDEBAR_COLLAPSED_KEY, JSON.stringify({
+        collapsed: this.isSidebarCollapsed,
+        pinned: this.isSidebarPinned
+      }));
+    } catch (error) {
+      console.warn('Failed to save sidebar state to localStorage:', error);
+    }
+  }
+
+  /**
+   * Load sidebar state from localStorage
+   */
+  private loadSidebarState(): void {
+    try {
+      const saved = localStorage.getItem(this.SIDEBAR_COLLAPSED_KEY);
+      if (saved) {
+        // Try parsing as JSON first (new format)
+        try {
+          const state = JSON.parse(saved);
+          if (typeof state === 'object' && state !== null) {
+            this.isSidebarCollapsed = state.collapsed ?? false;
+            this.isSidebarPinned = state.pinned ?? true;
+            return;
+          }
+        } catch {
+          // Fall back to old boolean format
+          this.isSidebarCollapsed = saved === 'true';
+          this.isSidebarPinned = !this.isSidebarCollapsed;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load sidebar state from localStorage:', error);
     }
   }
 
