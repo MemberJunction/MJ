@@ -73,7 +73,9 @@
             (saveViewRequested)="onSaveViewRequested($event)"
             (manageViewsRequested)="onManageViewsRequested()"
             (openInTabRequested)="onOpenInTabRequested($event)"
-            (configureViewRequested)="onConfigureViewRequested()">
+            (configureViewRequested)="onConfigureViewRequested()"
+            (createNewRecordRequested)="onCreateNewRecord()"
+            (exportRequested)="onExport()">
           </mj-view-selector>
         } @else {
           @if (displayIcon) {
@@ -500,6 +502,7 @@
     [isOpen]="state.viewConfigPanelOpen"
     [currentGridState]="currentGridState"
     [externalFilterState]="filterDialogState"
+    [isSaving]="isSavingView"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
     (delete)="onDeleteView()"
@@ -515,4 +518,11 @@
     (close)="onCloseFilterDialog()"
     (apply)="onFilterApplied($event)">
   </mj-filter-dialog>
+
+  <!-- Excel Export Component (hidden, used for export functionality) -->
+  <kendo-excelexport #excelExport [data]="exportData" [fileName]="exportFileName">
+    @for (col of exportColumns; track col.Name) {
+      <kendo-excelexport-column [field]="col.Name" [title]="col.DisplayName"></kendo-excelexport-column>
+    }
+  </kendo-excelexport>
 </div>

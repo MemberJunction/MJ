@@ -1,5 +1,19 @@
 # @memberjunction/ai-agent-manager
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ai-agents@2.128.0
+  - @memberjunction/ai-engine-base@2.128.0
+  - @memberjunction/ai-core-plus@2.128.0
+  - @memberjunction/aiengine@2.128.0
+  - @memberjunction/templates@2.128.0
+  - @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Patch Changes

@@ -1,5 +1,30 @@
 # @memberjunction/ng-conversations
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+- Updated dependencies [3dde14d]
+- Updated dependencies [0863f85]
+- Updated dependencies [e41becd]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ng-notifications@2.128.0
+  - @memberjunction/ng-markdown@2.128.0
+  - @memberjunction/ng-artifacts@2.128.0
+  - @memberjunction/ai-engine-base@2.128.0
+  - @memberjunction/ai-core-plus@2.128.0
+  - @memberjunction/ng-testing@2.128.0
+  - @memberjunction/ng-base-types@2.128.0
+  - @memberjunction/ng-code-editor@2.128.0
+  - @memberjunction/ng-container-directives@2.128.0
+  - @memberjunction/ng-shared-generic@2.128.0
+  - @memberjunction/ng-tasks@2.128.0
+  - @memberjunction/graphql-dataprovider@2.128.0
+  - @memberjunction/ai@2.128.0
+  - @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Minor Changes

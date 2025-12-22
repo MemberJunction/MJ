@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { filter } from 'rxjs/operators';
@@ -11,7 +11,7 @@ import {
   WorkspaceConfiguration,
   WorkspaceTab
 } from '@memberjunction/ng-base-application';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, EntityInfo } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -53,6 +53,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   userImageURL = '';
   userIconClass: string | null = null;
   userName = '';
+
+  // Search state
+  isSearchOpen = false;
+  searchableEntities: EntityInfo[] = [];
+  selectedEntity: EntityInfo | null = null;
+  @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
   /**
    * Get Nav Bar apps positioned to the left of the app switcher
@@ -287,6 +293,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       })
     );
+
+    // Load searchable entities for search functionality
+    await this.loadSearchableEntities();
 
     this.initialized = true;
     this.loading = false;
@@ -1091,5 +1100,104 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Update title via TitleService
     this.titleService.setContext(appName, resourceName);
+  }
+
+  // ========================================
+  // SEARCH FUNCTIONALITY
+  // ========================================
+
+  /**
+   * Load searchable entities from metadata
+   */
+  private async loadSearchableEntities(): Promise<void> {
+    const md = new Metadata();
+    this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
+    if (this.searchableEntities.length > 0) {
+      this.selectedEntity = this.searchableEntities[0];
+    }
+  }
+
+  /**
+   * Toggle search popup visibility
+   */
+  toggleSearch(): void {
+    this.isSearchOpen = !this.isSearchOpen;
+
+    // Focus on search input when opened
+    if (this.isSearchOpen) {
+      setTimeout(() => {
+        if (this.searchInput && this.searchInput.nativeElement) {
+          this.searchInput.nativeElement.focus();
+        }
+      }, 100);
+    }
+  }
+
+  /**
+   * Close search popup
+   */
+  closeSearch(): void {
+    this.isSearchOpen = false;
+  }
+
+  /**
+   * Handle search submission
+   */
+  onSearch(event: Event): void {
+    if (!this.searchInput) {
+      return;
+    }
+
+    const inputValue = this.searchInput.nativeElement.value;
+    if (inputValue && inputValue.length > 0 && inputValue.trim().length > 2) {
+      this.searchInput.nativeElement.value = ''; // Clear input
+      this.isSearchOpen = false; // Close search popup
+
+      // Navigate to search results
+      if (this.selectedEntity) {
+        this.router.navigate(['resource', 'search', inputValue], { queryParams: { Entity: this.selectedEntity.Name } });
+      }
+    } else {
+      // Show warning notification
+      MJGlobal.Instance.RaiseEvent({
+        component: this,
+        event: MJEventType.DisplaySimpleNotificationRequest,
+        eventCode: "",
+        args: {
+          message: 'Please enter at least 3 characters to search',
+          style: 'warning',
+          DisplayDuration: 1500
+        }
+      });
+    }
+  }
+
+  // ========================================
+  // NOTIFICATION FUNCTIONALITY
+  // ========================================
+
+  /**
+   * Show notifications page as a tab
+   */
+  showNotifications(): void {
+    MJGlobal.Instance.RaiseEvent({
+      event: MJEventType.ComponentEvent,
+      component: this,
+      eventCode: EventCodes.ViewNotifications,
+      args: {}
+    });
+
+    // Open notifications in a tab
+    // Use 'Custom' resource type with explicit driverClass to load NotificationsResource component
+    this.tabService.OpenTab({
+      ApplicationId: SYSTEM_APP_ID,
+      Title: 'Notifications',
+      Configuration: {
+        resourceType: 'Custom',
+        driverClass: 'NotificationsResource',
+        route: 'notifications'
+      },
+      IsPinned: false
+    });
   }
 }

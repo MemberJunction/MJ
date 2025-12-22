@@ -1,9 +1,10 @@
 import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, Metadata, EntityInfo } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridStateConfig } from '@memberjunction/ng-entity-viewer';
+import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
+import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
+import { RecordOpenedEvent, ViewGridStateConfig, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
+import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 
 export function LoadViewResource() {
     // Force class to be included in production builds (tree shaking workaround)
@@ -24,34 +25,7 @@ export function LoadViewResource() {
 @RegisterClass(BaseResourceComponent, 'ViewResource')
 @Component({
     selector: 'mj-userview-resource',
-    template: `
-        <div #container class="view-resource-container">
-            @if (isLoading) {
-                <div class="view-loading-state">
-                    <mj-loading text="Loading view..." size="large"></mj-loading>
-                </div>
-            } @else if (errorMessage) {
-                <div class="view-error-state">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>{{ errorMessage }}</p>
-                </div>
-            } @else if (entityInfo) {
-                <div class="view-header">
-                    <h2 class="view-title">{{ viewEntity?.Name || entityInfo.Name }}</h2>
-                    @if (viewEntity?.Description) {
-                        <p class="view-description">{{ viewEntity!.Description }}</p>
-                    }
-                </div>
-                <mj-entity-viewer
-                    [entity]="entityInfo"
-                    [viewEntity]="viewEntity"
-                    [gridState]="gridState"
-                    (recordOpened)="onRecordOpened($any($event))"
-                    (dataLoaded)="onDataLoaded()">
-                </mj-entity-viewer>
-            }
-        </div>
-    `,
+    templateUrl: './view-resource.component.html',
     styles: [`
         :host {
             display: block;
@@ -73,6 +47,19 @@ export function LoadViewResource() {
         .view-header {
             padding: 16px 20px 8px 20px;
             flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .header-left {
+            flex: 1;
+            min-width: 0;
+        }
+        .header-right {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
         }
         .view-title {
             margin: 0 0 4px 0;
@@ -84,6 +71,45 @@ export function LoadViewResource() {
             margin: 0;
             font-size: 0.875rem;
             color: var(--text-secondary, #666);
+        }
+        .action-button {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: 1px solid #d4d4d4;
+            border-radius: 6px;
+            background: white;
+            color: #333;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .action-button:hover:not(:disabled) {
+            background: #f5f5f5;
+            border-color: #b4b4b4;
+        }
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .action-button i {
+            font-size: 0.875rem;
+        }
+        .create-button {
+            background: #1976d2;
+            color: white;
+            border-color: #1976d2;
+        }
+        .create-button:hover:not(:disabled) {
+            background: #1565c0;
+            border-color: #1565c0;
+        }
+        .export-button:hover:not(:disabled) {
+            color: #1976d2;
+            border-color: #1976d2;
         }
         .view-loading-state,
         .view-error-state {
@@ -108,16 +134,27 @@ export function LoadViewResource() {
             flex: 1;
             min-height: 0;
         }
+        kendo-excelexport {
+            display: none;
+        }
     `]
 })
 export class UserViewResource extends BaseResourceComponent {
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
+    @ViewChild('entityViewer') entityViewerRef?: EntityViewerComponent;
+    @ViewChild('excelExport') excelExportRef?: ExcelExportComponent;
 
     public isLoading: boolean = false;
     public errorMessage: string | null = null;
     public entityInfo: EntityInfo | null = null;
     public viewEntity: UserViewEntityExtended | null = null;
     public gridState: ViewGridStateConfig | null = null;
+
+    // Export state
+    public isExporting: boolean = false;
+    public exportData: any[] = [];
+    public exportColumns: { Name: string; DisplayName: string }[] = [];
+    public exportFileName: string = 'export.xlsx';
 
     private dataLoaded = false;
     private metadata = new Metadata();
@@ -283,5 +320,124 @@ export class UserViewResource extends BaseResourceComponent {
      */
     override async GetResourceIconClass(_data: ResourceData): Promise<string> {
         return 'fa-solid fa-table-list';
+    }
+
+    /**
+     * Handle creating a new record for the current entity
+     */
+    public onCreateNewRecord(): void {
+        if (!this.entityInfo) return;
+
+        // Use NavigationService to open a new record form
+        this.navigationService.OpenNewEntityRecord(this.entityInfo.Name);
+    }
+
+    /**
+     * Handle export to Excel request
+     */
+    public async onExport(): Promise<void> {
+        if (!this.excelExportRef || !this.entityInfo) {
+            console.error('Cannot export: Excel export component or entity not available');
+            return;
+        }
+
+        this.isExporting = true;
+        this.cdr.detectChanges();
+
+        try {
+            this.showNotification('Working on the export, will notify you when it is complete...', 'info', 2000);
+
+            const data = await this.getExportData();
+
+            // Determine which columns to export based on grid state or view entity
+            if (this.gridState?.columnSettings && this.gridState.columnSettings.length > 0) {
+                // Use grid state - only export visible columns in grid order
+                const visibleColumns = this.gridState.columnSettings.filter(col => col.hidden !== true);
+                this.exportColumns = visibleColumns.map(col => ({
+                    Name: col.Name,
+                    DisplayName: col.DisplayName || col.Name
+                }));
+            } else if (this.viewEntity?.Columns) {
+                // Use view's column configuration - only export visible columns in view order
+                const visibleColumns = this.viewEntity.Columns.filter(col => !col.hidden);
+                this.exportColumns = visibleColumns.map(col => ({
+                    Name: col.Name,
+                    DisplayName: col.DisplayName || col.Name
+                }));
+            } else {
+                // Fall back to all non-virtual fields
+                const visibleFields = this.entityInfo.Fields.filter(f => !f.IsVirtual);
+                this.exportColumns = visibleFields.map(f => ({
+                    Name: f.Name,
+                    DisplayName: f.DisplayNameOrName
+                }));
+            }
+
+            this.exportData = data;
+
+            // Set the export filename
+            const viewName = this.viewEntity?.Name || 'Data';
+            this.exportFileName = `${this.entityInfo.Name}_${viewName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+            // Wait for Angular to update the DOM with the new data before triggering save
+            setTimeout(() => {
+                this.excelExportRef!.save();
+                this.showNotification('Excel Export Complete', 'success', 2000);
+                this.isExporting = false;
+                this.cdr.detectChanges();
+            }, 100);
+        }
+        catch (e) {
+            this.showNotification('Error exporting data', 'error', 5000);
+            console.error('Export error:', e);
+            this.isExporting = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Get the data for export - loads all records for the current view/entity
+     */
+    private async getExportData(): Promise<any[]> {
+        if (!this.entityInfo) {
+            throw new Error('No entity selected for export');
+        }
+
+        const rv = new RunView();
+
+        // Build the filter for the export - combine view's WhereClause with any smart filter
+        let filter = '';
+        if (this.viewEntity?.WhereClause) {
+            filter = this.viewEntity.WhereClause;
+        }
+
+        const result = await rv.RunView({
+            EntityName: this.entityInfo.Name,
+            ExtraFilter: filter,
+            OrderBy: '', // Let view handle sorting
+            ResultType: 'simple' // Get plain objects for export
+        });
+
+        if (!result.Success) {
+            throw new Error(result.ErrorMessage || 'Failed to load data for export');
+        }
+
+        return result.Results || [];
+    }
+
+    /**
+     * Show a notification to the user
+     */
+    private showNotification(message: string, style: 'info' | 'success' | 'error' | 'warning', duration: number): void {
+        MJGlobal.Instance.RaiseEvent({
+            component: this,
+            event: MJEventType.DisplaySimpleNotificationRequest,
+            eventCode: '',
+            args: {
+                message,
+                style,
+                DisplayDuration: duration
+            }
+        });
     }
 }

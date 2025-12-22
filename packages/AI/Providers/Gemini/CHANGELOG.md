@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 2.128.0
+
+### Patch Changes
+
+- 0863f85: no migration
+  - @memberjunction/ai@2.128.0
+  - @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Patch Changes

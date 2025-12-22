@@ -98,6 +98,7 @@ import { ChatConversationsResource } from './lib/resource-wrappers/chat-conversa
 import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collections-resource.component';
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
+import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 // AI resource components are now in @memberjunction/ng-dashboards directly (no wrappers needed)
 import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
@@ -146,6 +147,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     ChatCollectionsResource,
     ChatTasksResource,
     ArtifactResource,
+    NotificationsResource,
     TabbedDashboardComponent,
     DashboardPreferencesDialogComponent,
     StyleGuideTestComponent

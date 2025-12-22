@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-notifications
 
+## 2.128.0
+
+### Patch Changes
+
+- 3dde14d: Shell, Viewing System and Dashboard fixes and improvements
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/graphql-dataprovider@2.128.0
+  - @memberjunction/global@2.128.0
+
 ## 2.127.0
 
 ### Patch Changes
