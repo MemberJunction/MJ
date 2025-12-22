@@ -88,6 +88,16 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
    */
   @Output() configureViewRequested = new EventEmitter<void>();
 
+  /**
+   * Emitted when user wants to create a new record
+   */
+  @Output() createNewRecordRequested = new EventEmitter<void>();
+
+  /**
+   * Emitted when user wants to export data to Excel
+   */
+  @Output() exportRequested = new EventEmitter<void>();
+
   // Internal state
   public isLoading: boolean = false;
   public isDropdownOpen: boolean = false;
@@ -292,6 +302,20 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
    */
   onConfigureView(): void {
     this.configureViewRequested.emit();
+  }
+
+  /**
+   * Request to create a new record
+   */
+  onCreateNewRecord(): void {
+    this.createNewRecordRequested.emit();
+  }
+
+  /**
+   * Request to export data to Excel
+   */
+  onExport(): void {
+    this.exportRequested.emit();
   }
 
   /**

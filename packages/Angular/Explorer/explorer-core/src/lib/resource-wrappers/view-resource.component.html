@@ -1,0 +1,69 @@
+<div #container class="view-resource-container">
+    @if (isLoading) {
+        <div class="view-loading-state">
+            <mj-loading text="Loading view..." size="large"></mj-loading>
+        </div>
+    } @else if (errorMessage) {
+        <div class="view-error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>{{ errorMessage }}</p>
+        </div>
+    } @else if (entityInfo) {
+        <!-- Header with title and action buttons -->
+        <div class="view-header">
+            <div class="header-left">
+                <h2 class="view-title">{{ viewEntity?.Name || entityInfo.Name }}</h2>
+                @if (viewEntity?.Description) {
+                    <p class="view-description">{{ viewEntity!.Description }}</p>
+                }
+            </div>
+            <div class="header-right">
+                <!-- Create New Record Button -->
+                <button
+                    class="action-button create-button"
+                    (click)="onCreateNewRecord()"
+                    title="Create new {{ entityInfo.Name }} record">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Record</span>
+                </button>
+
+                <!-- Export Button -->
+                <button
+                    class="action-button export-button"
+                    (click)="onExport()"
+                    [disabled]="isExporting"
+                    title="Export to Excel">
+                    @if (isExporting) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                    } @else {
+                        <i class="fa-solid fa-file-excel"></i>
+                    }
+                    <span>{{ isExporting ? 'Exporting...' : 'Export' }}</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Entity Viewer -->
+        <mj-entity-viewer
+            #entityViewer
+            [entity]="entityInfo"
+            [viewEntity]="viewEntity"
+            [gridState]="gridState"
+            (recordOpened)="onRecordOpened($any($event))"
+            (dataLoaded)="onDataLoaded()">
+        </mj-entity-viewer>
+
+        <!-- Hidden Excel Export Component -->
+        <kendo-excelexport
+            #excelExport
+            [data]="exportData"
+            [fileName]="exportFileName">
+            @for (column of exportColumns; track column.Name) {
+                <kendo-excelexport-column
+                    [field]="column.Name"
+                    [title]="column.DisplayName">
+                </kendo-excelexport-column>
+            }
+        </kendo-excelexport>
+    }
+</div>

@@ -8,6 +8,7 @@ import { LoadChatConversationsResource } from "./chat-conversations-resource.com
 import { LoadChatCollectionsResource } from "./chat-collections-resource.component";
 import { LoadChatTasksResource } from "./chat-tasks-resource.component";
 import { LoadArtifactResource } from "./artifact-resource.component";
+import { LoadNotificationsResource } from "./notifications-resource.component";
 // AI resources are now loaded from @memberjunction/ng-dashboards directly
 import {
     LoadAIMonitorResource,
@@ -34,4 +35,5 @@ export function LoadResourceWrappers()
     LoadAIModelsResource();
     LoadAIConfigResource();
     LoadArtifactResource();
+    LoadNotificationsResource();
 }
