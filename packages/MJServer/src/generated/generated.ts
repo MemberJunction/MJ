@@ -5159,6 +5159,9 @@ export class MJAIPromptModel_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`}) 
+    EffortLevel?: number;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -5217,6 +5220,9 @@ export class CreateMJAIPromptModelInput {
 
     @Field({ nullable: true })
     ParallelConfigParam: string | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel: number | null;
 }
     
 
@@ -5260,6 +5266,9 @@ export class UpdateMJAIPromptModelInput {
 
     @Field({ nullable: true })
     ParallelConfigParam?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

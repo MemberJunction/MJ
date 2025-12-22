@@ -148,7 +148,8 @@ export class MarkdownService {
       startOnLoad: false,
       theme: this.currentConfig.mermaidTheme,
       securityLevel: 'loose',
-      fontFamily: 'inherit'
+      fontFamily: 'inherit',
+      suppressErrorRendering: true // Suppress visual error diagrams - errors go to console only
     });
 
     this.mermaidInitialized = true;
@@ -169,11 +170,17 @@ export class MarkdownService {
     }
 
     try {
-      const html = this.marked.parse(markdown) as string;
+      let html = this.marked.parse(markdown) as string;
 
       // Capture heading list after parsing
       if (this.currentConfig.enableHeadingIds) {
         this.headingList = getHeadingList() as HeadingInfo[];
+      }
+
+      // When HTML passthrough is enabled, fix incorrectly code-wrapped HTML
+      // marked sometimes wraps inline HTML in <pre><code> blocks
+      if (this.currentConfig.enableHtml) {
+        html = this.unwrapMiscodedHtml(html);
       }
 
       return html;
@@ -357,5 +364,108 @@ export class MarkdownService {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  /**
+   * Fix HTML that was incorrectly wrapped in <pre><code> blocks by marked.
+   * This happens when marked interprets inline HTML (especially indented HTML)
+   * as code blocks. We detect this by checking if the code block content
+   * looks like valid HTML structure rather than actual code.
+   *
+   * Only processes code blocks WITHOUT a language class (e.g., language-javascript)
+   * to avoid unwrapping intentional code examples.
+   */
+  private unwrapMiscodedHtml(html: string): string {
+    // Quick check - if no pre tags, nothing to do
+    if (!html.includes('<pre>')) {
+      return html;
+    }
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+      const container = doc.body.firstChild as HTMLElement;
+
+      if (!container) return html;
+
+      // Find all pre > code elements WITHOUT a language class
+      // Code blocks with language classes (language-javascript, etc.) are intentional
+      const preElements = container.querySelectorAll('pre');
+      let modified = false;
+
+      for (const pre of Array.from(preElements)) {
+        const code = pre.querySelector('code');
+        if (!code) continue;
+
+        // Skip if code has a language class - it's intentional code
+        const hasLanguageClass = code.className && /language-\w+/.test(code.className);
+        if (hasLanguageClass) continue;
+
+        // Get the text content (this is HTML-decoded by the browser)
+        const content = code.textContent?.trim() || '';
+
+        // Check if this looks like HTML that was incorrectly wrapped
+        if (this.looksLikeStructuralHtml(content)) {
+          // Verify it parses as valid HTML with actual elements
+          const testDoc = parser.parseFromString(content, 'text/html');
+          const hasStructure = testDoc.body.children.length > 0 ||
+                              (testDoc.body.innerHTML.trim().length > 0 &&
+                               testDoc.body.innerHTML.includes('<'));
+
+          if (hasStructure) {
+            // Replace the <pre> with the actual HTML content
+            const wrapper = document.createElement('div');
+            wrapper.className = 'unwrapped-html';
+            wrapper.innerHTML = content;
+
+            // Move all children from wrapper to replace pre
+            const fragment = document.createDocumentFragment();
+            while (wrapper.firstChild) {
+              fragment.appendChild(wrapper.firstChild);
+            }
+            pre.parentNode?.replaceChild(fragment, pre);
+            modified = true;
+          }
+        }
+      }
+
+      if (modified) {
+        return container.innerHTML;
+      }
+    } catch (error) {
+      console.warn('Error in unwrapMiscodedHtml:', error);
+    }
+
+    return html;
+  }
+
+  /**
+   * Check if content looks like structural HTML that was incorrectly
+   * wrapped in a code block. We look for common HTML element patterns
+   * that indicate this is meant to be rendered HTML, not code.
+   */
+  private looksLikeStructuralHtml(content: string): boolean {
+    // Must start with < to be HTML
+    if (!content.startsWith('<')) return false;
+
+    // Must end with > (closing tag)
+    if (!content.endsWith('>')) return false;
+
+    // Check for common structural HTML tags that indicate layout HTML
+    // These are tags that would typically appear in a UI mockup/prototype
+    const structuralTagPattern = /<(div|span|table|tr|td|th|thead|tbody|p|ul|ol|li|section|article|header|footer|nav|main|aside|form|input|button|label|select|option|textarea|h[1-6]|img|a|strong|em|b|i|br|hr)\b/i;
+
+    if (!structuralTagPattern.test(content)) return false;
+
+    // Additional check: should have multiple tags or nested structure
+    // Single self-closing tags like <br> or <img> shouldn't trigger unwrapping
+    const tagCount = (content.match(/<\w+/g) || []).length;
+    if (tagCount < 2) return false;
+
+    // Check it's not just showing HTML as an example (common in docs)
+    // If content has lots of &lt; or &gt; it's probably escaped HTML being shown
+    if (content.includes('&lt;') || content.includes('&gt;')) return false;
+
+    return true;
   }
 }

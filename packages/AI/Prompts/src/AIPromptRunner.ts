@@ -87,6 +87,7 @@ interface ModelVendorCandidate {
   driverClass: string;
   apiName?: string;
   supportsEffortLevel?: boolean;
+  effortLevel?: number;
   isPreferredVendor: boolean;
   priority: number; // Higher is better
   source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank';
@@ -461,9 +462,9 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The execution result
    */
   private async executeSinglePrompt<T = unknown>(
-    prompt: AIPromptEntityExtended, 
-    renderedPromptText: string, 
-    params: AIPromptParams, 
+    prompt: AIPromptEntityExtended,
+    renderedPromptText: string,
+    params: AIPromptParams,
     startTime: Date,
     existingPromptRun?: AIPromptRunEntityExtended,
     existingModel?: AIModelEntityExtended,
@@ -480,6 +481,7 @@ export class AIPromptRunner {
     let vendorDriverClass: string | undefined;
     let vendorApiName: string | undefined;
     let vendorSupportsEffortLevel: boolean | undefined;
+    let modelEffortLevel: number | undefined;
     let allCandidates: ModelVendorCandidate[] = [];
 
     if (modelSelectionInfo) {
@@ -511,6 +513,7 @@ export class AIPromptRunner {
       vendorDriverClass = modelResult.vendorDriverClass;
       vendorApiName = modelResult.vendorApiName;
       vendorSupportsEffortLevel = modelResult.vendorSupportsEffortLevel;
+      modelEffortLevel = modelResult.modelEffortLevel;
       modelSelectionInfo = modelResult.selectionInfo;
       allCandidates = modelResult.allCandidates || [];
       if (!selectedModel) {
@@ -541,7 +544,8 @@ export class AIPromptRunner {
       allCandidates,
       vendorDriverClass,
       vendorApiName,
-      vendorSupportsEffortLevel
+      vendorSupportsEffortLevel,
+      modelEffortLevel // Pass model-specific effort level
     );
 
     // Calculate execution metrics
@@ -1119,12 +1123,13 @@ export class AIPromptRunner {
     contextUser?: UserInfo,
     configurationId?: string,
     vendorId?: string,
-    params?: AIPromptParams 
+    params?: AIPromptParams
   ): Promise<{
     model: AIModelEntityExtended | null;
     vendorDriverClass?: string;
     vendorApiName?: string;
     vendorSupportsEffortLevel?: boolean;
+    modelEffortLevel?: number; // Model-specific effort level from AIPromptModel
     selectionInfo?: AIModelSelectionInfo;
     allCandidates?: ModelVendorCandidate[];
   }> {
@@ -1215,6 +1220,7 @@ export class AIPromptRunner {
           vendorDriverClass: undefined,
           vendorApiName: undefined,
           vendorSupportsEffortLevel: undefined,
+          modelEffortLevel: undefined,
           allCandidates: candidates,
           selectionInfo: this.createSelectionInfo({
             aiConfiguration: configuration,
@@ -1258,6 +1264,7 @@ export class AIPromptRunner {
         vendorDriverClass: selected.driverClass,
         vendorApiName: selected.apiName,
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
+        modelEffortLevel: selected.effortLevel, // Pass through model-specific effort level
         allCandidates: candidates,
         selectionInfo: this.createSelectionInfo({
           aiConfiguration: configuration,
@@ -1280,6 +1287,7 @@ export class AIPromptRunner {
         vendorDriverClass: undefined,
         vendorApiName: undefined,
         vendorSupportsEffortLevel: undefined,
+        modelEffortLevel: undefined,
         allCandidates: [],
         selectionInfo: this.createSelectionInfo({
           aiConfiguration: configuration,
@@ -1522,6 +1530,7 @@ export class AIPromptRunner {
       driverClass: modelVendor.DriverClass || model.DriverClass,
       apiName: modelVendor.APIName || model.APIName,
       supportsEffortLevel: modelVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
+      effortLevel: promptModel.EffortLevel ?? undefined, // Model-specific effort level override
       isPreferredVendor: false,
       priority: 0,  // Order is determined by promptModels sort
       source: 'prompt-model'
@@ -2277,7 +2286,8 @@ export class AIPromptRunner {
     promptRun?: AIPromptRunEntityExtended,
     vendorDriverClass?: string,
     vendorApiName?: string,
-    vendorSupportsEffortLevel?: boolean
+    vendorSupportsEffortLevel?: boolean,
+    modelEffortLevel?: number
   ): Promise<ChatResult> {
     // Get failover configuration (used for errorScope filtering)
     const failoverConfig = this.getFailoverConfiguration(prompt);
@@ -2287,7 +2297,7 @@ export class AIPromptRunner {
       return this.executeModel(
         model, renderedPrompt, prompt, params, vendorId,
         conversationMessages, templateMessageRole, cancellationToken,
-        vendorDriverClass, vendorApiName, vendorSupportsEffortLevel
+        vendorDriverClass, vendorApiName, vendorSupportsEffortLevel, modelEffortLevel
       );
     }
 
@@ -2330,7 +2340,8 @@ export class AIPromptRunner {
           cancellationToken,
           candidate.driverClass,
           candidate.apiName,
-          candidate.supportsEffortLevel
+          candidate.supportsEffortLevel,
+          candidate.effortLevel
         );
 
         // Success! Update promptRun with failover information if we had prior failures
@@ -2575,7 +2586,8 @@ export class AIPromptRunner {
     cancellationToken?: AbortSignal,
     vendorDriverClass?: string,
     vendorApiName?: string,
-    vendorSupportsEffortLevel?: boolean
+    vendorSupportsEffortLevel?: boolean,
+    modelEffortLevel?: number
   ): Promise<ChatResult> {
     // define these variables here to ensure they're available in the catch block
     let driverClass: string;
@@ -2690,27 +2702,31 @@ export class AIPromptRunner {
 
       // Apply effortLevel with precedence hierarchy
       // 1. params.effortLevel (runtime override - highest priority)
-      // 2. prompt.EffortLevel (prompt default - lower priority)
-      // 3. No effort level (provider default - lowest priority)
-      // Note: Agent DefaultPromptEffortLevel will be passed via params.effortLevel by BaseAgent
+      // 2. modelEffortLevel (model-specific override from AIPromptModel - second priority)
+      // 3. Agent DefaultPromptEffortLevel (passed via params.effortLevel by BaseAgent - third priority)
+      // 4. prompt.EffortLevel (prompt default - fourth priority)
+      // 5. No effort level (provider default - lowest priority)
       const hasEffortLevel = (params.effortLevel !== undefined && params.effortLevel !== null) ||
+                             (modelEffortLevel !== undefined && modelEffortLevel !== null) ||
                              (prompt.EffortLevel !== undefined && prompt.EffortLevel !== null);
 
       if (hasEffortLevel) {
         if (supportsEffortLevel) {
-          // Vendor/model supports effort level, apply it
+          // Vendor/model supports effort level, apply it with precedence
           if (params.effortLevel !== undefined && params.effortLevel !== null) {
             chatParams.effortLevel = params.effortLevel.toString();
+          } else if (modelEffortLevel !== undefined && modelEffortLevel !== null) {
+            chatParams.effortLevel = modelEffortLevel.toString();
           } else if (prompt.EffortLevel !== undefined && prompt.EffortLevel !== null) {
             chatParams.effortLevel = prompt.EffortLevel.toString();
           }
         } else {
           // Vendor/model does not support effort level, log warning
-          const effortValue = params.effortLevel ?? prompt.EffortLevel;
+          const effortValue = params.effortLevel ?? modelEffortLevel ?? prompt.EffortLevel;
           console.log(`⚠️ Effort Level ${effortValue} specified but will be ignored - model ${model.Name} does not support effort levels`);
         }
       }
-      // If neither is set, effortLevel remains undefined and providers use their defaults
+      // If none are set, effortLevel remains undefined and providers use their defaults
 
       // Apply response format from prompt settings
       if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
@@ -2809,7 +2825,8 @@ export class AIPromptRunner {
     allCandidates: ModelVendorCandidate[],
     vendorDriverClass?: string,
     vendorApiName?: string,
-    vendorSupportsEffortLevel?: boolean
+    vendorSupportsEffortLevel?: boolean,
+    modelEffortLevel?: number
   ): Promise<{
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
@@ -2855,7 +2872,8 @@ export class AIPromptRunner {
           promptRun,
           vendorDriverClass,
           vendorApiName,
-          vendorSupportsEffortLevel
+          vendorSupportsEffortLevel,
+          modelEffortLevel
         );
 
         // Check for fatal errors - don't attempt validation/retry on these
