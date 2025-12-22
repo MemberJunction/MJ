@@ -1137,51 +1137,58 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
   /**
    * Load previous payload for an agent from its most recent OUTPUT artifact.
+   * Searches backwards through all messages from this agent until an artifact is found.
+   * This ensures payload continuity even after clarifying exchanges without artifacts.
    * Checks both user-visible and system artifacts to support agents like Agent Manager.
    */
   private async loadPreviousPayloadForAgent(agentId: string): Promise<{
     payload: any;
     artifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null;
   }> {
-    // Find last message from this agent
-    const lastAgentMessage = this.conversationHistory
+    // Get all messages from this agent in reverse order (most recent first)
+    const agentMessages = this.conversationHistory
       .slice()
       .reverse()
-      .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
 
-    if (!lastAgentMessage) {
+    if (agentMessages.length === 0) {
       return { payload: null, artifactInfo: null };
     }
 
-    // Check user-visible artifacts first
-    let artifacts = this.artifactsByDetailId?.get(lastAgentMessage.ID);
+    // Search through all agent messages until we find one with an artifact
+    for (const message of agentMessages) {
+      // Check user-visible artifacts first
+      let artifacts = this.artifactsByDetailId?.get(message.ID);
 
-    // If not found, check system artifacts (Agent Manager, etc.)
-    if (!artifacts || artifacts.length === 0) {
-      artifacts = this.systemArtifactsByDetailId?.get(lastAgentMessage.ID);
-    }
+      // If not found, check system artifacts (Agent Manager, etc.)
+      if (!artifacts || artifacts.length === 0) {
+        artifacts = this.systemArtifactsByDetailId?.get(message.ID);
+      }
 
-    // Load artifact content as payload
-    if (artifacts && artifacts.length > 0) {
-      const artifact = artifacts[0];
-      try {
-        const version = await artifact.getVersion();
-        if (version.Content) {
-          console.log(`📦 Loaded previous payload for agent ${agentId} from artifact`);
-          return {
-            payload: JSON.parse(version.Content),
-            artifactInfo: {
-              artifactId: artifact.artifactId,
-              versionId: artifact.artifactVersionId,
-              versionNumber: artifact.versionNumber
-            }
-          };
+      // Try to load artifact content as payload
+      if (artifacts && artifacts.length > 0) {
+        const artifact = artifacts[0];
+        try {
+          const version = await artifact.getVersion();
+          if (version.Content) {
+            console.log(`📦 Loaded previous payload for agent ${agentId} from artifact (message: ${message.ID})`);
+            return {
+              payload: JSON.parse(version.Content),
+              artifactInfo: {
+                artifactId: artifact.artifactId,
+                versionId: artifact.artifactVersionId,
+                versionNumber: artifact.versionNumber
+              }
+            };
+          }
+        } catch (error) {
+          console.error('Error loading payload from artifact:', error);
+          // Continue to next message
         }
-      } catch (error) {
-        console.error('Error loading previous payload:', error);
       }
     }
 
+    console.log(`📦 No previous payload found for agent ${agentId} after searching ${agentMessages.length} messages`);
     return { payload: null, artifactInfo: null };
   }
 
@@ -1805,11 +1812,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       }
     }
 
-    // Find the last AI message from this agent (needed for both payload and configuration)
-    const lastAIMessage = this.conversationHistory
+    // Get all messages from this agent in reverse order (most recent first)
+    const agentMessages = this.conversationHistory
       .slice()
       .reverse()
-      .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+
+    const lastAIMessage = agentMessages.length > 0 ? agentMessages[0] : null;
 
     // Extract configuration from previous agent run (for configuration continuity)
     if (lastAIMessage && this.agentRunsByDetailId) {
@@ -1822,33 +1831,42 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       }
     }
 
-    // Fall back to most recent artifact if no target specified or target not found
-    if (!previousPayload && lastAIMessage) {
-      console.log('📦 Using most recent artifact from last agent message');
+    // Fall back to searching through all agent messages for an artifact
+    // This ensures payload continuity even after clarifying exchanges without artifacts
+    if (!previousPayload && agentMessages.length > 0) {
+      console.log('📦 Searching through agent messages for most recent artifact...');
 
-      // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
-      let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
-      if (!artifacts || artifacts.length === 0) {
-        artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
+      for (const message of agentMessages) {
+        // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
+        let artifacts = this.artifactsByDetailId?.get(message.ID);
+        if (!artifacts || artifacts.length === 0) {
+          artifacts = this.systemArtifactsByDetailId?.get(message.ID);
+        }
+
+        if (artifacts && artifacts.length > 0) {
+          try {
+            // Use the first artifact (should only be one OUTPUT per message)
+            const artifact = artifacts[0];
+            const version = await artifact.getVersion();
+            if (version.Content) {
+              previousPayload = JSON.parse(version.Content);
+              previousArtifactInfo = {
+                artifactId: artifact.artifactId,
+                versionId: artifact.artifactVersionId,
+                versionNumber: artifact.versionNumber
+              };
+              console.log(`📦 Loaded artifact as payload from message ${message.ID}`, previousArtifactInfo);
+              break; // Found an artifact, stop searching
+            }
+          } catch (error) {
+            console.warn('⚠️ Could not parse artifact content:', error);
+            // Continue to next message
+          }
+        }
       }
 
-      if (artifacts && artifacts.length > 0) {
-        try {
-          // Use the first artifact (should only be one OUTPUT per message)
-          const artifact = artifacts[0];
-          const version = await artifact.getVersion();
-          if (version.Content) {
-            previousPayload = JSON.parse(version.Content);
-            previousArtifactInfo = {
-              artifactId: artifact.artifactId,
-              versionId: artifact.artifactVersionId,
-              versionNumber: artifact.versionNumber
-            };
-            console.log('📦 Loaded most recent artifact as payload', previousArtifactInfo);
-          }
-        } catch (error) {
-          console.warn('⚠️ Could not parse artifact content:', error);
-        }
+      if (!previousPayload) {
+        console.log(`📦 No artifact found after searching ${agentMessages.length} messages from agent`);
       }
     }
 

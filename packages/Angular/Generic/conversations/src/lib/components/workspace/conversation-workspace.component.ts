@@ -112,7 +112,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public activeVersionNumber: number | null = null;
   public activeVersionId: string | null = null;
   public isMobileView: boolean = false;
-  public isSidebarPinned: boolean = true; // Whether sidebar stays open after selection
+  public isSidebarPinned: boolean = false; // Default unpinned until settings load (prevents flicker)
 
   // Artifact permissions
   public canShareActiveArtifact: boolean = false;
@@ -124,8 +124,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
-  public isSidebarCollapsed: boolean = false; // Collapsed state for sidebar
+  public isSidebarCollapsed: boolean = true; // Default collapsed until settings load (prevents flicker)
   public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
+  public isSidebarSettingsLoaded: boolean = false; // Tracks whether settings have been loaded (prevents render before state is known)
   private isSidebarResizing: boolean = false;
   private sidebarResizeStartX: number = 0;
   private sidebarResizeStartWidth: number = 0;
@@ -307,19 +308,19 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     if (this.isMobileView) {
       this.isSidebarCollapsed = true;
       this.isSidebarVisible = false;
+      this.isSidebarSettingsLoaded = true; // Mobile doesn't need to load settings
       // Enable transitions after a brief delay to ensure initial state is applied
       setTimeout(() => {
         this.sidebarTransitionsEnabled = true;
       }, 50);
     } else {
-      // Load from User Settings (async) - don't block UI initialization
-      this.loadSidebarState().then(() => {
-        this.cdr.detectChanges();
-        // Enable transitions after state is loaded and applied
-        setTimeout(() => {
-          this.sidebarTransitionsEnabled = true;
-        }, 50);
-      });
+      // Load from User Settings (async) - await before continuing to prevent flicker
+      await this.loadSidebarState();
+      this.cdr.detectChanges();
+      // Enable transitions after state is loaded and applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
     }
 
     // Setup resize listeners
@@ -703,6 +704,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.isSidebarPinned = false;
     } finally {
       this.isLoadingSettings = false;
+      this.isSidebarSettingsLoaded = true;
     }
   }
 

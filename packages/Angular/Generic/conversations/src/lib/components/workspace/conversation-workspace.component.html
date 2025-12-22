@@ -30,7 +30,7 @@
 
     <!-- Left Sidebar (hidden when Collections or Tasks view is active) -->
     <div class="workspace-sidebar"
-         *ngIf="activeTab !== 'collections' && activeTab !== 'tasks'"
+         *ngIf="activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarSettingsLoaded"
          [class.open]="isSidebarVisible"
          [class.collapsed]="isSidebarCollapsed"
          [class.no-transition]="!sidebarTransitionsEnabled"
@@ -50,8 +50,8 @@
       </mj-conversation-sidebar>
     </div>
 
-    <!-- Sidebar expand handle (only visible when collapsed) -->
-    @if (activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarCollapsed) {
+    <!-- Sidebar expand handle (only visible when collapsed and settings loaded) -->
+    @if (activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarCollapsed && isSidebarSettingsLoaded) {
       <div class="sidebar-expand-handle"
            (click)="expandSidebar()"
            title="Expand sidebar">
@@ -59,9 +59,9 @@
       </div>
     }
 
-    <!-- Resize handle for sidebar (only when expanded) -->
+    <!-- Resize handle for sidebar (only when expanded and settings loaded) -->
     <div class="sidebar-resize-handle"
-         *ngIf="isSidebarVisible && !isSidebarCollapsed && activeTab !== 'collections' && activeTab !== 'tasks'"
+         *ngIf="isSidebarVisible && !isSidebarCollapsed && activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarSettingsLoaded"
          (mousedown)="onSidebarResizeStart($event)"></div>
 
     <!-- Collections Full-Panel View -->
