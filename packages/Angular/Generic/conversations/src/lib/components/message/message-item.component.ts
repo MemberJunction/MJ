@@ -787,15 +787,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get isMessageEdited(): boolean {
     // Only show edited badge if user actually edited the message content
-    // Status updates don't count as edits - we need a more reliable indicator
-    // For now, we'll check if there's a significant time difference (more than 30 seconds)
-    // AND it's a user message (since AI messages get status updates frequently)
-    if (!this.message.__mj_CreatedAt || !this.message.__mj_UpdatedAt || !this.isUserMessage) {
+    // The OriginalMessageChanged flag is set server-side when the Message field changes on update
+    if (!this.isUserMessage) {
       return false;
     }
-    // Allow 30 second threshold to avoid false positives from status updates
-    // Real edits will typically happen much later than creation
-    return this.message.__mj_UpdatedAt.getTime() - this.message.__mj_CreatedAt.getTime() > 30000;
+    return this.message.OriginalMessageChanged === true;
   }
 
   public onPinClick(): void {
