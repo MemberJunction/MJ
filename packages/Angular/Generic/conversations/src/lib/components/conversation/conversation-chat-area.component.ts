@@ -595,6 +595,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       // Ensure current user is in the avatar map for new messages
       this.ensureCurrentUserInAvatarMap();
+
+      // CRITICAL: Invalidate cache when new message is added.
+      // Without this, navigating away and back would load stale cached data
+      // that doesn't include this new message.
+      if (this.conversationId) {
+        this.invalidateConversationCache(this.conversationId);
+      }
     }
 
     // Scroll to bottom when new message is sent
@@ -866,6 +873,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
+    // CRITICAL: Check if message belongs to the currently active conversation.
+    // With multi-instance caching, hidden message-input components can emit events
+    // for conversations that are not currently displayed.
+    const messageConversationId = event.message.ConversationID;
+
+    if (messageConversationId !== this.conversationId) {
+      // Message is from a different conversation (hidden cached component)
+      // Invalidate THAT conversation's cache so it reloads fresh data when user returns
+      LogStatusEx({message: `📩 Agent response for background conversation ${messageConversationId}`, verboseOnly: true});
+      this.invalidateConversationCache(messageConversationId);
+      return; // Don't add to current conversation's messages
+    }
+
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
 
@@ -1791,25 +1811,25 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     LogStatusEx({message: `🔄 Found ${inProgressMessages.length} in-progress messages, reconnecting...`, verboseOnly: true});
 
-    // For each in-progress message, check if there's an active agent run
+    // CRITICAL: Explicitly trigger callback registration on the active message-input component.
+    // Due to multi-instance caching with [hidden], when user navigates away the hidden component
+    // receives emptyInProgressIds which unregisters its callbacks. When returning, we must
+    // explicitly reconnect rather than relying on Angular's input binding change detection.
+    const activeInput = this.getActiveMessageInputComponent();
+    if (activeInput) {
+      activeInput.reconnectInProgressMessages();
+      LogStatusEx({message: `🔌 Explicitly reconnected streaming callbacks for ${inProgressMessages.length} messages`, verboseOnly: true});
+    }
+
+    // For each in-progress message, log active agent runs for visibility
     for (const message of inProgressMessages) {
       if (message.AgentID) {
-        // Check agent state service for this run
         const agentRun = this.agentRunsByDetailId.get(message.ID);
-
         if (agentRun && agentRun.Status === 'Running') {
-          LogStatusEx({message: `🔌 Reconnecting to agent run ${agentRun.ID} for message ${message.ID}`, verboseOnly: true});
-
-          // Agent state service polling will automatically pick this up
-          // The WebSocket subscription is already active via PushStatusUpdates()
-          // No additional action needed - just log for visibility
+          LogStatusEx({message: `🔌 Agent run ${agentRun.ID} active for message ${message.ID}`, verboseOnly: true});
         }
       }
     }
-
-    // Agent state service is already polling via startPolling() in onConversationChanged()
-    // WebSocket subscription is already active via message-input component's subscribeToPushStatus()
-    // Both will automatically receive updates for these in-progress runs
   }
 
   /**
