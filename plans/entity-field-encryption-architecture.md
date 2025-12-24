@@ -3,7 +3,8 @@
 **Status:** Proposed
 **Author:** Claude Code
 **Created:** 2025-12-05
-**Version:** 1.0
+**Updated:** 2025-12-24
+**Version:** 1.1
 
 ---
 
@@ -35,7 +36,7 @@ This document proposes a comprehensive field-level encryption system for MemberJ
 - **Pluggable key sources**: Abstract provider pattern for retrieving keys from various sources (env vars, vaults, config files)
 - **Multiple algorithms**: Support for different encryption algorithms (AES-256-GCM, AES-256-CBC, etc.)
 - **Flexible decryption control**: Option to keep data encrypted in API responses or decrypt before sending to client
-- **Key rotation support**: Built-in versioning for safe key rotation without data loss
+- **Key rotation support**: Full re-encryption workflow for secure key retirement
 
 ### Why This Fits MJ Architecture
 
@@ -56,7 +57,7 @@ After thorough analysis of the MemberJunction codebase, this feature is an excel
 - Support multiple key storage backends (env vars initially, vaults later)
 - Allow both server-side-only and client-visible decryption
 - Provide automatic encryption on save and decryption on load
-- Support key rotation without data migration downtime
+- Support key rotation with complete re-encryption for full key retirement
 - Follow existing MJ patterns and conventions
 
 ### Non-Goals
@@ -266,7 +267,18 @@ New columns added to the existing EntityField table:
 |--------|------|---------|-------------|
 | Encrypt | bit | 0 | Enable encryption for this field |
 | EncryptionKeyID | uniqueidentifier | NULL | FK to encryption key to use |
-| AllowDecryptInAPI | bit | 1 | Whether to decrypt in API responses |
+| AllowDecryptInAPI | bit | 0 | Whether to decrypt in API responses (default: secure) |
+| SendEncryptedValue | bit | 0 | When AllowDecryptInAPI=false, send encrypted ciphertext vs null |
+
+**API Response Behavior Matrix:**
+
+| AllowDecryptInAPI | SendEncryptedValue | API Response |
+|-------------------|-------------------|--------------|
+| true | N/A | Decrypted plaintext |
+| false | true | Encrypted ciphertext ($ENC$...) |
+| false | false | NULL (most secure, default) |
+
+**Defaults are secure by design**: New encrypted fields return `null` to clients by default. Administrators must explicitly enable decryption or ciphertext transmission.
 
 ---
 
@@ -277,7 +289,8 @@ Following MJ's established extensibility patterns (similar to Auth providers, St
 ### Abstract Base Class
 
 ```typescript
-// packages/MJCore/src/generic/encryption/EncryptionKeySourceBase.ts
+// packages/Encryption/src/EncryptionKeySourceBase.ts
+// Package: @memberjunction/encryption (server-side only, not included in MJCore)
 
 import { EncryptionKeySourceConfig } from './interfaces';
 
@@ -287,17 +300,17 @@ import { EncryptionKeySourceConfig } from './interfaces';
  * (environment variables, vault services, config files, etc.)
  */
 export abstract class EncryptionKeySourceBase {
-    protected config: EncryptionKeySourceConfig;
+    protected _config: EncryptionKeySourceConfig;
 
     constructor(config: EncryptionKeySourceConfig) {
-        this.config = config;
+        this._config = config;
     }
 
     /** Human-readable name of the key source */
     abstract get SourceName(): string;
 
     /** Validates that the source is properly configured */
-    abstract validateConfiguration(): boolean;
+    abstract ValidateConfiguration(): boolean;
 
     /**
      * Retrieves the raw key material for the given lookup value
@@ -305,26 +318,26 @@ export abstract class EncryptionKeySourceBase {
      * @param keyVersion - Optional version for versioned key stores
      * @returns Buffer containing the raw key bytes
      */
-    abstract getKey(lookupValue: string, keyVersion?: string): Promise<Buffer>;
+    abstract GetKey(lookupValue: string, keyVersion?: string): Promise<Buffer>;
 
     /**
      * Checks if a key exists without retrieving it
      * @param lookupValue - The identifier for the key
      */
-    abstract keyExists(lookupValue: string): Promise<boolean>;
+    abstract KeyExists(lookupValue: string): Promise<boolean>;
 
     /** Optional async initialization for sources that need setup */
-    async initialize(): Promise<void> { }
+    async Initialize(): Promise<void> { }
 
     /** Optional cleanup for sources with connections */
-    async dispose(): Promise<void> { }
+    async Dispose(): Promise<void> { }
 }
 ```
 
 ### Environment Variable Implementation
 
 ```typescript
-// packages/MJCore/src/generic/encryption/providers/EnvVarKeySource.ts
+// packages/Encryption/src/providers/EnvVarKeySource.ts
 
 import { RegisterClass } from '@memberjunction/global';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
@@ -336,16 +349,16 @@ export class EnvVarKeySource extends EncryptionKeySourceBase {
         return 'Environment Variable';
     }
 
-    validateConfiguration(): boolean {
+    ValidateConfiguration(): boolean {
         // Always valid - keys are validated at lookup time
         return true;
     }
 
-    async keyExists(lookupValue: string): Promise<boolean> {
+    async KeyExists(lookupValue: string): Promise<boolean> {
         return process.env[lookupValue] !== undefined;
     }
 
-    async getKey(lookupValue: string, keyVersion?: string): Promise<Buffer> {
+    async GetKey(lookupValue: string, keyVersion?: string): Promise<Buffer> {
         // For env vars, version is typically appended: KEY_NAME_V2
         const envVarName = keyVersion && keyVersion !== '1'
             ? `${lookupValue}_V${keyVersion}`
@@ -376,7 +389,7 @@ export class EnvVarKeySource extends EncryptionKeySourceBase {
 ### Configuration File Implementation
 
 ```typescript
-// packages/MJCore/src/generic/encryption/providers/ConfigFileKeySource.ts
+// packages/Encryption/src/providers/ConfigFileKeySource.ts
 
 import { RegisterClass } from '@memberjunction/global';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
@@ -384,39 +397,39 @@ import { cosmiconfigSync } from 'cosmiconfig';
 
 @RegisterClass(EncryptionKeySourceBase, 'ConfigFileKeySource')
 export class ConfigFileKeySource extends EncryptionKeySourceBase {
-    private config: Record<string, string> | null = null;
+    private _loadedConfig: Record<string, string> | null = null;
 
     get SourceName(): string {
         return 'Configuration File';
     }
 
-    async initialize(): Promise<void> {
+    async Initialize(): Promise<void> {
         const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
         const result = explorer.search();
 
         if (result?.config?.encryptionKeys) {
-            this.config = result.config.encryptionKeys;
+            this._loadedConfig = result.config.encryptionKeys;
         }
     }
 
-    validateConfiguration(): boolean {
-        return this.config !== null;
+    ValidateConfiguration(): boolean {
+        return this._loadedConfig !== null;
     }
 
-    async keyExists(lookupValue: string): Promise<boolean> {
-        return this.config?.[lookupValue] !== undefined;
+    async KeyExists(lookupValue: string): Promise<boolean> {
+        return this._loadedConfig?.[lookupValue] !== undefined;
     }
 
-    async getKey(lookupValue: string, keyVersion?: string): Promise<Buffer> {
-        if (!this.config) {
-            throw new Error('Configuration file not loaded. Call initialize() first.');
+    async GetKey(lookupValue: string, keyVersion?: string): Promise<Buffer> {
+        if (!this._loadedConfig) {
+            throw new Error('Configuration file not loaded. Call Initialize() first.');
         }
 
         const keyName = keyVersion && keyVersion !== '1'
             ? `${lookupValue}_v${keyVersion}`
             : lookupValue;
 
-        const keyValue = this.config[keyName];
+        const keyValue = this._loadedConfig[keyName];
 
         if (!keyValue) {
             throw new Error(
@@ -452,11 +465,12 @@ export class ConfigFileKeySource extends EncryptionKeySourceBase {
 ### Core Engine Class
 
 ```typescript
-// packages/MJCore/src/generic/encryption/EncryptionEngine.ts
+// packages/Encryption/src/EncryptionEngine.ts
+// Package: @memberjunction/encryption (server-side only)
 
 import * as crypto from 'crypto';
 import { MJGlobal } from '@memberjunction/global';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
 import {
     EncryptionKeyEntity,
@@ -467,7 +481,6 @@ import {
 export interface EncryptedValueParts {
     marker: string;
     keyId: string;
-    keyVersion: string;
     algorithm: string;
     iv: string;
     ciphertext: string;
@@ -495,16 +508,16 @@ export class EncryptionEngine {
     private static _instance: EncryptionEngine;
 
     // Cache for key material (key ID + version -> Buffer)
-    private keyMaterialCache: Map<string, { key: Buffer; expiry: Date }> = new Map();
+    private _keyMaterialCache: Map<string, { key: Buffer; expiry: Date }> = new Map();
 
     // Cache for key configurations (key ID -> KeyConfiguration)
-    private keyConfigCache: Map<string, { config: KeyConfiguration; expiry: Date }> = new Map();
+    private _keyConfigCache: Map<string, { config: KeyConfiguration; expiry: Date }> = new Map();
 
     // Cache for key source instances (driver class -> instance)
-    private keySourceCache: Map<string, EncryptionKeySourceBase> = new Map();
+    private _keySourceCache: Map<string, EncryptionKeySourceBase> = new Map();
 
     // Cache TTL in milliseconds (5 minutes default)
-    private readonly CACHE_TTL_MS = 5 * 60 * 1000;
+    private readonly _cacheTtlMs = 5 * 60 * 1000;
 
     private constructor() {}
 
@@ -522,7 +535,7 @@ export class EncryptionEngine {
      * @param contextUser - User context for metadata access
      * @returns Serialized encrypted value string
      */
-    async encrypt(
+    async Encrypt(
         plaintext: string | Buffer,
         encryptionKeyId: string,
         contextUser?: UserInfo
@@ -551,11 +564,10 @@ export class EncryptionEngine {
             : plaintext;
         const ciphertext = Buffer.concat([cipher.update(data), cipher.final()]);
 
-        // Build serialized format
+        // Build serialized format (no version - key rotation re-encrypts all data)
         const parts = [
             keyConfig.marker,
             encryptionKeyId,
-            keyConfig.keyVersion,
             keyConfig.algorithm.name,
             iv.toString('base64'),
             ciphertext.toString('base64')
@@ -576,17 +588,17 @@ export class EncryptionEngine {
      * @param contextUser - User context for metadata access
      * @returns Decrypted value or original if not encrypted
      */
-    async decrypt(
+    async Decrypt(
         value: string,
         contextUser?: UserInfo
     ): Promise<string> {
-        if (!this.isEncrypted(value)) {
+        if (!this.IsEncrypted(value)) {
             return value;
         }
 
-        const parsed = this.parseEncryptedValue(value);
+        const parsed = this.ParseEncryptedValue(value);
         const keyConfig = await this.getKeyConfiguration(parsed.keyId, contextUser);
-        const keyMaterial = await this.getKeyMaterial(keyConfig, contextUser, parsed.keyVersion);
+        const keyMaterial = await this.getKeyMaterial(keyConfig, contextUser);
 
         // Create decipher
         const decipher = crypto.createDecipheriv(
@@ -613,28 +625,28 @@ export class EncryptionEngine {
     /**
      * Checks if a value is encrypted (has the encryption marker)
      */
-    isEncrypted(value: unknown): boolean {
+    IsEncrypted(value: unknown): boolean {
         return typeof value === 'string' && value.startsWith('$ENC$');
     }
 
     /**
      * Parses an encrypted value string into its component parts
+     * Format: $ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]
      */
-    parseEncryptedValue(value: string): EncryptedValueParts {
+    ParseEncryptedValue(value: string): EncryptedValueParts {
         const parts = value.split('$').filter(p => p !== '');
 
-        if (parts.length < 6) {
-            throw new Error(`Invalid encrypted value format: expected at least 6 parts, got ${parts.length}`);
+        if (parts.length < 5) {
+            throw new Error(`Invalid encrypted value format: expected at least 5 parts, got ${parts.length}`);
         }
 
         return {
             marker: '$' + parts[0] + '$',
             keyId: parts[1],
-            keyVersion: parts[2],
-            algorithm: parts[3],
-            iv: parts[4],
-            ciphertext: parts[5],
-            authTag: parts[6] // May be undefined for non-AEAD
+            algorithm: parts[2],
+            iv: parts[3],
+            ciphertext: parts[4],
+            authTag: parts[5] // May be undefined for non-AEAD
         };
     }
 
@@ -646,7 +658,7 @@ export class EncryptionEngine {
         contextUser?: UserInfo
     ): Promise<KeyConfiguration> {
         const cacheKey = keyId;
-        const cached = this.keyConfigCache.get(cacheKey);
+        const cached = this._keyConfigCache.get(cacheKey);
 
         if (cached && cached.expiry > new Date()) {
             return cached.config;
@@ -710,9 +722,9 @@ export class EncryptionEngine {
         };
 
         // Cache it
-        this.keyConfigCache.set(cacheKey, {
+        this._keyConfigCache.set(cacheKey, {
             config,
-            expiry: new Date(Date.now() + this.CACHE_TTL_MS)
+            expiry: new Date(Date.now() + this._cacheTtlMs)
         });
 
         return config;
@@ -723,31 +735,29 @@ export class EncryptionEngine {
      */
     private async getKeyMaterial(
         config: KeyConfiguration,
-        contextUser?: UserInfo,
-        overrideVersion?: string
+        contextUser?: UserInfo
     ): Promise<Buffer> {
-        const version = overrideVersion || config.keyVersion;
-        const cacheKey = `${config.keyId}:${version}`;
+        const cacheKey = `${config.keyId}:${config.keyVersion}`;
 
-        const cached = this.keyMaterialCache.get(cacheKey);
+        const cached = this._keyMaterialCache.get(cacheKey);
         if (cached && cached.expiry > new Date()) {
             return cached.key;
         }
 
         // Get or create key source instance
-        let source = this.keySourceCache.get(config.source.driverClass);
+        let source = this._keySourceCache.get(config.source.driverClass);
 
         if (!source) {
             source = MJGlobal.Instance.ClassFactory.CreateInstance<EncryptionKeySourceBase>(
                 EncryptionKeySourceBase,
                 config.source.driverClass
             );
-            await source.initialize();
-            this.keySourceCache.set(config.source.driverClass, source);
+            await source.Initialize();
+            this._keySourceCache.set(config.source.driverClass, source);
         }
 
         // Get key from source
-        const keyMaterial = await source.getKey(config.source.lookupValue, version);
+        const keyMaterial = await source.GetKey(config.source.lookupValue, config.keyVersion);
 
         // Validate key length
         const expectedBytes = config.algorithm.keyLengthBits / 8;
@@ -759,10 +769,148 @@ export class EncryptionEngine {
         }
 
         // Cache it
-        this.keyMaterialCache.set(cacheKey, {
+        this._keyMaterialCache.set(cacheKey, {
             key: keyMaterial,
-            expiry: new Date(Date.now() + this.CACHE_TTL_MS)
+            expiry: new Date(Date.now() + this._cacheTtlMs)
         });
+
+        return keyMaterial;
+    }
+
+    /**
+     * Validates that key material can be retrieved from a lookup value.
+     * Used to verify new keys before committing to key rotation.
+     * @param lookupValue - The key source lookup value to validate
+     * @param contextUser - User context for metadata access
+     * @throws Error if key material cannot be retrieved or is invalid
+     */
+    async ValidateKeyMaterial(lookupValue: string, contextUser?: UserInfo): Promise<void> {
+        // This method is used during key rotation to validate the new key
+        // before any data changes are made. We need to temporarily retrieve
+        // the key material to ensure it's accessible and valid.
+
+        // For now, we just verify the env var or config key exists
+        // In a full implementation, this would also validate key length
+        // against the algorithm requirements
+
+        const envValue = process.env[lookupValue];
+        if (!envValue) {
+            throw new Error(
+                `Key material not accessible at lookup value: ${lookupValue}. ` +
+                `Ensure the environment variable or config key is set.`
+            );
+        }
+
+        // Validate it's valid base64
+        try {
+            const keyBytes = Buffer.from(envValue, 'base64');
+            if (keyBytes.length === 0) {
+                throw new Error('Key material is empty');
+            }
+        } catch (e) {
+            throw new Error(
+                `Invalid key material at ${lookupValue}: ${e instanceof Error ? e.message : String(e)}`
+            );
+        }
+    }
+
+    /**
+     * Encrypts a value using a specific key lookup value (for key rotation).
+     * This allows encrypting with a new key before updating the key metadata.
+     * @param plaintext - The value to encrypt
+     * @param encryptionKeyId - The encryption key ID (for algorithm/marker config)
+     * @param keyLookupValue - The specific lookup value to use for key material
+     * @param contextUser - User context for metadata access
+     * @returns Serialized encrypted value string
+     */
+    async EncryptWithLookup(
+        plaintext: string | Buffer,
+        encryptionKeyId: string,
+        keyLookupValue: string,
+        contextUser?: UserInfo
+    ): Promise<string> {
+        if (plaintext === null || plaintext === undefined) {
+            return plaintext as unknown as string;
+        }
+
+        // Get config but override the lookup value
+        const keyConfig = await this.getKeyConfiguration(encryptionKeyId, contextUser);
+        const overriddenConfig = {
+            ...keyConfig,
+            source: {
+                ...keyConfig.source,
+                lookupValue: keyLookupValue
+            }
+        };
+
+        // Get key material using the overridden lookup
+        const keyMaterial = await this.getKeyMaterialWithLookup(overriddenConfig, contextUser);
+
+        // Generate random IV
+        const iv = crypto.randomBytes(keyConfig.algorithm.ivLengthBytes);
+
+        // Create cipher
+        const cipher = crypto.createCipheriv(
+            keyConfig.algorithm.nodeCryptoName,
+            keyMaterial,
+            iv,
+            keyConfig.algorithm.isAEAD ? { authTagLength: 16 } : undefined
+        );
+
+        // Encrypt
+        const data = typeof plaintext === 'string'
+            ? Buffer.from(plaintext, 'utf8')
+            : plaintext;
+        const ciphertext = Buffer.concat([cipher.update(data), cipher.final()]);
+
+        // Build serialized format
+        const parts = [
+            keyConfig.marker,
+            encryptionKeyId,
+            keyConfig.algorithm.name,
+            iv.toString('base64'),
+            ciphertext.toString('base64')
+        ];
+
+        // Add auth tag for AEAD algorithms
+        if (keyConfig.algorithm.isAEAD) {
+            const authTag = cipher.getAuthTag();
+            parts.push(authTag.toString('base64'));
+        }
+
+        return parts.join('$');
+    }
+
+    /**
+     * Gets key material using a specific lookup value (bypasses cache for rotation)
+     */
+    private async getKeyMaterialWithLookup(
+        config: KeyConfiguration,
+        contextUser?: UserInfo
+    ): Promise<Buffer> {
+        // Get or create key source instance
+        let source = this._keySourceCache.get(config.source.driverClass);
+
+        if (!source) {
+            source = MJGlobal.Instance.ClassFactory.CreateInstance<EncryptionKeySourceBase>(
+                EncryptionKeySourceBase,
+                config.source.driverClass
+            );
+            await source.Initialize();
+            this._keySourceCache.set(config.source.driverClass, source);
+        }
+
+        // Get key from source using the overridden lookup value
+        const keyMaterial = await source.GetKey(config.source.lookupValue, config.keyVersion);
+
+        // Validate key length
+        const expectedBytes = config.algorithm.keyLengthBits / 8;
+        if (keyMaterial.length !== expectedBytes) {
+            throw new Error(
+                `Key length mismatch: expected ${expectedBytes} bytes for ${config.algorithm.name}, ` +
+                `got ${keyMaterial.length} bytes`
+            );
+        }
 
         return keyMaterial;
     }
@@ -770,9 +918,9 @@ export class EncryptionEngine {
     /**
      * Clears all caches - useful for testing or after key rotation
      */
-    clearCaches(): void {
-        this.keyMaterialCache.clear();
-        this.keyConfigCache.clear();
+    ClearCaches(): void {
+        this._keyMaterialCache.clear();
+        this._keyConfigCache.clear();
     }
 }
 ```
@@ -797,7 +945,7 @@ let value = theField.Value;
 if (theField.EntityFieldInfo.Encrypt && value != null && value !== '') {
     const encryptionKeyId = theField.EntityFieldInfo.EncryptionKeyID;
     if (encryptionKeyId) {
-        value = await EncryptionEngine.Instance.encrypt(
+        value = await EncryptionEngine.Instance.Encrypt(
             value.toString(),
             encryptionKeyId,
             contextUser
@@ -825,10 +973,8 @@ public async ProcessEntityRows(
 
     // ... existing datetime processing ...
 
-    // NEW: Find encrypted fields that allow API decryption
-    const encryptedFields = entityInfo.Fields.filter(
-        f => f.Encrypt && f.AllowDecryptInAPI
-    );
+    // NEW: Find all encrypted fields
+    const encryptedFields = entityInfo.Fields.filter(f => f.Encrypt);
 
     if (encryptedFields.length > 0) {
         const encryptionEngine = EncryptionEngine.Instance;
@@ -837,16 +983,24 @@ public async ProcessEntityRows(
             for (const field of encryptedFields) {
                 const value = row[field.Name];
 
-                if (value && encryptionEngine.isEncrypted(value)) {
-                    try {
-                        row[field.Name] = await encryptionEngine.decrypt(
-                            value,
-                            contextUser
-                        );
-                    } catch (e) {
-                        LogError(`Failed to decrypt field ${field.Name}: ${e.message}`);
-                        // Leave encrypted value as-is on failure
+                if (value && encryptionEngine.IsEncrypted(value)) {
+                    if (field.AllowDecryptInAPI) {
+                        // Decrypt and return plaintext
+                        try {
+                            row[field.Name] = await encryptionEngine.Decrypt(
+                                value,
+                                contextUser
+                            );
+                        } catch (e) {
+                            LogError(`Failed to decrypt field ${field.Name}: ${e.message}`);
+                            // Return null on decryption failure for security
+                            row[field.Name] = null;
+                        }
+                    } else if (!field.SendEncryptedValue) {
+                        // Don't send encrypted value - return null (most secure)
+                        row[field.Name] = null;
                     }
+                    // else: SendEncryptedValue=true, leave encrypted value as-is
                 }
             }
         }
@@ -872,8 +1026,11 @@ export class EntityFieldInfo {
     /** The encryption key ID to use for this field */
     public EncryptionKeyID: string | null = null;
 
-    /** Whether to decrypt this field when returning via API */
-    public AllowDecryptInAPI: boolean = true;
+    /** Whether to decrypt this field when returning via API (default: false for security) */
+    public AllowDecryptInAPI: boolean = false;
+
+    /** When AllowDecryptInAPI=false: if true, send encrypted ciphertext; if false (default), send null */
+    public SendEncryptedValue: boolean = false;
 }
 ```
 
@@ -885,15 +1042,18 @@ The `AllowDecryptInAPI` flag provides fine-grained control:
 
 ### Behavior Matrix
 
-| Encrypt | AllowDecryptInAPI | API Response | Server Access |
-|---------|-------------------|--------------|---------------|
-| false | N/A | Plaintext | Plaintext |
-| true | true | Decrypted | Decrypted |
-| true | false | Encrypted ($ENC$...) | Can decrypt via code |
+| Encrypt | AllowDecryptInAPI | SendEncryptedValue | API Response | Server Access |
+|---------|-------------------|-------------------|--------------|---------------|
+| false | N/A | N/A | Plaintext | Plaintext |
+| true | true | N/A | Decrypted plaintext | Decrypted |
+| true | false | true | Encrypted ($ENC$...) | Can decrypt via code |
+| true | false | false | NULL | Can decrypt via code |
+
+**Defaults are secure**: Both `AllowDecryptInAPI` and `SendEncryptedValue` default to `false`. This means new encrypted fields return `NULL` to API clients by default. Administrators must explicitly opt-in to send decrypted values or ciphertext.
 
 ### Use Cases
 
-**AllowDecryptInAPI = true (Default)**
+**AllowDecryptInAPI = true**
 - PII fields that authorized users should see (names, addresses)
 - Sensitive business data that's encrypted at rest but visible in UI
 - Data that needs to be searchable/sortable in the application
@@ -912,8 +1072,8 @@ For fields with `AllowDecryptInAPI = false`, server code can still decrypt:
 const engine = EncryptionEngine.Instance;
 const encryptedValue = entity.SecretAPIKey; // Gets "$ENC$..."
 
-if (engine.isEncrypted(encryptedValue)) {
-    const decrypted = await engine.decrypt(encryptedValue, contextUser);
+if (engine.IsEncrypted(encryptedValue)) {
+    const decrypted = await engine.Decrypt(encryptedValue, contextUser);
     // Use decrypted value for server-side operations
 }
 ```
@@ -925,14 +1085,13 @@ if (engine.isEncrypted(encryptedValue)) {
 ### Format Specification
 
 ```
-$ENC$<keyId>$<keyVersion>$<algorithm>$<iv>$<ciphertext>[$<authTag>]
+$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]
 ```
 
 | Part | Description | Example |
 |------|-------------|---------|
 | Marker | Always "$ENC$" | $ENC$ |
 | keyId | UUID of encryption key | a1b2c3d4-... |
-| keyVersion | Version string | 1, 2, v2 |
 | algorithm | Algorithm name | AES-256-GCM |
 | iv | Base64-encoded IV | dGVzdGl2MTI= |
 | ciphertext | Base64-encoded encrypted data | Y2lwaGVydGV4dA== |
@@ -941,69 +1100,270 @@ $ENC$<keyId>$<keyVersion>$<algorithm>$<iv>$<ciphertext>[$<authTag>]
 ### Example
 
 ```
-$ENC$a1b2c3d4-e5f6-7890-abcd-ef1234567890$1$AES-256-GCM$dGVzdGl2MTIzNDU2$Y2lwaGVydGV4dGhlcmU=$YXV0aHRhZ2hlcmU=
+$ENC$a1b2c3d4-e5f6-7890-abcd-ef1234567890$AES-256-GCM$dGVzdGl2MTIzNDU2$Y2lwaGVydGV4dGhlcmU=$YXV0aHRhZ2hlcmU=
 ```
 
 ### Benefits
 
 1. **Self-describing**: Contains all info needed to decrypt
-2. **Version-aware**: Supports key rotation with keyVersion
+2. **Simple**: No version tracking in ciphertext (key rotation re-encrypts all data)
 3. **Detectable**: Easy to check if a value is encrypted
 4. **URL-safe**: Base64 encoding is URL-safe
 5. **Database-friendly**: Stores as regular string/nvarchar
+
+### Design Decision: No Version in Ciphertext
+
+We deliberately exclude key version from the encrypted value format. This simplifies the system:
+- Only one active key per encryption key record at any time
+- Key rotation performs full re-encryption of all affected data
+- Old keys are completely retired after rotation (no lingering access)
+- Cleaner security model - departed staff have zero access after key rotation
 
 ---
 
 ## Key Rotation Strategy
 
-### Rotation Flow
+Key rotation is a **full re-encryption operation** that completely replaces all data encrypted with the old key. This ensures old keys can be fully retired with no lingering access.
+
+### Why Full Re-encryption?
+
+1. **Security**: When staff leave or keys may be compromised, the old key must be completely retired
+2. **Simplicity**: No version tracking in ciphertext, no multi-key decryption logic
+3. **Auditability**: Clear before/after state - all data uses the new key after rotation
+4. **Compliance**: Many security standards require ability to fully rotate encryption keys
+
+### Rotation Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                       KEY ROTATION WORKFLOW                              │
+│                    TRANSACTIONAL KEY ROTATION                            │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  Phase 1: Prepare New Key                                               │
+│  Step 1: Preparation (Admin performs manually)                          │
 │  ┌────────────────────────────────────────────────────────────────┐     │
-│  │ 1. Generate new key material                                    │     │
-│  │ 2. Store in key source (env var, vault, etc.)                  │     │
-│  │ 3. Create new Encryption Key record with:                      │     │
-│  │    - KeyVersion = "2" (or next version)                        │     │
-│  │    - Status = "Active"                                         │     │
-│  │    - Same EncryptionKeySourceID & EncryptionAlgorithmID        │     │
-│  │ 4. Update EntityField.EncryptionKeyID to new key               │     │
+│  │ 1. Generate new key material (openssl rand -base64 32)         │     │
+│  │ 2. Store new key in key source with NEW lookup value           │     │
+│  │    e.g., MJ_ENCRYPTION_KEY_PII_NEW                             │     │
+│  │ 3. Keep old key available during rotation                      │     │
 │  └────────────────────────────────────────────────────────────────┘     │
 │                                                                          │
-│  Phase 2: Transition Period                                             │
+│  Step 2: Execute Rotation (Server-side Action)                          │
 │  ┌────────────────────────────────────────────────────────────────┐     │
-│  │ - New writes use new key (KeyVersion = "2")                    │     │
-│  │ - Old reads still work (encrypted value contains key version)  │     │
-│  │ - Both key versions active and accessible                      │     │
+│  │ TRANSACTION START                                               │     │
+│  │   │                                                             │     │
+│  │   ├─ Set EncryptionKey.Status = 'Rotating'                     │     │
+│  │   │                                                             │     │
+│  │   ├─ For each EntityField using this key:                      │     │
+│  │   │    ├─ Query all records with encrypted values              │     │
+│  │   │    ├─ For each record (in batches):                        │     │
+│  │   │    │    ├─ Decrypt with OLD key                            │     │
+│  │   │    │    ├─ Re-encrypt with NEW key                         │     │
+│  │   │    │    └─ Update record                                   │     │
+│  │   │    └─ Verify batch success                                 │     │
+│  │   │                                                             │     │
+│  │   ├─ Update EncryptionKey.KeyLookupValue to new lookup         │     │
+│  │   ├─ Increment EncryptionKey.KeyVersion                        │     │
+│  │   ├─ Set EncryptionKey.Status = 'Active'                       │     │
+│  │   ├─ Update EncryptionKey.ActivatedAt = NOW()                  │     │
+│  │   │                                                             │     │
+│  │ TRANSACTION COMMIT                                              │     │
+│  │                                                                 │     │
+│  │ On ANY failure → ROLLBACK (all data unchanged)                 │     │
 │  └────────────────────────────────────────────────────────────────┘     │
 │                                                                          │
-│  Phase 3: Re-encryption (Optional)                                      │
+│  Step 3: Cleanup (Admin performs manually)                              │
 │  ┌────────────────────────────────────────────────────────────────┐     │
-│  │ - Run batch job to re-encrypt old data with new key            │     │
-│  │ - Process in batches to avoid locking                          │     │
-│  │ - Can be done gradually over time                              │     │
-│  └────────────────────────────────────────────────────────────────┘     │
-│                                                                          │
-│  Phase 4: Retire Old Key                                                │
-│  ┌────────────────────────────────────────────────────────────────┐     │
-│  │ 1. Verify no data remains encrypted with old key               │     │
-│  │ 2. Set old key Status = "Inactive"                             │     │
-│  │ 3. Eventually remove old key material from source              │     │
+│  │ 1. Verify rotation completed successfully                      │     │
+│  │ 2. Remove OLD key material from key source                     │     │
+│  │ 3. Rename NEW key to standard name if desired                  │     │
+│  │    e.g., MJ_ENCRYPTION_KEY_PII_NEW → MJ_ENCRYPTION_KEY_PII     │     │
 │  └────────────────────────────────────────────────────────────────┘     │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Points
+### Key Rotation Action Implementation
 
-1. **No downtime**: Both old and new keys work during transition
-2. **Version in ciphertext**: Encrypted values contain key version, so decryption always uses correct key
-3. **Gradual migration**: Re-encryption can happen over time
-4. **Rollback possible**: Can revert to old key if issues arise
+This implementation follows the same transaction management pattern used in `packages/MetadataSync` for consistency:
+
+```typescript
+// packages/Actions/CoreActions/src/encryption/RotateEncryptionKeyAction.ts
+
+import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseAction, RegisterClass } from '@memberjunction/global';
+import { TransactionManager } from '@memberjunction/metadatasync';
+import { EncryptionEngine } from '@memberjunction/encryption';
+import { EncryptionKeyEntity, EntityFieldEntity } from '@memberjunction/core-entities';
+
+export interface RotateKeyParams {
+    encryptionKeyId: string;      // The key to rotate
+    newKeyLookupValue: string;    // Where to find the new key material
+    batchSize?: number;           // Records per batch (default: 100)
+}
+
+export interface RotateKeyResult {
+    success: boolean;
+    recordsProcessed: number;
+    fieldsProcessed: string[];    // Entity.Field names
+    error?: string;
+}
+
+@RegisterClass(BaseAction, 'Rotate Encryption Key')
+export class RotateEncryptionKeyAction extends BaseAction {
+    private _transactionManager: TransactionManager | null = null;
+
+    async Run(params: RotateKeyParams, contextUser: UserInfo): Promise<RotateKeyResult> {
+        const { encryptionKeyId, newKeyLookupValue, batchSize = 100 } = params;
+        const result: RotateKeyResult = {
+            success: false,
+            recordsProcessed: 0,
+            fieldsProcessed: []
+        };
+
+        const md = new Metadata();
+        const engine = EncryptionEngine.Instance;
+
+        // Use TransactionManager pattern from MetadataSync
+        this._transactionManager = new TransactionManager();
+
+        try {
+            // Begin transaction
+            await this._transactionManager.BeginTransaction();
+
+            // PHASE 1: Load and validate the encryption key
+            const keyEntity = await md.GetEntityObject<EncryptionKeyEntity>(
+                'MJ: Encryption Keys', contextUser
+            );
+            await keyEntity.Load(encryptionKeyId);
+
+            if (keyEntity.Status !== 'Active') {
+                throw new Error(`Key ${keyEntity.Name} is not Active (status: ${keyEntity.Status})`);
+            }
+
+            // Set status to Rotating (prevents concurrent operations)
+            keyEntity.Status = 'Rotating';
+            await keyEntity.Save();
+
+            // PHASE 2: Validate new key is accessible before any data changes
+            await engine.ValidateKeyMaterial(newKeyLookupValue, contextUser);
+
+            // PHASE 3: Find all EntityFields using this key
+            const rv = new RunView();
+            const fieldsResult = await rv.RunView<EntityFieldEntity>({
+                EntityName: 'Entity Fields',
+                ExtraFilter: `EncryptionKeyID = '${encryptionKeyId}' AND Encrypt = 1`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!fieldsResult.Success) {
+                throw new Error('Failed to load entity fields');
+            }
+
+            // PHASE 4: Process each field - re-encrypt all data
+            for (const field of fieldsResult.Results) {
+                const entityInfo = md.Entities.find(e => e.ID === field.EntityID);
+                if (!entityInfo) continue;
+
+                result.fieldsProcessed.push(`${entityInfo.Name}.${field.Name}`);
+
+                // Process in batches (following MetadataSync batch pattern)
+                let offset = 0;
+                let hasMore = true;
+
+                while (hasMore) {
+                    const records = await rv.RunView({
+                        EntityName: entityInfo.Name,
+                        ExtraFilter: `${field.Name} IS NOT NULL AND ${field.Name} LIKE '$ENC$%'`,
+                        OrderBy: entityInfo.PrimaryKey.Name,
+                        MaxRows: batchSize,
+                        StartRow: offset,
+                        ResultType: 'entity_object'
+                    }, contextUser);
+
+                    if (!records.Success || records.Results.length === 0) {
+                        hasMore = false;
+                        continue;
+                    }
+
+                    // Re-encrypt each record in the batch
+                    // Fail-fast: any error immediately triggers rollback
+                    for (const record of records.Results) {
+                        const encryptedValue = record[field.Name];
+
+                        // Decrypt with old key
+                        const plaintext = await engine.Decrypt(encryptedValue, contextUser);
+
+                        // Re-encrypt with new key (using new lookup)
+                        const newEncrypted = await engine.EncryptWithLookup(
+                            plaintext,
+                            encryptionKeyId,
+                            newKeyLookupValue,
+                            contextUser
+                        );
+
+                        // Update record
+                        record[field.Name] = newEncrypted;
+                        await record.Save();
+                        result.recordsProcessed++;
+                    }
+
+                    offset += batchSize;
+                }
+            }
+
+            // PHASE 5: Update key metadata
+            keyEntity.KeyLookupValue = newKeyLookupValue;
+            keyEntity.KeyVersion = String(parseInt(keyEntity.KeyVersion || '1') + 1);
+            keyEntity.Status = 'Active';
+            keyEntity.ActivatedAt = new Date();
+            await keyEntity.Save();
+
+            // PHASE 6: Clear caches
+            engine.ClearCaches();
+
+            // Commit transaction on success
+            await this._transactionManager.CommitTransaction();
+            result.success = true;
+
+        } catch (error) {
+            // Rollback on any failure (fail-fast pattern from MetadataSync)
+            LogError(`Key rotation failed, rolling back: ${error instanceof Error ? error.message : String(error)}`);
+            await this._transactionManager.RollbackTransaction();
+            result.error = error instanceof Error ? error.message : String(error);
+        }
+
+        return result;
+    }
+}
+```
+
+### Safety Guarantees
+
+1. **All-or-Nothing**: The entire rotation happens in a single transaction. If any record fails to re-encrypt, the entire operation rolls back.
+
+2. **No Partial State**: Either all data is encrypted with the new key, or all data remains encrypted with the old key. There's never a mix.
+
+3. **Status Tracking**: The `Rotating` status prevents concurrent operations on the key during rotation.
+
+4. **Validation First**: The new key material is validated before any data changes occur.
+
+5. **Audit Trail**: The `KeyVersion` increment and `ActivatedAt` timestamp provide audit history.
+
+### Practical Considerations
+
+**Downtime**: For tables with many encrypted records, rotation may take significant time. Plan for:
+- Off-hours execution
+- Maintenance window if records are in millions
+- Progress logging for monitoring
+
+**Batch Size**: Default of 100 records per batch balances:
+- Transaction log growth
+- Lock duration
+- Memory usage
+
+**Rollback**: If rotation fails partway through, all changes are rolled back. You can safely retry after fixing the issue.
+
+**Testing**: Always test rotation in a non-production environment first with representative data volumes.
 
 ---
 
@@ -1191,18 +1551,32 @@ BEGIN TRY
             @level2type=N'COLUMN', @level2name=N'EncryptionKeyID';
     END;
 
-    -- Add AllowDecryptInAPI column
+    -- Add AllowDecryptInAPI column (default 0 = secure by default)
     IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[EntityField]') AND name = 'AllowDecryptInAPI')
     BEGIN
         ALTER TABLE [${flyway:defaultSchema}].[EntityField]
-            ADD [AllowDecryptInAPI] [bit] NOT NULL DEFAULT (1);
+            ADD [AllowDecryptInAPI] [bit] NOT NULL DEFAULT (0);
 
         EXEC sys.sp_addextendedproperty
             @name=N'MS_Description',
-            @value=N'When true, encrypted fields will be decrypted before returning via API. When false, the encrypted value is returned.',
+            @value=N'When true, encrypted fields will be decrypted before returning via API. When false, behavior depends on SendEncryptedValue. Default is false (secure).',
             @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
             @level1type=N'TABLE', @level1name=N'EntityField',
             @level2type=N'COLUMN', @level2name=N'AllowDecryptInAPI';
+    END;
+
+    -- Add SendEncryptedValue column (default 0 = return null when not decrypting)
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[EntityField]') AND name = 'SendEncryptedValue')
+    BEGIN
+        ALTER TABLE [${flyway:defaultSchema}].[EntityField]
+            ADD [SendEncryptedValue] [bit] NOT NULL DEFAULT (0);
+
+        EXEC sys.sp_addextendedproperty
+            @name=N'MS_Description',
+            @value=N'When AllowDecryptInAPI is false: if true, send encrypted ciphertext; if false (default), send NULL. Most secure option is false.',
+            @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
+            @level1type=N'TABLE', @level1name=N'EntityField',
+            @level2type=N'COLUMN', @level2name=N'SendEncryptedValue';
     END;
 
     -- =====================================================
@@ -1220,7 +1594,7 @@ BEGIN TRY
              'Environment Variable',
              'Retrieves encryption keys from environment variables. Keys should be base64-encoded.',
              'EnvVarKeySource',
-             '@memberjunction/core',
+             '@memberjunction/encryption',
              '{"envVarName": "string"}');
     END;
 
@@ -1233,7 +1607,7 @@ BEGIN TRY
              'Configuration File',
              'Retrieves encryption keys from mj.config.cjs encryptionKeys section.',
              'ConfigFileKeySource',
-             '@memberjunction/core',
+             '@memberjunction/encryption',
              '{"keyName": "string"}');
     END;
 
@@ -1321,7 +1695,8 @@ END CATCH;
 
 #### Phase 2: Base Provider Framework (1 day)
 - Create `EncryptionKeySourceBase` abstract class
-- Set up directory structure in `packages/MJCore/src/generic/encryption/`
+- Set up new `packages/Encryption/` package (`@memberjunction/encryption`)
+- This is a server-side only package - NOT included in MJCore (which runs client+server)
 - Add exports to package
 
 #### Phase 3: Environment Variable Provider (1 day)
@@ -1442,6 +1817,22 @@ private readonly CACHE_TTL_MS = 5 * 60 * 1000;
 - **HashiCorp Vault** - Enterprise secret management
 - **Google Cloud KMS** - GCP key management
 
+### Known Gap: Initial Encryption of Existing Data
+
+**Problem:** When encryption is enabled on an existing field that already contains plaintext data, that data needs to be encrypted. The current design only handles:
+1. New data (encrypted on save via `generateSPParams`)
+2. Key rotation (re-encrypt already-encrypted data)
+
+**Solution Needed:** An `EnableFieldEncryptionAction` that:
+1. Takes an EntityField ID and validates `Encrypt=true` is set
+2. Queries all records where the field contains plaintext (NOT starting with `$ENC$`)
+3. Encrypts each value in a transaction using the configured key
+4. Updates the records with encrypted values
+
+This is essentially the opposite of key rotation - instead of decrypt→re-encrypt, it's just encrypt plaintext. Should follow the same TransactionManager pattern with batching and fail-fast rollback.
+
+**Priority:** Should be implemented before production use, as enabling encryption on a field with existing data is a common use case.
+
 ### Advanced Features
 
 - **Blind indexing** - Enable exact-match search on encrypted fields
@@ -1533,18 +1924,18 @@ VALUES (
 ### Server-Side Decryption (for AllowDecryptInAPI = false)
 
 ```typescript
-import { EncryptionEngine } from '@memberjunction/core';
+import { EncryptionEngine } from '@memberjunction/encryption';
 
 async function useApiKey(entity: IntegrationConfigEntity, contextUser: UserInfo) {
     const engine = EncryptionEngine.Instance;
 
     // entity.APIKey contains "$ENC$..." because AllowDecryptInAPI = false
-    if (engine.isEncrypted(entity.APIKey)) {
-        const decryptedKey = await engine.decrypt(entity.APIKey, contextUser);
+    if (engine.IsEncrypted(entity.APIKey)) {
+        const decryptedKey = await engine.Decrypt(entity.APIKey, contextUser);
 
         // Use decrypted key for API call
         const client = new ExternalAPIClient(decryptedKey);
-        await client.doSomething();
+        await client.DoSomething();
     }
 }
 ```
@@ -1556,3 +1947,4 @@ async function useApiKey(entity: IntegrationConfigEntity, contextUser: UserInfo)
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-12-05 | Claude Code | Initial draft |
+| 1.1 | 2025-12-24 | Claude Code | Simplified design: removed version from encrypted format, full transactional key rotation, added SendEncryptedValue column, secure defaults (AllowDecryptInAPI=0, SendEncryptedValue=0), moved to separate @memberjunction/encryption package |
