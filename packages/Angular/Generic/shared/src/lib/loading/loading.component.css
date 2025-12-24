@@ -84,7 +84,7 @@
 
 /* Animation: Spin */
 .mj-loading-logo.animation-spin {
-  animation: mj-loading-spin 1.5s linear infinite;
+  animation: mj-loading-spin 3s linear infinite;
 }
 
 @keyframes mj-loading-spin {
