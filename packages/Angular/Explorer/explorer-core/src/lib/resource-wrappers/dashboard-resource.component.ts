@@ -173,10 +173,8 @@ export class DashboardResource extends BaseResourceComponent {
         this.clearError();
 
         const data = this.Data;
-        console.log('[DashboardResource] loadDashboard called with:', data);
 
         if (!data?.ResourceRecordID) {
-            console.log('[DashboardResource] No ResourceRecordID, exiting');
             this.NotifyLoadStarted();
             this.NotifyLoadComplete();
             return;
@@ -187,10 +185,8 @@ export class DashboardResource extends BaseResourceComponent {
         try {
             // Check if this is a special dashboard type (not a database record)
             const config = data.Configuration || {};
-            console.log('[DashboardResource] Config:', config, 'ResourceRecordID:', data.ResourceRecordID);
 
             if (config['dashboardType'] === 'DataExplorer' || data.ResourceRecordID === 'DataExplorer') {
-                console.log('[DashboardResource] Loading DataExplorer with filter:', config['entityFilter']);
                 // Special case: Data Explorer dashboard with optional entity filter
                 await this.loadDataExplorer(
                     config['entityFilter'],
@@ -335,14 +331,12 @@ export class DashboardResource extends BaseResourceComponent {
 
             // handle open entity record events in MJ Explorer with routing
             instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
-                console.log('DashboardResource OpenEntityRecord event received:', data);
                 // check to see if the data has entityname/pkey
                 if (data && data.EntityName && data.RecordPKey) {
-                    console.log('DashboardResource calling NavigationService.OpenEntityRecord:', data.EntityName, data.RecordPKey);
                     // Use NavigationService to open entity record in new tab
                     this.navigationService.OpenEntityRecord(data.EntityName, data.RecordPKey);
                 } else {
-                    console.log('DashboardResource - invalid data, missing EntityName or RecordPKey:', data);
+                    console.warn('DashboardResource - invalid data, missing EntityName or RecordPKey:', data);
                 }
             });
 
