@@ -1119,14 +1119,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Emit the firstResourceLoadComplete event exactly once.
-   * Subsequent calls are ignored to prevent side effects from later tab loads.
+   * While the naming implies this is only invoked once, components we DO NOT CONTROL might have race
+   * conditions that result in unpredictable behavior. To avoid those causing loading screen overaly to show
+   * forever we emit all events upstream
    */
   private emitFirstLoadCompleteOnce(): void {
-    if (!this.hasEmittedFirstLoadComplete) {
-      this.hasEmittedFirstLoadComplete = true;
-      console.log('🎯 First resource load complete - notifying shell');
-      this.firstResourceLoadComplete.emit();
-    }
+    this.firstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
   }
 }

@@ -256,6 +256,7 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
   private async loadRecents(): Promise<void> {
     try {
       this.recentsLoading = true;
+      this.cdr.detectChanges();
       await this.recentAccessService.loadRecentItems(10);
     } catch (error) {
       console.error('Error loading recents:', error);

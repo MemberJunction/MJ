@@ -833,17 +833,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /**
    * Called when the first resource component finishes loading.
-   * This allows us to hide the shell loading indicator only after
-   * the first resource is ready, eliminating the visual gap.
+   * We accept subsequent calls to this method in ordre to ensure we are
+   * not forever showing animation for loading - this can happen if there is
+   * a race condition in components we DO NOT control, so while the naming
+   * is intended to imply the goal it doesn't "hurt" to have this work this way
    */
   onFirstResourceLoadComplete(): void {
-    if (this.waitingForFirstResource) {
-      this.waitingForFirstResource = false;
-      this.loading = false;
-      this.stopLoadingAnimation();
-      this.cdr.detectChanges();
-      console.log('🎯 Shell: First resource loaded, hiding shell loading indicator');
-    }
+    this.waitingForFirstResource = false;
+    this.loading = false;
+    this.stopLoadingAnimation();
+    this.cdr.detectChanges();
   }
 
   /**
