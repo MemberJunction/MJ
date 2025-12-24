@@ -172,5 +172,12 @@
 
 <!-- Loading State -->
 <div class="shell-loading" *ngIf="loading">
-  <mj-loading text="Loading workspace..." size="large"></mj-loading>
+  <mj-loading
+    [text]="currentLoadingText"
+    [textColor]="currentLoadingTextColor"
+    [logoColor]="currentLoadingColor"
+    [logoGradient]="currentLoadingGradient"
+    [animation]="currentLoadingAnimation"
+    size="large">
+  </mj-loading>
 </div>

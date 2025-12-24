@@ -14,11 +14,13 @@ import {
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
+import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
+import { LoadingTheme, getActiveTheme, STANDARD_THEME } from './loading-themes';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -49,6 +51,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   unreadNotificationCount = 0; // Notification badge count
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
+
+  // Loading animation state
+  private loadingMessageInterval: ReturnType<typeof setInterval> | null = null;
+  private loadingMessageIndex = 0;
+  private usedMessageIndices: number[] = [];
+  private usedGradientIndices: number[] = [];
+  private messageCycleCount = 0; // Track message cycles for color changes
+  private activeTheme: LoadingTheme = STANDARD_THEME;
+  private readonly messageIntervalMs = 2500; // 2.5 seconds per message
+  private readonly colorChangeEveryNMessages = 2; // Change color every 2 messages (5 seconds)
+  private readonly animationOptions: ('pulse' | 'spin' | 'pulse-spin')[] = ['pulse', 'spin', 'pulse-spin'];
+  currentLoadingText = 'Loading workspace...';
+  currentLoadingColor = '#264FAF'; // Default MJ blue
+  currentLoadingTextColor = '#757575';
+  currentLoadingGradient: LogoGradient | null = null;
+  currentLoadingAnimation: 'pulse' | 'spin' | 'bounce' | 'pulse-spin' = 'pulse';
 
   // User avatar state
   userImageURL = '';
@@ -123,6 +141,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   async initializeShell(): Promise<void> {
+    // Start the loading animation with cycling messages
+    this.startLoadingAnimation();
+
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
 
@@ -790,12 +811,155 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.waitingForFirstResource) {
       this.waitingForFirstResource = false;
       this.loading = false;
+      this.stopLoadingAnimation();
       this.cdr.detectChanges();
       console.log('🎯 Shell: First resource loaded, hiding shell loading indicator');
     }
   }
 
+  /**
+   * Start the loading message cycling animation.
+   * Messages cycle every 2.5 seconds without repeating until all are used.
+   * Colors change every 5 seconds (every 2nd message cycle).
+   * For themed periods: use theme colors/gradients from the start.
+   * For standard theme: keep MJ blue throughout (no color changes).
+   * Animation is randomly selected from pulse, spin, and pulse-spin.
+   * Theme is selected based on current date and user's browser locale.
+   */
+  private startLoadingAnimation(): void {
+    // Select the appropriate theme based on date and locale
+    this.activeTheme = getActiveTheme();
+    console.log(`🎨 Loading theme: ${this.activeTheme.name}`);
+
+    // Reset state
+    this.usedMessageIndices = [0]; // Mark first message as used
+    this.usedGradientIndices = [];
+    this.loadingMessageIndex = 0;
+    this.messageCycleCount = 0;
+
+    // Initialize display with first message and initial color/gradient
+    this.initializeLoadingDisplay();
+
+    // Randomly select an animation type
+    this.currentLoadingAnimation = this.animationOptions[
+      Math.floor(Math.random() * this.animationOptions.length)
+    ];
+
+    // Start cycling every 2.5 seconds
+    this.loadingMessageInterval = setInterval(() => {
+      this.cycleToNextMessage();
+      this.cdr.detectChanges();
+    }, this.messageIntervalMs);
+  }
+
+  /**
+   * Stop the loading message cycling animation.
+   */
+  private stopLoadingAnimation(): void {
+    if (this.loadingMessageInterval) {
+      clearInterval(this.loadingMessageInterval);
+      this.loadingMessageInterval = null;
+    }
+  }
+
+  /**
+   * Initialize the loading display with first message and initial color/gradient.
+   * For themed periods, applies theme styling from the start.
+   * For standard theme, keeps MJ blue throughout.
+   */
+  private initializeLoadingDisplay(): void {
+    // Set first message
+    this.currentLoadingText = this.activeTheme.messages[0];
+
+    if (this.activeTheme.staticColors) {
+      // Standard theme: keep MJ blue, no gradient
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = '#757575'; // Default gray text
+      this.currentLoadingGradient = null;
+    } else {
+      // Themed period: use theme colors and first gradient from the start
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = this.activeTheme.colors[0];
+
+      // Set initial gradient if theme has gradients
+      if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+        this.currentLoadingGradient = this.activeTheme.gradients[0];
+        this.usedGradientIndices = [0];
+      } else {
+        this.currentLoadingGradient = null;
+      }
+    }
+  }
+
+  /**
+   * Cycle to the next loading message, avoiding repeats until all are used.
+   * Colors change every colorChangeEveryNMessages cycles (5 seconds).
+   * For standard theme, colors remain static.
+   */
+  private cycleToNextMessage(): void {
+    const messages = this.activeTheme.messages;
+    this.messageCycleCount++;
+
+    // If we've used all messages, reset the used list (but exclude current to avoid immediate repeat)
+    if (this.usedMessageIndices.length >= messages.length) {
+      this.usedMessageIndices = [this.loadingMessageIndex];
+    }
+
+    // Find a random unused message index
+    const availableIndices = messages
+      .map((_, i) => i)
+      .filter(i => !this.usedMessageIndices.includes(i));
+
+    if (availableIndices.length > 0) {
+      const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+      this.usedMessageIndices.push(randomIndex);
+      this.loadingMessageIndex = randomIndex;
+
+      // Update the message
+      this.currentLoadingText = this.activeTheme.messages[randomIndex];
+
+      // Check if it's time to change colors (every 2nd message = every 5 seconds)
+      // But only for non-static themes
+      if (!this.activeTheme.staticColors && this.messageCycleCount % this.colorChangeEveryNMessages === 0) {
+        this.cycleToNextColor();
+      }
+    }
+  }
+
+  /**
+   * Cycle to the next color/gradient from the theme.
+   * Alternates through gradients if available.
+   */
+  private cycleToNextColor(): void {
+    // Cycle to next gradient if available
+    if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+      const gradients = this.activeTheme.gradients;
+
+      // If we've used all gradients, reset (but exclude current to avoid immediate repeat)
+      if (this.usedGradientIndices.length >= gradients.length) {
+        const lastUsed = this.usedGradientIndices[this.usedGradientIndices.length - 1];
+        this.usedGradientIndices = [lastUsed];
+      }
+
+      // Find next gradient (simple rotation for gradients)
+      const currentIndex = this.usedGradientIndices[this.usedGradientIndices.length - 1] ?? -1;
+      const nextIndex = (currentIndex + 1) % gradients.length;
+      this.usedGradientIndices.push(nextIndex);
+      this.currentLoadingGradient = gradients[nextIndex];
+    }
+
+    // Also cycle text color through theme colors
+    const colors = this.activeTheme.colors;
+    if (colors.length > 1) {
+      // Get a random color from the theme for text
+      const randomIndex = Math.floor(Math.random() * colors.length);
+      this.currentLoadingColor = colors[randomIndex];
+      this.currentLoadingTextColor = colors[randomIndex];
+    }
+  }
+
   ngOnDestroy(): void {
+    this.stopLoadingAnimation();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.layoutManager.Destroy();
   }

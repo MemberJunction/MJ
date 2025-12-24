@@ -8,6 +8,8 @@ import { LogError, Metadata } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
+import { MJGlobal, MJEventType } from '@memberjunction/global';
+import { firstValueFrom, filter, take } from 'rxjs';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
   storedRoutes: { [key: string]: DetachedRouteHandleExt | null } = {};
@@ -125,6 +127,7 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
 export class ResourceResolver implements Resolve<void> {
   private processedUrls = new Map<string, number>();
   private readonly URL_DEBOUNCE_MS = 100; // Allow same URL after 100ms
+  private loggedInPromise: Promise<void> | null = null;
 
   constructor(
     private sharedService: SharedService,
@@ -132,22 +135,32 @@ export class ResourceResolver implements Resolve<void> {
     private appManager: ApplicationManager,
     private tabService: TabService
   ) {
-    // Subscribe to router events
-    this.router.events.subscribe(event => {
-      // if (event instanceof NavigationEnd) {
-      //   LogStatus('NavigationEnd:', event.url);
-      // }
-      // if (event instanceof NavigationError) {
-      //   LogError(`NavigationError: ${event.error}`);
-      // }
-      // if (event instanceof NavigationCancel) {
-      //   LogError(`NavigationCancel: ${event.reason}`);
-      // }
-    });
+    // Create a promise that resolves when the user is logged in and metadata is loaded
+    this.loggedInPromise = this.waitForLogin();
   }
 
-  resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
+  /**
+   * Wait for the LoggedIn event which indicates metadata is loaded.
+   * Uses replay (true) to catch the event even if it already fired.
+   */
+  private async waitForLogin(): Promise<void> {
+    await firstValueFrom(
+      MJGlobal.Instance.GetEventListener(true).pipe(
+        filter(event => event.event === MJEventType.LoggedIn),
+        take(1)
+      )
+    );
+    console.log('[ResourceResolver] LoggedIn event received, metadata is ready');
+  }
+
+  async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
     console.log('[ResourceResolver.resolve] Called with URL:', state.url);
+
+    // Wait for login/metadata to be ready before processing
+    if (this.loggedInPromise) {
+      console.log('[ResourceResolver.resolve] Waiting for metadata to be ready...');
+      await this.loggedInPromise;
+    }
 
     // Prevent duplicate processing of the same URL within a short time window
     // This allows legitimate re-navigation to the same URL (like app switching)
@@ -164,6 +177,7 @@ export class ResourceResolver implements Resolve<void> {
     console.log('[ResourceResolver.resolve] Processing URL:', state.url);
 
     const md = new Metadata();
+    const applications = md.Applications;
 
     // Handle app-level navigation: /app/:appName (no nav item - app default)
     if (route.params['appName'] !== undefined && route.params['navItemName'] === undefined) {
@@ -171,7 +185,7 @@ export class ResourceResolver implements Resolve<void> {
       console.log('[ResourceResolver.resolve] App-only URL detected:', appName);
 
       // Find the app
-      const app = md.Applications.find(a =>
+      const app = applications.find(a =>
         a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
       );
 
@@ -196,8 +210,8 @@ export class ResourceResolver implements Resolve<void> {
 
       console.log('[ResourceResolver.resolve] App nav item URL detected:', appName, '/', navItemName);
 
-      // Find the app
-      const app = md.Applications.find(a =>
+      // Find the app (applications already validated as non-null above)
+      const app = applications.find(a =>
         a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
       );
 
