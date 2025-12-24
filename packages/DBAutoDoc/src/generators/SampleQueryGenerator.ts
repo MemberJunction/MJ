@@ -7,7 +7,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
-import * as fs from 'fs/promises';
 import {
   SampleQuery,
   SampleQueryGenerationResult,
@@ -23,7 +22,8 @@ import {
   QueryPlan,
   QuerySQL
 } from '../types/sample-queries.js';
-import { SchemaDefinition, TableDefinition } from '../types/state.js';
+import { SchemaDefinition, TableDefinition, DatabaseDocumentation } from '../types/state.js';
+import { StateManager } from '../state/StateManager.js';
 
 interface QueryGenerationPromptResponse {
   queries: Array<{
@@ -128,10 +128,9 @@ export class SampleQueryGenerator {
     private promptEngine: PromptEngine,
     private driver: BaseAutoDocDriver,
     private model: string,
+    private stateManager: StateManager,  // StateManager for incremental writes
     private effortLevel?: number,
-    private maxTokens: number = 16000,  // Default from typical AI config
-    private outputFilePath?: string,  // Optional path for incremental query writes
-    private summaryFilePath?: string  // Optional path for incremental summary writes
+    private maxTokens: number = 16000  // Default from typical AI config
   ) {}
 
   public async generateQueries(
@@ -141,38 +140,90 @@ export class SampleQueryGenerator {
     this.totalTokensUsed = 0;
     this.totalCost = 0;
 
-    const allQueries: SampleQuery[] = [];
-    const summary: SampleQueryGenerationSummary = {
-      totalQueriesGenerated: 0,
-      queriesValidated: 0,
-      queriesFailed: 0,
-      totalExecutionTime: 0,
+    const state = await this.stateManager.load();
+    if (!state) {
+      throw new Error('Failed to load state from StateManager');
+    }
+
+    const startedAt = new Date().toISOString();
+
+    // Initialize deliverable and phase tracking
+    if (!state.sampleQueries) {
+      state.sampleQueries = {
+        generatedAt: startedAt,
+        status: 'partial',
+        queries: [],
+        summary: {
+          totalQueriesGenerated: 0,
+          queriesValidated: 0,
+          queriesFailed: 0,
+          totalExecutionTime: 0,
+          tokensUsed: 0,
+          estimatedCost: 0,
+          averageConfidence: 0,
+          queriesByType: {} as Record<QueryType, number>,
+          queriesByPattern: {} as Record<QueryPattern, number>,
+          queriesByComplexity: {} as Record<QueryComplexity, number>
+        },
+        modelUsed: this.model
+      };
+    } else {
+      // Reset for a new run
+      state.sampleQueries.generatedAt = startedAt;
+      state.sampleQueries.status = 'partial';
+      state.sampleQueries.queries = [];
+      state.sampleQueries.modelUsed = this.model;
+    }
+
+    // Track phase metadata
+    state.phases.queryGeneration = {
+      startedAt,
+      status: 'running',
+      queriesGenerated: 0,
       tokensUsed: 0,
-      estimatedCost: 0,
-      averageConfidence: 0,
-      queriesByType: {} as Record<QueryType, number>,
-      queriesByPattern: {} as Record<QueryPattern, number>,
-      queriesByComplexity: {} as Record<QueryComplexity, number>
+      estimatedCost: 0
     };
 
     try {
       for (const schema of schemas) {
         LogStatus(`[SampleQueryGenerator] Generating queries for schema: ${schema.name}`);
 
-        const schemaQueries = await this.generateQueriesForSchema(schema, allQueries);
-        allQueries.push(...schemaQueries);
+        const schemaQueries = await this.generateQueriesForSchema(schema, state.sampleQueries.queries);
+        state.sampleQueries.queries.push(...schemaQueries);
       }
 
-      summary.totalQueriesGenerated = allQueries.length;
-      summary.queriesValidated = allQueries.filter(q => q.validated).length;
-      summary.queriesFailed = allQueries.filter(q => !q.validated).length;
-      summary.totalExecutionTime = Date.now() - this.startTime;
-      summary.tokensUsed = this.totalTokensUsed;
-      summary.estimatedCost = this.totalCost;
-      summary.averageConfidence =
-        allQueries.reduce((sum, q) => sum + q.confidence, 0) / allQueries.length;
+      // Update deliverable summary
+      const allQueries = state.sampleQueries.queries;
+      const summary: SampleQueryGenerationSummary = {
+        totalQueriesGenerated: allQueries.length,
+        queriesValidated: allQueries.filter(q => q.validated).length,
+        queriesFailed: allQueries.filter(q => !q.validated).length,
+        totalExecutionTime: Date.now() - this.startTime,
+        tokensUsed: this.totalTokensUsed,
+        estimatedCost: this.totalCost,
+        averageConfidence: allQueries.length > 0
+          ? allQueries.reduce((sum, q) => sum + q.confidence, 0) / allQueries.length
+          : 0,
+        queriesByType: {} as Record<QueryType, number>,
+        queriesByPattern: {} as Record<QueryPattern, number>,
+        queriesByComplexity: {} as Record<QueryComplexity, number>
+      };
 
       this.aggregateQueryMetrics(allQueries, summary);
+
+      // Mark deliverable as completed
+      state.sampleQueries.summary = summary;
+      state.sampleQueries.status = 'completed';
+
+      // Mark phase as completed
+      state.phases.queryGeneration.status = 'completed';
+      state.phases.queryGeneration.completedAt = new Date().toISOString();
+      state.phases.queryGeneration.queriesGenerated = allQueries.length;
+      state.phases.queryGeneration.tokensUsed = this.totalTokensUsed;
+      state.phases.queryGeneration.estimatedCost = this.totalCost;
+
+      // Save final state
+      await this.stateManager.save(state);
 
       return {
         success: true,
@@ -181,9 +232,38 @@ export class SampleQueryGenerator {
       };
     } catch (error) {
       LogError(`[SampleQueryGenerator] Failed to generate queries: ${(error as Error).message}`);
+
+      // Mark deliverable and phase as failed
+      const errorState = await this.stateManager.load();
+      if (errorState) {
+        if (errorState.sampleQueries) {
+          errorState.sampleQueries.status = 'failed';
+        }
+        if (errorState.phases.queryGeneration) {
+          errorState.phases.queryGeneration.status = 'failed';
+          errorState.phases.queryGeneration.errorMessage = (error as Error).message;
+          errorState.phases.queryGeneration.completedAt = new Date().toISOString();
+        }
+        await this.stateManager.save(errorState);
+      }
+
+      const queries = errorState?.sampleQueries?.queries || [];
+      const summary = errorState?.sampleQueries?.summary || {
+          totalQueriesGenerated: 0,
+          queriesValidated: 0,
+          queriesFailed: 0,
+          totalExecutionTime: 0,
+          tokensUsed: 0,
+          estimatedCost: 0,
+          averageConfidence: 0,
+          queriesByType: {} as Record<QueryType, number>,
+          queriesByPattern: {} as Record<QueryPattern, number>,
+          queriesByComplexity: {} as Record<QueryComplexity, number>
+        };
+
       return {
         success: false,
-        queries: allQueries,
+        queries,
         summary,
         errorMessage: (error as Error).message
       };
@@ -213,8 +293,8 @@ export class SampleQueryGenerator {
         );
         queries.push(...tableQueries);
 
-        // Write incrementally after each table if output path is provided
-        if ((this.outputFilePath || this.summaryFilePath) && tableQueries.length > 0) {
+        // Write incrementally after each table
+        if (tableQueries.length > 0) {
           await this.writeIncrementalOutput(existingQueries.concat(queries));
         }
       } catch (error) {
@@ -1021,31 +1101,35 @@ export class SampleQueryGenerator {
   }
 
   /**
-   * Write queries and summary to files incrementally after each table completes
+   * Write queries and summary to state incrementally after each table completes
    * This allows users to cancel the run and still see completed queries and progress
    */
   private async writeIncrementalOutput(queries: SampleQuery[]): Promise<void> {
     try {
-      // Write queries if path is provided
-      if (this.outputFilePath) {
-        await fs.writeFile(
-          this.outputFilePath,
-          JSON.stringify(queries, null, 2),
-          'utf-8'
-        );
-        LogStatus(`[SampleQueryGenerator] Wrote ${queries.length} queries to ${this.outputFilePath}`);
+      const state = await this.stateManager.load();
+
+      if (!state || !state.sampleQueries) {
+        return; // Should not happen, but safeguard
       }
 
-      // Calculate and write summary if path is provided
-      if (this.summaryFilePath) {
-        const summary = this.calculateSummary(queries);
-        await fs.writeFile(
-          this.summaryFilePath,
-          JSON.stringify(summary, null, 2),
-          'utf-8'
-        );
-        LogStatus(`[SampleQueryGenerator] Updated summary: ${summary.totalQueriesGenerated} queries, ${summary.queriesValidated} validated`);
+      // Update deliverable queries
+      state.sampleQueries.queries = queries;
+
+      // Calculate and update summary
+      const summary = this.calculateSummary(queries);
+      state.sampleQueries.summary = summary;
+
+      // Update phase tracking
+      if (state.phases.queryGeneration) {
+        state.phases.queryGeneration.queriesGenerated = queries.length;
+        state.phases.queryGeneration.tokensUsed = this.totalTokensUsed;
+        state.phases.queryGeneration.estimatedCost = this.totalCost;
       }
+
+      // Save state
+      await this.stateManager.save(state);
+
+      LogStatus(`[SampleQueryGenerator] Updated state: ${summary.totalQueriesGenerated} queries, ${summary.queriesValidated} validated`);
     } catch (error) {
       LogError(`[SampleQueryGenerator] Failed to write incremental output: ${(error as Error).message}`);
     }

@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component using unsafe formatting methods (violates unsafe-formatting-methods rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [html, setHtml] = useState('');\n  \n  useEffect(() => {\n    const userInput = '<script>alert(\"xss\")</script>';\n    const formatted = `<div>${userInput}</div>`;\n    setHtml(formatted);\n  }, []);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <div dangerouslySetInnerHTML={{ __html: html }} />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

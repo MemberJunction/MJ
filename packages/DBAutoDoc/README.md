@@ -131,13 +131,47 @@ This generates:
 
 **Query Fix & Refinement:**
 
-When a generated query fails validation, DBAutoDoc can automatically attempt to fix it:
-- **Query Fix**: Passes the SQL, error message, and previous attempts to the LLM for correction
-- **Query Refinement**: Analyzes sample results and asks LLM if the query matches the business purpose
+DBAutoDoc includes two quality control mechanisms to ensure high-quality queries:
 
-The processing flow is: Generate → Validate/Fix → Refine → Validate/Fix → Done
+**1. Query Fix (Error Recovery)**
+- **Purpose**: Automatically fix queries that fail validation (syntax errors, wrong columns, etc.)
+- **When**: Runs immediately when a query fails to execute
+- **How**: Passes SQL, error message, and schema context to LLM for correction
+- **Settings**:
+  - `enableQueryFix: true` (default: true) - Enable automatic fixes
+  - `maxFixAttempts: 3` (default: 3) - Maximum retry attempts per query
+- **Success Rate**: ~96% of queries validate successfully after fix attempts
 
-This iterative approach significantly improves query quality, with most queries succeeding after 1-2 fix attempts.
+**2. Query Refinement (Quality Improvement)**
+- **Purpose**: Improve working queries by analyzing actual results
+- **When**: Runs after a query successfully validates
+- **How**: LLM reviews sample results and suggests improvements (filters, joins, aggregations)
+- **Settings**:
+  - `enableQueryRefinement: false` (default: false) - Enable refinement analysis
+  - `maxRefinementAttempts: 1` (default: 1) - Maximum refinement iterations
+- **Use Cases**: Adding appropriate filters, improving join logic, optimizing aggregations
+- **Note**: Increases token usage and generation time but significantly improves query quality
+
+**Processing Flow:**
+```
+Generate SQL
+  → Validate (execute against DB)
+  → If Failed: Fix (up to maxFixAttempts) → Re-validate
+  → If Passed & Refinement Enabled: Refine → Re-validate → Repeat (up to maxRefinementAttempts)
+  → Done
+```
+
+**Example Configuration:**
+```json
+{
+  "sampleQueryGeneration": {
+    "enableQueryFix": true,           // Fix broken queries
+    "maxFixAttempts": 3,              // Try up to 3 times
+    "enableQueryRefinement": true,    // Improve working queries
+    "maxRefinementAttempts": 2        // Up to 2 refinement passes
+  }
+}
+```
 
 **Key Configuration Settings:**
 - **`maxTables`**: Controls table selection
@@ -840,19 +874,33 @@ Note: Sample query generation uses ~6× more API calls than description generati
 
 ### Sample Query Generation Best Practices
 
+**Configuration:**
 1. **Use GPT-4o or Claude 3.5** - Best balance of quality, speed, and cost
 2. **Set token budget** - Prevents runaway costs (default: 100K tokens)
 3. **Start with 5 queries/table** - Good balance of coverage and cost
-4. **Enable alignment validation** - Ensures related queries use consistent logic
-5. **Enable query fix** - Auto-fixes failed queries (up to 3 attempts by default)
-6. **Enable query refinement** - LLM analyzes results to improve query quality
-7. **Review generated queries** - Verify SQL correctness before using for training
-8. **Use for few-shot prompting** - Include in AI agent system prompts as examples
-9. **Generate separately** - Use `generate-queries` command on existing state to avoid re-running full analysis
-10. **Export to metadata** - Use `export-sample-queries` to sync queries to MemberJunction
-11. **Focus on complex tables** - Skip simple lookup tables to save costs
-12. **Validate execution** - Enable `maxExecutionTime` to test queries run successfully
-13. **Document patterns** - Use generated queries to document common query patterns for your domain
+4. **Enable query fix** (`enableQueryFix: true`, default) - Auto-fixes broken queries (up to 3 attempts)
+5. **Enable query refinement** (`enableQueryRefinement: true`, optional) - LLM improves working queries
+6. **Set max refinement attempts** (`maxRefinementAttempts: 2`) - More iterations = better quality but higher cost
+
+**Quality Control:**
+7. **Enable alignment validation** - Ensures related queries use consistent filtering logic
+8. **Validate execution** - Set `maxExecutionTime` to test queries actually run (default: 30s)
+9. **Review refinement results** - Check `wasRefined` flag and `refinementHistory` in output
+10. **Compare fix vs refinement** - Fix errors are in `fixHistory`, improvements in `refinementHistory`
+
+**Usage:**
+11. **Generate separately** - Use `generate-queries` command on existing state to avoid re-running full analysis
+12. **Export to metadata** - Use `export-sample-queries` to sync queries to MemberJunction
+13. **Use for few-shot prompting** - Include in AI agent system prompts as examples
+14. **Focus on complex tables** - Skip simple lookup tables to save costs
+15. **Document patterns** - Use generated queries to document common query patterns for your domain
+
+**Understanding Results:**
+- `validated: true` = Query executes successfully
+- `fixAttempts: 0` = Query worked on first try
+- `fixAttempts: 2, validated: true` = Query fixed after 2 attempts
+- `wasRefined: true` = Query was improved after initial success
+- `refinementAttempts: 2` = Query went through 2 refinement passes
 
 ## Troubleshooting
 

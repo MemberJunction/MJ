@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
@@ -312,6 +312,15 @@ export class BaseAgent {
      * @since 2.123.0
      */
     private _effectiveActions: ActionEntityExtended[] = [];
+
+    /**
+     * Execution limits for dynamically added actions.
+     * Maps action IDs to their MaxExecutionsPerRun limit.
+     * Populated during gatherPromptTemplateData() when actionChanges include actionLimits.
+     * @private
+     * @since 2.124.0
+     */
+    private _dynamicActionLimits: Record<string, number> = {};
 
     /**
      * Counter for tracking validation retry attempts during FinalPayloadValidation.
@@ -627,6 +636,10 @@ export class BaseAgent {
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
             this._contextRecoveryAttempts = 0;
+
+            // Reset effective actions and dynamic limits for this run
+            this._effectiveActions = [];
+            this._dynamicActionLimits = {};
 
             // Store message lifecycle callback if provided
             this._messageLifecycleCallback = params.onMessageLifecycle;
@@ -1526,9 +1539,9 @@ export class BaseAgent {
     /**
      * Validates that the actions next step is valid and can be executed by the current agent. Subclasses can override
      * this method to implement custom validation logic if needed.
-     * @param params 
-     * @param nextStep 
-     * @returns 
+     * @param params
+     * @param nextStep
+     * @returns
      */
     protected async validateActionsNextStep<P>(
         params: ExecuteAgentParams,
@@ -1537,25 +1550,32 @@ export class BaseAgent {
         agentRun: AIAgentRunEntityExtended,
         currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        // check to make sure the current agent can execute the specified action
-        const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
+        // Use effective actions which includes runtime action changes (populated in gatherPromptTemplateData)
+        // Fall back to database-configured actions if _effectiveActions is empty
+        const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
+
+        // Also get the database-configured agent actions for MaxExecutionsPerRun lookup
+        const dbAgentActions = AIEngine.Instance.AgentActions.filter(
+            aa => aa.AgentID === params.agent.ID && aa.Status === 'Active'
+        );
+
         const missingActions = nextStep.actions?.filter(action => {
             const actionName = action.name.trim().toLowerCase();
 
-            // Try exact match first
-            const exactMatch = curAgentActions.find(aa =>
-                aa.Action.trim().toLowerCase() === actionName
+            // Try exact match first against effective actions (by Name property)
+            const exactMatch = effectiveActions.find(a =>
+                a.Name.trim().toLowerCase() === actionName
             );
             if (exactMatch) return false;  // Found exact match, not missing
 
             // Fallback: Try CONTAINS search for partial matches
-            const containsMatches = curAgentActions.filter(aa =>
-                aa.Action.trim().toLowerCase().includes(actionName)
+            const containsMatches = effectiveActions.filter(a =>
+                a.Name.trim().toLowerCase().includes(actionName)
             );
 
             if (containsMatches.length === 1) {
                 // Exactly one partial match - use it and update action name
-                const correctedName = containsMatches[0].Action;
+                const correctedName = containsMatches[0].Name;
                 this.logStatus(`Action name fuzzy matched: '${action.name}' → '${correctedName}'`, true, params);
                 action.name = correctedName;  // Update to correct full name
                 return false;  // Found via contains, not missing
@@ -1563,14 +1583,16 @@ export class BaseAgent {
 
             // No matches or ambiguous (multiple matches) - it's missing
             if (containsMatches.length > 1) {
-                this.logStatus(`Ambiguous action name '${action.name}' matches ${containsMatches.length} actions: ${containsMatches.map(a => a.Action).join(', ')}`, true, params);
+                this.logStatus(`Ambiguous action name '${action.name}' matches ${containsMatches.length} actions: ${containsMatches.map(a => a.Name).join(', ')}`, true, params);
             }
             return true;
         });
+
         // we should have zero missing actions, if we do, we need to log an error and return a retry step
         if (missingActions && missingActions.length > 0) {
             const missingActionNames = missingActions.map(a => a.name).join(', ');
-            this.logError(`Actions '${missingActionNames}' not found or not active for agent '${params.agent.Name}'`, {
+            const availableActionNames = effectiveActions.map(a => a.Name).join(', ');
+            this.logError(`Actions '${missingActionNames}' not found or not active for agent '${params.agent.Name}'. Available actions: ${availableActionNames}`, {
                 agent: params.agent,
                 category: 'ActionExecution'
             });
@@ -1581,27 +1603,41 @@ export class BaseAgent {
             return {
                 step: 'Retry',
                 terminate: false, // this will kick it back to the prompt to run again
-                errorMessage: `Actions '${missingActionNames}' not found or not active`
+                errorMessage: `Actions '${missingActionNames}' not found or not active. Available: ${availableActionNames}`
             };
         }
 
         // Check MaxExecutionsPerRun limits for each action
         if (nextStep.actions) {
             const violatedActions: string[] = [];
-            
+
             for (const action of nextStep.actions) {
-                const agentAction = curAgentActions.find(aa => 
-                    aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase()
+                const actionEntity = effectiveActions.find(a =>
+                    a.Name.trim().toLowerCase() === action.name.trim().toLowerCase()
                 );
-                
-                if (agentAction && agentAction.MaxExecutionsPerRun != null) {
-                    const executionCount = await this.getActionExecutionCount(agentRun.ID, agentAction.ActionID);
-                    if (executionCount >= agentAction.MaxExecutionsPerRun) {
-                        violatedActions.push(`${action.name} (limit: ${agentAction.MaxExecutionsPerRun}, current: ${executionCount})`);
+
+                if (!actionEntity) continue;
+
+                // Check for limit from database-configured agent action
+                const dbAgentAction = dbAgentActions.find(aa => aa.ActionID === actionEntity.ID);
+                let maxExecutions: number | null = null;
+
+                if (dbAgentAction?.MaxExecutionsPerRun != null) {
+                    // Database-configured action with limit
+                    maxExecutions = dbAgentAction.MaxExecutionsPerRun;
+                } else if (this._dynamicActionLimits[actionEntity.ID] != null) {
+                    // Dynamically added action with limit from actionChanges
+                    maxExecutions = this._dynamicActionLimits[actionEntity.ID];
+                }
+
+                if (maxExecutions != null) {
+                    const executionCount = await this.getActionExecutionCount(agentRun.ID, actionEntity.ID);
+                    if (executionCount >= maxExecutions) {
+                        violatedActions.push(`${action.name} (limit: ${maxExecutions}, current: ${executionCount})`);
                     }
                 }
             }
-            
+
             if (violatedActions.length > 0) {
                 const violationMessage = `Actions have reached execution limits: ${violatedActions.join(', ')}`;
                 this.logError(violationMessage, {
@@ -1627,6 +1663,28 @@ export class BaseAgent {
         return nextStep;
     }
 
+    /**
+     * Gets the effective actions for validation, using runtime changes if available.
+     * Falls back to database-configured actions if _effectiveActions is empty.
+     *
+     * @param agentId - The ID of the agent to get actions for
+     * @returns Array of effective actions available to the agent
+     * @protected
+     * @since 2.123.0
+     */
+    protected getEffectiveActionsForValidation(agentId: string): ActionEntityExtended[] {
+        if (this._effectiveActions.length > 0) {
+            return this._effectiveActions;
+        }
+
+        // Fallback: compute from database configuration
+        const agentActions = AIEngine.Instance.AgentActions.filter(
+            aa => aa.AgentID === agentId && aa.Status === 'Active'
+        );
+        return ActionEngineServer.Instance.Actions.filter(a =>
+            agentActions.some(aa => aa.ActionID === a.ID) && a.Status === 'Active'
+        );
+    }
 
     /**
      * Validates that the Success next step is valid and can be executed by the current agent. Subclasses can override
@@ -3028,7 +3086,9 @@ The context is now within limits. Please retry your request with the recovered c
             // Apply runtime action changes if provided
             if (actionChanges?.length) {
                 const isRoot = this._depth === 0;
-                actions = this.applyActionChanges(actions, actionChanges, agent.ID, isRoot);
+                const result = this.applyActionChanges(actions, actionChanges, agent.ID, isRoot);
+                actions = result.actions;
+                this._dynamicActionLimits = result.dynamicLimits;
             }
 
             // Filter to only active actions and store for later validation in executeActionsStep
@@ -3289,6 +3349,10 @@ The context is now within limits. Please retry your request with the recovered c
             const subAgentActionChanges = this.filterActionChangesForSubAgent(params.actionChanges);
 
             // Execute the sub-agent with cancellation and streaming support
+            // Use subAgentRequest.context if provided, otherwise fall back to params.context
+            // This allows Flow agents and Loop agents to propagate context through sub-agent requests
+            const subAgentContext = subAgentRequest.context !== undefined ? subAgentRequest.context : params.context;
+
             const result = await runner.RunAgent<SC, SR>({
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
@@ -3307,7 +3371,7 @@ The context is now within limits. Please retry your request with the recovered c
                         ...params.data,
                         ...subAgentRequest.templateParameters,
                       }, // merge parent data first, then override with template parameters so loop agents can dynamically override parent data
-                context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
+                context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
                 // Add callback to link AgentRun ID immediately when created
@@ -3526,17 +3590,8 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Applies runtime action changes to a base set of actions.
-     *
-     * This method processes an array of ActionChange objects and applies them
-     * to the provided base actions, respecting scope and mode settings.
-     *
-     * @param {ActionEntityExtended[]} baseActions - The starting set of actions
-     * @param {ActionChange[]} actionChanges - Array of changes to apply
-     * @param {string} agentId - The ID of the current agent
-     * @param {boolean} isRoot - Whether this is the root agent
-     * @returns {ActionEntityExtended[]} The modified set of actions
-     * @protected
+     * Result type for applyActionChanges method.
+     * Contains both the modified actions and any dynamic execution limits.
      * @since 2.123.0
      */
     protected applyActionChanges(
@@ -3544,8 +3599,9 @@ The context is now within limits. Please retry your request with the recovered c
         actionChanges: ActionChange[],
         agentId: string,
         isRoot: boolean
-    ): ActionEntityExtended[] {
+    ): { actions: ActionEntityExtended[]; dynamicLimits: Record<string, number> } {
         let actions = [...baseActions];
+        const dynamicLimits: Record<string, number> = {};
 
         for (const change of actionChanges) {
             // Check if this change applies to this agent
@@ -3560,6 +3616,10 @@ The context is now within limits. Please retry your request with the recovered c
                         const actionToAdd = ActionEngineServer.Instance.Actions.find(a => a.ID === actionId);
                         if (actionToAdd) {
                             actions.push(actionToAdd);
+                            // Store execution limit if provided
+                            if (change.actionLimits?.[actionId] != null) {
+                                dynamicLimits[actionId] = change.actionLimits[actionId];
+                            }
                         } else {
                             LogStatus(`Action with ID '${actionId}' not found in ActionEngineServer - skipping add`);
                         }
@@ -3571,7 +3631,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
-        return actions;
+        return { actions, dynamicLimits };
     }
 
     /**
@@ -4933,13 +4993,17 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Return the Chat step
+                // Return the Chat step, including responseForm and commands from sub-agent
+                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
                 return {
                     step: 'Chat',
                     terminate: true, // Bubble up to the main loop to handle Chat
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
-                    newPayload: previousDecision?.newPayload // Don't modify payload on Chat
+                    newPayload: mergedPayload, // Preserve sub-agent payload changes
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands
                 };
             }
             
@@ -5280,12 +5344,17 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                // Return the Chat step, including responseForm and commands from sub-agent
+                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
                 return {
                     step: 'Chat',
                     terminate: true,
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
-                    newPayload: previousDecision?.newPayload
+                    newPayload: mergedPayload, // Preserve sub-agent payload changes
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands
                 };
             }
 
@@ -6029,21 +6098,28 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     protected validateActionInAgent(actionName: string): string | null {
-        // check to make sure action is valid
-        const aa = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === this._agentRun!.AgentID);
-        let action = aa.filter(a => a.Agent?.trim().toLowerCase() === actionName.trim().toLowerCase());
-        if (!action) {
-            // try to do a search contains without exact match and if we have exactly 1 it is ok, if more than 1 different error
-            // message and if no match still not good
-            const partialAction = aa.filter(a => a.Agent?.trim().toLowerCase().includes(actionName.trim().toLowerCase() || ''));
-            if (partialAction.length > 1) {
-                return `Ambiguous action '${actionName}' specified`;
-            }
-            else if (partialAction.length === 0) {
-                return `No action '${actionName}' found`;
-            }
+        // Use effective actions which includes runtime action changes
+        const effectiveActions = this.getEffectiveActionsForValidation(this._agentRun!.AgentID);
+        const normalizedName = actionName.trim().toLowerCase();
+
+        // Try exact match first
+        const exactMatch = effectiveActions.find(a => a.Name.trim().toLowerCase() === normalizedName);
+        if (exactMatch) {
+            return null; // Valid
         }
-        return null;
+
+        // Try partial/contains match
+        const partialMatches = effectiveActions.filter(a =>
+            a.Name.trim().toLowerCase().includes(normalizedName)
+        );
+
+        if (partialMatches.length === 1) {
+            return null; // Valid - single partial match
+        } else if (partialMatches.length > 1) {
+            return `Ambiguous action '${actionName}' specified. Matches: ${partialMatches.map(a => a.Name).join(', ')}`;
+        } else {
+            return `No action '${actionName}' found. Available: ${effectiveActions.map(a => a.Name).join(', ')}`;
+        }
     }
 
     protected validateSubAgentInAgent(subAgentName: string): string | null {
@@ -6410,40 +6486,45 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Helper: Find AgentAction with fuzzy matching for loops
+     * Helper: Find action with fuzzy matching for loops.
+     * Uses effective actions which includes both database-configured and dynamically added actions.
+     * Returns an object with the resolved action name for use in loop execution.
+     *
+     * @since 2.123.0 - Updated to use _effectiveActions for dynamic action support
      */
     private findAgentActionForLoop(
         actionName: string,
         agentId: string,
         agentName: string,
         params: ExecuteAgentParams
-    ): AIAgentActionEntity {
-        const agentActions = AIEngine.Instance.AgentActions.filter(aa =>
-            aa.AgentID === agentId && aa.Status === 'Active'
-        );
+    ): { Action: string } {
+        // Use effective actions which includes runtime action changes
+        const effectiveActions = this.getEffectiveActionsForValidation(agentId);
+        const normalizedName = actionName.trim().toLowerCase();
 
         // Try exact match first
-        let matched = agentActions.find(aa =>
-            aa.Action.trim().toLowerCase() === actionName.trim().toLowerCase()
+        let matchedAction = effectiveActions.find(a =>
+            a.Name.trim().toLowerCase() === normalizedName
         );
 
         // Fallback: CONTAINS search
-        if (!matched) {
-            const containsMatches = agentActions.filter(aa =>
-                aa.Action.trim().toLowerCase().includes(actionName.trim().toLowerCase())
+        if (!matchedAction) {
+            const containsMatches = effectiveActions.filter(a =>
+                a.Name.trim().toLowerCase().includes(normalizedName)
             );
 
             if (containsMatches.length === 1) {
-                matched = containsMatches[0];
-                this.logStatus(`Action fuzzy matched: '${actionName}' → '${matched.Action}'`, true, params);
+                matchedAction = containsMatches[0];
+                this.logStatus(`Action fuzzy matched: '${actionName}' → '${matchedAction.Name}'`, true, params);
             } else if (containsMatches.length > 1) {
-                throw new Error(`Ambiguous action '${actionName}'. Matches: ${containsMatches.map(a => a.Action).join(', ')}`);
+                throw new Error(`Ambiguous action '${actionName}'. Matches: ${containsMatches.map(a => a.Name).join(', ')}`);
             } else {
-                throw new Error(`Action '${actionName}' not found for agent '${agentName}'`);
+                throw new Error(`Action '${actionName}' not found for agent '${agentName}'. Available: ${effectiveActions.map(a => a.Name).join(', ')}`);
             }
         }
 
-        return matched;
+        // Return object with Action property for compatibility with existing callers
+        return { Action: matchedAction.Name };
     }
 
     /**
@@ -6848,19 +6929,25 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Checks if all minimum execution requirements are met for actions and sub-agents.
-     * 
+     *
+     * NOTE: This method intentionally uses only database-configured AgentActions, not _effectiveActions.
+     * MinExecutionsPerRun is a database-only concept - dynamically added actions via actionChanges
+     * do not have minimum execution requirements. If minimum requirements for dynamic actions are
+     * needed in the future, consider adding a `minActionLimits` property to the ActionChange interface.
+     *
      * @param agent - The agent to check
      * @param agentRun - The current agent run
      * @returns Array of violation messages (empty if all requirements are met)
      */
     protected async checkMinimumExecutionRequirements(agent: AIAgentEntityExtended, agentRun: AIAgentRunEntityExtended): Promise<string[]> {
         const violations: string[] = [];
-        
-        // Check action minimum requirements
-        const agentActions = AIEngine.Instance.AgentActions.filter(aa => 
-            aa.AgentID === agent.ID && 
-            aa.Status === 'Active' && 
-            aa.MinExecutionsPerRun != null && 
+
+        // Check action minimum requirements from database-configured actions only.
+        // Dynamically added actions do not have MinExecutionsPerRun requirements.
+        const agentActions = AIEngine.Instance.AgentActions.filter(aa =>
+            aa.AgentID === agent.ID &&
+            aa.Status === 'Active' &&
+            aa.MinExecutionsPerRun != null &&
             aa.MinExecutionsPerRun > 0
         );
         

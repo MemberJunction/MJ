@@ -1,9 +1,9 @@
-import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, EnvironmentEntityExtended, ConversationEntity } from '@memberjunction/core-entities';
+import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity } from '@memberjunction/core-entities';
 import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
@@ -31,7 +31,9 @@ export function LoadChatConversationsResource() {
   template: `
     <div class="chat-conversations-container" *ngIf="isReady; else loadingTemplate">
       <!-- Left sidebar: Conversation list -->
-      <div class="conversation-sidebar">
+      <div class="conversation-sidebar"
+           [class.collapsed]="isSidebarCollapsed"
+           [class.no-transition]="!sidebarTransitionsEnabled">
         <mj-conversation-list
           #conversationList
           *ngIf="currentUser"
@@ -39,9 +41,21 @@ export function LoadChatConversationsResource() {
           [currentUser]="currentUser"
           [selectedConversationId]="selectedConversationId"
           [renamedConversationId]="renamedConversationId"
+          [isSidebarPinned]="isSidebarPinned"
+          [isMobileView]="isMobileView"
           (conversationSelected)="onConversationSelected($event)"
-          (newConversationRequested)="onNewConversationRequested()">
+          (newConversationRequested)="onNewConversationRequested()"
+          (pinSidebarRequested)="pinSidebar()"
+          (unpinSidebarRequested)="unpinSidebar()">
         </mj-conversation-list>
+      </div>
+
+      <!-- Sidebar expand handle (only visible when collapsed) -->
+      <div class="sidebar-expand-handle"
+           *ngIf="isSidebarCollapsed"
+           (click)="expandSidebar()"
+           title="Expand sidebar">
+        <i class="fas fa-chevron-right"></i>
       </div>
 
       <!-- Main area: Chat interface -->
@@ -65,7 +79,8 @@ export function LoadChatConversationsResource() {
           (pendingArtifactConsumed)="onPendingArtifactConsumed()"
           (pendingMessageConsumed)="onPendingMessageConsumed()"
           (pendingMessageRequested)="onPendingMessageRequested($event)"
-          (artifactLinkClicked)="onArtifactLinkClicked($event)">
+          (artifactLinkClicked)="onArtifactLinkClicked($event)"
+          (openEntityRecord)="onOpenEntityRecord($event)">
         </mj-conversation-chat-area>
       </div>
     </div>
@@ -89,6 +104,7 @@ export function LoadChatConversationsResource() {
       height: 100%;
       flex: 1;
       overflow: hidden;
+      position: relative;
     }
 
     .conversation-sidebar {
@@ -97,6 +113,44 @@ export function LoadChatConversationsResource() {
       border-right: 1px solid #e0e0e0;
       overflow-y: auto;
       background: #f5f5f5;
+      transition: width 0.3s ease;
+    }
+
+    /* Disable transitions during initial load to prevent jarring animation */
+    .conversation-sidebar.no-transition {
+      transition: none !important;
+    }
+
+    .conversation-sidebar.collapsed {
+      width: 0;
+      min-width: 0;
+      border-right: none;
+      overflow: hidden;
+    }
+
+    .sidebar-expand-handle {
+      flex-shrink: 0;
+      width: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: #092340;
+      border-right: 1px solid rgba(255, 255, 255, 0.15);
+      transition: background 0.15s ease;
+    }
+
+    .sidebar-expand-handle:hover {
+      background: #1a3a5c;
+    }
+
+    .sidebar-expand-handle i {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 11px;
+    }
+
+    .sidebar-expand-handle:hover i {
+      color: white;
     }
 
     .conversation-main {
@@ -135,11 +189,20 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   public selectedThreadId: string | null = null;
   public isNewUnsavedConversation: boolean = false;
   public renamedConversationId: string | null = null;
+  public isSidebarCollapsed: boolean = false;
+  public isSidebarPinned: boolean = true; // Whether sidebar stays open after selection
+  public isMobileView: boolean = false;
+  public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
 
   // Pending navigation state
   public pendingArtifactId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
   public pendingMessageToSend: string | null = null;
+
+  // User Settings persistence
+  private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
+  private readonly SIDEBAR_COLLAPSED_KEY = 'mj-conversations-sidebar-collapsed';
+  private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private navigationService: NavigationService,
@@ -154,6 +217,25 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   async ngOnInit() {
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
+
+    // Check initial mobile state and set default collapsed
+    this.checkMobileView();
+    if (this.isMobileView) {
+      this.isSidebarCollapsed = true;
+      // Enable transitions after a brief delay to ensure initial state is applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
+    } else {
+      // Load sidebar state from User Settings (non-blocking)
+      this.loadSidebarState().then(() => {
+        this.cdr.detectChanges();
+        // Enable transitions after state is loaded and applied
+        setTimeout(() => {
+          this.sidebarTransitionsEnabled = true;
+        }, 50);
+      });
+    }
 
     // CRITICAL: Initialize AIEngine and mention service BEFORE children render
     // This prevents the slow first-load issue where each child would trigger initialization
@@ -208,6 +290,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+
+    // Clear any pending save timeout
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
   }
 
   /**
@@ -465,6 +552,203 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedThreadId = null; // Clear thread when switching conversations
     this.isNewUnsavedConversation = false;
     this.updateUrl();
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.checkMobileView();
+  }
+
+  /**
+   * Handle clicks outside the sidebar to auto-collapse when unpinned
+   */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    // Only handle when sidebar is expanded but unpinned
+    if (this.isSidebarCollapsed || this.isSidebarPinned) {
+      return;
+    }
+
+    // Check if click is outside the sidebar
+    const target = event.target as HTMLElement;
+    const sidebarElement = target.closest('.conversation-sidebar');
+    const expandHandle = target.closest('.sidebar-expand-handle');
+
+    // If click is outside sidebar and expand handle, collapse it
+    if (!sidebarElement && !expandHandle) {
+      this.collapseSidebar();
+    }
+  }
+
+  /**
+   * Check if we're in mobile view and handle state accordingly
+   */
+  private checkMobileView(): void {
+    const wasMobile = this.isMobileView;
+    this.isMobileView = window.innerWidth < 768;
+
+    if (this.isMobileView && !wasMobile) {
+      // Switched to mobile - default to collapsed
+      this.isSidebarCollapsed = true;
+    }
+  }
+
+  /**
+   * Collapse sidebar
+   */
+  collapseSidebar(): void {
+    this.isSidebarCollapsed = true;
+  }
+
+  /**
+   * Expand sidebar (unpinned - will auto-collapse on selection)
+   */
+  expandSidebar(): void {
+    this.isSidebarCollapsed = false;
+    this.isSidebarPinned = false;
+  }
+
+  /**
+   * Pin sidebar - keep it open after selection
+   */
+  pinSidebar(): void {
+    this.isSidebarPinned = true;
+    this.saveSidebarState();
+  }
+
+  /**
+   * Unpin sidebar - will auto-collapse on next selection
+   */
+  unpinSidebar(): void {
+    this.isSidebarPinned = false;
+    this.collapseSidebar();
+    this.saveSidebarState();
+  }
+
+  /**
+   * Save sidebar state to User Settings (server) and localStorage (fallback)
+   * Uses debouncing to avoid excessive database writes
+   */
+  private saveSidebarState(): void {
+    const stateToSave = {
+      collapsed: this.isSidebarCollapsed,
+      pinned: this.isSidebarPinned
+    };
+
+    // Save to localStorage immediately as backup
+    try {
+      localStorage.setItem(this.SIDEBAR_COLLAPSED_KEY, JSON.stringify(stateToSave));
+    } catch (error) {
+      console.warn('Failed to save sidebar state to localStorage:', error);
+    }
+
+    // Debounce the server save to avoid excessive writes
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+    this.saveSettingsTimeout = setTimeout(() => {
+      this.saveSidebarStateToServer(stateToSave);
+    }, 1000); // 1 second debounce
+  }
+
+  /**
+   * Save sidebar state to User Settings entity on server
+   */
+  private async saveSidebarStateToServer(state: { collapsed: boolean; pinned: boolean }): Promise<void> {
+    try {
+      const userId = this.currentUser?.ID;
+      if (!userId) {
+        return;
+      }
+
+      const rv = new RunView();
+      const result = await rv.RunView<UserSettingEntity>({
+        EntityName: 'MJ: User Settings',
+        ExtraFilter: `UserID='${userId}' AND Setting='${this.USER_SETTING_SIDEBAR_KEY}'`,
+        ResultType: 'entity_object'
+      });
+
+      const md = new Metadata();
+      let setting: UserSettingEntity;
+
+      if (result.Success && result.Results && result.Results.length > 0) {
+        // Update existing setting
+        setting = result.Results[0];
+      } else {
+        // Create new setting
+        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting.UserID = userId;
+        setting.Setting = this.USER_SETTING_SIDEBAR_KEY;
+      }
+
+      setting.Value = JSON.stringify(state);
+      await setting.Save();
+    } catch (error) {
+      console.warn('Failed to save sidebar state to User Settings:', error);
+    }
+  }
+
+  /**
+   * Load sidebar state from User Settings (server), falling back to localStorage
+   * For new users with no saved state, defaults to collapsed with new conversation
+   */
+  private async loadSidebarState(): Promise<void> {
+    try {
+      const userId = this.currentUser?.ID;
+      if (userId) {
+        // Try loading from User Settings first
+        const rv = new RunView();
+        const result = await rv.RunView<UserSettingEntity>({
+          EntityName: 'MJ: User Settings',
+          ExtraFilter: `UserID='${userId}' AND Setting='${this.USER_SETTING_SIDEBAR_KEY}'`,
+          ResultType: 'entity_object'
+        });
+
+        if (result.Success && result.Results && result.Results.length > 0) {
+          const setting = result.Results[0];
+          if (setting.Value) {
+            const state = JSON.parse(setting.Value);
+            this.isSidebarCollapsed = state.collapsed ?? true;
+            this.isSidebarPinned = state.pinned ?? false;
+            return;
+          }
+        }
+      }
+
+      // Fall back to localStorage
+      const saved = localStorage.getItem(this.SIDEBAR_COLLAPSED_KEY);
+      if (saved) {
+        try {
+          const state = JSON.parse(saved);
+          if (typeof state === 'object' && state !== null) {
+            this.isSidebarCollapsed = state.collapsed ?? true;
+            this.isSidebarPinned = state.pinned ?? false;
+            return;
+          }
+        } catch {
+          // Fall back to old boolean format
+          this.isSidebarCollapsed = saved === 'true';
+          this.isSidebarPinned = !this.isSidebarCollapsed;
+          return;
+        }
+      }
+
+      // No saved state found - NEW USER DEFAULT:
+      // Start with sidebar collapsed and show new conversation screen
+      this.isSidebarCollapsed = true;
+      this.isSidebarPinned = false;
+      this.isNewUnsavedConversation = true;
+    } catch (error) {
+      console.warn('Failed to load sidebar state:', error);
+      // Default to collapsed for new users on error
+      this.isSidebarCollapsed = true;
+      this.isSidebarPinned = false;
+    }
   }
 
   /**
@@ -476,6 +760,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedThreadId = null;
     this.isNewUnsavedConversation = true;
     this.updateUrl();
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
   }
 
   /**
@@ -570,5 +859,13 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Navigate using the generic nav item method
     this.navigationService.OpenNavItemByName(navItemName, params);
+  }
+
+  /**
+   * Handle entity record open request from chat area (from React component grids).
+   * Uses NavigationService to open the record in a new tab.
+   */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 }

@@ -35,6 +35,74 @@ export class GeminiLLM extends BaseLLM {
     public get GeminiClient(): GoogleGenAI {
         return this._gemini;
     }
+
+    /**
+     * Convert MJ effort level (1-100) to Gemini thinkingBudget (0-24576)
+     *
+     * Mapping strategy:
+     * - 1-33 (low): 1024-4096 tokens
+     * - 34-66 (medium): 4097-12288 tokens
+     * - 67-100 (high): 12289-24576 tokens
+     * - undefined: No thinkingConfig (Gemini default ~8192)
+     *
+     * Model-specific behavior:
+     * - Gemini 2.5 Flash/Flash-Lite: Can disable thinking with budget=0
+     * - Gemini 2.5 Pro: Cannot disable thinking, minimum ~1024
+     * - Gemini 3 models: Use thinkingLevel instead (future consideration)
+     *
+     * @param effortLevel - MJ normalized effort level (1-100) as string or number
+     * @param modelName - The Gemini model name to check capabilities
+     * @returns thinkingBudget value or undefined for default behavior
+     */
+    private getThinkingBudget(effortLevel: string | number | undefined, modelName: string): number | undefined {
+        if (effortLevel === undefined || effortLevel === null || effortLevel === '') {
+            return undefined; // Use Gemini's default behavior (auto, up to ~8192)
+        }
+
+        // Parse string to number if needed
+        const numericLevel = typeof effortLevel === 'string' ? parseInt(effortLevel, 10) : effortLevel;
+        if (isNaN(numericLevel)) {
+            return undefined; // Invalid effort level, use default
+        }
+
+        // Clamp to valid range
+        const level = Math.max(1, Math.min(100, numericLevel));
+
+        // Check model capabilities for thinking
+        const lowerModel = modelName.toLowerCase();
+        const isFlashModel = lowerModel.includes('flash');
+        const isProModel = lowerModel.includes('pro') && !isFlashModel;
+
+        // Very low effort (1-5) - try to disable thinking on Flash models
+        if (level <= 5 && isFlashModel) {
+            return 0; // Disable thinking (only works on Flash/Flash-Lite)
+        }
+
+        // For Pro models, minimum effective budget is ~1024
+        // For Flash models with effort > 5, use normal scaling
+        if (level <= 33) {
+            // Low: linear scale from 1024 to 4096
+            return Math.round(1024 + ((level - 1) / 32) * (4096 - 1024));
+        } else if (level <= 66) {
+            // Medium: linear scale from 4097 to 12288
+            return Math.round(4097 + ((level - 34) / 32) * (12288 - 4097));
+        } else {
+            // High: linear scale from 12289 to 24576
+            return Math.round(12289 + ((level - 67) / 33) * (24576 - 12289));
+        }
+    }
+
+    /**
+     * Check if a model supports thinking configuration
+     * Thinking is supported on Gemini 2.5+ models
+     */
+    private supportsThinking(modelName: string): boolean {
+        const lowerModel = modelName.toLowerCase();
+        // Gemini 2.5 and later support thinking
+        return lowerModel.includes('2.5') ||
+               lowerModel.includes('gemini-3') ||
+               lowerModel.includes('gemini-exp');
+    }
     
     /**
      * Gemini supports streaming
@@ -143,25 +211,18 @@ export class GeminiLLM extends BaseLLM {
                 console.warn('Gemini provider does not support minP parameter, ignoring');
             }
 
-            // Add generationConfig with reasoningMode if effortLevel is provided
-            if (params.effortLevel) {
-                // Gemini has generationConfig.reasoningMode which can be set to 'full' for higher quality
-                // reasoning but at increased cost and latency
-                modelOptions.generationConfig = {
-                    ...(modelOptions.generationConfig || {}),
-                    reasoningMode: 'full'
-                };
-            }
+            // Build thinking configuration based on effort level and model capabilities
+            const thinkingBudget = this.getThinkingBudget(params.effortLevel, modelName);
+            const useThinking = this.supportsThinking(modelName) && thinkingBudget !== undefined;
+
+            // Create chat config - only include thinkingConfig if model supports it and effortLevel is specified
+            const chatConfig: Record<string, unknown> = {};
+            this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
 
             // Create chat with history (all messages except the last)
             // Don't use systemInstruction parameter - we're bundling it with the user message
             const chat = this.GeminiClient.chats.create({
-                config: {
-                    thinkingConfig: {
-                        includeThoughts: true,
-                        thinkingBudget: -1
-                    }
-                },
+                config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
                 model: modelName,
                 history: history
             });
@@ -207,7 +268,10 @@ export class GeminiLLM extends BaseLLM {
                         finish_reason: "completed",
                         index: 0
                     }],
-                    usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
+                    usage: new ModelUsage(
+                        result.usageMetadata?.promptTokenCount || 0,
+                        result.usageMetadata?.candidatesTokenCount || 0
+                    )
                 },
                 errorMessage: "",
                 exception: null,
@@ -227,6 +291,57 @@ export class GeminiLLM extends BaseLLM {
                 errorMessage: e.message,
                 exception: e,
                 errorInfo: ErrorAnalyzer.analyzeError(e, 'Gemini')
+            }
+        }
+    }
+
+    private setThinkingConfig(chatConfig: any, useThinking: boolean, effortLevel: string | undefined, modelName: string, thinkingBudget: number) {
+        // this is a hack, need a cleaner way of doing this
+        const gemini3AndAbove: boolean = modelName?.toLowerCase().includes("-3") ||
+                                         modelName?.toLowerCase().includes("-4") ||
+                                         modelName?.toLowerCase().includes("-5") ||
+                                         modelName?.toLowerCase().includes("-6") ||
+                                         modelName?.toLowerCase().includes("-7");
+                                         
+        if (useThinking) {
+            if (gemini3AndAbove) {
+                // no budget used, we map the effortLevel to 4 buckets
+                let geminiLevel = undefined;
+                // Parse string to number if needed
+                let numericLevel = typeof effortLevel === 'string' ? parseInt(effortLevel, 10) : effortLevel;
+                if (isNaN(numericLevel)) {
+                    numericLevel = 0;
+                }
+
+                if (!numericLevel || numericLevel <= 1) {
+                    geminiLevel = "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
+                }
+                else if(numericLevel <= 33) {
+                    geminiLevel = "LOW" 
+                }
+                else if (numericLevel <= 66) {
+                    geminiLevel = "MEDIUM" 
+                }
+                else {
+                    geminiLevel = "HIGH" 
+                }
+
+                chatConfig.thinkingConfig = {
+                    thinkingLevel: geminiLevel
+                }
+            }
+            else {
+                chatConfig.thinkingConfig = {
+                    includeThoughts: true,
+                    thinkingBudget: thinkingBudget
+                };
+            }
+        }
+        else {
+            if (gemini3AndAbove) {
+                chatConfig.thinkingConfig = {
+                    thinkingLevel: "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
+                }
             }
         }
     }
@@ -310,25 +425,18 @@ export class GeminiLLM extends BaseLLM {
             console.warn('Gemini provider does not support minP parameter, ignoring');
         }
 
-        // Add generationConfig with reasoningMode if effortLevel is provided
-        if (params.effortLevel) {
-            // Gemini has generationConfig.reasoningMode which can be set to 'full' for higher quality
-            // reasoning but at increased cost and latency
-            modelOptions.generationConfig = {
-                ...(modelOptions.generationConfig || {}),
-                reasoningMode: 'full'
-            };
-        }
+        // Build thinking configuration based on effort level and model capabilities
+        const thinkingBudget = this.getThinkingBudget(params.effortLevel, modelName);
+        const useThinking = this.supportsThinking(modelName) && thinkingBudget !== undefined;
+
+        // Create chat config - only include thinkingConfig if model supports it and effortLevel is specified
+        const chatConfig: Record<string, unknown> = {};
+        this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
 
         // Create chat with history (all messages except the last)
         // Don't use systemInstruction parameter - we're bundling it with the user message
         const chat = this.GeminiClient.chats.create({
-            config: {
-                thinkingConfig: {
-                    includeThoughts: true,
-                    thinkingBudget: -1
-                }
-            },
+            config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
             model: modelName,
             history: history
         });
@@ -378,12 +486,20 @@ export class GeminiLLM extends BaseLLM {
         if (chunk.candidates && chunk.candidates[0] && chunk.candidates[0].finishReason) {
             finishReason = chunk.candidates[0].finishReason;
         }
-        
-        // Gemini doesn't provide usage in chunks
+
+        // Extract usage from chunk if available (appears on final chunk)
+        let usage = null;
+        if (chunk.usageMetadata) {
+            usage = new ModelUsage(
+                chunk.usageMetadata.promptTokenCount || 0,
+                chunk.usageMetadata.candidatesTokenCount || 0
+            );
+        }
+
         return {
             content,
             finishReason,
-            usage: null
+            usage
         };
     }
     
@@ -500,13 +616,13 @@ export class GeminiLLM extends BaseLLM {
                 finish_reason: finishReason,
                 index: 0
             }],
-            usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
+            usage: usage || new ModelUsage(0, 0)
         };
-        
+
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
-        
+
         return result;
     }
     SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {

@@ -31,22 +31,22 @@
   "technicalDesign": "## Implementation\n\n### Props\n- velocityData: 2D array of velocity values\n- stages: Array of stage names\n- periods: Array of time periods\n\n### Visualization\n- Grid cells with color gradients\n- ECharts heatmap chart",
   "properties": [
     {
-      "name": "velocityData",
-      "type": "Array<Array<number>>",
+      "name": "deals",
+      "type": "Array<object>",
       "required": true,
-      "description": "2D array of velocity values"
+      "description": "Array of deal objects for velocity calculation"
     },
     {
       "name": "stages",
       "type": "Array<string>",
       "required": true,
-      "description": "Stage names for rows"
+      "description": "Stage names for velocity analysis"
     },
     {
-      "name": "periods",
-      "type": "Array<string>",
-      "required": true,
-      "description": "Time period labels for columns"
+      "name": "onDrillDown",
+      "type": "function",
+      "required": false,
+      "description": "Callback function when user clicks on a heatmap cell"
     }
   ],
   "events": [],

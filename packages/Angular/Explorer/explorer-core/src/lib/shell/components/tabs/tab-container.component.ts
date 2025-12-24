@@ -10,7 +10,10 @@ import {
   createComponent,
   ComponentRef,
   ViewEncapsulation,
-  ChangeDetectorRef
+  ChangeDetectorRef,
+  HostListener,
+  Output,
+  EventEmitter
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -27,6 +30,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { DatasetResultType, LogError, Metadata, RunView } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
+import { DashboardResource } from '../../../resource-wrappers/dashboard-resource.component';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -48,7 +52,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
 
+  /**
+   * Emitted when the first resource component finishes loading.
+   * This allows the shell to keep showing its loading indicator until the first
+   * resource is ready, eliminating the visual gap between shell loading and resource loading.
+   */
+  @Output() firstResourceLoadComplete = new EventEmitter<void>();
+
   private subscriptions: Subscription[] = [];
+  private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
 
   // Track component references for cleanup (legacy - keep for backward compat during transition)
@@ -242,11 +254,23 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.cacheManager.clearCache();
 
     // Cleanup any legacy componentRefs
-    this.componentRefs.forEach((ref, tabId) => {
+    this.componentRefs.forEach((ref, _tabId) => {
       this.appRef.detachView(ref.hostView);
       ref.destroy();
     });
     this.componentRefs.clear();
+  }
+
+  /**
+   * Handle window resize events as a fallback safety mechanism.
+   * Golden Layout's ResizeObserver should handle most cases, but this
+   * ensures the layout is properly sized after browser window changes.
+   */
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    if (this.layoutInitialized && !this.useSingleResourceMode) {
+      this.layoutManager.updateSize();
+    }
   }
 
   /**
@@ -430,7 +454,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Wire up events
     instance.LoadCompleteEvent = () => {
-      console.log('✅ Single-resource component loaded');
+      this.emitFirstLoadCompleteOnce();
     };
 
     // Get the native element and append to container
@@ -610,6 +634,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       instance.LoadCompleteEvent = () => {
         // Tab content loaded - update tab title with resource display name
         this.updateTabTitleFromResource(tabId, instance, resourceData);
+        this.emitFirstLoadCompleteOnce();
       };
 
       instance.ResourceRecordSavedEvent = (entity: { Get?: (key: string) => unknown }) => {
@@ -1091,5 +1116,14 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.workspaceManager.CloseTabsToRight(this.contextMenuTabId);
     }
     this.hideContextMenu();
+  }
+
+  /**
+   * While the naming implies this is only invoked once, components we DO NOT CONTROL might have race
+   * conditions that result in unpredictable behavior. To avoid those causing loading screen overaly to show
+   * forever we emit all events upstream
+   */
+  private emitFirstLoadCompleteOnce(): void {
+    this.firstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
   }
 }

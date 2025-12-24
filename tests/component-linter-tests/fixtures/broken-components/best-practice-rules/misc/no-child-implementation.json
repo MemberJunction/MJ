@@ -1,0 +1,7 @@
+{
+  "name": "ChildComponent",
+  "description": "Child component implementing root-only functionality (violates no-child-implementation rule)",
+  "code": "function ChildComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, callbacks }) {\n  const [users, setUsers] = useState([]);\n  \n  useEffect(() => {\n    async function loadUsers() {\n      const result = await utilities.rv.RunView({ EntityName: 'Users' });\n      if (result.Success) {\n        setUsers(result.Results || []);\n      }\n    }\n    loadUsers();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Child Component</h1>\n      <ul>\n        {users.map(user => <li key={user.ID}>{user.Name}</li>)}\n      </ul>\n    </div>\n  );\n}",
+  "componentType": "child",
+  "libraries": []
+}

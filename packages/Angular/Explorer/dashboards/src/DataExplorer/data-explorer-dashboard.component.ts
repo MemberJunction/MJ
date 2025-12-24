@@ -8,7 +8,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
-import { ApplicationEntityEntity } from '@memberjunction/core-entities';
+import { ApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -28,6 +28,8 @@ import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
+import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
+import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -68,6 +70,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /** Reference to the view config panel for passing filter state */
   @ViewChild(ViewConfigPanelComponent) viewConfigPanelRef: ViewConfigPanelComponent | undefined;
+
+  /** Reference to the Excel export component */
+  @ViewChild('excelExport', { read: ExcelExportComponent }) excelExportRef: ExcelExportComponent | undefined;
 
   /**
    * Optional filter to constrain which entities are shown in the explorer.
@@ -151,6 +156,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Entity filter for recent records (null = show all, string = filter by entityId)
   public recentRecordsEntityFilter: string | null = null;
+
+  // Export functionality
+  public exportData: any[] = [];
+  public exportColumns: { Name: string; DisplayName: string }[] = [];
+  public exportFileName: string = 'export.xlsx';
+
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Data Explorer"
+  }
+
 
   /**
    * Filtered entities based on entityFilterText (for home screen)
@@ -469,6 +485,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public filterDialogState: CompositeFilterDescriptor = createEmptyFilter();
   public filterDialogDisabled: boolean = false;
 
+  // View save state
+  public isSavingView: boolean = false;
+
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
@@ -591,6 +610,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Update URL to reflect current state (whether from URL, deepLink, or persisted)
     this.updateUrl();
+
+    // Notify that loading is complete (for resource wrapper integration)
+    this.NotifyLoadComplete();
   }
 
   /**
@@ -950,6 +972,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public async onSaveView(event: ViewSaveEvent): Promise<void> {
     if (!this.selectedEntity) return;
 
+    this.isSavingView = true;
+    this.cdr.detectChanges();
+
     try {
       const md = new Metadata();
 
@@ -1046,6 +1071,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.cdr.detectChanges();
     } catch (error) {
       console.error('[DataExplorer] Error saving view:', error);
+    } finally {
+      this.isSavingView = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1282,6 +1310,169 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.OpenEntityRecord.emit({
       EntityName: this.detailPanelEntity.Name,
       RecordPKey: record.PrimaryKey
+    });
+  }
+
+  /**
+   * Handle creating a new record for the current entity
+   */
+  public onCreateNewRecord(): void {
+    if (!this.selectedEntity) return;
+
+    // Use NavigationService to open a new record form
+    this.navigationService.OpenNewEntityRecord(this.selectedEntity.Name);
+  }
+
+  /**
+   * Handle export to Excel request
+   */
+  public async onExport(): Promise<void> {
+    if (!this.excelExportRef || !this.selectedEntity) {
+      console.error('Cannot export: Excel export component or entity not available');
+      return;
+    }
+
+    try {
+      this.showNotification('Working on the export, will notify you when it is complete...', 'info', 2000);
+
+      const data = await this.getExportData();
+
+      // Get visible columns in priority order:
+      // 1. Current grid state (reflects actual displayed columns including user modifications)
+      // 2. View's column configuration (if a view is selected)
+      // 3. All non-virtual fields (fallback for default view)
+      if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
+        // Use current grid state - only export visible columns in grid order
+        const visibleColumns = this.currentGridState.columnSettings.filter(col => col.hidden !== true);
+        this.exportColumns = visibleColumns.map(col => ({
+          Name: col.Name,
+          DisplayName: col.DisplayName || col.Name
+        }));
+      } else if (this.selectedViewEntity?.Columns) {
+        // Use view's column configuration - only export visible columns in view order
+        const visibleColumns = this.selectedViewEntity.Columns.filter(col => !col.hidden);
+        this.exportColumns = visibleColumns.map(col => ({
+          Name: col.Name,
+          DisplayName: col.DisplayName || col.Name
+        }));
+      } else {
+        // Fall back to all non-virtual fields if no view is selected
+        const visibleFields = this.selectedEntity.Fields.filter(f => !f.IsVirtual);
+        this.exportColumns = visibleFields.map(f => ({
+          Name: f.Name,
+          DisplayName: f.DisplayNameOrName
+        }));
+      }
+
+      this.exportData = data;
+
+      // Set the export filename
+      const viewName = this.selectedViewEntity?.Name || 'Data';
+      this.exportFileName = `${this.selectedEntity.Name}_${viewName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Wait for Angular to update the DOM with the new data before triggering save
+      setTimeout(() => {
+        this.excelExportRef!.save();
+        this.showNotification('Excel Export Complete', 'success', 2000);
+      }, 100);
+    }
+    catch (e) {
+      this.showNotification('Error exporting data', 'error', 5000);
+      console.error('Export error:', e);
+    }
+  }
+
+  /**
+   * Get the data for export - loads all records for the current view/entity
+   */
+  protected async getExportData(): Promise<any[]> {
+    if (!this.selectedEntity) {
+      throw new Error('No entity selected for export');
+    }
+
+    const md = new Metadata();
+    const rv = new RunView();
+
+    // Build the run view params based on current state
+    const baseParams = {
+      EntityName: this.selectedEntity.Name,
+      ExtraFilter: this.buildExtraFilter(),
+      OrderBy: this.buildOrderBy(),
+      IgnoreMaxRows: true,
+      ForceAuditLog: true,
+      AuditLogDescription: `Export of Data From ${this.selectedViewEntity ? '"' + this.selectedViewEntity.Name + '"' : this.selectedEntity.Name} View for User ${md.CurrentUser.Email}`
+    };
+
+    // Add smart filter if present
+    const params = this.debouncedFilterText
+      ? { ...baseParams, UserSearchString: this.debouncedFilterText }
+      : baseParams;
+
+    const result = await rv.RunView(params);
+
+    if (result && result.Success) {
+      return result.Results;
+    }
+    else {
+      throw new Error('Unable to get export data: ' + (result?.ErrorMessage || 'Unknown error'));
+    }
+  }
+
+  /**
+   * Build the ExtraFilter string based on current view and filter state
+   */
+  private buildExtraFilter(): string {
+    const filters: string[] = [];
+
+    // Add view filter if a view is selected
+    if (this.selectedViewEntity?.WhereClause) {
+      filters.push(`(${this.selectedViewEntity.WhereClause})`);
+    }
+
+    // Add smart filter if present
+    if (this.debouncedFilterText) {
+      // Smart filter is applied via UserSearchString in RunView, not ExtraFilter
+      // So we don't need to add it here
+    }
+
+    return filters.join(' AND ');
+  }
+
+  /**
+   * Build the OrderBy string based on current view state
+   */
+  private buildOrderBy(): string {
+    // Use view's OrderByClause if available
+    if (this.selectedViewEntity?.OrderByClause) {
+      return this.selectedViewEntity.OrderByClause;
+    }
+
+    // Use grid state sort if available
+    if (this.currentGridState?.sortSettings && this.currentGridState.sortSettings.length > 0) {
+      const sorts = this.currentGridState.sortSettings.map(s =>
+        `${s.field} ${s.dir.toUpperCase()}`
+      );
+      return sorts.join(', ');
+    }
+
+    // Default sort by primary key
+    return this.selectedEntity!.FirstPrimaryKey.Name;
+  }
+
+  /**
+   * Show a notification to the user
+   */
+  private showNotification(message: string, type: 'info' | 'success' | 'error', duration: number): void {
+    const data: DisplaySimpleNotificationRequestData = {
+      message: message,
+      style: type,
+      DisplayDuration: duration
+    };
+    MJGlobal.Instance.RaiseEvent({
+      component: this,
+      event: MJEventType.DisplaySimpleNotificationRequest,
+      eventCode: "",
+      args: data
     });
   }
 

@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component calling invalid methods on utilities.md (violates utilities-metadata-methods rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [entities, setEntities] = useState([]);\n  \n  useEffect(() => {\n    async function loadMetadata() {\n      const result = await utilities.md.invalidMethod();\n      setEntities(result);\n    }\n    loadMetadata();\n  }, []);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <p>Entities: {entities.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

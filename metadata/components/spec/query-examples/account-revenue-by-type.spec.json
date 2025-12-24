@@ -1,0 +1,314 @@
+{
+  "name": "AccountRevenueByType",
+  "title": "Account Revenue by Type",
+  "type": "chart",
+  "namespace": "CRM/Analytics",
+  "userExplanation": "Shows revenue breakdown by account type (Enterprise, SMB, Individual, etc.) with click-to-drill-down functionality. Click any chart segment to view detailed invoice records for that account type using EntityDataGrid. Demonstrates the fundamental hybrid pattern: RunQuery for aggregated chart data + EntityDataGrid for automatic drill-down.",
+  "functionalRequirements": "## Business Objectives\n- Visualize revenue distribution across different account types\n- Identify which account types generate the most revenue\n- Enable quick drill-down to see invoice details for any account type\n- Demonstrate the core hybrid pattern for educational purposes\n\n## Functional Requirements\n- **Revenue Chart**: Display pie or bar chart showing total revenue by account type\n- **Account Count**: Show number of accounts in each type (in tooltip or segment label)\n- **Click-to-Drill-Down**: When user clicks chart segment, display EntityDataGrid with invoices for that account type\n- **Automatic Filtering**: EntityDataGrid automatically filters to selected account type using SQL filter\n- **Invoice Details**: Show invoice number, date, account name, total, and status in grid\n- **Grid Features**: EntityDataGrid provides automatic pagination, sorting, filtering, and OpenEntityRecord\n- **Clear Selection**: Provide button/action to clear selection and return to chart-only view\n- **Highlight Selection**: Visual feedback showing which segment is currently selected\n- **Chart Type Options**: Support switching between pie, doughnut, and bar chart types\n- **Loading States**: Show loading indicator while data loads\n- **Empty States**: Handle cases with no revenue data",
+  "description": "Analyzes revenue distribution across different account types with comparison metrics and trend analysis.",
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "Account Revenue by Type",
+        "categoryPath": "Demo",
+        "description": "Aggregates total revenue by AccountType. Joins Account → AccountType → Invoice where Status='Paid'. Returns AccountType, AccountCount, TotalRevenue for chart. **Result Order: TotalRevenue DESC** - Highest revenue account types first for ranking comparison.",
+        "entityNames": [
+          "Accounts",
+          "Account Types",
+          "Invoices"
+        ],
+        "fields": [
+          {
+            "name": "AccountType",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Type of account (e.g., Enterprise, SMB, Individual)"
+          },
+          {
+            "name": "AccountCount",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of distinct accounts of this type"
+          },
+          {
+            "name": "TotalRevenue",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total revenue from paid invoices for this account type"
+          },
+          {
+            "name": "AvgInvoice",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average invoice amount for this account type"
+          },
+          {
+            "name": "InvoiceCount",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of paid invoices for this account type"
+          },
+          {
+            "name": "TotalOutstanding",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total outstanding balance due for this account type"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "AccountType",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Enterprise",
+            "description": "Optional filter by specific account type"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-01-01",
+            "description": "Optional start date filter in YYYY-MM-DD format"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-12-31",
+            "description": "Optional end date filter in YYYY-MM-DD format"
+          }
+        ]
+      },
+      {
+        "name": "Invoices by Account Type",
+        "categoryPath": "Demo",
+        "description": "Returns raw invoice records filtered by account type with date range support. Used for DataGrid drill-down display when user clicks chart segment. Replaces EntityDataGrid extraFilter subquery pattern.",
+        "entityNames": [
+          "Invoices",
+          "Accounts"
+        ],
+        "fields": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Invoice ID (primary key)"
+          },
+          {
+            "name": "InvoiceNumber",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar(50)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Invoice number"
+          },
+          {
+            "name": "InvoiceDate",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "datetime",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Invoice date"
+          },
+          {
+            "name": "DueDate",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "datetime",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Payment due date"
+          },
+          {
+            "name": "AccountName",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Name of the account (from vwAccounts.Name)"
+          },
+          {
+            "name": "AccountType",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Type of account (from vwAccounts.AccountType)"
+          },
+          {
+            "name": "TotalAmount",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Total invoice amount"
+          },
+          {
+            "name": "AmountPaid",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Amount paid so far"
+          },
+          {
+            "name": "BalanceDue",
+            "sequence": 9,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Remaining balance due"
+          },
+          {
+            "name": "Status",
+            "sequence": 10,
+            "defaultInView": true,
+            "type": "nvarchar(50)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Invoice status (e.g., Paid, Pending, Overdue)"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "AccountType",
+            "isRequired": true,
+            "type": "string",
+            "sampleValue": "Customer",
+            "description": "Required filter by account type (the clicked segment label)"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-01-01",
+            "description": "Optional start date filter in YYYY-MM-DD format"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-12-31",
+            "description": "Optional end date filter in YYYY-MM-DD format"
+          }
+        ]
+      }
+    ],
+    "entities": []
+  },
+  "properties": [
+    {
+      "name": "accountType",
+      "type": "string",
+      "required": false,
+      "description": "Optional filter by specific account type (e.g., 'Enterprise', 'SMB', 'Individual'). If provided, shows only that account type.",
+      "default": null
+    },
+    {
+      "name": "startDate",
+      "type": "string",
+      "required": false,
+      "description": "Optional start date filter (ISO format: '2024-01-01'). Returns invoices with InvoiceDate >= startDate.",
+      "default": null
+    },
+    {
+      "name": "endDate",
+      "type": "string",
+      "required": false,
+      "description": "Optional end date filter (ISO format: '2024-12-31'). Returns invoices with InvoiceDate <= endDate.",
+      "default": null
+    },
+    {
+      "name": "chartType",
+      "type": "string",
+      "required": false,
+      "description": "Type of chart to display: 'bar' (default), 'pie', or 'doughnut'",
+      "default": "bar",
+      "possibleValues": [
+        "bar",
+        "pie",
+        "doughnut"
+      ]
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "required": false,
+      "description": "Custom chart title. If not provided, uses default title.",
+      "default": "Account Revenue by Type"
+    }
+  ],
+  "events": [
+    {
+      "name": "onSegmentClick",
+      "description": "Fired when user clicks a chart segment (account type bar/slice)",
+      "payload": {
+        "accountType": "string - The account type that was clicked (e.g., 'Customer', 'Prospect')",
+        "accountCount": "number - Number of accounts of this type",
+        "totalRevenue": "number - Total revenue for this account type",
+        "avgInvoice": "number - Average invoice amount for this account type",
+        "invoiceCount": "number - Number of invoices for this account type"
+      },
+      "example": "{ accountType: 'Customer', accountCount: 17, totalRevenue: 720558.36, avgInvoice: 30023.26, invoiceCount: 24 }"
+    },
+    {
+      "name": "onRecordClick",
+      "description": "Fired when user clicks a row in the EntityDataGrid drill-down",
+      "payload": {
+        "invoiceId": "string - The ID of the clicked invoice record",
+        "invoiceNumber": "string - Invoice number (e.g., 'INV-001')",
+        "accountName": "string - Name of the account",
+        "totalAmount": "number - Total invoice amount",
+        "status": "string - Invoice status (e.g., 'Paid', 'Pending')"
+      },
+      "example": "{ invoiceId: 'abc-123', invoiceNumber: 'INV-001', accountName: 'Acme Corp', totalAmount: 5000.00, status: 'Paid' }"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "DataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Initial Load**: RunQuery executes 'Account Revenue by Type' with optional filters (accountType, startDate, endDate)\n2. **Chart Rendering**: SimpleChart displays aggregated revenue data grouped by AccountType\n3. **User Interaction**: User clicks chart segment (bar/pie slice)\n4. **Drill-Down Query**: Component executes 'Invoices by Account Type' query with clicked segment label\n5. **Grid Rendering**: DataGrid displays query results with OpenEntityRecord functionality\n6. **Date Consistency**: Date filters applied to both queries for consistency\n\n### State Management\n- `data`: Array of query results (AccountType, TotalRevenue, AccountCount, etc.)\n- `loading`: Boolean for initial data load\n- `error`: String for error messages\n- `selectedSegment`: Object with label/value/records from clicked chart segment\n- `drilldownData`: Array of invoice records from drill-down query (null until segment clicked)\n- `loadingDrilldown`: Boolean for drill-down query status\n- `pendingStartDate/EndDate`: User input for date filters (when props are null)\n- `appliedStartDate/EndDate`: Active date filters\n\n### Conditional UI Controls\n**Date Filter Panel**: Only rendered when both `startDate` and `endDate` props are null. Allows user to set date range filters with:\n- Start Date input (HTML date picker)\n- End Date input (HTML date picker)\n- Apply Filters button (requires both dates)\n- Clear Dates button (shown when filters applied)\n\n### Filter Coordination\n**effectiveStartDate/endDate**: Computed values that prioritize props over applied state\n- Used in RunQuery Parameters for both queries\n- Ensures consistency between chart and drill-down data\n\n### Query-Driven Pattern (NEW)\n**Replaces EntityDataGrid extraFilter subquery anti-pattern:**\n\n**Before (Anti-Pattern):**\n```javascript\n<EntityDataGrid\n  entityName=\"Invoices\"\n  extraFilter={`AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='${type}')`}\n/>\n```\n\n**After (Query-Driven):**\n```javascript\nconst result = await utilities.rq.RunQuery({\n  QueryName: 'Invoices by Account Type',\n  Parameters: { AccountType: type, StartDate: start, EndDate: end }\n});\n<DataGrid\n  data={result.Results}\n  entityName=\"Invoices\"\n  entityPrimaryKeys={['ID']}\n/>\n```\n\n### Benefits of Query-Driven Pattern\n1. **No Schema References in Code**: SQL stays in query files where it belongs\n2. **Static Analysis**: Linter can validate query names and parameters\n3. **Reusability**: Other components can use the same query\n4. **Maintainability**: Change SQL without touching component code\n5. **Performance**: Query can be optimized independently\n6. **Type Safety**: DataGrid with entityName provides OpenEntityRecord feature\n\n### Event System\n**onSegmentClick**: Fires when chart segment clicked, provides:\n- accountType, value, recordCount\n\n**onRecordClick**: Fires when DataGrid row clicked, provides:\n- invoiceId, invoiceNumber, accountName, totalAmount, status\n\n### Educational Value\nDemonstrates:\n1. **Query-Driven Pattern**: Two queries (aggregation + detail) instead of EntityDataGrid extraFilter\n2. **DataGrid with OpenEntityRecord**: entityName + entityPrimaryKeys enables record navigation\n3. **Filter Consistency**: Same parameters passed to both queries\n4. **Conditional UI**: Show/hide controls based on prop nullability\n5. **Loading States**: Separate loading indicators for initial load vs drill-down\n6. **Event Exposure**: External consumers can listen to user interactions\n7. **Best Practice**: SQL in query files, not in component code",
+  "code": "@file:../../code/query-examples/account-revenue-by-type.js",
+  "exampleUsage": "// Basic usage (no filters)\n<AccountRevenueByType\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// With date filters controlled externally\n<AccountRevenueByType\n  startDate=\"2024-01-01\"\n  endDate=\"2024-12-31\"\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// With event handlers and custom chart type\n<AccountRevenueByType\n  chartType=\"doughnut\"\n  onSegmentClick={(event) => {\n    console.log(`Clicked ${event.accountType}: $${event.totalRevenue}`);\n  }}\n  onRecordClick={(event) => {\n    console.log(`Invoice ${event.invoiceNumber} clicked`);\n    // Navigate to invoice detail page\n    router.push(`/invoices/${event.invoiceId}`);\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// Let user control date filters (no props provided)\n<AccountRevenueByType\n  title=\"Revenue Analysis by Account Type\"\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>"
+}

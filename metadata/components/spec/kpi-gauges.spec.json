@@ -2,24 +2,40 @@
   "name": "KPIGauges",
   "namespace": "CRM/Finance",
   "type": "Chart",
-  "location": "embedded",
   "code": "@file:../code/kpi-gauges.js",
-  "functionalRequirements": "## KPI Gauges\n\n### Purpose\nDisplay key financial metrics as gauge charts.\n\n### Features\n- Multiple gauge displays\n- Target vs actual\n- Color coding by performance\n- Percentage indicators",
+  "functionalRequirements": "Radial gauge charts displaying key performance indicators like gross margin and utilization.",
   "dataRequirements": {
-    "mode": "views",
-    "queries": []
+    "mode": "props"
   },
-  "technicalDesign": "## Implementation\n\n### Props\n- kpis: Array of KPI data\n\n### Display\n- ApexCharts radial gauges\n- Dynamic colors",
+  "technicalDesign": "Uses ApexCharts radial bars to display KPI metrics as percentage gauges.",
   "properties": [
     {
-      "name": "kpis",
-      "type": "Array<{name: string, value: number, target: number, unit: string, color?: string}>",
+      "name": "loading",
+      "type": "boolean",
       "required": true,
-      "description": "KPI metrics data"
+      "description": "Loading state"
+    },
+    {
+      "name": "metrics",
+      "type": "object",
+      "required": true,
+      "description": "Metrics object containing grossMargin and other KPIs"
+    },
+    {
+      "name": "chartRefs",
+      "type": "object",
+      "required": true,
+      "description": "Ref object for chart DOM elements"
     }
   ],
   "events": [],
   "dependencies": [],
-  "libraries": [],
-  "description": "Gauge charts showing key performance indicators"
+  "libraries": [
+    {
+      "name": "ApexCharts",
+      "version": "^3.45.1",
+      "globalVariable": "ApexCharts"
+    }
+  ],
+  "description": "Radial gauge charts for KPI visualization"
 }

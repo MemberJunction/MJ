@@ -1,0 +1,19 @@
+{
+  "name": "QueryResultFieldCaseBroken",
+  "type": "generic",
+  "title": "Query Result Field Case Mismatch - Broken Pattern",
+  "description": "Tests linter detection of case mismatch in query result field name",
+  "code": "function QueryResultFieldCaseBroken({ utilities }) {\n  const [events, setEvents] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Upcoming Events',\n        CategoryPath: 'Events/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Case mismatch: eventDate should be EventDate\n        const upcoming = result.Results.map(e => ({\n          name: e.EventName,\n          date: e.eventDate,\n          location: e.Location\n        }));\n        setEvents(upcoming);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Upcoming Events</h3>\n      {events.map((e, i) => (\n        <div key={i}>{e.name} - {e.date} at {e.location}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Upcoming Events",
+      "categoryPath": "Events/Reports",
+      "fields": ["EventID", "EventName", "EventDate", "Location", "AttendeeCount"]
+    }]
+  }
+}

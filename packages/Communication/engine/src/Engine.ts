@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, CommunicationEngineBase, CreateDraftResult, Message, MessageRecipient, MessageResult } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, CommunicationEngineBase, CreateDraftResult, Message, MessageRecipient, MessageResult, ProviderCredentialsBase } from "@memberjunction/communication-types";
 import { CommunicationRunEntity } from "@memberjunction/core-entities";
 import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
@@ -42,13 +42,26 @@ export class CommunicationEngine extends CommunicationEngineBase {
 
  
      /**
-      * Sends multiple messages using the specified provider. The provider must be one of the providers that are configured in the 
+      * Sends multiple messages using the specified provider. The provider must be one of the providers that are configured in the
       * system.
-      * @param providerName 
-      * @param providerMessageTypeName 
-      * @param message this will be used as a starting point but the To will be replaced with the recipient in the recipients array
+      * @param providerName - Name of the communication provider to use
+      * @param providerMessageTypeName - Type of message to send
+      * @param message - Base message (To will be replaced with each recipient)
+      * @param recipients - Array of recipients to send to
+      * @param previewOnly - If true, only preview without sending
+      * @param credentials - Optional credentials override for this request.
+      *                      Provider-specific credential object (e.g., SendGridCredentials).
+      *                      If not provided, uses environment variables.
+      *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
       */
-     public async SendMessages(providerName: string, providerMessageTypeName: string, message: Message, recipients: MessageRecipient[], previewOnly: boolean = false): Promise<MessageResult[]> {
+     public async SendMessages(
+        providerName: string,
+        providerMessageTypeName: string,
+        message: Message,
+        recipients: MessageRecipient[],
+        previewOnly: boolean = false,
+        credentials?: ProviderCredentialsBase
+     ): Promise<MessageResult[]> {
         const run = await this.StartRun();
         if (!run)
             throw new Error(`Failed to start communication run.`);
@@ -58,7 +71,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
             const messageCopy = new Message(message);
             messageCopy.To = r.To;
             messageCopy.ContextData = r.ContextData;
-            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly);
+            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly, credentials);
             results.push(result);
         }
 
@@ -70,8 +83,24 @@ export class CommunicationEngine extends CommunicationEngineBase {
 
      /**
       * Sends a single message using the specified provider. The provider must be one of the providers that are configured in the system.
+      * @param providerName - Name of the communication provider to use
+      * @param providerMessageTypeName - Type of message to send
+      * @param message - The message to send
+      * @param run - Optional communication run entity for logging
+      * @param previewOnly - If true, only preview without sending
+      * @param credentials - Optional credentials override for this request.
+      *                      Provider-specific credential object (e.g., SendGridCredentials).
+      *                      If not provided, uses environment variables.
+      *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
       */
-     public async SendSingleMessage(providerName: string, providerMessageTypeName: string, message: Message, run?: CommunicationRunEntity, previewOnly?: boolean): Promise<MessageResult> {
+     public async SendSingleMessage(
+        providerName: string,
+        providerMessageTypeName: string,
+        message: Message,
+        run?: CommunicationRunEntity,
+        previewOnly?: boolean,
+        credentials?: ProviderCredentialsBase
+     ): Promise<MessageResult> {
         if (!this.Loaded){
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
         }
@@ -106,7 +135,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
             else {
                 const log = await this.StartLog(processedMessage, run);
                 if (log) {
-                    const sendResult = await provider.SendSingleMessage(processedMessage);
+                    const sendResult = await provider.SendSingleMessage(processedMessage, credentials);
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';
                     log.ErrorMessage = sendResult.Error;
                     if (!await log.Save()){
@@ -118,7 +147,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
                 }
                 else{
                     throw new Error(`Failed to start log for message.`);
-                }    
+                }
             }
         }
         else{
@@ -131,12 +160,17 @@ export class CommunicationEngine extends CommunicationEngineBase {
       * @param message - The message to save as a draft
       * @param providerName - Name of the provider to use
       * @param contextUser - Optional user context for server-side operations
+      * @param credentials - Optional credentials override for this request.
+      *                      Provider-specific credential object (e.g., MSGraphCredentials).
+      *                      If not provided, uses environment variables.
+      *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
       * @returns Promise<CreateDraftResult> - Result containing draft ID if successful
       */
      public async CreateDraft(
          message: Message,
          providerName: string,
-         contextUser?: UserInfo
+         contextUser?: UserInfo,
+         credentials?: ProviderCredentialsBase
      ): Promise<CreateDraftResult> {
          try {
              if (!this.Loaded) {
@@ -179,7 +213,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
              const result = await provider.CreateDraft({
                  Message: processedMessage,
                  ContextData: message.ContextData
-             });
+             }, credentials);
 
              if (result.Success) {
                  LogStatus(`Draft created successfully via ${providerName}. Draft ID: ${result.DraftID}`);
@@ -188,11 +222,12 @@ export class CommunicationEngine extends CommunicationEngineBase {
              }
 
              return result;
-         } catch (error: any) {
+         } catch (error: unknown) {
+             const errorMessage = error instanceof Error ? error.message : 'Error creating draft';
              LogError('Error creating draft', undefined, error);
              return {
                  Success: false,
-                 ErrorMessage: error.message || 'Error creating draft'
+                 ErrorMessage: errorMessage
              };
          }
      }

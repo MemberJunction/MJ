@@ -20,9 +20,32 @@ import { takeUntil } from 'rxjs/operators';
             placeholder="Search conversations..."
             [(ngModel)]="searchQuery">
           @if (!isSelectionMode) {
-            <button class="btn-select" (click)="toggleSelectionMode()" title="Select conversations">
-              <i class="fas fa-check-square"></i> 
-            </button>
+            <div class="header-menu-container">
+              <button class="btn-menu" (click)="toggleHeaderMenu($event)" title="Options">
+                <i class="fas fa-ellipsis-v"></i>
+              </button>
+              @if (isHeaderMenuOpen) {
+                <div class="header-dropdown-menu">
+                  <button class="dropdown-item" (click)="onSelectConversationsClick($event)">
+                    <i class="fas fa-check-square"></i>
+                    <span>Select Conversations</span>
+                  </button>
+                  @if (!isMobileView) {
+                    @if (isSidebarPinned) {
+                      <button class="dropdown-item" (click)="onUnpinSidebarClick($event)">
+                        <i class="fas fa-thumbtack-slash"></i>
+                        <span>Unpin Sidebar</span>
+                      </button>
+                    } @else {
+                      <button class="dropdown-item" (click)="onPinSidebarClick($event)">
+                        <i class="fas fa-thumbtack"></i>
+                        <span>Pin Sidebar</span>
+                      </button>
+                    }
+                  }
+                </div>
+              }
+            </div>
           }
         </div>
       </div>
@@ -190,6 +213,7 @@ import { takeUntil } from 'rxjs/operators';
     </div>
   `,
   styles: [`
+    :host { display: block; height: 100%; }
     .conversation-list { display: flex; flex-direction: column; height: 100%; background: #092340; }
     .list-header { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
     .search-input {
@@ -224,7 +248,7 @@ import { takeUntil } from 'rxjs/operators';
     }
     .btn-new-conversation:hover { background: #005A8C; }
     .btn-new-conversation i { font-size: 14px; }
-    .list-content { flex: 1; overflow-y: auto; padding: 4px 0; }
+    .list-content { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; }
 
     /* Collapsible Sections */
     .sidebar-section { margin-bottom: 20px; }
@@ -484,6 +508,83 @@ import { takeUntil } from 'rxjs/operators';
       align-items: center;
     }
 
+    /* Header menu button and dropdown */
+    .header-menu-container {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .btn-menu {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-menu:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    .header-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      min-width: 200px;
+      background: #0A2742;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      z-index: 1001;
+      overflow: hidden;
+      padding: 4px 0;
+    }
+
+    .header-dropdown-menu .dropdown-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.85);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .header-dropdown-menu .dropdown-item:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
+
+    .header-dropdown-menu .dropdown-item i {
+      width: 16px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    .header-dropdown-menu .dropdown-item:hover i {
+      color: white;
+    }
+
+    .header-dropdown-menu .dropdown-item .shortcut {
+      margin-left: auto;
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
     .btn-select {
       padding: 8px 12px;
       background: transparent;
@@ -622,9 +723,13 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Input() currentUser!: UserInfo;
   @Input() selectedConversationId: string | null = null;
   @Input() renamedConversationId: string | null = null;
+  @Input() isSidebarPinned: boolean = true; // Whether sidebar is pinned (stays open after selection)
+  @Input() isMobileView: boolean = false; // Whether we're on mobile (no pin options)
 
   @Output() conversationSelected = new EventEmitter<string>();
   @Output() newConversationRequested = new EventEmitter<void>();
+  @Output() pinSidebarRequested = new EventEmitter<void>(); // Request to pin sidebar
+  @Output() unpinSidebarRequested = new EventEmitter<void>(); // Request to unpin (collapse) sidebar
 
   public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
@@ -633,6 +738,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   public isSelectionMode: boolean = false;
   public selectedConversationIds = new Set<string>();
   public searchQuery: string = '';
+  public isHeaderMenuOpen: boolean = false;
 
   private destroy$ = new Subject<void>();
 
@@ -683,10 +789,40 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   @HostListener('document:click')
   onDocumentClick(): void {
-    // Close menu when clicking outside
+    // Close menus when clicking outside
     if (this.openMenuConversationId) {
       this.closeMenu();
     }
+    if (this.isHeaderMenuOpen) {
+      this.closeHeaderMenu();
+    }
+  }
+
+  public toggleHeaderMenu(event: Event): void {
+    event.stopPropagation();
+    this.isHeaderMenuOpen = !this.isHeaderMenuOpen;
+  }
+
+  public closeHeaderMenu(): void {
+    this.isHeaderMenuOpen = false;
+  }
+
+  public onSelectConversationsClick(event: Event): void {
+    event.stopPropagation();
+    this.toggleSelectionMode();
+    this.closeHeaderMenu();
+  }
+
+  public onPinSidebarClick(event: Event): void {
+    event.stopPropagation();
+    this.closeHeaderMenu();
+    this.pinSidebarRequested.emit();
+  }
+
+  public onUnpinSidebarClick(event: Event): void {
+    event.stopPropagation();
+    this.closeHeaderMenu();
+    this.unpinSidebarRequested.emit();
   }
 
   public toggleDirectMessages(): void {

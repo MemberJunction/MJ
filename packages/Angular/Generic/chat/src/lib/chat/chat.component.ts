@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
-import { MarkdownService } from 'ngx-markdown';
+import { MarkdownService } from '@memberjunction/ng-markdown';
 import { LogError } from '@memberjunction/core'
 
 

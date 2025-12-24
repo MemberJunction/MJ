@@ -1,11 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseDashboard, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
-import { UserFavoriteEntity, UserNotificationEntity } from '@memberjunction/core-entities';
+import { ResourceData, UserFavoriteEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -20,7 +20,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   styleUrls: ['./home-dashboard.component.css']
 })
 @RegisterClass(BaseDashboard, 'HomeDashboard')
-export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnDestroy {
+export class HomeDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
@@ -82,7 +82,12 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
     super();
   }
 
-  async ngOnInit(): Promise<void> {
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Home"
+  }
+
+  async ngAfterViewInit(): Promise<void> {
     // Get current user info
     this.currentUser = {
       Name: this.metadata.CurrentUser?.Name || 'User',
@@ -107,10 +112,10 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
       .subscribe(apps => {
         // Exclude the Home app from the list (users are already on Home)
         this.apps = apps.filter(app => app.Name !== 'Home');
-        // Only stop loading when we actually have apps (non-empty array means loaded)
-        if (apps.length > 0) {
-          this.isLoading = false;
-        }
+
+        this.isLoading = false;
+        this.NotifyLoadComplete();
+
         this.cdr.detectChanges();
       });
 
@@ -132,11 +137,12 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
         this.cdr.detectChanges();
       });
 
-    // Load favorites and recents
-    await Promise.all([
-      this.loadFavorites(),
-      this.loadRecents()
-    ]);
+    // Favorites and recents load asynchronously in the sidebar
+    this.NotifyLoadComplete();
+
+    // Load favorites and recents asynchronously (don't block rendering)
+    this.loadFavorites();
+    this.loadRecents();
   }
 
   override ngOnDestroy(): void {
@@ -250,6 +256,7 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
   private async loadRecents(): Promise<void> {
     try {
       this.recentsLoading = true;
+      this.cdr.detectChanges();
       await this.recentAccessService.loadRecentItems(10);
     } catch (error) {
       console.error('Error loading recents:', error);

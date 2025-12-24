@@ -1,0 +1,12 @@
+{
+  "name": "EntityFieldTypeCoercionFixed",
+  "type": "generic",
+  "title": "Entity Field Type Coercion - Fixed Pattern",
+  "description": "Corrected version keeping ID as GUID string",
+  "code": "function EntityFieldTypeCoercionFixed({ utilities }) {\n  const [memberIds, setMemberIds] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ✅ Correct: Keep ID as GUID string\n        const ids = result.Results.map(m => m.ID);\n        setMemberIds(ids);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member IDs</h3>\n      {memberIds.map((id, i) => <div key={i}>ID: {id}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active"
+}

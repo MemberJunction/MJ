@@ -436,12 +436,12 @@ When importing the SkipChatModule, ensure your application includes:
 ```typescript
 // In your app.module.ts or feature module
 import { SkipChatModule } from '@memberjunction/ng-skip-chat';
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 @NgModule({
   imports: [
     SkipChatModule,
-    MarkdownModule.forRoot(), // Already included in SkipChatModule but needed at app level
+    MarkdownModule, // Already included in SkipChatModule but may be needed at app level
     // ... other imports
   ]
 })
@@ -467,7 +467,7 @@ export class AppModule { }
 - `@progress/kendo-angular-grid`: For grid components
 - `@progress/kendo-angular-listview`: For conversation list
 - `@progress/kendo-angular-dialog`: For dialog components
-- `ngx-markdown`: For markdown rendering
+- `@memberjunction/ng-markdown`: For markdown rendering
 - `plotly.js-dist-min`: For chart rendering
 - `@angular/cdk`: For overlay functionality
 

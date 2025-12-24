@@ -1,0 +1,24 @@
+{
+  "name": "QueryOptionalParamsNoneProvidedComponent",
+  "description": "Component with query having ONLY optional params, NONE provided - should be VALID (tests that linter respects isRequired: false)",
+  "code": "function QueryOptionalParamsNoneProvidedComponent({ utilities }) {\n  const [data, setData] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      try {\n        // Query has 3 optional params (Category, StartDate, EndDate)\n        // Providing NONE is valid - query should use defaults\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'Invoice Line Items by Product',\n          CategoryPath: 'Demo',\n          Parameters: {\n            // All params optional, none provided\n          }\n        });\n\n        if (result.Success) {\n          setData(result.Results);\n        }\n      } catch (err) {\n        console.error(err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadData();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>All Line Items</h1>\n      <p>Count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "Invoice Line Items by Product",
+        "categoryPath": "Demo",
+        "fields": ["ID", "Product", "Quantity", "TotalPrice"],
+        "entityNames": ["Invoice Line Items"],
+        "parameters": [
+          { "name": "ProductID", "type": "number", "isRequired": false },
+          { "name": "Category", "type": "string", "isRequired": false },
+          { "name": "StartDate", "type": "string", "isRequired": false },
+          { "name": "EndDate", "type": "string", "isRequired": false }
+        ]
+      }
+    ]
+  }
+}

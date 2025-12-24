@@ -18,14 +18,25 @@
         (agentSelected)="onAgentSelected($event)">
         </mj-active-agent-indicator>
     </div>
-    <div class="chat-actions">
-        <button class="chat-members" (click)="toggleMembersModal()" title="View members">
-        <i class="fas fa-users"></i>
-        <span>{{ memberCount }} member{{ memberCount !== 1 ? 's' : '' }}</span>
-        </button>
+    <div class="chat-actions chat-actions-buttons">
         <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts" *ngIf="artifactCountDisplay > 0">
         <i class="fas fa-cube"></i>
-        <span>{{ artifactCountDisplay }} artifact{{ artifactCountDisplay !== 1 ? 's' : '' }}</span>
+        <span class="artifact-badge">{{ artifactCountDisplay }}</span>
+        </button>
+        <button class="chat-members" (click)="toggleMembersModal()" title="View members" *ngIf="memberCount > 1">
+        <i class="fas fa-users"></i>
+        <span class="members-badge">{{ memberCount }}</span>
+        </button>
+        <button class="action-btn" (click)="exportConversation()" title="Export conversation">
+        <i class="fas fa-download"></i>
+        <span class="btn-label">Export</span>
+        </button>
+        <button class="action-btn share-btn"
+                [class.shared]="isShared"
+                (click)="shareConversation()"
+                [title]="isShared ? 'Manage sharing' : 'Share conversation'">
+        <i class="fas fa-share-nodes"></i>
+        <span class="btn-label">Share</span>
         </button>
         <mj-active-agent-indicator
         [conversationId]="conversation.ID"
@@ -33,19 +44,6 @@
         (togglePanel)="onToggleAgentPanel()"
         (agentSelected)="onAgentSelected($event)">
         </mj-active-agent-indicator>
-    </div>
-    <div class="chat-actions">
-        <button class="action-btn" (click)="exportConversation()" title="Export conversation">
-        <i class="fas fa-download"></i>
-        Export
-        </button>
-        <button class="action-btn share-btn"
-                [class.shared]="isShared"
-                (click)="shareConversation()"
-                [title]="isShared ? 'Manage sharing' : 'Share conversation'">
-        <i class="fas fa-share-nodes"></i>
-        Share
-        </button>
     </div>
     </div>
 
@@ -162,7 +160,8 @@
             (saveToCollectionRequested)="onSaveToCollectionRequested($event)"
             (navigateToLink)="onArtifactLinkNavigation($event)"
             (shareRequested)="onArtifactShareRequested($event)"
-            (maximizeToggled)="toggleMaximizeArtifactPane()">
+            (maximizeToggled)="toggleMaximizeArtifactPane()"
+            (openEntityRecord)="onOpenEntityRecord($event)">
         </mj-artifact-viewer-panel>
         </div>
     }

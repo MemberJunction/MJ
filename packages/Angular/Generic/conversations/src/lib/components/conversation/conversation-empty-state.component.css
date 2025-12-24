@@ -1,8 +1,15 @@
+:host {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+}
+
 .conversation-empty-state {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  flex: 1;
   width: 100%;
   padding: 2rem;
   overflow-y: auto;

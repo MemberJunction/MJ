@@ -13,33 +13,44 @@ export class ComponentEntityExtended extends ComponentEntity {
      * @returns
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const specField = this.Fields.find(f => f.Name === 'Specification');
-        if (!this.IsSaved || specField.Dirty) {
-            try {
-                // Use the already-parsed spec from SetSpec() which also handles text/object formats
-                const spec = this._spec;
+        // Always ensure spec is parsed before save
+        if (!this._spec) {
+            this.SetSpec(this.Specification);
+        }
 
-                if (spec) {
-                    // Calculate derived fields from spec
-                    this.HasCustomProps = spec.properties?.length > 0;
-                    this.HasRequiredCustomProps = spec.properties?.some(p => p.required) || false;
-                    this.HasCustomEvents = spec.events?.length > 0;
-                    this.RequiresData = spec.dataRequirements?.mode?.length > 0; // check one element of the dataRequirements
-                    this.DependencyCount = spec.dependencies?.length || 0;
+        try {
+            const spec = this._spec;
 
-                    // Note: Description, FunctionalRequirements, and TechnicalDesign are now synced
-                    // immediately in SetSpec() to ensure they're always current with the Specification
+            if (spec) {
+                // ALWAYS sync Description, FunctionalRequirements, and TechnicalDesign from spec before save
+                // This ensures Specification is the single source of truth - any manual changes to these
+                // fields will be overwritten with values from the Specification
+                if (spec.description) {
+                    this.Description = spec.description;
                 }
-            }
-            catch (ex) {
-                console.error('Error saving ComponentEntityExtended:', ex);
+                if (spec.functionalRequirements) {
+                    this.FunctionalRequirements = spec.functionalRequirements;
+                }
+                if (spec.technicalDesign) {
+                    this.TechnicalDesign = spec.technicalDesign;
+                }
+
+                // Calculate other derived fields from spec
+                this.HasCustomProps = spec.properties?.length > 0;
+                this.HasRequiredCustomProps = spec.properties?.some(p => p.required) || false;
+                this.HasCustomEvents = spec.events?.length > 0;
+                this.RequiresData = spec.dataRequirements?.mode?.length > 0;
+                this.DependencyCount = spec.dependencies?.length || 0;
             }
         }
+        catch (ex) {
+            console.error('Error saving ComponentEntityExtended:', ex);
+        }
+
         return await super.Save(options);
     }
 
-    private _spec: ComponentSpec | undefined;
-    private _syncingFromSpec = false; // Flag to allow internal sets from SetSpec()
+    protected _spec: ComponentSpec | undefined;
 
     /**
      * Read-only representation of the value in the @see Specification property.
@@ -55,32 +66,13 @@ export class ComponentEntityExtended extends ComponentEntity {
     override Set(FieldName: string, Value: any): void {
         const fieldNameLower = FieldName?.trim().toLowerCase();
 
-        // Prevent direct setting of fields that are derived from the Specification
-        // These fields are automatically synced from the spec and should not be set directly
-        // Exception: Allow internal sets when syncing from the spec itself
-        if (!this._syncingFromSpec &&
-            (fieldNameLower === 'description' ||
-             fieldNameLower === 'functionalrequirements' ||
-             fieldNameLower === 'technicaldesign')) {
-
-            // Log a warning to help developers understand the correct pattern
-            console.warn(
-                `⚠️  ComponentEntity: Attempted to set '${FieldName}' directly. ` +
-                `This field is automatically derived from the Specification. ` +
-                `Please update the spec file instead to ensure consistency.`
-            );
-
-            // Skip setting these fields - they will be synced from Specification
-            return;
-        }
-
         const oldValue = this.Get(FieldName);
         super.Set(FieldName, Value);
 
-        if (fieldNameLower === 'specification') {
-            if (oldValue !== Value) { // no need to do json parse
-                this.SetSpec(Value);
-            }
+        // When Specification field is set, sync the derived fields from the spec
+        // This ensures Description/FunctionalRequirements/TechnicalDesign stay in sync with the spec
+        if (fieldNameLower === 'specification' && oldValue !== Value) {
+            this.SetSpec(Value);
         }
     }
 
@@ -99,21 +91,14 @@ export class ComponentEntityExtended extends ComponentEntity {
         // These redundant columns exist for backwards compatibility and database queries,
         // but should always reflect what's in the spec.
         if (this._spec) {
-            // Set flag to allow internal syncing from spec
-            this._syncingFromSpec = true;
-            try {
-                if (this._spec.description) {
-                    this.Description = this._spec.description;
-                }
-                if (this._spec.functionalRequirements) {
-                    this.FunctionalRequirements = this._spec.functionalRequirements;
-                }
-                if (this._spec.technicalDesign) {
-                    this.TechnicalDesign = this._spec.technicalDesign;
-                }
-            } finally {
-                // Always reset flag even if an error occurs
-                this._syncingFromSpec = false;
+            if (this._spec.description) {
+                this.Description = this._spec.description;
+            }
+            if (this._spec.functionalRequirements) {
+                this.FunctionalRequirements = this._spec.functionalRequirements;
+            }
+            if (this._spec.technicalDesign) {
+                this.TechnicalDesign = this._spec.technicalDesign;
             }
         }
     }
@@ -121,6 +106,7 @@ export class ComponentEntityExtended extends ComponentEntity {
     override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         const result = await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad)
         if (result) {
+            // After loading from database, re-sync derived fields from Specification to ensure consistency
             this.SetSpec(this.Specification)
         }
         return result;
@@ -137,6 +123,7 @@ export class ComponentEntityExtended extends ComponentEntity {
     override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
         const result = await super.LoadFromData(data, _replaceOldValues);
         if (result) {
+            // After loading, re-sync derived fields from Specification to ensure consistency
             this.SetSpec(this.Specification)
         }
         return result;

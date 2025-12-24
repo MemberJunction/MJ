@@ -1,0 +1,15 @@
+{
+  "name": "EntityArrayReduceInvalidBroken",
+  "type": "generic",
+  "title": "Entity Array Reduce Invalid Field - Broken Pattern",
+  "description": "Tests linter detection of grouping by field with typo in reduce",
+  "code": "function EntityArrayReduceInvalidBroken({ utilities }) {\n  const [grouped, setGrouped] = useState({});\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Typo in reduce: MembershipTpye should be MembershipType\n        const groups = result.Results.reduce((acc, m) => {\n          const key = m.MembershipTpye || 'Unknown';\n          acc[key] = (acc[key] || 0) + 1;\n          return acc;\n        }, {});\n        setGrouped(groups);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members by Type</h3>\n      {Object.entries(grouped).map(([type, count]) => (\n        <div key={type}>{type}: {count}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{"name": "Members", "type": "view"}]
+  }
+}

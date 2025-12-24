@@ -2,7 +2,7 @@ import { Component, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { RoleEntity } from '@memberjunction/core-entities';
+import { ResourceData, RoleEntity } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
@@ -65,6 +65,10 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
 
   constructor() {
     super();
+  }
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Role Management"
   }
 
   protected initDashboard(): void {

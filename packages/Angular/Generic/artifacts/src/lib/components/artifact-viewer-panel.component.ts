@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, SecurityContext } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity, ArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -8,7 +8,6 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 import { ArtifactViewerTab } from './base-artifact-viewer.component';
-import { marked } from 'marked';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
@@ -34,6 +33,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -66,8 +66,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   // Dynamic tabs from plugin
   public get allTabs(): string[] {
-    // Start with Display tab (cannot be removed)
-    const tabs = ['Display'];
+    const tabs: string[] = [];
+
+    // Only add Display tab if there's content to display
+    if (this.hasDisplayTab) {
+      tabs.push('Display');
+    }
 
     // Get plugin tabs directly from plugin instance (no caching needed - plugin always exists)
     if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
@@ -96,36 +100,88 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     return tabs;
   }
 
-  public GetTabContent(tabName: string): { type: string; content: string; language?: string } | null {
-    // Check if this is a plugin-provided tab (query directly from plugin - no cache needed)
+  /**
+   * Get the full tab definition for a given tab name.
+   * Returns the ArtifactViewerTab which may include component info for custom component tabs.
+   */
+  public GetTabDefinition(tabName: string): ArtifactViewerTab | null {
+    // Check if this is a plugin-provided tab
     if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
       const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
       const pluginTab = pluginTabs.find((t: ArtifactViewerTab) =>
         t.label.toLowerCase() === tabName.toLowerCase()
       );
-
       if (pluginTab) {
-        const content = typeof pluginTab.content === 'function'
-          ? pluginTab.content()
-          : pluginTab.content;
-
-        return {
-          type: pluginTab.contentType,
-          content: content,
-          language: pluginTab.language
-        };
+        return pluginTab;
       }
     }
 
     // Handle base tabs
     switch (tabName.toLowerCase()) {
       case 'json':
-        return { type: 'json', content: this.jsonContent, language: 'json' };
+        return { label: 'JSON', contentType: 'json', content: this.jsonContent, language: 'json' };
       case 'details':
-        return { type: 'html', content: this.displayMarkdown || this.displayHtml || '' };
+        return { label: 'Details', contentType: 'html', content: this.displayMarkdown || this.displayHtml || '' };
       default:
         return null;
     }
+  }
+
+  /**
+   * Get resolved tab content for string-based tabs (non-component tabs).
+   * For component tabs, use GetTabDefinition() and render the component directly.
+   */
+  public GetTabContent(tabName: string): { type: string; content: string; language?: string } | null {
+    const tabDef = this.GetTabDefinition(tabName);
+    if (!tabDef) return null;
+
+    // Component tabs don't have string content
+    if (tabDef.contentType === 'component') {
+      return null;
+    }
+
+    const content = typeof tabDef.content === 'function'
+      ? tabDef.content()
+      : tabDef.content || '';
+
+    return {
+      type: tabDef.contentType,
+      content: content,
+      language: tabDef.language
+    };
+  }
+
+  /**
+   * Check if a tab is a component tab (renders a custom Angular component)
+   */
+  public IsComponentTab(tabName: string): boolean {
+    const tabDef = this.GetTabDefinition(tabName);
+    return tabDef?.contentType === 'component' && !!tabDef.component;
+  }
+
+  /**
+   * Get the component type for a component tab.
+   * Returns null if the tab is not a component tab (used for template type safety).
+   */
+  public GetComponentTabType(tabName: string): Type<any> | null {
+    const tabDef = this.GetTabDefinition(tabName);
+    if (tabDef?.contentType === 'component' && tabDef.component) {
+      return tabDef.component;
+    }
+    return null;
+  }
+
+  /**
+   * Get the component inputs for a component tab
+   */
+  public GetComponentInputs(tabName: string): Record<string, any> {
+    const tabDef = this.GetTabDefinition(tabName);
+    if (!tabDef || tabDef.contentType !== 'component') {
+      return {};
+    }
+    return typeof tabDef.componentInputs === 'function'
+      ? tabDef.componentInputs()
+      : tabDef.componentInputs || {};
   }
 
   private recentAccessService: RecentAccessService;
@@ -328,15 +384,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           this.displayHtml = this.cleanEscapedCharacters(this.displayHtml);
         }
 
-        // Default to display tab if we have a plugin or extracted display content
-        // Otherwise default to JSON tab for JSON types, or Details tab as last resort
-        if (this.hasDisplayTab) {
-          this.activeTab = 'display';
-        } else if (this.jsonContent) {
-          this.activeTab = 'json';
-        } else {
-          this.activeTab = 'details';
-        }
+        // Set active tab to the first available tab
+        this.setActiveTabToFirstAvailable();
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
@@ -359,9 +408,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   get hasDisplayTab(): boolean {
     // Show Display tab if:
-    // 1. We have a plugin for this artifact type (check if artifact type exists), OR
+    // 1. We have a plugin AND it reports having content to display, OR
     // 2. We have displayMarkdown or displayHtml attributes from extract rules
-    return this.hasPlugin || !!this.displayMarkdown || !!this.displayHtml;
+    //
+    // Note: hasDisplayContent defaults to false in base class, so plugins must
+    // explicitly opt-in by overriding to return true when they have content.
+    // This prevents showing Display tab before plugin loads or when plugin has no content.
+    const pluginHasContent = this.pluginViewer?.pluginInstance?.hasDisplayContent ?? false;
+
+    return pluginHasContent || !!this.displayMarkdown || !!this.displayHtml;
   }
 
   get hasPlugin(): boolean {
@@ -396,6 +451,37 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   setActiveTab(tab: 'display' | 'json' | 'details' | 'links'): void {
     this.activeTab = tab;
+  }
+
+  /**
+   * Sets the active tab to the first available tab in the list.
+   * Called when tabs change or when the currently active tab becomes unavailable.
+   */
+  private setActiveTabToFirstAvailable(): void {
+    const tabs = this.allTabs;
+    if (tabs.length > 0) {
+      // If current tab is still available, keep it; otherwise switch to first
+      const currentTabStillAvailable = tabs.some(t => t.toLowerCase() === this.activeTab.toLowerCase());
+      if (!currentTabStillAvailable) {
+        this.activeTab = tabs[0].toLowerCase();
+      }
+    } else {
+      // Fallback to details if no tabs available (shouldn't happen)
+      this.activeTab = 'details';
+    }
+  }
+
+  /**
+   * Called when the plugin viewer finishes loading.
+   * Selects the first available tab now that plugin tabs are available.
+   */
+  onPluginLoaded(): void {
+    // Now that plugin is loaded, we have accurate tab information
+    // Always select the first tab since this is the initial load
+    const tabs = this.allTabs;
+    if (tabs.length > 0) {
+      this.activeTab = tabs[0].toLowerCase();
+    }
   }
 
   private parseAttributeValue(value: string | null | undefined): string | null {
@@ -842,6 +928,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   /**
+   * Handle entity record open request from artifact viewer plugin (React component)
+   * Propagates the event up to parent components
+   */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    this.openEntityRecord.emit(event);
+  }
+
+  /**
    * Resolves the DriverClass for an artifact type by traversing up the parent hierarchy.
    * Returns the first DriverClass found, or null if none found in the hierarchy.
    */
@@ -942,19 +1036,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
 
     return null;
-  }
-
-  /**
-   * Render markdown to HTML (for markdown tabs)
-   */
-  public RenderMarkdown(markdown: string): SafeHtml {
-    try {
-      const html = marked.parse(markdown);
-      return this.sanitizer.sanitize(SecurityContext.HTML, html) || '';
-    } catch (e) {
-      console.error('Failed to render markdown:', e);
-      return markdown;
-    }
   }
 
   /**

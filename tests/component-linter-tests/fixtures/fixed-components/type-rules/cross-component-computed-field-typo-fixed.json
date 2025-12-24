@@ -1,0 +1,18 @@
+{
+  "name": "CrossComponentComputedFieldTypoFixed",
+  "type": "generic",
+  "title": "Cross-Component Computed Field Typo - Fixed Pattern",
+  "description": "Tests correctly named computed field passed to downstream component",
+  "code": "function CrossComponentComputedFieldTypoFixed({ utilities, components }) {\n  const [members, setMembers] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // Adding computed field with correct name\n        const enhanced = result.Results.map(m => ({\n          ...m,\n          FullName: `${m.FirstName} ${m.LastName}` // ✅ Correct: FullName\n        }));\n        setMembers(enhanced);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* Grid uses FullName that matches computed field */}\n      <DataGrid \n        data={members} \n        columns={[\n          {field: 'FullName', title: 'Name'},\n          {field: 'Email', title: 'Email'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email"]
+    }]
+  }
+}

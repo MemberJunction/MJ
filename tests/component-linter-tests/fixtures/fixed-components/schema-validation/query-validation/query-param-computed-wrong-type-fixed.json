@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamComputedWrongTypeFixed",
+  "type": "generic",
+  "title": "Query Parameter Computed Wrong Type - Fixed Pattern",
+  "description": "Tests correct usage of computed value with proper type for query parameter",
+  "code": "function QueryParamComputedWrongTypeFixed({ utilities }) {\n  const [products, setProducts] = useState([]);\n  const [primaryCat] = useState('Electronics');\n  const [secondaryCat] = useState('Computers');\n\n  useEffect(() => {\n    async function loadData() {\n      if (!primaryCat || !secondaryCat) return;\n      \n      // ✅ Creating proper comma-separated string using template literal\n      const categories = `${primaryCat},${secondaryCat}`;\n      \n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Products By Categories',\n        CategoryPath: 'Products/Reports',\n        Parameters: { Categories: categories }\n      });\n      if (result?.Success) {\n        setProducts(result.Results);\n      }\n    }\n    loadData();\n  }, [primaryCat, secondaryCat]);\n\n  return (\n    <div>\n      <h3>Products</h3>\n      {products.map((p, i) => <div key={i}>{p.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Products By Categories",
+      "categoryPath": "Products/Reports",
+      "parameters": [
+        {"name": "Categories", "type": "nvarchar", "isRequired": true}
+      ]
+    }]
+  }
+}

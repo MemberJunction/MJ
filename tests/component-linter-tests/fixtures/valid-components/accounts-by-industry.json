@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/accounts-by-industry.spec.json",
+  "description": "Valid component demonstrating accounts grouped by industry"
+}

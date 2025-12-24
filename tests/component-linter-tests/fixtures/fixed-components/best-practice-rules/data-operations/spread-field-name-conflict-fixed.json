@@ -1,0 +1,18 @@
+{
+  "name": "SpreadFieldNameConflictFixed",
+  "type": "generic",
+  "title": "Spread Field Name Conflict - Fixed Pattern",
+  "description": "Tests spread operator with unique computed field names",
+  "code": "function SpreadFieldNameConflictFixed({ utilities, components }) {\n  const [orders, setOrders] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Orders' });\n      if (result?.Success) {\n        // ✅ Using unique field name for computed value\n        const enhanced = result.Results.map(o => ({\n          ...o,\n          PaymentStatus: o.IsPaid ? 'Paid' : 'Unpaid' // Unique name\n        }));\n        setOrders(enhanced);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Orders</h3>\n      {/* Grid references both original and computed fields */}\n      <DataGrid \n        data={orders} \n        columns={[\n          {field: 'OrderNumber', title: 'Order'},\n          {field: 'Status', title: 'Status'},\n          {field: 'PaymentStatus', title: 'Payment'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Orders",
+      "fields": ["ID", "OrderNumber", "Status", "IsPaid", "TotalAmount"]
+    }]
+  }
+}

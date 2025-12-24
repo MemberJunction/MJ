@@ -1,0 +1,12 @@
+{
+  "name": "EntityArraySortValidFixed",
+  "type": "generic",
+  "title": "Entity Array Sort Valid Field - Fixed Pattern",
+  "description": "Corrected version sorting by existing entity field",
+  "code": "function EntityArraySortValidFixed({ utilities }) {\n  const [sortedMembers, setSortedMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ✅ Sorting by existing field: LastName\n        const sorted = [...result.Results].sort((a, b) => \n          a.LastName.localeCompare(b.LastName)\n        );\n        setSortedMembers(sorted);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sorted Members</h3>\n      {sortedMembers.map((m, i) => (\n        <div key={i}>{m.FirstName} {m.LastName}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active"
+}

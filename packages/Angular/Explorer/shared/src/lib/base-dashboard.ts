@@ -1,6 +1,7 @@
 import { Directive, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
-import { DashboardEntityExtended } from '@memberjunction/core-entities';
+import { DashboardEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { BaseResourceComponent } from './base-resource-component';
 
 export interface DashboardConfig {
   dashboard: DashboardEntityExtended;
@@ -11,7 +12,7 @@ export interface DashboardConfig {
  * Make the base class a directive so we can use Angular functionality and sub-classes can be @Component 
  */
 @Directive()
-export abstract class BaseDashboard implements OnInit, OnDestroy {
+export abstract class BaseDashboard extends BaseResourceComponent implements OnInit, OnDestroy {
   /**
    * Set or change the dashboard configuration. Changing this property will NOT cause the dashboard to reload. Call Refresh() to do that.
    */
@@ -22,11 +23,6 @@ export abstract class BaseDashboard implements OnInit, OnDestroy {
   get Config(): DashboardConfig | null {
     return this._config;
   }
-
-  /**
-   * Subclasses should emit this event when they have completed loading.
-   */
-  @Output() LoadingComplete = new EventEmitter<void>();
 
   /**
    * Subclasses can emit anytime an error occurs.  
@@ -49,8 +45,6 @@ export abstract class BaseDashboard implements OnInit, OnDestroy {
   @Output() OpenEntityRecord = new EventEmitter<{EntityName: string, RecordPKey: CompositeKey}>();
 
   protected _config: DashboardConfig | null = null;
-
-  constructor() {}
 
   async ngOnInit() {
     this.initDashboard();
@@ -83,4 +77,13 @@ export abstract class BaseDashboard implements OnInit, OnDestroy {
    * Subclasses should override this method to load their data. This method is called when the dashboard is created and when Refresh() is called.
    */
   protected abstract loadData(): void;
+
+  /**
+   * Sub-classes can override this to provide a custom icon class
+   * @param data 
+   * @returns 
+   */
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
+    return "";
+  }
 } 

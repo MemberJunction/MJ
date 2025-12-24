@@ -68,6 +68,13 @@ export interface ForEachOperation {
         name: string;
         message: string;
         templateParameters?: Record<string, string>;
+        /**
+         * Runtime context propagated to the sub-agent.
+         * Allows sub-agents to access API keys, environment settings, and other
+         * runtime configuration from the parent agent.
+         * @since 2.127.0
+         */
+        context?: unknown;
     };
 }
 
@@ -101,6 +108,13 @@ export interface WhileOperation {
         name: string;
         message: string;
         templateParameters?: Record<string, string>;
+        /**
+         * Runtime context propagated to the sub-agent.
+         * Allows sub-agents to access API keys, environment settings, and other
+         * runtime configuration from the parent agent.
+         * @since 2.127.0
+         */
+        context?: unknown;
     };
 }
 
@@ -384,12 +398,15 @@ export type AgentExecutionStreamingCallback = (chunk: {
 
 /**
  * Parameters required to execute an AI Agent.
- * 
+ *
  * @template TContext - Type of the context object passed through agent and action execution.
  *                      This allows for type-safe context propagation throughout the execution hierarchy.
  *                      Defaults to any for backward compatibility.
  * @template P - Type of the payload passed to the agent execution
- * 
+ * @template TAgentTypeParams - Type of agent-type-specific execution parameters.
+ *                              Flow agents use FlowAgentExecuteParams, Loop agents could define their own.
+ *                              Defaults to unknown for backward compatibility.
+ *
  * @example
  * ```typescript
  * // Define a typed context
@@ -398,7 +415,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  *   userPreferences: { language: string; timezone: string };
  *   sessionId: string;
  * }
- * 
+ *
  * // Use with type safety
  * const params: ExecuteAgentParams<MyAgentContext> = {
  *   agent: myAgent,
@@ -409,9 +426,20 @@ export type AgentExecutionStreamingCallback = (chunk: {
  *     sessionId: 'abc123'
  *   }
  * };
+ *
+ * // Flow agent with type-specific params
+ * import { FlowAgentExecuteParams } from '@memberjunction/ai-agents';
+ * const flowParams: ExecuteAgentParams<any, any, FlowAgentExecuteParams> = {
+ *   agent: myFlowAgent,
+ *   conversationMessages: messages,
+ *   agentTypeParams: {
+ *     startAtStep: someStepEntity,  // Start at a specific step
+ *     skipSteps: [stepToSkip]       // Skip certain steps
+ *   }
+ * };
  * ```
  */
-export type ExecuteAgentParams<TContext = any, P = any> = {
+export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unknown> = {
     /** The agent entity to execute, containing all metadata and configuration */
     agent: AIAgentEntityExtended;
     /** Array of chat messages representing the conversation history */
@@ -814,6 +842,37 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * @since 2.123.0
      */
     actionChanges?: ActionChange[];
+
+    /**
+     * Optional agent-type-specific execution parameters.
+     *
+     * Different agent types can define their own parameter interfaces for
+     * type-specific configuration that doesn't belong in the general ExecuteAgentParams.
+     *
+     * Examples:
+     * - Flow agents: FlowAgentExecuteParams with startAtStep, skipSteps
+     * - Loop agents: Could define LoopAgentExecuteParams with custom iteration controls
+     *
+     * The type is determined by the TAgentTypeParams generic parameter.
+     * When using a specific agent type, import and use its params interface for type safety.
+     *
+     * @example
+     * ```typescript
+     * import { FlowAgentExecuteParams } from '@memberjunction/ai-agents';
+     *
+     * const params: ExecuteAgentParams<any, any, FlowAgentExecuteParams> = {
+     *   agent: myFlowAgent,
+     *   conversationMessages: messages,
+     *   agentTypeParams: {
+     *     startAtStep: AIEngine.Instance.GetAgentSteps(agentId).find(s => s.Name === 'Approval'),
+     *     skipSteps: [debugStep, testStep]
+     *   }
+     * };
+     * ```
+     *
+     * @since 2.127.0
+     */
+    agentTypeParams?: TAgentTypeParams;
 }
 
 /**
@@ -1045,6 +1104,26 @@ export interface ActionChange {
      * Required when scope is 'specific', ignored otherwise.
      */
     agentIds?: string[];
+
+    /**
+     * Optional execution limits for actions being added.
+     * Maps action IDs to their maximum executions per agent run.
+     * Only applies when mode is 'add'. Ignored for 'remove' mode.
+     *
+     * @example
+     * ```typescript
+     * const change: ActionChange = {
+     *   scope: 'global',
+     *   mode: 'add',
+     *   actionIds: ['search-action-id', 'email-action-id'],
+     *   actionLimits: {
+     *     'search-action-id': 10,    // Max 10 searches per run
+     *     'email-action-id': 5       // Max 5 emails per run
+     *   }
+     * };
+     * ```
+     */
+    actionLimits?: Record<string, number>;
 }
 
 

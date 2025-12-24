@@ -1,0 +1,22 @@
+{
+  "name": "ComponentPropNameNonexistentBroken",
+  "type": "generic",
+  "title": "Component Property Name Nonexistent - Broken Pattern",
+  "description": "Tests linter detection of non-existent component property",
+  "code": "function ComponentPropNameNonexistentBroken({ utilities, components }) {\n  const [chartData, setChartData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales By Month',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        setChartData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sales Chart</h3>\n      {/* ❌ Property 'title' doesn't exist on SimpleChart */}\n      <SimpleChart data={chartData} groupBy=\"Month\" valueField=\"Revenue\" title=\"Sales Overview\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "components": [{
+      "name": "SimpleChart",
+      "properties": [
+        {"name": "data", "type": "array", "isRequired": true},
+        {"name": "groupBy", "type": "string", "isRequired": true},
+        {"name": "valueField", "type": "string", "isRequired": true}
+      ]
+    }]
+  }
+}

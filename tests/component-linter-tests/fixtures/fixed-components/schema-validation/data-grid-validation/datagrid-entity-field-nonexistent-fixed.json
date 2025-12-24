@@ -1,0 +1,18 @@
+{
+  "name": "DataGridEntityFieldNonexistentFixed",
+  "type": "generic",
+  "title": "DataGrid Entity Field Nonexistent - Fixed Pattern",
+  "description": "Tests correct usage of actual entity fields in EntityGrid",
+  "code": "function DataGridEntityFieldNonexistentFixed({ utilities, components }) {\n  const { EntityGrid } = components;\n\n  return (\n    <div>\n      <h3>Member Directory</h3>\n      {/* ✅ Using actual fields from Members entity */}\n      <EntityGrid \n        entityName=\"Members\" \n        fields={['ID', 'FirstName', 'LastName', 'MembershipType', 'Email']} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email", "MembershipType", "Status"]
+    }]
+  }
+}
