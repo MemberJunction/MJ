@@ -604,6 +604,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Update URL to reflect current state (whether from URL, deepLink, or persisted)
     this.updateUrl();
+
+    // Notify that loading is complete (for resource wrapper integration)
+    this.LoadingComplete.emit();
   }
 
   /**

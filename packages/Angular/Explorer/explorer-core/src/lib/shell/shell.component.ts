@@ -42,6 +42,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   activeApp: BaseApplication | null = null;
   loading = true;
   initialized = false;
+  private waitingForFirstResource = false;
   tabBarVisible = true; // Controlled by workspace manager
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
@@ -298,7 +299,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     await this.loadSearchableEntities();
 
     this.initialized = true;
-    this.loading = false;
+    this.waitingForFirstResource = true;
   }
 
   /**
@@ -778,6 +779,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngAfterViewInit(): void {
     // Layout initialization happens in TabContainerComponent
+  }
+
+  /**
+   * Called when the first resource component finishes loading.
+   * This allows us to hide the shell loading indicator only after
+   * the first resource is ready, eliminating the visual gap.
+   */
+  onFirstResourceLoadComplete(): void {
+    if (this.waitingForFirstResource) {
+      this.waitingForFirstResource = false;
+      this.loading = false;
+      this.cdr.detectChanges();
+      console.log('🎯 Shell: First resource loaded, hiding shell loading indicator');
+    }
   }
 
   ngOnDestroy(): void {

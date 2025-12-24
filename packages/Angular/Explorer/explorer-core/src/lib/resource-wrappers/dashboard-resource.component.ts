@@ -265,6 +265,11 @@ export class DashboardResource extends BaseResourceComponent {
                 }
             });
 
+            // Subscribe to LoadingComplete to know when the dashboard is ready
+            instance.LoadingComplete.subscribe(() => {
+                this.NotifyLoadComplete();
+            });
+
             // Initialize dashboard (no database config needed for DataExplorer)
             const config: DashboardConfig = {
                 dashboard: null as unknown as DashboardEntity, // No database record
@@ -275,8 +280,6 @@ export class DashboardResource extends BaseResourceComponent {
 
             // Trigger change detection to ensure the component updates
             componentRef.changeDetectorRef.detectChanges();
-
-            this.NotifyLoadComplete();
         } catch (error) {
             console.error('Error loading Data Explorer:', error);
             this.setError('The Data Explorer could not be loaded.', error);
@@ -346,12 +349,14 @@ export class DashboardResource extends BaseResourceComponent {
                     LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
                 }
             });
-            
+
+            // Subscribe to LoadingComplete to know when the dashboard is ready
+            instance.LoadingComplete.subscribe(() => {
+                this.NotifyLoadComplete();
+            });
 
             instance.Config = config;
             instance.Refresh();
-
-            this.NotifyLoadComplete();
         } catch (error) {
             console.error('Error loading code-based dashboard:', error);
             this.setError(`The dashboard "${dashboard.Name}" could not be loaded. The dashboard class may not be registered or may have failed to initialize.`, error);

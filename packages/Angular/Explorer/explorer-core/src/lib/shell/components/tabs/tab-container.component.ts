@@ -11,7 +11,9 @@ import {
   ComponentRef,
   ViewEncapsulation,
   ChangeDetectorRef,
-  HostListener
+  HostListener,
+  Output,
+  EventEmitter
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -28,6 +30,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { DatasetResultType, LogError, Metadata, RunView } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
+import { DashboardResource } from '../../../resource-wrappers/dashboard-resource.component';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -49,7 +52,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
 
+  /**
+   * Emitted when the first resource component finishes loading.
+   * This allows the shell to keep showing its loading indicator until the first
+   * resource is ready, eliminating the visual gap between shell loading and resource loading.
+   */
+  @Output() firstResourceLoadComplete = new EventEmitter<void>();
+
   private subscriptions: Subscription[] = [];
+  private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
 
   // Track component references for cleanup (legacy - keep for backward compat during transition)
@@ -444,6 +455,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Wire up events
     instance.LoadCompleteEvent = () => {
       console.log('✅ Single-resource component loaded');
+      this.emitFirstLoadCompleteOnce();
     };
 
     // Get the native element and append to container
@@ -623,6 +635,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       instance.LoadCompleteEvent = () => {
         // Tab content loaded - update tab title with resource display name
         this.updateTabTitleFromResource(tabId, instance, resourceData);
+        this.emitFirstLoadCompleteOnce();
       };
 
       instance.ResourceRecordSavedEvent = (entity: { Get?: (key: string) => unknown }) => {
@@ -1104,5 +1117,17 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.workspaceManager.CloseTabsToRight(this.contextMenuTabId);
     }
     this.hideContextMenu();
+  }
+
+  /**
+   * Emit the firstResourceLoadComplete event exactly once.
+   * Subsequent calls are ignored to prevent side effects from later tab loads.
+   */
+  private emitFirstLoadCompleteOnce(): void {
+    if (!this.hasEmittedFirstLoadComplete) {
+      this.hasEmittedFirstLoadComplete = true;
+      console.log('🎯 First resource load complete - notifying shell');
+      this.firstResourceLoadComplete.emit();
+    }
   }
 }

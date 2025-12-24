@@ -137,6 +137,8 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
       this.loadFavorites(),
       this.loadRecents()
     ]);
+
+    this.LoadingComplete.emit();
   }
 
   override ngOnDestroy(): void {

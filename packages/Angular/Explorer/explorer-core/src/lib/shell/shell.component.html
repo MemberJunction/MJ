@@ -1,4 +1,4 @@
-<div class="shell-container" *ngIf="!loading" [class.tabs-visible]="tabBarVisible" kendoDialogContainer>
+<div class="shell-container" [class.hidden]="loading" [class.tabs-visible]="tabBarVisible" kendoDialogContainer>
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -164,7 +164,10 @@
   </div>
 
   <!-- Tab Container - with dynamic tab bar visibility -->
-  <mj-tab-container [class.hide-tab-bar]="!tabBarVisible"></mj-tab-container>
+  <mj-tab-container
+    [class.hide-tab-bar]="!tabBarVisible"
+    (firstResourceLoadComplete)="onFirstResourceLoadComplete()">
+  </mj-tab-container>
 </div>
 
 <!-- Loading State -->
