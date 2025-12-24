@@ -1,21 +1,9 @@
 import { ComponentRef, Injectable, NgModule } from '@angular/core';
 import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
 import {
-  SingleEntityComponent,
   SingleRecordComponent,
-  HomeWrapperComponent,
-  UserNotificationsComponent,
-  DataBrowserComponent,
-  ReportBrowserComponent,
-  DashboardBrowserComponent,
-  AuthGuardService as AuthGuard,
-  FilesComponent,
-  QueryBrowserComponent,
-  ListViewComponent,
-  ChatWrapperComponent,
+  AuthGuardService as AuthGuard
 } from './public-api';
-import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
-import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 import { LogError, Metadata } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
@@ -438,40 +426,7 @@ export class ResourceResolver implements Resolve<void> {
   }
 }
 
-const routes: Routes = [
-  { path: '', component: HomeWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'home', component: HomeWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'chat', component: ChatWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'chat/:conversationId', component: ChatWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'dashboards/:folderID', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'reports/:folderID', component: ReportBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'queries/:folderID', component: QueryBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },
-  { path: 'lists', component: ListViewComponent, canActivate: [AuthGuard] },
-  { path: 'lists/:folderID', component: ListViewComponent, canActivate: [AuthGuard] },
-  {
-    path: 'settings',
-    component: SettingsComponent,
-    canActivate: [AuthGuard],
-    children: [
-      {
-        path: '',
-        component: SettingsComponent,
-        pathMatch: 'full',
-      },
-      {
-        path: '**',
-        component: SettingsComponent,
-      },
-    ],
-  },
-  { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },
-  { path: 'style-guide-test', component: StyleGuideTestComponent, canActivate: [AuthGuard] },
-  { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },
+const routes: Routes = [ 
   {
     path: 'app/:appName/:navItemName',
     resolve: { data: ResourceResolver },
@@ -525,11 +480,7 @@ const routes: Routes = [
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
-  },
-  {
-    path: '**',
-    redirectTo: 'home',
-  },
+  } 
 ];
 
 interface DetachedRouteHandleExt extends DetachedRouteHandle {
