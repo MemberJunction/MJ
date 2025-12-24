@@ -3168,8 +3168,15 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   });
                 }
               }
-              // Case 3: Parameters is neither array nor object
-              else if (!t.isObjectExpression(paramValue)) {
+              // Case 3: Parameters is a valid format we can't or don't need to validate further
+              // - Variable reference (e.g., Parameters: statusParams) - can't validate without scope tracking
+              // - Object expression without spec query params - nothing to validate against
+              else if (t.isIdentifier(paramValue) || t.isObjectExpression(paramValue)) {
+                // Valid format - skip further validation
+                // Either a variable reference or an object when we have no spec to validate against
+              }
+              // Case 4: Parameters is neither array, object, nor variable reference
+              else {
                 let fixCode: string;
                 let message: string;
 
@@ -8619,7 +8626,7 @@ const result = await utilities.rq.RunQuery({
     // Map to store full query definitions for parameter validation
     const queryDefinitionsMap = new Map<string, ComponentQueryDataRequirement>();
 
-    // Map to track allowed fields per entity
+    // Map to track allowed fields per entity (from dataRequirements display/filter/sort arrays)
     const entityFieldsMap = new Map<
       string,
       {
@@ -8628,6 +8635,10 @@ const result = await utilities.rq.RunQuery({
         sortFields: Set<string>;
       }
     >();
+
+    // Map to track ALL fields that exist in the entity (from fieldMetadata)
+    // Used to distinguish "field not in requirements" (medium) from "field doesn't exist" (critical)
+    const entityAllFieldsMap = new Map<string, Set<string>>();
 
     if (componentSpec.dataRequirements?.entities) {
       for (const entity of componentSpec.dataRequirements.entities) {
@@ -8638,6 +8649,17 @@ const result = await utilities.rq.RunQuery({
             filterFields: new Set(entity.filterFields || []),
             sortFields: new Set(entity.sortFields || []),
           });
+
+          // Build set of ALL fields from fieldMetadata if available
+          if (entity.fieldMetadata && Array.isArray(entity.fieldMetadata)) {
+            const allFields = new Set<string>();
+            for (const field of entity.fieldMetadata) {
+              if (field.name) {
+                allFields.add(field.name);
+              }
+            }
+            entityAllFieldsMap.set(entity.name, allFields);
+          }
         }
       }
     }
@@ -8670,6 +8692,17 @@ const result = await utilities.rq.RunQuery({
                   filterFields: new Set(entity.filterFields || []),
                   sortFields: new Set(entity.sortFields || []),
                 });
+              }
+
+              // Merge fieldMetadata into allFields map
+              if (entity.fieldMetadata && Array.isArray(entity.fieldMetadata)) {
+                const existingAll = entityAllFieldsMap.get(entity.name) || new Set<string>();
+                for (const field of entity.fieldMetadata) {
+                  if (field.name) {
+                    existingAll.add(field.name);
+                  }
+                }
+                entityAllFieldsMap.set(entity.name, existingAll);
               }
             }
           }
@@ -8785,18 +8818,35 @@ const result = await utilities.rq.RunQuery({
                                 entityFields.displayFields.has(fieldName) || entityFields.filterFields.has(fieldName) || entityFields.sortFields.has(fieldName);
 
                               if (!isAllowed) {
-                                violations.push({
-                                  rule: 'field-not-in-requirements',
-                                  severity: 'critical',
-                                  line: fieldElement.loc?.start.line || 0,
-                                  column: fieldElement.loc?.start.column || 0,
-                                  message: `Field "${fieldName}" not found in dataRequirements for entity "${usedEntity}". Available fields: ${[
-                                    ...entityFields.displayFields,
-                                    ...entityFields.filterFields,
-                                    ...entityFields.sortFields,
-                                  ].join(', ')}`,
-                                  code: fieldName,
-                                });
+                                // Check if field exists in entity metadata (two-tier severity)
+                                const allFields = entityAllFieldsMap.get(usedEntity);
+                                const existsInEntity = allFields ? allFields.has(fieldName) : false;
+
+                                if (existsInEntity) {
+                                  // Field exists but not in dataRequirements - medium severity (works but suboptimal)
+                                  violations.push({
+                                    rule: 'field-not-in-requirements',
+                                    severity: 'medium',
+                                    line: fieldElement.loc?.start.line || 0,
+                                    column: fieldElement.loc?.start.column || 0,
+                                    message: `Field "${fieldName}" exists in entity "${usedEntity}" but not declared in dataRequirements. Consider adding to displayFields, filterFields, or sortFields.`,
+                                    code: fieldName,
+                                  });
+                                } else {
+                                  // Field doesn't exist in entity - critical severity (will fail at runtime)
+                                  violations.push({
+                                    rule: 'field-not-in-requirements',
+                                    severity: 'critical',
+                                    line: fieldElement.loc?.start.line || 0,
+                                    column: fieldElement.loc?.start.column || 0,
+                                    message: `Field "${fieldName}" does not exist in entity "${usedEntity}". Available fields: ${[
+                                      ...entityFields.displayFields,
+                                      ...entityFields.filterFields,
+                                      ...entityFields.sortFields,
+                                    ].join(', ')}`,
+                                    code: fieldName,
+                                  });
+                                }
                               }
                             }
                           }
@@ -8812,16 +8862,33 @@ const result = await utilities.rq.RunQuery({
                         const orderByField = orderByValue.split(/\s+/)[0];
 
                         if (!entityFields.sortFields.has(orderByField)) {
-                          violations.push({
-                            rule: 'orderby-field-not-sortable',
-                            severity: 'critical',
-                            line: orderByProperty.value.loc?.start.line || 0,
-                            column: orderByProperty.value.loc?.start.column || 0,
-                            message: `OrderBy field "${orderByField}" not in sortFields for entity "${usedEntity}". Available sort fields: ${[
-                              ...entityFields.sortFields,
-                            ].join(', ')}`,
-                            code: orderByValue,
-                          });
+                          // Check if field exists in entity metadata (two-tier severity)
+                          const allFields = entityAllFieldsMap.get(usedEntity);
+                          const existsInEntity = allFields ? allFields.has(orderByField) : false;
+
+                          if (existsInEntity) {
+                            // Field exists but not in sortFields - medium severity (works but suboptimal)
+                            violations.push({
+                              rule: 'orderby-field-not-sortable',
+                              severity: 'medium',
+                              line: orderByProperty.value.loc?.start.line || 0,
+                              column: orderByProperty.value.loc?.start.column || 0,
+                              message: `OrderBy field "${orderByField}" exists in entity "${usedEntity}" but not declared in sortFields. Consider adding for optimization.`,
+                              code: orderByValue,
+                            });
+                          } else {
+                            // Field doesn't exist in entity - critical severity (will fail at runtime)
+                            violations.push({
+                              rule: 'orderby-field-not-sortable',
+                              severity: 'critical',
+                              line: orderByProperty.value.loc?.start.line || 0,
+                              column: orderByProperty.value.loc?.start.column || 0,
+                              message: `OrderBy field "${orderByField}" does not exist in entity "${usedEntity}". Available sort fields: ${[
+                                ...entityFields.sortFields,
+                              ].join(', ')}`,
+                              code: orderByValue,
+                            });
+                          }
                         }
                       }
                     }
