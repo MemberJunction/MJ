@@ -2,6 +2,7 @@ import { ElementRef, Injectable, Injector } from '@angular/core';
 import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
 import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
@@ -79,6 +80,10 @@ export class SharedService {
     // DashboardEngine loads dashboard metadata
     // Used when viewing dashboards
     DashboardEngine.Instance.Config(false).catch(err =>
+      LogError(`Failed to pre-warm DashboardEngine: ${err}`)
+    );
+
+    EntityCommunicationsEngineBase.Instance.Config(false).catch(err =>
       LogError(`Failed to pre-warm DashboardEngine: ${err}`)
     );
   }
