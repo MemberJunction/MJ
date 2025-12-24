@@ -1,7 +1,7 @@
 /**
  * For each Skip API Analysis result, it is possible for Skip to provide a set of tableDataColumns that describe the data that is being returned in this shape.
  */
-export class SkipColumnInfo {
+export interface SkipColumnInfo {
     fieldName: string;
     displayName: string;
     simpleDataType: 'string' | 'number' | 'date' | 'boolean';
@@ -9,9 +9,9 @@ export class SkipColumnInfo {
 }
 
 /**
- * Enumerates the possible values for a given field  
+ * Enumerates the possible values for a given field
  */
-export class SkipEntityFieldValueInfo {
+export interface SkipEntityFieldValueInfo {
     /**
      * Possible value
      */
@@ -23,9 +23,9 @@ export class SkipEntityFieldValueInfo {
 }
 
 /**
- * Describes a single field in an entity. 
+ * Describes a single field in an entity.
  */
-export class SkipEntityFieldInfo {
+export interface SkipEntityFieldInfo {
     entityID: string;
     sequence: number;
     name: string;
@@ -59,9 +59,9 @@ export class SkipEntityFieldInfo {
 
 /**
  * Defines relationships between entities, including foreign key relationships and
- * many-to-many relationships through junction tables.  
+ * many-to-many relationships through junction tables.
  */
-export class SkipEntityRelationshipInfo {
+export interface SkipEntityRelationshipInfo {
     entityID: string;
     relatedEntityID: string;
     type: string;
@@ -79,25 +79,25 @@ export class SkipEntityRelationshipInfo {
 /**
  * Info about a single entity including fields and relationships
  */
-export class SkipEntityInfo {
+export interface SkipEntityInfo {
     id: string;
-    name!: string;
+    name: string;
     description?: string;
-    schemaName!: string;
-    baseView!: string;
-    fields: SkipEntityFieldInfo[] =[];
-    relatedEntities: SkipEntityRelationshipInfo[] = [];
+    schemaName: string;
+    baseView: string;
+    fields: SkipEntityFieldInfo[];
+    relatedEntities: SkipEntityRelationshipInfo[];
 
     /**
      * If rows packed is set to anything other than none, the data is provided in the rows property.
      */
-    rowsPacked?: 'None' | 'Sample' | 'All' = 'None';
+    rowsPacked?: 'None' | 'Sample' | 'All';
     /**
      * If rowsPacked === 'Sample', this additional property is used to indicate the method used to sample the rows
      */
-    rowsSampleMethod?: 'random' | 'top n' | 'bottom n' = 'random';
+    rowsSampleMethod?: 'random' | 'top n' | 'bottom n';
     /**
-     * Optional, the metadata can include an array of rows that can be used to provide context to Skip for the data that is being passed in. 
+     * Optional, the metadata can include an array of rows that can be used to provide context to Skip for the data that is being passed in.
      */
-    rows?: any[] = [];
+    rows?: unknown[];
 }

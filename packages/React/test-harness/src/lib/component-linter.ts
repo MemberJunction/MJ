@@ -1,7 +1,7 @@
 import * as parser from '@babel/parser';
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentQueryDataRequirement, SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
 import type { EntityFieldInfo, EntityInfo, RunQueryResult, RunViewResult } from '@memberjunction/core';
 import { Metadata } from '@memberjunction/core';
 import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
@@ -8528,7 +8528,7 @@ const result = await utilities.rq.RunQuery({
       // Add data requirements validation if componentSpec is provided
       if (componentSpec?.dataRequirements?.entities) {
         try {
-          const dataViolations = this.validateDataRequirements(ast, componentSpec);
+          const dataViolations = this.validateDataRequirements(ast, componentSpec, options);
           violations.push(...dataViolations);
         } catch (error) {
           console.warn('Data requirements validation failed:', error instanceof Error ? error.message : error);
@@ -8616,7 +8616,7 @@ const result = await utilities.rq.RunQuery({
     }
   }
 
-  private static validateDataRequirements(ast: t.File, componentSpec: ComponentSpec): Violation[] {
+  private static validateDataRequirements(ast: t.File, componentSpec: ComponentSpec, options?: ComponentExecutionOptions): Violation[] {
     const violations: Violation[] = [];
 
     // Extract entity names from dataRequirements
@@ -8636,9 +8636,20 @@ const result = await utilities.rq.RunQuery({
       }
     >();
 
-    // Map to track ALL fields that exist in the entity (from fieldMetadata)
+    // Map to track ALL fields that exist in the entity
     // Used to distinguish "field not in requirements" (medium) from "field doesn't exist" (critical)
     const entityAllFieldsMap = new Map<string, Set<string>>();
+
+    // FIRST: Populate entityAllFieldsMap from options.entityMetadata if provided
+    // This gives us the complete list of fields that actually exist in each entity
+    if (options?.entityMetadata && Array.isArray(options.entityMetadata)) {
+      for (const entity of options.entityMetadata) {
+        if (entity.name && entity.fields) {
+          const fieldNames = new Set<string>(entity.fields.map((f: SimpleEntityFieldInfo) => f.name));
+          entityAllFieldsMap.set(entity.name, fieldNames);
+        }
+      }
+    }
 
     if (componentSpec.dataRequirements?.entities) {
       for (const entity of componentSpec.dataRequirements.entities) {
@@ -8651,7 +8662,8 @@ const result = await utilities.rq.RunQuery({
           });
 
           // Build set of ALL fields from fieldMetadata if available
-          if (entity.fieldMetadata && Array.isArray(entity.fieldMetadata)) {
+          // Only use fieldMetadata as fallback if entityMetadata wasn't provided for this entity
+          if (!entityAllFieldsMap.has(entity.name) && entity.fieldMetadata && Array.isArray(entity.fieldMetadata)) {
             const allFields = new Set<string>();
             for (const field of entity.fieldMetadata) {
               if (field.name) {
@@ -8694,9 +8706,10 @@ const result = await utilities.rq.RunQuery({
                 });
               }
 
-              // Merge fieldMetadata into allFields map
-              if (entity.fieldMetadata && Array.isArray(entity.fieldMetadata)) {
-                const existingAll = entityAllFieldsMap.get(entity.name) || new Set<string>();
+              // Merge fieldMetadata into allFields map only if entityMetadata wasn't provided
+              // If entityMetadata was provided, it already has the complete field list
+              if (!entityAllFieldsMap.has(entity.name) && entity.fieldMetadata && Array.isArray(entity.fieldMetadata)) {
+                const existingAll = new Set<string>();
                 for (const field of entity.fieldMetadata) {
                   if (field.name) {
                     existingAll.add(field.name);
