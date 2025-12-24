@@ -6,6 +6,7 @@ import { SharedService, BaseDashboard } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass } from '@memberjunction/global';
+import { ResourceData } from '@memberjunction/core-entities';
 
 /** Session options for SQL logging */
 interface SqlLoggingSessionOptions {
@@ -122,6 +123,10 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
 
   constructor(private sharedService: SharedService) {
     super();
+  }
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "SQL Logging"
   }
 
   protected initDashboard(): void {

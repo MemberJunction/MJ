@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SharedService } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 
 interface CommunicationDashboardState {
     activeTab: string;
@@ -40,6 +41,11 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         super();
         this.setupStateManagement();
         this.updateNavigationSelection();
+    }
+
+
+    async GetResourceDisplayName(data: ResourceData): Promise<string> {
+        return "Communications"
     }
 
     ngAfterViewInit(): void {
@@ -121,7 +127,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             }, 0);
         }
 
-        this.LoadingComplete.emit();
+        this.NotifyLoadComplete();
     }
 
     public getCurrentTabLabel(): string {

@@ -2,15 +2,16 @@ import { BrowserManager } from './browser-context';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
 import { ComponentLinter, Violation } from './component-linter';
-import { 
-  ComponentSpec, 
-  ComponentUtilities, 
+import {
+  ComponentSpec,
+  ComponentUtilities,
   SimpleAITools,
   SimpleExecutePromptParams,
   SimpleExecutePromptResult,
   SimpleEmbedTextParams,
   SimpleEmbedTextResult,
-  ComponentObject
+  ComponentObject,
+  SimpleEntityInfo
 } from '@memberjunction/interactive-component-types';
 import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
@@ -58,6 +59,25 @@ export interface ComponentExecutionOptions {
   isRootComponent?: boolean;
   debug?: boolean;
   utilities?: ComponentUtilities;
+
+  /**
+   * Optional array of entity metadata providing complete field lists per entity.
+   * Used by the linter to validate field usage with two-tier severity:
+   * - Medium: Field exists in entity but not declared in dataRequirements
+   * - Critical: Field does not exist in entity at all
+   *
+   * If not provided, linter only checks against dataRequirements.fieldMetadata
+   * which may cause false-positive critical errors for valid but undeclared fields.
+   *
+   * @example
+   * // Caller provides metadata for entities used in component
+   * const md = new Metadata();
+   * const entityNames = spec.dataRequirements.entities.map(e => e.name);
+   * const entityMetadata = md.Entities
+   *   .filter(e => entityNames.includes(e.Name))
+   *   .map(e => SimpleEntityInfo.FromEntityInfo(e));
+   */
+  entityMetadata?: SimpleEntityInfo[];
 }
 
 export interface ComponentExecutionResult {
