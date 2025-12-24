@@ -137,13 +137,15 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
         this.cdr.detectChanges();
       });
 
-    // Load favorites and recents
-    await Promise.all([
-      this.loadFavorites(),
-      this.loadRecents()
-    ]);
+    // Notify load complete after tiny delay - the main dashboard UI is ready
+    // Favorites and recents load asynchronously in the sidebar
+    setTimeout(() => {
+      this.NotifyLoadComplete();
+    }, 50)
 
-    this.NotifyLoadComplete();
+    // Load favorites and recents asynchronously (don't block rendering)
+    this.loadFavorites();
+    this.loadRecents();
   }
 
   override ngOnDestroy(): void {

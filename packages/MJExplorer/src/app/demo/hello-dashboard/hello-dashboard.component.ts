@@ -4,6 +4,7 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 import { CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
+import { ResourceData } from '@memberjunction/core-entities';
 
 /**
  * @fileoverview Hello Dashboard Component - A Comprehensive MemberJunction Dashboard Demo
@@ -536,12 +537,18 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     
     // Mark loading as complete
     this.isLoading = false;
+    this.NotifyLoadComplete();
     
     // Update container size after a delay to ensure DOM is fully rendered
     setTimeout(() => {
       console.log('🔄 HelloDashboard: Delayed container size update');
       this.updateContainerSize();
     }, 1000);
+  }
+
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Hello World Dashboard"
   }
 
   private setupUserStateDebouncing(): void {
