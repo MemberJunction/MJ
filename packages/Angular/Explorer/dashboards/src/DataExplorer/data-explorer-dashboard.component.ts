@@ -8,7 +8,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
-import { ApplicationEntityEntity } from '@memberjunction/core-entities';
+import { ApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -161,6 +161,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public exportData: any[] = [];
   public exportColumns: { Name: string; DisplayName: string }[] = [];
   public exportFileName: string = 'export.xlsx';
+
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Data Explorer"
+  }
+
 
   /**
    * Filtered entities based on entityFilterText (for home screen)
@@ -606,7 +612,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.updateUrl();
 
     // Notify that loading is complete (for resource wrapper integration)
-    this.LoadingComplete.emit();
+    this.NotifyLoadComplete();
   }
 
   /**

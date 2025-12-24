@@ -265,10 +265,11 @@ export class DashboardResource extends BaseResourceComponent {
                 }
             });
 
-            // Subscribe to LoadingComplete to know when the dashboard is ready
-            instance.LoadingComplete.subscribe(() => {
+            // Setup LoadCompleteEvent to know when the dashboard is ready
+            instance.LoadCompleteEvent = () => {
                 this.NotifyLoadComplete();
-            });
+            };
+
 
             // Initialize dashboard (no database config needed for DataExplorer)
             const config: DashboardConfig = {
@@ -311,19 +312,26 @@ export class DashboardResource extends BaseResourceComponent {
             this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
             const instance = this.componentRef.instance as BaseDashboard;
 
-            // Manually append the component's native element inside the div
-            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
-            nativeElement.style.width = '100%';
-            nativeElement.style.height = '100%';
-            this.containerElement.nativeElement.appendChild(nativeElement);
+
+            // Setup LoadCompleteEvent() to know when the dashboard is ready
+            instance.LoadCompleteEvent = () => {
+                this.NotifyLoadComplete();
+            };
 
             // Initialize with dashboard data
-            const baseData = this.Data;
             const userStateEntity = await this.loadDashboardUserState(dashboard.ID);
             const config: DashboardConfig = {
                 dashboard,
                 userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
             };
+
+            instance.Config = config;
+
+            // Manually append the component's native element inside the div
+            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
+            nativeElement.style.width = '100%';
+            nativeElement.style.height = '100%';
+            this.containerElement.nativeElement.appendChild(nativeElement);
 
             // handle open entity record events in MJ Explorer with routing
             instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
@@ -350,12 +358,6 @@ export class DashboardResource extends BaseResourceComponent {
                 }
             });
 
-            // Subscribe to LoadingComplete to know when the dashboard is ready
-            instance.LoadingComplete.subscribe(() => {
-                this.NotifyLoadComplete();
-            });
-
-            instance.Config = config;
             instance.Refresh();
         } catch (error) {
             console.error('Error loading code-based dashboard:', error);

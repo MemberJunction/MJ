@@ -20,7 +20,7 @@ import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
-import { LoadingTheme, getActiveTheme, STANDARD_THEME } from './loading-themes';
+import { LoadingTheme, getActiveTheme } from './loading-themes';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -58,14 +58,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private usedMessageIndices: number[] = [];
   private usedGradientIndices: number[] = [];
   private messageCycleCount = 0; // Track message cycles for color changes
-  private activeTheme: LoadingTheme = STANDARD_THEME;
+  private activeTheme: LoadingTheme;
   private readonly messageIntervalMs = 2500; // 2.5 seconds per message
   private readonly colorChangeEveryNMessages = 2; // Change color every 2 messages (5 seconds)
   private readonly animationOptions: ('pulse' | 'spin' | 'pulse-spin')[] = ['pulse', 'spin', 'pulse-spin'];
-  currentLoadingText = 'Loading workspace...';
-  currentLoadingColor = '#264FAF'; // Default MJ blue
-  currentLoadingTextColor = '#757575';
-  currentLoadingGradient: LogoGradient | null = null;
+  currentLoadingText: string;
+  currentLoadingColor: string;
+  currentLoadingTextColor: string;
+  currentLoadingGradient: LogoGradient | null;
   currentLoadingAnimation: 'pulse' | 'spin' | 'bounce' | 'pulse-spin' = 'pulse';
 
   // User avatar state
@@ -111,7 +111,36 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private settingsDialogService: SettingsDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService
-  ) {}
+  ) {
+    // Initialize theme immediately so loading UI shows correct colors from the start
+    this.activeTheme = getActiveTheme();
+
+    // Randomly select animation type from the start
+    this.currentLoadingAnimation = this.animationOptions[
+      Math.floor(Math.random() * this.animationOptions.length)
+    ];
+
+    // Set first message
+    this.currentLoadingText = this.activeTheme.messages[0];
+
+    if (this.activeTheme.staticColors) {
+      // Standard theme: keep MJ blue, no gradient
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = '#757575'; // Default gray text
+      this.currentLoadingGradient = null;
+    } else {
+      // Themed period: use theme colors and first gradient from the start
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = this.activeTheme.colors[0];
+
+      // Set initial gradient if theme has gradients
+      if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+        this.currentLoadingGradient = this.activeTheme.gradients[0];
+      } else {
+        this.currentLoadingGradient = null;
+      }
+    }
+  }
 
   async ngOnInit(): Promise<void> {
     try {

@@ -5,7 +5,7 @@ import { takeUntil } from 'rxjs/operators';
 import { BaseDashboard, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
-import { UserFavoriteEntity, UserNotificationEntity } from '@memberjunction/core-entities';
+import { ResourceData, UserFavoriteEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -82,6 +82,11 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
     super();
   }
 
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Home"
+  }
+
   async ngOnInit(): Promise<void> {
     // Get current user info
     this.currentUser = {
@@ -138,7 +143,7 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
       this.loadRecents()
     ]);
 
-    this.LoadingComplete.emit();
+    this.NotifyLoadComplete();
   }
 
   override ngOnDestroy(): void {

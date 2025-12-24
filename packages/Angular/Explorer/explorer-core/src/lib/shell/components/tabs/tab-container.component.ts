@@ -454,7 +454,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Wire up events
     instance.LoadCompleteEvent = () => {
-      console.log('✅ Single-resource component loaded');
       this.emitFirstLoadCompleteOnce();
     };
 
