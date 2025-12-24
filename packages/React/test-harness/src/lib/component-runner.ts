@@ -866,6 +866,33 @@ export class ComponentRunner {
         console.log('Execution result:', executionResult);
       }
 
+      // If we hit a timeout, skip all remaining page operations - the browser may be unresponsive
+      // Return early with the timeout error to avoid "Target page closed" crashes
+      if (hasTimeout) {
+        console.log('⚠️ Timeout detected - skipping remaining page operations');
+
+        // Build timeout-specific violation
+        const timeoutViolation: Violation = {
+          message: `Component execution timed out after ${globalTimeout}ms. This usually indicates an infinite render loop.`,
+          severity: 'critical' as const,
+          rule: 'timeout',
+          line: 0,
+          column: 0,
+          source: 'test-harness' as const
+        };
+
+        return {
+          success: false,
+          errors: [timeoutViolation],
+          warnings: [],
+          console: [],
+          html: '<html><body><!-- Timeout - no content captured --></body></html>',
+          screenshot: Buffer.from(''),
+          renderCount: 0,
+          executionTime: Date.now() - startTime
+        };
+      }
+
       // Wait for render completion
       const renderWaitTime = options.renderWaitTime || 500;
       await page.waitForTimeout(renderWaitTime);

@@ -12925,11 +12925,11 @@ export class MJEntity_ {
     @Field(() => [MJQueryEntity_])
     QueryEntities_EntityIDArray: MJQueryEntity_[]; // Link to QueryEntities
     
-    @Field(() => [MJRecordLink_])
-    MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
-    
     @Field(() => [MJAccessControlRule_])
     MJ_AccessControlRules_EntityIDArray: MJAccessControlRule_[]; // Link to MJ_AccessControlRules
+    
+    @Field(() => [MJRecordLink_])
+    MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
     
     @Field(() => [MJGeneratedCode_])
     GeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to GeneratedCodes
@@ -13738,17 +13738,6 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJRecordLink_])
-    async MJ_RecordLinks_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Record Links', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordLinks] WHERE [SourceEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Record Links', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAccessControlRule_])
     async MJ_AccessControlRules_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Access Control Rules', userPayload);
@@ -13757,6 +13746,17 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAccessControlRules] WHERE [EntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Access Control Rules', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Access Control Rules', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordLink_])
+    async MJ_RecordLinks_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordLinks] WHERE [SourceEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Record Links', rows);
         return result;
     }
         
@@ -25949,6 +25949,9 @@ export class MJConversationDetail_ {
     @Field({nullable: true, description: `JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.`}) 
     AutomaticCommands?: string;
         
+    @Field(() => Boolean, {description: `Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.`}) 
+    OriginalMessageChanged: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Conversation?: string;
@@ -26078,6 +26081,9 @@ export class CreateMJConversationDetailInput {
 
     @Field({ nullable: true })
     AutomaticCommands: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OriginalMessageChanged?: boolean;
 }
     
 
@@ -26157,6 +26163,9 @@ export class UpdateMJConversationDetailInput {
 
     @Field({ nullable: true })
     AutomaticCommands?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OriginalMessageChanged?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
