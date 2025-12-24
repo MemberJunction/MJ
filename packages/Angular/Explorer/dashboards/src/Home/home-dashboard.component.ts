@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -20,7 +20,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   styleUrls: ['./home-dashboard.component.css']
 })
 @RegisterClass(BaseDashboard, 'HomeDashboard')
-export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnDestroy {
+export class HomeDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
@@ -87,7 +87,7 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
     return "Home"
   }
 
-  async ngOnInit(): Promise<void> {
+  async ngAfterViewInit(): Promise<void> {
     // Get current user info
     this.currentUser = {
       Name: this.metadata.CurrentUser?.Name || 'User',
@@ -112,10 +112,10 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
       .subscribe(apps => {
         // Exclude the Home app from the list (users are already on Home)
         this.apps = apps.filter(app => app.Name !== 'Home');
-        // Only stop loading when we actually have apps (non-empty array means loaded)
-        if (apps.length > 0) {
-          this.isLoading = false;
-        }
+
+        this.isLoading = false;
+        this.NotifyLoadComplete();
+
         this.cdr.detectChanges();
       });
 
@@ -137,11 +137,8 @@ export class HomeDashboardComponent extends BaseDashboard implements OnInit, OnD
         this.cdr.detectChanges();
       });
 
-    // Notify load complete after tiny delay - the main dashboard UI is ready
     // Favorites and recents load asynchronously in the sidebar
-    setTimeout(() => {
-      this.NotifyLoadComplete();
-    }, 50)
+    this.NotifyLoadComplete();
 
     // Load favorites and recents asynchronously (don't block rendering)
     this.loadFavorites();
