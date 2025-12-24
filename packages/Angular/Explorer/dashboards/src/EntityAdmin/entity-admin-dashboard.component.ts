@@ -88,6 +88,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       this.hasLoadedUserState = true;
       setTimeout(() => {
         this.loadUserStateFromConfiguration();
+        this.LoadingComplete.emit();
       }, 100);
     }
   }

@@ -112,9 +112,10 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     super();
   }
 
-  ngAfterViewInit(): void {
+  async ngAfterViewInit() {
     this.initDashboard();
-    this.loadData();
+    await this.loadData();
+    this.LoadingComplete.emit();
   }
 
   ngOnDestroy(): void {
