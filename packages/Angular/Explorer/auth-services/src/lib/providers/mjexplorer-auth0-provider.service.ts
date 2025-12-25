@@ -2,7 +2,8 @@ import { Injectable } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { AuthService, IdToken, User, AuthGuard, AuthConfigService, Auth0ClientService, Auth0ClientFactory, AuthClientConfig } from '@auth0/auth0-angular';
-import { Observable, of } from 'rxjs';
+import { Observable, of, firstValueFrom } from 'rxjs';
+import { take } from 'rxjs/operators';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
 
 // Prevent tree-shaking by explicitly referencing the class
@@ -32,8 +33,14 @@ export class MJAuth0Provider extends MJAuthBase {
         clientId: environment.AUTH0_CLIENTID,
         authorizationParams: {
           redirect_uri: window.location.origin,
+          // No audience parameter - uses ID tokens (matches pre-refactor behavior)
+          // ID tokens have aud=clientId by default and contain user claims
         },
         cacheLocation: 'localstorage',
+        // Enable refresh tokens so we can refresh without relying on Auth0 session cookies
+        useRefreshTokens: true,
+        // Use rotating refresh tokens for better security
+        useRefreshTokensFallback: true,
       },
     },
     {
@@ -72,8 +79,38 @@ export class MJAuth0Provider extends MJAuthBase {
   }
 
   public async refresh(): Promise<Observable<any>> {
-    await this.auth.getAccessTokenSilently();
-    return this.auth.idTokenClaims$;
+    try {
+      console.log('[Auth0] refresh() - Attempting to refresh session...');
+
+      // Force token refresh using refresh tokens (if available) or silent auth
+      // ignoreCache forces fetching new tokens instead of returning cached ones
+      await firstValueFrom(this.auth.getAccessTokenSilently({
+        cacheMode: 'off',
+        authorizationParams: {
+          ignoreCache: true
+        }
+      }));
+
+      console.log('[Auth0] refresh() - getAccessTokenSilently completed');
+
+      // Small delay to ensure Auth0 SDK has updated idTokenClaims$ observable
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Get fresh ID token claims after session refresh
+      const freshClaims = await firstValueFrom(this.auth.idTokenClaims$);
+
+      console.log('[Auth0] refresh() - Got fresh ID token', {
+        exp: freshClaims?.exp,
+        expiryDate: freshClaims?.exp ? new Date(freshClaims.exp * 1000).toISOString() : 'N/A'
+      });
+
+      // Return the fresh claims
+      return of(freshClaims);
+    } catch (error) {
+      console.error('[Auth0] refresh() - Session refresh failed:', error);
+      // Re-throw to trigger re-login
+      throw error;
+    }
   }
 
   async getUser(): Promise<Observable<User | null | undefined>> {
@@ -88,7 +125,17 @@ export class MJAuth0Provider extends MJAuthBase {
 
   async getUserClaims(): Promise<Observable<any>> {
     await this.ensureInitialized();
-    return this.auth.idTokenClaims$;
+
+    console.log('[Auth0] getUserClaims: Getting ID token claims...');
+
+    // Get ID token claims (matches pre-refactor behavior)
+    // These always contain user information
+    const idTokenClaims = await firstValueFrom(this.auth.idTokenClaims$);
+
+    console.log('[Auth0] Got ID token claims');
+
+    // Return claims with __raw containing the JWT string
+    return of(idTokenClaims);
   }
 
   checkExpiredTokenError(error: string): boolean {
@@ -116,7 +163,7 @@ export class MJAuth0Provider extends MJAuthBase {
 
   async getToken(): Promise<string | null> {
     try {
-      const token = await this.auth.getAccessTokenSilently().toPromise();
+      const token = await firstValueFrom(this.auth.getAccessTokenSilently());
       return token || null;
     } catch (error) {
       console.error('Error getting Auth0 token:', error);

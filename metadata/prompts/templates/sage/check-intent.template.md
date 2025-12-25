@@ -22,6 +22,7 @@ Analyze the conversation context and determine if the latest user message clearl
 ## Decision Criteria
 
 ### Vote YES when the message is:
+- **Form responses**: Messages containing `@{"_mode":"form",...}` syntax - these are structured responses to an agent's form request and ALWAYS continue with that agent
 - **Refinement requests**: "make it shorter", "add more detail", "change the tone"
 - **Iterative adjustments**: "try version 2", "what if we...", "can you modify..."
 - **Clarifications about current work**: "what did you mean by...", "can you explain..."
@@ -253,6 +254,24 @@ Return a JSON object with this exact structure:
 {
   "continuesWith": "NO",
   "reasoning": "User is asking to run the newly created Report Generator Agent with a task. This is a context shift to the new agent, not continuation with Agent Manager.",
+  "modifyingArtifact": false,
+  "targetArtifactVersionId": null
+}
+```
+
+### Example 11: Form Response (YES)
+**Previous Agent**: Data Collection Agent (gathers structured data from users)
+
+**Conversation Context**:
+- Agent asked user for confirmation via a response form with Yes/No buttons
+
+**Latest Message**: `@{"_mode":"form","action":"formSubmit","fields":[{"name":"confirm","value":"yes","label":"Confirm"}]}`
+
+**Output**:
+```json
+{
+  "continuesWith": "YES",
+  "reasoning": "User submitted a structured form response to the agent's form request. Form responses always continue with the requesting agent.",
   "modifyingArtifact": false,
   "targetArtifactVersionId": null
 }

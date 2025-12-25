@@ -63,6 +63,42 @@ Parameters for executing AI agents with support for:
 - Progress and streaming callbacks
 - Cancellation support
 - **Effort level control** - Override agent and prompt effort levels
+- **Agent type-specific parameters** - Generic support for custom execution params
+
+#### Agent Type Parameters (v2.127+)
+
+`ExecuteAgentParams` supports a third generic parameter `TAgentTypeParams` for passing agent type-specific execution parameters:
+
+```typescript
+type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unknown> = {
+    // ... existing properties ...
+
+    /**
+     * Agent type-specific execution parameters.
+     * Different agent types can define their own parameter interfaces
+     * for customizing execution behavior.
+     */
+    agentTypeParams?: TAgentTypeParams;
+}
+```
+
+This enables type-safe customization of how specific agent types execute:
+
+```typescript
+import { FlowAgentExecuteParams } from '@memberjunction/ai-agents';
+
+// Type-safe Flow Agent parameters
+const params: ExecuteAgentParams<unknown, unknown, FlowAgentExecuteParams> = {
+    agent: myFlowAgent,
+    conversationMessages: messages,
+    agentTypeParams: {
+        startAtStep: specificStep,  // Start at a specific step
+        skipSteps: [step1, step2]   // Skip these steps
+    }
+};
+```
+
+See [@memberjunction/ai-agents](../Agents/README.md#flow-agent-execution-parameters) for `FlowAgentExecuteParams` documentation.
 
 ### ExecuteAgentResult
 
@@ -366,6 +402,7 @@ When sub-agents are executed, action changes are propagated based on scope:
 
 ## Version History
 
+- **2.127.0** - Added `agentTypeParams` generic to `ExecuteAgentParams` for agent type-specific execution parameters
 - **2.123.0** - Added runtime action changes (ActionChange, ActionChangeScope, ActionChangeMode)
 - **2.108.0** - Added message lifecycle management types and expiration configuration
 - **2.78.0** - Added enhanced model selection tracking with entity objects

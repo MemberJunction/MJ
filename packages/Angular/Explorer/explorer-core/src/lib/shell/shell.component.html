@@ -1,4 +1,4 @@
-<div class="shell-container" *ngIf="!loading" [class.tabs-visible]="tabBarVisible" kendoDialogContainer>
+<div class="shell-container" [class.hidden]="loading" [class.tabs-visible]="tabBarVisible" kendoDialogContainer>
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -43,10 +43,10 @@
 
     <!-- Actions (search, notifications, user menu) -->
     <div class="header-actions">
-      <button class="icon-btn desktop-only" title="Search">
+      <button class="icon-btn desktop-only search-toggle-btn" title="Search" (click)="toggleSearch()">
         <i class="fa-solid fa-search"></i>
       </button>
-      <button class="icon-btn desktop-only notification-btn" title="Notifications">
+      <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
         <i class="fa-solid fa-bell"></i>
         <span class="notification-badge" *ngIf="unreadNotificationCount > 0">
           {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
@@ -107,6 +107,31 @@
     </div>
   </header>
 
+  <!-- Search Popup -->
+  <div class="search-popup-overlay" *ngIf="isSearchOpen" (click)="closeSearch()"></div>
+  <div class="search-popup" [class.open]="isSearchOpen">
+    <div class="search-popup-content" (click)="$event.stopPropagation()">
+      <kendo-dropdownlist
+        [data]="searchableEntities"
+        textField="Name"
+        valueField="ID"
+        class="search-entity-dropdown"
+        [(ngModel)]="selectedEntity">
+      </kendo-dropdownlist>
+      <input
+        type="text"
+        #searchInput
+        placeholder="Search..."
+        kendoTextBox
+        class="search-input"
+        (keydown.enter)="onSearch($event)"
+      />
+      <button class="search-submit-btn" (click)="onSearch($event)" title="Search">
+        <i class="fa-solid fa-search"></i>
+      </button>
+    </div>
+  </div>
+
   <!-- Mobile Navigation Drawer -->
   <div class="mobile-nav-overlay" *ngIf="mobileNavOpen" (click)="closeMobileNav()"></div>
   <div class="mobile-nav-drawer" [class.open]="mobileNavOpen">
@@ -124,22 +149,35 @@
       </mj-app-nav>
     </div>
     <div class="mobile-nav-footer">
-      <button class="mobile-nav-action" title="Search">
+      <button class="mobile-nav-action" title="Search" (click)="toggleSearch(); closeMobileNav()">
         <i class="fa-solid fa-search"></i>
         <span>Search</span>
       </button>
-      <button class="mobile-nav-action" title="Notifications">
+      <button class="mobile-nav-action" title="Notifications" (click)="showNotifications(); closeMobileNav()">
         <i class="fa-solid fa-bell"></i>
         <span>Notifications</span>
+        <span class="notification-badge-mobile" *ngIf="unreadNotificationCount > 0">
+          {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+        </span>
       </button>
     </div>
   </div>
 
   <!-- Tab Container - with dynamic tab bar visibility -->
-  <mj-tab-container [class.hide-tab-bar]="!tabBarVisible"></mj-tab-container>
+  <mj-tab-container
+    [class.hide-tab-bar]="!tabBarVisible"
+    (firstResourceLoadComplete)="onFirstResourceLoadComplete()">
+  </mj-tab-container>
 </div>
 
 <!-- Loading State -->
 <div class="shell-loading" *ngIf="loading">
-  <mj-loading text="Loading workspace..." size="large"></mj-loading>
+  <mj-loading
+    [text]="currentLoadingText"
+    [textColor]="currentLoadingTextColor"
+    [logoColor]="currentLoadingColor"
+    [logoGradient]="currentLoadingGradient"
+    [animation]="currentLoadingAnimation"
+    size="large">
+  </mj-loading>
 </div>

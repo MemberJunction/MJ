@@ -1572,7 +1572,6 @@ export class BoxFileStorage extends FileStorageBase {
   
       return currentFolderId;
     } catch (error) {
-      console.error('Error finding folder by path:', error);
       throw error;
     }
   }

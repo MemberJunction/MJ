@@ -126,7 +126,41 @@ export interface UserSettingsChangedEvent {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
-  @Input() component!: ComponentSpec;
+  private _component!: ComponentSpec;
+
+  /**
+   * The component specification to render.
+   * When this changes after initialization, the component will be reinitialized
+   * to load and render the new specification.
+   */
+  @Input()
+  set component(value: ComponentSpec) {
+    const previousComponent = this._component;
+    this._component = value;
+
+    // If already initialized and component spec changed, reinitialize
+    if (this.isInitialized && value && previousComponent !== value) {
+      // Check if it's actually a different component (not just same reference)
+      const isDifferent = !previousComponent ||
+        previousComponent.name !== value.name ||
+        previousComponent.code !== value.code ||
+        previousComponent.version !== value.version;
+
+      if (isDifferent) {
+        console.log(`🔄 [MJReactComponent] Component input changed, reinitializing:`, {
+          previous: previousComponent?.name,
+          new: value.name,
+          previousVersion: previousComponent?.version,
+          newVersion: value.version
+        });
+        this.reinitializeComponent();
+      }
+    }
+  }
+  get component(): ComponentSpec {
+    return this._component;
+  }
+
   /**
    * Controls verbose logging for component lifecycle and operations.
    * Note: This does NOT control which React build (dev/prod) is loaded.
@@ -250,15 +284,49 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy() {
     // Set destroying flag immediately
     this.isDestroying = true;
-    
+
     // Cancel any pending renders
     this.pendingRender = false;
-    
+
     this.destroyed$.next();
     this.destroyed$.complete();
     this.cleanup();
   }
 
+  /**
+   * Reinitialize the component when the input spec changes.
+   * Cleans up the current component and initializes with the new spec.
+   */
+  private async reinitializeComponent() {
+    // Don't reinitialize if we're being destroyed
+    if (this.isDestroying) {
+      return;
+    }
+
+    console.log(`🔄 [reinitializeComponent] Cleaning up and reinitializing for ${this.component?.name}`);
+
+    // Clear cached state from previous component
+    this.compiledComponent = null;
+    this.resolvedComponentSpec = null;
+    this.loadedDependencies = {};
+    this.componentVersion = '';
+    this.hasError = false;
+    this.isInitialized = false;
+
+    // Unmount existing React root if present
+    if (this.reactRootId) {
+      this.isRendering = false;
+      this.pendingRender = false;
+      reactRootManager.unmountRoot(this.reactRootId);
+      this.reactRootId = null;
+    }
+
+    // Trigger change detection to show loading state
+    this.cdr.detectChanges();
+
+    // Initialize with the new component spec
+    await this.initializeComponent();
+  }
 
   /**
    * Initialize the React component

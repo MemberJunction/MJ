@@ -1,5 +1,60 @@
 # Change Log - @memberjunction/ng-chat
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+- Updated dependencies [0863f85]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/ng-markdown@2.128.0
+  - @memberjunction/ng-container-directives@2.128.0
+  - @memberjunction/ng-shared-generic@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/ng-container-directives@2.127.0
+  - @memberjunction/ng-shared-generic@2.127.0
+  - @memberjunction/ng-markdown@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.126.1
+- @memberjunction/ng-markdown@2.126.1
+- @memberjunction/ng-shared-generic@2.126.1
+- @memberjunction/core@2.126.1
+
+## 2.126.0
+
+### Minor Changes
+
+- 389183e: migration
+
+### Patch Changes
+
+- Updated dependencies [389183e]
+- Updated dependencies [703221e]
+  - @memberjunction/ng-markdown@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ng-container-directives@2.126.0
+  - @memberjunction/ng-shared-generic@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-shared-generic@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

@@ -197,6 +197,16 @@ export class MJNotificationService {
   }
 
   /**
+   * Update notification observables from existing in-memory data without doing a database query.
+   * This is efficient for cases where notifications have been modified locally (e.g., marking as read)
+   * and we just need to notify subscribers of the change.
+   */
+  public static UpdateNotificationObservables() {
+    MJNotificationService._notifications$.next(MJNotificationService._userNotifications);
+    MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
+  }
+
+  /**
    * Creates a message that is not saved to the User Notifications table, but is displayed to the user.
    * @param message - text to display
    * @param style - display styling

@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/communication-types
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/templates-base-types@2.128.0
+  - @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/templates-base-types@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/core@2.126.1
+- @memberjunction/core-entities@2.126.1
+- @memberjunction/global@2.126.1
+- @memberjunction/templates-base-types@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- 4d1d468: no migration
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/templates-base-types@2.126.0
+  - @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- e1569fc: no migration
+- a692034: added functionality
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/templates-base-types@2.125.0
+  - @memberjunction/global@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

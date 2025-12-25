@@ -1,0 +1,21 @@
+{
+  "name": "ComponentPropTypeNumberToBooleanBroken",
+  "type": "generic",
+  "title": "Component Property Type Number to Boolean - Broken Pattern",
+  "description": "Tests linter detection of passing number to boolean property",
+  "code": "function ComponentPropTypeNumberToBooleanBroken({ utilities, components }) {\n  const [showCount, setShowCount] = useState(1);\n  const { DataTable } = components;\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* ❌ showPagination expects boolean, passing number */}\n      <DataTable data={members} showPagination={showCount} />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "components": [{
+      "name": "DataTable",
+      "properties": [
+        {"name": "data", "type": "array", "isRequired": true},
+        {"name": "showPagination", "type": "boolean", "isRequired": false}
+      ]
+    }]
+  }
+}

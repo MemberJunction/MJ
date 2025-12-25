@@ -1,0 +1,44 @@
+{
+  "name": "OrdersByDateRange",
+  "type": "report",
+  "description": "Orders report with date filters - BROKEN: uses invalid date formats",
+  "namespace": "reports/orders",
+  "version": "1.0.0",
+  "registry": "Test",
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "Orders By Date",
+        "categoryPath": "Reports/Orders",
+        "description": "Returns orders within a date range",
+        "parameters": [
+          {
+            "name": "FromDate",
+            "isRequired": true,
+            "type": "datetime",
+            "sampleValue": "2024-01-01T00:00:00",
+            "description": "Start date/time for orders"
+          },
+          {
+            "name": "ToDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-12-31",
+            "description": "End date for orders"
+          }
+        ],
+        "fields": [
+          {
+            "name": "OrderDate",
+            "type": "datetime"
+          },
+          {
+            "name": "OrderTotal",
+            "type": "money"
+          }
+        ]
+      }
+    ]
+  },
+  "code": "function OrdersByDateRange({ utilities }) {\n  const [orders, setOrders] = React.useState([]);\n\n  React.useEffect(() => {\n    async function fetchOrders() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Orders By Date',\n        CategoryPath: 'Reports/Orders',\n        Parameters: {\n          FromDate: '01/15/2024',\n          ToDate: '2024-13-45'\n        }\n      });\n      if (result?.Success) {\n        setOrders(result.Results || []);\n      }\n    }\n    fetchOrders();\n  }, []);\n\n  return (\n    <div>\n      <h1>Orders Report</h1>\n      <p>Found {orders.length} orders</p>\n    </div>\n  );\n}"
+}

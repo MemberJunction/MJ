@@ -1,0 +1,64 @@
+<div class="communication-dashboard-container">
+    <div class="dashboard-header">
+        <div class="header-title">
+            <i class="fa-solid fa-comments"></i>
+            <span>Communication Management</span>
+        </div>
+        <div class="header-actions">
+            <span class="tab-label">{{getCurrentTabLabel()}}</span>
+        </div>
+    </div>
+
+    <div class="dashboard-content">
+        <div class="sidebar">
+            <div *ngFor="let item of navigationConfig; let i = index" class="nav-item" [class.selected]="item.selected"
+                (click)="onTabChange(navigationItems[i])">
+                <i [class]="item.icon"></i>
+                <span>{{item.text}}</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div [ngSwitch]="activeTab" class="tab-container">
+                <div *ngSwitchCase="'monitor'" class="tab-content">
+                    <div class="placeholder-content">
+                        <h3>Communication Monitoring</h3>
+                        <p>Real-time overview of communication health and delivery metrics.</p>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <span class="stat-label">Total Messages (24h)</span>
+                                <span class="stat-value">1,284</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Delivery Rate</span>
+                                <span class="stat-value success">98.2%</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Failed Messages</span>
+                                <span class="stat-value error">23</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div *ngSwitchCase="'logs'" class="tab-content">
+                    <div class="placeholder-content">
+                        <h3>Communication Logs</h3>
+                        <p>Detailed history of all outgoing and incoming communications.</p>
+                    </div>
+                </div>
+                <div *ngSwitchCase="'providers'" class="tab-content">
+                    <div class="placeholder-content">
+                        <h3>Communication Providers</h3>
+                        <p>Manage integrations with SendGrid, Twilio, and other services.</p>
+                    </div>
+                </div>
+                <div *ngSwitchCase="'runs'" class="tab-content">
+                    <div class="placeholder-content">
+                        <h3>Communication Runs</h3>
+                        <p>Track and manage bulk communication campaigns and automated runs.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

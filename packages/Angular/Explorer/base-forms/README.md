@@ -369,7 +369,7 @@ export class YourModule { }
 - **@memberjunction/ng-record-changes**: Change tracking
 - **@memberjunction/ng-code-editor**: Code editing support
 - **@progress/kendo-angular-\***: UI components
-- **ngx-markdown**: Markdown rendering
+- **@memberjunction/ng-markdown**: Markdown rendering
 - **rxjs**: Reactive programming
 
 ## Integration with MemberJunction

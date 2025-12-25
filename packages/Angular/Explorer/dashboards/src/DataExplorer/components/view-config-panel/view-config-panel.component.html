@@ -407,8 +407,12 @@
           class="footer-btn save-as-btn"
           (click)="onSaveAsNew()"
           [disabled]="isSaving">
-          <i class="fa-solid fa-plus"></i>
-          Save As New
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-plus"></i>
+          }
+          {{ isSaving ? 'Saving...' : 'Save As New' }}
         </button>
       }
       @if (viewEntity && canEdit) {
@@ -416,8 +420,12 @@
           class="footer-btn save-btn primary"
           (click)="onSave()"
           [disabled]="isSaving || !viewName">
-          <i class="fa-solid fa-save"></i>
-          Save
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-save"></i>
+          }
+          {{ isSaving ? 'Saving...' : 'Save' }}
         </button>
       }
       @if (!viewEntity) {
@@ -425,8 +433,12 @@
           class="footer-btn save-btn primary"
           (click)="onSaveAsNew()"
           [disabled]="isSaving || !viewName">
-          <i class="fa-solid fa-save"></i>
-          Create View
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-save"></i>
+          }
+          {{ isSaving ? 'Creating...' : 'Create View' }}
         </button>
       }
     </div>

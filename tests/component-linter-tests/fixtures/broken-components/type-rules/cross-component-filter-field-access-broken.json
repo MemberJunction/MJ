@@ -1,0 +1,18 @@
+{
+  "name": "CrossComponentFilterFieldAccessBroken",
+  "type": "generic",
+  "title": "Cross-Component Filter Field Access - Broken Pattern",
+  "description": "Tests filtering data removes field needed by downstream component (may fail until linter refactor)",
+  "code": "function CrossComponentFilterFieldAccessBroken({ utilities, components }) {\n  const [products, setProducts] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Products' });\n      if (result?.Success) {\n        // Filter keeps all fields, but grid needs Category\n        const active = result.Results.filter(p => p.IsActive);\n        setProducts(active);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Active Products</h3>\n      {/* ❌ Grid references ProductType but entity has Category */}\n      <DataGrid \n        data={products} \n        columns={[\n          {field: 'ProductName', title: 'Product'},\n          {field: 'ProductType', title: 'Type'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Products",
+      "fields": ["ID", "ProductName", "Category", "Price", "IsActive"]
+    }]
+  }
+}

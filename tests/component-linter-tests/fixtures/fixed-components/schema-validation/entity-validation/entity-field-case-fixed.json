@@ -1,0 +1,12 @@
+{
+  "name": "EntityFieldCaseFixed",
+  "type": "generic",
+  "title": "Entity Field Case - Fixed Pattern",
+  "description": "Corrected version using proper PascalCase for entity field",
+  "code": "function EntityFieldCaseFixed({ utilities }) {\n  const [emails, setEmails] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ✅ Correct case: Email (PascalCase)\n        const emailList = result.Results\n          .filter(m => m.Email)\n          .map(m => m.Email);\n        setEmails(emailList);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Emails</h3>\n      {emails.map((email, i) => <div key={i}>{email}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active"
+}

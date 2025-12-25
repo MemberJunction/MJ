@@ -1,10 +1,9 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
-import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-browser';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { RunView } from '@memberjunction/core';
 import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
-import { marked } from 'marked';
 
 /**
  * Viewer component for JSON artifacts.
@@ -42,7 +41,13 @@ import { marked } from 'marked';
             (load)="onIframeLoad()">
           </iframe>
         } @else if (displayMarkdown) {
-          <div class="markdown-content" [innerHTML]="renderedMarkdown"></div>
+          <div class="markdown-content">
+            <mj-markdown [data]="displayMarkdown"
+                         [enableCollapsibleHeadings]="true"
+                         [enableLineNumbers]="true"
+                         [enableSmartypants]="true"
+                         [enableHtml]="true"></mj-markdown>
+          </div>
         } @else {
           <div class="json-editor-container">
             <mj-code-editor
@@ -128,9 +133,15 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
   public htmlBlobUrl: SafeResourceUrl | null = null;
-  public renderedMarkdown: SafeHtml | null = null;
   private versionAttributes: ArtifactVersionAttributeEntity[] = [];
   private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
+
+  /**
+   * JSON artifacts always have content to display (JSON editor, displayHtml, or displayMarkdown)
+   */
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -224,17 +235,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           this.htmlBlobUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.unsafeBlobUrl);
         }
 
-        // Convert markdown to HTML if we have markdown content (and no HTML)
-        if (this.displayMarkdown && !this.displayHtml) {
-          try {
-            const html = marked.parse(this.displayMarkdown) as string;
-            this.renderedMarkdown = this.sanitizer.sanitize(1, html); // 1 = SecurityContext.HTML
-          } catch (err) {
-            console.error('📦 Error converting markdown to HTML:', err);
-            // Fallback to plain text
-            this.renderedMarkdown = this.displayMarkdown;
-          }
-        }
+        // Note: Markdown rendering is now handled by <mj-markdown> component in template
 
         console.log(`📦 JSON Plugin: displayHtml=${!!this.displayHtml} (${this.displayHtml?.length || 0} chars), displayMarkdown=${!!this.displayMarkdown} (${this.displayMarkdown?.length || 0} chars)`);
         console.log(`📦 isShowingElevatedDisplay=${this.isShowingElevatedDisplay}`);

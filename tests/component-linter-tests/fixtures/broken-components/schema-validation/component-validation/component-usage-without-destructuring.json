@@ -1,0 +1,13 @@
+{
+  "name": "TestComponent",
+  "description": "Component using components prop without destructuring (violates component-usage-without-destructuring rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange, components }) {\n  return (\n    <div>\n      <h1>Test Component</h1>\n      <components.UserCard name=\"John\" />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "componentDependencies": [
+    {
+      "name": "UserCard",
+      "code": "function UserCard({ name }) { return <div>{name}</div>; }"
+    }
+  ]
+}

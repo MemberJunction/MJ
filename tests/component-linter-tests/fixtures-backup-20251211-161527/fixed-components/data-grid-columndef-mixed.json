@@ -1,0 +1,30 @@
+{
+  "name": "DataGridColumndefMixed",
+  "description": "DataGrid with mixed string field names and ColumnDef objects - both valid",
+  "code": "function DataGridColumndefMixed({ components, utilities }) {\n  const { DataGrid } = components;\n  const [products, setProducts] = React.useState(null);\n\n  React.useEffect(() => {\n    async function loadData() {\n      const results = await utilities.rv.RunView({\n        EntityName: 'Products',\n        ExtraFilter: '',\n        MaxRows: 50\n      });\n      setProducts(results.Results);\n    }\n    loadData();\n  }, []);\n\n  if (!products) return <div>Loading...</div>;\n\n  return (\n    <DataGrid\n      entityName=\"Products\"\n      data={products}\n      columns={[\n        'SKU',\n        { field: 'Name', header: 'Product Name' },\n        { field: 'Price', header: 'Price', width: 100 },\n        'Category'\n      ]}\n      utilities={utilities}\n    />\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Products",
+        "type": "view",
+        "maxRows": 50,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier", "description": "Primary key" },
+          { "name": "SKU", "type": "nvarchar", "description": "SKU" },
+          { "name": "Name", "type": "nvarchar", "description": "Product name" },
+          { "name": "Category", "type": "nvarchar", "description": "Category" },
+          { "name": "Price", "type": "decimal", "description": "Price" }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "ChartAggregateFieldWrongFixed",
+  "type": "generic",
+  "title": "Chart Aggregate Field Wrong - Fixed Pattern",
+  "description": "Tests chart with numeric field for aggregate function",
+  "code": "function ChartAggregateFieldWrongFixed({ utilities, components }) {\n  const [productData, setProductData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Product Performance',\n        CategoryPath: 'Products/Reports'\n      });\n      if (result?.Success) {\n        setProductData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Product Performance</h3>\n      {/* ✅ Using average on SalesAmount (numeric field) */}\n      <SimpleChart \n        data={productData} \n        groupBy=\"Category\" \n        valueField=\"SalesAmount\" \n        aggregateFunction=\"average\" \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Product Performance",
+      "categoryPath": "Products/Reports",
+      "fields": ["Category", "ProductName", "SalesAmount", "UnitsSold"]
+    }]
+  }
+}

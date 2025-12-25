@@ -2,6 +2,7 @@
   "name": "TopProductsRanking",
   "title": "Top Products Ranking",
   "type": "table",
+  "namespace": "CRM/Sales",
   "userExplanation": "Displays top-performing products in a table with click-to-drill-down functionality. When you click a product row, it loads all invoice line items for that product, demonstrating manual drill-down control using RunView and DataGrid (not EntityDataGrid).",
   "functionalRequirements": "## Business Objectives\n- Identify top-performing products by revenue, units sold, or profit margin\n- Support flexible filtering by product category and time period\n- Enable drill-down to see individual invoice line items for any product\n- Demonstrate manual RunView drill-down pattern with standard DataGrid\n\n## Functional Requirements\n- **Product Ranking Display**: Show top N products (configurable, default 10) in a table format\n- **Ranking Metrics**: Display product name, category, total revenue, units sold, and number of invoices\n- **Click-to-Drill-Down**: When user clicks a product row, load all invoice line items for that product using RunView\n- **Detail View**: Display invoice line items in standard DataGrid (not EntityDataGrid) with invoice date, quantity, unit price, total, and account name\n- **Back Navigation**: Provide clear way to return to product ranking view\n- **Flexible Filtering**: Support filtering by product category and date range\n- **Custom Data Transformation**: Demonstrate calculating additional metrics (like margin) on drill-down data\n- **Loading States**: Show loading indicators during data fetch\n- **Empty States**: Handle cases where no products or no line items exist",
   "description": "Displays top-performing products ranked by revenue, units sold, or profit margin with flexible filtering and drill-down capabilities.",
@@ -13,11 +14,24 @@
         "name": "Product Ranking",
         "categoryPath": "Demo",
         "description": "Unified product ranking query that ranks products by revenue with optional category filtering. Replaces both top-products-ranking.sql and category-top-products.sql. When Category parameter omitted, ranks across all categories. When Category provided, ranks within that category. Returns TOP N products (default 10) with revenue, quantity, invoice count, and average price metrics. General-purpose query for product performance analysis. **Result Order: TotalRevenue DESC** - Highest revenue products first for performance ranking.",
-        "entityNames": ["Invoice Line Items", "Products", "Invoices"],
+        "entityNames": [
+          "Invoice Line Items",
+          "Products",
+          "Invoices"
+        ],
         "fields": [
           {
-            "name": "ProductName",
+            "name": "ProductID",
             "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Product ID for drill-down filtering"
+          },
+          {
+            "name": "ProductName",
+            "sequence": 2,
             "defaultInView": true,
             "type": "nvarchar(255)",
             "allowsNull": false,
@@ -26,7 +40,7 @@
           },
           {
             "name": "Category",
-            "sequence": 2,
+            "sequence": 3,
             "defaultInView": true,
             "type": "nvarchar(255)",
             "allowsNull": true,
@@ -35,7 +49,7 @@
           },
           {
             "name": "TotalRevenue",
-            "sequence": 3,
+            "sequence": 4,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": true,
@@ -44,7 +58,7 @@
           },
           {
             "name": "TotalQuantity",
-            "sequence": 4,
+            "sequence": 5,
             "defaultInView": true,
             "type": "int",
             "allowsNull": true,
@@ -53,7 +67,7 @@
           },
           {
             "name": "InvoiceCount",
-            "sequence": 5,
+            "sequence": 6,
             "defaultInView": true,
             "type": "int",
             "allowsNull": false,
@@ -62,7 +76,7 @@
           },
           {
             "name": "AvgPrice",
-            "sequence": 6,
+            "sequence": 7,
             "defaultInView": true,
             "type": "decimal(18,2)",
             "allowsNull": true,
@@ -106,25 +120,61 @@
       {
         "name": "Products",
         "description": "Product records shown in the main ranking query results. The query aggregates sales data by ProductID.",
-        "displayFields": ["Name", "Category"],
-        "filterFields": ["Category", "ID"],
-        "sortFields": ["Name"],
+        "displayFields": [
+          "Name",
+          "Category"
+        ],
+        "filterFields": [
+          "Category",
+          "ID"
+        ],
+        "sortFields": [
+          "Name"
+        ],
         "usageContext": "Main entity displayed in DataGrid ranking table, grouped and aggregated in the Top Products Ranking query"
       },
       {
         "name": "Invoice Line Items",
         "description": "Detail records shown when drilling down into a specific product. Loaded via RunView (not EntityDataGrid) to demonstrate manual data transformation.",
-        "displayFields": ["InvoiceDate", "InvoiceName", "Quantity", "UnitPrice", "Total", "AccountName"],
-        "filterFields": ["ProductID", "InvoiceDate"],
-        "sortFields": ["InvoiceDate", "Total"],
+        "displayFields": [
+          "ID",
+          "InvoiceID",
+          "Product",
+          "Description",
+          "InvoiceDate",
+          "InvoiceName",
+          "Quantity",
+          "UnitPrice",
+          "Discount",
+          "TotalPrice",
+          "Total",
+          "AccountName"
+        ],
+        "filterFields": [
+          "ProductID",
+          "InvoiceDate"
+        ],
+        "sortFields": [
+          "ID",
+          "InvoiceDate",
+          "Total"
+        ],
         "usageContext": "Loaded via RunView when user clicks on a product row. Filter: ProductID='{selectedProductID}', OrderBy: 'InvoiceDate DESC', MaxRows: 100"
       },
       {
         "name": "Invoices",
         "description": "Invoice records referenced in the query to provide invoice-level details (date, account name) for line items.",
-        "displayFields": ["InvoiceNumber", "InvoiceDate", "AccountName"],
-        "filterFields": ["ID"],
-        "sortFields": ["InvoiceDate"],
+        "displayFields": [
+          "InvoiceNumber",
+          "InvoiceDate",
+          "AccountName"
+        ],
+        "filterFields": [
+          "ID"
+        ],
+        "sortFields": [
+          "InvoiceDate"
+        ],
         "usageContext": "Joined in query to provide InvoiceDate and AccountName view fields for Invoice Line Items"
       }
     ]

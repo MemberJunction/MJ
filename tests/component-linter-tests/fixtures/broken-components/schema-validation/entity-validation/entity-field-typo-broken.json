@@ -1,0 +1,16 @@
+{
+  "name": "EntityFieldTypoBroken",
+  "type": "generic",
+  "title": "Entity Field Typo - Broken Pattern",
+  "description": "Tests linter detection of typo in entity field name (FristName vs FirstName)",
+  "code": "function EntityFieldTypoBroken({ utilities }) {\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Typo: FristName should be FirstName\n        const names = result.Results.map(m => m.FristName);\n        setMembers(names);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Names</h3>\n      {members.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "requirements": {
+    "entity": "Members",
+    "expectedFields": ["FirstName", "LastName", "Email", "MembershipType"]
+  }
+}

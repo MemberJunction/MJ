@@ -15,7 +15,7 @@ import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AI
 import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair, LogStatusEx } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
@@ -430,10 +430,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.escapeHtml(JSON.stringify(content));
     }
 
-    if (content.fields.length === 1) {
+    // Filter out fields with empty/null/undefined values (optional fields not provided)
+    const nonEmptyFields = content.fields.filter((f: any) => {
+      const value = f.value;
+      return value != null && value !== '' && !(Array.isArray(value) && value.length === 0);
+    });
+
+    if (nonEmptyFields.length === 0) {
+      return this.escapeHtml(JSON.stringify(content));
+    }
+
+    if (nonEmptyFields.length === 1) {
       // Single field - simple inline pill
-      const field = content.fields[0];
-      const value = this.escapeHtml(String(field.value));
+      const field = nonEmptyFields[0];
+      // Use displayValue (friendly option label) if available, otherwise fall back to raw value
+      const value = this.escapeHtml(String(field.displayValue || field.value));
 
       // Just show the value if it's a single simple response
       // This handles cases like "Choose an option: weather" -> just show "weather"
@@ -441,7 +452,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     } else {
       // Multiple fields - vertical question/answer layout for complex forms
       const title = content.title ? this.escapeHtml(content.title) : 'Form Response';
-      const fieldsHTML = content.fields.map((f: any) => {
+      const fieldsHTML = nonEmptyFields.map((f: any) => {
         const label = this.escapeHtml(f.label || f.name);
         const value = this.formatFieldValue(f);
         return `<div class="pill-field">
@@ -460,10 +471,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  private formatFieldValue(field: { name?: string; value: any; label?: string; type?: string }): string {
+  private formatFieldValue(field: { name?: string; value: any; label?: string; type?: string; displayValue?: string }): string {
     // Handle null/undefined
     if (field.value == null) {
       return this.escapeHtml('');
+    }
+
+    // For choice types (buttongroup, radio, dropdown, checkbox), use displayValue if available
+    const choiceTypes = ['buttongroup', 'radio', 'dropdown', 'checkbox'];
+    if (field.type && choiceTypes.includes(field.type) && field.displayValue) {
+      return this.escapeHtml(field.displayValue);
     }
 
     const stringValue = String(field.value);
@@ -770,15 +787,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get isMessageEdited(): boolean {
     // Only show edited badge if user actually edited the message content
-    // Status updates don't count as edits - we need a more reliable indicator
-    // For now, we'll check if there's a significant time difference (more than 30 seconds)
-    // AND it's a user message (since AI messages get status updates frequently)
-    if (!this.message.__mj_CreatedAt || !this.message.__mj_UpdatedAt || !this.isUserMessage) {
+    // The OriginalMessageChanged flag is set server-side when the Message field changes on update
+    if (!this.isUserMessage) {
       return false;
     }
-    // Allow 30 second threshold to avoid false positives from status updates
-    // Real edits will typically happen much later than creation
-    return this.message.__mj_UpdatedAt.getTime() - this.message.__mj_CreatedAt.getTime() > 30000;
+    return this.message.OriginalMessageChanged === true;
   }
 
   public onPinClick(): void {
@@ -1168,11 +1181,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       const question = form.questions.find(q => q.id === questionId);
       const questionType = typeof question?.type === 'string' ? question.type : question?.type?.type;
 
+      // Look up display value for choice types (buttongroup, radio, dropdown, checkbox)
+      const displayValue = this.getChoiceDisplayValue(question, value);
+
       return {
         name: questionId,
         value: value,
         label: question?.label || questionId,
-        type: questionType // Include type for proper formatting
+        type: questionType, // Include type for proper formatting
+        displayValue: displayValue // Include friendly display text for choice fields
       };
     });
 
@@ -1207,11 +1224,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private async executeAutomaticCommands(): Promise<void> {
     try {
-      if (!this.isLastMessage) 
+      if (!this.isLastMessage)
         return; // we only do this when the message is the last one in the conversation
 
       // TODO - IMPORTANT
-      // BELOW, after doing the commands, 
+      // BELOW, after doing the commands,
       // we need to mark the message as haveing completed its automatic commands to avoid re-running on reload
 
 
@@ -1227,6 +1244,38 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     } catch (error) {
       console.error('Failed to execute automatic commands:', error);
     }
+  }
+
+  /**
+   * Get the display value for choice-type questions (buttongroup, radio, dropdown, checkbox)
+   * This looks up the option's label based on the selected value
+   */
+  private getChoiceDisplayValue(question: FormQuestion | undefined, value: string | number | boolean | string[]): string | undefined {
+    if (!question) return undefined;
+
+    // Get the question type object
+    const typeObj = question.type;
+    if (typeof typeObj === 'string') return undefined;
+
+    // Check if it's a choice type with options
+    const choiceTypes = ['buttongroup', 'radio', 'dropdown', 'checkbox'];
+    if (!choiceTypes.includes(typeObj.type)) return undefined;
+
+    const choiceType = typeObj as ChoiceQuestionType;
+    if (!choiceType.options || choiceType.options.length === 0) return undefined;
+
+    // Handle array values (checkbox with multiple selections)
+    if (Array.isArray(value)) {
+      const labels = value.map(v => {
+        const option = choiceType.options.find(opt => opt.value === v);
+        return option?.label || String(v);
+      });
+      return labels.join(', ');
+    }
+
+    // Handle single value
+    const option = choiceType.options.find(opt => opt.value === value);
+    return option?.label;
   }
 
 }

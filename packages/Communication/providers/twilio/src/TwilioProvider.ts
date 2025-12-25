@@ -279,23 +279,18 @@ export class TwilioProvider extends BaseCommunicationProvider {
         limit: params.NumMessages
       };
 
-      // Filter options
-      if (params.ContextData) {
-        // Filter by date sent
-        if (params.ContextData.dateSent) {
-          queryParams.dateSent = params.ContextData.dateSent;
-        }
-
-        // Filter by sender
-        if (params.ContextData.from) {
-          queryParams.from = params.ContextData.from;
-        }
-
-        // Filter by recipient
-        if (params.ContextData.to) {
-          queryParams.to = params.ContextData.to;
-        }
+      // Filter by date sent
+      if (params.ContextData?.dateSent) {
+        queryParams.dateSent = params.ContextData.dateSent;
       }
+
+      // Filter by sender
+      if (params.ContextData?.from) {
+        queryParams.from = params.ContextData.from;
+      }
+
+      // Filter by recipient
+      queryParams.to = params.Identifier || params.ContextData?.to || undefined;
 
       // Fetch messages
       const messages = await twilioClient.messages.list(queryParams);

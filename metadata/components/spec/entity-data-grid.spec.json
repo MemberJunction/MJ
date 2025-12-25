@@ -10,6 +10,39 @@
     "mode": "views",
     "description": "Component performs RunView internally with adaptive caching. Initial load fetches maxCachedRows to determine cache mode. Does NOT accept data via props."
   },
+  "typeDefinitions": {
+    "FieldDefinition": {
+      "description": "Field definition object for advanced field configuration",
+      "properties": {
+        "field": {
+          "type": "string",
+          "required": true,
+          "description": "Field name from entity"
+        },
+        "header": {
+          "type": "string",
+          "required": false,
+          "description": "Display header text (defaults to field DisplayName or field name)"
+        },
+        "render": {
+          "type": "function",
+          "signature": "(value: any, record: object, fieldInfo?: object) => ReactNode",
+          "required": false,
+          "description": "Custom render function for cell content"
+        },
+        "width": {
+          "type": "string | number",
+          "required": false,
+          "description": "Column width (e.g., '200px' or 200)"
+        },
+        "sortable": {
+          "type": "boolean",
+          "required": false,
+          "description": "Override global sorting setting for this column"
+        }
+      }
+    }
+  },
   "properties": [
     {
       "name": "entityName",
@@ -23,14 +56,34 @@
       "type": "string",
       "description": "Optional SQL WHERE clause to filter records (without 'WHERE' keyword). Always applied server-side via RunView ExtraFilter parameter. Supports full SQL syntax: comparison operators, AND/OR logic, IN clauses, date functions, etc. Clearing cache and reloading data when changed. Examples: \"Status='Active'\", \"InvoiceDate >= '2024-01-01' AND Total > 1000\", \"MemberID IN (SELECT ID FROM Members WHERE MembershipType='Gold')\"",
       "required": false,
-      "exampleValue": "Status='Active' AND InvoiceDate >= '2024-01-01'"
+      "exampleValue": "Status='Active' AND InvoiceDate >= '2024-01-01'",
+      "constraints": [
+        {
+          "type": "sql-where-clause",
+          "dependsOn": "entityName",
+          "description": "Validates SQL WHERE clause syntax and field references against the entity schema",
+          "errorTemplate": "SQL WHERE clause error: {message}"
+        }
+      ]
     },
     {
       "name": "fields",
-      "type": "Array<string | object>",
-      "description": "Optional array of field definitions (same as DataGrid columns prop). Can be simple strings (field names) or ColumnDef objects with {field, header, render, width, sortable}. If omitted, auto-detects from entity metadata (first 15 non-system fields). Renamed from 'columns' to align with MemberJunction terminology (EntityField). ColumnDef structure: {field: string (required), header: string (optional custom header), render: function(value, record, fieldInfo) (optional custom renderer), width: string|number (e.g. '200px' or 200), sortable: boolean (optional per-column override)}. See exampleUsage for advanced styling examples.",
+      "type": "Array<string | FieldDefinition>",
+      "description": "Optional field definitions. Can be simple strings (field names) or FieldDefinition objects for advanced configuration. If omitted, auto-detects first 15 non-system fields. When using FieldDefinition objects, the 'field' property is validated against entity fields.",
       "required": false,
-      "exampleValue": "[\"Name\", {field: \"Price\", header: \"Unit Price\", width: \"120px\", render: (v) => `$${v.toFixed(2)}`}, \"Status\"]"
+      "exampleValue": "[\"Name\", {field: \"Price\", header: \"Unit Price\", width: \"120px\", render: (v) => `$${v.toFixed(2)}`}, \"Status\"]",
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "Validates that field names (strings or FieldDefinition.field properties) exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "Field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
     },
     {
       "name": "orderBy",

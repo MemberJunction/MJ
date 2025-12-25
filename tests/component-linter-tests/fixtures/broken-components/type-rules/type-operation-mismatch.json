@@ -1,0 +1,24 @@
+{
+  "name": "TypeOperationMismatchComponent",
+  "description": "Component performing type-unsafe operations (violates type-mismatch-operation rule)",
+  "code": "function TypeOperationMismatchComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [items, setItems] = useState([]);\n  const [total, setTotal] = useState(0);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'OrderItems',\n        MaxRows: 100\n      });\n\n      if (result.Success) {\n        setItems(result.Results);\n\n        // VIOLATION: Adding number (Amount) to string (Description)\n        // This creates an implicit string conversion\n        const badSum = result.Results.reduce((acc, item) => {\n          return acc + item.Amount + item.Description;\n        }, 0);\n\n        // VIOLATION: Calling toFixed on what might be a string\n        // ProductCode is a string field, not a number\n        const formatted = result.Results[0].ProductCode.toFixed(2);\n\n        // VIOLATION: Numeric comparison with string field\n        // Status is a string like 'Active', 'Inactive'\n        const filtered = result.Results.filter(item => item.Status > 0);\n\n        // VIOLATION: Math operation on string field\n        const doubled = result.Results.map(item => item.ProductCode * 2);\n\n        // Calculate total correctly for comparison\n        const goodTotal = result.Results.reduce((acc, item) => acc + item.Amount, 0);\n        setTotal(goodTotal);\n      }\n    }\n    loadData();\n  }, []);\n\n  // VIOLATION: String concatenation where number expected\n  const displayTotal = 'Total: ' + total.toFixed(2);\n\n  return (\n    <div>\n      <h1>Order Items</h1>\n      <p>{displayTotal}</p>\n      <p>Count: {items.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "OrderItems",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "ProductCode", "type": "nvarchar" },
+          { "name": "Description", "type": "nvarchar" },
+          { "name": "Amount", "type": "decimal" },
+          { "name": "Quantity", "type": "int" },
+          { "name": "Status", "type": "nvarchar" }
+        ]
+      }
+    ]
+  }
+}

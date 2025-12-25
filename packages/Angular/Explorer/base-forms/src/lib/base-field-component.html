@@ -18,7 +18,7 @@
                 }
                 @else if (FieldInfo.Length === -1) {
                     <!-- this is a varchar(max) type of field -->
-                    <markdown #markdown [data]="record.Get(FieldName)"></markdown>
+                    <mj-markdown #markdown [data]="record.Get(FieldName)"></mj-markdown>
                     <!-- <span [innerHTML]="record.Get(FieldName) | formatText"></span> -->
                 }
                 @else {

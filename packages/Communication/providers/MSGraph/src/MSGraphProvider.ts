@@ -375,7 +375,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const client = this.getGraphClient(creds);
 
         const contextData = params.ContextData;
-        const emailToUse = (contextData?.Email as string) || creds.accountEmail;
+        const emailToUse = params.Identifier || (contextData?.Email as string) || creds.accountEmail;
 
         const user: User | null = await this.GetServiceAccountWithClient(client, emailToUse);
         if (!user || !user.id) {

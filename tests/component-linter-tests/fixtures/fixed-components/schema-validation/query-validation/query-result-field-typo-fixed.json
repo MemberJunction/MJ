@@ -1,0 +1,19 @@
+{
+  "name": "QueryResultFieldTypoFixed",
+  "type": "generic",
+  "title": "Query Result Field Typo - Fixed Pattern",
+  "description": "Tests correct spelling of query result field name",
+  "code": "function QueryResultFieldTypoFixed({ utilities }) {\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Member Directory',\n        CategoryPath: 'Membership/Reports'\n      });\n      if (result?.Success) {\n        // ✅ Correct: MembershipType\n        const formatted = result.Results.map(m => ({\n          name: m.FullName,\n          type: m.MembershipType\n        }));\n        setMembers(formatted);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Directory</h3>\n      {members.map((m, i) => (\n        <div key={i}>{m.name} ({m.type})</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Member Directory",
+      "categoryPath": "Membership/Reports",
+      "fields": ["MemberID", "FullName", "Email", "MembershipType", "JoinDate"]
+    }]
+  }
+}

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { filter } from 'rxjs/operators';
@@ -11,14 +11,16 @@ import {
   WorkspaceConfiguration,
   WorkspaceTab
 } from '@memberjunction/ng-base-application';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, EntityInfo } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
+import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
+import { LoadingTheme, getActiveTheme } from './loading-themes';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -42,6 +44,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   activeApp: BaseApplication | null = null;
   loading = true;
   initialized = false;
+  private waitingForFirstResource = false;
   tabBarVisible = true; // Controlled by workspace manager
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
@@ -49,10 +52,32 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
 
+  // Loading animation state
+  private loadingMessageInterval: ReturnType<typeof setInterval> | null = null;
+  private loadingMessageIndex = 0;
+  private usedMessageIndices: number[] = [];
+  private usedGradientIndices: number[] = [];
+  private messageCycleCount = 0; // Track message cycles for color changes
+  private activeTheme: LoadingTheme;
+  private readonly messageIntervalMs = 2500; // 2.5 seconds per message
+  private readonly colorChangeEveryNMessages = 2; // Change color every 2 messages (5 seconds)
+  private readonly animationOptions: ('pulse' | 'spin' | 'pulse-spin')[] = ['pulse', 'spin', 'pulse-spin'];
+  currentLoadingText: string;
+  currentLoadingColor: string;
+  currentLoadingTextColor: string;
+  currentLoadingGradient: LogoGradient | null;
+  currentLoadingAnimation: 'pulse' | 'spin' | 'bounce' | 'pulse-spin' = 'pulse';
+
   // User avatar state
   userImageURL = '';
   userIconClass: string | null = null;
   userName = '';
+
+  // Search state
+  isSearchOpen = false;
+  searchableEntities: EntityInfo[] = [];
+  selectedEntity: EntityInfo | null = null;
+  @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
   /**
    * Get Nav Bar apps positioned to the left of the app switcher
@@ -86,7 +111,36 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private settingsDialogService: SettingsDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService
-  ) {}
+  ) {
+    // Initialize theme immediately so loading UI shows correct colors from the start
+    this.activeTheme = getActiveTheme();
+
+    // Randomly select animation type from the start
+    this.currentLoadingAnimation = this.animationOptions[
+      Math.floor(Math.random() * this.animationOptions.length)
+    ];
+
+    // Set first message
+    this.currentLoadingText = this.activeTheme.messages[0];
+
+    if (this.activeTheme.staticColors) {
+      // Standard theme: keep MJ blue, no gradient
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = '#757575'; // Default gray text
+      this.currentLoadingGradient = null;
+    } else {
+      // Themed period: use theme colors and first gradient from the start
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = this.activeTheme.colors[0];
+
+      // Set initial gradient if theme has gradients
+      if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+        this.currentLoadingGradient = this.activeTheme.gradients[0];
+      } else {
+        this.currentLoadingGradient = null;
+      }
+    }
+  }
 
   async ngOnInit(): Promise<void> {
     try {
@@ -116,6 +170,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   async initializeShell(): Promise<void> {
+    // Start the loading animation with cycling messages
+    this.startLoadingAnimation();
+
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
 
@@ -288,8 +345,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       })
     );
 
+    // Load searchable entities for search functionality
+    await this.loadSearchableEntities();
+
     this.initialized = true;
-    this.loading = false;
+    this.waitingForFirstResource = true;
   }
 
   /**
@@ -771,7 +831,163 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Layout initialization happens in TabContainerComponent
   }
 
+  /**
+   * Called when the first resource component finishes loading.
+   * We accept subsequent calls to this method in ordre to ensure we are
+   * not forever showing animation for loading - this can happen if there is
+   * a race condition in components we DO NOT control, so while the naming
+   * is intended to imply the goal it doesn't "hurt" to have this work this way
+   */
+  onFirstResourceLoadComplete(): void {
+    this.waitingForFirstResource = false;
+    this.loading = false;
+    this.stopLoadingAnimation();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Start the loading message cycling animation.
+   * Messages cycle every 2.5 seconds without repeating until all are used.
+   * Colors change every 5 seconds (every 2nd message cycle).
+   * For themed periods: use theme colors/gradients from the start.
+   * For standard theme: keep MJ blue throughout (no color changes).
+   * Animation is randomly selected from pulse, spin, and pulse-spin.
+   * Theme is selected based on current date and user's browser locale.
+   */
+  private startLoadingAnimation(): void {
+    // Select the appropriate theme based on date and locale
+    this.activeTheme = getActiveTheme();
+    console.log(`🎨 Loading theme: ${this.activeTheme.name}`);
+
+    // Reset state
+    this.usedMessageIndices = [0]; // Mark first message as used
+    this.usedGradientIndices = [];
+    this.loadingMessageIndex = 0;
+    this.messageCycleCount = 0;
+
+    // Initialize display with first message and initial color/gradient
+    this.initializeLoadingDisplay();
+
+    // Randomly select an animation type
+    this.currentLoadingAnimation = this.animationOptions[
+      Math.floor(Math.random() * this.animationOptions.length)
+    ];
+
+    // Start cycling every 2.5 seconds
+    this.loadingMessageInterval = setInterval(() => {
+      this.cycleToNextMessage();
+      this.cdr.detectChanges();
+    }, this.messageIntervalMs);
+  }
+
+  /**
+   * Stop the loading message cycling animation.
+   */
+  private stopLoadingAnimation(): void {
+    if (this.loadingMessageInterval) {
+      clearInterval(this.loadingMessageInterval);
+      this.loadingMessageInterval = null;
+    }
+  }
+
+  /**
+   * Initialize the loading display with first message and initial color/gradient.
+   * For themed periods, applies theme styling from the start.
+   * For standard theme, keeps MJ blue throughout.
+   */
+  private initializeLoadingDisplay(): void {
+    // Set first message
+    this.currentLoadingText = this.activeTheme.messages[0];
+
+    if (this.activeTheme.staticColors) {
+      // Standard theme: keep MJ blue, no gradient
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = '#757575'; // Default gray text
+      this.currentLoadingGradient = null;
+    } else {
+      // Themed period: use theme colors and first gradient from the start
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = this.activeTheme.colors[0];
+
+      // Set initial gradient if theme has gradients
+      if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+        this.currentLoadingGradient = this.activeTheme.gradients[0];
+        this.usedGradientIndices = [0];
+      } else {
+        this.currentLoadingGradient = null;
+      }
+    }
+  }
+
+  /**
+   * Cycle to the next loading message, avoiding repeats until all are used.
+   * Colors change every colorChangeEveryNMessages cycles (5 seconds).
+   * For standard theme, colors remain static.
+   */
+  private cycleToNextMessage(): void {
+    const messages = this.activeTheme.messages;
+    this.messageCycleCount++;
+
+    // If we've used all messages, reset the used list (but exclude current to avoid immediate repeat)
+    if (this.usedMessageIndices.length >= messages.length) {
+      this.usedMessageIndices = [this.loadingMessageIndex];
+    }
+
+    // Find a random unused message index
+    const availableIndices = messages
+      .map((_, i) => i)
+      .filter(i => !this.usedMessageIndices.includes(i));
+
+    if (availableIndices.length > 0) {
+      const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+      this.usedMessageIndices.push(randomIndex);
+      this.loadingMessageIndex = randomIndex;
+
+      // Update the message
+      this.currentLoadingText = this.activeTheme.messages[randomIndex];
+
+      // Check if it's time to change colors (every 2nd message = every 5 seconds)
+      // But only for non-static themes
+      if (!this.activeTheme.staticColors && this.messageCycleCount % this.colorChangeEveryNMessages === 0) {
+        this.cycleToNextColor();
+      }
+    }
+  }
+
+  /**
+   * Cycle to the next color/gradient from the theme.
+   * Alternates through gradients if available.
+   */
+  private cycleToNextColor(): void {
+    // Cycle to next gradient if available
+    if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+      const gradients = this.activeTheme.gradients;
+
+      // If we've used all gradients, reset (but exclude current to avoid immediate repeat)
+      if (this.usedGradientIndices.length >= gradients.length) {
+        const lastUsed = this.usedGradientIndices[this.usedGradientIndices.length - 1];
+        this.usedGradientIndices = [lastUsed];
+      }
+
+      // Find next gradient (simple rotation for gradients)
+      const currentIndex = this.usedGradientIndices[this.usedGradientIndices.length - 1] ?? -1;
+      const nextIndex = (currentIndex + 1) % gradients.length;
+      this.usedGradientIndices.push(nextIndex);
+      this.currentLoadingGradient = gradients[nextIndex];
+    }
+
+    // Also cycle text color through theme colors
+    const colors = this.activeTheme.colors;
+    if (colors.length > 1) {
+      // Get a random color from the theme for text
+      const randomIndex = Math.floor(Math.random() * colors.length);
+      this.currentLoadingColor = colors[randomIndex];
+      this.currentLoadingTextColor = colors[randomIndex];
+    }
+  }
+
   ngOnDestroy(): void {
+    this.stopLoadingAnimation();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.layoutManager.Destroy();
   }
@@ -1091,5 +1307,104 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Update title via TitleService
     this.titleService.setContext(appName, resourceName);
+  }
+
+  // ========================================
+  // SEARCH FUNCTIONALITY
+  // ========================================
+
+  /**
+   * Load searchable entities from metadata
+   */
+  private async loadSearchableEntities(): Promise<void> {
+    const md = new Metadata();
+    this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
+    if (this.searchableEntities.length > 0) {
+      this.selectedEntity = this.searchableEntities[0];
+    }
+  }
+
+  /**
+   * Toggle search popup visibility
+   */
+  toggleSearch(): void {
+    this.isSearchOpen = !this.isSearchOpen;
+
+    // Focus on search input when opened
+    if (this.isSearchOpen) {
+      setTimeout(() => {
+        if (this.searchInput && this.searchInput.nativeElement) {
+          this.searchInput.nativeElement.focus();
+        }
+      }, 100);
+    }
+  }
+
+  /**
+   * Close search popup
+   */
+  closeSearch(): void {
+    this.isSearchOpen = false;
+  }
+
+  /**
+   * Handle search submission
+   */
+  onSearch(event: Event): void {
+    if (!this.searchInput) {
+      return;
+    }
+
+    const inputValue = this.searchInput.nativeElement.value;
+    if (inputValue && inputValue.length > 0 && inputValue.trim().length > 2) {
+      this.searchInput.nativeElement.value = ''; // Clear input
+      this.isSearchOpen = false; // Close search popup
+
+      // Navigate to search results
+      if (this.selectedEntity) {
+        this.router.navigate(['resource', 'search', inputValue], { queryParams: { Entity: this.selectedEntity.Name } });
+      }
+    } else {
+      // Show warning notification
+      MJGlobal.Instance.RaiseEvent({
+        component: this,
+        event: MJEventType.DisplaySimpleNotificationRequest,
+        eventCode: "",
+        args: {
+          message: 'Please enter at least 3 characters to search',
+          style: 'warning',
+          DisplayDuration: 1500
+        }
+      });
+    }
+  }
+
+  // ========================================
+  // NOTIFICATION FUNCTIONALITY
+  // ========================================
+
+  /**
+   * Show notifications page as a tab
+   */
+  showNotifications(): void {
+    MJGlobal.Instance.RaiseEvent({
+      event: MJEventType.ComponentEvent,
+      component: this,
+      eventCode: EventCodes.ViewNotifications,
+      args: {}
+    });
+
+    // Open notifications in a tab
+    // Use 'Custom' resource type with explicit driverClass to load NotificationsResource component
+    this.tabService.OpenTab({
+      ApplicationId: SYSTEM_APP_ID,
+      Title: 'Notifications',
+      Configuration: {
+        resourceType: 'Custom',
+        driverClass: 'NotificationsResource',
+        route: 'notifications'
+      },
+      IsPinned: false
+    });
   }
 }

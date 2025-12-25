@@ -118,7 +118,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
     };
     
     loadModels();
-  }, [filters, sortBy, sortDirection, searchQuery, utilities.rv]);
+  }, [filters, sortBy, sortDirection, searchQuery]);
   
   // Load model details and analytics when selection changes
   useEffect(() => {
@@ -192,7 +192,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
     };
     
     loadModelDetails();
-  }, [selectedModelId, utilities.rv]);
+  }, [selectedModelId]);
   
   // Handle model selection
   const handleSelectModel = useCallback((modelId) => {

@@ -8,7 +8,7 @@ import { OverlayModule } from '@angular/cdk/overlay';
 
 /*********************************************/
 // Markdown
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 /*********************************************/
 // Kendo UI Angular imports
@@ -85,7 +85,7 @@ import { SkipChatWrapperComponent } from './lib/skip-chat-wrapper/skip-chat-wrap
     UserViewGridModule,
     ChatModule,
     SkipChatModule,
-    MarkdownModule.forRoot(),
+    MarkdownModule,
   ],
   exports: [
     SkipChatWithRecordComponent,

@@ -1,5 +1,88 @@
 # Change Log - @memberjunction/ng-entity-communications
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ng-shared@2.128.0
+  - @memberjunction/ng-container-directives@2.128.0
+  - @memberjunction/ng-shared-generic@2.128.0
+  - @memberjunction/communication-types@2.128.0
+  - @memberjunction/entity-communications-base@2.128.0
+  - @memberjunction/entity-communications-client@2.128.0
+  - @memberjunction/templates-base-types@2.128.0
+  - @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/ng-shared@2.127.0
+  - @memberjunction/ng-container-directives@2.127.0
+  - @memberjunction/ng-shared-generic@2.127.0
+  - @memberjunction/communication-types@2.127.0
+  - @memberjunction/entity-communications-base@2.127.0
+  - @memberjunction/entity-communications-client@2.127.0
+  - @memberjunction/templates-base-types@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.126.1
+- @memberjunction/entity-communications-client@2.126.1
+- @memberjunction/ng-container-directives@2.126.1
+- @memberjunction/ng-shared-generic@2.126.1
+- @memberjunction/communication-types@2.126.1
+- @memberjunction/entity-communications-base@2.126.1
+- @memberjunction/core@2.126.1
+- @memberjunction/core-entities@2.126.1
+- @memberjunction/global@2.126.1
+- @memberjunction/templates-base-types@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [4d1d468]
+- Updated dependencies [703221e]
+  - @memberjunction/communication-types@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/entity-communications-base@2.126.0
+  - @memberjunction/entity-communications-client@2.126.0
+  - @memberjunction/ng-shared@2.126.0
+  - @memberjunction/ng-container-directives@2.126.0
+  - @memberjunction/ng-shared-generic@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/templates-base-types@2.126.0
+  - @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [e1569fc]
+- Updated dependencies [bd4aa3d]
+- Updated dependencies [a692034]
+  - @memberjunction/communication-types@2.125.0
+  - @memberjunction/entity-communications-base@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/entity-communications-client@2.125.0
+  - @memberjunction/ng-shared@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-shared-generic@2.125.0
+  - @memberjunction/templates-base-types@2.125.0
+  - @memberjunction/global@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

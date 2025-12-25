@@ -1,5 +1,50 @@
 # @memberjunction/interactive-component-types
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/ai-vectors-memory@2.128.0
+
+## 2.127.0
+
+### Minor Changes
+
+- 65318c4: migration
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/ai-vectors-memory@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.126.1
+- @memberjunction/core@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-vectors-memory@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- 1115143: Add comprehensive constraint validation system for component props, enhance type inference engine with function scope tracking, improve date parameter validation in React component linter, and refactor golden example components to demonstrate library usage patterns
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ai-vectors-memory@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

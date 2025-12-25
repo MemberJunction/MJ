@@ -2,6 +2,7 @@
   "name": "SubmissionReviewDashboard",
   "title": "Submission Review Dashboard",
   "type": "dashboard",
+  "namespace": "Events/Reports",
   "userExplanation": "Comprehensive submission review dashboard showing status distribution charts, review timeline, and top reviewers list. Demonstrates complex hybrid pattern: uses multiple queries for charts, direct RunView for reviewer stats, and EntityDataGrid for drilling into submissions by status.",
   "functionalRequirements": "## Business Objectives\n- Monitor event submission review process across all statuses\n- Track review activity and timeline trends\n- Identify top-performing reviewers by volume and quality\n- Enable drill-down into submissions by status for detailed review\n- Demonstrate mixing multiple data loading patterns in one component\n\n## Functional Requirements\n- **Status Summary Chart**: Stacked bar or pie chart showing submission counts by status (Pending, Under Review, Accepted, Rejected, etc.)\n- **Review Timeline Chart**: Line chart showing review activity over time (daily or weekly counts)\n- **Top Reviewers Panel**: Display top 10 reviewers with submission count, average score, and review count\n- **KPI Cards**: Show total submissions, average score, unique speakers, and pending count\n- **Click-to-Drill-Down**: When user clicks status segment, show EntityDataGrid with submissions in that status\n- **Multi-Query Coordination**: Load status summary and timeline queries in parallel\n- **RunView for Reference Data**: Load reviewer records via RunView, aggregate client-side for top reviewers list\n- **Mixed Data Sources**: Demonstrate using RunQuery for charts, RunView for aggregation, EntityDataGrid for drill-down\n- **State Management**: Track selected status and coordinate updates across all panels\n- **Conditional Loading**: Only load drill-down grid when status is selected\n- **Clear Selection**: Return to overview when clearing status filter\n- **Loading States**: Show loading indicators for each panel independently\n- **Empty States**: Handle cases with no submissions or no reviews",
   "description": "Event submission review dashboard showing status distribution, review timeline, and reviewer activity with drill-down to submission details.",
@@ -13,7 +14,11 @@
         "name": "Submission Status Summary",
         "categoryPath": "Demo",
         "description": "Status distribution: COUNT(*), COUNT(DISTINCT SpeakerID), AVG(ReviewScore) grouped by SubmissionStatus. Returns 5-8 status categories for stacked bar chart. **Result Order: CASE Status (Accepted→Under Review→Passed Initial→Waitlisted→Rejected→Failed Initial→Analyzing→New)** - Workflow progression order for status comparison.",
-        "entityNames": ["Submissions", "Submission Speakers", "Submission Reviews"],
+        "entityNames": [
+          "Submissions",
+          "Submission Speakers",
+          "Submission Reviews"
+        ],
         "fields": [
           {
             "name": "Status",
@@ -91,7 +96,10 @@
         "name": "Submission Review Timeline",
         "categoryPath": "Demo",
         "description": "Conditional review activity timeline (executes when status clicked): COUNT(*), AVG(Score) grouped by CAST(ReviewDate AS DATE) for selected status. Returns daily review counts for line chart. **Result Order: Date DESC** - Most recent review activity first for timeline analysis.",
-        "entityNames": ["Submission Reviews", "Submissions"],
+        "entityNames": [
+          "Submission Reviews",
+          "Submissions"
+        ],
         "fields": [
           {
             "name": "Date",
@@ -193,17 +201,39 @@
       {
         "name": "Submissions",
         "description": "Event submissions shown in EntityDataGrid when drilling down from status chart",
-        "displayFields": ["SubmissionTitle", "SubmittedAt", "Status", "EventName", "AIEvaluationScore", "FinalDecision"],
-        "filterFields": ["Status", "EventID"],
-        "sortFields": ["SubmittedAt", "AIEvaluationScore"],
+        "displayFields": [
+          "SubmissionTitle",
+          "SubmittedAt",
+          "Status",
+          "EventName",
+          "AIEvaluationScore",
+          "FinalDecision"
+        ],
+        "filterFields": [
+          "Status",
+          "EventID"
+        ],
+        "sortFields": [
+          "SubmittedAt",
+          "AIEvaluationScore"
+        ],
         "usageContext": "Loaded by EntityDataGrid when user clicks on a status segment in the status summary chart"
       },
       {
         "name": "Submission Reviews",
         "description": "Review records loaded via RunView to calculate top reviewers",
-        "displayFields": ["ReviewerName", "ReviewDate", "Rating", "SubmissionTitle"],
-        "filterFields": ["ReviewDate"],
-        "sortFields": ["ReviewDate"],
+        "displayFields": [
+          "ReviewerName",
+          "ReviewDate",
+          "Rating",
+          "SubmissionTitle"
+        ],
+        "filterFields": [
+          "ReviewDate"
+        ],
+        "sortFields": [
+          "ReviewDate"
+        ],
         "usageContext": "Loaded via RunView to aggregate reviewer statistics and display top reviewers list"
       }
     ]

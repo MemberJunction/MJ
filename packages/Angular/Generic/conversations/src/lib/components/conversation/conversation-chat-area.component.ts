@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, AIAgentRunEntityExtended, ConversationDetailArtifactEntity, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
 import { ConversationDataService } from '../../services/conversation-data.service';
@@ -62,7 +62,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @Output() pendingMessageRequested = new EventEmitter<string>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
-  @ViewChild('messageInput', { static: false }) private messageInputComponent?: MessageInputComponent;
+  @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
 
   public messages: ConversationDetailEntity[] = [];
@@ -304,6 +304,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   public getCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
     return Array.from(this.messageInputMetadataCache.values());
+  }
+
+  /**
+   * Get the message input component for the current conversation.
+   * Since we cache multiple message-input instances (one per visited conversation),
+   * we need to find the one that matches the current conversationId.
+   */
+  private getActiveMessageInputComponent(): MessageInputComponent | undefined {
+    if (!this.messageInputComponents || !this.conversationId) {
+      return undefined;
+    }
+    return this.messageInputComponents.find(
+      component => component.conversationId === this.conversationId
+    );
   }
 
   private async loadMessages(conversationId: string): Promise<void> {
@@ -1290,9 +1304,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
     const messageText = event.customInput || event.text;
 
+    // Get the active message input for the current conversation
+    // (we cache multiple instances, one per visited conversation)
+    const activeInput = this.getActiveMessageInputComponent();
+
     // If we have an active conversation with message input available, use it
-    if (this.messageInputComponent && !this.isNewConversation) {
-      await this.messageInputComponent.sendMessageWithText(messageText);
+    if (activeInput && !this.isNewConversation) {
+      await activeInput.sendMessageWithText(messageText);
     } else if (!this.conversation || this.isNewConversation) {
       // If no conversation or in new unsaved state, route through empty state handler
       // This will create the conversation and send the message

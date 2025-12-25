@@ -139,6 +139,7 @@ export class SkipProxyAgent extends BaseAgent {
 
         // Prepare Skip SDK call options
         const skipOptions: SkipCallOptions = {
+            payload: params.payload,
             messages: skipMessages,
             conversationId,
             dataContext: context.dataContext,
@@ -316,7 +317,10 @@ export class SkipProxyAgent extends BaseAgent {
                 terminate: true,
                 step: 'Chat',
                 message: clarifyResponse.clarifyingQuestion,
-                newPayload: undefined
+                responseForm: clarifyResponse.responseForm,
+                // Pass through payload for incremental artifact building (e.g., PRD in progress)
+                // The client will render this as an artifact and pass it back in the next request
+                newPayload: apiResponse.payload as any
             };
         }
 

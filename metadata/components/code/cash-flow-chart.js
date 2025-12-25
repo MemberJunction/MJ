@@ -1,48 +1,58 @@
-// CashFlowChart Sub-component
-function CashFlowChart ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Load SimpleChart from the components registry
-  const SimpleChart = components['SimpleChart'];
+function CashFlowChart({ loading, metrics, chartRefs, formatCurrency }) {
+  useEffect(() => {
+    if (!loading && chartRefs.current.cashFlowChart) {
+      const categories = ['Revenue', 'Expenses', 'Outstanding', 'Net Cash'];
+      const data = [
+        metrics.actualRevenue,
+        -metrics.outstandingRevenue * 0.6,
+        -metrics.outstandingRevenue * 0.4,
+        metrics.cashFlow
+      ];
 
-  const handleChartClick = React.useCallback((event) => {
-    if (event && onDataClick) {
-      onDataClick(event);
+      const chart = new ApexCharts(chartRefs.current.cashFlowChart, {
+        chart: {
+          type: 'bar',
+          height: 300
+        },
+        series: [{
+          name: 'Cash Flow',
+          data: data
+        }],
+        xaxis: {
+          categories: categories
+        },
+        yaxis: {
+          labels: {
+            formatter: (val) => formatCurrency(Math.abs(val))
+          }
+        },
+        colors: ['#10B981'],
+        plotOptions: {
+          bar: {
+            colors: {
+              ranges: [{
+                from: -1000000000,
+                to: 0,
+                color: '#EF4444'
+              }]
+            }
+          }
+        },
+        dataLabels: {
+          enabled: true,
+          formatter: (val) => formatCurrency(val)
+        },
+        tooltip: {
+          y: {
+            formatter: (val) => formatCurrency(val)
+          }
+        }
+      });
+      chart.render();
+
+      return () => chart.destroy();
     }
-  }, [onDataClick]);
+  }, [loading, metrics.actualRevenue, metrics.outstandingRevenue, metrics.cashFlow, chartRefs, formatCurrency]);
 
-  // Memoize the chart content to prevent unnecessary re-renders
-  const chartContent = React.useMemo(() => {
-    if (!SimpleChart) {
-      return (
-        <div style={{ padding: '20px', textAlign: 'center', color: '#6B7280' }}>
-          SimpleChart component not available
-        </div>
-      );
-    }
-
-    // SimpleChart expects raw data array, not pre-processed chart data
-    // The parent component should pass raw records instead of chart series/categories
-    return (
-      <SimpleChart
-        key="cash-flow-chart"
-        data={data}
-        groupBy="Date"  // Adjust this field name based on actual data structure
-        aggregateMethod="sum"
-        chartType="line"
-        title="Cash Flow"
-        onDataPointClick={handleChartClick}
-        utilities={utilities}
-        styles={styles}
-        components={components}
-        callbacks={callbacks}
-        savedUserSettings={savedUserSettings}
-        onSaveUserSettings={onSaveUserSettings}
-      />
-    );
-  }, [SimpleChart, data, handleChartClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings]);
-
-  return (
-    <div style={{ width: '100%', height: '350px' }}>
-      {chartContent}
-    </div>
-  );
+  return <div ref={el => chartRefs.current.cashFlowChart = el}></div>;
 }

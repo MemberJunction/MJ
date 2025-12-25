@@ -1,5 +1,130 @@
 # @memberjunction/ai-provider-bundle
 
+## 2.128.0
+
+### Minor Changes
+
+- 5f70858: migration
+
+### Patch Changes
+
+- Updated dependencies [0863f85]
+  - @memberjunction/ai-gemini@2.128.0
+  - @memberjunction/ai-recommendations-rex@2.128.0
+  - @memberjunction/ai-vectors-pinecone@2.128.0
+  - @memberjunction/ai-anthropic@2.128.0
+  - @memberjunction/ai-azure@2.128.0
+  - @memberjunction/ai-bedrock@2.128.0
+  - @memberjunction/ai-betty-bot@2.128.0
+  - @memberjunction/ai-cerebras@2.128.0
+  - @memberjunction/ai-elevenlabs@2.128.0
+  - @memberjunction/ai-groq@2.128.0
+  - @memberjunction/ai-heygen@2.128.0
+  - @memberjunction/ai-lmstudio@2.128.0
+  - @memberjunction/ai-local-embeddings@2.128.0
+  - @memberjunction/ai-mistral@2.128.0
+  - @memberjunction/ai-ollama@2.128.0
+  - @memberjunction/ai-openai@2.128.0
+  - @memberjunction/ai-openrouter@2.128.0
+  - @memberjunction/ai-vertex@2.128.0
+  - @memberjunction/ai-xai@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@2.127.0
+- @memberjunction/ai-vectors-pinecone@2.127.0
+- @memberjunction/ai-anthropic@2.127.0
+- @memberjunction/ai-azure@2.127.0
+- @memberjunction/ai-bedrock@2.127.0
+- @memberjunction/ai-betty-bot@2.127.0
+- @memberjunction/ai-cerebras@2.127.0
+- @memberjunction/ai-elevenlabs@2.127.0
+- @memberjunction/ai-gemini@2.127.0
+- @memberjunction/ai-groq@2.127.0
+- @memberjunction/ai-heygen@2.127.0
+- @memberjunction/ai-lmstudio@2.127.0
+- @memberjunction/ai-local-embeddings@2.127.0
+- @memberjunction/ai-mistral@2.127.0
+- @memberjunction/ai-ollama@2.127.0
+- @memberjunction/ai-openai@2.127.0
+- @memberjunction/ai-openrouter@2.127.0
+- @memberjunction/ai-vertex@2.127.0
+- @memberjunction/ai-xai@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@2.126.1
+- @memberjunction/ai-azure@2.126.1
+- @memberjunction/ai-bedrock@2.126.1
+- @memberjunction/ai-betty-bot@2.126.1
+- @memberjunction/ai-cerebras@2.126.1
+- @memberjunction/ai-elevenlabs@2.126.1
+- @memberjunction/ai-gemini@2.126.1
+- @memberjunction/ai-groq@2.126.1
+- @memberjunction/ai-heygen@2.126.1
+- @memberjunction/ai-lmstudio@2.126.1
+- @memberjunction/ai-local-embeddings@2.126.1
+- @memberjunction/ai-mistral@2.126.1
+- @memberjunction/ai-ollama@2.126.1
+- @memberjunction/ai-openai@2.126.1
+- @memberjunction/ai-openrouter@2.126.1
+- @memberjunction/ai-recommendations-rex@2.126.1
+- @memberjunction/ai-vectors-pinecone@2.126.1
+- @memberjunction/ai-vertex@2.126.1
+- @memberjunction/ai-xai@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@2.126.0
+- @memberjunction/ai-vectors-pinecone@2.126.0
+- @memberjunction/ai-anthropic@2.126.0
+- @memberjunction/ai-azure@2.126.0
+- @memberjunction/ai-bedrock@2.126.0
+- @memberjunction/ai-betty-bot@2.126.0
+- @memberjunction/ai-cerebras@2.126.0
+- @memberjunction/ai-elevenlabs@2.126.0
+- @memberjunction/ai-gemini@2.126.0
+- @memberjunction/ai-groq@2.126.0
+- @memberjunction/ai-heygen@2.126.0
+- @memberjunction/ai-lmstudio@2.126.0
+- @memberjunction/ai-local-embeddings@2.126.0
+- @memberjunction/ai-mistral@2.126.0
+- @memberjunction/ai-ollama@2.126.0
+- @memberjunction/ai-openai@2.126.0
+- @memberjunction/ai-openrouter@2.126.0
+- @memberjunction/ai-vertex@2.126.0
+- @memberjunction/ai-xai@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@2.125.0
+- @memberjunction/ai-vectors-pinecone@2.125.0
+- @memberjunction/ai-anthropic@2.125.0
+- @memberjunction/ai-azure@2.125.0
+- @memberjunction/ai-bedrock@2.125.0
+- @memberjunction/ai-betty-bot@2.125.0
+- @memberjunction/ai-cerebras@2.125.0
+- @memberjunction/ai-elevenlabs@2.125.0
+- @memberjunction/ai-gemini@2.125.0
+- @memberjunction/ai-groq@2.125.0
+- @memberjunction/ai-heygen@2.125.0
+- @memberjunction/ai-lmstudio@2.125.0
+- @memberjunction/ai-local-embeddings@2.125.0
+- @memberjunction/ai-mistral@2.125.0
+- @memberjunction/ai-ollama@2.125.0
+- @memberjunction/ai-openai@2.125.0
+- @memberjunction/ai-openrouter@2.125.0
+- @memberjunction/ai-vertex@2.125.0
+- @memberjunction/ai-xai@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

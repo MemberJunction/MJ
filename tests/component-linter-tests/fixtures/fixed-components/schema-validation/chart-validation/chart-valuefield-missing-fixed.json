@@ -1,0 +1,19 @@
+{
+  "name": "ChartValueFieldMissingFixed",
+  "type": "generic",
+  "title": "Chart ValueField Missing - Fixed Pattern",
+  "description": "Tests chart with correct valueField from data",
+  "code": "function ChartValueFieldMissingFixed({ utilities, components }) {\n  const [eventData, setEventData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Event Stats',\n        CategoryPath: 'Events/Reports'\n      });\n      if (result?.Success) {\n        setEventData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Event Statistics</h3>\n      {/* ✅ valueField uses AttendeeCount field that exists */}\n      <SimpleChart data={eventData} groupBy=\"EventType\" valueField=\"AttendeeCount\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Event Stats",
+      "categoryPath": "Events/Reports",
+      "fields": ["EventType", "AttendeeCount", "EventCount"]
+    }]
+  }
+}

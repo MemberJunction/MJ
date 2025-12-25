@@ -4100,7 +4100,7 @@ export const ConversationDetailSchema = z.object({
         * * Default Value: newsequentialid()`),
     ConversationID: z.string().describe(`
         * * Field Name: ConversationID
-        * * Display Name: Conversation ID
+        * * Display Name: Conversation
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)`),
     ExternalID: z.string().nullable().describe(`
@@ -4167,19 +4167,19 @@ export const ConversationDetailSchema = z.object({
         * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.`),
     ArtifactID: z.string().nullable().describe(`
         * * Field Name: ArtifactID
-        * * Display Name: Artifact ID
+        * * Display Name: Artifact
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
         * * Description: Optional reference to a conversation artifact associated with this conversation detail`),
     ArtifactVersionID: z.string().nullable().describe(`
         * * Field Name: ArtifactVersionID
-        * * Display Name: Artifact Version ID
+        * * Display Name: Artifact Version
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
         * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail`),
@@ -4196,13 +4196,13 @@ export const ConversationDetailSchema = z.object({
         * * Description: Indicates if this message is pinned within the conversation for easy reference`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent ID
+        * * Display Name: Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun`),
@@ -4224,7 +4224,7 @@ export const ConversationDetailSchema = z.object({
         * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run ID
+        * * Display Name: Test Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.`),
@@ -4243,6 +4243,12 @@ export const ConversationDetailSchema = z.object({
         * * Display Name: Automatic Commands
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.`),
+    OriginalMessageChanged: z.boolean().describe(`
+        * * Field Name: OriginalMessageChanged
+        * * Display Name: Original Message Changed
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -4269,7 +4275,7 @@ export const ConversationDetailSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -10202,6 +10208,11 @@ export const AIPromptModelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EffortLevel: z.number().nullable().describe(`
+        * * Field Name: EffortLevel
+        * * Display Name: Effort Level
+        * * SQL Data Type: int
+        * * Description: Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -28462,7 +28473,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
 
     /**
     * * Field Name: ConversationID
-    * * Display Name: Conversation ID
+    * * Display Name: Conversation
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
     */
@@ -28619,7 +28630,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.
@@ -28633,7 +28644,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
 
     /**
     * * Field Name: ArtifactID
-    * * Display Name: Artifact ID
+    * * Display Name: Artifact
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
@@ -28648,7 +28659,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
 
     /**
     * * Field Name: ArtifactVersionID
-    * * Display Name: Artifact Version ID
+    * * Display Name: Artifact Version
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
@@ -28690,7 +28701,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.
@@ -28704,7 +28715,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent ID
+    * * Display Name: Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun
@@ -28751,7 +28762,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run ID
+    * * Display Name: Test Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.
@@ -28800,6 +28811,20 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
     set AutomaticCommands(value: string | null) {
         this.Set('AutomaticCommands', value);
+    }
+
+    /**
+    * * Field Name: OriginalMessageChanged
+    * * Display Name: Original Message Changed
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.
+    */
+    get OriginalMessageChanged(): boolean {
+        return this.Get('OriginalMessageChanged');
+    }
+    set OriginalMessageChanged(value: boolean) {
+        this.Set('OriginalMessageChanged', value);
     }
 
     /**
@@ -28858,7 +28883,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -43872,6 +43897,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
     * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
     * * ParallelCount: This rule ensures that the ParallelCount value must always be at least 1.
     * * Priority: This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
@@ -43882,6 +43908,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateEffortLevelRange(result);
         this.ValidateExecutionGroupNonNegative(result);
         this.ValidateParallelCountAtLeastOne(result);
         this.ValidatePriorityIsNonNegative(result);
@@ -43889,6 +43916,24 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelRange(result: ValidationResult) {
+    	// Only validate when a value is provided
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EffortLevel",
+    			"Effort level must be between 1 and 100.",
+    			this.EffortLevel,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -44139,6 +44184,19 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EffortLevel
+    * * Display Name: Effort Level
+    * * SQL Data Type: int
+    * * Description: Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.
+    */
+    get EffortLevel(): number | null {
+        return this.Get('EffortLevel');
+    }
+    set EffortLevel(value: number | null) {
+        this.Set('EffortLevel', value);
     }
 
     /**

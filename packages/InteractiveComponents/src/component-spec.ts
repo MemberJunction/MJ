@@ -1,12 +1,94 @@
 import { ComponentEvent, ComponentProperty } from "./component-props-events";
 import { ComponentDataRequirements } from "./data-requirements";
 import { ComponentLibraryDependency } from "./library-dependency";
+import { ComponentTypeDefinition } from "./component-constraints";
+
+/**
+ * Tracks the current change being applied to this component.
+ * Populated by Impact Assessor at the start of a modification flow,
+ * updated by each agent as it processes the request.
+ *
+ * This is only used for embedded components - registry components never have changeRequest.
+ */
+export interface ComponentChangeRequest {
+    /**
+     * The user's original request that initiated this change
+     */
+    userRequest: string;
+
+    /**
+     * Classification of the change type
+     */
+    type: 'new' | 'bug_fix' | 'enhancement' | 'data_change' | 'style_change';
+
+    /**
+     * Which layers of the spec are affected by this change.
+     * Set by the Impact Assessor based on analyzing the user request
+     * against the existing spec.
+     */
+    affectsLayers: {
+        prd: boolean;
+        data: boolean;
+        tdd: boolean;
+        code: boolean;
+    };
+
+    /**
+     * Summary of changes made at each layer, populated as each agent completes.
+     * Downstream agents can see what upstream agents modified.
+     */
+    changeSummary?: {
+        prd?: string;
+        data?: string;
+        tdd?: string;
+        code?: string;
+    };
+
+    /**
+     * For this specific component in the hierarchy: does it need regeneration?
+     * Set by Software Architect when analyzing which components are affected.
+     */
+    componentNeedsUpdate?: boolean;
+
+    /**
+     * Explanation of why this component needs (or doesn't need) updating.
+     * Helps code generator understand the context.
+     */
+    componentChangeReason?: string;
+}
+
+/**
+ * Result of the most recent test harness execution for this component.
+ * Only applicable to embedded components (not registry components).
+ */
+export interface ComponentTestResult {
+    /**
+     * Overall result of the test
+     */
+    status: 'passed' | 'failed';
+
+    /**
+     * When the test was run (UTC)
+     */
+    timestamp: Date;
+
+    /**
+     * If failed, a brief description of what went wrong
+     */
+    errorSummary?: string;
+}
 
 /**
  * Specification for an interactive component
  */
 export class ComponentSpec {
     name: string;
+
+    /**
+     * Optional: Custom type definitions for complex prop types (e.g., ColumnDef, FieldDefinition).
+     * Similar to TypeScript interfaces, used for lint-time validation of object literals.
+     */
+    typeDefinitions?: Record<string, ComponentTypeDefinition>;
 
     /**
      * Components can be embedded or registry. Registry means we don't have the
@@ -155,6 +237,25 @@ export class ComponentSpec {
      * collaborate on completing the component.
      */
     workPlan?: string;
+
+    /**
+     * Current change request being processed, if any.
+     * Populated by Impact Assessor at the start of a modification flow.
+     * Updated by each agent as it processes the request.
+     *
+     * This field is only present during active modification flows and
+     * for embedded components (never on registry components).
+     */
+    changeRequest?: ComponentChangeRequest;
+
+    /**
+     * Result of the most recent test harness execution.
+     * Tells downstream agents whether the current code is working or broken.
+     *
+     * Only populated for embedded components after code generation completes.
+     * Registry components do not have test results as they are pre-tested.
+     */
+    latestTestResult?: ComponentTestResult;
 };
 
 /**

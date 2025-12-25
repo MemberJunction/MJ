@@ -94,42 +94,50 @@
   font-size: 10px;
 }
 
-.chat-members {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: transparent;
-  border: 1px solid #E5E7EB;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #6B7280;
-  cursor: pointer;
-  transition: all 150ms ease;
-}
-
-.chat-members:hover {
-  background: #F9FAFB;
-  color: #111827;
-}
-
+.chat-members,
 .artifact-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  justify-content: center;
+  position: relative;
+  padding: 6px 8px;
   background: transparent;
   border: 1px solid #E5E7EB;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: #6B7280;
   cursor: pointer;
   transition: all 150ms ease;
 }
 
+.chat-members:hover,
 .artifact-indicator:hover {
   background: #F9FAFB;
   color: #111827;
+}
+
+/* Badge overlay for artifact and member counts */
+.artifact-badge,
+.members-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: #3B82F6;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.members-badge {
+  background: #6366F1;
 }
 
 .ambient-agent-indicator {
@@ -688,25 +696,36 @@
 @media (max-width: 768px) {
   .chat-header {
     padding: 8px 12px;
-    gap: 8px;
-    flex-direction: column;
-    align-items: stretch;
+    gap: 6px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    position: relative;
   }
   .chat-info {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
     gap: 8px;
+    flex: 1;
+    min-width: 0;
+    order: 1;
   }
   .chat-title {
-    font-size: 14px;
-    width: 100%;
-    white-space: normal;
+    font-size: 15px;
+    font-weight: 700;
+    width: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
   }
   .project-tag {
     margin-left: 0;
     font-size: 10px;
     padding: 3px 8px;
     height: 24px;
+    display: none; /* Hide on mobile to save space */
   }
   .test-indicator {
     margin-left: 0;
@@ -714,15 +733,28 @@
     padding: 3px 8px;
     height: 24px;
   }
+  /* Action buttons - icon only on mobile */
+  .chat-actions-buttons {
+    order: 2;
+    flex-shrink: 0;
+  }
+  .chat-actions-buttons .action-btn {
+    padding: 6px 8px;
+    min-width: auto;
+  }
+  .chat-actions-buttons .action-btn .btn-label {
+    display: none;
+  }
   .chat-actions {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    width: 100%;
+    flex-wrap: nowrap;
   }
   .chat-members,
-  .artifact-indicator,
+  .artifact-indicator {
+    padding: 5px 7px;
+    font-size: 13px;
+  }
   .action-btn {
-    padding: 6px 10px;
+    padding: 6px 8px;
     font-size: 12px;
   }
   .ambient-agent-indicator {
@@ -747,7 +779,7 @@
     width: 36px;
     height: 36px;
   }
-  /* Artifact pane - full width overlay on mobile */
+  /* Artifact pane - full width overlay on mobile, overlapping header */
   .chat-content-area {
     position: relative;
   }
@@ -755,7 +787,7 @@
     position: fixed;
     left: 0;
     right: 0;
-    top: 80px;
+    top: 56px; /* 48px nav + 8px dark strip above blue border */
     bottom: 0;
     width: 100% !important;
     z-index: 100;
@@ -769,15 +801,17 @@
 @media (max-width: 480px) {
   .chat-header {
     padding: 6px 8px;
-    gap: 6px;
+    gap: 4px;
   }
   .chat-title {
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 700;
   }
   .project-tag {
     font-size: 9px;
     padding: 2px 6px;
     height: 20px;
+    display: none;
   }
   .test-indicator {
     font-size: 9px;
@@ -785,9 +819,12 @@
     height: 20px;
   }
   .chat-members,
-  .artifact-indicator,
-  .action-btn {
+  .artifact-indicator {
     padding: 4px 8px;
+    font-size: 11px;
+  }
+  .action-btn {
+    padding: 5px 7px;
     font-size: 11px;
   }
   .ambient-agent-indicator {

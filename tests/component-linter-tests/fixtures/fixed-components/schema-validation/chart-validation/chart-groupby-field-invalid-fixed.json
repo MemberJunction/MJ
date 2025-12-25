@@ -1,0 +1,19 @@
+{
+  "name": "ChartGroupByFieldInvalidFixed",
+  "type": "generic",
+  "title": "Chart GroupBy Field Invalid - Fixed Pattern",
+  "description": "Tests chart with valid groupBy field from query",
+  "code": "function ChartGroupByFieldInvalidFixed({ utilities, components }) {\n  const [salesData, setSalesData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales By Category',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        setSalesData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sales Chart</h3>\n      {/* ✅ groupBy uses Category field that exists */}\n      <SimpleChart data={salesData} groupBy=\"Category\" valueField=\"Revenue\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Sales By Category",
+      "categoryPath": "Sales/Reports",
+      "fields": ["Category", "Revenue", "OrderCount"]
+    }]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "DataGridNoEntitynameStrings",
+  "description": "DataGrid without entityName can use arbitrary string column names - validates conditional constraint skipping",
+  "code": "function DataGridNoEntitynameStrings({ components, utilities }) {\n  const { DataGrid } = components;\n  const [customData, setCustomData] = React.useState([\n    { foo: 'Value 1', bar: 100, baz: 'Category A' },\n    { foo: 'Value 2', bar: 200, baz: 'Category B' },\n    { foo: 'Value 3', bar: 150, baz: 'Category A' }\n  ]);\n\n  return (\n    <div>\n      <h1>Custom Data Grid</h1>\n      <DataGrid\n        data={customData}\n        columns={['foo', 'bar', 'baz']}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ]
+}

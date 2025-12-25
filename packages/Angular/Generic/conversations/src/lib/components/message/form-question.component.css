@@ -67,7 +67,7 @@
 
 .question-textarea {
   resize: vertical;
-  min-height: 60px;
+  min-height: 100px;
 }
 
 .question-buttongroup {
@@ -219,7 +219,7 @@
 
 /* Medium fields - for names, cities, phone numbers (DEFAULT) */
 .input-container.width-medium {
-  max-width: 350px;
+  max-width: 450px;
 }
 
 .input-container.width-medium .question-input,
@@ -229,7 +229,7 @@
 
 /* Wide fields - for emails, URLs, long text */
 .input-container.width-wide {
-  max-width: 500px;
+  max-width: 100%;
 }
 
 .input-container.width-wide .question-input,

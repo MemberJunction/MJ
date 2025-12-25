@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/revenue-trend-chart.spec.json",
+  "description": "Valid component demonstrating revenue trend visualization with area chart"
+}

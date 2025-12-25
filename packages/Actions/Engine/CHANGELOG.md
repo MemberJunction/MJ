@@ -1,5 +1,81 @@
 # Change Log - @memberjunction/actions
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/ai-prompts@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ai-core-plus@2.128.0
+  - @memberjunction/aiengine@2.128.0
+  - @memberjunction/actions-base@2.128.0
+  - @memberjunction/doc-utils@2.128.0
+  - @memberjunction/ai@2.128.0
+  - @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [0e56e97]
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/ai-core-plus@2.127.0
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/aiengine@2.127.0
+  - @memberjunction/ai-prompts@2.127.0
+  - @memberjunction/actions-base@2.127.0
+  - @memberjunction/doc-utils@2.127.0
+  - @memberjunction/ai@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.126.1
+- @memberjunction/ai-core-plus@2.126.1
+- @memberjunction/aiengine@2.126.1
+- @memberjunction/ai-prompts@2.126.1
+- @memberjunction/actions-base@2.126.1
+- @memberjunction/doc-utils@2.126.1
+- @memberjunction/core@2.126.1
+- @memberjunction/core-entities@2.126.1
+- @memberjunction/global@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-core-plus@2.126.0
+  - @memberjunction/aiengine@2.126.0
+  - @memberjunction/ai-prompts@2.126.0
+  - @memberjunction/actions-base@2.126.0
+  - @memberjunction/doc-utils@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/ai@2.126.0
+  - @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ai-core-plus@2.125.0
+  - @memberjunction/aiengine@2.125.0
+  - @memberjunction/ai-prompts@2.125.0
+  - @memberjunction/actions-base@2.125.0
+  - @memberjunction/doc-utils@2.125.0
+  - @memberjunction/ai@2.125.0
+  - @memberjunction/global@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

@@ -124,7 +124,7 @@ function DealPipelineDashboard({
     };
 
     loadDeals();
-  }, [includeClosedDeals, utilities?.refresh]);
+  }, [includeClosedDeals]);
 
   // Shared row selection handler
   const createRowSelectionHandler = (chartName) => {

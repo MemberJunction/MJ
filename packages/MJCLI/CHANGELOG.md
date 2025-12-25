@@ -1,5 +1,78 @@
 # Change Log - @memberjunction/cli
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/ai-cli@2.128.0
+  - @memberjunction/codegen-lib@2.128.0
+  - @memberjunction/db-auto-doc@2.128.0
+  - @memberjunction/metadata-sync@2.128.0
+  - @memberjunction/query-gen@2.128.0
+  - @memberjunction/sqlserver-dataprovider@2.128.0
+  - @memberjunction/testing-cli@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- b748848: Add Gemini 3 Flash and GPT-5.2 AI models, enhance QueryGen with graph-based entity targeting, AI-powered semantic query naming, and optional external SQL file generation
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/query-gen@2.127.0
+  - @memberjunction/ai-cli@2.127.0
+  - @memberjunction/codegen-lib@2.127.0
+  - @memberjunction/db-auto-doc@2.127.0
+  - @memberjunction/metadata-sync@2.127.0
+  - @memberjunction/sqlserver-dataprovider@2.127.0
+  - @memberjunction/testing-cli@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/metadata-sync@2.126.1
+- @memberjunction/ai-cli@2.126.1
+- @memberjunction/codegen-lib@2.126.1
+- @memberjunction/db-auto-doc@2.126.1
+- @memberjunction/core@2.126.1
+- @memberjunction/query-gen@2.126.1
+- @memberjunction/sqlserver-dataprovider@2.126.1
+- @memberjunction/testing-cli@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- 142c950: Add new QueryGen package for AI-powered SQL query generation with retry mechanisms, vector similarity search, entity grouping, query validation and refinement, hierarchical category management, and configurable metadata export
+- Updated dependencies [eae1a1f]
+- Updated dependencies [142c950]
+- Updated dependencies [703221e]
+  - @memberjunction/db-auto-doc@2.126.0
+  - @memberjunction/query-gen@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-cli@2.126.0
+  - @memberjunction/codegen-lib@2.126.0
+  - @memberjunction/metadata-sync@2.126.0
+  - @memberjunction/sqlserver-dataprovider@2.126.0
+  - @memberjunction/testing-cli@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ai-cli@2.125.0
+  - @memberjunction/codegen-lib@2.125.0
+  - @memberjunction/db-auto-doc@2.125.0
+  - @memberjunction/metadata-sync@2.125.0
+  - @memberjunction/sqlserver-dataprovider@2.125.0
+  - @memberjunction/testing-cli@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

@@ -2,59 +2,46 @@
   "name": "CashFlowChart",
   "namespace": "CRM/Finance",
   "type": "Chart",
-  "location": "embedded",
   "code": "@file:../code/cash-flow-chart.js",
-  "functionalRequirements": "## Cash Flow Chart\n\n### Purpose\nVisualize cash flow patterns.\n\n### Features\n- Waterfall chart\n- Inflows vs outflows\n- Running balance\n- Category breakdown",
+  "functionalRequirements": "Bar chart displaying cash flow analysis with revenue, expenses, and net cash.",
   "dataRequirements": {
-    "mode": "views",
-    "description": "Visualizes cash flow patterns from payment and invoice data",
-    "entities": [
-      {
-        "name": "Payments",
-        "description": "Payment transactions for cash flow tracking",
-        "displayFields": [
-          "PaymentDate",
-          "Amount",
-          "Category"
-        ],
-        "filterFields": [],
-        "sortFields": [],
-        "fieldMetadata": [],
-        "permissionLevelNeeded": [
-          "read"
-        ],
-        "usageContext": "Cash inflows from payments"
-      },
-      {
-        "name": "Invoices",
-        "description": "Invoice data for cash outflow tracking",
-        "displayFields": [
-          "IssueDate",
-          "TotalAmount",
-          "Category"
-        ],
-        "filterFields": [],
-        "sortFields": [],
-        "fieldMetadata": [],
-        "permissionLevelNeeded": [
-          "read"
-        ],
-        "usageContext": "Cash outflows from invoices"
-      }
-    ],
-    "queries": []
+    "mode": "props"
   },
-  "technicalDesign": "## Implementation\n\n### Props\n- cashFlowData: Array of cash flow entries\n\n### Chart\n- ApexCharts waterfall\n- Color coding",
+  "technicalDesign": "Uses ApexCharts bar chart with color-coded positive/negative values.",
   "properties": [
     {
-      "name": "cashFlowData",
-      "type": "Array<{date: string, category: string, amount: number, type: 'inflow' | 'outflow', balance: number}>",
+      "name": "loading",
+      "type": "boolean",
       "required": true,
-      "description": "Cash flow data entries"
+      "description": "Loading state"
+    },
+    {
+      "name": "metrics",
+      "type": "object",
+      "required": true,
+      "description": "Metrics object containing cash flow data"
+    },
+    {
+      "name": "chartRefs",
+      "type": "object",
+      "required": true,
+      "description": "Ref object for chart DOM elements"
+    },
+    {
+      "name": "formatCurrency",
+      "type": "function",
+      "required": true,
+      "description": "Function to format currency values"
     }
   ],
   "events": [],
   "dependencies": [],
-  "libraries": [],
-  "description": "Waterfall chart showing cash flow components"
+  "libraries": [
+    {
+      "name": "ApexCharts",
+      "version": "^3.45.1",
+      "globalVariable": "ApexCharts"
+    }
+  ],
+  "description": "Cash flow visualization with bar chart"
 }

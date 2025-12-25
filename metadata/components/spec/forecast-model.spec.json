@@ -1,72 +1,59 @@
 {
   "name": "ForecastModel",
   "namespace": "CRM/Finance",
-  "type": "Other",
-  "location": "embedded",
+  "type": "Chart",
   "code": "@file:../code/forecast-model.js",
-  "functionalRequirements": "## Forecast Model\n\n### Purpose\nDisplay financial forecasting and projections.\n\n### Features\n- Predictive models\n- Scenario analysis\n- Confidence intervals\n- Adjustment controls",
+  "functionalRequirements": "Line chart displaying revenue forecast with scenario selection and confidence intervals.",
   "dataRequirements": {
-    "mode": "views",
-    "description": "Displays financial forecasting and projections",
-    "entities": [
-      {
-        "name": "Deals",
-        "description": "Deal pipeline for forecasting",
-        "displayFields": [
-          "Amount",
-          "Probability",
-          "CloseDate",
-          "Stage"
-        ],
-        "filterFields": [],
-        "sortFields": [],
-        "fieldMetadata": [],
-        "permissionLevelNeeded": [
-          "read"
-        ],
-        "usageContext": "Pipeline-based revenue forecasting"
-      },
-      {
-        "name": "Invoices",
-        "description": "Historical revenue data",
-        "displayFields": [
-          "TotalAmount",
-          "IssueDate"
-        ],
-        "filterFields": [],
-        "sortFields": [],
-        "fieldMetadata": [],
-        "permissionLevelNeeded": [
-          "read"
-        ],
-        "usageContext": "Historical trend analysis"
-      }
-    ],
-    "queries": []
+    "mode": "props"
   },
-  "technicalDesign": "## Implementation\n\n### Props\n- forecastData: Forecast projections\n- scenarios: Different scenarios\n- onScenarioChange: Scenario selection",
+  "technicalDesign": "Uses ApexCharts line chart with dashed stroke for forecast visualization and dropdown for scenario selection.",
   "properties": [
     {
-      "name": "forecastData",
-      "type": "Array<{period: string, value: number, confidence: {low: number, high: number}}>",
+      "name": "loading",
+      "type": "boolean",
       "required": true,
-      "description": "Forecast projection data"
+      "description": "Loading state"
+    },
+    {
+      "name": "forecastData",
+      "type": "Array<object>",
+      "required": true,
+      "description": "Array of forecast data with confidence intervals"
     },
     {
       "name": "scenarios",
-      "type": "Array<{id: string, name: string, parameters: {growth: number, seasonality: boolean}}>",
+      "type": "Array<object>",
+      "required": false,
+      "description": "Array of forecast scenarios"
+    },
+    {
+      "name": "chartRefs",
+      "type": "object",
       "required": true,
-      "description": "Available scenarios"
+      "description": "Ref object for chart DOM elements"
+    },
+    {
+      "name": "formatCurrency",
+      "type": "function",
+      "required": true,
+      "description": "Function to format currency values"
     },
     {
       "name": "onScenarioChange",
-      "type": "(scenarioId: string) => void",
+      "type": "function",
       "required": false,
-      "description": "Scenario change callback"
+      "description": "Callback when scenario changes"
     }
   ],
   "events": [],
   "dependencies": [],
-  "libraries": [],
-  "description": "Predictive model chart with revenue forecasting"
+  "libraries": [
+    {
+      "name": "ApexCharts",
+      "version": "^3.45.1",
+      "globalVariable": "ApexCharts"
+    }
+  ],
+  "description": "Revenue forecast visualization with scenario modeling"
 }

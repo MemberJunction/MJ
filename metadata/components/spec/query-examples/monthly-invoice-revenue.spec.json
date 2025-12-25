@@ -2,6 +2,7 @@
   "title": "Monthly Invoice Revenue Chart",
   "type": "chart",
   "name": "MonthlyInvoiceRevenue",
+  "namespace": "CRM/Finance",
   "userExplanation": "A bar chart showing monthly invoice revenue trends with flexible filtering. Supports filtering by year, month, status, and date ranges. When multiple status values are provided (e.g., 'Paid,Sent'), the chart groups by status for comparison.",
   "functionalRequirements": "## Business Objectives\n- Visualize monthly revenue trends from invoices\n- Understand revenue patterns and seasonality across different invoice statuses\n- Compare monthly performance over time\n- Analyze outstanding balances and payment trends\n\n## Functional Requirements\n- **Chart Display**: Render a bar chart showing monthly revenue totals\n- **Flexible Filtering**: Support year, month, status list, and custom date range filters\n- **Dynamic Grouping**: When multiple statuses provided (e.g., 'Paid,Sent'), group by status for comparison\n- **Data Metrics**: Show total revenue, invoice count, outstanding balance, and average invoice\n- **Tooltips**: Display detailed metrics when hovering over bars\n- **Responsive Design**: Chart resizes for different screen sizes\n- **Loading States**: Show loading indicator while data is being fetched\n- **Empty State**: Display helpful message if no data is available\n- **Error Handling**: Show user-friendly error messages if query fails",
   "description": "Displays monthly invoice revenue trends with flexible filtering by year, month, status, and date ranges. Features dynamic grouping by status when comparing multiple invoice states.",
@@ -12,7 +13,9 @@
         "name": "Monthly Invoice Revenue",
         "categoryPath": "Demo",
         "description": "Aggregates invoices by YEAR/MONTH and calculates comprehensive revenue metrics: TotalAmount (revenue), SubTotal, TaxAmount, AmountPaid, BalanceDue, invoice count, and average. Dynamic GROUP BY: adds Status column when multiple statuses provided (e.g., 'Paid,Sent'). Uses STRING_SPLIT for comma-delimited status lists. Defaults to Status='Paid' if no StatusList parameter. Supports Year, Month, StartDate, EndDate filters. **Result Order: Year DESC, Month DESC, Status** - Most recent periods first, with status comparison when multiple statuses selected.",
-        "entityNames": ["Invoices"],
+        "entityNames": [
+          "Invoices"
+        ],
         "fields": [
           {
             "name": "Year",
@@ -152,7 +155,9 @@
           }
         ],
         "usageContext": "Primary data source for chart - provides time-series revenue metrics with flexible filtering and optional status-based grouping. Query results are pre-aggregated and ready for visualization in SimpleChart component.",
-        "permissionLevelNeeded": ["read"]
+        "permissionLevelNeeded": [
+          "read"
+        ]
       }
     ]
   },
@@ -198,7 +203,11 @@
       "required": false,
       "description": "Type of chart to display: 'bar' (default), 'line', or 'area'",
       "default": "bar",
-      "possibleValues": ["bar", "line", "area"]
+      "possibleValues": [
+        "bar",
+        "line",
+        "area"
+      ]
     },
     {
       "name": "title",

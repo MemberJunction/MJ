@@ -20,6 +20,8 @@ function ProductCategoryAnalysis({
   const [error, setError] = useState(null);
   const [selectedSegment, setSelectedSegment] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [drilldownData, setDrilldownData] = useState(null);
+  const [loadingDrilldown, setLoadingDrilldown] = useState(false);
 
   // Internal filter state (only used when external props are null)
   const [pendingStartDate, setPendingStartDate] = useState(null);
@@ -33,7 +35,7 @@ function ProductCategoryAnalysis({
   const showDateFilters = startDate === null && endDate === null;
 
   // Get components from registry
-  const { SimpleChart, EntityDataGrid } = components;
+  const { SimpleChart, DataGrid } = components;
 
   // Apply date filters
   const handleApplyFilters = () => {
@@ -83,7 +85,7 @@ function ProductCategoryAnalysis({
     };
 
     loadCategoryData();
-  }, [category, effectiveStartDate, effectiveEndDate, utilities]);
+  }, [category, effectiveStartDate, effectiveEndDate]);
 
   // Load top products when category is selected
   const handleCategoryClick = async (clickData) => {
@@ -93,10 +95,11 @@ function ProductCategoryAnalysis({
     setSelectedSegment(clickData);
     setSelectedProduct(null);
     setLoadingProducts(true);
+    setLoadingDrilldown(true);
 
     try {
       // Execute the category top products query (conditional) - using effective dates
-      const result = await utilities.rq.RunQuery({
+      const productResult = await utilities.rq.RunQuery({
         QueryName: 'Category Top Products',
         CategoryPath: 'Demo',
         Parameters: {
@@ -107,17 +110,37 @@ function ProductCategoryAnalysis({
         }
       });
 
-      if (result && result.Success && result.Results) {
-        setProductData(result.Results);
+      if (productResult && productResult.Success && productResult.Results) {
+        setProductData(productResult.Results);
       } else {
-        console.error('Failed to load product data:', result?.ErrorMessage);
+        console.error('Failed to load product data:', productResult?.ErrorMessage);
         setProductData([]);
       }
+
+      // Load line items for the entire category using query
+      const lineItemsResult = await utilities.rq.RunQuery({
+        QueryName: 'Invoice Line Items by Product',
+        CategoryPath: 'Demo',
+        Parameters: {
+          Category: clickData.label,
+          StartDate: effectiveStartDate,
+          EndDate: effectiveEndDate
+        }
+      });
+
+      if (lineItemsResult && lineItemsResult.Success && lineItemsResult.Results) {
+        setDrilldownData(lineItemsResult.Results);
+      } else {
+        console.error('Failed to load line items:', lineItemsResult?.ErrorMessage);
+        setDrilldownData([]);
+      }
     } catch (err) {
-      console.error('Error loading product data:', err);
+      console.error('Error loading drill-down data:', err);
       setProductData([]);
+      setDrilldownData([]);
     } finally {
       setLoadingProducts(false);
+      setLoadingDrilldown(false);
     }
 
     // Fire external event if provided
@@ -131,8 +154,34 @@ function ProductCategoryAnalysis({
   };
 
   // Handle product selection for secondary drill-down
-  const handleProductClick = (product) => {
+  const handleProductClick = async (product) => {
     setSelectedProduct(product.ProductName);
+    setLoadingDrilldown(true);
+
+    try {
+      // Load line items for specific product using ProductID (robust ID-based filtering)
+      const result = await utilities.rq.RunQuery({
+        QueryName: 'Invoice Line Items by Product',
+        CategoryPath: 'Demo',
+        Parameters: {
+          ProductID: product.ProductID,
+          StartDate: effectiveStartDate,
+          EndDate: effectiveEndDate
+        }
+      });
+
+      if (result && result.Success && result.Results) {
+        setDrilldownData(result.Results);
+      } else {
+        console.error('Failed to load line items for product:', result?.ErrorMessage);
+        setDrilldownData([]);
+      }
+    } catch (err) {
+      console.error('Error loading line items for product:', err);
+      setDrilldownData([]);
+    } finally {
+      setLoadingDrilldown(false);
+    }
 
     // Fire external event if provided
     if (onProductClick) {
@@ -145,16 +194,16 @@ function ProductCategoryAnalysis({
     }
   };
 
-  // Handle EntityDataGrid row click
-  const handleRecordClick = (event) => {
+  // Handle DataGrid row click
+  const handleRecordClick = (record) => {
     if (onRecordClick) {
       onRecordClick({
-        lineItemId: event.record?.ID,
-        product: event.record?.Product,
-        quantity: event.record?.Quantity,
-        unitPrice: event.record?.UnitPrice,
-        totalPrice: event.record?.TotalPrice,
-        description: event.record?.Description
+        lineItemId: record?.ID,
+        product: record?.Product,
+        quantity: record?.Quantity,
+        unitPrice: record?.UnitPrice,
+        totalPrice: record?.TotalPrice,
+        description: record?.Description
       });
     }
   };
@@ -164,24 +213,7 @@ function ProductCategoryAnalysis({
     setSelectedSegment(null);
     setSelectedProduct(null);
     setProductData(null);
-  };
-
-  // Build EntityDataGrid extraFilter with date filters
-  const buildEntityFilter = () => {
-    const filters = [];
-
-    // Filter by selected category or product
-    if (selectedProduct) {
-      filters.push(`ProductID IN (SELECT ID FROM CRM.vwProducts WHERE Name='${selectedProduct}')`);
-    } else if (selectedSegment) {
-      filters.push(`ProductID IN (SELECT ID FROM CRM.vwProducts WHERE Category='${selectedSegment.label}')`);
-    }
-
-    // Note: InvoiceDate doesn't exist in vwInvoiceLineItems
-    // Date filtering would require joining to vwInvoices, which EntityDataGrid doesn't support
-    // The line items are already filtered by product selection
-
-    return filters.length > 0 ? filters.join(' AND ') : undefined;
+    setDrilldownData(null);
   };
 
   // Render component - keep filters visible at all times
@@ -447,24 +479,33 @@ function ProductCategoryAnalysis({
               borderRadius: '4px'
             }}>
               <h3 style={{ margin: '0 0 16px 0' }}>Line Item Details</h3>
-              <EntityDataGrid
-                entityName="Invoice Line Items"
-                extraFilter={buildEntityFilter()}
-                fields={['Product', 'Quantity', 'UnitPrice', 'TotalPrice', 'Description']}
-                orderBy="ID DESC"
-                pageSize={20}
-                maxCachedRows={100}
-                enablePageCache={true}
-                showPageSizeChanger={true}
-                enableSorting={true}
-                enableFiltering={true}
-                showRefreshButton={true}
-                onRowClick={handleRecordClick}
-                utilities={utilities}
-                styles={styles}
-                components={components}
-                callbacks={callbacks}
-              />
+              {loadingDrilldown ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <div>Loading line items...</div>
+                </div>
+              ) : drilldownData && drilldownData.length > 0 ? (
+                <DataGrid
+                  data={drilldownData}
+                  columns={['Product', 'Quantity', 'UnitPrice', 'TotalPrice', 'Description', 'InvoiceDate', 'AccountName']}
+                  entityName="Invoice Line Items"
+                  entityPrimaryKeys={['ID']}
+                  sorting={true}
+                  paging={true}
+                  filtering={true}
+                  onRowClick={handleRecordClick}
+                  utilities={utilities}
+                  styles={styles}
+                  components={components}
+                  callbacks={callbacks}
+                />
+              ) : drilldownData && drilldownData.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#8c8c8c' }}>
+                  <div style={{ fontSize: '16px' }}>No Line Items Found</div>
+                  <div style={{ marginTop: '8px' }}>
+                    No line item records found for this selection
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

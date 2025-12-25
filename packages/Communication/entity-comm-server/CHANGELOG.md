@@ -1,5 +1,68 @@
 # Change Log - @memberjunction/entity-communications-server
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/communication-types@2.128.0
+  - @memberjunction/communication-engine@2.128.0
+  - @memberjunction/entity-communications-base@2.128.0
+  - @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/communication-types@2.127.0
+  - @memberjunction/communication-engine@2.127.0
+  - @memberjunction/entity-communications-base@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.126.1
+- @memberjunction/communication-engine@2.126.1
+- @memberjunction/entity-communications-base@2.126.1
+- @memberjunction/core@2.126.1
+- @memberjunction/core-entities@2.126.1
+- @memberjunction/global@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [4d1d468]
+- Updated dependencies [703221e]
+  - @memberjunction/communication-types@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/communication-engine@2.126.0
+  - @memberjunction/entity-communications-base@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [e1569fc]
+- Updated dependencies [bd4aa3d]
+- Updated dependencies [a692034]
+  - @memberjunction/communication-types@2.125.0
+  - @memberjunction/communication-engine@2.125.0
+  - @memberjunction/entity-communications-base@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/global@2.125.0
+
 ## 2.124.0
 
 ### Patch Changes

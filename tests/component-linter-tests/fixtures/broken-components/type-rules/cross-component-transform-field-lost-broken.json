@@ -1,0 +1,18 @@
+{
+  "name": "CrossComponentTransformFieldLostBroken",
+  "type": "generic",
+  "title": "Cross-Component Transform Field Lost - Broken Pattern",
+  "description": "Tests data transformation that loses required field for downstream component (may fail until linter refactor)",
+  "code": "function CrossComponentTransformFieldLostBroken({ utilities, components }) {\n  const [chartData, setChartData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Orders' });\n      if (result?.Success) {\n        // ❌ Transformation removes TotalAmount field that chart needs\n        const transformed = result.Results.map(o => ({\n          OrderDate: o.OrderDate,\n          CustomerName: o.CustomerName\n        }));\n        setChartData(transformed);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Orders by Date</h3>\n      {/* Chart expects TotalAmount but it was removed */}\n      <SimpleChart data={chartData} groupBy=\"OrderDate\" valueField=\"TotalAmount\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Orders",
+      "fields": ["ID", "OrderDate", "CustomerName", "TotalAmount", "Status"]
+    }]
+  }
+}

@@ -6,6 +6,7 @@ import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 
 import { ERDCompositeComponent } from './components/erd-composite.component';
+import { ResourceData } from '@memberjunction/core-entities';
 
 interface DashboardState {
   filterPanelVisible: boolean;
@@ -50,6 +51,10 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     });
   }
 
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Entity Administration"
+  }
+ 
   override ngOnDestroy(): void {
     this.userStateChangeSubject.complete();
     super.ngOnDestroy();
@@ -88,6 +93,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       this.hasLoadedUserState = true;
       setTimeout(() => {
         this.loadUserStateFromConfiguration();
+        this.NotifyLoadComplete();
       }, 100);
     }
   }

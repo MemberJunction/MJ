@@ -12,7 +12,8 @@ export interface DatabaseDocumentation {
   database: DatabaseInfo;
   seedContext?: SeedContext;
   phases: AnalysisPhases; // Multi-phase workflow organization
-  schemas: SchemaDefinition[]; // Includes merged column statistics
+  schemas: SchemaDefinition[]; // Deliverable: Database structure with descriptions
+  sampleQueries?: SampleQueriesDeliverable; // Deliverable: Training queries generated from schemas
   resumedFromFile?: string; // Path to the state file this analysis resumed from
 }
 
@@ -55,23 +56,38 @@ export interface SeedContext {
 /**
  * Multi-phase workflow organization
  * Each phase is optional and tracked separately
+ * Phases describe HOW deliverables were generated (process history)
  */
 export interface AnalysisPhases {
   keyDetection?: RelationshipDiscoveryPhase; // Primary key and foreign key detection
   descriptionGeneration: AnalysisRun[]; // Table and column description analysis
-  sampleQueryGeneration?: SampleQueryGenerationPhase; // Sample query generation for AI agents
+  queryGeneration?: QueryGenerationPhase; // Metadata about query generation process
 }
 
 /**
- * Sample query generation phase results
+ * Query generation phase metadata (process tracking)
+ * The actual queries are stored as a top-level deliverable
  */
-export interface SampleQueryGenerationPhase {
+export interface QueryGenerationPhase {
   startedAt: string;
   completedAt?: string;
   status: 'running' | 'completed' | 'failed';
+  queriesGenerated: number;
+  tokensUsed: number;
+  estimatedCost: number;
+  errorMessage?: string;
+}
+
+/**
+ * Sample queries deliverable (product of analysis)
+ * Training queries generated from database schemas for AI agents
+ */
+export interface SampleQueriesDeliverable {
+  generatedAt: string;
+  status: 'completed' | 'partial' | 'failed';
   queries: SampleQuery[];
   summary: SampleQueryGenerationSummary;
-  errorMessage?: string;
+  modelUsed?: string;
 }
 
 export interface SchemaDefinition {

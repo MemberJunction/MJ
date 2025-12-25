@@ -1,0 +1,15 @@
+{
+  "name": "EntityArrayFilterInvalidBroken",
+  "type": "generic",
+  "title": "Entity Array Filter Invalid Field - Broken Pattern",
+  "description": "Tests linter detection of filtering by non-existent entity field",
+  "code": "function EntityArrayFilterInvalidBroken({ utilities }) {\n  const [activeMembers, setActiveMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Filtering by non-existent field: Members has no Status field\n        const filtered = result.Results.filter(m => m.Status === 'Active');\n        setActiveMembers(filtered);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Active Members</h3>\n      {activeMembers.map((m, i) => (\n        <div key={i}>{m.FirstName} {m.LastName}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{"name": "Members", "type": "view"}]
+  }
+}

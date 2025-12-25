@@ -1,0 +1,21 @@
+{
+  "name": "ComponentPropNameTypoFixed",
+  "type": "generic",
+  "title": "Component Property Name Typo - Fixed Pattern",
+  "description": "Tests correct component property name",
+  "code": "function ComponentPropNameTypoFixed({ utilities, components }) {\n  const [members, setMembers] = useState([]);\n  const { DataTable } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* ✅ Correct property name: data */}\n      <DataTable data={members} columns={['Name', 'Email']} />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "components": [{
+      "name": "DataTable",
+      "properties": [
+        {"name": "data", "type": "array", "isRequired": true},
+        {"name": "columns", "type": "array", "isRequired": false}
+      ]
+    }]
+  }
+}

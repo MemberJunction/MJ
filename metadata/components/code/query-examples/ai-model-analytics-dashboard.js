@@ -95,7 +95,7 @@ function AIModelAnalyticsDashboard({
     };
 
     loadData();
-  }, [startDate, endDate, vendorName, modelName, daysBack, utilities]);
+  }, [startDate, endDate, vendorName, modelName, daysBack]);
 
   // Calculate KPI metrics
   const calculateKPIs = () => {

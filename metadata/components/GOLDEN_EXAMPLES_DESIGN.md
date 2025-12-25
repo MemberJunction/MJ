@@ -8,18 +8,45 @@ This document provides everything needed to implement 8 golden example component
 
 ### Final Status Summary
 
-| # | Component | Type | Queries | Status | Violations |
-|---|-----------|------|---------|--------|------------|
-| 1 | MonthlyInvoiceRevenue | Chart | 1 | ✅ Complete | 0 |
-| 2 | TopProductsRanking | Table | 1 | ✅ Complete | 0 |
-| 3 | AIModelAnalyticsDashboard | Dashboard | 3 | ✅ Complete | 0 |
-| 4 | AccountRevenueByType | Chart | 1 | ✅ Complete | 0 |
-| 5 | ProductCategoryAnalysis | Dashboard | 2 | ✅ Complete | 0 |
-| 6 | SubmissionReviewDashboard | Dashboard | 3 | ✅ Complete | 0 |
-| 7 | DealPipelineVisualization | Dashboard | 4 | ✅ Complete | 0 |
-| 8 | InvoiceAgingAnalysis | Dashboard | 3 | ✅ Complete | 0 |
+| # | Component | Type | Queries | Status | Violations | Libraries |
+|---|-----------|------|---------|--------|------------|-----------|
+| 1 | MonthlyInvoiceRevenue | Chart | 1 | ✅ Complete | 0 | Generic only |
+| 2 | TopProductsRanking | Table | 1 | ✅ Complete | 0 | Generic only |
+| 3 | AIModelAnalyticsDashboard | Dashboard | 3 | ✅ Complete | 0 | Generic only |
+| 4 | AccountRevenueByType | Chart | 1 | ✅ Complete | 0 | Generic only |
+| 5 | ProductCategoryAnalysis | Dashboard | 2 | ✅ Complete | 0 | Generic only |
+| 6 | SubmissionReviewDashboard | Dashboard | 3 | ✅ Complete | 0 | Generic only |
+| 7 | DealPipelineVisualization | Dashboard | 4 | ✅ Complete | 0 | **ApexCharts** |
+| 8 | InvoiceAgingAnalysis | Dashboard | 3 | ✅ Complete | 0 | **D3.js** |
 
 **Total: 8 components, 18 queries, 0 linter violations** 🚀
+
+### 📚 Library Usage Patterns Demonstrated
+
+The 8 golden examples now demonstrate **THREE distinct patterns**:
+
+#### **Pattern 1: Generic Components Only** (6 components)
+- MonthlyInvoiceRevenue, TopProductsRanking, AIModelAnalyticsDashboard
+- AccountRevenueByType, ProductCategoryAnalysis, SubmissionReviewDashboard
+- **Use Case**: Standard visualizations where generic components provide sufficient functionality
+- **Decision Point**: Choose when rapid development and consistency are priorities
+
+#### **Pattern 2: Hybrid - Specialized Library** (Component #7)
+- **DealPipelineVisualization**: ApexCharts funnel + SimpleChart velocity
+- **Use Case**: Mix specialized libraries for complex visualizations with generic components for simple ones
+- **Technical Rationale**: ApexCharts has superior funnel chart support
+- **Decision Point**: Choose when specific visualization types need specialized library features
+
+#### **Pattern 3: Custom D3 Visualization** (Component #8)
+- **InvoiceAgingAnalysis**: D3.js custom aging buckets + SimpleChart payment trends
+- **Use Case**: Truly custom visualizations that require pixel-perfect control and unique interactions
+- **Technical Rationale**: Color-coded risk levels with heatmap gradient not available in generic components
+- **Decision Point**: Choose when generic components can't express the required visualization complexity
+
+**Educational Value:**
+- Shows the full spectrum: Generic → Specialized Library → Custom D3
+- Demonstrates decision-making criteria for library selection
+- Real-world pattern: most apps use a mix of all three approaches
 
 ### Key Achievements
 
@@ -52,6 +79,34 @@ This document provides everything needed to implement 8 golden example component
 5. **feat: Refactor Deal Pipeline Visualization to use query pair pattern** (eccaed242)
 6. **fix: Align query parameters with SQL templates** (e6ac472e2)
 
+### 🔮 Future Library Refactoring Candidates
+
+**Additional components that could be refactored to demonstrate different library patterns:**
+
+#### **Option 1: InvoiceAgingAnalysis + D3.js** (High Priority)
+- **Library**: D3.js (v7.8.5) ✅ Available
+- **Use Case**: Custom aging bucket heatmap visualization
+- **Current**: Uses SimpleChart for all visualizations
+- **Proposed**: Replace aging buckets chart with custom D3 visualization (grouped bars + heatmap hybrid)
+- **Educational Value**:
+  - Demonstrates maximum customization when generic components aren't flexible enough
+  - Shows D3.js integration for unique data visualizations
+  - Illustrates the "escape hatch" for truly unique requirements
+- **Complexity**: High (D3 has steep learning curve)
+
+#### **Option 2: AIModelAnalyticsDashboard + ECharts** (Medium Priority)
+- **Library**: ECharts ✅ Available
+- **Use Case**: Advanced time-series chart with zoom/brush features
+- **Current**: Uses SimpleChart for all 3 charts (doughnut, bar, line)
+- **Proposed**: Replace time-series trend chart with ECharts for advanced interactions
+- **Educational Value**:
+  - Demonstrates when to upgrade from basic charting to enterprise-grade
+  - Shows ECharts integration (Chinese origin, globally popular)
+  - Illustrates feature-rich charting libraries
+- **Complexity**: Medium (ECharts is easier than D3)
+
+**Note**: These refactorings are **optional** and should only be done if additional pattern variety is needed for educational purposes. The current 7 generic + 1 hybrid (ApexCharts) mix is sufficient.
+
 ### Reference for Future Work
 
 **Component Testing:**
@@ -73,6 +128,9 @@ DB_TRUST_SERVER_CERTIFICATE=1 sqlcmd -S sqlserver.local,1433 \
 - Match spec parameters exactly with SQL template parameters
 - DataGrid with OpenEntityRecord provides better UX than EntityDataGrid with SQL filters
 - Component linter catches parameter mismatches early
+- Choose specialized libraries (ApexCharts, D3, ECharts) when generic components lack needed features
+- React is implicit - never list it in the libraries array
+- Only list libraries that the component code directly uses (not dependencies' libraries)
 
 ---
 

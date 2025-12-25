@@ -1,0 +1,1371 @@
+[
+  {
+    "name": "Top Customers by Revenue",
+    "userQuestion": "Who are our top 10 customers by total revenue?",
+    "description": "Returns the top customers ranked by total revenue with their contact information",
+    "technicalDescription": "Aggregates order totals by customer, joins customer details, orders by revenue descending",
+    "sql": "SELECT TOP 10 c.ID, c.Name, c.Email, c.Phone, SUM(o.TotalAmount) AS TotalRevenue, COUNT(o.ID) AS OrderCount FROM [dbo].[vwCustomers] c INNER JOIN [dbo].[vwOrders] o ON c.ID = o.CustomerID WHERE o.Status = 'Completed' AND o.OrderDate >= {{ startDate | sqlString }} GROUP BY c.ID, c.Name, c.Email, c.Phone ORDER BY TotalRevenue DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date for revenue calculation period",
+        "usage": ["WHERE clause date filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Customer unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Customer full name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Email",
+        "description": "Customer email address",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Phone",
+        "description": "Customer phone number",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "TotalRevenue",
+        "description": "Sum of all completed order amounts",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "OrderCount",
+        "description": "Total number of orders placed",
+        "type": "int",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Monthly Sales Trend",
+    "userQuestion": "What is our monthly sales trend for the past year?",
+    "description": "Returns monthly revenue, order count, and average order value grouped by month",
+    "technicalDescription": "Aggregates sales data by month using DATEPART, calculates revenue and averages, orders chronologically",
+    "sql": "SELECT YEAR(OrderDate) AS Year, MONTH(OrderDate) AS Month, COUNT(ID) AS OrderCount, SUM(TotalAmount) AS Revenue, AVG(TotalAmount) AS AvgOrderValue FROM [dbo].[vwOrders] WHERE OrderDate >= DATEADD(YEAR, -1, GETDATE()) AND Status = 'Completed' GROUP BY YEAR(OrderDate), MONTH(OrderDate) ORDER BY Year, Month",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "Year",
+        "description": "Year of the sales data",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "Month",
+        "description": "Month number (1-12)",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "OrderCount",
+        "description": "Number of orders in the month",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "Revenue",
+        "description": "Total revenue for the month",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgOrderValue",
+        "description": "Average order value for the month",
+        "type": "decimal",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Products Low in Stock",
+    "userQuestion": "Which products are running low on inventory?",
+    "description": "Returns products where current quantity is below the reorder threshold",
+    "technicalDescription": "Filters products by comparing QuantityOnHand with ReorderLevel, includes supplier info",
+    "sql": "SELECT p.ID, p.Name, p.SKU, p.QuantityOnHand, p.ReorderLevel, p.UnitPrice, s.Name AS SupplierName, s.Email AS SupplierEmail FROM [dbo].[vwProducts] p LEFT JOIN [dbo].[vwSuppliers] s ON p.SupplierID = s.ID WHERE p.QuantityOnHand <= p.ReorderLevel AND p.IsActive = 1 ORDER BY p.QuantityOnHand ASC",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Product unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Product name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "SKU",
+        "description": "Product stock keeping unit",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "QuantityOnHand",
+        "description": "Current inventory quantity",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "ReorderLevel",
+        "description": "Minimum quantity before reorder needed",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "UnitPrice",
+        "description": "Price per unit",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "SupplierName",
+        "description": "Name of the supplier",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "SupplierEmail",
+        "description": "Supplier contact email",
+        "type": "string",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "Customer Order History",
+    "userQuestion": "What is the complete order history for a specific customer?",
+    "description": "Returns all orders for a customer with details and line items",
+    "technicalDescription": "Joins orders and order items by customer ID, includes product details and totals",
+    "sql": "SELECT o.ID AS OrderID, o.OrderDate, o.Status, o.TotalAmount, oi.ProductID, p.Name AS ProductName, oi.Quantity, oi.UnitPrice, oi.LineTotal FROM [dbo].[vwOrders] o INNER JOIN [dbo].[vwOrderItems] oi ON o.ID = oi.OrderID INNER JOIN [dbo].[vwProducts] p ON oi.ProductID = p.ID WHERE o.CustomerID = {{ customerId | sqlString }} ORDER BY o.OrderDate DESC, oi.LineNumber ASC",
+    "parameters": [
+      {
+        "name": "customerId",
+        "type": "string",
+        "isRequired": true,
+        "description": "Unique identifier of the customer",
+        "usage": ["WHERE clause for customer filtering"],
+        "defaultValue": null,
+        "sampleValue": "CUST-12345"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "OrderID",
+        "description": "Order unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "OrderDate",
+        "description": "Date the order was placed",
+        "type": "date",
+        "optional": false
+      },
+      {
+        "name": "Status",
+        "description": "Current order status",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "TotalAmount",
+        "description": "Total order amount",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "ProductID",
+        "description": "Product identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "ProductName",
+        "description": "Name of the ordered product",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Quantity",
+        "description": "Quantity ordered",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "UnitPrice",
+        "description": "Price per unit at time of order",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "LineTotal",
+        "description": "Total for this line item",
+        "type": "decimal",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Revenue by Product Category",
+    "userQuestion": "What is our revenue breakdown by product category?",
+    "description": "Returns total revenue, order count, and units sold for each product category",
+    "technicalDescription": "Aggregates order items by product category, calculates revenue and quantities",
+    "sql": "SELECT pc.ID, pc.Name AS CategoryName, COUNT(DISTINCT o.ID) AS OrderCount, SUM(oi.Quantity) AS UnitsSold, SUM(oi.LineTotal) AS Revenue FROM [dbo].[vwProductCategories] pc INNER JOIN [dbo].[vwProducts] p ON pc.ID = p.CategoryID INNER JOIN [dbo].[vwOrderItems] oi ON p.ID = oi.ProductID INNER JOIN [dbo].[vwOrders] o ON oi.OrderID = o.ID WHERE o.Status = 'Completed' AND o.OrderDate BETWEEN {{ startDate | sqlString }} AND {{ endDate | sqlString }} GROUP BY pc.ID, pc.Name ORDER BY Revenue DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date of analysis period",
+        "usage": ["WHERE clause date range filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      },
+      {
+        "name": "endDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "End date of analysis period",
+        "usage": ["WHERE clause date range filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-12-31"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Category unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "CategoryName",
+        "description": "Product category name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "OrderCount",
+        "description": "Number of orders containing this category",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "UnitsSold",
+        "description": "Total units sold in this category",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "Revenue",
+        "description": "Total revenue for this category",
+        "type": "decimal",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Pending Orders Report",
+    "userQuestion": "What orders are currently pending or in process?",
+    "description": "Returns all orders that are not yet completed with customer and shipping details",
+    "technicalDescription": "Filters orders by status, joins customer info, ordered by oldest first",
+    "sql": "SELECT o.ID, o.OrderDate, o.Status, o.TotalAmount, c.Name AS CustomerName, c.Email, c.Phone, o.ShippingAddress, o.EstimatedDeliveryDate, DATEDIFF(DAY, o.OrderDate, GETDATE()) AS DaysPending FROM [dbo].[vwOrders] o INNER JOIN [dbo].[vwCustomers] c ON o.CustomerID = c.ID WHERE o.Status IN ('Pending', 'Processing', 'Shipped') ORDER BY o.OrderDate ASC",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Order unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "OrderDate",
+        "description": "Date order was placed",
+        "type": "date",
+        "optional": false
+      },
+      {
+        "name": "Status",
+        "description": "Current order status",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "TotalAmount",
+        "description": "Order total amount",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "CustomerName",
+        "description": "Customer name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Email",
+        "description": "Customer email",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Phone",
+        "description": "Customer phone",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "ShippingAddress",
+        "description": "Shipping address",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "EstimatedDeliveryDate",
+        "description": "Expected delivery date",
+        "type": "date",
+        "optional": true
+      },
+      {
+        "name": "DaysPending",
+        "description": "Number of days since order was placed",
+        "type": "int",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Employee Sales Performance",
+    "userQuestion": "What is each salesperson's performance this quarter?",
+    "description": "Returns sales metrics for each employee including revenue, order count, and average deal size",
+    "technicalDescription": "Aggregates orders by assigned employee, calculates totals and averages for current quarter",
+    "sql": "SELECT e.ID, e.FirstName, e.LastName, e.Department, COUNT(o.ID) AS OrderCount, SUM(o.TotalAmount) AS TotalRevenue, AVG(o.TotalAmount) AS AvgOrderValue, MIN(o.OrderDate) AS FirstSale, MAX(o.OrderDate) AS LastSale FROM [dbo].[vwEmployees] e LEFT JOIN [dbo].[vwOrders] o ON e.ID = o.SalesRepID AND o.Status = 'Completed' AND o.OrderDate >= DATEADD(QUARTER, DATEDIFF(QUARTER, 0, GETDATE()), 0) WHERE e.Department = 'Sales' AND e.IsActive = 1 GROUP BY e.ID, e.FirstName, e.LastName, e.Department ORDER BY TotalRevenue DESC",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Employee unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "FirstName",
+        "description": "Employee first name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "LastName",
+        "description": "Employee last name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Department",
+        "description": "Employee department",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "OrderCount",
+        "description": "Number of orders closed",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "TotalRevenue",
+        "description": "Total revenue generated",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgOrderValue",
+        "description": "Average order value",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "FirstSale",
+        "description": "Date of first sale this quarter",
+        "type": "date",
+        "optional": true
+      },
+      {
+        "name": "LastSale",
+        "description": "Date of most recent sale",
+        "type": "date",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "Product Performance Analysis",
+    "userQuestion": "Which products are our best and worst performers?",
+    "description": "Returns products with sales metrics, profit margins, and inventory turnover",
+    "technicalDescription": "Joins products with order items, calculates sales, profit, and turnover rate",
+    "sql": "SELECT p.ID, p.Name, p.SKU, p.Category, COUNT(DISTINCT oi.OrderID) AS OrderCount, SUM(oi.Quantity) AS UnitsSold, SUM(oi.LineTotal) AS Revenue, SUM((oi.UnitPrice - p.Cost) * oi.Quantity) AS GrossProfit, (SUM((oi.UnitPrice - p.Cost) * oi.Quantity) / NULLIF(SUM(oi.LineTotal), 0)) * 100 AS ProfitMarginPct, p.QuantityOnHand, CASE WHEN p.QuantityOnHand > 0 THEN CAST(SUM(oi.Quantity) AS DECIMAL) / p.QuantityOnHand ELSE NULL END AS TurnoverRate FROM [dbo].[vwProducts] p LEFT JOIN [dbo].[vwOrderItems] oi ON p.ID = oi.ProductID LEFT JOIN [dbo].[vwOrders] o ON oi.OrderID = o.ID AND o.Status = 'Completed' AND o.OrderDate >= {{ startDate | sqlString }} WHERE p.IsActive = 1 GROUP BY p.ID, p.Name, p.SKU, p.Category, p.Cost, p.QuantityOnHand ORDER BY Revenue DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date for performance analysis",
+        "usage": ["WHERE clause date filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Product unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Product name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "SKU",
+        "description": "Product SKU",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Category",
+        "description": "Product category",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "OrderCount",
+        "description": "Number of orders containing this product",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "UnitsSold",
+        "description": "Total units sold",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "Revenue",
+        "description": "Total revenue generated",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "GrossProfit",
+        "description": "Total gross profit",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "ProfitMarginPct",
+        "description": "Profit margin percentage",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "QuantityOnHand",
+        "description": "Current inventory level",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "TurnoverRate",
+        "description": "Inventory turnover rate",
+        "type": "decimal",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "Customer Segmentation by Purchase Frequency",
+    "userQuestion": "How can we segment customers by their purchase frequency?",
+    "description": "Returns customers grouped by purchase frequency with lifetime value",
+    "technicalDescription": "Aggregates orders per customer, categorizes by frequency, calculates metrics",
+    "sql": "SELECT c.ID, c.Name, c.Email, COUNT(o.ID) AS TotalOrders, SUM(o.TotalAmount) AS LifetimeValue, AVG(o.TotalAmount) AS AvgOrderValue, MIN(o.OrderDate) AS FirstOrderDate, MAX(o.OrderDate) AS LastOrderDate, DATEDIFF(DAY, MAX(o.OrderDate), GETDATE()) AS DaysSinceLastOrder, CASE WHEN COUNT(o.ID) >= 10 THEN 'Frequent' WHEN COUNT(o.ID) >= 5 THEN 'Regular' WHEN COUNT(o.ID) >= 2 THEN 'Occasional' ELSE 'One-Time' END AS Segment FROM [dbo].[vwCustomers] c LEFT JOIN [dbo].[vwOrders] o ON c.ID = o.CustomerID AND o.Status = 'Completed' WHERE c.IsActive = 1 GROUP BY c.ID, c.Name, c.Email ORDER BY TotalOrders DESC",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Customer unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Customer name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Email",
+        "description": "Customer email",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "TotalOrders",
+        "description": "Total number of orders",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "LifetimeValue",
+        "description": "Total amount spent",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgOrderValue",
+        "description": "Average order value",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "FirstOrderDate",
+        "description": "Date of first order",
+        "type": "date",
+        "optional": true
+      },
+      {
+        "name": "LastOrderDate",
+        "description": "Date of most recent order",
+        "type": "date",
+        "optional": true
+      },
+      {
+        "name": "DaysSinceLastOrder",
+        "description": "Days since last purchase",
+        "type": "int",
+        "optional": true
+      },
+      {
+        "name": "Segment",
+        "description": "Customer frequency segment",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Supplier Performance Metrics",
+    "userQuestion": "How are our suppliers performing on delivery and quality?",
+    "description": "Returns supplier metrics including on-time delivery rate and defect rate",
+    "technicalDescription": "Aggregates purchase orders and returns by supplier, calculates performance KPIs",
+    "sql": "SELECT s.ID, s.Name, s.Email, s.Phone, COUNT(DISTINCT po.ID) AS TotalPurchaseOrders, SUM(po.TotalAmount) AS TotalSpend, AVG(DATEDIFF(DAY, po.OrderDate, po.DeliveryDate)) AS AvgDeliveryDays, SUM(CASE WHEN po.DeliveryDate <= po.ExpectedDeliveryDate THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(po.ID), 0) AS OnTimeDeliveryPct, COUNT(r.ID) AS ReturnCount, SUM(r.Quantity) AS UnitsReturned, SUM(r.Amount) AS ReturnAmount FROM [dbo].[vwSuppliers] s LEFT JOIN [dbo].[vwPurchaseOrders] po ON s.ID = po.SupplierID AND po.Status = 'Completed' AND po.OrderDate >= {{ startDate | sqlString }} LEFT JOIN [dbo].[vwReturns] r ON s.ID = r.SupplierID AND r.ReturnDate >= {{ startDate | sqlString }} WHERE s.IsActive = 1 GROUP BY s.ID, s.Name, s.Email, s.Phone ORDER BY TotalSpend DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date for supplier performance period",
+        "usage": ["WHERE clause date filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Supplier unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Supplier name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Email",
+        "description": "Supplier email",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Phone",
+        "description": "Supplier phone",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "TotalPurchaseOrders",
+        "description": "Number of purchase orders",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "TotalSpend",
+        "description": "Total amount spent with supplier",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgDeliveryDays",
+        "description": "Average delivery time in days",
+        "type": "int",
+        "optional": true
+      },
+      {
+        "name": "OnTimeDeliveryPct",
+        "description": "On-time delivery percentage",
+        "type": "decimal",
+        "optional": true
+      },
+      {
+        "name": "ReturnCount",
+        "description": "Number of returns",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "UnitsReturned",
+        "description": "Total units returned",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "ReturnAmount",
+        "description": "Total value of returns",
+        "type": "decimal",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Invoice Aging Report",
+    "userQuestion": "Which invoices are overdue and by how much?",
+    "description": "Returns unpaid invoices with aging buckets and customer contact info",
+    "technicalDescription": "Filters unpaid invoices, calculates days overdue, groups into aging buckets",
+    "sql": "SELECT i.ID, i.InvoiceNumber, i.InvoiceDate, i.DueDate, i.Amount, i.AmountPaid, i.Amount - i.AmountPaid AS Balance, DATEDIFF(DAY, i.DueDate, GETDATE()) AS DaysOverdue, CASE WHEN DATEDIFF(DAY, i.DueDate, GETDATE()) <= 0 THEN 'Current' WHEN DATEDIFF(DAY, i.DueDate, GETDATE()) <= 30 THEN '1-30 Days' WHEN DATEDIFF(DAY, i.DueDate, GETDATE()) <= 60 THEN '31-60 Days' WHEN DATEDIFF(DAY, i.DueDate, GETDATE()) <= 90 THEN '61-90 Days' ELSE '90+ Days' END AS AgingBucket, c.Name AS CustomerName, c.Email, c.Phone FROM [dbo].[vwInvoices] i INNER JOIN [dbo].[vwCustomers] c ON i.CustomerID = c.ID WHERE i.Status = 'Unpaid' OR (i.Status = 'Partial' AND i.Amount > i.AmountPaid) ORDER BY DaysOverdue DESC",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Invoice unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "InvoiceNumber",
+        "description": "Invoice number",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "InvoiceDate",
+        "description": "Invoice date",
+        "type": "date",
+        "optional": false
+      },
+      {
+        "name": "DueDate",
+        "description": "Payment due date",
+        "type": "date",
+        "optional": false
+      },
+      {
+        "name": "Amount",
+        "description": "Total invoice amount",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AmountPaid",
+        "description": "Amount already paid",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "Balance",
+        "description": "Remaining balance due",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "DaysOverdue",
+        "description": "Number of days overdue",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "AgingBucket",
+        "description": "Aging category",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "CustomerName",
+        "description": "Customer name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Email",
+        "description": "Customer email",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Phone",
+        "description": "Customer phone",
+        "type": "string",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "New Customer Acquisition by Source",
+    "userQuestion": "Where are our new customers coming from?",
+    "description": "Returns customer acquisition metrics by marketing source and channel",
+    "technicalDescription": "Groups new customers by acquisition source, calculates counts and revenue",
+    "sql": "SELECT c.AcquisitionSource, c.AcquisitionChannel, COUNT(c.ID) AS NewCustomers, SUM(o.TotalAmount) AS Revenue, AVG(o.TotalAmount) AS AvgFirstOrderValue, MIN(c.CreatedAt) AS FirstCustomer, MAX(c.CreatedAt) AS LastCustomer FROM [dbo].[vwCustomers] c LEFT JOIN [dbo].[vwOrders] o ON c.ID = o.CustomerID AND o.OrderNumber = 1 WHERE c.CreatedAt BETWEEN {{ startDate | sqlString }} AND {{ endDate | sqlString }} GROUP BY c.AcquisitionSource, c.AcquisitionChannel ORDER BY NewCustomers DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date for acquisition period",
+        "usage": ["WHERE clause date range filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      },
+      {
+        "name": "endDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "End date for acquisition period",
+        "usage": ["WHERE clause date range filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-12-31"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "AcquisitionSource",
+        "description": "Marketing source (Google Ads, Facebook, etc)",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "AcquisitionChannel",
+        "description": "Marketing channel (Paid Search, Social, etc)",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "NewCustomers",
+        "description": "Number of new customers acquired",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "Revenue",
+        "description": "Revenue from first orders",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgFirstOrderValue",
+        "description": "Average first order value",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "FirstCustomer",
+        "description": "Date of first customer in period",
+        "type": "date",
+        "optional": true
+      },
+      {
+        "name": "LastCustomer",
+        "description": "Date of most recent customer",
+        "type": "date",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "Abandoned Cart Analysis",
+    "userQuestion": "What items are frequently left in abandoned shopping carts?",
+    "description": "Returns products most commonly found in abandoned carts with values",
+    "technicalDescription": "Joins abandoned carts with cart items, aggregates by product, orders by frequency",
+    "sql": "SELECT p.ID, p.Name, p.Category, p.UnitPrice, COUNT(DISTINCT ci.CartID) AS AbandonedCount, SUM(ci.Quantity) AS TotalQuantity, SUM(ci.Quantity * ci.UnitPrice) AS PotentialRevenue, AVG(ci.Quantity) AS AvgQuantity FROM [dbo].[vwProducts] p INNER JOIN [dbo].[vwCartItems] ci ON p.ID = ci.ProductID INNER JOIN [dbo].[vwShoppingCarts] sc ON ci.CartID = sc.ID WHERE sc.Status = 'Abandoned' AND sc.LastModified >= {{ startDate | sqlString }} GROUP BY p.ID, p.Name, p.Category, p.UnitPrice ORDER BY AbandonedCount DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date for cart analysis",
+        "usage": ["WHERE clause date filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Product unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Product name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Category",
+        "description": "Product category",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "UnitPrice",
+        "description": "Current unit price",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AbandonedCount",
+        "description": "Number of abandoned carts containing this product",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "TotalQuantity",
+        "description": "Total quantity in abandoned carts",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "PotentialRevenue",
+        "description": "Potential revenue from abandoned items",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgQuantity",
+        "description": "Average quantity per abandoned cart",
+        "type": "decimal",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Shipping Performance by Carrier",
+    "userQuestion": "Which shipping carriers are performing best?",
+    "description": "Returns carrier performance metrics including delivery time and cost",
+    "technicalDescription": "Aggregates shipments by carrier, calculates delivery times and costs",
+    "sql": "SELECT sh.CarrierName, COUNT(sh.ID) AS TotalShipments, AVG(DATEDIFF(DAY, sh.ShipDate, sh.DeliveryDate)) AS AvgDeliveryDays, SUM(CASE WHEN sh.DeliveryDate <= sh.EstimatedDeliveryDate THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(sh.ID), 0) AS OnTimePct, AVG(sh.ShippingCost) AS AvgShippingCost, SUM(sh.ShippingCost) AS TotalShippingCost, COUNT(CASE WHEN sh.Status = 'Damaged' OR sh.Status = 'Lost' THEN 1 END) AS IssueCount FROM [dbo].[vwShipments] sh WHERE sh.ShipDate >= {{ startDate | sqlString }} AND sh.Status IN ('Delivered', 'Damaged', 'Lost') GROUP BY sh.CarrierName ORDER BY TotalShipments DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date for shipping analysis",
+        "usage": ["WHERE clause date filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "CarrierName",
+        "description": "Shipping carrier name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "TotalShipments",
+        "description": "Number of shipments",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "AvgDeliveryDays",
+        "description": "Average delivery time in days",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "OnTimePct",
+        "description": "On-time delivery percentage",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgShippingCost",
+        "description": "Average shipping cost per shipment",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "TotalShippingCost",
+        "description": "Total shipping cost",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "IssueCount",
+        "description": "Number of damaged or lost shipments",
+        "type": "int",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Product Return Rate Analysis",
+    "userQuestion": "Which products have the highest return rates?",
+    "description": "Returns products with return rates, reasons, and impact on revenue",
+    "technicalDescription": "Calculates return rate by comparing returns to sales for each product",
+    "sql": "SELECT p.ID, p.Name, p.Category, COUNT(DISTINCT oi.OrderID) AS UnitsSold, COUNT(DISTINCT r.ID) AS UnitsReturned, (COUNT(DISTINCT r.ID) * 100.0 / NULLIF(COUNT(DISTINCT oi.OrderID), 0)) AS ReturnRatePct, SUM(r.Amount) AS ReturnAmount, STRING_AGG(r.Reason, ', ') AS ReturnReasons FROM [dbo].[vwProducts] p LEFT JOIN [dbo].[vwOrderItems] oi ON p.ID = oi.ProductID LEFT JOIN [dbo].[vwOrders] o ON oi.OrderID = o.ID AND o.Status = 'Completed' AND o.OrderDate >= {{ startDate | sqlString }} LEFT JOIN [dbo].[vwReturns] r ON oi.ID = r.OrderItemID WHERE p.IsActive = 1 GROUP BY p.ID, p.Name, p.Category HAVING COUNT(DISTINCT r.ID) > 0 ORDER BY ReturnRatePct DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date for return analysis",
+        "usage": ["WHERE clause date filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Product unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Product name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Category",
+        "description": "Product category",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "UnitsSold",
+        "description": "Number of units sold",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "UnitsReturned",
+        "description": "Number of units returned",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "ReturnRatePct",
+        "description": "Return rate percentage",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "ReturnAmount",
+        "description": "Total value of returns",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "ReturnReasons",
+        "description": "Comma-separated list of return reasons",
+        "type": "string",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "Customer Lifetime Value Projection",
+    "userQuestion": "What is the projected lifetime value of our customer segments?",
+    "description": "Returns customer segments with historical metrics and LTV projections",
+    "technicalDescription": "Segments customers, calculates historical metrics, projects future value",
+    "sql": "SELECT CASE WHEN TotalOrders >= 10 THEN 'VIP' WHEN TotalOrders >= 5 THEN 'Loyal' WHEN TotalOrders >= 2 THEN 'Growing' ELSE 'New' END AS Segment, COUNT(CustomerID) AS CustomerCount, AVG(TotalOrders) AS AvgOrders, AVG(TotalRevenue) AS AvgHistoricalValue, AVG(AvgOrderValue) AS AvgOrderSize, AVG(DaysBetweenOrders) AS AvgDaysBetweenOrders, AVG(TotalRevenue * (365.0 / NULLIF(DaysBetweenOrders, 0)) * 3) AS ProjectedLTV3Year FROM (SELECT c.ID AS CustomerID, COUNT(o.ID) AS TotalOrders, SUM(o.TotalAmount) AS TotalRevenue, AVG(o.TotalAmount) AS AvgOrderValue, DATEDIFF(DAY, MIN(o.OrderDate), MAX(o.OrderDate)) / NULLIF(COUNT(o.ID) - 1, 0) AS DaysBetweenOrders FROM [dbo].[vwCustomers] c LEFT JOIN [dbo].[vwOrders] o ON c.ID = o.CustomerID AND o.Status = 'Completed' WHERE c.IsActive = 1 GROUP BY c.ID) AS CustomerMetrics GROUP BY CASE WHEN TotalOrders >= 10 THEN 'VIP' WHEN TotalOrders >= 5 THEN 'Loyal' WHEN TotalOrders >= 2 THEN 'Growing' ELSE 'New' END ORDER BY AvgHistoricalValue DESC",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "Segment",
+        "description": "Customer segment name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "CustomerCount",
+        "description": "Number of customers in segment",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "AvgOrders",
+        "description": "Average number of orders",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgHistoricalValue",
+        "description": "Average historical revenue per customer",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgOrderSize",
+        "description": "Average order value",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "AvgDaysBetweenOrders",
+        "description": "Average days between orders",
+        "type": "int",
+        "optional": true
+      },
+      {
+        "name": "ProjectedLTV3Year",
+        "description": "Projected 3-year lifetime value",
+        "type": "decimal",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "Inventory Replenishment Schedule",
+    "userQuestion": "Which products need to be reordered and when?",
+    "description": "Returns products with reorder recommendations based on sales velocity",
+    "technicalDescription": "Calculates sales velocity, current inventory, and projected stockout dates",
+    "sql": "SELECT p.ID, p.Name, p.SKU, p.QuantityOnHand, p.ReorderLevel, p.LeadTimeDays, s.Name AS SupplierName, CAST(SUM(oi.Quantity) AS DECIMAL) / NULLIF(DATEDIFF(DAY, MIN(o.OrderDate), MAX(o.OrderDate)), 0) AS DailySalesVelocity, CAST(p.QuantityOnHand AS DECIMAL) / NULLIF(CAST(SUM(oi.Quantity) AS DECIMAL) / NULLIF(DATEDIFF(DAY, MIN(o.OrderDate), MAX(o.OrderDate)), 0), 0) AS DaysOfSupply, DATEADD(DAY, CAST(p.QuantityOnHand AS DECIMAL) / NULLIF(CAST(SUM(oi.Quantity) AS DECIMAL) / NULLIF(DATEDIFF(DAY, MIN(o.OrderDate), MAX(o.OrderDate)), 0), 0), GETDATE()) AS ProjectedStockoutDate, CASE WHEN CAST(p.QuantityOnHand AS DECIMAL) / NULLIF(CAST(SUM(oi.Quantity) AS DECIMAL) / NULLIF(DATEDIFF(DAY, MIN(o.OrderDate), MAX(o.OrderDate)), 0), 0) <= p.LeadTimeDays THEN 'Urgent' WHEN p.QuantityOnHand <= p.ReorderLevel THEN 'Soon' ELSE 'Normal' END AS Priority FROM [dbo].[vwProducts] p LEFT JOIN [dbo].[vwSuppliers] s ON p.SupplierID = s.ID LEFT JOIN [dbo].[vwOrderItems] oi ON p.ID = oi.ProductID LEFT JOIN [dbo].[vwOrders] o ON oi.OrderID = o.ID AND o.Status = 'Completed' AND o.OrderDate >= DATEADD(DAY, -90, GETDATE()) WHERE p.IsActive = 1 AND p.QuantityOnHand <= p.ReorderLevel * 1.5 GROUP BY p.ID, p.Name, p.SKU, p.QuantityOnHand, p.ReorderLevel, p.LeadTimeDays, s.Name ORDER BY Priority, DaysOfSupply ASC",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Product unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Product name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "SKU",
+        "description": "Product SKU",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "QuantityOnHand",
+        "description": "Current inventory quantity",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "ReorderLevel",
+        "description": "Reorder threshold",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "LeadTimeDays",
+        "description": "Supplier lead time in days",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "SupplierName",
+        "description": "Supplier name",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "DailySalesVelocity",
+        "description": "Average daily sales rate",
+        "type": "decimal",
+        "optional": true
+      },
+      {
+        "name": "DaysOfSupply",
+        "description": "Estimated days until stockout",
+        "type": "decimal",
+        "optional": true
+      },
+      {
+        "name": "ProjectedStockoutDate",
+        "description": "Estimated stockout date",
+        "type": "date",
+        "optional": true
+      },
+      {
+        "name": "Priority",
+        "description": "Reorder priority (Urgent/Soon/Normal)",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Customer Churn Risk Analysis",
+    "userQuestion": "Which customers are at risk of churning?",
+    "description": "Returns customers showing signs of churn based on purchase patterns",
+    "technicalDescription": "Identifies customers with declining engagement or long gaps since last order",
+    "sql": "SELECT c.ID, c.Name, c.Email, c.Phone, COUNT(o.ID) AS TotalOrders, SUM(o.TotalAmount) AS LifetimeValue, MAX(o.OrderDate) AS LastOrderDate, DATEDIFF(DAY, MAX(o.OrderDate), GETDATE()) AS DaysSinceLastOrder, AVG(DATEDIFF(DAY, LAG(o.OrderDate) OVER (PARTITION BY c.ID ORDER BY o.OrderDate), o.OrderDate)) AS AvgDaysBetweenOrders, CASE WHEN DATEDIFF(DAY, MAX(o.OrderDate), GETDATE()) > AVG(DATEDIFF(DAY, LAG(o.OrderDate) OVER (PARTITION BY c.ID ORDER BY o.OrderDate), o.OrderDate)) * 2 THEN 'High Risk' WHEN DATEDIFF(DAY, MAX(o.OrderDate), GETDATE()) > AVG(DATEDIFF(DAY, LAG(o.OrderDate) OVER (PARTITION BY c.ID ORDER BY o.OrderDate), o.OrderDate)) * 1.5 THEN 'Medium Risk' ELSE 'Low Risk' END AS ChurnRisk FROM [dbo].[vwCustomers] c INNER JOIN [dbo].[vwOrders] o ON c.ID = o.CustomerID AND o.Status = 'Completed' WHERE c.IsActive = 1 GROUP BY c.ID, c.Name, c.Email, c.Phone HAVING COUNT(o.ID) >= 2 AND DATEDIFF(DAY, MAX(o.OrderDate), GETDATE()) > 30 ORDER BY ChurnRisk DESC, DaysSinceLastOrder DESC",
+    "parameters": [],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Customer unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Name",
+        "description": "Customer name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Email",
+        "description": "Customer email",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "Phone",
+        "description": "Customer phone",
+        "type": "string",
+        "optional": true
+      },
+      {
+        "name": "TotalOrders",
+        "description": "Total number of orders",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "LifetimeValue",
+        "description": "Total lifetime value",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "LastOrderDate",
+        "description": "Date of most recent order",
+        "type": "date",
+        "optional": false
+      },
+      {
+        "name": "DaysSinceLastOrder",
+        "description": "Days since last purchase",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "AvgDaysBetweenOrders",
+        "description": "Average days between orders",
+        "type": "int",
+        "optional": true
+      },
+      {
+        "name": "ChurnRisk",
+        "description": "Churn risk level (High/Medium/Low)",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "Sales Commission Calculation",
+    "userQuestion": "What are the sales commissions owed to each sales rep?",
+    "description": "Returns commission amounts by sales rep based on completed orders and rates",
+    "technicalDescription": "Aggregates orders by sales rep, applies commission rates, calculates totals",
+    "sql": "SELECT e.ID, e.FirstName, e.LastName, e.CommissionRate, COUNT(o.ID) AS OrderCount, SUM(o.TotalAmount) AS TotalSales, SUM(o.TotalAmount * e.CommissionRate / 100) AS CommissionOwed, MIN(o.OrderDate) AS FirstSale, MAX(o.OrderDate) AS LastSale FROM [dbo].[vwEmployees] e INNER JOIN [dbo].[vwOrders] o ON e.ID = o.SalesRepID WHERE o.Status = 'Completed' AND o.OrderDate BETWEEN {{ startDate | sqlString }} AND {{ endDate | sqlString }} AND e.CommissionRate > 0 GROUP BY e.ID, e.FirstName, e.LastName, e.CommissionRate ORDER BY CommissionOwed DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date of commission period",
+        "usage": ["WHERE clause date range filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      },
+      {
+        "name": "endDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "End date of commission period",
+        "usage": ["WHERE clause date range filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-31"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Employee unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "FirstName",
+        "description": "Employee first name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "LastName",
+        "description": "Employee last name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "CommissionRate",
+        "description": "Commission rate percentage",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "OrderCount",
+        "description": "Number of orders closed",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "TotalSales",
+        "description": "Total sales amount",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "CommissionOwed",
+        "description": "Total commission amount",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "FirstSale",
+        "description": "Date of first sale in period",
+        "type": "date",
+        "optional": true
+      },
+      {
+        "name": "LastSale",
+        "description": "Date of last sale in period",
+        "type": "date",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "Profit Margin by Product Line",
+    "userQuestion": "What are our profit margins across different product lines?",
+    "description": "Returns profitability analysis by product category with cost breakdown",
+    "technicalDescription": "Aggregates sales and costs by category, calculates margins and contribution",
+    "sql": "SELECT pc.ID, pc.Name AS ProductLine, COUNT(DISTINCT p.ID) AS ProductCount, SUM(oi.Quantity) AS UnitsSold, SUM(oi.LineTotal) AS Revenue, SUM(oi.Quantity * p.Cost) AS TotalCost, SUM(oi.LineTotal - (oi.Quantity * p.Cost)) AS GrossProfit, (SUM(oi.LineTotal - (oi.Quantity * p.Cost)) / NULLIF(SUM(oi.LineTotal), 0)) * 100 AS GrossProfitMarginPct, SUM(oi.LineTotal) / NULLIF((SELECT SUM(LineTotal) FROM [dbo].[vwOrderItems] oi2 INNER JOIN [dbo].[vwOrders] o2 ON oi2.OrderID = o2.ID WHERE o2.Status = 'Completed' AND o2.OrderDate >= {{ startDate | sqlString }}), 0) * 100 AS RevenueContributionPct FROM [dbo].[vwProductCategories] pc INNER JOIN [dbo].[vwProducts] p ON pc.ID = p.CategoryID INNER JOIN [dbo].[vwOrderItems] oi ON p.ID = oi.ProductID INNER JOIN [dbo].[vwOrders] o ON oi.OrderID = o.ID WHERE o.Status = 'Completed' AND o.OrderDate >= {{ startDate | sqlString }} GROUP BY pc.ID, pc.Name ORDER BY GrossProfit DESC",
+    "parameters": [
+      {
+        "name": "startDate",
+        "type": "date",
+        "isRequired": true,
+        "description": "Start date for profitability analysis",
+        "usage": ["WHERE clause date filter"],
+        "defaultValue": null,
+        "sampleValue": "2024-01-01"
+      }
+    ],
+    "selectClause": [
+      {
+        "name": "ID",
+        "description": "Product line unique identifier",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "ProductLine",
+        "description": "Product line name",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "ProductCount",
+        "description": "Number of products in line",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "UnitsSold",
+        "description": "Total units sold",
+        "type": "int",
+        "optional": false
+      },
+      {
+        "name": "Revenue",
+        "description": "Total revenue",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "TotalCost",
+        "description": "Total cost of goods sold",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "GrossProfit",
+        "description": "Total gross profit",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "GrossProfitMarginPct",
+        "description": "Gross profit margin percentage",
+        "type": "decimal",
+        "optional": false
+      },
+      {
+        "name": "RevenueContributionPct",
+        "description": "Percentage of total company revenue",
+        "type": "decimal",
+        "optional": false
+      }
+    ]
+  }
+]

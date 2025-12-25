@@ -1,0 +1,13 @@
+{
+  "name": "TestComponent",
+  "description": "Component using wrong library variable name (violates library-variable-names rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  useEffect(() => {\n    const today = wrongMomentName();\n    console.log('Today:', today.format('YYYY-MM-DD'));\n  }, []);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <p>Data count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [
+    {
+      "name": "moment",
+      "globalVariable": "moment",
+      "url": "https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"
+    }
+  ]
+}

@@ -386,7 +386,7 @@ PlotlyViaCDNModule.setPlotlyBundle(null); // Uses full bundle
 - @progress/kendo-angular-indicators (16.2.0)
 - angular-plotly.js (^5.2.2)
 - plotly.js-dist-min (^2.3.4)
-- ngx-markdown (18.0.0)
+- @memberjunction/ng-markdown (2.125.0)
 - tslib (^2.3.0)
 
 ## TypeScript Types and Interfaces

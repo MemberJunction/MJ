@@ -3349,6 +3349,10 @@ The context is now within limits. Please retry your request with the recovered c
             const subAgentActionChanges = this.filterActionChangesForSubAgent(params.actionChanges);
 
             // Execute the sub-agent with cancellation and streaming support
+            // Use subAgentRequest.context if provided, otherwise fall back to params.context
+            // This allows Flow agents and Loop agents to propagate context through sub-agent requests
+            const subAgentContext = subAgentRequest.context !== undefined ? subAgentRequest.context : params.context;
+
             const result = await runner.RunAgent<SC, SR>({
                 agent: subAgent,
                 conversationMessages: subAgentMessages,
@@ -3367,7 +3371,7 @@ The context is now within limits. Please retry your request with the recovered c
                         ...params.data,
                         ...subAgentRequest.templateParameters,
                       }, // merge parent data first, then override with template parameters so loop agents can dynamically override parent data
-                context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
+                context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
                 // Add callback to link AgentRun ID immediately when created
@@ -4989,13 +4993,17 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Return the Chat step
+                // Return the Chat step, including responseForm and commands from sub-agent
+                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
                 return {
                     step: 'Chat',
                     terminate: true, // Bubble up to the main loop to handle Chat
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
-                    newPayload: previousDecision?.newPayload // Don't modify payload on Chat
+                    newPayload: mergedPayload, // Preserve sub-agent payload changes
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands
                 };
             }
             
@@ -5336,12 +5344,17 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                // Return the Chat step, including responseForm and commands from sub-agent
+                // Use mergedPayload to preserve sub-agent payload changes (e.g., PRD from Requirements Expert)
                 return {
                     step: 'Chat',
                     terminate: true,
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
-                    newPayload: previousDecision?.newPayload
+                    newPayload: mergedPayload, // Preserve sub-agent payload changes
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands
                 };
             }
 
