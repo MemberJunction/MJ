@@ -809,6 +809,29 @@ The tool automatically detects primary key fields from entity metadata:
 - **Composite primary keys**: Multiple fields that together form the primary key
 - **Auto-detection**: Tool reads entity metadata to determine primary key structure
 - **No hardcoding**: Works with any primary key field name(s)
+- **Reference support**: Primary key values can use `@lookup`, `@parent`, and other reference types
+
+#### Using @lookup in Primary Keys
+You can use `@lookup` references in primary key fields to avoid hardcoding GUIDs. This is especially useful when decorating existing records:
+
+```json
+{
+  "fields": {
+    "Encrypt": true,
+    "AllowDecryptInAPI": false
+  },
+  "primaryKey": {
+    "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Test Tables&Name=ServerOnlyEncrypted"
+  }
+}
+```
+
+In this example:
+1. The inner `@lookup:Entities.Name=Test Tables` resolves to the Entity ID
+2. That ID is used to find the Entity Field with the matching `EntityID` and `Name`
+3. The resulting Entity Field ID becomes the primary key
+
+**Note:** Primary key lookups must resolve immediately - the `?allowDefer` flag is not supported in primary key fields since the primary key is needed to determine if a record exists.
 
 ### deleteRecord Directive
 The tool now supports deleting records from the database using a special `deleteRecord` directive in JSON files. This allows you to remove obsolete records as part of your metadata sync workflow:
