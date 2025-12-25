@@ -26,7 +26,7 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -1050,7 +1050,26 @@ export class ResolverBase {
           break;
         case 'object':
           if (clientOldValues[key] instanceof Date) {
-            different = clientOldValues[key].getTime() !== dbValues[key].getTime();
+            const clientDate = clientOldValues[key] as Date;
+            const dbDate = dbValues[key];
+            if (dbDate == null || !(dbDate instanceof Date)) {
+              different = true;
+            } else if (clientDate.getTime() !== dbDate.getTime()) {
+              // Check if this is a datetime/datetime2 field with only a timezone hour shift
+              const sqlType = f?.SQLFullType?.trim().toLowerCase() || '';
+              if (sqlType !== 'datetimeoffset' && IsOnlyTimezoneShift(clientDate, dbDate)) {
+                console.warn(
+                  `Timezone hour shift detected on field "${key}" (${sqlType || 'datetime'}). ` +
+                  `Client: ${clientDate.toISOString()}, DB: ${dbDate.toISOString()}. ` +
+                  `Consider using datetimeoffset to avoid timezone ambiguity.`
+                );
+                different = false; // Allow timezone shifts through for non-datetimeoffset fields
+              } else {
+                different = true;
+              }
+            }
+          } else if (clientOldValues[key] === null) {
+            different = dbValues[key] !== null;
           }
           break;
         default:
