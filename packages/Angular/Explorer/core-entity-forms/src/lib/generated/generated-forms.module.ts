@@ -173,6 +173,9 @@ import { ConversationArtifactVersionFormComponent, LoadConversationArtifactVersi
 import { ConversationArtifactFormComponent, LoadConversationArtifactFormComponent } from "./Entities/ConversationArtifact/conversationartifact.form.component";
 import { ConversationDetailArtifactFormComponent, LoadConversationDetailArtifactFormComponent } from "./Entities/ConversationDetailArtifact/conversationdetailartifact.form.component";
 import { ConversationDetailRatingFormComponent, LoadConversationDetailRatingFormComponent } from "./Entities/ConversationDetailRating/conversationdetailrating.form.component";
+import { CredentialCategoryFormComponent, LoadCredentialCategoryFormComponent } from "./Entities/CredentialCategory/credentialcategory.form.component";
+import { CredentialTypeFormComponent, LoadCredentialTypeFormComponent } from "./Entities/CredentialType/credentialtype.form.component";
+import { CredentialFormComponent, LoadCredentialFormComponent } from "./Entities/Credential/credential.form.component";
 import { DashboardUserPreferenceFormComponent, LoadDashboardUserPreferenceFormComponent } from "./Entities/DashboardUserPreference/dashboarduserpreference.form.component";
 import { DashboardUserStateFormComponent, LoadDashboardUserStateFormComponent } from "./Entities/DashboardUserState/dashboarduserstate.form.component";
 import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent } from "./Entities/EncryptionAlgorithm/encryptionalgorithm.form.component";
@@ -584,6 +587,9 @@ declarations: [
     ConversationArtifactFormComponent,
     ConversationDetailArtifactFormComponent,
     ConversationDetailRatingFormComponent,
+    CredentialCategoryFormComponent,
+    CredentialTypeFormComponent,
+    CredentialFormComponent,
     DashboardUserPreferenceFormComponent,
     DashboardUserStateFormComponent,
     EncryptionAlgorithmFormComponent,
@@ -593,10 +599,7 @@ declarations: [
     ProjectFormComponent,
     PublicLinkFormComponent,
     QueryParameterFormComponent,
-    RecordLinkFormComponent,
-    ReportUserStateFormComponent,
-    ReportVersionFormComponent,
-    ScheduledJobRunFormComponent],
+    RecordLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -622,6 +625,9 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    ReportUserStateFormComponent,
+    ReportVersionFormComponent,
+    ScheduledJobRunFormComponent,
     ScheduledJobTypeFormComponent,
     ScheduledJobFormComponent,
     TaskDependencyFormComponent,
@@ -638,10 +644,7 @@ declarations: [
     UserSettingFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
-    OutputTriggerTypeFormComponent,
-    QueryFormComponent,
-    QueryCategoryFormComponent,
-    QueryEntityFormComponent],
+    OutputTriggerTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -667,6 +670,9 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    QueryFormComponent,
+    QueryCategoryFormComponent,
+    QueryEntityFormComponent,
     QueryFieldFormComponent,
     QueryPermissionFormComponent,
     QueueTaskFormComponent,
@@ -683,10 +689,7 @@ declarations: [
     ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
     ReportFormComponent,
-    ResourceLinkFormComponent,
-    ResourcePermissionFormComponent,
-    ResourceTypeFormComponent,
-    RoleFormComponent],
+    ResourceLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -712,6 +715,9 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    ResourcePermissionFormComponent,
+    ResourceTypeFormComponent,
+    RoleFormComponent,
     RowLevelSecurityFilterFormComponent,
     ScheduledActionParamFormComponent,
     ScheduledActionFormComponent,
@@ -727,10 +733,7 @@ declarations: [
     UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
-    UserNotificationFormComponent,
-    UserRecordLogFormComponent,
-    UserRoleFormComponent,
-    UserViewCategoryFormComponent],
+    UserNotificationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -756,6 +759,9 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    UserRecordLogFormComponent,
+    UserRoleFormComponent,
+    UserViewCategoryFormComponent,
     UserViewRunDetailFormComponent,
     UserViewRunFormComponent,
     UserViewFormComponent,
@@ -964,6 +970,9 @@ export function LoadCoreGeneratedForms() {
     LoadConversationArtifactFormComponent();
     LoadConversationDetailArtifactFormComponent();
     LoadConversationDetailRatingFormComponent();
+    LoadCredentialCategoryFormComponent();
+    LoadCredentialTypeFormComponent();
+    LoadCredentialFormComponent();
     LoadDashboardUserPreferenceFormComponent();
     LoadDashboardUserStateFormComponent();
     LoadEncryptionAlgorithmFormComponent();

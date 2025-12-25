@@ -12254,6 +12254,209 @@ export const ConversationDetailRatingSchema = z.object({
 export type ConversationDetailRatingEntityType = z.infer<typeof ConversationDetailRatingSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Credential Categories
+ */
+export const CredentialCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Display name for the category.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of the category.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credential Categories (vwCredentialCategories.ID)
+        * * Description: Parent category for hierarchical organization. NULL for root categories.`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for UI display (e.g., fa-solid fa-folder).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type CredentialCategoryEntityType = z.infer<typeof CredentialCategorySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Credential Types
+ */
+export const CredentialTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name for the credential type (e.g., OpenAI, SendGrid, AWS S3).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of the credential type.`),
+    Category: z.union([z.literal('AI'), z.literal('Authentication'), z.literal('Communication'), z.literal('Database'), z.literal('Integration'), z.literal('Storage')]).describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI
+    *   * Authentication
+    *   * Communication
+    *   * Database
+    *   * Integration
+    *   * Storage
+        * * Description: High-level category: AI, Communication, Storage, Authentication, Database, or Integration.`),
+    FieldSchema: z.string().describe(`
+        * * Field Name: FieldSchema
+        * * Display Name: Field Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema defining the required fields for this credential type. Includes field names, types, validation rules, and UI hints.`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for UI display (e.g., fa-brands fa-openai).`),
+    ValidationEndpoint: z.string().nullable().describe(`
+        * * Field Name: ValidationEndpoint
+        * * Display Name: Validation Endpoint
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional URL endpoint to validate credentials against the service provider.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type CredentialTypeEntityType = z.infer<typeof CredentialTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Credentials
+ */
+export const CredentialSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CredentialTypeID: z.string().describe(`
+        * * Field Name: CredentialTypeID
+        * * Display Name: Credential Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+        * * Description: Reference to the credential type that defines the schema for this credential.`),
+    CategoryID: z.string().nullable().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credential Categories (vwCredentialCategories.ID)
+        * * Description: Optional category for organizational grouping.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable name for this credential (e.g., Production SendGrid, Development OpenAI).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of this credential instance.`),
+    Values: z.string().describe(`
+        * * Field Name: Values
+        * * Display Name: Values
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Encrypted JSON blob containing all credential values. This field uses MemberJunction field-level encryption.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, this is the default credential for its type when no specific credential is requested.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: If false, the credential is disabled and will not be used.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiration date. Expired credentials are treated as inactive.`),
+    LastValidatedAt: z.date().nullable().describe(`
+        * * Field Name: LastValidatedAt
+        * * Display Name: Last Validated At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful validation against the provider.`),
+    LastUsedAt: z.date().nullable().describe(`
+        * * Field Name: LastUsedAt
+        * * Display Name: Last Used At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last time this credential was used.`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome icon class to override the type icon for this specific credential.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CredentialType: z.string().describe(`
+        * * Field Name: CredentialType
+        * * Display Name: Credential Type
+        * * SQL Data Type: nvarchar(100)`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type CredentialEntityType = z.infer<typeof CredentialSchema>;
+
+/**
  * zod schema definition for the entity MJ: Dashboard User Preferences
  */
 export const DashboardUserPreferenceSchema = z.object({
@@ -49717,6 +49920,523 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
     */
     get User(): string {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Credential Categories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CredentialCategory
+ * * Base View: vwCredentialCategories
+ * * @description Hierarchical organization for credentials. Allows grouping credentials by service type, department, or any organizational structure.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Credential Categories')
+export class CredentialCategoryEntity extends BaseEntity<CredentialCategoryEntityType> {
+    /**
+    * Loads the MJ: Credential Categories record from the database
+    * @param ID: string - primary key value to load the MJ: Credential Categories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof CredentialCategoryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name for the category.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the category.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credential Categories (vwCredentialCategories.ID)
+    * * Description: Parent category for hierarchical organization. NULL for root categories.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for UI display (e.g., fa-solid fa-folder).
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: Credential Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CredentialType
+ * * Base View: vwCredentialTypes
+ * * @description Defines credential templates for different services (e.g., OpenAI, SendGrid). Uses JSON Schema to define required fields and validation rules.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Credential Types')
+export class CredentialTypeEntity extends BaseEntity<CredentialTypeEntityType> {
+    /**
+    * Loads the MJ: Credential Types record from the database
+    * @param ID: string - primary key value to load the MJ: Credential Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof CredentialTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name for the credential type (e.g., OpenAI, SendGrid, AWS S3).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the credential type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI
+    *   * Authentication
+    *   * Communication
+    *   * Database
+    *   * Integration
+    *   * Storage
+    * * Description: High-level category: AI, Communication, Storage, Authentication, Database, or Integration.
+    */
+    get Category(): 'AI' | 'Authentication' | 'Communication' | 'Database' | 'Integration' | 'Storage' {
+        return this.Get('Category');
+    }
+    set Category(value: 'AI' | 'Authentication' | 'Communication' | 'Database' | 'Integration' | 'Storage') {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: FieldSchema
+    * * Display Name: Field Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema defining the required fields for this credential type. Includes field names, types, validation rules, and UI hints.
+    */
+    get FieldSchema(): string {
+        return this.Get('FieldSchema');
+    }
+    set FieldSchema(value: string) {
+        this.Set('FieldSchema', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for UI display (e.g., fa-brands fa-openai).
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: ValidationEndpoint
+    * * Display Name: Validation Endpoint
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional URL endpoint to validate credentials against the service provider.
+    */
+    get ValidationEndpoint(): string | null {
+        return this.Get('ValidationEndpoint');
+    }
+    set ValidationEndpoint(value: string | null) {
+        this.Set('ValidationEndpoint', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Credentials - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Credential
+ * * Base View: vwCredentials
+ * * @description Stores credential instances with encrypted values. All access should go through CredentialEngine for proper audit logging.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Credentials')
+export class CredentialEntity extends BaseEntity<CredentialEntityType> {
+    /**
+    * Loads the MJ: Credentials record from the database
+    * @param ID: string - primary key value to load the MJ: Credentials record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof CredentialEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CredentialTypeID
+    * * Display Name: Credential Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+    * * Description: Reference to the credential type that defines the schema for this credential.
+    */
+    get CredentialTypeID(): string {
+        return this.Get('CredentialTypeID');
+    }
+    set CredentialTypeID(value: string) {
+        this.Set('CredentialTypeID', value);
+    }
+
+    /**
+    * * Field Name: CategoryID
+    * * Display Name: Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credential Categories (vwCredentialCategories.ID)
+    * * Description: Optional category for organizational grouping.
+    */
+    get CategoryID(): string | null {
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string | null) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Human-readable name for this credential (e.g., Production SendGrid, Development OpenAI).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of this credential instance.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Values
+    * * Display Name: Values
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Encrypted JSON blob containing all credential values. This field uses MemberJunction field-level encryption.
+    */
+    get Values(): string {
+        return this.Get('Values');
+    }
+    set Values(value: string) {
+        this.Set('Values', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, this is the default credential for its type when no specific credential is requested.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: If false, the credential is disabled and will not be used.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiration date. Expired credentials are treated as inactive.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: LastValidatedAt
+    * * Display Name: Last Validated At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful validation against the provider.
+    */
+    get LastValidatedAt(): Date | null {
+        return this.Get('LastValidatedAt');
+    }
+    set LastValidatedAt(value: Date | null) {
+        this.Set('LastValidatedAt', value);
+    }
+
+    /**
+    * * Field Name: LastUsedAt
+    * * Display Name: Last Used At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last time this credential was used.
+    */
+    get LastUsedAt(): Date | null {
+        return this.Get('LastUsedAt');
+    }
+    set LastUsedAt(value: Date | null) {
+        this.Set('LastUsedAt', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome icon class to override the type icon for this specific credential.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CredentialType
+    * * Display Name: Credential Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CredentialType(): string {
+        return this.Get('CredentialType');
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
     }
 }
 

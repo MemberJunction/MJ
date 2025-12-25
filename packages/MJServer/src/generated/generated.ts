@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, EncryptionKeySourceEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, EncryptionAlgorithmEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, EncryptionKeyEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, UserSettingEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, CredentialTypeEntity, AIConfigurationEntity, EncryptionKeySourceEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, EncryptionAlgorithmEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, EncryptionKeyEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, CredentialEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, CredentialCategoryEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, UserSettingEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -3270,6 +3270,206 @@ export class MJTaskTypeResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Task Types', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Credential Types
+//****************************************************************************
+@ObjectType({ description: `Defines credential templates for different services (e.g., OpenAI, SendGrid). Uses JSON Schema to define required fields and validation rules.` })
+export class MJCredentialType_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Unique name for the credential type (e.g., OpenAI, SendGrid, AWS S3).`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of the credential type.`}) 
+    Description?: string;
+        
+    @Field({description: `High-level category: AI, Communication, Storage, Authentication, Database, or Integration.`}) 
+    @MaxLength(100)
+    Category: string;
+        
+    @Field({description: `JSON Schema defining the required fields for this credential type. Includes field names, types, validation rules, and UI hints.`}) 
+    FieldSchema: string;
+        
+    @Field({nullable: true, description: `Font Awesome icon class for UI display (e.g., fa-brands fa-openai).`}) 
+    @MaxLength(200)
+    IconClass?: string;
+        
+    @Field({nullable: true, description: `Optional URL endpoint to validate credentials against the service provider.`}) 
+    @MaxLength(1000)
+    ValidationEndpoint?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJCredential_])
+    MJ_Credentials_CredentialTypeIDArray: MJCredential_[]; // Link to MJ_Credentials
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Credential Types
+//****************************************************************************
+@InputType()
+export class CreateMJCredentialTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Category?: string;
+
+    @Field({ nullable: true })
+    FieldSchema?: string;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
+
+    @Field({ nullable: true })
+    ValidationEndpoint: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Credential Types
+//****************************************************************************
+@InputType()
+export class UpdateMJCredentialTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Category?: string;
+
+    @Field({ nullable: true })
+    FieldSchema?: string;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
+
+    @Field({ nullable: true })
+    ValidationEndpoint?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Credential Types
+//****************************************************************************
+@ObjectType()
+export class RunMJCredentialTypeViewResult {
+    @Field(() => [MJCredentialType_])
+    Results: MJCredentialType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJCredentialType_)
+export class MJCredentialTypeResolver extends ResolverBase {
+    @Query(() => RunMJCredentialTypeViewResult)
+    async RunMJCredentialTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCredentialTypeViewResult)
+    async RunMJCredentialTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCredentialTypeViewResult)
+    async RunMJCredentialTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Credential Types';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJCredentialType_, { nullable: true })
+    async MJCredentialType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJCredentialType_ | null> {
+        this.CheckUserReadPermissions('MJ: Credential Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCredentialTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Credential Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Credential Types', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJCredential_])
+    async MJ_Credentials_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Credentials', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCredentials] WHERE [CredentialTypeID]='${mjcredentialtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Credentials', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Credentials', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJCredentialType_)
+    async CreateMJCredentialType(
+        @Arg('input', () => CreateMJCredentialTypeInput) input: CreateMJCredentialTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Credential Types', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJCredentialType_)
+    async UpdateMJCredentialType(
+        @Arg('input', () => UpdateMJCredentialTypeInput) input: UpdateMJCredentialTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Credential Types', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJCredentialType_)
+    async DeleteMJCredentialType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Credential Types', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -45838,6 +46038,248 @@ export class MJAIAgentExampleResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Credentials
+//****************************************************************************
+@ObjectType({ description: `Stores credential instances with encrypted values. All access should go through CredentialEngine for proper audit logging.` })
+export class MJCredential_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Reference to the credential type that defines the schema for this credential.`}) 
+    @MaxLength(16)
+    CredentialTypeID: string;
+        
+    @Field({nullable: true, description: `Optional category for organizational grouping.`}) 
+    @MaxLength(16)
+    CategoryID?: string;
+        
+    @Field({description: `Human-readable name for this credential (e.g., Production SendGrid, Development OpenAI).`}) 
+    @MaxLength(400)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of this credential instance.`}) 
+    Description?: string;
+        
+    @Field({description: `Encrypted JSON blob containing all credential values. This field uses MemberJunction field-level encryption.`}) 
+    Values: string;
+        
+    @Field(() => Boolean, {description: `If true, this is the default credential for its type when no specific credential is requested.`}) 
+    IsDefault: boolean;
+        
+    @Field(() => Boolean, {description: `If false, the credential is disabled and will not be used.`}) 
+    IsActive: boolean;
+        
+    @Field({nullable: true, description: `Optional expiration date. Expired credentials are treated as inactive.`}) 
+    @MaxLength(10)
+    ExpiresAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp of the last successful validation against the provider.`}) 
+    @MaxLength(10)
+    LastValidatedAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp of the last time this credential was used.`}) 
+    @MaxLength(10)
+    LastUsedAt?: Date;
+        
+    @Field({nullable: true, description: `Optional Font Awesome icon class to override the type icon for this specific credential.`}) 
+    @MaxLength(200)
+    IconClass?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    CredentialType: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Category?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Credentials
+//****************************************************************************
+@InputType()
+export class CreateMJCredentialInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    CredentialTypeID?: string;
+
+    @Field({ nullable: true })
+    CategoryID: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Values?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    ExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    LastValidatedAt: Date | null;
+
+    @Field({ nullable: true })
+    LastUsedAt: Date | null;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Credentials
+//****************************************************************************
+@InputType()
+export class UpdateMJCredentialInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    CredentialTypeID?: string;
+
+    @Field({ nullable: true })
+    CategoryID?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Values?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastValidatedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastUsedAt?: Date | null;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Credentials
+//****************************************************************************
+@ObjectType()
+export class RunMJCredentialViewResult {
+    @Field(() => [MJCredential_])
+    Results: MJCredential_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJCredential_)
+export class MJCredentialResolver extends ResolverBase {
+    @Query(() => RunMJCredentialViewResult)
+    async RunMJCredentialViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCredentialViewResult)
+    async RunMJCredentialViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCredentialViewResult)
+    async RunMJCredentialDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Credentials';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJCredential_, { nullable: true })
+    async MJCredential(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJCredential_ | null> {
+        this.CheckUserReadPermissions('MJ: Credentials', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCredentials] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Credentials', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Credentials', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJCredential_)
+    async CreateMJCredential(
+        @Arg('input', () => CreateMJCredentialInput) input: CreateMJCredentialInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Credentials', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJCredential_)
+    async UpdateMJCredential(
+        @Arg('input', () => UpdateMJCredentialInput) input: UpdateMJCredentialInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Credentials', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJCredential_)
+    async DeleteMJCredential(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Credentials', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Test Suites
 //****************************************************************************
 @ObjectType({ description: `Hierarchical organization of tests into suites. Test suites can contain other suites (via ParentID) and tests (via TestSuiteTest junction table). Suites provide logical grouping for running batches of related tests.` })
@@ -50990,6 +51432,209 @@ export class MJGeneratedCodeResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Generated Codes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Credential Categories
+//****************************************************************************
+@ObjectType({ description: `Hierarchical organization for credentials. Allows grouping credentials by service type, department, or any organizational structure.` })
+export class MJCredentialCategory_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Display name for the category.`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of the category.`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Parent category for hierarchical organization. NULL for root categories.`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({nullable: true, description: `Font Awesome icon class for UI display (e.g., fa-solid fa-folder).`}) 
+    @MaxLength(200)
+    IconClass?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
+    @Field(() => [MJCredentialCategory_])
+    MJ_CredentialCategories_ParentIDArray: MJCredentialCategory_[]; // Link to MJ_CredentialCategories
+    
+    @Field(() => [MJCredential_])
+    MJ_Credentials_CategoryIDArray: MJCredential_[]; // Link to MJ_Credentials
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Credential Categories
+//****************************************************************************
+@InputType()
+export class CreateMJCredentialCategoryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    IconClass: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Credential Categories
+//****************************************************************************
+@InputType()
+export class UpdateMJCredentialCategoryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Credential Categories
+//****************************************************************************
+@ObjectType()
+export class RunMJCredentialCategoryViewResult {
+    @Field(() => [MJCredentialCategory_])
+    Results: MJCredentialCategory_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJCredentialCategory_)
+export class MJCredentialCategoryResolver extends ResolverBase {
+    @Query(() => RunMJCredentialCategoryViewResult)
+    async RunMJCredentialCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCredentialCategoryViewResult)
+    async RunMJCredentialCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCredentialCategoryViewResult)
+    async RunMJCredentialCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Credential Categories';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJCredentialCategory_, { nullable: true })
+    async MJCredentialCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJCredentialCategory_ | null> {
+        this.CheckUserReadPermissions('MJ: Credential Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCredentialCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Credential Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Credential Categories', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJCredentialCategory_])
+    async MJ_CredentialCategories_ParentIDArray(@Root() mjcredentialcategory_: MJCredentialCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Credential Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCredentialCategories] WHERE [ParentID]='${mjcredentialcategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Credential Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Credential Categories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJCredential_])
+    async MJ_Credentials_CategoryIDArray(@Root() mjcredentialcategory_: MJCredentialCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Credentials', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCredentials] WHERE [CategoryID]='${mjcredentialcategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Credentials', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Credentials', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJCredentialCategory_)
+    async CreateMJCredentialCategory(
+        @Arg('input', () => CreateMJCredentialCategoryInput) input: CreateMJCredentialCategoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Credential Categories', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJCredentialCategory_)
+    async UpdateMJCredentialCategory(
+        @Arg('input', () => UpdateMJCredentialCategoryInput) input: UpdateMJCredentialCategoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Credential Categories', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJCredentialCategory_)
+    async DeleteMJCredentialCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Credential Categories', key, options, provider, userPayload, pubSub);
     }
     
 }

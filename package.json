@@ -21,7 +21,8 @@
     "packages/AngularElements/*",
     "packages/React/*",
     "packages/Scheduling/*",
-    "packages/TestingFramework/*"
+    "packages/TestingFramework/*",
+    "packages/Credentials/*"
   ],
   "scripts": {
     "build": "npm run build:stream",
