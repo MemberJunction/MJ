@@ -4,6 +4,9 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "encryption-key-sources",
+    "encryption-algorithms",
+    "encryption-keys",
     "resource-types",
     "ai-configurations",
     "artifact-types",
@@ -23,7 +26,8 @@
     "dashboards",
     "test-types",
     "tests",
-    "test-suites"
+    "test-suites",
+    "entities"
   ],
   "sqlLogging": {
     "enabled": true,

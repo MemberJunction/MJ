@@ -25,7 +25,21 @@
           "sync": {
             "lastModified": "2025-10-10T22:32:03.139Z",
             "checksum": "c3b2c7ceaf3f664f2cb3711791b876f7de504b802e00266dc0eeb3a183c54700"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.PromptID",
+              "expression": "@lookup:AI Prompts.Name=Sage - System Prompt",
+              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
+            }
+          ]
         }
       ],
       "AI Agent Actions": [
@@ -41,7 +55,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.331Z",
             "checksum": "8bd3bdf5d8fa68be03b2a57fd560871a4913d0202766cca18e2140fbeae0c685"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Get Record",
+              "resolved": "49E30665-1A90-45CA-9129-C33959A51B4F"
+            }
+          ]
         },
         {
           "fields": {
@@ -55,7 +83,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.344Z",
             "checksum": "69aa35cc41c7c2b9f59f19566e8e2d557c3fc4dbcedea5a4723b3febeaba34a1"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Create Record",
+              "resolved": "2504E288-ADF7-4913-A627-AA14276BAA55"
+            }
+          ]
         },
         {
           "fields": {
@@ -69,7 +111,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.356Z",
             "checksum": "df1be674a0bab35106c0da849ac708368740b297dee5d6fd60dae743e8e40d90"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Update Record",
+              "resolved": "FCAAD325-0D33-4E48-BC25-49C0E3587062"
+            }
+          ]
         },
         {
           "fields": {
@@ -83,7 +139,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.368Z",
             "checksum": "ca4306509c62aef0550a04c0129e99926d1446c968ab4e37709f282306e697d5"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Delete Record",
+              "resolved": "C03F2547-5154-4627-8E12-FBDEB7580346"
+            }
+          ]
         },
         {
           "fields": {
@@ -97,7 +167,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.379Z",
             "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Web Search",
+              "resolved": "82169F64-8566-4AE7-9C87-190A885C98A9"
+            }
+          ]
         },
         {
           "fields": {
@@ -111,7 +195,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.393Z",
             "checksum": "7a0862dbadb572018f72356925a405d423864e2322c0624c9162edec7bf0d7e5"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Calculate Expression",
+              "resolved": "22F9505E-3BEB-400E-A49F-A74D135C5A93"
+            }
+          ]
         },
         {
           "fields": {
@@ -125,7 +223,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.404Z",
             "checksum": "886cf8aebf28d972c031e5cd7471325a3e6c0e55e1eae670d630dbd999485067"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Text Analyzer",
+              "resolved": "154255C2-76D4-492C-88D9-C80614EDD703"
+            }
+          ]
         },
         {
           "fields": {
@@ -139,7 +251,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.414Z",
             "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Web Page Content",
+              "resolved": "81F96534-03F5-49E9-81B0-D8902A7645A3"
+            }
+          ]
         },
         {
           "fields": {
@@ -153,7 +279,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.427Z",
             "checksum": "e92d05e2d3dd1ea076a8239f6ff973750bd6992f3d3459069b09b7911d3fc904"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=URL Metadata Extractor",
+              "resolved": "A2455679-1370-4298-AC9E-0BA48DE2432E"
+            }
+          ]
         },
         {
           "fields": {
@@ -167,7 +307,21 @@
           "sync": {
             "lastModified": "2025-10-04T15:53:26.446Z",
             "checksum": "bfd0856ee8119698eed7b76b888f9736680ca59d333a427685e8b16591a4df73"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Get Weather",
+              "resolved": "6C88FED2-679A-4FDD-A31A-7F38D0457F22"
+            }
+          ]
         },
         {
           "fields": {
@@ -181,7 +335,21 @@
           "sync": {
             "lastModified": "2025-10-17T01:10:54.011Z",
             "checksum": "7e6b1c744135f395e990d7d35b2d75e64da089b4186cd188765204b3289e7bd1"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Query Scheduled Jobs",
+              "resolved": "55D321D5-6BF3-4EFB-921F-E33376DFB2AF"
+            }
+          ]
         },
         {
           "fields": {
@@ -195,7 +363,21 @@
           "sync": {
             "lastModified": "2025-10-17T01:10:54.025Z",
             "checksum": "032fa68f059ca122adeef4d48edafff27471bb6e4a8f5e3cde16a9d73dd2e127"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Create Scheduled Job",
+              "resolved": "B26806D3-2951-480A-984A-C304CFD353AC"
+            }
+          ]
         },
         {
           "fields": {
@@ -209,7 +391,21 @@
           "sync": {
             "lastModified": "2025-10-17T01:10:54.037Z",
             "checksum": "22fe5c9dae3b0d37e42022f69eab56e0e9eac65c50d4450e3a48deb4a67db973"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Update Scheduled Job",
+              "resolved": "E825C4C3-91F3-4716-A9CA-796210A4D783"
+            }
+          ]
         },
         {
           "fields": {
@@ -223,7 +419,21 @@
           "sync": {
             "lastModified": "2025-10-17T01:10:54.050Z",
             "checksum": "5f07a6807f3b100bcd7a5e7d6da9a4b823f3f6df01710dd43982c05dca6459c0"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Delete Scheduled Job",
+              "resolved": "61D57D8B-805C-4DA4-ACE1-D1254B2ABA39"
+            }
+          ]
         },
         {
           "fields": {
@@ -237,7 +447,21 @@
           "sync": {
             "lastModified": "2025-10-17T01:10:54.063Z",
             "checksum": "3d968b9d18a7fb1965fe82b847373efa9aa65f0f3d4eb9f641d134571ae41c57"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Execute Scheduled Job Now",
+              "resolved": "8C985369-A876-43D3-9A56-848E7AC28CFA"
+            }
+          ]
         },
         {
           "fields": {
@@ -251,7 +475,21 @@
           "sync": {
             "lastModified": "2025-10-17T01:10:54.074Z",
             "checksum": "785958ebddc3a99febe00ffb3fb79a86cae5672e43529e0ce0757d1fe77ff328"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Get Scheduled Job Statistics",
+              "resolved": "7C842E03-7CAF-425A-9934-5DABF6967BF8"
+            }
+          ]
         },
         {
           "fields": {
@@ -265,7 +503,21 @@
           "sync": {
             "lastModified": "2025-10-24T17:55:20.827Z",
             "checksum": "3ba0ba1e63c5effd7ffb8d2bd6e190d199ae7118510857c71a5d2ff1a913cff2"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Find Candidate Agents",
+              "resolved": "EF610103-E48D-4D9C-8DA2-1CF5B05F8AB6"
+            }
+          ]
         },
         {
           "fields": {
@@ -279,7 +531,21 @@
           "sync": {
             "lastModified": "2025-10-31T00:28:48.783Z",
             "checksum": "6e0da71beb9748ba7ac036186631c86ff7b0aaaef45655f39c00c7d41229372a"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Get Typeform Responses",
+              "resolved": "D836BB77-87A7-4DE6-97A2-3CD2C595D774"
+            }
+          ]
         }
       ]
     },
@@ -289,6 +555,14 @@
     "sync": {
       "lastModified": "2025-10-24T03:18:42.381Z",
       "checksum": "9dca48befacc6bea53664d4a45334941b496ade756d529025f81017dfd6ab578"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
+        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
+      }
+    ]
   }
 ]
