@@ -105,6 +105,13 @@ import { CommunicationMonitorResourceComponent } from './Communication/communica
 import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
 import { CommunicationProvidersResourceComponent } from './Communication/communication-providers-resource.component';
 import { CommunicationRunsResourceComponent } from './Communication/communication-runs-resource.component';
+// Credentials Dashboard Components
+import { CredentialsDashboardComponent } from './Credentials/credentials-dashboard.component';
+import { CredentialsOverviewResourceComponent } from './Credentials/components/credentials-overview-resource.component';
+import { CredentialsListResourceComponent } from './Credentials/components/credentials-list-resource.component';
+import { CredentialsTypesResourceComponent } from './Credentials/components/credentials-types-resource.component';
+import { CredentialsCategoriesResourceComponent } from './Credentials/components/credentials-categories-resource.component';
+import { CredentialsAuditResourceComponent } from './Credentials/components/credentials-audit-resource.component';
 
 
 
@@ -186,9 +193,14 @@ import { CommunicationRunsResourceComponent } from './Communication/communicatio
     CommunicationMonitorResourceComponent,
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
-    CommunicationRunsResourceComponent
-
-
+    CommunicationRunsResourceComponent,
+    // Credentials Dashboard Components
+    CredentialsDashboardComponent,
+    CredentialsOverviewResourceComponent,
+    CredentialsListResourceComponent,
+    CredentialsTypesResourceComponent,
+    CredentialsCategoriesResourceComponent,
+    CredentialsAuditResourceComponent
   ],
   imports: [
     CommonModule,
@@ -267,9 +279,14 @@ import { CommunicationRunsResourceComponent } from './Communication/communicatio
     CommunicationMonitorResourceComponent,
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
-    CommunicationRunsResourceComponent
-
-
+    CommunicationRunsResourceComponent,
+    // Export Credentials Dashboard
+    CredentialsDashboardComponent,
+    CredentialsOverviewResourceComponent,
+    CredentialsListResourceComponent,
+    CredentialsTypesResourceComponent,
+    CredentialsCategoriesResourceComponent,
+    CredentialsAuditResourceComponent
   ]
 })
 export class DashboardsModule { }

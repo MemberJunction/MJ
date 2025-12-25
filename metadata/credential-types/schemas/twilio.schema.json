@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "accountSid": {
+      "type": "string",
+      "title": "Account SID",
+      "description": "Twilio Account SID",
+      "isSecret": false,
+      "order": 0
+    },
+    "authToken": {
+      "type": "string",
+      "title": "Auth Token",
+      "description": "Twilio Auth Token",
+      "isSecret": true,
+      "order": 1
+    }
+  },
+  "required": ["accountSid", "authToken"]
+}
