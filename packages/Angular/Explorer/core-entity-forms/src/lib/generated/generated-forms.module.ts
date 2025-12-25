@@ -730,8 +730,7 @@ declarations: [
     UserNotificationFormComponent,
     UserRecordLogFormComponent,
     UserRoleFormComponent,
-    UserViewCategoryFormComponent,
-    UserViewRunDetailFormComponent],
+    UserViewCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -757,6 +756,7 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    UserViewRunDetailFormComponent,
     UserViewRunFormComponent,
     UserViewFormComponent,
     UserFormComponent,

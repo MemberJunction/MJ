@@ -725,7 +725,7 @@ export class MJTestRunFeedback_ {
     Comments?: string;
         
     @Field({description: `Timestamp when the feedback was provided`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ReviewedAt: Date;
         
     @Field() 
@@ -12130,7 +12130,7 @@ export class MJCompanyIntegration_ {
     RefreshToken?: string;
         
     @Field({nullable: true, description: `Timestamp when the current access token expires and needs to be refreshed.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     TokenExpirationDate?: Date;
         
     @Field({nullable: true, description: `API key for systems using key-based authentication instead of OAuth.`}) 
@@ -12189,11 +12189,11 @@ export class MJCompanyIntegration_ {
     LastRunID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     LastRunStartedAt?: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     LastRunEndedAt?: Date;
         
     @Field(() => [MJList_])
@@ -15855,11 +15855,11 @@ export class MJUserRecordLog_ {
     RecordID: string;
         
     @Field({description: `Field EarliestAt for entity User Record Logs.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EarliestAt: Date;
         
     @Field({description: `Field LatestAt for entity User Record Logs.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     LatestAt: Date;
         
     @Field(() => Int, {description: `Field TotalCount for entity User Record Logs.`}) 
@@ -16451,11 +16451,11 @@ export class MJCompanyIntegrationRun_ {
     RunByUserID: string;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt?: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field(() => Int, {description: `The total number of records processed during this integration run.`}) 
@@ -16727,7 +16727,7 @@ export class MJCompanyIntegrationRunDetail_ {
     Action: string;
         
     @Field({description: `Timestamp when this specific record operation was executed.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ExecutedAt: Date;
         
     @Field(() => Boolean, {description: `Indicates whether this individual record operation succeeded or failed.`}) 
@@ -16746,11 +16746,11 @@ export class MJCompanyIntegrationRunDetail_ {
     Entity: string;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     RunStartedAt?: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     RunEndedAt?: Date;
         
     @Field(() => [MJErrorLog_])
@@ -18301,7 +18301,7 @@ export class MJCompanyIntegrationRunAPILog_ {
     CompanyIntegrationRunID: string;
         
     @Field({description: `Timestamp when this API call was executed during the integration run.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ExecutedAt: Date;
         
     @Field(() => Boolean, {description: `Indicates whether the API call completed successfully or encountered an error.`}) 
@@ -18911,7 +18911,7 @@ export class MJUserViewRun_ {
     UserViewID: string;
         
     @Field({description: `Timestamp when the view was executed.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     RunAt: Date;
         
     @Field() 
@@ -19251,11 +19251,11 @@ export class MJWorkflowRun_ {
     ExternalSystemRecordID: string;
         
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field() 
@@ -23141,7 +23141,7 @@ export class MJQueue_ {
     ProcessUserName?: string;
         
     @Field({description: `Field LastHeartbeat for entity Queues.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     LastHeartbeat: Date;
         
     @Field() 
@@ -23395,11 +23395,11 @@ export class MJQueueTask_ {
     Status: string;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt?: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field({nullable: true, description: `JSON payload containing the data needed to process this task.`}) 
@@ -27199,7 +27199,7 @@ export class MJUserNotification_ {
     Unread: boolean;
         
     @Field({nullable: true, description: `Timestamp when the user read this notification.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ReadAt?: Date;
         
     @Field() 
@@ -27765,11 +27765,11 @@ export class MJRecordMergeLog_ {
     ProcessingStatus: string;
         
     @Field({description: `Field ProcessingStartedAt for entity Record Merge Logs.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ProcessingStartedAt: Date;
         
     @Field({nullable: true, description: `Field ProcessingEndedAt for entity Record Merge Logs.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ProcessingEndedAt?: Date;
         
     @Field({nullable: true, description: `Detailed log of the merge process including field mappings and decisions.`}) 
@@ -29572,11 +29572,11 @@ export class MJEntityDocumentRun_ {
     EntityDocumentID: string;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt?: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field({description: `Can be Pending, In Progress, Completed, or Failed`}) 
@@ -29961,7 +29961,7 @@ export class MJEntityRecordDocument_ {
     VectorJSON?: string;
         
     @Field({description: `Timestamp of when the source entity record was last updated.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EntityRecordUpdatedAt: Date;
         
     @Field() 
@@ -30461,7 +30461,7 @@ export class MJDataContextItem_ {
     DataJSON?: string;
         
     @Field({nullable: true, description: `If DataJSON is populated, this field will show the date the the data was captured`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     LastRefreshedAt?: Date;
         
     @Field() 
@@ -30693,7 +30693,7 @@ export class MJDataContext_ {
     UserID: string;
         
     @Field({nullable: true, description: `Timestamp of when the data in this context was last refreshed or recalculated.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     LastRefreshedAt?: Date;
         
     @Field() 
@@ -32329,7 +32329,7 @@ export class MJVersionInstallation_ {
     Type?: string;
         
     @Field({description: `Timestamp when this version was installed.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     InstalledAt: Date;
         
     @Field({description: `Pending, Complete, Failed`}) 
@@ -32538,7 +32538,7 @@ export class MJDuplicateRunDetailMatch_ {
     MatchProbability: number;
         
     @Field({description: `Timestamp when this duplicate match was identified.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     MatchedAt: Date;
         
     @Field({description: `The action to take for this match (Ignore, Merge, Delete).`}) 
@@ -32558,7 +32558,7 @@ export class MJDuplicateRunDetailMatch_ {
     MergeStatus: string;
         
     @Field({description: `Timestamp when records were merged, if applicable.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     MergedAt: Date;
         
     @Field() 
@@ -33110,11 +33110,11 @@ export class MJDuplicateRun_ {
     SourceListID: string;
         
     @Field() 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field({description: `Overall approval status for the duplicate run results (Pending, Approved, Rejected).`}) 
@@ -34687,7 +34687,7 @@ export class MJAction_ {
     CodeApprovedByUserID?: string;
         
     @Field({nullable: true, description: `When the code was approved.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     CodeApprovedAt?: Date;
         
     @Field(() => Boolean, {description: `If set to 1, Code will never be generated by the AI system. This overrides all other settings including the ForceCodeGeneration bit`}) 
@@ -37266,11 +37266,11 @@ export class MJCommunicationRun_ {
     Status: string;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt?: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field({nullable: true}) 
@@ -37683,7 +37683,7 @@ export class MJCommunicationLog_ {
     Direction: string;
         
     @Field({description: `The date and time when the message was logged.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     MessageDate: Date;
         
     @Field({description: `The status of the logged message (Pending, In-Progress, Complete, Failed).`}) 
@@ -38105,11 +38105,11 @@ export class MJTemplate_ {
     UserID: string;
         
     @Field({nullable: true, description: `Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     ActiveAt?: Date;
         
     @Field({nullable: true, description: `Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     DisabledAt?: Date;
         
     @Field(() => Boolean, {description: `If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. `}) 
@@ -39540,11 +39540,11 @@ export class MJRecommendationRun_ {
     RecommendationProviderID: string;
         
     @Field({description: `The start date of the recommendation run`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartDate: Date;
         
     @Field({nullable: true, description: `The end date of the recommendation run`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndDate?: Date;
         
     @Field({description: `The status of the recommendation run`}) 
@@ -40259,11 +40259,11 @@ export class MJRecordChangeReplayRun_ {
     ID: string;
         
     @Field({description: `Timestamp when the replay run started`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt: Date;
         
     @Field({nullable: true, description: `Timestamp when the replay run ended`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndedAt?: Date;
         
     @Field({description: `Status of the replay run (Pending, In Progress, Complete, Error)`}) 
@@ -41395,11 +41395,11 @@ export class MJTestRun_ {
     Status: string;
         
     @Field({nullable: true, description: `Timestamp when the test run started execution`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt?: Date;
         
     @Field({nullable: true, description: `Timestamp when the test run completed`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     CompletedAt?: Date;
         
     @Field(() => Float, {nullable: true, description: `Execution time in seconds for this test`}) 
@@ -42123,7 +42123,7 @@ export class MJAIAgentRequest_ {
     AgentID: string;
         
     @Field({description: `Timestamp when the request was made by the agent.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     RequestedAt: Date;
         
     @Field({nullable: true, description: `Optional, a user that the AI specifically is directing the request to, if null intended for general system owner.`}) 
@@ -42145,7 +42145,7 @@ export class MJAIAgentRequest_ {
     ResponseByUserID?: string;
         
     @Field({nullable: true, description: `Timestamp when the response was provided by the human.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     RespondedAt?: Date;
         
     @Field({nullable: true, description: `Additional comments about the request. Not shared with the agent, purely record keeping.`}) 
@@ -48409,11 +48409,11 @@ export class MJTestSuiteRun_ {
     Status: string;
         
     @Field({nullable: true, description: `Timestamp when the suite run started execution`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartedAt?: Date;
         
     @Field({nullable: true, description: `Timestamp when the suite run completed (successfully or with failures)`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     CompletedAt?: Date;
         
     @Field(() => Int, {nullable: true, description: `Total number of tests executed in this suite run`}) 
@@ -48715,11 +48715,11 @@ export class MJContentProcessRun_ {
     SourceID: string;
         
     @Field({nullable: true, description: `Timestamp when the content processing workflow began execution.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     StartTime?: Date;
         
     @Field({nullable: true, description: `Timestamp when the content processing workflow completed or failed.`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     EndTime?: Date;
         
     @Field({nullable: true}) 
@@ -51561,11 +51561,11 @@ export class MJAIPromptRun_ {
     CommonValidationError?: string;
         
     @Field({nullable: true, description: `Timestamp of the first validation attempt`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     FirstAttemptAt?: Date;
         
     @Field({nullable: true, description: `Timestamp of the last validation attempt`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     LastAttemptAt?: Date;
         
     @Field(() => Int, {nullable: true, description: `Total time spent on retries in milliseconds (excluding first attempt)`}) 
@@ -51591,7 +51591,7 @@ export class MJAIPromptRun_ {
     OriginalModelID?: string;
         
     @Field({nullable: true, description: `Timestamp when the original request started, before any failovers`}) 
-    @MaxLength(8)
+    @MaxLength(10)
     OriginalRequestStartTime?: Date;
         
     @Field(() => Int, {nullable: true, description: `Total time spent in failover attempts in milliseconds`}) 
