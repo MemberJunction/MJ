@@ -7,12 +7,39 @@
     <!-- We only render a field if the record is either saved, or the field is editable. Meaning, for NEW records, we only show editable fields -->
     <div class="record-form-row" *ngIf="(!EditMode || IsFieldReadOnly) && !shouldHideField">
         <label *ngIf="ShowLabel" [innerHTML]="HighlightedDisplayName"></label>
-        @if (IsValueEncryptedOrSentinel) {
-            <!-- Encrypted field value - show masked display with lock icon -->
-            <span class="encrypted-value" title="This value is encrypted and protected">
-                <i class="fa-solid fa-lock encrypted-icon"></i>
-                {{EncryptedDisplayMask}}
-            </span>
+        @if (IsEncryptedField) {
+            <!-- Encrypted field in read-only mode -->
+            @if (CanRevealEncryptedValue) {
+                <!-- AllowDecryptInAPI=true: Show masked by default with reveal button -->
+                <span class="encrypted-value-container">
+                    @if (isEncryptedValueRevealed) {
+                        <span class="encrypted-revealed-value">{{Value}}</span>
+                    }
+                    @else {
+                        <span class="encrypted-value">
+                            <i class="fa-solid fa-lock encrypted-icon"></i>
+                            {{EncryptedDisplayMask}}
+                        </span>
+                    }
+                    <button type="button"
+                            class="encrypted-toggle-btn"
+                            (click)="toggleEncryptedValueVisibility()"
+                            [title]="isEncryptedValueRevealed ? 'Hide value' : 'Show value'">
+                        <i class="fa-solid" [class.fa-eye]="!isEncryptedValueRevealed" [class.fa-eye-slash]="isEncryptedValueRevealed"></i>
+                    </button>
+                </span>
+            }
+            @else if (IsValueProtected) {
+                <!-- AllowDecryptInAPI=false or sentinel: Always show masked, no reveal option -->
+                <span class="encrypted-value" title="This value is encrypted and protected">
+                    <i class="fa-solid fa-lock encrypted-icon"></i>
+                    {{EncryptedDisplayMask}}
+                </span>
+            }
+            @else {
+                <!-- Encrypted field with no value -->
+                <span></span>
+            }
         }
         @else {
             @switch (LinkType) {
@@ -49,20 +76,46 @@
         @if (ShowLabel) {
             <label [innerHTML]="HighlightedDisplayName"></label>
         }
-        @if (IsEncryptedField && IsValueEncryptedOrSentinel) {
-            <!-- Encrypted field with protected value - show special input with placeholder -->
+        @if (IsBlindEncryptedEdit) {
+            <!-- Encrypted field where user cannot see existing value (AllowDecryptInAPI=false) -->
             <div class="encrypted-field-edit">
-                <span class="encrypted-current-value" title="Current value is encrypted and protected">
+                <span class="encrypted-current-value" title="Current value is encrypted and cannot be viewed">
                     <i class="fa-solid fa-lock encrypted-icon"></i>
                     {{EncryptedDisplayMask}}
                 </span>
-                <kendo-textbox
-                    [(ngModel)]="Value"
-                    [placeholder]="'Enter new value to replace encrypted data'"
-                    class="encrypted-input"
-                    type="password">
-                </kendo-textbox>
-                <span class="encrypted-hint">Enter a new value to overwrite the existing encrypted data</span>
+                <div class="encrypted-input-container">
+                    <kendo-textbox
+                        [(ngModel)]="EncryptedEditValue"
+                        [placeholder]="'Enter new value to replace encrypted data'"
+                        class="encrypted-input"
+                        [type]="isNewValueRevealed ? 'text' : 'password'">
+                    </kendo-textbox>
+                    <button type="button"
+                            class="encrypted-toggle-btn"
+                            (click)="toggleNewValueVisibility()"
+                            [title]="isNewValueRevealed ? 'Hide value' : 'Show value'">
+                        <i class="fa-solid" [class.fa-eye]="!isNewValueRevealed" [class.fa-eye-slash]="isNewValueRevealed"></i>
+                    </button>
+                </div>
+                <span class="encrypted-hint">Enter a new value to overwrite the existing encrypted data (current value cannot be displayed)</span>
+            </div>
+        }
+        @else if (IsEncryptedField) {
+            <!-- Encrypted field where user CAN see existing value (AllowDecryptInAPI=true) -->
+            <div class="encrypted-field-edit-visible">
+                <div class="encrypted-input-container">
+                    <kendo-textbox
+                        [(ngModel)]="Value"
+                        class="encrypted-input"
+                        [type]="isEncryptedValueRevealed ? 'text' : 'password'">
+                    </kendo-textbox>
+                    <button type="button"
+                            class="encrypted-toggle-btn"
+                            (click)="toggleEncryptedValueVisibility()"
+                            [title]="isEncryptedValueRevealed ? 'Hide value' : 'Show value'">
+                        <i class="fa-solid" [class.fa-eye]="!isEncryptedValueRevealed" [class.fa-eye-slash]="isEncryptedValueRevealed"></i>
+                    </button>
+                </div>
             </div>
         }
         @else if (FieldInfo && FieldInfo.RelatedEntity && FieldInfo.RelatedEntity.length > 0) {
@@ -76,13 +129,7 @@
                     <mj-code-editor [(ngModel)]="Value" [languages]="languages" [language]="'JavaScript'"></mj-code-editor>
                 }
                 @case ('textbox') {
-                    @if (IsEncryptedField) {
-                        <!-- Encrypted field uses password type for privacy -->
-                        <kendo-textbox [(ngModel)]="Value" type="password" />
-                    }
-                    @else {
-                        <kendo-textbox [(ngModel)]="Value"  />
-                    }
+                    <kendo-textbox [(ngModel)]="Value" />
                 }
                 @case ('textarea') {
                     <kendo-textarea [(ngModel)]="Value"></kendo-textarea>

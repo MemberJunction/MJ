@@ -86,14 +86,53 @@ markdown {
   letter-spacing: 2px;
 }
 
+.encrypted-value-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.encrypted-revealed-value {
+  font-family: inherit;
+}
+
 .encrypted-icon {
   color: #888;
   font-size: 12px;
 }
 
+.encrypted-toggle-btn {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: #666;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.encrypted-toggle-btn:hover {
+  background-color: #f0f0f0;
+  border-color: #999;
+  color: #333;
+}
+
 .encrypted-field-edit {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.encrypted-field-edit-visible {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.encrypted-input-container {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 

@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, Renderer2, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, AfterViewInit, Renderer2 } from '@angular/core';
 import { BaseEntity, EntityField, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
-import { ENCRYPTED_SENTINEL, IsEncryptedSentinel, IsValueEncrypted, IsEncryptedOrSentinel } from '@memberjunction/global';
+import { IsEncryptedSentinel, IsEncryptedOrSentinel } from '@memberjunction/global';
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormContext } from './base-form-context';
 import { MarkdownComponent } from '@memberjunction/ng-markdown';
@@ -196,6 +196,13 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   }
 
   /**
+   * Returns true if the field allows decrypted values to be shown in the API
+   */
+  public get AllowDecryptInAPI(): boolean {
+    return this.FieldInfo?.AllowDecryptInAPI === true;
+  }
+
+  /**
    * Returns true if the field's current value is the encrypted sentinel value,
    * indicating that the actual value is protected and cannot be shown.
    */
@@ -205,12 +212,95 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   }
 
   /**
-   * Returns true if the field's current value is encrypted (either ciphertext or sentinel).
-   * Used to determine if special UI handling is needed.
+   * Returns true if the field's current value should be treated as protected for display purposes.
+   * For encrypted fields where AllowDecryptInAPI=false, any non-empty value should be hidden.
    */
-  public get IsValueEncryptedOrSentinel(): boolean {
+  public get IsValueProtected(): boolean {
     const value = this.record.Get(this.FieldName);
-    return IsEncryptedOrSentinel(value);
+
+    // If value is sentinel or encrypted ciphertext, it's protected
+    if (IsEncryptedOrSentinel(value)) {
+      return true;
+    }
+
+    // For encrypted fields where AllowDecryptInAPI=false, treat any non-null value as protected
+    const fieldInfo = this.FieldInfo;
+    if (fieldInfo?.Encrypt && !fieldInfo.AllowDecryptInAPI) {
+      return value !== null && value !== undefined && value !== '';
+    }
+
+    return false;
+  }
+
+  /**
+   * Returns true if the encrypted field has a value that can be revealed (AllowDecryptInAPI=true)
+   */
+  public get CanRevealEncryptedValue(): boolean {
+    if (!this.IsEncryptedField) return false;
+    if (!this.AllowDecryptInAPI) return false;
+    const value = this.record.Get(this.FieldName);
+    return value !== null && value !== undefined && value !== '';
+  }
+
+  /**
+   * Controls whether the encrypted value is currently visible (for AllowDecryptInAPI=true fields)
+   */
+  public isEncryptedValueRevealed = false;
+
+  /**
+   * Controls whether the new value being typed is visible (for blind edit mode)
+   */
+  public isNewValueRevealed = false;
+
+  /**
+   * Toggles the visibility of the encrypted value
+   */
+  public toggleEncryptedValueVisibility(): void {
+    this.isEncryptedValueRevealed = !this.isEncryptedValueRevealed;
+  }
+
+  /**
+   * Toggles the visibility of the new value being typed (for blind edit mode)
+   */
+  public toggleNewValueVisibility(): void {
+    this.isNewValueRevealed = !this.isNewValueRevealed;
+  }
+
+  /**
+   * For encrypted fields in edit mode where AllowDecryptInAPI=false,
+   * we need a separate edit value that starts empty (user can't see existing value)
+   */
+  private _encryptedEditValue: string = '';
+
+  /**
+   * Gets the value for editing encrypted fields.
+   * For AllowDecryptInAPI=false fields, returns empty string initially (user can't see existing value)
+   * For AllowDecryptInAPI=true fields, returns the actual value
+   */
+  public get EncryptedEditValue(): string {
+    if (this.AllowDecryptInAPI) {
+      return this.Value ?? '';
+    }
+    return this._encryptedEditValue;
+  }
+
+  /**
+   * Sets the encrypted edit value and updates the record
+   */
+  public set EncryptedEditValue(newValue: string) {
+    this._encryptedEditValue = newValue;
+    if (newValue && newValue.length > 0) {
+      // Only update the record if user has entered something
+      this.record.Set(this.FieldName, newValue);
+      this.ValueChange.emit(newValue);
+    }
+  }
+
+  /**
+   * Returns true if editing an encrypted field that doesn't allow viewing existing value
+   */
+  public get IsBlindEncryptedEdit(): boolean {
+    return this.IsEncryptedField && !this.AllowDecryptInAPI && this.IsValueProtected;
   }
 
   /**
