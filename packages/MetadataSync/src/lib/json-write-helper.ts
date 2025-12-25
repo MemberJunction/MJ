@@ -30,14 +30,16 @@ export class JsonWriteHelper {
     if (Array.isArray(data)) {
       return data.map(item => this.normalizeRecordDataOrder(item));
     }
-    
+
     if (data && typeof data === 'object') {
       // Check if this looks like a RecordData object
       if (data.fields !== undefined) {
         // This is a RecordData object - rebuild preserving original key order
         // but ensuring known keys maintain their relative order when present
         const ordered: any = {};
-        const knownKeys = ['fields', 'relatedEntities', 'primaryKey', 'sync', 'deleteRecord'];
+        // Known keys that are part of RecordData structure
+        // __mj_sync_notes is a system-managed key that should appear after sync
+        const knownKeys = ['fields', 'relatedEntities', 'primaryKey', 'sync', '__mj_sync_notes', 'deleteRecord'];
 
         // Process keys in original order, preserving user's ordering
         for (const key of Object.keys(data)) {
@@ -60,7 +62,7 @@ export class JsonWriteHelper {
         return processed;
       }
     }
-    
+
     return data;
   }
 

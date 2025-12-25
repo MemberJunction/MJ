@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
-import { SyncEngine, RecordData, DeferrableLookupError } from '../lib/sync-engine';
+import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig, EntityConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
@@ -712,6 +712,9 @@ export class PushService {
 
     // Check if record exists
     // Process primaryKey values through processFieldValue to resolve @lookup, @parent, etc.
+    // Create a resolution collector to track @lookup and @parent resolutions
+    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey' };
+
     let resolvedPrimaryKey: Record<string, any> | undefined;
     if (record.primaryKey && Object.keys(record.primaryKey).length > 0) {
       resolvedPrimaryKey = {};
@@ -723,7 +726,9 @@ export class PushService {
             parentEntity,
             null, // rootRecord
             0,
-            batchContext
+            batchContext,
+            resolutionCollector,
+            pkField
           );
         } catch (pkError: unknown) {
           // Check if this is a deferrable lookup error
@@ -801,6 +806,9 @@ export class PushService {
     // Track if we hit any deferrable lookup errors
     let hasDeferrableLookupError = false;
 
+    // Switch the collector to track field resolutions
+    resolutionCollector.fieldPrefix = 'fields';
+
     for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
       try {
         const processedValue = await this.syncEngine.processFieldValue(
@@ -809,7 +817,9 @@ export class PushService {
           parentEntity,
           null, // rootRecord
           0,
-          batchContext // Pass batch context for lookups
+          batchContext, // Pass batch context for lookups
+          resolutionCollector,
+          fieldName
         );
         entity.Set(fieldName, processedValue);
       } catch (fieldError: unknown) {
@@ -1135,6 +1145,17 @@ export class PushService {
     
     // Restore original field values to preserve @ references
     record.fields = originalFields;
+
+    // Update __mj_sync_notes with resolution information
+    // This helps users understand how @lookup and @parent references were resolved
+    // Use type assertion through unknown to handle the dynamic property
+    const recordWithNotes = record as unknown as Record<string, unknown>;
+    if (resolutionCollector.notes.length > 0) {
+      recordWithNotes.__mj_sync_notes = resolutionCollector.notes;
+    } else {
+      // Remove existing notes if no resolutions were tracked
+      delete recordWithNotes.__mj_sync_notes;
+    }
 
     // Return appropriate status
     // If we had deferred lookups, return 'deferred' to indicate partial save

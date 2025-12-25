@@ -696,6 +696,7 @@ Any key that is not one of the reserved MetadataSync keys (`fields`, `relatedEnt
 - `relatedEntities` - Embedded related entity records
 - `primaryKey` - Record identifier
 - `sync` - Sync metadata (lastModified, checksum)
+- `__mj_sync_notes` - System-managed resolution tracking (see [Resolution Tracking](#resolution-tracking-with-__mj_sync_notes))
 - `deleteRecord` - Deletion directive
 
 **Recommended comment pattern:**
@@ -775,6 +776,109 @@ MetadataSync preserves the original order of keys in your JSON files. When you r
 3. **Place comments near relevant content**: Add `_comments` inside related entity objects to document specific records
 4. **Document complex configurations**: Use comments to explain lookup references, encryption settings, or business rules
 5. **Version control friendly**: Comments make metadata files more readable in code reviews and git diffs
+
+## Resolution Tracking with `__mj_sync_notes`
+
+When you use `@lookup` or `@parent` references in your metadata files, MetadataSync automatically tracks how these references were resolved during push operations. This information is written to a `__mj_sync_notes` key in each record, providing transparency into the resolution process.
+
+### Purpose
+
+The `__mj_sync_notes` feature helps you:
+- **Debug lookup issues**: See exactly what value a `@lookup` resolved to
+- **Understand parent references**: Track how `@parent:` references were resolved
+- **Verify nested lookups**: View the resolution chain for nested `@lookup` expressions
+- **Document resolved values**: Provides a reference for what GUIDs correspond to which lookup expressions
+
+### How It Works
+
+After each `mj sync push` operation, records with `@lookup` or `@parent` references will have a `__mj_sync_notes` section added automatically:
+
+```json
+{
+  "fields": {
+    "Name": "ServerOnlyEncrypted",
+    "Encrypt": true,
+    "EncryptionKeyID": "@lookup:MJ: Encryption Keys.Name=Test Encryption Key"
+  },
+  "primaryKey": {
+    "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Test Tables&Name=ServerOnlyEncrypted"
+  },
+  "sync": {
+    "lastModified": "2025-12-25T16:14:32.605Z",
+    "checksum": "7e989e08396f6cffb8b2d70958018b21..."
+  },
+  "__mj_sync_notes": [
+    {
+      "type": "lookup",
+      "field": "primaryKey.ID",
+      "expression": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Test Tables&Name=ServerOnlyEncrypted",
+      "resolved": "F501E294-5F5F-44C6-AD06-5C9754A13D29",
+      "nested": [
+        {
+          "expression": "@lookup:Entities.Name=Test Tables",
+          "resolved": "0fde4c2c-26b1-45e9-b504-5d4a6f4201cf"
+        }
+      ]
+    },
+    {
+      "type": "lookup",
+      "field": "fields.EncryptionKeyID",
+      "expression": "@lookup:MJ: Encryption Keys.Name=Test Encryption Key",
+      "resolved": "85B814C8-A01B-4AE3-A252-DC9D54C914C7"
+    }
+  ]
+}
+```
+
+### Note Structure
+
+Each resolution note contains:
+
+| Field | Description |
+|-------|-------------|
+| `type` | Resolution type: `"lookup"` for `@lookup` references, `"parent"` for `@parent` references |
+| `field` | Field path where the resolution occurred (e.g., `"primaryKey.ID"`, `"fields.CategoryID"`) |
+| `expression` | The original reference expression before resolution |
+| `resolved` | The resolved value (typically a GUID) |
+| `nested` | (Optional) Array of nested resolutions for expressions containing nested `@lookup` references |
+
+### System-Managed Key
+
+The `__mj_sync_notes` key uses a double underscore prefix (`__`) to clearly indicate it is system-managed:
+- **Do not manually edit** this section - it is regenerated on each push
+- **Do not delete** it - it will be recreated automatically
+- The key is automatically removed if a record has no `@lookup` or `@parent` references
+- Key ordering is preserved - `__mj_sync_notes` appears after `sync` in the file
+
+### Example: Parent Reference Resolution
+
+When using `@parent:` references in related entities:
+
+```json
+{
+  "fields": {
+    "Name": "My Template"
+  },
+  "relatedEntities": {
+    "Template Contents": [
+      {
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "Content": "Hello World"
+        },
+        "__mj_sync_notes": [
+          {
+            "type": "parent",
+            "field": "fields.TemplateID",
+            "expression": "@parent:ID",
+            "resolved": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 ## Default Value Inheritance
 
