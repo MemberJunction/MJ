@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/financial-analytics-dashboard.spec.json",
+  "description": "Valid component demonstrating financial analytics dashboard"
+}

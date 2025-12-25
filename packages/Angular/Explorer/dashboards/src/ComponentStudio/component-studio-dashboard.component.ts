@@ -1,23 +1,21 @@
-import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, ViewContainerRef, HostListener } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
 import {
   ComponentEntityExtended,
-  ArtifactEntity,
-  ArtifactVersionEntity
+  ArtifactVersionEntity,
+  ResourceData
 } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ReactComponentEvent, MJReactComponent } from '@memberjunction/ng-react';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
-import { DialogService, DialogRef, DialogCloseResult } from '@progress/kendo-angular-dialog';
+import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 import { TextImportDialogComponent } from './components/text-import-dialog.component';
 import { ArtifactSelectionDialogComponent, ArtifactSelectionResult } from './components/artifact-selection-dialog.component';
 import { ArtifactLoadDialogComponent, ArtifactLoadResult } from './components/artifact-load-dialog.component';
-import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 // Interface for components loaded from files (not from database)
@@ -91,7 +89,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public isEditingSpec = false;
   public isEditingCode = false;
   private lastEditSource: 'spec' | 'code' | null = null;
-  
+
   // File input element reference
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
   
@@ -110,15 +108,20 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   constructor(
     private cdr: ChangeDetectorRef,
     private dialogService: DialogService,
-    private viewContainerRef: ViewContainerRef,
     private notificationService: MJNotificationService
   ) {
     super();
   }
 
-  ngAfterViewInit(): void {
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Component Studio"
+  }
+
+  async ngAfterViewInit() {
     this.initDashboard();
-    this.loadData();
+    await this.loadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
@@ -132,7 +135,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   protected async loadData(): Promise<void> {
     this.isLoading = true;
-    
+
     try {
       const rv = new RunView();
       const result = await rv.RunView<ComponentEntityExtended>({
@@ -145,21 +148,25 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
       if (result.Success) {
         this.components = result.Results || [];
-        // Load favorites for all components
-        await this.loadFavorites();
+
+        // Display components immediately - don't wait for favorites
         this.combineAndFilterComponents();
+        this.isLoading = false;
+
+        // Load favorites in background (non-blocking)
+        this.loadFavorites();
       } else {
         console.error('Failed to load components:', result.ErrorMessage);
+        this.isLoading = false;
       }
     } catch (error) {
       console.error('Error loading components:', error);
-    } finally {
       this.isLoading = false;
     }
   }
 
   /**
-   * Load favorite status for all components
+   * Load favorite status for all components in parallel
    */
   private async loadFavorites(): Promise<void> {
     const md = new Metadata();
@@ -167,23 +174,33 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     if (!currentUserId) return;
 
     this.favoriteComponents.clear();
-    
-    // Check favorite status for each component
-    for (const component of this.components) {
-      try {
-        const isFavorite = await this.metadata.GetRecordFavoriteStatus(
-          currentUserId,
-          'MJ: Components',
-          CompositeKey.FromID(component.ID)
-        );
-        
-        if (isFavorite) {
-          this.favoriteComponents.add(component.ID);
-        }
-      } catch (error) {
-        console.error(`Error loading favorite status for component ${component.ID}:`, error);
+
+    // Load all favorite statuses in parallel for better performance
+    const favoritePromises = this.components.map(component =>
+      this.metadata.GetRecordFavoriteStatus(
+        currentUserId,
+        'MJ: Components',
+        CompositeKey.FromID(component.ID)
+      )
+        .then(isFavorite => ({ componentId: component.ID, isFavorite }))
+        .catch(error => {
+          console.error(`Error loading favorite status for component ${component.ID}:`, error);
+          return { componentId: component.ID, isFavorite: false };
+        })
+    );
+
+    // Wait for all favorites to load
+    const results = await Promise.all(favoritePromises);
+
+    // Update the favorites set
+    for (const result of results) {
+      if (result.isFavorite) {
+        this.favoriteComponents.add(result.componentId);
       }
     }
+
+    // Trigger change detection to update favorite icons in UI
+    this.cdr.detectChanges();
   }
 
   /**
@@ -739,8 +756,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       const dialogRef = this.dialogService.open({
         content: ArtifactLoadDialogComponent,
         width: 1200,
-        height: 700,
-        appendTo: this.viewContainerRef
+        height: 700
       });
 
       const result = await dialogRef.result.toPromise() as ArtifactLoadResult | undefined;
@@ -804,8 +820,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       height: 600,
       minWidth: 500,
       title: '',  // Title is in the component
-      actions: [],  // Actions are in the component
-      appendTo: this.viewContainerRef
+      actions: []  // Actions are in the component
     });
     
     // Handle the import event from the dialog component
@@ -1266,8 +1281,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       const dialogRef = this.dialogService.open({
         content: ArtifactSelectionDialogComponent,
         width: 1200, // Increased from 1000px by 200px
-        height: 900, // Keep same height
-        appendTo: this.viewContainerRef
+        height: 900 // Keep same height
       });
 
       console.log('Dialog opened, waiting for result...');

@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -15,6 +15,7 @@ import { MarkdownArtifactViewerComponent } from './components/plugins/markdown-a
 import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-viewer.component';
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
+import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 
 // Import artifact type plugin viewer component
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
@@ -45,12 +46,15 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MarkdownArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
-    ComponentArtifactViewerComponent
+    ComponentArtifactViewerComponent,
+
+    // Custom tab components (used by plugins via dynamic component tabs)
+    DataRequirementsViewerComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
-    MarkdownModule.forChild(),
+    MarkdownModule,
     CodeEditorModule,
     MJReactModule,
     MJNotificationsModule

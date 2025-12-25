@@ -302,7 +302,7 @@ You can override these styles in your global styles or component styles:
 - `@progress/kendo-angular-indicators`: Loading spinner component
 - `@progress/kendo-angular-buttons`: Button components
 - `@progress/kendo-angular-dialog`: Dialog component for confirmations
-- `ngx-markdown`: Markdown rendering support
+- `@memberjunction/ng-markdown`: Markdown rendering support
 - `tslib`: TypeScript runtime helpers
 
 ### Integration with MemberJunction

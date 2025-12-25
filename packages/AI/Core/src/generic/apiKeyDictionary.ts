@@ -65,9 +65,32 @@ export class AIAPIKeys {
 /**
  * Helper function that gets the API Key for a given AI Driver Name using the AIAPIKeys class or any registered sub-class of AIAPIKeys
  * @param AIDriverName 
+ * @param apiKeys - optional array of AIAPIKey objects to check first before falling back to the global AIAPIKeys class
+ * @param verbose - optional flag to enable verbose logging
  * @returns 
  */
-export function GetAIAPIKey(AIDriverName: string): string {
+export function GetAIAPIKey(AIDriverName: string, apiKeys?: AIAPIKey[], verbose?: boolean): string {
+    let apiKey: string;
+    if (apiKeys && apiKeys.length > 0) {
+    const localKey = apiKeys.find(k => k.driverClass === AIDriverName);
+    if (localKey) {
+        apiKey = localKey.apiKey;
+        if (verbose) {
+            console.log(`   Using local API key for driver class: ${AIDriverName}`);
+        }
+    } else {
+        apiKey = GetAIAPIKeyGlobal(AIDriverName);
+        if (verbose) {
+            console.log(`   No local API key found for driver class ${AIDriverName}, using global key`);
+        }
+    }
+    } else {
+        apiKey = GetAIAPIKeyGlobal(AIDriverName);
+    }
+    return apiKey;
+}
+
+export function GetAIAPIKeyGlobal(AIDriverName: string): string {
     const obj = MJGlobal.Instance.ClassFactory.CreateInstance<AIAPIKeys>(AIAPIKeys); // get an instance of the above or a sub-class, whatever is registered with highest priority
     if (obj)
         return obj.GetAPIKey(AIDriverName);

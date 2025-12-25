@@ -1,0 +1,14 @@
+{
+  "name": "SimpleDrilldownNoEntityname",
+  "description": "SimpleDrilldownChart without entityName can use arbitrary field names - validates conditional constraint skipping",
+  "code": "function SimpleDrilldownNoEntityname({ components, utilities }) {\n  const { SimpleDrilldownChart } = components;\n  const [analyticsData, setAnalyticsData] = React.useState([\n    { campaignName: 'Summer Sale', impressions: 5000, clicks: 250, conversions: 25 },\n    { campaignName: 'Fall Promo', impressions: 3500, clicks: 180, conversions: 18 },\n    { campaignName: 'Holiday Special', impressions: 8000, clicks: 400, conversions: 50 }\n  ]);\n\n  return (\n    <div>\n      <h1>Marketing Campaign Analytics</h1>\n      <SimpleDrilldownChart\n        data={analyticsData}\n        categoryField=\"campaignName\"\n        valueFields={['impressions', 'clicks', 'conversions']}\n        chartType=\"column\"\n        title=\"Campaign Performance\"\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "SimpleDrilldownChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry"
+    }
+  ]
+}

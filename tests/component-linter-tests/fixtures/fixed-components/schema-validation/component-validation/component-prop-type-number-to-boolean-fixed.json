@@ -1,0 +1,21 @@
+{
+  "name": "ComponentPropTypeNumberToBooleanFixed",
+  "type": "generic",
+  "title": "Component Property Type Number to Boolean - Fixed Pattern",
+  "description": "Tests correct usage of boolean property with boolean value",
+  "code": "function ComponentPropTypeNumberToBooleanFixed({ utilities, components }) {\n  const [showPagination, setShowPagination] = useState(true);\n  const { DataTable } = components;\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* ✅ showPagination expects boolean, passing boolean */}\n      <DataTable data={members} showPagination={showPagination} />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "components": [{
+      "name": "DataTable",
+      "properties": [
+        {"name": "data", "type": "array", "isRequired": true},
+        {"name": "showPagination", "type": "boolean", "isRequired": false}
+      ]
+    }]
+  }
+}

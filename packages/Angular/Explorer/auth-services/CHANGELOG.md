@@ -1,5 +1,55 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- d6ae2a0: Auth0 Token Refresh fixes
+  - @memberjunction/core@2.126.1
+  - @memberjunction/global@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- ae52a0f: Fix Auth0 token refresh to properly await completion, preventing 500 errors after token expiration. The refresh() method now correctly converts the Observable to a Promise using firstValueFrom() instead of incorrectly awaiting an Observable directly.
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/global@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes

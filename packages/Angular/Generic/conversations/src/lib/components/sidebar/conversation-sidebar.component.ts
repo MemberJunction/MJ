@@ -12,8 +12,12 @@ import { NavigationTab } from '../../models/conversation-state.model';
           [currentUser]="currentUser"
           [selectedConversationId]="selectedConversationId"
           [renamedConversationId]="renamedConversationId"
+          [isSidebarPinned]="isSidebarPinned"
+          [isMobileView]="isMobileView"
           (conversationSelected)="conversationSelected.emit($event)"
-          (newConversationRequested)="newConversationRequested.emit()">
+          (newConversationRequested)="newConversationRequested.emit()"
+          (pinSidebarRequested)="onPinSidebarRequested()"
+          (unpinSidebarRequested)="onUnpinSidebarRequested()">
         </mj-conversation-list>
       </div>
       <div *ngIf="activeTab === 'collections'" class="sidebar-content">
@@ -56,7 +60,19 @@ export class ConversationSidebarComponent {
   @Input() currentUser!: UserInfo;
   @Input() selectedConversationId: string | null = null;
   @Input() renamedConversationId: string | null = null;
+  @Input() isSidebarPinned: boolean = true;
+  @Input() isMobileView: boolean = false;
 
   @Output() conversationSelected = new EventEmitter<string>();
   @Output() newConversationRequested = new EventEmitter<void>();
+  @Output() pinSidebarRequested = new EventEmitter<void>();
+  @Output() unpinSidebarRequested = new EventEmitter<void>();
+
+  onPinSidebarRequested(): void {
+    this.pinSidebarRequested.emit();
+  }
+
+  onUnpinSidebarRequested(): void {
+    this.unpinSidebarRequested.emit();
+  }
 }

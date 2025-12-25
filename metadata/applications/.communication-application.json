@@ -1,0 +1,47 @@
+{
+  "fields": {
+    "Name": "Communication",
+    "Description": "Manage and monitor system communications, providers, and logs",
+    "Icon": "fa-solid fa-comments",
+    "DefaultForNewUser": false,
+    "Color": "#00bcd4",
+    "DefaultSequence": 1004,
+    "DefaultNavItems": [
+      {
+        "Label": "Monitor",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "CommunicationMonitorResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Logs",
+        "Icon": "fa-solid fa-list-ul",
+        "ResourceType": "Custom",
+        "DriverClass": "CommunicationLogsResource"
+      },
+      {
+        "Label": "Providers",
+        "Icon": "fa-solid fa-server",
+        "ResourceType": "Custom",
+        "DriverClass": "CommunicationProvidersResource"
+      },
+      {
+        "Label": "Runs",
+        "Icon": "fa-solid fa-play",
+        "ResourceType": "Custom",
+        "DriverClass": "CommunicationRunsResource"
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "6B351216-A44E-4BBE-9461-FC70BE858506"
+  },
+  "sync": {
+    "lastModified": "2025-12-20T16:41:02.061Z",
+    "checksum": "1bf0e1716404ba16227328ec73d4a42ae084badac0a00d6af76cd7abe8f4490d"
+  }
+}

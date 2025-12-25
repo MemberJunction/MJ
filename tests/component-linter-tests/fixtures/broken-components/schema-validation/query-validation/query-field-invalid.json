@@ -1,0 +1,25 @@
+{
+  "name": "QueryFieldInvalidComponent",
+  "description": "Component accessing non-existent fields on query results (violates query-field-validation rule)",
+  "code": "function QueryFieldInvalidComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const { useState, useEffect } = React;\n  const [salesData, setSalesData] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState(null);\n\n  useEffect(() => {\n    async function loadSalesData() {\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'SalesReport',\n          CategoryPath: 'Reports/Sales',\n          Parameters: {\n            year: 2024\n          }\n        });\n\n        if (result.Success) {\n          // Mix of valid and invalid field accesses\n          const data = result.Results.map(row => ({\n            // ✅ Valid fields - these exist in the query definition\n            account: row.AccountName,\n            revenue: row.Revenue,\n            quarter: row.Quarter,\n            year: row.Year,\n            \n            // ❌ VIOLATION: InvalidField doesn't exist in query definition\n            invalid: row.InvalidField,\n            \n            // ❌ VIOLATION: NonExistentProperty doesn't exist in query definition\n            fake: row.NonExistentProperty,\n            \n            // ❌ VIOLATION: Profit field not included in query definition\n            profit: row.Profit,\n            \n            // ❌ VIOLATION: CustomerName field not included in query definition\n            customer: row.CustomerName\n          }));\n          setSalesData(data);\n        } else {\n          setError(result.ErrorMessage);\n        }\n      } catch (err) {\n        setError(err.message);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadSalesData();\n  }, []);\n\n  if (loading) return <div>Loading sales data...</div>;\n  if (error) return <div className=\"error\">Error: {error}</div>;\n\n  return (\n    <div className=\"sales-report\">\n      <h1>Sales Report 2024</h1>\n      <table>\n        <thead>\n          <tr>\n            <th>Account</th>\n            <th>Revenue</th>\n            <th>Quarter</th>\n            <th>Invalid Field</th>\n          </tr>\n        </thead>\n        <tbody>\n          {salesData.map((row, index) => (\n            <tr key={index}>\n              <td>{row.account}</td>\n              <td>${row.revenue.toFixed(2)}</td>\n              <td>Q{row.quarter}</td>\n              {/* Using invalid field in display */}\n              <td>{row.invalid}</td>\n            </tr>\n          ))}\n        </tbody>\n      </table>\n      <div className=\"summary\">\n        <p>Total Records: {salesData.length}</p>\n        {/* Another invalid field access */}\n        <p>Profit: {salesData.reduce((sum, row) => sum + row.profit, 0)}</p>\n      </div>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "SalesReport",
+        "categoryPath": "Reports/Sales",
+        "fields": [
+          { "name": "AccountName", "type": "nvarchar" },
+          { "name": "Revenue", "type": "decimal" },
+          { "name": "Quarter", "type": "int" },
+          { "name": "Year", "type": "int" }
+        ],
+        "parameters": [
+          { "name": "year", "type": "int", "isRequired": true }
+        ]
+      }
+    ]
+  }
+}

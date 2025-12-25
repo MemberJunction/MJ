@@ -1,0 +1,30 @@
+{
+  "name": "SimpleChartAverageWithValuefield",
+  "description": "SimpleChart with aggregateMethod='average' and required valueField - FIXED version",
+  "code": "function SimpleChartAverageWithValuefield({ components, utilities }) {\n  const { SimpleChart } = components;\n  const [orders, setOrders] = React.useState(null);\n\n  React.useEffect(() => {\n    async function loadData() {\n      const results = await utilities.rv.RunView({\n        EntityName: 'Orders',\n        ExtraFilter: '',\n        MaxRows: 100\n      });\n      setOrders(results.Results);\n    }\n    loadData();\n  }, []);\n\n  if (!orders) return <div>Loading...</div>;\n\n  return (\n    <SimpleChart\n      entityName=\"Orders\"\n      data={orders}\n      categoryField=\"Status\"\n      valueField=\"Total\"\n      aggregateMethod=\"average\"\n      chartType=\"bar\"\n      title=\"Average Order Value by Status\"\n      utilities={utilities}\n    />\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry"
+    }
+  ],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Orders",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier", "description": "Primary key" },
+          { "name": "OrderNumber", "type": "nvarchar", "description": "Order number" },
+          { "name": "Status", "type": "nvarchar", "description": "Order status" },
+          { "name": "Total", "type": "decimal", "description": "Order total" },
+          { "name": "OrderDate", "type": "datetime", "description": "Order date" }
+        ]
+      }
+    ]
+  }
+}

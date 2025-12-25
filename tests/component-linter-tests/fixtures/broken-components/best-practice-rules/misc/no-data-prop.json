@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component using data prop instead of savedUserSettings (violates no-data-prop rule)",
+  "code": "function TestComponent({ utilities, data, onDataChange }) {\n  const [items, setItems] = useState([]);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <p>Data: {JSON.stringify(data)}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

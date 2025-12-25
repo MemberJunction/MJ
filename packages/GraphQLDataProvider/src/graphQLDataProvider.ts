@@ -121,6 +121,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _configData: GraphQLProviderConfigData;
     private _sessionId: string;
     private _aiClient: GraphQLAIClient;
+    private _refreshPromise: Promise<void> | null = null;
 
     public get ConfigData(): GraphQLProviderConfigData {
         return this._configData;
@@ -299,8 +300,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
+            // Enhanced logging to diagnose token issues
+            const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+            console.log('[GraphQL] Config called with token:', {
+                tokenPreview,
+                tokenLength: configData.Token?.length,
+                separateConnection,
+                hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+            });
+
+            // CRITICAL: Always set this instance's _configData first
+            // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
+            this._configData = configData;
+
             if (separateConnection) {
-                this._configData = configData;
                 // Get UUID after setting the configData, so that it can be used to get any stored session ID
                 this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
 
@@ -309,18 +322,24 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 await this.SaveStoredSessionID(this._sessionId);
             }
             else {
+                // Update the singleton instance
                 GraphQLDataProvider.Instance._configData = configData;
 
                 if (GraphQLDataProvider.Instance._sessionId === undefined) {
                     GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
                 }
-    
+
                 // now create the new client, if it isn't already created
                 if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey);    
-                
+                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey);
+
                 // Store the session ID for the global instance
                 await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+
+                // CRITICAL: Sync this instance with the singleton
+                // This ensures ExecuteGQL() can use this._client.request()
+                this._sessionId = GraphQLDataProvider.Instance._sessionId;
+                this._client = GraphQLDataProvider.Instance._client;
             }
             return super.Config(configData); // now parent class can do it's config
         }
@@ -1673,9 +1692,21 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data;
         }
         catch (e) {
+            // Enhanced error logging to diagnose 500 errors
+            console.log('[GraphQL] ExecuteGQL error caught:', {
+                hasResponse: !!e?.response,
+                hasErrors: !!e?.response?.errors,
+                errorCount: e?.response?.errors?.length,
+                firstError: e?.response?.errors?.[0],
+                errorCode: e?.response?.errors?.[0]?.extensions?.code,
+                errorMessage: e?.response?.errors?.[0]?.message,
+                fullError: e
+            });
+
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
                 const error = e.response.errors[0];
                 const code = error?.extensions?.code?.toUpperCase().trim()
+                console.log('[GraphQL] Error code detected:', code);
                 if (code === 'JWT_EXPIRED') {
                     if (refreshTokenIfNeeded) {
                         // token expired, so we need to refresh it and try again
@@ -1699,14 +1730,62 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async RefreshToken(): Promise<void> {
+        // Check if we're in singleton mode
+        const isInstanceSingleton = GraphQLDataProvider.Instance &&
+                                    GraphQLDataProvider.Instance._configData === this._configData;
+
+        // If singleton has a refresh in progress, wait for it
+        if (isInstanceSingleton && GraphQLDataProvider.Instance._refreshPromise) {
+            console.log('[GraphQL] Token refresh already in progress (singleton), waiting...');
+            return GraphQLDataProvider.Instance._refreshPromise;
+        }
+
+        // If this instance has a refresh in progress, wait for it
+        if (this._refreshPromise) {
+            console.log('[GraphQL] Token refresh already in progress (instance), waiting...');
+            return this._refreshPromise;
+        }
+
+        // Start a new refresh
+        console.log('[GraphQL] Starting token refresh...');
+        this._refreshPromise = this.performTokenRefresh();
+
+        // Also store on singleton if in singleton mode
+        if (isInstanceSingleton) {
+            GraphQLDataProvider.Instance._refreshPromise = this._refreshPromise;
+        }
+
+        try {
+            await this._refreshPromise;
+            console.log('[GraphQL] Token refresh completed successfully');
+        } finally {
+            // Clear the promise when done
+            this._refreshPromise = null;
+            if (isInstanceSingleton && GraphQLDataProvider.Instance) {
+                GraphQLDataProvider.Instance._refreshPromise = null;
+            }
+        }
+    }
+
+    private async performTokenRefresh(): Promise<void> {
         if (this._configData.Data.RefreshTokenFunction) {
             const newToken = await this._configData.Data.RefreshTokenFunction();
             if (newToken) {
                 this._configData.Token = newToken; // update the token
-                this._client = this.CreateNewGraphQLClient(this._configData.URL,
-                                                           this._configData.Token,
-                                                           this._sessionId,
-                                                           this._configData.MJAPIKey);  
+                const newClient = this.CreateNewGraphQLClient(this._configData.URL,
+                                                              this._configData.Token,
+                                                              this._sessionId,
+                                                              this._configData.MJAPIKey);
+
+                // Update this instance's client
+                this._client = newClient;
+
+                // CRITICAL: Also update the singleton's client if we're in singleton mode
+                // Check if this._configData is the same reference as Instance._configData
+                if (GraphQLDataProvider.Instance &&
+                    GraphQLDataProvider.Instance._configData === this._configData) {
+                    GraphQLDataProvider.Instance._client = newClient;
+                }
             }
             else {
                 throw new Error('Refresh token function returned null or undefined token');
@@ -1722,7 +1801,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string): GraphQLClient {
-        const headers: Record<string, string> = { 
+        // Enhanced logging to diagnose token issues
+        const tokenPreview = token ? `${token.substring(0, 20)}...${token.substring(token.length - 10)}` : 'NO TOKEN';
+        console.log('[GraphQL] Creating new client:', {
+            url,
+            tokenPreview,
+            tokenLength: token?.length,
+            sessionId,
+            hasMJAPIKey: !!mjAPIKey
+        });
+
+        const headers: Record<string, string> = {
             'x-session-id': sessionId,
         };
         if (token)

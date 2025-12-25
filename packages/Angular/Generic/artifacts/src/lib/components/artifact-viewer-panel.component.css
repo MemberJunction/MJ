@@ -834,6 +834,15 @@
   padding: 16px;
 }
 
+/* Custom component tab content */
+.component-tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 16px;
+}
+
 .markdown-viewer {
   flex: 1;
   overflow: auto;
@@ -927,6 +936,23 @@
 
 /* Mobile adjustments: 481px - 768px */
 @media (max-width: 768px) {
+  /* Add top border with slight visual separation from top nav */
+  .artifact-viewer-panel {
+    border-top: 3px solid #3B82F6;
+    position: relative;
+  }
+
+  /* Create a small dark strip above the blue border to separate from top nav */
+  .artifact-viewer-panel::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: #092340; /* Match the top nav dark background color */
+  }
+
   .tab-navigation {
     padding: 0 8px;
     overflow-x: auto;

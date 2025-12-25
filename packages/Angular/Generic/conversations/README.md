@@ -182,7 +182,7 @@ npm run build:conversations
 - @memberjunction/ng-base-types ^2.101.0
 - @progress/kendo-angular-* ^16.2.0
 - @angular/* ^18.0.2
-- ngx-markdown ^18.0.0
+- @memberjunction/ng-markdown ^2.125.0
 - marked ^9.1.6
 
 ### 📚 References

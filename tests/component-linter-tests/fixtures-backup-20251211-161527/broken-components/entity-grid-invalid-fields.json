@@ -1,0 +1,31 @@
+{
+  "name": "EntityGridInvalidFields",
+  "description": "EntityDataGrid with fields that don't exist on Members entity - violates subset-of-entity-fields constraint",
+  "code": "function EntityGridInvalidFields({ components, utilities }) {\n  const { EntityDataGrid } = components;\n  \n  return (\n    <div>\n      <h1>Members List</h1>\n      <EntityDataGrid\n        entityName=\"Members\"\n        fields={['FullName', 'Status', 'StartDate']}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dependencies": [
+    {
+      "name": "EntityDataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Members",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier", "description": "Primary key" },
+          { "name": "FirstName", "type": "nvarchar", "description": "First name" },
+          { "name": "LastName", "type": "nvarchar", "description": "Last name" },
+          { "name": "Email", "type": "nvarchar", "description": "Email address" },
+          { "name": "JoinDate", "type": "datetime", "description": "Date joined" },
+          { "name": "IsActive", "type": "bit", "description": "Active status" }
+        ]
+      }
+    ]
+  }
+}

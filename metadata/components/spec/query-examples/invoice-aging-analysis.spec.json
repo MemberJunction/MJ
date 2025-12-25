@@ -1,0 +1,639 @@
+{
+  "name": "InvoiceAgingAnalysis",
+  "title": "Invoice Aging Analysis",
+  "type": "dashboard",
+  "namespace": "CRM/Finance",
+  "userExplanation": "Master-level accounts receivable dashboard with D3.js custom aging visualization, SimpleChart payment trends, and interactive filters. Demonstrates CUSTOM VISUALIZATION pattern: using D3.js for unique aging bucket heatmap when generic components aren't flexible enough. Shows outstanding balances by aging period with color intensity, top accounts with overdue invoices, and payment history. Most complex hybrid pattern with D3.js + SimpleChart + EntityDataGrid.",
+  "functionalRequirements": "## Business Objectives\n- Monitor accounts receivable aging across different time periods\n- Identify high-risk accounts with significant overdue balances\n- Track payment trends and average days to payment\n- Enable drill-down from aging buckets to specific invoices and payments\n- Support filtering by date range, account type, and minimum outstanding amount\n\n## Functional Requirements\n- **Interactive Filter Panel**: Date range selector, account type dropdown, minimum outstanding amount input\n- **Aging Buckets Chart**: Stacked bar chart showing outstanding amounts by aging period (0-30, 30-60, 60-90, 90+ days)\n- **Payment Trends Chart**: Dual-axis chart showing monthly payment totals and average days to payment (last 12 months)\n- **Click Aging Bucket**: When user clicks bucket, show three panels: top accounts, KPI cards, and invoice grid\n- **Top Accounts Panel**: Conditional query showing top 10 accounts with most outstanding in selected bucket\n- **KPI Cards**: Total outstanding, invoice count, average days overdue for selected bucket\n- **Invoice Grid**: EntityDataGrid with invoices in selected aging bucket, color-coded by overdue status (green/yellow/red)\n- **Account Selection**: Click account in top accounts list to show account payment history (conditional query 4)\n- **Payment Drill-Down**: Click invoice row to show EntityDataGrid of payments for that invoice\n- **Filter Coordination**: All queries re-execute when filters change\n- **Query Result Caching**: Cache query results for configured duration (default 5 minutes) to reduce database load\n- **State Cleanup**: Clear conditional queries when selections change\n- **Custom Column Rendering**: Color-code DaysOverdue column based on thresholds\n- **Multi-Level State**: Track filter values, selected bucket, selected account, and selected invoice\n- **Loading States**: Independent loading for each query and grid\n- **Empty States**: Handle buckets with no invoices or accounts with no history",
+  "description": "Accounts receivable aging analysis with D3.js custom visualization for aging buckets and SimpleChart for payment trends. Demonstrates when to use custom D3 visualizations vs generic components.",
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "Outstanding Invoices",
+        "categoryPath": "Demo",
+        "description": "Returns raw outstanding invoice records with calculated DaysOverdue field. NO GROUP BY - returns individual invoices for flexible client-side aggregation. Joins vwInvoices with vwAccounts to include AccountType. General-purpose query for aging analysis, payment tracking, AR dashboards. Client-side code can: group into aging buckets, aggregate by account, filter by overdue threshold, calculate totals. Query pair source for top-accounts-by-outstanding.sql. **Result Order: DueDate ASC, BalanceDue DESC** - Oldest invoices with highest balances first for priority review.",
+        "entityNames": [
+          "Invoices",
+          "Accounts"
+        ],
+        "fields": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Invoice unique identifier"
+          },
+          {
+            "name": "InvoiceNumber",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar(100)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Invoice number"
+          },
+          {
+            "name": "AccountID",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Foreign key to Account"
+          },
+          {
+            "name": "Account",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Account name (denormalized from view)"
+          },
+          {
+            "name": "AccountType",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Account type from joined vwAccounts table"
+          },
+          {
+            "name": "InvoiceDate",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Date invoice was created"
+          },
+          {
+            "name": "DueDate",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Date payment is due"
+          },
+          {
+            "name": "Status",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "nvarchar(50)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Invoice status"
+          },
+          {
+            "name": "TotalAmount",
+            "sequence": 9,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Total invoice amount"
+          },
+          {
+            "name": "AmountPaid",
+            "sequence": 10,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Amount paid to date"
+          },
+          {
+            "name": "BalanceDue",
+            "sequence": 11,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Remaining balance due (TotalAmount - AmountPaid)"
+          },
+          {
+            "name": "DaysOverdue",
+            "sequence": 12,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Days overdue calculated as DATEDIFF(day, DueDate, GETDATE()). Negative values indicate not yet due."
+          }
+        ],
+        "parameters": [
+          {
+            "name": "MinOutstanding",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "1000",
+            "description": "Optional filter by minimum outstanding balance"
+          },
+          {
+            "name": "AccountType",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Enterprise",
+            "description": "Optional filter by account type"
+          }
+        ]
+      },
+      {
+        "name": "Payment Trends",
+        "categoryPath": "Demo",
+        "description": "Monthly payment trends: SUM(Amount), COUNT(*), AVG(DATEDIFF(day, InvoiceDate, PaymentDate)) grouped by YEAR/MONTH for last 12 months. Returns dual-axis chart data. **Result Order: Year ASC, Month ASC** - Chronological order for time-series payment trend visualization.",
+        "entityNames": [
+          "Payments",
+          "Invoices",
+          "Accounts"
+        ],
+        "fields": [
+          {
+            "name": "Year",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Year of payment"
+          },
+          {
+            "name": "Month",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Month number (1-12)"
+          },
+          {
+            "name": "MonthName",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar(50)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Month name (January, February, etc.)"
+          },
+          {
+            "name": "PaymentCount",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of payments received in this month"
+          },
+          {
+            "name": "TotalPaid",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total amount paid in this month"
+          },
+          {
+            "name": "AvgPayment",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average payment amount"
+          },
+          {
+            "name": "AvgDaysToPayment",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average days from invoice date to payment"
+          },
+          {
+            "name": "UniqueAccounts",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of distinct accounts that made payments"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "MonthsBack",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "12",
+            "description": "Number of months to look back (default: 12)"
+          },
+          {
+            "name": "PaymentMethod",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Credit Card",
+            "description": "Optional filter by payment method"
+          },
+          {
+            "name": "AccountType",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Enterprise",
+            "description": "Optional filter by account type"
+          }
+        ]
+      },
+      {
+        "name": "Top Accounts by Outstanding",
+        "categoryPath": "Demo",
+        "description": "Aggregates outstanding invoices by account, returning TOP N accounts with highest balances. Groups by AccountName and AccountType with metrics: invoice count, total outstanding, average outstanding, average days overdue, max days overdue. General-purpose account-level aggregation query. Aging bucket filtering should be handled client-side using outstanding-invoices.sql. Query pair with outstanding-invoices.sql (aggregation + raw data pattern). **Result Order: TotalOutstanding DESC** - Highest outstanding balances first for priority focus.",
+        "entityNames": [
+          "Accounts",
+          "Invoices"
+        ],
+        "fields": [
+          {
+            "name": "AccountName",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Name of the account"
+          },
+          {
+            "name": "AccountType",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Account type"
+          },
+          {
+            "name": "InvoiceCount",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of outstanding invoices"
+          },
+          {
+            "name": "TotalOutstanding",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total balance due for this account"
+          },
+          {
+            "name": "AvgOutstanding",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average outstanding balance per invoice"
+          },
+          {
+            "name": "AvgDaysOverdue",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average days overdue across all invoices"
+          },
+          {
+            "name": "MaxDaysOverdue",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Maximum days overdue for any invoice"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "TopN",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "10",
+            "description": "Number of top accounts to return (default: 10)"
+          },
+          {
+            "name": "MinOutstanding",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "1000",
+            "description": "Optional filter by minimum outstanding balance"
+          },
+          {
+            "name": "AccountType",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Enterprise",
+            "description": "Optional filter by account type"
+          }
+        ]
+      },
+      {
+        "name": "Account Payment History",
+        "categoryPath": "Demo",
+        "description": "Returns raw payment transaction records for account detail view. LEFT JOIN invoices with payments to show both paid and unpaid invoices. Includes calculated DaysToPayment field. PaymentStatus bucketing (On Time/Late/Overdue/Pending) handled client-side for flexibility. General-purpose query for account payment analysis, payment tracking, and invoice history. Supports filtering by AccountID, AccountName, and date range. **Result Order: InvoiceDate DESC, PaymentDate DESC** - Most recent invoices and payments first for account review.",
+        "entityNames": [
+          "Invoices",
+          "Payments",
+          "Accounts"
+        ],
+        "fields": [
+          {
+            "name": "InvoiceNumber",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "nvarchar(100)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Invoice number"
+          },
+          {
+            "name": "InvoiceDate",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Date invoice was created"
+          },
+          {
+            "name": "DueDate",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Date payment is due"
+          },
+          {
+            "name": "TotalAmount",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Total invoice amount"
+          },
+          {
+            "name": "AmountPaid",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Amount paid to date"
+          },
+          {
+            "name": "BalanceDue",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Remaining balance due"
+          },
+          {
+            "name": "Status",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "nvarchar(50)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Invoice status (Paid, Pending, Overdue, etc.)"
+          },
+          {
+            "name": "PaymentDate",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "date",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Date payment was received (null if unpaid)"
+          },
+          {
+            "name": "PaymentAmount",
+            "sequence": 9,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Amount of this payment (null if unpaid)"
+          },
+          {
+            "name": "PaymentMethod",
+            "sequence": 10,
+            "defaultInView": true,
+            "type": "nvarchar(100)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Payment method used"
+          },
+          {
+            "name": "ReferenceNumber",
+            "sequence": 11,
+            "defaultInView": true,
+            "type": "nvarchar(100)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Payment reference number"
+          },
+          {
+            "name": "DaysToPayment",
+            "sequence": 12,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Days from invoice date to payment date"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "AccountID",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "12345",
+            "description": "Optional filter by account ID (UNIQUEIDENTIFIER)"
+          },
+          {
+            "name": "AccountName",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Acme Corporation",
+            "description": "Optional filter by account name"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-01-01",
+            "description": "Optional start date filter in YYYY-MM-DD format"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-12-31",
+            "description": "Optional end date filter in YYYY-MM-DD format"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "name": "Invoices",
+        "description": "Invoice records shown in DataGrid for aging bucket drill-down. Includes joined fields from Accounts (AccountType) and calculated fields (DaysOverdue).",
+        "displayFields": [
+          "ID",
+          "InvoiceNumber",
+          "InvoiceDate",
+          "DueDate",
+          "Account",
+          "AccountType",
+          "TotalAmount",
+          "AmountPaid",
+          "BalanceDue",
+          "Status",
+          "DaysOverdue"
+        ],
+        "filterFields": [
+          "ID",
+          "DaysOverdue",
+          "AccountID",
+          "AccountType",
+          "BalanceDue",
+          "Account"
+        ],
+        "sortFields": [
+          "DaysOverdue",
+          "BalanceDue",
+          "InvoiceDate",
+          "DueDate"
+        ],
+        "usageContext": "Loaded by EntityDataGrid with two different filter patterns: (1) Aging bucket drill-down: DaysOverdue BETWEEN x AND y AND AccountID IN (subquery) AND BalanceDue >= {minOutstanding}. (2) Account payment history: AccountName = '{accountName}'"
+      },
+      {
+        "name": "Accounts",
+        "description": "Account records shown in EntityDataGrid for top accounts list and referenced in SQL filters.",
+        "displayFields": [
+          "Name",
+          "AccountType",
+          "Status"
+        ],
+        "filterFields": [
+          "ID",
+          "AccountType",
+          "Status"
+        ],
+        "sortFields": [
+          "Name"
+        ],
+        "usageContext": "Loaded by EntityDataGrid for top accounts with optional filter: AccountType = '{appliedAccountType}'. Also referenced in invoice filter SQL subquery: SELECT ID FROM CRM.vwAccounts WHERE AccountType = '{accountType}'"
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "onBucketClick",
+      "type": "function",
+      "required": false,
+      "description": "Callback fired when user clicks an aging bucket in the chart",
+      "default": null
+    },
+    {
+      "name": "onAccountClick",
+      "type": "function",
+      "required": false,
+      "description": "Callback fired when user clicks an account row in the top accounts grid",
+      "default": null
+    },
+    {
+      "name": "onInvoiceClick",
+      "type": "function",
+      "required": false,
+      "description": "Callback fired when user clicks an invoice row in any EntityDataGrid",
+      "default": null
+    }
+  ],
+  "events": [
+    {
+      "name": "onBucketClick",
+      "description": "Fired when user clicks an aging bucket (bar segment)",
+      "payload": {
+        "bucket": "string - The aging bucket that was clicked (e.g., '0-30 days', '30-60 days')",
+        "invoiceCount": "number - Number of invoices in this bucket",
+        "totalOutstanding": "number - Total outstanding balance in this bucket"
+      },
+      "example": "{ bucket: '30-60 days', invoiceCount: 45, totalOutstanding: 125000.00 }"
+    },
+    {
+      "name": "onAccountClick",
+      "description": "Fired when user clicks an account row in the top accounts grid",
+      "payload": {
+        "accountName": "string - Name of the account",
+        "accountType": "string - Type of account",
+        "invoiceCount": "number - Number of outstanding invoices",
+        "totalOutstanding": "number - Total outstanding balance",
+        "avgDaysOverdue": "number - Average days overdue"
+      },
+      "example": "{ accountName: 'Acme Corp', accountType: 'Customer', invoiceCount: 8, totalOutstanding: 35000.00, avgDaysOverdue: 45 }"
+    },
+    {
+      "name": "onInvoiceClick",
+      "description": "Fired when user clicks an invoice row in the EntityDataGrid drill-down",
+      "payload": {
+        "invoiceId": "string - The ID of the clicked invoice record",
+        "invoiceNumber": "string - Invoice number",
+        "totalAmount": "number - Total invoice amount",
+        "balanceDue": "number - Outstanding balance",
+        "status": "string - Invoice status"
+      },
+      "example": "{ invoiceId: 'abc-123', invoiceNumber: 'INV-001', totalAmount: 5000.00, balanceDue: 2500.00, status: 'Overdue' }"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "DataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "libraries": [
+    {
+      "name": "d3",
+      "globalVariable": "d3",
+      "version": "7.8.5"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "## Component Architecture\n\n### Custom Visualization with D3.js\n**This component demonstrates the ESCAPE HATCH pattern - using D3.js for truly custom visualizations when generic components aren't flexible enough.**\n\n**Why D3.js for Aging Buckets?**\n- **Unique Requirements**: Need grouped bars with heatmap color intensity based on overdue severity\n- **Custom Interactions**: Click handling with detailed tooltips showing invoice counts and amounts\n- **Visual Complexity**: Generic bar charts can't show the risk severity through color gradients\n- **Ultimate Control**: D3 provides pixel-perfect control over every visual element\n\n**Hybrid Visualization Strategy:**\n- **D3.js Aging Visualization**: Custom grouped bar chart with color-coded risk levels (green → yellow → red)\n- **SimpleChart Payment Trends**: Generic line chart sufficient for simple trend visualization\n- **EntityDataGrid**: Generic grid component for drill-down tables\n\n**When to Use D3 vs Generic Components:**\n- Use D3: Unique visualizations, custom interactions, pixel-perfect control needed\n- Use Generic: Standard charts, simple data display, rapid development priority\n\n### Modern SQL + JavaScript Pattern\nThis component follows MemberJunction's best practice: **SQL returns raw data, JavaScript aggregates**.\n\n**Benefits of client-side aggregation:**\n- **Simpler SQL**: Query just returns invoice records with DaysOverdue calculated\n- **Flexibility**: Easy to change bucket ranges or add new aggregations without SQL changes\n- **Reusability**: Raw invoice data can be used for multiple visualizations\n- **Performance**: SQL does one simple query, JavaScript groups data in memory\n- **Maintainability**: Business logic stays in JavaScript where it's easier to modify and test\n\n### Data Flow\n1. **Initial Load**: Three concurrent RunQuery calls execute for outstanding invoices, payment trends, and top accounts\n2. **Raw Data Loading**: 'Outstanding Invoices' query returns all invoice records with DaysOverdue field\n3. **Client-Side Aggregation**: JavaScript function groups raw invoices into aging buckets (Not Yet Due, 0-30, 30-60, 60-90, 90+ days)\n4. **Filter Panel**: User adjusts filters (pending state) and clicks Apply Filters button\n5. **Data Reload**: Applied filter state triggers useEffect to reload all 3 queries\n6. **Chart Rendering**: SimpleChart displays aggregated aging bucket data\n7. **Bucket Drill-Down**: User clicks aging bucket → selectedSegment set → raw invoices filtered for that bucket shown in EntityDataGrid\n8. **Account Selection**: User clicks account row → selectedAccount set → EntityDataGrid shows payment history\n9. **Filter Consistency**: All EntityDataGrid filters use applied filter values for consistency\n\n### State Management\n**Pending Filter State** (user input):\n- `pendingMinOutstanding`, `pendingAccountType`, `pendingMonthsBack`, `pendingPaymentMethod`, `pendingTopN`\n\n**Applied Filter State** (active filters):\n- `appliedMinOutstanding`, `appliedAccountType`, `appliedMonthsBack`, `appliedPaymentMethod`, `appliedTopN`\n\n**Data State**:\n- `rawInvoices`: Raw invoice records from 'Outstanding Invoices' query\n- `agingData`: Aggregated aging bucket data (computed from rawInvoices)\n- `paymentTrendsData`: Payment trends query results\n- `topAccountsData`: Top accounts query results\n\n**Selection State**:\n- `selectedSegment`: Currently selected aging bucket (null = no drill-down, object = bucket drill-down)\n- `selectedAccount`: Currently selected account (null = no account view, object = payment history view)\n\n**UI State**:\n- `loading`: Boolean for async operation status\n- `errors`: Object with error messages per query/operation\n\n### Filter Panel Pattern\n**Split Pending/Applied State**:\n- User changes inputs → updates pending state only\n- Apply Filters button → copies pending to applied state\n- Applied state triggers data reload via useEffect\n- Prevents reload on every keystroke\n- Always visible (no toggle)\n- Clear Filters button resets all to defaults\n\n### Query Coordination\n**Three Concurrent Queries**: All execute in parallel on mount/applied filter change\n1. Outstanding Invoices - Raw invoice records with DaysOverdue (aggregated client-side into aging buckets)\n2. Payment Trends - Monthly payment patterns\n3. Top Accounts by Outstanding - Accounts with highest overdue\n\n### Client-Side Aggregation Function\nThe `aggregateIntoAgingBuckets()` function:\n1. Groups raw invoices by aging period based on DaysOverdue\n2. Calculates totals and averages per bucket\n3. Returns array of bucket objects sorted by aging progression\n4. Enables flexible bucket definition changes without SQL modifications\n\n### Multi-Level Drill-Down\n**Level 1 - Aging Bucket Click**:\n- User clicks aging bucket chart segment\n- Sets `selectedSegment` with clickData\n- EntityDataGrid shows invoices filtered by DaysOverdue range\n- Maps bucket name to SQL filter (e.g., '30-60 days' → DaysOverdue BETWEEN 31 AND 60)\n- Includes applied account type and min outstanding filters\n\n**Level 2 - Account Selection**:\n- User clicks account in top accounts EntityDataGrid\n- Sets `selectedAccount` with record data\n- Shows KPI summary cards (total outstanding, invoice count, etc.)\n- EntityDataGrid shows all invoices for selected account\n- Filter uses AccountName for simplicity\n\n### EntityDataGrid Integration\n**Invoice Drill-Down Filter** (from aging bucket):\n1. Aging bucket filter: Maps bucket to DaysOverdue range\n2. Account type filter (optional): `AccountID IN (SELECT ID FROM CRM.vwAccounts WHERE AccountType='{appliedAccountType}')`\n3. Minimum outstanding filter (optional): `BalanceDue >= {appliedMinOutstanding}`\n4. Filters combined with AND operator\n\n**Payment History Filter** (from account selection):\n- Simple filter: `AccountName='{selectedAccount.AccountName}'`\n- Shows all invoices for the account regardless of status\n\n### Event System\n**onBucketClick**: Fires when aging bucket clicked, provides:\n- bucket, invoiceCount, totalOutstanding\n\n**onAccountClick**: Fires when account row clicked, provides:\n- accountName, accountType, invoiceCount, totalOutstanding, avgDaysOverdue\n\n**onInvoiceClick**: Fires when invoice row clicked, provides:\n- invoiceId, invoiceNumber, totalAmount, balanceDue, status\n\n### Educational Value\nDemonstrates:\n1. **Custom D3.js Visualization**: Truly custom aging bucket viz with color-coded risk levels\n2. **D3 Lifecycle Management**: Proper initialization, updates, and cleanup with useEffect + useRef\n3. **D3 Selections & Data Binding**: SVG element creation and data-driven updates\n4. **When to Use D3**: Shows the decision point - custom viz needs vs generic component limitations\n5. **Hybrid Pattern**: D3 custom viz + SimpleChart + EntityDataGrid in one component\n6. **Advanced Filter Pattern**: Pending/applied state split prevents premature data loads\n7. **Multi-Query Dashboard**: Three concurrent queries with independent error handling\n8. **Multi-Level Drill-Down**: Bucket → Invoices, Account → Payment History\n9. **Filter Coordination**: Consistent filter application across queries and grids\n10. **Complex SQL Filters**: Aging bucket mapping, subqueries, range filters\n11. **Always-Visible Filters**: User control without UI disruption\n12. **Event Exposure**: External consumers can listen to all user interactions\n13. **Master Complexity**: Most complex hybrid pattern with D3 + 4 queries + 2 drill-down paths",
+  "code": "@file:../../code/query-examples/invoice-aging-analysis.js",
+  "exampleUsage": "// Basic usage\n<InvoiceAgingAnalysis\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n\n// With event handlers\n<InvoiceAgingAnalysis\n  onBucketClick={(event) => {\n    console.log(`Bucket ${event.bucket}: ${event.invoiceCount} invoices, $${event.totalOutstanding}`);\n  }}\n  onAccountClick={(event) => {\n    console.log(`Account ${event.accountName}: ${event.invoiceCount} invoices overdue`);\n  }}\n  onInvoiceClick={(event) => {\n    console.log(`Invoice ${event.invoiceNumber} clicked`);\n    // Navigate to invoice detail page\n    router.push(`/invoices/${event.invoiceId}`);\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n\n// With pre-configured filters via savedUserSettings\n<InvoiceAgingAnalysis\n  savedUserSettings={{\n    appliedMinOutstanding: 5000,\n    appliedAccountType: 'Customer',\n    appliedMonthsBack: 6,\n    appliedPaymentMethod: 'Credit Card',\n    appliedTopN: 20\n  }}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  onSaveUserSettings={onSaveUserSettings}\n/>"
+}

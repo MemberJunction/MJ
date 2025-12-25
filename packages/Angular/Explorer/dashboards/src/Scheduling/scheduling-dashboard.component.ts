@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SharedService } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 
 interface SchedulingDashboardState {
   activeTab: string;
@@ -53,6 +54,11 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     super();
     this.setupStateManagement();
     this.updateNavigationSelection();
+  }
+
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Scheduling"
   }
 
   ngAfterViewInit(): void {
@@ -170,7 +176,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
       }, 0);
     }
 
-    this.LoadingComplete.emit();
+    this.NotifyLoadComplete();
   }
 
   public getCurrentTabLabel(): string {

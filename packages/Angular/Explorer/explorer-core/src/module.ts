@@ -52,51 +52,24 @@ import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
-import { ChatWrapperComponent } from './lib/chat-wrapper/chat-wrapper.component';
-import { DashboardBrowserComponent } from './lib/dashboard-browser-component/dashboard-browser.component';
-import { DataBrowserComponent } from './lib/data-browser-component/data-browser.component';
-import { FavoritesComponent } from './lib/favorites/favorites.component';
-import { FilesComponent } from './lib/files/files.component';
-// [3.0] DEPRECATED - Superseded by GenericBrowserListComponent, unused
-// import { GenericBrowseListComponent } from './lib/generic-browse-list/generic-browse-list.component';
 import { FormToolbarComponent } from './lib/generic/form-toolbar';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
-import { HeaderComponent } from './lib/header/header.component';
-import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
-import { HomeComponent } from './lib/home-component/home.component';
-import { HomeWrapperComponent } from './lib/home-wrapper/home-wrapper.component';
-import { TabbedDashboardComponent } from './lib/tabbed-dashboard/tabbed-dashboard.component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
-// [3.0] DEPRECATED - Replaced by ShellModule (mj-shell), unused
-// import { NavigationComponent } from './lib/navigation/navigation.component';
-import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
-import { ReportBrowserComponent } from './lib/report-browser-component/report-browser.component';
 import { DashboardResource } from './lib/resource-wrappers/dashboard-resource.component';
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 import { EntityRecordResource } from './lib/resource-wrappers/record-resource.component';
-import { ReportResource } from './lib/resource-wrappers/report-resource.component';
 import { SearchResultsResource } from './lib/resource-wrappers/search-results-resource.component';
 import { UserViewResource } from './lib/resource-wrappers/view-resource.component';
-import { SingleApplicationComponent } from './lib/single-application/single-application.component';
 import { AddItemComponent } from './lib/single-dashboard/Components/add-item/add-item.component';
 import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-item/delete-item.component';
 import { EditDashboardComponent } from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.component';
 import { SingleDashboardComponent } from './lib/single-dashboard/single-dashboard.component';
-import { SingleEntityComponent } from './lib/single-entity/single-entity.component';
 import { SingleQueryComponent } from './lib/single-query/single-query.component';
 import { SingleRecordComponent } from './lib/single-record/single-record.component';
-import { SingleReportComponent } from './lib/single-report/single-report.component';
 import { SingleSearchResultComponent } from './lib/single-search-result/single-search-result.component';
-import { SingleViewComponent } from './lib/single-view/single-view.component';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { UserProfileComponent } from './lib/user-profile/user-profile.component';
-// [3.0] DEPRECATED - Only used by NavigationComponent, unused
-// import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansion-panel-component';
-import { ApplicationViewComponent } from './lib/app-view/application-view.component';
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
-import { ListViewComponent } from './lib/list-view/list-view.component';
-import { ResourceBrowserComponent } from './lib/resource-browser/resource-browser.component';
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import {SingleListDetailComponent} from './lib/single-list-detail/single-list-detail.component';
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
@@ -104,40 +77,20 @@ import { ChatConversationsResource } from './lib/resource-wrappers/chat-conversa
 import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collections-resource.component';
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
+import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 // AI resource components are now in @memberjunction/ng-dashboards directly (no wrappers needed)
-import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
-// [3.0] DEPRECATED - Test/demo component, not used in production
-// import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
+import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
 @NgModule({
   declarations: [
     FormToolbarComponent,
     ResourceContainerComponent,
-    AuthButtonComponent,
-    ChatWrapperComponent,
-    DashboardBrowserComponent,
-    DataBrowserComponent,
-    // GenericBrowseListComponent, // [3.0] DEPRECATED
-    GenericBrowserListComponent,
-    HomeComponent,
-    HomeWrapperComponent,
-    // NavigationComponent, // [3.0] DEPRECATED - replaced by ShellModule
-    ReportBrowserComponent,
-    QueryBrowserComponent,
     DashboardResource,
     EntityRecordResource,
-    ReportResource,
     SearchResultsResource,
     UserViewResource,
-    FilesComponent,
-    SingleApplicationComponent,
-    FavoritesComponent,
-    HeaderComponent,
-    SingleEntityComponent,
     SingleRecordComponent,
-    SingleReportComponent,
     SingleSearchResultComponent,
-    SingleViewComponent,
     SingleQueryComponent,
     UserProfileComponent,
     SingleDashboardComponent,
@@ -146,17 +99,13 @@ import { SystemValidationBannerComponent } from './lib/system-validation/system-
     EditDashboardComponent,
     UserNotificationsComponent,
     QueryResource,
-    // ExpansionPanelComponent, // [3.0] DEPRECATED
-    ApplicationViewComponent,
-    ListViewComponent,
-    ResourceBrowserComponent,
     SingleListDetailComponent,
     ListDetailResource,
     ChatConversationsResource,
     ChatCollectionsResource,
     ChatTasksResource,
     ArtifactResource,
-    TabbedDashboardComponent,
+    NotificationsResource,
     DashboardPreferencesDialogComponent,
     // StyleGuideTestComponent // [3.0] DEPRECATED
   ],
@@ -214,40 +163,19 @@ import { SystemValidationBannerComponent } from './lib/system-validation/system-
   exports: [
     FormToolbarComponent,
     ResourceContainerComponent,
-    AuthButtonComponent,
-    DashboardBrowserComponent,
-    DataBrowserComponent,
-    // GenericBrowseListComponent, // [3.0] DEPRECATED
-    GenericBrowserListComponent,
-    HomeComponent,
-    HomeWrapperComponent,
-    // NavigationComponent, // [3.0] DEPRECATED - replaced by ShellModule
-    ReportBrowserComponent,
     DashboardResource,
     EntityRecordResource,
-    ReportResource,
     SearchResultsResource,
     UserViewResource,
-    SingleApplicationComponent,
-    FavoritesComponent,
-    HeaderComponent,
-    SingleEntityComponent,
     SingleRecordComponent,
-    SingleReportComponent,
     SingleSearchResultComponent,
-    SingleViewComponent,
     UserProfileComponent,
     SingleDashboardComponent,
     AddItemComponent,
     DeleteItemComponent,
     EditDashboardComponent,
     UserNotificationsComponent,
-    // ExpansionPanelComponent, // [3.0] DEPRECATED
-    ApplicationViewComponent,
-    ListViewComponent,
-    ResourceBrowserComponent,
     ListDetailResource,
-    TabbedDashboardComponent,
     DashboardPreferencesDialogComponent,
     // StyleGuideTestComponent // [3.0] DEPRECATED
   ],

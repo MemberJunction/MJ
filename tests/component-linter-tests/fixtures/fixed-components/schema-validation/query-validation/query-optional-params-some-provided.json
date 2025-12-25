@@ -1,0 +1,27 @@
+{
+  "name": "QueryOptionalParamsSomeProvidedComponent",
+  "description": "Component with query having ONLY optional params, SOME provided - should be VALID (tests partial optional param usage)",
+  "code": "function QueryOptionalParamsSomeProvidedComponent({ utilities, category }) {\n  const [data, setData] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      try {\n        // Query has 4 optional params\n        // Providing only 2 is valid - others use defaults\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'Invoice Line Items by Product',\n          CategoryPath: 'Demo',\n          Parameters: {\n            Category: category,\n            StartDate: '2024-01-01'\n            // ProductID and EndDate omitted - valid because optional\n          }\n        });\n\n        if (result.Success) {\n          setData(result.Results);\n        }\n      } catch (err) {\n        console.error(err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadData();\n  }, [category]);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Line Items for {category}</h1>\n      <p>Count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "properties": [
+    { "name": "category", "type": "string", "required": false, "description": "Category to filter by" }
+  ],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [
+      {
+        "name": "Invoice Line Items by Product",
+        "categoryPath": "Demo",
+        "fields": ["ID", "Product", "Quantity", "TotalPrice"],
+        "entityNames": ["Invoice Line Items"],
+        "parameters": [
+          { "name": "ProductID", "type": "number", "isRequired": false },
+          { "name": "Category", "type": "string", "isRequired": false },
+          { "name": "StartDate", "type": "string", "isRequired": false },
+          { "name": "EndDate", "type": "string", "isRequired": false }
+        ]
+      }
+    ]
+  }
+}

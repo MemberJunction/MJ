@@ -1,0 +1,12 @@
+{
+  "name": "EntityArrayFilterValidFixed",
+  "type": "generic",
+  "title": "Entity Array Filter Valid Field - Fixed Pattern",
+  "description": "Corrected version filtering by existing entity field",
+  "code": "function EntityArrayFilterValidFixed({ utilities }) {\n  const [premiumMembers, setPremiumMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ✅ Filtering by existing field: MembershipType\n        const filtered = result.Results.filter(m => m.MembershipType === 'Premium');\n        setPremiumMembers(filtered);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Premium Members</h3>\n      {premiumMembers.map((m, i) => (\n        <div key={i}>{m.FirstName} {m.LastName}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active"
+}

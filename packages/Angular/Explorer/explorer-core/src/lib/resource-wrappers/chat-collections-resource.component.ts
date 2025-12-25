@@ -1,6 +1,6 @@
 import { Component, ViewEncapsulation, OnInit, OnDestroy } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended } from '@memberjunction/core-entities';
@@ -54,7 +54,8 @@ export function LoadChatCollectionsResource() {
             [isMaximized]="isArtifactPanelMaximized"
             (closed)="closeArtifactPanel()"
             (maximizeToggled)="toggleMaximizeArtifactPanel()"
-            (navigateToLink)="onNavigateToLink($event)">
+            (navigateToLink)="onNavigateToLink($event)"
+            (openEntityRecord)="onOpenEntityRecord($event)">
           </mj-artifact-viewer-panel>
         </div>
       </ng-container>
@@ -480,6 +481,14 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
     // Navigate using the generic nav item method
     this.navigationService.OpenNavItemByName(navItemName, params);
+  }
+
+  /**
+   * Handle entity record open request from artifact viewer (from React component grids).
+   * Uses NavigationService to open the record in a new tab.
+   */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 
   /**

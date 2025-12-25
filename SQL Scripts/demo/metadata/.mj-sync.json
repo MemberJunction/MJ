@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "query-categories",
+    "queries"
+  ],
+  "sqlLogging": {
+    "enabled": false
+  }
+}

@@ -10,6 +10,39 @@
     "mode": "views",
     "description": "Component is data-agnostic and works with any entity data passed via props"
   },
+  "typeDefinitions": {
+    "ColumnDef": {
+      "description": "Column definition object for advanced column configuration",
+      "properties": {
+        "field": {
+          "type": "string",
+          "required": true,
+          "description": "Field name from data object"
+        },
+        "header": {
+          "type": "string",
+          "required": false,
+          "description": "Display header text (defaults to field DisplayName or field name)"
+        },
+        "render": {
+          "type": "function",
+          "signature": "(value: any, record: object, fieldInfo?: object) => ReactNode",
+          "required": false,
+          "description": "Custom render function for cell content"
+        },
+        "width": {
+          "type": "string | number",
+          "required": false,
+          "description": "Column width (e.g., '200px' or 200)"
+        },
+        "sortable": {
+          "type": "boolean",
+          "required": false,
+          "description": "Override global sorting setting for this column"
+        }
+      }
+    }
+  },
   "properties": [
     {
       "name": "data",
@@ -28,14 +61,38 @@
       "type": "Array<string>",
       "description": "Array of field names that constitute the primary key(s) for opening entity records. Required for OpenEntityRecord integration. When provided with entityName, clicking a row will open the entity record using these fields. Use for 1:1 record-to-row scenarios (not aggregated data). Example: ['ID'] for single key, ['OrderID', 'LineNumber'] for composite key.",
       "required": false,
-      "exampleValue": "[\"ID\"]"
+      "exampleValue": "[\"ID\"]",
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that primary key field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": true
+          },
+          "errorTemplate": "Primary key field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
     },
     {
       "name": "columns",
-      "type": "Array<string | object>",
-      "description": "Array of column definitions. Can be simple strings (field names) for default behavior, or column definition objects with properties: field (required), header, render, width, sortable. If not provided, all fields will be displayed. See technical design section for complete ColumnDef structure.",
+      "type": "Array<string | ColumnDef>",
+      "description": "Array of column definitions. Can be simple strings (field names) for default behavior, or ColumnDef objects for advanced configuration. If not provided, all fields will be displayed. When using ColumnDef objects, the 'field' property is validated against entity fields.",
       "required": false,
-      "exampleValue": "[\"Name\", { field: \"Price\", header: \"Unit Price\", render: (v) => `$${v}`, width: \"120px\", sortable: true }]"
+      "exampleValue": "[\"Name\", { field: \"Price\", header: \"Unit Price\", render: (v) => `$${v}`, width: \"120px\", sortable: true }]",
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that column field names (strings or ColumnDef.field properties) exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "Column field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
     },
     {
       "name": "sorting",
@@ -83,7 +140,19 @@
       "name": "filterFields",
       "type": "Array<string>",
       "description": "Fields to search when filtering. If not specified, searches all fields",
-      "required": false
+      "required": false,
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "When entityName is provided, validates that filter field names exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "Filter field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
     },
     {
       "name": "filterDebounceTime",

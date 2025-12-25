@@ -9,8 +9,8 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
-import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
-import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
+import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine, UserSettingEntity } from '@memberjunction/core-entities';
+import { UserInfo, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
@@ -112,6 +112,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public activeVersionNumber: number | null = null;
   public activeVersionId: string | null = null;
   public isMobileView: boolean = false;
+  public isSidebarPinned: boolean = false; // Default unpinned until settings load (prevents flicker)
 
   // Artifact permissions
   public canShareActiveArtifact: boolean = false;
@@ -123,6 +124,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
+  public isSidebarCollapsed: boolean = true; // Default collapsed until settings load (prevents flicker)
+  public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
+  public isSidebarSettingsLoaded: boolean = false; // Tracks whether settings have been loaded (prevents render before state is known)
   private isSidebarResizing: boolean = false;
   private sidebarResizeStartX: number = 0;
   private sidebarResizeStartWidth: number = 0;
@@ -141,9 +145,15 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private previousIsNewConversation: boolean = false; // Track new conversation state changes
   private destroy$ = new Subject<void>();
 
-  // LocalStorage keys
+  // LocalStorage keys (fallback for User Settings)
   private readonly SIDEBAR_WIDTH_KEY = 'mj-conversations-sidebar-width';
+  private readonly SIDEBAR_COLLAPSED_KEY = 'mj-conversations-sidebar-collapsed';
   private readonly ARTIFACT_PANEL_WIDTH_KEY = 'mj-artifact-panel-width';
+
+  // User Settings key for server-side persistence
+  private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
+  private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
+  private isLoadingSettings: boolean = false;
 
   // Task filter for conversation-specific filtering
   public tasksFilter: string = '1=1';
@@ -201,6 +211,11 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.selectedConversation = null;
     this.isNewUnsavedConversation = true;
     this.pendingMessageToSend = null;
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
   }
 
   /**
@@ -231,6 +246,11 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    */
   onConversationSelected(conversationId: string): void {
     this.setActiveConversation(conversationId);
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
   }
 
   /**
@@ -277,12 +297,31 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         this.onAutomaticCommand(command);
       });
 
-    // Check initial mobile state
+    // Check initial mobile state FIRST
     this.checkMobileView();
 
     // Load saved widths from localStorage
     this.loadSidebarWidth();
     this.loadArtifactPanelWidth();
+
+    // Load sidebar state - but on mobile, always default to collapsed
+    if (this.isMobileView) {
+      this.isSidebarCollapsed = true;
+      this.isSidebarVisible = false;
+      this.isSidebarSettingsLoaded = true; // Mobile doesn't need to load settings
+      // Enable transitions after a brief delay to ensure initial state is applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
+    } else {
+      // Load from User Settings (async) - await before continuing to prevent flicker
+      await this.loadSidebarState();
+      this.cdr.detectChanges();
+      // Enable transitions after state is loaded and applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
+    }
 
     // Setup resize listeners
     window.addEventListener('mousemove', this.onResizeMove.bind(this));
@@ -450,6 +489,11 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.destroy$.next();
     this.destroy$.complete();
 
+    // Clear any pending save timeout
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
     window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
@@ -462,14 +506,205 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.checkMobileView();
   }
 
+  /**
+   * Handle clicks outside the sidebar to auto-collapse when unpinned
+   */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    // Only handle when sidebar is expanded but unpinned
+    if (this.isSidebarCollapsed || this.isSidebarPinned) {
+      return;
+    }
+
+    // Check if click is outside the sidebar
+    const target = event.target as HTMLElement;
+    const sidebarElement = target.closest('.workspace-sidebar');
+    const expandHandle = target.closest('.sidebar-expand-handle');
+
+    // If click is outside sidebar and expand handle, collapse it
+    if (!sidebarElement && !expandHandle) {
+      this.collapseSidebar();
+    }
+  }
+
   private checkMobileView(): void {
     const wasMobile = this.isMobileView;
     this.isMobileView = window.innerWidth < 768;
 
     if (this.isMobileView && !wasMobile) {
+      // Switched to mobile - hide sidebar and default to collapsed
       this.isSidebarVisible = false;
+      this.isSidebarCollapsed = true;
     } else if (!this.isMobileView && wasMobile) {
+      // Switched to desktop - show sidebar, restore state from User Settings
       this.isSidebarVisible = true;
+      this.loadSidebarState().then(() => {
+        this.cdr.detectChanges();
+      });
+    }
+  }
+
+  /**
+   * Collapse sidebar
+   */
+  collapseSidebar(): void {
+    this.isSidebarCollapsed = true;
+    if (this.isMobileView) {
+      this.isSidebarVisible = false;
+    }
+  }
+
+  /**
+   * Expand sidebar (unpinned - will auto-collapse on selection)
+   */
+  expandSidebar(): void {
+    this.isSidebarCollapsed = false;
+    this.isSidebarPinned = false;
+  }
+
+  /**
+   * Pin sidebar - keep it open after selection
+   */
+  pinSidebar(): void {
+    this.isSidebarPinned = true;
+    this.saveSidebarState();
+  }
+
+  /**
+   * Unpin sidebar - will auto-collapse on next selection
+   */
+  unpinSidebar(): void {
+    this.isSidebarPinned = false;
+    this.collapseSidebar();
+    this.saveSidebarState();
+  }
+
+  /**
+   * Save sidebar state to User Settings (server) and localStorage (fallback)
+   * Uses debouncing to avoid excessive database writes
+   */
+  private saveSidebarState(): void {
+    const stateToSave = {
+      collapsed: this.isSidebarCollapsed,
+      pinned: this.isSidebarPinned
+    };
+
+    // Save to localStorage immediately as backup
+    try {
+      localStorage.setItem(this.SIDEBAR_COLLAPSED_KEY, JSON.stringify(stateToSave));
+    } catch (error) {
+      console.warn('Failed to save sidebar state to localStorage:', error);
+    }
+
+    // Debounce the server save to avoid excessive writes
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+    this.saveSettingsTimeout = setTimeout(() => {
+      this.saveSidebarStateToServer(stateToSave);
+    }, 1000); // 1 second debounce
+  }
+
+  /**
+   * Save sidebar state to User Settings entity on server
+   */
+  private async saveSidebarStateToServer(state: { collapsed: boolean; pinned: boolean }): Promise<void> {
+    try {
+      const userId = this.currentUser?.ID;
+      if (!userId) {
+        return;
+      }
+
+      const rv = new RunView();
+      const result = await rv.RunView<UserSettingEntity>({
+        EntityName: 'MJ: User Settings',
+        ExtraFilter: `UserID='${userId}' AND Setting='${this.USER_SETTING_SIDEBAR_KEY}'`,
+        ResultType: 'entity_object'
+      });
+
+      const md = new Metadata();
+      let setting: UserSettingEntity;
+
+      if (result.Success && result.Results && result.Results.length > 0) {
+        // Update existing setting
+        setting = result.Results[0];
+      } else {
+        // Create new setting
+        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting.UserID = userId;
+        setting.Setting = this.USER_SETTING_SIDEBAR_KEY;
+      }
+
+      setting.Value = JSON.stringify(state);
+      await setting.Save();
+    } catch (error) {
+      console.warn('Failed to save sidebar state to User Settings:', error);
+    }
+  }
+
+  /**
+   * Load sidebar state from User Settings (server), falling back to localStorage
+   * For new users with no saved state, defaults to collapsed with new conversation
+   */
+  private async loadSidebarState(): Promise<void> {
+    this.isLoadingSettings = true;
+
+    try {
+      const userId = this.currentUser?.ID;
+      if (userId) {
+        // Try loading from User Settings first
+        const rv = new RunView();
+        const result = await rv.RunView<UserSettingEntity>({
+          EntityName: 'MJ: User Settings',
+          ExtraFilter: `UserID='${userId}' AND Setting='${this.USER_SETTING_SIDEBAR_KEY}'`,
+          ResultType: 'entity_object'
+        });
+
+        if (result.Success && result.Results && result.Results.length > 0) {
+          const setting = result.Results[0];
+          if (setting.Value) {
+            const state = JSON.parse(setting.Value);
+            this.isSidebarCollapsed = state.collapsed ?? true;
+            this.isSidebarPinned = state.pinned ?? false;
+            this.isLoadingSettings = false;
+            return;
+          }
+        }
+      }
+
+      // Fall back to localStorage
+      const saved = localStorage.getItem(this.SIDEBAR_COLLAPSED_KEY);
+      if (saved) {
+        try {
+          const state = JSON.parse(saved);
+          if (typeof state === 'object' && state !== null) {
+            this.isSidebarCollapsed = state.collapsed ?? true;
+            this.isSidebarPinned = state.pinned ?? false;
+            this.isLoadingSettings = false;
+            return;
+          }
+        } catch {
+          // Fall back to old boolean format
+          this.isSidebarCollapsed = saved === 'true';
+          this.isSidebarPinned = !this.isSidebarCollapsed;
+          this.isLoadingSettings = false;
+          return;
+        }
+      }
+
+      // No saved state found - NEW USER DEFAULT:
+      // Start with sidebar collapsed and show new conversation screen
+      this.isSidebarCollapsed = true;
+      this.isSidebarPinned = false;
+      this.isNewUnsavedConversation = true;
+    } catch (error) {
+      console.warn('Failed to load sidebar state:', error);
+      // Default to collapsed for new users on error
+      this.isSidebarCollapsed = true;
+      this.isSidebarPinned = false;
+    } finally {
+      this.isLoadingSettings = false;
+      this.isSidebarSettingsLoaded = true;
     }
   }
 

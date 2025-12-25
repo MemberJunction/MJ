@@ -1,5 +1,85 @@
 # @memberjunction/react-test-harness
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/aiengine@2.128.0
+  - @memberjunction/ai-vectors-memory@2.128.0
+  - @memberjunction/interactive-component-types@2.128.0
+  - @memberjunction/react-runtime@2.128.0
+  - @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [65318c4]
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/interactive-component-types@2.127.0
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/react-runtime@2.127.0
+  - @memberjunction/aiengine@2.127.0
+  - @memberjunction/ai-vectors-memory@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/react-runtime@2.126.1
+- @memberjunction/aiengine@2.126.1
+- @memberjunction/ai-vectors-memory@2.126.1
+- @memberjunction/interactive-component-types@2.126.1
+- @memberjunction/core@2.126.1
+- @memberjunction/core-entities@2.126.1
+- @memberjunction/global@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- eae1a1f: Add Phase B component linter fixtures, reorganize test structure, refactor financial analytics components, and fix OpenEntityRecord event propagation in artifacts and collections
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/aiengine@2.126.0
+  - @memberjunction/ai-vectors-memory@2.126.0
+  - @memberjunction/interactive-component-types@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/react-runtime@2.126.0
+  - @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [1115143]
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/interactive-component-types@2.125.0
+  - @memberjunction/react-runtime@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/aiengine@2.125.0
+  - @memberjunction/ai-vectors-memory@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/aiengine@2.124.0
+  - @memberjunction/ai-vectors-memory@2.124.0
+  - @memberjunction/interactive-component-types@2.124.0
+  - @memberjunction/react-runtime@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes

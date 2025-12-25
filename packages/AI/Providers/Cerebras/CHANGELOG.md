@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/ai-cerebras
 
+## 2.128.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.128.0
+- @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+  - @memberjunction/global@2.127.0
+  - @memberjunction/ai@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.126.1
+- @memberjunction/global@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.126.0
+- @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.125.0
+- @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.124.0
+- @memberjunction/global@2.124.0
+
 ## 2.123.1
 
 ### Patch Changes

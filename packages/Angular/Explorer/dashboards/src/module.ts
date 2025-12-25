@@ -53,6 +53,7 @@ import { TextImportDialogComponent } from './ComponentStudio/components/text-imp
 import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/artifact-selection-dialog.component';
 import { ArtifactLoadDialogComponent } from './ComponentStudio/components/artifact-load-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
+import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SplitterModule } from '@progress/kendo-angular-layout';
 // Scheduling Dashboard Components
@@ -99,6 +100,14 @@ import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
+import { CommunicationDashboardComponent } from './Communication/communication-dashboard.component';
+import { CommunicationMonitorResourceComponent } from './Communication/communication-monitor-resource.component';
+import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
+import { CommunicationProvidersResourceComponent } from './Communication/communication-providers-resource.component';
+import { CommunicationRunsResourceComponent } from './Communication/communication-runs-resource.component';
+
+
+
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -171,7 +180,15 @@ import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
     ViewConfigPanelComponent,
     FilterDialogComponent,
     // Home Dashboard Components
-    HomeDashboardComponent
+    HomeDashboardComponent,
+    // Communication Dashboard Components
+    CommunicationDashboardComponent,
+    CommunicationMonitorResourceComponent,
+    CommunicationLogsResourceComponent,
+    CommunicationProvidersResourceComponent,
+    CommunicationRunsResourceComponent
+
+
   ],
   imports: [
     CommonModule,
@@ -192,6 +209,7 @@ import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
     AITestHarnessModule,
     MemberJunctionCoreEntityFormsModule,
     GridModule,
+    ExcelExportModule,
     MJReactModule,
     SplitterModule,
     TabStripModule,
@@ -243,7 +261,15 @@ import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
     // Export Data Explorer Dashboard
     DataExplorerDashboardComponent,
     // Export Home Dashboard
-    HomeDashboardComponent
+    HomeDashboardComponent,
+    // Export Communication Dashboard
+    CommunicationDashboardComponent,
+    CommunicationMonitorResourceComponent,
+    CommunicationLogsResourceComponent,
+    CommunicationProvidersResourceComponent,
+    CommunicationRunsResourceComponent
+
+
   ]
 })
 export class DashboardsModule { }

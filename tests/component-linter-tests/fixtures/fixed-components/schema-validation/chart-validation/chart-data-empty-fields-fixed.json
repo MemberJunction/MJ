@@ -1,0 +1,18 @@
+{
+  "name": "ChartDataEmptyFieldsFixed",
+  "type": "generic",
+  "title": "Chart Data Empty Fields - Fixed Pattern",
+  "description": "Tests chart with valid data filtering that preserves field structure",
+  "code": "function ChartDataEmptyFieldsFixed({ utilities, components }) {\n  const [chartData, setChartData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Sales' });\n      if (result?.Success) {\n        // ✅ Filter keeps valid data with all fields\n        const filtered = result.Results.filter(s => s.Amount > 0);\n        setChartData(filtered);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Regional Sales</h3>\n      {/* Chart has properly structured data */}\n      <SimpleChart data={chartData} groupBy=\"Month\" valueField=\"Amount\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Sales",
+      "fields": ["ID", "Month", "Amount", "Region"]
+    }]
+  }
+}

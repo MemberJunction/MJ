@@ -1168,10 +1168,26 @@ VALUES
 (@Submission6ID, @Speaker2ID, 1, 'Presenter');
 
 -- Insert sample reviews (for submissions that are under review)
+-- Reviews spread across November and December 2024 for better timeline visualization
 INSERT INTO Events.SubmissionReview (SubmissionID, ReviewerContactID, ReviewedAt, OverallScore, RelevanceScore, QualityScore, SpeakerExperienceScore, Comments, Recommendation)
 VALUES
-(@Submission1ID, 1, '2026-01-05 10:30:00', 8.5, 9.0, 8.5, 9.0, 'Excellent submission with strong technical depth. Sarah has proven experience and the topic is highly relevant. Would be great as a main-track presentation.', 'Accept'),
-(@Submission3ID, 1, '2026-01-06 14:15:00', 9.5, 10.0, 9.0, 10.0, 'Outstanding keynote material from a top-tier researcher. This would be a highlight of the conference. Strong recommend for keynote slot.', 'Accept');
+-- Submission 1 reviews (Building Resilient AI Systems)
+(@Submission1ID, 1, '2024-11-18 10:30:00', 8.5, 9.0, 8.5, 9.0, 'Excellent submission with strong technical depth. Sarah has proven experience and the topic is highly relevant. Would be great as a main-track presentation.', 'Accept'),
+(@Submission1ID, 2, '2024-11-20 14:20:00', 7.5, 8.0, 7.0, 8.0, 'Solid proposal. Production ML experience is valuable. Would like to see more specific examples of failure modes and recovery strategies in the final talk.', 'Accept'),
+(@Submission1ID, 3, '2024-11-22 09:15:00', 8.0, 8.5, 8.0, 8.5, 'Good balance of theory and practice. Speaker credentials are strong. Recommend for main track.', 'Accept'),
+
+-- Submission 3 reviews (Interpretable AI keynote)
+(@Submission3ID, 1, '2024-11-25 14:15:00', 9.5, 10.0, 9.0, 10.0, 'Outstanding keynote material from a top-tier researcher. This would be a highlight of the conference. Strong recommend for keynote slot.', 'Accept'),
+(@Submission3ID, 2, '2024-11-26 11:30:00', 9.0, 9.5, 9.0, 9.5, 'Excellent research credentials. Topic is critical and timely. Will appeal to broad audience. Keynote-worthy.', 'Accept'),
+
+-- Submission 2 reviews (Kubernetes Security Workshop)
+(@Submission2ID, 1, '2024-12-01 08:45:00', 8.0, 8.5, 8.0, 7.5, 'Good workshop content. Security topics are important. Slightly concerned about 3-hour duration management. Would accept with suggestion to have co-facilitator.', 'Needs Discussion'),
+(@Submission2ID, 3, '2024-12-02 15:30:00', 8.5, 9.0, 8.5, 8.0, 'Strong security expertise evident. Hands-on format is valuable. Setup requirements need to be communicated clearly pre-conference.', 'Accept'),
+(@Submission2ID, 2, '2024-12-03 10:00:00', 7.0, 8.0, 7.5, 7.0, 'Workshop has merit but needs refinement. Consider breaking into 2x90-minute sessions to improve retention and reduce setup burden.', 'Needs Discussion'),
+
+-- Submission 4 reviews (HTML/CSS - will be rejected)
+(@Submission4ID, 1, '2024-12-05 13:20:00', 4.0, 3.0, 5.0, 4.0, 'Content is too basic for this conference. Does not align with AI/Cloud focus. Better suited for beginner bootcamp.', 'Reject'),
+(@Submission4ID, 2, '2024-12-05 16:45:00', 4.5, 3.5, 5.0, 4.0, 'Agree with previous reviewer. Topic misalignment with conference theme. Speaker profile does not indicate advanced expertise.', 'Reject');
 
 -- Insert sample notifications
 INSERT INTO Events.SubmissionNotification (SubmissionID, NotificationType, SentAt, RecipientEmail, Subject, MessageBody, DeliveryStatus)

@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/entity-browser.spec.json",
+  "description": "Valid component demonstrating entity browser with filtering and details"
+}
