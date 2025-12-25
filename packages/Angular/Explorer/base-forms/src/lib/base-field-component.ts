@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, Renderer2, ChangeDetectorRef } from '@angular/core';
 import { BaseEntity, EntityField, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
+import { ENCRYPTED_SENTINEL, IsEncryptedSentinel, IsValueEncrypted, IsEncryptedOrSentinel } from '@memberjunction/global';
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormContext } from './base-form-context';
 import { MarkdownComponent } from '@memberjunction/ng-markdown';
@@ -186,6 +187,36 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
     const value = this.record.Get(this.FieldName);
     return value === null || value === undefined || value === '';
   }
+
+  /**
+   * Returns true if the field is configured for encryption in the entity metadata
+   */
+  public get IsEncryptedField(): boolean {
+    return this.FieldInfo?.Encrypt === true;
+  }
+
+  /**
+   * Returns true if the field's current value is the encrypted sentinel value,
+   * indicating that the actual value is protected and cannot be shown.
+   */
+  public get IsValueEncryptedSentinel(): boolean {
+    const value = this.record.Get(this.FieldName);
+    return IsEncryptedSentinel(value);
+  }
+
+  /**
+   * Returns true if the field's current value is encrypted (either ciphertext or sentinel).
+   * Used to determine if special UI handling is needed.
+   */
+  public get IsValueEncryptedOrSentinel(): boolean {
+    const value = this.record.Get(this.FieldName);
+    return IsEncryptedOrSentinel(value);
+  }
+
+  /**
+   * The masked display text for encrypted values (shows dots instead of actual value)
+   */
+  public readonly EncryptedDisplayMask = '••••••••';
 
   @ViewChild('markdown', { static: false}) markdown: MarkdownComponent | undefined;
 

@@ -1251,6 +1251,15 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Returns an array of all fields that are configured for encryption.
+     * These fields will be automatically encrypted at rest and decrypted on load.
+     * @returns {EntityFieldInfo[]} Array of encrypted fields
+     */
+    get EncryptedFields(): EntityFieldInfo[] {
+        return this.Fields.filter((f) => f.Encrypt);
+    }
+
+    /**
      * Gets all fields for this entity with their complete metadata.
      * @returns {EntityFieldInfo[]} Array of all entity fields
      */

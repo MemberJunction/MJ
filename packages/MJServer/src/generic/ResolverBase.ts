@@ -26,7 +26,8 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted } from '@memberjunction/global';
+import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
@@ -47,7 +48,20 @@ export class ResolverBase {
     return g[ResolverBase._eventSubscriptionKey];
   }
 
-  protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
+  /**
+   * Maps field names to their GraphQL-safe CodeNames and handles encryption for API responses.
+   *
+   * For encrypted fields coming from raw SQL queries (not entity objects):
+   * - AllowDecryptInAPI=true: Decrypt the value before sending to client
+   * - AllowDecryptInAPI=false + SendEncryptedValue=true: Keep encrypted ciphertext
+   * - AllowDecryptInAPI=false + SendEncryptedValue=false: Replace with sentinel
+   *
+   * @param entityName - The entity name
+   * @param dataObject - The data object with field values
+   * @param contextUser - Optional user context for decryption (required for encrypted fields)
+   * @returns The processed data object
+   */
+  protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo): Promise<any> {
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
     // fields, iterate through the dataObject and REPLACE the property that has the field name
@@ -69,17 +83,149 @@ export class ResolverBase {
           }
         }
       });
+
+      // Handle encrypted fields - data from raw SQL queries is still encrypted
+      const encryptedFields = entityInfo.EncryptedFields;
+      if (encryptedFields.length > 0) {
+        for (const field of encryptedFields) {
+          const fieldName = field.CodeName;
+          const value = dataObject[fieldName];
+
+          // Skip null/undefined values
+          if (value === null || value === undefined) continue;
+
+          // Check if value is encrypted (raw SQL returns encrypted values)
+          if (typeof value === 'string' && IsValueEncrypted(value)) {
+            if (field.AllowDecryptInAPI) {
+              // Decrypt the value for the client
+              if (contextUser) {
+                try {
+                  const engine = EncryptionEngine.Instance;
+                  const decryptedValue = await engine.Decrypt(value, contextUser);
+                  dataObject[fieldName] = decryptedValue;
+                } catch (err) {
+                  LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  // On decryption failure, use sentinel for safety
+                  dataObject[fieldName] = ENCRYPTED_SENTINEL;
+                }
+              } else {
+                // No context user, can't decrypt - use sentinel
+                dataObject[fieldName] = ENCRYPTED_SENTINEL;
+              }
+            } else if (!field.SendEncryptedValue) {
+              // AllowDecryptInAPI=false and SendEncryptedValue=false - use sentinel
+              dataObject[fieldName] = ENCRYPTED_SENTINEL;
+            }
+            // else: AllowDecryptInAPI=false and SendEncryptedValue=true - keep encrypted value as-is
+          }
+        }
+      }
     }
     return dataObject;
   }
 
-  protected ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[]) {
+  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
     // iterate through the array and call MapFieldNamesToCodeNames for each element
     if (dataObjectArray && dataObjectArray.length > 0) {
-      dataObjectArray.forEach((element) => {
-        this.MapFieldNamesToCodeNames(entityName, element);
-      });
+      for (const element of dataObjectArray) {
+        await this.MapFieldNamesToCodeNames(entityName, element, contextUser);
+      }
     }
+    return dataObjectArray;
+  }
+
+  /**
+   * Filters encrypted field values before sending to the API client.
+   *
+   * For each encrypted field in the entity:
+   * - If AllowDecryptInAPI is true: value passes through unchanged (already decrypted by data provider)
+   * - If AllowDecryptInAPI is false and SendEncryptedValue is true: re-encrypt and send ciphertext
+   * - If AllowDecryptInAPI is false and SendEncryptedValue is false: replace with sentinel value
+   *
+   * @param entityName - Name of the entity
+   * @param dataObject - The data object containing field values
+   * @param encryptionEngine - Optional encryption engine for re-encryption (lazy loaded if needed)
+   * @param contextUser - User context for encryption operations
+   * @returns The filtered data object
+   */
+  protected async FilterEncryptedFieldsForAPI(
+    entityName: string,
+    dataObject: Record<string, unknown>,
+    contextUser: UserInfo
+  ): Promise<Record<string, unknown>> {
+    if (!dataObject) return dataObject;
+
+    const md = new Metadata();
+    const entityInfo = md.Entities.find((e) => e.Name === entityName);
+    if (!entityInfo) return dataObject;
+
+    // Find all encrypted fields that need filtering
+    const encryptedFields = entityInfo.EncryptedFields;
+    if (encryptedFields.length === 0) return dataObject;
+
+    // Process each encrypted field
+    for (const field of encryptedFields) {
+      const fieldName = field.CodeName;
+      const value = dataObject[fieldName];
+
+      // Skip null/undefined values
+      if (value === null || value === undefined) continue;
+
+      // If AllowDecryptInAPI is true, the decrypted value passes through
+      if (field.AllowDecryptInAPI) continue;
+
+      // AllowDecryptInAPI is false - we need to filter the value
+      if (field.SendEncryptedValue) {
+        // Re-encrypt the value before sending
+        // Only re-encrypt if it's not already encrypted (data provider decrypted it)
+        if (typeof value === 'string' && !IsValueEncrypted(value)) {
+          try {
+            const engine = EncryptionEngine.Instance;
+            const encryptedValue = await engine.Encrypt(
+              value,
+              field.EncryptionKeyID as string,
+              contextUser
+            );
+            dataObject[fieldName] = encryptedValue;
+          } catch (err) {
+            // If re-encryption fails, use sentinel for safety
+            LogError(`Failed to re-encrypt field ${fieldName} for API response: ${err}`);
+            dataObject[fieldName] = ENCRYPTED_SENTINEL;
+          }
+        }
+        // If already encrypted (shouldn't happen normally), keep as-is
+      } else {
+        // SendEncryptedValue is false - replace with sentinel
+        dataObject[fieldName] = ENCRYPTED_SENTINEL;
+      }
+    }
+
+    return dataObject;
+  }
+
+  /**
+   * Filters encrypted fields for an array of data objects
+   */
+  protected async ArrayFilterEncryptedFieldsForAPI(
+    entityName: string,
+    dataObjectArray: Record<string, unknown>[],
+    contextUser: UserInfo
+  ): Promise<Record<string, unknown>[]> {
+    if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
+
+    // Check if entity has any encrypted fields first to avoid unnecessary processing
+    const md = new Metadata();
+    const entityInfo = md.Entities.find((e) => e.Name === entityName);
+    if (!entityInfo) return dataObjectArray;
+
+    const encryptedFields = entityInfo.Fields.filter(f => f.Encrypt && !f.AllowDecryptInAPI);
+    if (encryptedFields.length === 0) return dataObjectArray;
+
+    // Process each element
+    for (const element of dataObjectArray) {
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser);
+    }
+
     return dataObjectArray;
   }
 
@@ -438,8 +584,14 @@ export class ResolverBase {
         for (const r of result.Results) {
           mapper.MapFields(r);
         }
+        // Filter encrypted fields before sending to API client
+        await this.ArrayFilterEncryptedFieldsForAPI(
+          viewInfo.Entity,
+          result.Results as Record<string, unknown>[],
+          user
+        );
       }
-      
+
       return result;
     } catch (err) {
       // Fix #9: Improved error handling with structured logging
@@ -534,10 +686,21 @@ export class ResolverBase {
 
       // Process results
       const mapper = new FieldMapper();
-      for (const runViewResult of runViewResults) {
+      for (let i = 0; i < runViewResults.length; i++) {
+        const runViewResult = runViewResults[i];
         if (runViewResult?.Success && runViewResult.Results?.length) {
           for (const result of runViewResult.Results) {
             mapper.MapFields(result);
+          }
+          // Filter encrypted fields before sending to API client
+          // Use the corresponding param's entity name
+          const entityName = params[i]?.viewInfo?.Entity;
+          if (entityName && contextUser) {
+            await this.ArrayFilterEncryptedFieldsForAPI(
+              entityName,
+              runViewResult.Results as Record<string, unknown>[],
+              contextUser
+            );
           }
         }
       }
@@ -720,7 +883,9 @@ export class ResolverBase {
       if (await entityObject.Save()) {
         // save worked, fire the AfterCreate event and then return all the data
         await this.AfterCreate(provider, input); // fire event
-        return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
+        const contextUser = this.GetUserFromPayload(userPayload);
+        // MapFieldNamesToCodeNames now handles encryption filtering as well
+        return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
       }
       // save failed, return null
       else throw entityObject.LatestResult?.Message;
@@ -790,8 +955,9 @@ export class ResolverBase {
       if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(provider, input); // fire event
-        
-        return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
+
+        // MapFieldNamesToCodeNames now handles encryption filtering as well
+        return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
       } else {
         throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
           extensions: { code: 'SAVE_ENTITY_ERROR', entityName },

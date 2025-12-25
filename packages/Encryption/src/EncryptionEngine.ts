@@ -45,7 +45,7 @@
  */
 
 import * as crypto from 'crypto';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, ENCRYPTION_MARKER } from '@memberjunction/global';
 import { LogError, RunView, UserInfo } from '@memberjunction/core';
 import { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
 import {
@@ -291,7 +291,7 @@ export class EncryptionEngine {
      * ```
      */
     IsEncrypted(value: unknown): boolean {
-        return typeof value === 'string' && value.startsWith('$ENC$');
+        return typeof value === 'string' && value.startsWith(ENCRYPTION_MARKER);
     }
 
     /**
@@ -345,7 +345,7 @@ export class EncryptionEngine {
         }
 
         return {
-            marker: '$ENC$',
+            marker: ENCRYPTION_MARKER,
             keyId: parts[1],
             algorithm: parts[2],
             iv: parts[3],
@@ -724,7 +724,7 @@ export class EncryptionEngine {
         return {
             keyId: key.ID,
             keyVersion: key.KeyVersion || '1',
-            marker: key.Marker || '$ENC$',
+            marker: key.Marker || ENCRYPTION_MARKER,
             algorithm: {
                 name: algo.Name,
                 nodeCryptoName: algo.NodeCryptoName,

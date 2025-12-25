@@ -1,6 +1,6 @@
 # @memberjunction/encryption
 
-Field-level encryption for MemberJunction entities. This package provides AES-256 encryption with transparent encrypt-on-save and decrypt-on-load operations, configurable per field via entity metadata.
+Comprehensive and general purpose encryption package. Used for field-level encryption for MemberJunction entities. Field-level encryption provides transparent encrypt-on-save and decrypt-on-load operations, configurable per field via entity metadata. This package can be used for any other use-cases where encryption/decryption is required.
 
 ## Features
 
