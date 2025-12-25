@@ -9,29 +9,23 @@ import { StartupValidationService } from './lib/services/startup-validation.serv
 
 // Kendo UI Angular imports
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { ChartsModule } from '@progress/kendo-angular-charts';
 import { DialogsModule } from '@progress/kendo-angular-dialog';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { FilterModule } from '@progress/kendo-angular-filter';
 import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LabelModule } from '@progress/kendo-angular-label';
 import { LayoutModule, TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
 import { ListViewModule } from '@progress/kendo-angular-listview';
-import { SortableModule } from '@progress/kendo-angular-sortable';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { DragDropModule } from '@angular/cdk/drag-drop';
-// Badge functionality is included in IndicatorsModule
-// Chip functionality is included in ButtonsModule
 
 // MJ
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryGridModule } from '@memberjunction/ng-query-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
@@ -78,8 +72,6 @@ import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collection
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
-// AI resource components are now in @memberjunction/ng-dashboards directly (no wrappers needed)
-import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 
 @NgModule({
   declarations: [
@@ -107,7 +99,6 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     ArtifactResource,
     NotificationsResource,
     DashboardPreferencesDialogComponent,
-    // StyleGuideTestComponent // [3.0] DEPRECATED
   ],
   imports: [
     AppRoutingModule,
@@ -118,9 +109,8 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     GridModule,
     DialogsModule,
     ExcelExportModule,
-    // CompareRecordsModule, // [3.0] DEPRECATED - no component usage in templates
+    CompareRecordsModule, // [3.0] TO DO To-Do Need to implement this again
     IndicatorsModule,
-    // ChartsModule, // [3.0] DEPRECATED - no kendo-chart usage in templates
     ButtonsModule,
     TabStripModule,
     ExcelModule,
@@ -134,14 +124,11 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     TreeViewModule,
     UserViewGridModule,
     QueryGridModule,
-    // SortableModule, // [3.0] DEPRECATED - no kendoSortable usage in templates
     LayoutModule,
-    // FilterModule, // [3.0] DEPRECATED - no kendo-filter usage in templates
     DropDownsModule,
     MemberJunctionSharedModule,
     ConversationsModule,
     DashboardsModule,
-    // EntityPermissionsModule, // [3.0] DEPRECATED - no component usage in templates
     ExplorerSettingsModule,
     FileStorageModule,
     UserViewPropertiesDialogModule,
@@ -155,7 +142,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     DragDropModule,
     CardModule,
     AvatarModule,
-    // AITestHarnessModule, // [3.0] DEPRECATED - no component usage in templates
+    AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,
     EntityViewerModule
@@ -176,8 +163,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     EditDashboardComponent,
     UserNotificationsComponent,
     ListDetailResource,
-    DashboardPreferencesDialogComponent,
-    // StyleGuideTestComponent // [3.0] DEPRECATED
+    DashboardPreferencesDialogComponent 
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },
