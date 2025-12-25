@@ -107,7 +107,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     ArtifactResource,
     NotificationsResource,
     DashboardPreferencesDialogComponent,
-    StyleGuideTestComponent
+    // StyleGuideTestComponent // [3.0] DEPRECATED
   ],
   imports: [
     AppRoutingModule,
@@ -118,21 +118,15 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     GridModule,
     DialogsModule,
     ExcelExportModule,
-    CompareRecordsModule,
+    // CompareRecordsModule, // [3.0] DEPRECATED - no component usage in templates
     IndicatorsModule,
-    CommonModule,
-    FormsModule,
-    GridModule,
-    ChartsModule,
+    // ChartsModule, // [3.0] DEPRECATED - no kendo-chart usage in templates
     ButtonsModule,
     TabStripModule,
     ExcelModule,
     PDFModule,
-    IndicatorsModule,
-    DialogsModule,
     InputsModule,
     LabelModule,
-    CompareRecordsModule,
     RecordChangesModule,
     ContainerDirectivesModule,
     BaseFormsModule,
@@ -140,14 +134,14 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     TreeViewModule,
     UserViewGridModule,
     QueryGridModule,
-    SortableModule,
+    // SortableModule, // [3.0] DEPRECATED - no kendoSortable usage in templates
     LayoutModule,
-    FilterModule,
+    // FilterModule, // [3.0] DEPRECATED - no kendo-filter usage in templates
     DropDownsModule,
     MemberJunctionSharedModule,
     ConversationsModule,
     DashboardsModule,
-    EntityPermissionsModule,
+    // EntityPermissionsModule, // [3.0] DEPRECATED - no component usage in templates
     ExplorerSettingsModule,
     FileStorageModule,
     UserViewPropertiesDialogModule,
@@ -161,7 +155,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     DragDropModule,
     CardModule,
     AvatarModule,
-    AITestHarnessModule,
+    // AITestHarnessModule, // [3.0] DEPRECATED - no component usage in templates
     ArtifactsModule,
     SharedGenericModule,
     EntityViewerModule
@@ -183,7 +177,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     UserNotificationsComponent,
     ListDetailResource,
     DashboardPreferencesDialogComponent,
-    StyleGuideTestComponent
+    // StyleGuideTestComponent // [3.0] DEPRECATED
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },
