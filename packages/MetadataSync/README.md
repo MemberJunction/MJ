@@ -683,6 +683,99 @@ metadata/
 }
 ```
 
+## Adding Comments to JSON Metadata Files
+
+Since JSON does not natively support comments, MetadataSync provides a convention for adding documentation to your metadata files using custom keys that are preserved but ignored during sync operations.
+
+### Comment Convention
+
+Any key that is not one of the reserved MetadataSync keys (`fields`, `relatedEntities`, `primaryKey`, `sync`, `deleteRecord`) will be preserved in your JSON files but ignored during push/pull operations. By convention, use an underscore prefix (`_`) for comment keys to clearly distinguish them from future MetadataSync features.
+
+**Reserved keys (processed by MetadataSync):**
+- `fields` - Entity field values
+- `relatedEntities` - Embedded related entity records
+- `primaryKey` - Record identifier
+- `sync` - Sync metadata (lastModified, checksum)
+- `deleteRecord` - Deletion directive
+
+**Recommended comment pattern:**
+- `_comments` - Array of comment strings
+- `_note` - Single comment string
+- `_description` - Descriptive text
+- Any key starting with `_` - Reserved for user documentation
+
+### Example: Top-Level Comments
+```json
+{
+  "_comments": [
+    "This file configures encryption settings for the Test Tables entity",
+    "The encryption key is defined in /metadata/encryption-keys/"
+  ],
+  "fields": {
+    "Name": "Test Tables",
+    "BaseView": "vwTestTables"
+  },
+  "primaryKey": {
+    "ID": "0fde4c2c-26b1-45e9-b504-5d4a6f4201cf"
+  }
+}
+```
+
+### Example: Comments on Related Entities
+```json
+{
+  "_comments": ["Parent entity configuration"],
+  "fields": {
+    "Name": "My Entity"
+  },
+  "relatedEntities": {
+    "Entity Fields": [
+      {
+        "fields": {
+          "Encrypt": true,
+          "AllowDecryptInAPI": false
+        },
+        "_comments": ["This field stores server-only encrypted data"],
+        "primaryKey": {
+          "ID": "F501E294-5F5F-44C6-AD06-5C9754A13D29"
+        }
+      },
+      {
+        "fields": {
+          "Encrypt": true,
+          "AllowDecryptInAPI": true
+        },
+        "_comments": ["This field is decrypted for API responses"],
+        "primaryKey": {
+          "ID": "CF4B94E4-8E68-4692-B13A-9A0D51D397B7"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Key Ordering Preservation
+
+MetadataSync preserves the original order of keys in your JSON files. When you run `mj sync push` or `mj sync pull`, your comments will remain exactly where you placed them:
+
+```json
+{
+  "_comments": ["This comment stays at the top"],
+  "fields": { ... },
+  "_note": "This note stays between fields and relatedEntities",
+  "relatedEntities": { ... }
+}
+```
+
+### Best Practices
+
+1. **Use underscore prefix**: Start custom keys with `_` to reserve the alphabetic namespace for future MetadataSync features
+2. **Use arrays for multi-line comments**: `"_comments": ["Line 1", "Line 2"]` provides clean formatting
+3. **Place comments near relevant content**: Add `_comments` inside related entity objects to document specific records
+4. **Document complex configurations**: Use comments to explain lookup references, encryption settings, or business rules
+5. **Version control friendly**: Comments make metadata files more readable in code reviews and git diffs
+
 ## Default Value Inheritance
 
 The tool implements a cascading inheritance system for field defaults, similar to CSS or OOP inheritance:
