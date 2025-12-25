@@ -30,14 +30,15 @@
       [scrollable]="false">
       <div class="erd-pane-container" >
         <mj-erd-diagram
-          [filteredEntities]="filteredEntities"
-          [allEntityFields]="allEntityFields"
-          [isRefreshingERD]="isRefreshingERD"
-          [selectedEntityId]="selectedEntity?.ID || null"
-          (entitySelected)="onEntitySelected($event)"
-          (entityDeselected)="onEntityDeselected()"
-          (refreshERD)="refreshERD()"
-          >
+          [nodes]="filteredERDNodes"
+          [isRefreshing]="isRefreshingERD"
+          [selectedNodeId]="selectedEntity?.ID || null"
+          [showHeader]="true"
+          headerTitle="Entity Relationship Diagram"
+          (nodeSelected)="onERDNodeSelected($event)"
+          (nodeClick)="onERDNodeClick($event)"
+          (nodeDeselected)="onEntityDeselected()"
+          (refreshRequested)="refreshERD()">
         </mj-erd-diagram>
       </div>
     </kendo-splitter-pane>

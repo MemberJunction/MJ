@@ -11,7 +11,7 @@ import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashbo
 import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
 import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
 import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
-import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
+import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
 import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
@@ -112,6 +112,8 @@ import { CredentialsListResourceComponent } from './Credentials/components/crede
 import { CredentialsTypesResourceComponent } from './Credentials/components/credentials-types-resource.component';
 import { CredentialsCategoriesResourceComponent } from './Credentials/components/credentials-categories-resource.component';
 import { CredentialsAuditResourceComponent } from './Credentials/components/credentials-audit-resource.component';
+import { CredentialEditPanelComponent } from './Credentials/components/credential-edit-panel.component';
+import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
 
 
 
@@ -121,7 +123,6 @@ import { CredentialsAuditResourceComponent } from './Credentials/components/cred
     ERDCompositeComponent,
     EntityFilterPanelComponent,
     EntityDetailsComponent,
-    ERDDiagramComponent,
     ModelManagementV2Component,
     PromptManagementV2Component,
     PromptFilterPanelComponent,
@@ -200,7 +201,9 @@ import { CredentialsAuditResourceComponent } from './Credentials/components/cred
     CredentialsListResourceComponent,
     CredentialsTypesResourceComponent,
     CredentialsCategoriesResourceComponent,
-    CredentialsAuditResourceComponent
+    CredentialsAuditResourceComponent,
+    CredentialEditPanelComponent,
+    GroupByPipe
   ],
   imports: [
     CommonModule,
@@ -232,7 +235,8 @@ import { CredentialsAuditResourceComponent } from './Credentials/components/cred
     EntityViewerModule,
     ExplorerSettingsModule,
     SharedGenericModule,
-    FilterBuilderModule
+    FilterBuilderModule,
+    EntityRelationshipDiagramModule
   ],
   providers: [
     AIInstrumentationService,
@@ -286,7 +290,9 @@ import { CredentialsAuditResourceComponent } from './Credentials/components/cred
     CredentialsListResourceComponent,
     CredentialsTypesResourceComponent,
     CredentialsCategoriesResourceComponent,
-    CredentialsAuditResourceComponent
+    CredentialsAuditResourceComponent,
+    CredentialEditPanelComponent,
+    GroupByPipe
   ]
 })
 export class DashboardsModule { }

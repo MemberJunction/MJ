@@ -32,6 +32,7 @@
     "@codemirror/merge": "^6.6.3",
     "@memberjunction/ai-engine-base": "2.128.0",
     "@memberjunction/core": "2.128.0",
+    "@memberjunction/ng-entity-relationship-diagram": "2.128.0",
     "@memberjunction/core-entities": "2.128.0",
     "@memberjunction/global": "2.128.0",
     "@memberjunction/graphql-dataprovider": "2.128.0",

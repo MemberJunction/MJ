@@ -8,8 +8,9 @@
   background: white;
   overflow: hidden;
   height: 100%;
+  display: flex;
   flex-direction: column;
-  min-height: 0; /* Allow flex children to shrink below content size */
+  min-height: 0;
 }
 
 .section-header {
@@ -19,7 +20,9 @@
   padding: 12px 16px;
   background-color: #f5f5f5;
   border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
 }
+
 .section-header h3 {
   margin: 0;
   font-size: 14px;
@@ -39,9 +42,16 @@
   background: white;
   cursor: pointer;
   font-size: 12px;
+  transition: background-color 0.2s ease;
 }
+
 .control-btn:hover {
   background-color: #f0f0f0;
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .erd-container {
@@ -50,9 +60,10 @@
   background-color: #fafafa;
   overflow: hidden;
   width: 100%;
-  height: 1000px;
+  min-height: 400px;
   box-sizing: border-box;
 }
+
 .erd-container svg {
   position: absolute;
   top: 0;
@@ -62,6 +73,7 @@
   box-sizing: border-box;
 }
 
+/* Loading overlay */
 .loading-overlay {
   position: absolute;
   top: 0;
@@ -98,15 +110,18 @@
   border-radius: 50%;
   animation: spin 1.5s linear infinite;
 }
+
 .spinner-ring:nth-child(1) {
   border-top-color: #2196f3;
   animation-delay: 0s;
 }
+
 .spinner-ring:nth-child(2) {
   border-top-color: #9c27b0;
   animation-delay: 0.3s;
   transform: scale(0.8);
 }
+
 .spinner-ring:nth-child(3) {
   border-top-color: #ff6b35;
   animation-delay: 0.6s;
@@ -120,11 +135,7 @@
   text-align: center;
 }
 
-.control-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
+/* Animations */
 @keyframes spin {
   0% {
     transform: rotate(0deg);
@@ -133,12 +144,24 @@
     transform: rotate(360deg);
   }
 }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Node highlighting styles */
 :host ::ng-deep .erd-container svg .node .entity-rect.highlighted {
   stroke: #ff9800 !important;
   stroke-width: 4px !important;
   filter: drop-shadow(0 0 8px rgba(255, 152, 0, 0.6));
   animation: pulse 1s ease-in-out infinite alternate;
 }
+
 :host ::ng-deep .erd-container svg .node.selected .entity-rect {
   stroke: #2196f3 !important;
   stroke-width: 4px !important;
@@ -146,16 +169,20 @@
   fill: #f3f8ff !important;
   animation: selectedPulse 2s ease-in-out infinite alternate;
 }
+
 :host ::ng-deep .erd-container svg .node.selected .entity-header {
   fill: #2196f3 !important;
 }
+
 :host ::ng-deep .erd-container svg .node.selected .entity-header-bottom {
   fill: #2196f3 !important;
 }
+
 :host ::ng-deep .erd-container svg .node.selected .entity-name {
   fill: white !important;
   font-weight: bold !important;
 }
+
 @keyframes selectedPulse {
   0% {
     stroke-width: 4px;
@@ -166,42 +193,53 @@
     filter: drop-shadow(0 0 16px rgb(33, 150, 243));
   }
 }
+
+/* Related/connected nodes */
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-rect.relationship-highlighted {
   stroke: #ff6b35 !important;
   stroke-width: 3px !important;
   filter: drop-shadow(0 0 6px rgba(255, 107, 53, 0.5));
   animation: entityPulse 1.5s ease-in-out infinite alternate;
 }
+
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-header {
   fill: #ff6b35 !important;
 }
+
 :host ::ng-deep .erd-container svg .node.relationship-connected .entity-header-bottom {
   fill: #ff6b35 !important;
 }
+
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-rect.connection-highlighted {
   stroke: #9b59b6 !important;
   stroke-width: 3px !important;
   filter: drop-shadow(0 0 6px rgba(155, 89, 182, 0.5));
   opacity: 0.9;
 }
+
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header {
   fill: #9b59b6 !important;
   opacity: 0.8;
 }
+
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header-bottom {
   fill: #9b59b6 !important;
   opacity: 0.8;
 }
+
+/* Link styles */
 :host ::ng-deep .erd-container svg .link-group .link {
   stroke-width: 2px;
   transition: all 0.2s ease;
   cursor: pointer;
 }
+
 :host ::ng-deep .erd-container svg .link-group .link:hover {
   stroke-width: 3px;
   stroke: #ff6b35;
   opacity: 1;
 }
+
 :host ::ng-deep .erd-container svg .link-group .link.highlighted {
   stroke: #ff6b35 !important;
   stroke-width: 4px !important;
@@ -209,26 +247,33 @@
   filter: drop-shadow(0 0 6px rgba(255, 107, 53, 0.6));
   animation: linkPulse 1.5s ease-in-out infinite alternate;
 }
+
 :host ::ng-deep .erd-container svg .link-group .link-label {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   opacity: 0.8;
   pointer-events: none;
   transition: opacity 0.2s ease;
 }
+
 :host ::ng-deep .erd-container svg .link-group .link-label.highlighted {
   opacity: 1;
   font-weight: bold;
   fill: #ff6b35;
 }
+
 :host ::ng-deep .erd-container svg .link-group.highlighted {
   z-index: 10;
 }
+
+/* Field hover */
 :host ::ng-deep .erd-container svg .field-group .field-bg {
   transition: fill 0.2s;
 }
+
 :host ::ng-deep .erd-container svg .field-group:hover .field-bg {
   fill: #e3f2fd !important;
 }
+
 @keyframes pulse {
   0% {
     stroke-width: 4px;
@@ -237,6 +282,7 @@
     stroke-width: 6px;
   }
 }
+
 @keyframes linkPulse {
   0% {
     stroke-width: 4px;
@@ -247,6 +293,7 @@
     filter: drop-shadow(0 0 10px rgba(255, 107, 53, 0.8));
   }
 }
+
 @keyframes entityPulse {
   0% {
     stroke-width: 3px;

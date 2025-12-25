@@ -1,13 +1,14 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { SplitterModule } from '@progress/kendo-angular-layout';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
+import {
+  ERDDiagramComponent,
+  ERDNode,
+  ERDNodeClickEvent
+} from '@memberjunction/ng-entity-relationship-diagram';
 
-import { EntityFilterPanelComponent } from './entity-filter-panel.component';
-import { ERDDiagramComponent } from './erd-diagram.component';
-import { EntityDetailsComponent } from './entity-details.component';
+import { entitiesToERDNodes, findEntityByNodeId } from '../utils/entity-to-erd-adapter';
 
 interface EntityFilter {
   schemaName: string | null;
@@ -34,12 +35,16 @@ interface DashboardState {
 })
 export class ERDCompositeComponent implements OnInit, OnDestroy {
   @ViewChild(ERDDiagramComponent) erdDiagram!: ERDDiagramComponent;
-  
+
   @Input() isRefreshingERD = false;
 
   // Data loaded internally
   public entities: EntityInfo[] = [];
   public allEntityFields: EntityFieldInfo[] = [];
+
+  // ERD nodes converted from entities for the generic ERD component
+  public erdNodes: ERDNode[] = [];
+  public filteredERDNodes: ERDNode[] = [];
 
   @Output() stateChange = new EventEmitter<DashboardState>();
   @Output() userStateChange = new EventEmitter<DashboardState>();
@@ -73,9 +78,14 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
     this.setupStateManagement();
     await this.loadData();
     this.filteredEntities = [...this.entities];
+
+    // Convert entities to ERD nodes for the generic ERD component
+    this.erdNodes = entitiesToERDNodes(this.entities);
+    this.filteredERDNodes = [...this.erdNodes];
+
     this.applyFilters();
     this.isDataLoaded = true;
-    
+
     // Notify parent that data is loaded and ready for state loading
     this.emitStateChange();
   }
@@ -163,9 +173,31 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
   public onEntitySelected(entity: EntityInfo): void {
     this.selectedEntity = entity;
-    
+
     this.emitStateChange();
     this.emitUserStateChange();
+  }
+
+  /**
+   * Handle node selection from the generic ERD component.
+   * Converts the ERDNode back to EntityInfo for the details panel.
+   */
+  public onERDNodeSelected(node: ERDNode): void {
+    const entity = findEntityByNodeId(node.id, this.entities);
+    if (entity) {
+      this.selectedEntity = entity;
+      this.emitStateChange();
+      this.emitUserStateChange();
+    }
+  }
+
+  /**
+   * Handle node click from the generic ERD component.
+   * Can be used to cancel default selection behavior if needed.
+   */
+  public onERDNodeClick(event: ERDNodeClickEvent): void {
+    // Let default behavior proceed - node will be selected
+    // Set event.cancel = true to prevent selection
   }
 
   public onEntityOpened(entity: EntityInfo): void {
@@ -228,6 +260,10 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
       return true;
     });
+
+    // Also filter ERD nodes to match
+    const filteredEntityIds = new Set(this.filteredEntities.map(e => e.ID));
+    this.filteredERDNodes = this.erdNodes.filter(node => filteredEntityIds.has(node.id));
   }
 
   private emitStateChange(): void {
