@@ -104,6 +104,7 @@ import {
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
+import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -2011,21 +2012,39 @@ export class SQLServerDataProvider
   }
 
   /**
-   * This function generates the SQL Statement that will Save a record to the database, it is generally used by the Save() method of this class, but it is marked as public because
-   * it is also used by the SQLServerTransactionGroup to regenerate Save SQL if any values were changed by the transaction group due to transaction variables being set into the object.
+   * Generates the SQL Statement that will Save a record to the database.
+   *
+   * This method is used by the Save() method of this class, but it is marked as public because
+   * it is also used by the SQLServerTransactionGroup to regenerate Save SQL if any values were
+   * changed by the transaction group due to transaction variables being set into the object.
+   *
+   * @param entity - The entity to generate save SQL for
+   * @param bNewRecord - Whether this is a new record (create) or existing record (update)
+   * @param spName - The stored procedure name to call
+   * @param user - The user context for the operation
+   * @returns The full SQL statement for the save operation
+   *
+   * @security This method handles field-level encryption transparently.
+   *           Fields marked with Encrypt=true will have their values encrypted
+   *           before being included in the SQL statement.
    */
-  public GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): string {
-    const result = this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
+  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<string> {
+    const result = await this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
     return result.fullSQL;
   }
 
   /**
    * This function generates both the full SQL (with record change metadata) and the simple stored procedure call
    * @returns Object with fullSQL and simpleSQL properties
+   *
+   * @security This method handles field-level encryption transparently.
+   *           Fields marked with Encrypt=true will have their values encrypted
+   *           before being included in the SQL statement.
    */
-  private GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): { fullSQL: string; simpleSQL: string } {
+  private async GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<{ fullSQL: string; simpleSQL: string }> {
     // Generate the stored procedure parameters - now returns an object with structured SQL
-    const spParams = this.generateSPParams(entity, !bNewRecord);
+    // This is async because it may need to encrypt field values
+    const spParams = await this.generateSPParams(entity, !bNewRecord, user);
     
     // Build the simple SQL - use the new DECLARE/SET/EXEC pattern
     let sSimpleSQL: string;
@@ -2270,7 +2289,9 @@ export class SQLServerDataProvider
             await this.HandleEntityAIActions(entity, 'save', true, user);
           }
 
-          const sqlDetails = this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
+          // Generate the SQL for the save operation
+          // This is async because it may need to encrypt field values
+          const sqlDetails = await this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
           const sSQL = sqlDetails.fullSQL;
 
           if (entity.TransactionGroup && !bReplay /*we never participate in a transaction if we're in replay mode*/) {
@@ -2331,12 +2352,13 @@ export class SQLServerDataProvider
             } else {
               try {
                 // Execute SQL with optional simple SQL fallback for loggers
-                const rawResult = await this.ExecuteSQL(sSQL, null, { 
-                  isMutation: true, 
+                const rawResult = await this.ExecuteSQL(sSQL, null, {
+                  isMutation: true,
                   description: `Save ${entity.EntityInfo.Name}`,
                   simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
                 }, user);
-                result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
+                // Process rows with user context for decryption
+                result = await this.ProcessEntityRows(rawResult, entity.EntityInfo, user);
               } catch (e) {
                 throw e; // rethrow
               }
@@ -2417,16 +2439,39 @@ export class SQLServerDataProvider
     return sRet;
   }
 
-  private generateSPParams(entity: BaseEntity, isUpdate: boolean): { variablesSQL: string; setSQL: string; execParams: string; simpleParams: string } {
+  /**
+   * Generates the stored procedure parameters for a save operation.
+   *
+   * This method handles:
+   * - Value type conversions (datetimeoffset, uniqueidentifier, etc.)
+   * - Field-level encryption for fields marked with Encrypt=true
+   * - Primary key handling for create/update operations
+   *
+   * @param entity - The entity being saved
+   * @param isUpdate - Whether this is an update (true) or create (false) operation
+   * @param contextUser - The user context for encryption operations
+   * @returns An object containing the SQL components for the stored procedure call
+   *
+   * @security Fields with Encrypt=true are encrypted before being sent to the database.
+   *           Encryption uses the key specified in EncryptionKeyID.
+   */
+  private async generateSPParams(
+    entity: BaseEntity,
+    isUpdate: boolean,
+    contextUser?: UserInfo
+  ): Promise<{ variablesSQL: string; setSQL: string; execParams: string; simpleParams: string }> {
     // Generate a unique suffix for variable names to avoid collisions in batch scripts
     const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
-    
+
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];
     let simpleParams: string = '';
     let bFirst: boolean = true;
-    
+
+    // Get the encryption engine instance (lazy - only used if needed)
+    let encryptionEngine: EncryptionEngine | null = null;
+
     for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
       const f = entity.EntityInfo.Fields[i];
       // For CREATE operations, include primary keys that are not auto-increment and have actual values
@@ -2460,21 +2505,52 @@ export class SQLServerDataProvider
             }
           }
 
+          // ========================================================================
+          // FIELD-LEVEL ENCRYPTION
+          // If the field is marked for encryption and has a non-null value,
+          // encrypt it before storing in the database.
+          // ========================================================================
+          if (f.Encrypt && f.EncryptionKeyID && value !== null && value !== undefined) {
+            // Lazy-load encryption engine only when needed
+            if (!encryptionEngine) {
+              encryptionEngine = EncryptionEngine.Instance;
+            }
+
+            // Only encrypt if the value is not already encrypted
+            // This handles cases where values may already be encrypted (e.g., re-save scenarios)
+            if (!encryptionEngine.IsEncrypted(value)) {
+              try {
+                // Convert value to string for encryption if it isn't already
+                const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+                value = await encryptionEngine.Encrypt(stringValue, f.EncryptionKeyID, contextUser);
+              } catch (encryptError) {
+                // Log the error but throw to prevent unencrypted storage
+                // SECURITY: Never store unencrypted data in an encrypted field
+                const message = encryptError instanceof Error ? encryptError.message : String(encryptError);
+                throw new Error(
+                  `Failed to encrypt field "${f.Name}" on entity "${entity.EntityInfo.Name}": ${message}. ` +
+                  'The save operation has been aborted to prevent storing unencrypted sensitive data.'
+                );
+              }
+            }
+          }
+          // ========================================================================
+
           // Generate variable name with unique suffix
           const varName = `@${f.CodeName}${uniqueSuffix}`;
-          
+
           // Add declaration with proper SQL type using existing SQLFullType property
           declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
-          
+
           // Add SET statement if value is not null (SQL variables default to NULL)
           if (value !== null && value !== undefined) {
             const setValueSQL = this.generateSetStatementValue(f, value);
             setStatements.push(`SET ${varName} = ${setValueSQL}`);
           }
-          
+
           // Add to EXEC parameters
           execParams.push(`@${f.CodeName}=${varName}`);
-          
+
           // Also build the old-style simple params for backward compatibility
           simpleParams += this.generateSingleSPParam(f, value, bFirst);
           bFirst = false;
@@ -2896,7 +2972,8 @@ export class SQLServerDataProvider
 
     const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE ${where}`;
     const rawData = await this.ExecuteSQL(sql, undefined, undefined, user);
-    const d = await this.ProcessEntityRows(rawData, entity.EntityInfo);
+    // Process rows with user context for decryption
+    const d = await this.ProcessEntityRows(rawData, entity.EntityInfo, user);
     if (d && d.length > 0) {
       // got the record, now process the relationships if there are any
       const ret = d[0];
@@ -3594,15 +3671,25 @@ export class SQLServerDataProvider
   }
    
   /**
-   * Processes entity rows returned from SQL Server to handle timezone conversions for datetime fields.
+   * Processes entity rows returned from SQL Server to handle:
+   * 1. Timezone conversions for datetime fields
+   * 2. Field-level decryption for encrypted fields
+   *
    * This method specifically handles the conversion of datetime2 fields (which SQL Server returns without timezone info)
    * to proper UTC dates, preventing JavaScript from incorrectly interpreting them as local time.
    *
+   * For encrypted fields, this method decrypts values at the data provider level.
+   * API-level filtering (AllowDecryptInAPI/SendEncryptedValue) is handled by the GraphQL layer.
+   *
    * @param rows The raw result rows from SQL Server
    * @param entityInfo The entity metadata to determine field types
-   * @returns The processed rows with corrected datetime values
+   * @param contextUser Optional user context for decryption operations
+   * @returns The processed rows with corrected datetime values and decrypted fields
+   *
+   * @security Encrypted fields are decrypted here for internal use.
+   *           The API layer handles response filtering based on AllowDecryptInAPI settings.
    */
-  public async ProcessEntityRows(rows: any[], entityInfo: EntityInfo): Promise<any[]> {
+  public async ProcessEntityRows(rows: any[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<any[]> {
     if (!rows || rows.length === 0) {
       return rows;
     }
@@ -3610,18 +3697,30 @@ export class SQLServerDataProvider
     // Find all datetime fields in the entity
     const datetimeFields = entityInfo.Fields.filter((field) => field.TSType === EntityFieldTSType.Date);
 
-    // If there are no datetime fields, return the rows as-is
-    if (datetimeFields.length === 0) {
+    // Find all encrypted fields in the entity
+    const encryptedFields = entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID);
+
+    // If there are no fields requiring processing, return the rows as-is
+    if (datetimeFields.length === 0 && encryptedFields.length === 0) {
       return rows;
     }
 
     // Check if we need datetimeoffset adjustment (lazy loaded on first use)
-    const needsAdjustment = await this.NeedsDatetimeOffsetAdjustment();
+    const needsAdjustment = datetimeFields.length > 0 ? await this.NeedsDatetimeOffsetAdjustment() : false;
 
-    // Process each row
-    return rows.map((row) => {
+    // Get encryption engine instance (lazy - only if we have encrypted fields)
+    let encryptionEngine: EncryptionEngine | null = null;
+    if (encryptedFields.length > 0) {
+      encryptionEngine = EncryptionEngine.Instance;
+    }
+
+    // Process each row - need to use Promise.all for async decryption
+    const processedRows = await Promise.all(rows.map(async (row) => {
       const processedRow = { ...row };
 
+      // ========================================================================
+      // DATETIME FIELD PROCESSING
+      // ========================================================================
       for (const field of datetimeFields) {
         const fieldValue = processedRow[field.Name];
 
@@ -3677,8 +3776,43 @@ export class SQLServerDataProvider
         // For other types (date, time), leave as-is
       }
 
+      // ========================================================================
+      // ENCRYPTED FIELD PROCESSING (DECRYPTION)
+      // Decrypt at the data provider level for internal use.
+      // API-level filtering based on AllowDecryptInAPI is handled by GraphQL resolvers.
+      // ========================================================================
+      if (encryptionEngine && encryptedFields.length > 0) {
+        for (const field of encryptedFields) {
+          const fieldValue = processedRow[field.Name];
+
+          // Skip null/undefined/empty values
+          if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
+            continue;
+          }
+
+          // Only decrypt if the value is actually encrypted
+          if (typeof fieldValue === 'string' && encryptionEngine.IsEncrypted(fieldValue)) {
+            try {
+              const decryptedValue = await encryptionEngine.Decrypt(fieldValue, contextUser);
+              processedRow[field.Name] = decryptedValue;
+            } catch (decryptError) {
+              // Log error but don't fail the entire operation
+              // Return the encrypted value so the caller knows something is wrong
+              const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
+              LogError(
+                `Failed to decrypt field "${field.Name}" on entity "${entityInfo.Name}": ${message}. ` +
+                'The encrypted value will be returned unchanged.'
+              );
+              // Keep the encrypted value in the row - let the caller decide what to do
+            }
+          }
+        }
+      }
+
       return processedRow;
-    });
+    }));
+
+    return processedRows;
   }
 
 

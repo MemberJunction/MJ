@@ -6456,13 +6456,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Primary Key
+        * * Display Name: Is Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)`),
     IsUnique: z.boolean().describe(`
         * * Field Name: IsUnique
-        * * Display Name: Unique
+        * * Display Name: Is Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field must have unique values within the entity.`),
@@ -6616,13 +6616,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`),
     IsVirtual: z.boolean().describe(`
         * * Field Name: IsVirtual
-        * * Display Name: Virtual
+        * * Display Name: Is Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: NULL`),
     IsNameField: z.boolean().describe(`
         * * Field Name: IsNameField
-        * * Display Name: Name Field
+        * * Display Name: Is Name Field
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.`),
@@ -6731,6 +6731,30 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field`),
+    Encrypt: z.boolean().describe(`
+        * * Field Name: Encrypt
+        * * Display Name: Encrypt
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this field will be encrypted at rest using the specified EncryptionKeyID. Encrypted fields cannot be indexed or searched.`),
+    EncryptionKeyID: z.string().nullable().describe(`
+        * * Field Name: EncryptionKeyID
+        * * Display Name: Encryption Key ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Encryption Keys (vwEncryptionKeys.ID)
+        * * Description: References the encryption key to use when Encrypt is true. Required if Encrypt is true.`),
+    AllowDecryptInAPI: z.boolean().describe(`
+        * * Field Name: AllowDecryptInAPI
+        * * Display Name: Allow Decrypt In API
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, encrypted fields will be decrypted before returning via API. When false, behavior depends on SendEncryptedValue. Default is false (secure).`),
+    SendEncryptedValue: z.boolean().describe(`
+        * * Field Name: SendEncryptedValue
+        * * Display Name: Send Encrypted Value
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When AllowDecryptInAPI is false: if true, send encrypted ciphertext; if false (default), send NULL. Most secure option is false.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -12331,6 +12355,232 @@ export const DashboardUserStateSchema = z.object({
 });
 
 export type DashboardUserStateEntityType = z.infer<typeof DashboardUserStateSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Encryption Algorithms
+ */
+export const EncryptionAlgorithmSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the algorithm.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Algorithm name (e.g., AES-256-GCM). Must match the format used in encrypted values.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the algorithm and when to use it.`),
+    NodeCryptoName: z.string().describe(`
+        * * Field Name: NodeCryptoName
+        * * Display Name: Node Crypto Name
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Node.js crypto module algorithm identifier (e.g., aes-256-gcm).`),
+    KeyLengthBits: z.number().describe(`
+        * * Field Name: KeyLengthBits
+        * * Display Name: Key Length (Bits)
+        * * SQL Data Type: int
+        * * Description: Required key length in bits (e.g., 256 for AES-256).`),
+    IVLengthBytes: z.number().describe(`
+        * * Field Name: IVLengthBytes
+        * * Display Name: IV Length (Bytes)
+        * * SQL Data Type: int
+        * * Description: Required initialization vector length in bytes (e.g., 12 for GCM, 16 for CBC).`),
+    IsAEAD: z.boolean().describe(`
+        * * Field Name: IsAEAD
+        * * Display Name: AEAD
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this algorithm provides Authenticated Encryption with Associated Data (AEAD). AEAD algorithms like GCM detect tampering.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this algorithm is available for use.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type EncryptionAlgorithmEntityType = z.infer<typeof EncryptionAlgorithmSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Encryption Key Sources
+ */
+export const EncryptionKeySourceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the key source.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name for this key source (e.g., Environment Variable, AWS KMS).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of this key source and usage instructions.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: TypeScript class name that implements EncryptionKeySourceBase (e.g., EnvVarKeySource).`),
+    DriverImportPath: z.string().nullable().describe(`
+        * * Field Name: DriverImportPath
+        * * Display Name: Driver Import Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Package path where the driver class is exported (e.g., @memberjunction/encryption).`),
+    ConfigTemplate: z.string().nullable().describe(`
+        * * Field Name: ConfigTemplate
+        * * Display Name: Config Template
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON template describing the configuration options for this key source.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this key source is available for use.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Inactive
+        * * Description: Current status: Active, Inactive, or Deprecated.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type EncryptionKeySourceEntityType = z.infer<typeof EncryptionKeySourceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Encryption Keys
+ */
+export const EncryptionKeySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the encryption key configuration.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name for this key (e.g., PII Master Key, API Secrets Key).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of this key purpose and scope.`),
+    EncryptionKeySourceID: z.string().describe(`
+        * * Field Name: EncryptionKeySourceID
+        * * Display Name: Key Source
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Encryption Key Sources (vwEncryptionKeySources.ID)
+        * * Description: References the key source that provides the key material.`),
+    EncryptionAlgorithmID: z.string().describe(`
+        * * Field Name: EncryptionAlgorithmID
+        * * Display Name: Encryption Algorithm
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Encryption Algorithms (vwEncryptionAlgorithms.ID)
+        * * Description: References the algorithm to use for encryption/decryption.`),
+    KeyLookupValue: z.string().describe(`
+        * * Field Name: KeyLookupValue
+        * * Display Name: Lookup Value
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Source-specific lookup value (e.g., environment variable name, vault path).`),
+    KeyVersion: z.string().describe(`
+        * * Field Name: KeyVersion
+        * * Display Name: Key Version
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 1
+        * * Description: Version string for key rotation tracking. Incremented during rotation.`),
+    Marker: z.string().describe(`
+        * * Field Name: Marker
+        * * Display Name: Marker
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: $ENC$
+        * * Description: Prefix marker for encrypted values (default: $ENC$).`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this key can be used for new encryption operations.`),
+    Status: z.union([z.literal('Active'), z.literal('Expired'), z.literal('Inactive'), z.literal('Rotating')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    *   * Inactive
+    *   * Rotating
+        * * Description: Current status: Active, Inactive, Rotating, or Expired.`),
+    ActivatedAt: z.date().nullable().describe(`
+        * * Field Name: ActivatedAt
+        * * Display Name: Activated At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the current key version was activated.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiration date. Keys past this date cannot be used for new encryption.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EncryptionKeySource: z.string().describe(`
+        * * Field Name: EncryptionKeySource
+        * * Display Name: Key Source Name
+        * * SQL Data Type: nvarchar(100)`),
+    EncryptionAlgorithm: z.string().describe(`
+        * * Field Name: EncryptionAlgorithm
+        * * Display Name: Algorithm Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type EncryptionKeyEntityType = z.infer<typeof EncryptionKeySchema>;
 
 /**
  * zod schema definition for the entity MJ: Environments
@@ -34447,7 +34697,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Primary Key
+    * * Display Name: Is Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
@@ -34461,7 +34711,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsUnique
-    * * Display Name: Unique
+    * * Display Name: Is Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.
@@ -34770,7 +35020,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsVirtual
-    * * Display Name: Virtual
+    * * Display Name: Is Virtual
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: NULL
@@ -34781,7 +35031,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsNameField
-    * * Display Name: Name Field
+    * * Display Name: Is Name Field
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
@@ -35026,6 +35276,62 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
     set AutoUpdateIncludeInUserSearchAPI(value: boolean) {
         this.Set('AutoUpdateIncludeInUserSearchAPI', value);
+    }
+
+    /**
+    * * Field Name: Encrypt
+    * * Display Name: Encrypt
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this field will be encrypted at rest using the specified EncryptionKeyID. Encrypted fields cannot be indexed or searched.
+    */
+    get Encrypt(): boolean {
+        return this.Get('Encrypt');
+    }
+    set Encrypt(value: boolean) {
+        this.Set('Encrypt', value);
+    }
+
+    /**
+    * * Field Name: EncryptionKeyID
+    * * Display Name: Encryption Key ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Encryption Keys (vwEncryptionKeys.ID)
+    * * Description: References the encryption key to use when Encrypt is true. Required if Encrypt is true.
+    */
+    get EncryptionKeyID(): string | null {
+        return this.Get('EncryptionKeyID');
+    }
+    set EncryptionKeyID(value: string | null) {
+        this.Set('EncryptionKeyID', value);
+    }
+
+    /**
+    * * Field Name: AllowDecryptInAPI
+    * * Display Name: Allow Decrypt In API
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, encrypted fields will be decrypted before returning via API. When false, behavior depends on SendEncryptedValue. Default is false (secure).
+    */
+    get AllowDecryptInAPI(): boolean {
+        return this.Get('AllowDecryptInAPI');
+    }
+    set AllowDecryptInAPI(value: boolean) {
+        this.Set('AllowDecryptInAPI', value);
+    }
+
+    /**
+    * * Field Name: SendEncryptedValue
+    * * Display Name: Send Encrypted Value
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When AllowDecryptInAPI is false: if true, send encrypted ciphertext; if false (default), send NULL. Most secure option is false.
+    */
+    get SendEncryptedValue(): boolean {
+        return this.Get('SendEncryptedValue');
+    }
+    set SendEncryptedValue(value: boolean) {
+        this.Set('SendEncryptedValue', value);
     }
 
     /**
@@ -49697,6 +50003,568 @@ export class DashboardUserStateEntity extends BaseEntity<DashboardUserStateEntit
     */
     get User(): string {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Encryption Algorithms - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EncryptionAlgorithm
+ * * Base View: vwEncryptionAlgorithms
+ * * @description Defines available encryption algorithms and their configuration parameters. AES-256-GCM is the recommended algorithm for new implementations.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Encryption Algorithms')
+export class EncryptionAlgorithmEntity extends BaseEntity<EncryptionAlgorithmEntityType> {
+    /**
+    * Loads the MJ: Encryption Algorithms record from the database
+    * @param ID: string - primary key value to load the MJ: Encryption Algorithms record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof EncryptionAlgorithmEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the algorithm.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Algorithm name (e.g., AES-256-GCM). Must match the format used in encrypted values.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of the algorithm and when to use it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: NodeCryptoName
+    * * Display Name: Node Crypto Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Node.js crypto module algorithm identifier (e.g., aes-256-gcm).
+    */
+    get NodeCryptoName(): string {
+        return this.Get('NodeCryptoName');
+    }
+    set NodeCryptoName(value: string) {
+        this.Set('NodeCryptoName', value);
+    }
+
+    /**
+    * * Field Name: KeyLengthBits
+    * * Display Name: Key Length (Bits)
+    * * SQL Data Type: int
+    * * Description: Required key length in bits (e.g., 256 for AES-256).
+    */
+    get KeyLengthBits(): number {
+        return this.Get('KeyLengthBits');
+    }
+    set KeyLengthBits(value: number) {
+        this.Set('KeyLengthBits', value);
+    }
+
+    /**
+    * * Field Name: IVLengthBytes
+    * * Display Name: IV Length (Bytes)
+    * * SQL Data Type: int
+    * * Description: Required initialization vector length in bytes (e.g., 12 for GCM, 16 for CBC).
+    */
+    get IVLengthBytes(): number {
+        return this.Get('IVLengthBytes');
+    }
+    set IVLengthBytes(value: number) {
+        this.Set('IVLengthBytes', value);
+    }
+
+    /**
+    * * Field Name: IsAEAD
+    * * Display Name: AEAD
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this algorithm provides Authenticated Encryption with Associated Data (AEAD). AEAD algorithms like GCM detect tampering.
+    */
+    get IsAEAD(): boolean {
+        return this.Get('IsAEAD');
+    }
+    set IsAEAD(value: boolean) {
+        this.Set('IsAEAD', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this algorithm is available for use.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Encryption Key Sources - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EncryptionKeySource
+ * * Base View: vwEncryptionKeySources
+ * * @description Defines sources for retrieving encryption keys (environment variables, vault services, config files, etc.). Key sources are pluggable providers that implement the EncryptionKeySourceBase class.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Encryption Key Sources')
+export class EncryptionKeySourceEntity extends BaseEntity<EncryptionKeySourceEntityType> {
+    /**
+    * Loads the MJ: Encryption Key Sources record from the database
+    * @param ID: string - primary key value to load the MJ: Encryption Key Sources record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof EncryptionKeySourceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the key source.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name for this key source (e.g., Environment Variable, AWS KMS).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of this key source and usage instructions.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: TypeScript class name that implements EncryptionKeySourceBase (e.g., EnvVarKeySource).
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: DriverImportPath
+    * * Display Name: Driver Import Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Package path where the driver class is exported (e.g., @memberjunction/encryption).
+    */
+    get DriverImportPath(): string | null {
+        return this.Get('DriverImportPath');
+    }
+    set DriverImportPath(value: string | null) {
+        this.Set('DriverImportPath', value);
+    }
+
+    /**
+    * * Field Name: ConfigTemplate
+    * * Display Name: Config Template
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON template describing the configuration options for this key source.
+    */
+    get ConfigTemplate(): string | null {
+        return this.Get('ConfigTemplate');
+    }
+    set ConfigTemplate(value: string | null) {
+        this.Set('ConfigTemplate', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this key source is available for use.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Inactive
+    * * Description: Current status: Active, Inactive, or Deprecated.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Encryption Keys - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EncryptionKey
+ * * Base View: vwEncryptionKeys
+ * * @description Defines encryption keys used for field-level encryption. Keys are NOT stored in the database - only references to external key sources. Configure one or more keys and assign them to entity fields.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Encryption Keys')
+export class EncryptionKeyEntity extends BaseEntity<EncryptionKeyEntityType> {
+    /**
+    * Loads the MJ: Encryption Keys record from the database
+    * @param ID: string - primary key value to load the MJ: Encryption Keys record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof EncryptionKeyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the encryption key configuration.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name for this key (e.g., PII Master Key, API Secrets Key).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of this key purpose and scope.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: EncryptionKeySourceID
+    * * Display Name: Key Source
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Encryption Key Sources (vwEncryptionKeySources.ID)
+    * * Description: References the key source that provides the key material.
+    */
+    get EncryptionKeySourceID(): string {
+        return this.Get('EncryptionKeySourceID');
+    }
+    set EncryptionKeySourceID(value: string) {
+        this.Set('EncryptionKeySourceID', value);
+    }
+
+    /**
+    * * Field Name: EncryptionAlgorithmID
+    * * Display Name: Encryption Algorithm
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Encryption Algorithms (vwEncryptionAlgorithms.ID)
+    * * Description: References the algorithm to use for encryption/decryption.
+    */
+    get EncryptionAlgorithmID(): string {
+        return this.Get('EncryptionAlgorithmID');
+    }
+    set EncryptionAlgorithmID(value: string) {
+        this.Set('EncryptionAlgorithmID', value);
+    }
+
+    /**
+    * * Field Name: KeyLookupValue
+    * * Display Name: Lookup Value
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Source-specific lookup value (e.g., environment variable name, vault path).
+    */
+    get KeyLookupValue(): string {
+        return this.Get('KeyLookupValue');
+    }
+    set KeyLookupValue(value: string) {
+        this.Set('KeyLookupValue', value);
+    }
+
+    /**
+    * * Field Name: KeyVersion
+    * * Display Name: Key Version
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: 1
+    * * Description: Version string for key rotation tracking. Incremented during rotation.
+    */
+    get KeyVersion(): string {
+        return this.Get('KeyVersion');
+    }
+    set KeyVersion(value: string) {
+        this.Set('KeyVersion', value);
+    }
+
+    /**
+    * * Field Name: Marker
+    * * Display Name: Marker
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: $ENC$
+    * * Description: Prefix marker for encrypted values (default: $ENC$).
+    */
+    get Marker(): string {
+        return this.Get('Marker');
+    }
+    set Marker(value: string) {
+        this.Set('Marker', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this key can be used for new encryption operations.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    *   * Inactive
+    *   * Rotating
+    * * Description: Current status: Active, Inactive, Rotating, or Expired.
+    */
+    get Status(): 'Active' | 'Expired' | 'Inactive' | 'Rotating' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Expired' | 'Inactive' | 'Rotating') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ActivatedAt
+    * * Display Name: Activated At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the current key version was activated.
+    */
+    get ActivatedAt(): Date | null {
+        return this.Get('ActivatedAt');
+    }
+    set ActivatedAt(value: Date | null) {
+        this.Set('ActivatedAt', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiration date. Keys past this date cannot be used for new encryption.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EncryptionKeySource
+    * * Display Name: Key Source Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get EncryptionKeySource(): string {
+        return this.Get('EncryptionKeySource');
+    }
+
+    /**
+    * * Field Name: EncryptionAlgorithm
+    * * Display Name: Algorithm Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get EncryptionAlgorithm(): string {
+        return this.Get('EncryptionAlgorithm');
     }
 }
 

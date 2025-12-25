@@ -175,6 +175,9 @@ import { ConversationDetailArtifactFormComponent, LoadConversationDetailArtifact
 import { ConversationDetailRatingFormComponent, LoadConversationDetailRatingFormComponent } from "./Entities/ConversationDetailRating/conversationdetailrating.form.component";
 import { DashboardUserPreferenceFormComponent, LoadDashboardUserPreferenceFormComponent } from "./Entities/DashboardUserPreference/dashboarduserpreference.form.component";
 import { DashboardUserStateFormComponent, LoadDashboardUserStateFormComponent } from "./Entities/DashboardUserState/dashboarduserstate.form.component";
+import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent } from "./Entities/EncryptionAlgorithm/encryptionalgorithm.form.component";
+import { EncryptionKeySourceFormComponent, LoadEncryptionKeySourceFormComponent } from "./Entities/EncryptionKeySource/encryptionkeysource.form.component";
+import { EncryptionKeyFormComponent, LoadEncryptionKeyFormComponent } from "./Entities/EncryptionKey/encryptionkey.form.component";
 import { EnvironmentFormComponent, LoadEnvironmentFormComponent } from "./Entities/Environment/environment.form.component";
 import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
 import { PublicLinkFormComponent, LoadPublicLinkFormComponent } from "./Entities/PublicLink/publiclink.form.component";
@@ -583,6 +586,9 @@ declarations: [
     ConversationDetailRatingFormComponent,
     DashboardUserPreferenceFormComponent,
     DashboardUserStateFormComponent,
+    EncryptionAlgorithmFormComponent,
+    EncryptionKeySourceFormComponent,
+    EncryptionKeyFormComponent,
     EnvironmentFormComponent,
     ProjectFormComponent,
     PublicLinkFormComponent,
@@ -590,10 +596,7 @@ declarations: [
     RecordLinkFormComponent,
     ReportUserStateFormComponent,
     ReportVersionFormComponent,
-    ScheduledJobRunFormComponent,
-    ScheduledJobTypeFormComponent,
-    ScheduledJobFormComponent,
-    TaskDependencyFormComponent],
+    ScheduledJobRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -619,6 +622,9 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    ScheduledJobTypeFormComponent,
+    ScheduledJobFormComponent,
+    TaskDependencyFormComponent,
     TaskTypeFormComponent,
     TaskFormComponent,
     TestRubricFormComponent,
@@ -635,10 +641,7 @@ declarations: [
     OutputTriggerTypeFormComponent,
     QueryFormComponent,
     QueryCategoryFormComponent,
-    QueryEntityFormComponent,
-    QueryFieldFormComponent,
-    QueryPermissionFormComponent,
-    QueueTaskFormComponent],
+    QueryEntityFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -664,6 +667,9 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    QueryFieldFormComponent,
+    QueryPermissionFormComponent,
+    QueueTaskFormComponent,
     QueueTypeFormComponent,
     QueueFormComponent,
     RecommendationItemFormComponent,
@@ -680,10 +686,7 @@ declarations: [
     ResourceLinkFormComponent,
     ResourcePermissionFormComponent,
     ResourceTypeFormComponent,
-    RoleFormComponent,
-    RowLevelSecurityFilterFormComponent,
-    ScheduledActionParamFormComponent,
-    ScheduledActionFormComponent],
+    RoleFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -709,6 +712,9 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    RowLevelSecurityFilterFormComponent,
+    ScheduledActionParamFormComponent,
+    ScheduledActionFormComponent,
     SchemaInfoFormComponent,
     SkillFormComponent,
     TaggedItemFormComponent,
@@ -725,10 +731,7 @@ declarations: [
     UserRecordLogFormComponent,
     UserRoleFormComponent,
     UserViewCategoryFormComponent,
-    UserViewRunDetailFormComponent,
-    UserViewRunFormComponent,
-    UserViewFormComponent,
-    UserFormComponent],
+    UserViewRunDetailFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -754,6 +757,9 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    UserViewRunFormComponent,
+    UserViewFormComponent,
+    UserFormComponent,
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
@@ -960,6 +966,9 @@ export function LoadCoreGeneratedForms() {
     LoadConversationDetailRatingFormComponent();
     LoadDashboardUserPreferenceFormComponent();
     LoadDashboardUserStateFormComponent();
+    LoadEncryptionAlgorithmFormComponent();
+    LoadEncryptionKeySourceFormComponent();
+    LoadEncryptionKeyFormComponent();
     LoadEnvironmentFormComponent();
     LoadProjectFormComponent();
     LoadPublicLinkFormComponent();

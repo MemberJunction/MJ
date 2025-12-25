@@ -465,6 +465,59 @@ export class EntityFieldInfo extends BaseInfo {
     */
     AutoUpdateIncludeInUserSearchAPI: boolean = true;
 
+    // ========================================================================
+    // ENCRYPTION FIELDS
+    // These fields control field-level encryption for sensitive data at rest
+    // ========================================================================
+
+    /**
+     * When true, this field will be encrypted at rest using the specified EncryptionKeyID.
+     * Encrypted fields:
+     * - Cannot be indexed or searched effectively
+     * - Are automatically encrypted on save and decrypted on load
+     * - Store data in the format: $ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]
+     *
+     * @default false
+     */
+    Encrypt: boolean = false;
+
+    /**
+     * References the encryption key to use when Encrypt is true.
+     * Must point to an active record in the "MJ: Encryption Keys" entity.
+     * Required if Encrypt is true.
+     */
+    EncryptionKeyID: string | null = null;
+
+    /**
+     * Controls whether encrypted fields are decrypted when returned via API.
+     *
+     * When true:
+     * - Field value is decrypted before returning to client
+     * - Use for PII that authorized users should see
+     *
+     * When false:
+     * - Behavior depends on SendEncryptedValue
+     * - Use for secrets like API keys that should never leave the server
+     *
+     * @default false (secure by default)
+     */
+    AllowDecryptInAPI: boolean = false;
+
+    /**
+     * When AllowDecryptInAPI is false, controls what value is returned to clients.
+     *
+     * When true:
+     * - Send the encrypted ciphertext ($ENC$...)
+     * - Client knows field is encrypted but can't decrypt
+     *
+     * When false:
+     * - Send NULL instead of the encrypted value
+     * - Most secure option - client doesn't even see encrypted data
+     *
+     * @default false (most secure)
+     */
+    SendEncryptedValue: boolean = false;
+
 
     // virtual fields - returned by the database VIEW
     FieldCodeName: string =  null

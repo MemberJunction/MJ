@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, UserSettingEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, EncryptionKeySourceEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, EncryptionAlgorithmEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, EncryptionKeyEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, UserSettingEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -3562,6 +3562,215 @@ export class MJAIConfigurationResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Configurations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Encryption Key Sources
+//****************************************************************************
+@ObjectType({ description: `Defines sources for retrieving encryption keys (environment variables, vault services, config files, etc.). Key sources are pluggable providers that implement the EncryptionKeySourceBase class.` })
+export class MJEncryptionKeySource_ {
+    @Field({description: `Unique identifier for the key source.`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Unique name for this key source (e.g., Environment Variable, AWS KMS).`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-readable description of this key source and usage instructions.`}) 
+    Description?: string;
+        
+    @Field({description: `TypeScript class name that implements EncryptionKeySourceBase (e.g., EnvVarKeySource).`}) 
+    @MaxLength(510)
+    DriverClass: string;
+        
+    @Field({nullable: true, description: `Package path where the driver class is exported (e.g., @memberjunction/encryption).`}) 
+    @MaxLength(1000)
+    DriverImportPath?: string;
+        
+    @Field({nullable: true, description: `JSON template describing the configuration options for this key source.`}) 
+    ConfigTemplate?: string;
+        
+    @Field(() => Boolean, {description: `Whether this key source is available for use.`}) 
+    IsActive: boolean;
+        
+    @Field({description: `Current status: Active, Inactive, or Deprecated.`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJEncryptionKey_])
+    MJ_EncryptionKeys_EncryptionKeySourceIDArray: MJEncryptionKey_[]; // Link to MJ_EncryptionKeys
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Encryption Key Sources
+//****************************************************************************
+@InputType()
+export class CreateMJEncryptionKeySourceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    DriverImportPath: string | null;
+
+    @Field({ nullable: true })
+    ConfigTemplate: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Encryption Key Sources
+//****************************************************************************
+@InputType()
+export class UpdateMJEncryptionKeySourceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    DriverImportPath?: string | null;
+
+    @Field({ nullable: true })
+    ConfigTemplate?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Encryption Key Sources
+//****************************************************************************
+@ObjectType()
+export class RunMJEncryptionKeySourceViewResult {
+    @Field(() => [MJEncryptionKeySource_])
+    Results: MJEncryptionKeySource_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJEncryptionKeySource_)
+export class MJEncryptionKeySourceResolver extends ResolverBase {
+    @Query(() => RunMJEncryptionKeySourceViewResult)
+    async RunMJEncryptionKeySourceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEncryptionKeySourceViewResult)
+    async RunMJEncryptionKeySourceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEncryptionKeySourceViewResult)
+    async RunMJEncryptionKeySourceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Encryption Key Sources';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJEncryptionKeySource_, { nullable: true })
+    async MJEncryptionKeySource(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJEncryptionKeySource_ | null> {
+        this.CheckUserReadPermissions('MJ: Encryption Key Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEncryptionKeySources] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Encryption Key Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Encryption Key Sources', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJEncryptionKey_])
+    async MJ_EncryptionKeys_EncryptionKeySourceIDArray(@Root() mjencryptionkeysource_: MJEncryptionKeySource_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Encryption Keys', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEncryptionKeys] WHERE [EncryptionKeySourceID]='${mjencryptionkeysource_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Encryption Keys', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Encryption Keys', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJEncryptionKeySource_)
+    async CreateMJEncryptionKeySource(
+        @Arg('input', () => CreateMJEncryptionKeySourceInput) input: CreateMJEncryptionKeySourceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Encryption Key Sources', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJEncryptionKeySource_)
+    async UpdateMJEncryptionKeySource(
+        @Arg('input', () => UpdateMJEncryptionKeySourceInput) input: UpdateMJEncryptionKeySourceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Encryption Key Sources', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJEncryptionKeySource_)
+    async DeleteMJEncryptionKeySource(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Encryption Key Sources', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -7352,6 +7561,213 @@ export class MJTaskDependencyResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Task Dependencies', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Encryption Algorithms
+//****************************************************************************
+@ObjectType({ description: `Defines available encryption algorithms and their configuration parameters. AES-256-GCM is the recommended algorithm for new implementations.` })
+export class MJEncryptionAlgorithm_ {
+    @Field({description: `Unique identifier for the algorithm.`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Algorithm name (e.g., AES-256-GCM). Must match the format used in encrypted values.`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true, description: `Description of the algorithm and when to use it.`}) 
+    Description?: string;
+        
+    @Field({description: `Node.js crypto module algorithm identifier (e.g., aes-256-gcm).`}) 
+    @MaxLength(100)
+    NodeCryptoName: string;
+        
+    @Field(() => Int, {description: `Required key length in bits (e.g., 256 for AES-256).`}) 
+    KeyLengthBits: number;
+        
+    @Field(() => Int, {description: `Required initialization vector length in bytes (e.g., 12 for GCM, 16 for CBC).`}) 
+    IVLengthBytes: number;
+        
+    @Field(() => Boolean, {description: `Whether this algorithm provides Authenticated Encryption with Associated Data (AEAD). AEAD algorithms like GCM detect tampering.`}) 
+    IsAEAD: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this algorithm is available for use.`}) 
+    IsActive: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJEncryptionKey_])
+    MJ_EncryptionKeys_EncryptionAlgorithmIDArray: MJEncryptionKey_[]; // Link to MJ_EncryptionKeys
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Encryption Algorithms
+//****************************************************************************
+@InputType()
+export class CreateMJEncryptionAlgorithmInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    NodeCryptoName?: string;
+
+    @Field(() => Int, { nullable: true })
+    KeyLengthBits?: number;
+
+    @Field(() => Int, { nullable: true })
+    IVLengthBytes?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAEAD?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Encryption Algorithms
+//****************************************************************************
+@InputType()
+export class UpdateMJEncryptionAlgorithmInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    NodeCryptoName?: string;
+
+    @Field(() => Int, { nullable: true })
+    KeyLengthBits?: number;
+
+    @Field(() => Int, { nullable: true })
+    IVLengthBytes?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAEAD?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Encryption Algorithms
+//****************************************************************************
+@ObjectType()
+export class RunMJEncryptionAlgorithmViewResult {
+    @Field(() => [MJEncryptionAlgorithm_])
+    Results: MJEncryptionAlgorithm_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJEncryptionAlgorithm_)
+export class MJEncryptionAlgorithmResolver extends ResolverBase {
+    @Query(() => RunMJEncryptionAlgorithmViewResult)
+    async RunMJEncryptionAlgorithmViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEncryptionAlgorithmViewResult)
+    async RunMJEncryptionAlgorithmViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEncryptionAlgorithmViewResult)
+    async RunMJEncryptionAlgorithmDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Encryption Algorithms';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJEncryptionAlgorithm_, { nullable: true })
+    async MJEncryptionAlgorithm(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJEncryptionAlgorithm_ | null> {
+        this.CheckUserReadPermissions('MJ: Encryption Algorithms', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEncryptionAlgorithms] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Encryption Algorithms', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Encryption Algorithms', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJEncryptionKey_])
+    async MJ_EncryptionKeys_EncryptionAlgorithmIDArray(@Root() mjencryptionalgorithm_: MJEncryptionAlgorithm_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Encryption Keys', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEncryptionKeys] WHERE [EncryptionAlgorithmID]='${mjencryptionalgorithm_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Encryption Keys', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Encryption Keys', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJEncryptionAlgorithm_)
+    async CreateMJEncryptionAlgorithm(
+        @Arg('input', () => CreateMJEncryptionAlgorithmInput) input: CreateMJEncryptionAlgorithmInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Encryption Algorithms', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJEncryptionAlgorithm_)
+    async UpdateMJEncryptionAlgorithm(
+        @Arg('input', () => UpdateMJEncryptionAlgorithmInput) input: UpdateMJEncryptionAlgorithmInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Encryption Algorithms', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJEncryptionAlgorithm_)
+    async DeleteMJEncryptionAlgorithm(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Encryption Algorithms', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -12199,6 +12615,19 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field`}) 
     AutoUpdateIncludeInUserSearchAPI: boolean;
         
+    @Field(() => Boolean, {description: `When true, this field will be encrypted at rest using the specified EncryptionKeyID. Encrypted fields cannot be indexed or searched.`}) 
+    Encrypt: boolean;
+        
+    @Field({nullable: true, description: `References the encryption key to use when Encrypt is true. Required if Encrypt is true.`}) 
+    @MaxLength(16)
+    EncryptionKeyID?: string;
+        
+    @Field(() => Boolean, {description: `When true, encrypted fields will be decrypted before returning via API. When false, behavior depends on SendEncryptedValue. Default is false (secure).`}) 
+    AllowDecryptInAPI: boolean;
+        
+    @Field(() => Boolean, {description: `When AllowDecryptInAPI is false: if true, send encrypted ciphertext; if false (default), send NULL. Most secure option is false.`}) 
+    SendEncryptedValue: boolean;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -12363,6 +12792,18 @@ export class CreateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateIncludeInUserSearchAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    Encrypt?: boolean;
+
+    @Field({ nullable: true })
+    EncryptionKeyID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDecryptInAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SendEncryptedValue?: boolean;
 }
     
 
@@ -12478,6 +12919,18 @@ export class UpdateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateIncludeInUserSearchAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    Encrypt?: boolean;
+
+    @Field({ nullable: true })
+    EncryptionKeyID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDecryptInAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SendEncryptedValue?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -42484,6 +42937,264 @@ export class MJReportUserStateResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Report User States', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Encryption Keys
+//****************************************************************************
+@ObjectType({ description: `Defines encryption keys used for field-level encryption. Keys are NOT stored in the database - only references to external key sources. Configure one or more keys and assign them to entity fields.` })
+export class MJEncryptionKey_ {
+    @Field({description: `Unique identifier for the encryption key configuration.`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Unique name for this key (e.g., PII Master Key, API Secrets Key).`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Description of this key purpose and scope.`}) 
+    Description?: string;
+        
+    @Field({description: `References the key source that provides the key material.`}) 
+    @MaxLength(16)
+    EncryptionKeySourceID: string;
+        
+    @Field({description: `References the algorithm to use for encryption/decryption.`}) 
+    @MaxLength(16)
+    EncryptionAlgorithmID: string;
+        
+    @Field({description: `Source-specific lookup value (e.g., environment variable name, vault path).`}) 
+    @MaxLength(1000)
+    KeyLookupValue: string;
+        
+    @Field({description: `Version string for key rotation tracking. Incremented during rotation.`}) 
+    @MaxLength(40)
+    KeyVersion: string;
+        
+    @Field({description: `Prefix marker for encrypted values (default: $ENC$).`}) 
+    @MaxLength(40)
+    Marker: string;
+        
+    @Field(() => Boolean, {description: `Whether this key can be used for new encryption operations.`}) 
+    IsActive: boolean;
+        
+    @Field({description: `Current status: Active, Inactive, Rotating, or Expired.`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `When the current key version was activated.`}) 
+    @MaxLength(10)
+    ActivatedAt?: Date;
+        
+    @Field({nullable: true, description: `Optional expiration date. Keys past this date cannot be used for new encryption.`}) 
+    @MaxLength(10)
+    ExpiresAt?: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    EncryptionKeySource: string;
+        
+    @Field() 
+    @MaxLength(100)
+    EncryptionAlgorithm: string;
+        
+    @Field(() => [MJEntityField_])
+    EntityFields_EncryptionKeyIDArray: MJEntityField_[]; // Link to EntityFields
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Encryption Keys
+//****************************************************************************
+@InputType()
+export class CreateMJEncryptionKeyInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    EncryptionKeySourceID?: string;
+
+    @Field({ nullable: true })
+    EncryptionAlgorithmID?: string;
+
+    @Field({ nullable: true })
+    KeyLookupValue?: string;
+
+    @Field({ nullable: true })
+    KeyVersion?: string;
+
+    @Field({ nullable: true })
+    Marker?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ActivatedAt: Date | null;
+
+    @Field({ nullable: true })
+    ExpiresAt: Date | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Encryption Keys
+//****************************************************************************
+@InputType()
+export class UpdateMJEncryptionKeyInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    EncryptionKeySourceID?: string;
+
+    @Field({ nullable: true })
+    EncryptionAlgorithmID?: string;
+
+    @Field({ nullable: true })
+    KeyLookupValue?: string;
+
+    @Field({ nullable: true })
+    KeyVersion?: string;
+
+    @Field({ nullable: true })
+    Marker?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ActivatedAt?: Date | null;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Encryption Keys
+//****************************************************************************
+@ObjectType()
+export class RunMJEncryptionKeyViewResult {
+    @Field(() => [MJEncryptionKey_])
+    Results: MJEncryptionKey_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJEncryptionKey_)
+export class MJEncryptionKeyResolver extends ResolverBase {
+    @Query(() => RunMJEncryptionKeyViewResult)
+    async RunMJEncryptionKeyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEncryptionKeyViewResult)
+    async RunMJEncryptionKeyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEncryptionKeyViewResult)
+    async RunMJEncryptionKeyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Encryption Keys';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJEncryptionKey_, { nullable: true })
+    async MJEncryptionKey(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJEncryptionKey_ | null> {
+        this.CheckUserReadPermissions('MJ: Encryption Keys', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEncryptionKeys] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Encryption Keys', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Encryption Keys', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJEntityField_])
+    async EntityFields_EncryptionKeyIDArray(@Root() mjencryptionkey_: MJEncryptionKey_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Fields', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields] WHERE [EncryptionKeyID]='${mjencryptionkey_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJEncryptionKey_)
+    async CreateMJEncryptionKey(
+        @Arg('input', () => CreateMJEncryptionKeyInput) input: CreateMJEncryptionKeyInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Encryption Keys', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJEncryptionKey_)
+    async UpdateMJEncryptionKey(
+        @Arg('input', () => UpdateMJEncryptionKeyInput) input: UpdateMJEncryptionKeyInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Encryption Keys', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJEncryptionKey_)
+    async DeleteMJEncryptionKey(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Encryption Keys', key, options, provider, userPayload, pubSub);
     }
     
 }
