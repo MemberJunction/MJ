@@ -12625,7 +12625,7 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When true, encrypted fields will be decrypted before returning via API. When false, behavior depends on SendEncryptedValue. Default is false (secure).`}) 
     AllowDecryptInAPI: boolean;
         
-    @Field(() => Boolean, {description: `When AllowDecryptInAPI is false: if true, send encrypted ciphertext; if false (default), send NULL. Most secure option is false.`}) 
+    @Field(() => Boolean, {description: `When AllowDecryptInAPI is false: if true, send encrypted ciphertext (e.g., $ENC$...); if false (default), send sentinel value, usually "[!ENCRYPTED$]", indicating a value exists but is protected. Most secure option is false.`}) 
     SendEncryptedValue: boolean;
         
     @Field({nullable: true}) 

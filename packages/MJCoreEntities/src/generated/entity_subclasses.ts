@@ -6456,13 +6456,13 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Is Primary Key
+        * * Display Name: Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)`),
     IsUnique: z.boolean().describe(`
         * * Field Name: IsUnique
-        * * Display Name: Is Unique
+        * * Display Name: Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the field must have unique values within the entity.`),
@@ -6616,7 +6616,7 @@ export const EntityFieldSchema = z.object({
         * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`),
     IsVirtual: z.boolean().describe(`
         * * Field Name: IsVirtual
-        * * Display Name: Is Virtual
+        * * Display Name: Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: NULL`),
@@ -6754,7 +6754,7 @@ export const EntityFieldSchema = z.object({
         * * Display Name: Send Encrypted Value
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: When AllowDecryptInAPI is false: if true, send encrypted ciphertext; if false (default), send NULL. Most secure option is false.`),
+        * * Description: When AllowDecryptInAPI is false: if true, send encrypted ciphertext (e.g., $ENC$...); if false (default), send sentinel value, usually "[!ENCRYPTED$]", indicating a value exists but is protected. Most secure option is false.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -34697,7 +34697,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Is Primary Key
+    * * Display Name: Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
@@ -34711,7 +34711,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsUnique
-    * * Display Name: Is Unique
+    * * Display Name: Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.
@@ -35020,7 +35020,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
 
     /**
     * * Field Name: IsVirtual
-    * * Display Name: Is Virtual
+    * * Display Name: Virtual
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: NULL
@@ -35325,7 +35325,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Send Encrypted Value
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: When AllowDecryptInAPI is false: if true, send encrypted ciphertext; if false (default), send NULL. Most secure option is false.
+    * * Description: When AllowDecryptInAPI is false: if true, send encrypted ciphertext (e.g., $ENC$...); if false (default), send sentinel value, usually "[!ENCRYPTED$]", indicating a value exists but is protected. Most secure option is false.
     */
     get SendEncryptedValue(): boolean {
         return this.Get('SendEncryptedValue');
