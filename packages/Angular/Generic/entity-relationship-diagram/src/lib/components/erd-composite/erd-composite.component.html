@@ -36,6 +36,7 @@
             [includeIncoming]="true"
             [includeOutgoing]="true"
             [showHeader]="true"
+            [config]="erdConfig"
             headerTitle="Entity Relationship Diagram"
             (entitySelected)="onERDEntitySelected($event)"
             (entityDeselected)="onEntityDeselected()"

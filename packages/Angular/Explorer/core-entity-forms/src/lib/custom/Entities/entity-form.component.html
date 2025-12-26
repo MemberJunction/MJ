@@ -311,6 +311,7 @@
                             [includeIncoming]="true"
                             [includeOutgoing]="true"
                             [showHeader]="false"
+                            [config]="{ skipAnimation: true }"
                             (entitySelected)="onERDEntitySelected($event)"
                             (openRecord)="onERDOpenRecord($event)">
                         </mj-entity-erd>
@@ -318,64 +319,69 @@
 
                     <!-- List View -->
                     <div class="relationships-list" *ngIf="relationshipViewMode === 'list'">
-                        <!-- Outgoing Relationships (FK fields on this entity) -->
+                        <!-- Outgoing Relationships (FK fields on this entity) - Grouped by target entity -->
                         <div class="relationship-group">
                             <h3 class="relationship-group-title">
                                 <i class="fa-solid fa-arrow-right-from-bracket"></i>
                                 Outgoing (References to other entities)
+                                <span class="group-count">{{ groupedOutgoingRelationships.length }}</span>
                             </h3>
-                            <div class="relationship-items">
+                            <div class="relationship-items grouped">
                                 <div
-                                    class="relationship-item"
-                                    *ngFor="let field of entity.Fields"
-                                    [class.hidden]="!field.RelatedEntityID">
-                                    <ng-container *ngIf="field.RelatedEntityID">
-                                        <div class="rel-icon">
+                                    class="relationship-item-grouped"
+                                    *ngFor="let group of groupedOutgoingRelationships">
+                                    <div class="rel-header">
+                                        <div class="rel-icon outgoing">
                                             <i class="fa-solid fa-arrow-right"></i>
                                         </div>
-                                        <div class="rel-info">
-                                            <div class="rel-entity" (click)="navigateToRelatedEntity(field)">
-                                                {{ getRelatedEntityName(field) }}
-                                            </div>
-                                            <div class="rel-field">via {{ field.Name }}</div>
-                                        </div>
-                                        <div class="rel-meta">
-                                            <span class="rel-display-type">{{ field.RelatedEntityDisplayType }}</span>
-                                        </div>
-                                    </ng-container>
+                                        <div class="rel-entity-name">{{ group.entityName }}</div>
+                                    </div>
+                                    <div class="rel-fields-chips">
+                                        <span
+                                            class="field-chip outgoing"
+                                            *ngFor="let field of group.fields"
+                                            [title]="field.Description || field.Name"
+                                            (click)="selectField(field)">
+                                            <i class="fa-solid fa-link"></i>
+                                            {{ field.Name }}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div class="empty-state" *ngIf="stats.foreignKeyCount === 0">
+                                <div class="empty-state" *ngIf="groupedOutgoingRelationships.length === 0">
                                     <p>No outgoing relationships</p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Incoming Relationships -->
+                        <!-- Incoming Relationships - Grouped by source entity -->
                         <div class="relationship-group">
                             <h3 class="relationship-group-title">
                                 <i class="fa-solid fa-arrow-right-to-bracket"></i>
                                 Incoming (Entities that reference this one)
+                                <span class="group-count">{{ groupedIncomingRelationships.length }}</span>
                             </h3>
-                            <div class="relationship-items">
+                            <div class="relationship-items grouped">
                                 <div
-                                    class="relationship-item"
-                                    *ngFor="let rel of incomingRelationships"
-                                    (click)="selectRelationship(rel)">
-                                    <div class="rel-icon">
-                                        <i class="fa-solid fa-arrow-left"></i>
+                                    class="relationship-item-grouped"
+                                    *ngFor="let group of groupedIncomingRelationships">
+                                    <div class="rel-header">
+                                        <div class="rel-icon incoming">
+                                            <i class="fa-solid fa-arrow-left"></i>
+                                        </div>
+                                        <div class="rel-entity-name">{{ group.entityName }}</div>
                                     </div>
-                                    <div class="rel-info">
-                                        <div class="rel-entity">{{ rel.Entity }}</div>
-                                        <div class="rel-field">via {{ rel.RelatedEntityJoinField }}</div>
-                                    </div>
-                                    <div class="rel-meta">
-                                        <span class="rel-type">{{ rel.Type }}</span>
-                                        <span class="rel-bundle" *ngIf="rel.BundleInAPI">
-                                            <i class="fa-solid fa-box"></i>
+                                    <div class="rel-fields-chips">
+                                        <span
+                                            class="field-chip incoming"
+                                            *ngFor="let field of group.fields"
+                                            [title]="'Type: ' + field.type">
+                                            <i class="fa-solid fa-link"></i>
+                                            {{ field.fieldName }}
+                                            <i class="fa-solid fa-box bundle-icon" *ngIf="field.bundleInAPI" title="Bundled in API"></i>
                                         </span>
                                     </div>
                                 </div>
-                                <div class="empty-state" *ngIf="incomingRelationships.length === 0">
+                                <div class="empty-state" *ngIf="groupedIncomingRelationships.length === 0">
                                     <p>No incoming relationships</p>
                                 </div>
                             </div>

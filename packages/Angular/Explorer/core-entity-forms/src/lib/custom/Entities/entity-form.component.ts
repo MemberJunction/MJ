@@ -53,6 +53,27 @@ export interface FieldGroup {
 }
 
 /**
+ * Grouped outgoing relationship - an entity this entity references via FK fields
+ */
+export interface GroupedOutgoingRelationship {
+    /** The entity being referenced */
+    entityId: string;
+    entityName: string;
+    /** All fields on THIS entity that reference the target entity */
+    fields: EntityFieldInfo[];
+}
+
+/**
+ * Grouped incoming relationship - an entity that references this entity
+ */
+export interface GroupedIncomingRelationship {
+    /** The entity that references this entity */
+    entityName: string;
+    /** All fields on the OTHER entity that reference THIS entity */
+    fields: { fieldName: string; type: string; bundleInAPI: boolean }[];
+}
+
+/**
  * World-class Entity Explorer form component that provides an exploration-focused
  * interface for understanding entities in the MemberJunction system.
  *
@@ -130,6 +151,12 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
 
     /** Incoming relationships (other entities reference this one) */
     public incomingRelationships: EntityRelationshipInfo[] = [];
+
+    /** Grouped outgoing relationships by target entity */
+    public groupedOutgoingRelationships: GroupedOutgoingRelationship[] = [];
+
+    /** Grouped incoming relationships by source entity */
+    public groupedIncomingRelationships: GroupedIncomingRelationship[] = [];
 
     /** Whether detail panel is open */
     public detailPanelOpen = false;
@@ -336,6 +363,55 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
 
         // Outgoing relationships could be computed from fields with RelatedEntityID
         this.outgoingRelationships = [];
+
+        // Build grouped outgoing relationships (fields on THIS entity that reference OTHER entities)
+        const outgoingMap = new Map<string, GroupedOutgoingRelationship>();
+        for (const field of this.entity.Fields) {
+            if (field.RelatedEntityID) {
+                const existing = outgoingMap.get(field.RelatedEntityID);
+                if (existing) {
+                    existing.fields.push(field);
+                } else {
+                    const relatedEntity = this.allEntities.find(e => e.ID === field.RelatedEntityID);
+                    outgoingMap.set(field.RelatedEntityID, {
+                        entityId: field.RelatedEntityID,
+                        entityName: relatedEntity?.Name || field.RelatedEntity || 'Unknown',
+                        fields: [field]
+                    });
+                }
+            }
+        }
+        this.groupedOutgoingRelationships = Array.from(outgoingMap.values())
+            .sort((a, b) => a.entityName.localeCompare(b.entityName));
+
+        // Build grouped incoming relationships (fields on OTHER entities that reference THIS entity)
+        // Group by entity name, then deduplicate fields by fieldName within each group
+        const incomingMap = new Map<string, GroupedIncomingRelationship>();
+        for (const rel of this.entity.RelatedEntities) {
+            const existing = incomingMap.get(rel.Entity);
+            if (existing) {
+                // Only add if this field name isn't already in the list
+                const fieldExists = existing.fields.some(f => f.fieldName === rel.RelatedEntityJoinField);
+                if (!fieldExists) {
+                    existing.fields.push({
+                        fieldName: rel.RelatedEntityJoinField,
+                        type: rel.Type,
+                        bundleInAPI: rel.BundleInAPI
+                    });
+                }
+            } else {
+                incomingMap.set(rel.Entity, {
+                    entityName: rel.Entity,
+                    fields: [{
+                        fieldName: rel.RelatedEntityJoinField,
+                        type: rel.Type,
+                        bundleInAPI: rel.BundleInAPI
+                    }]
+                });
+            }
+        }
+        this.groupedIncomingRelationships = Array.from(incomingMap.values())
+            .sort((a, b) => a.entityName.localeCompare(b.entityName));
     }
 
     private updateNavBadges(): void {

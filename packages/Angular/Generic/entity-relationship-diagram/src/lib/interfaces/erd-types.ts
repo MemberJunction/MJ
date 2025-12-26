@@ -451,6 +451,13 @@ export interface ERDConfig {
   animationDuration?: number;
   /** Whether to auto-fit diagram to container on initial load. Default: true */
   fitOnLoad?: boolean;
+  /**
+   * Skip the D3 force simulation animation and render immediately.
+   * When true, the simulation runs to completion synchronously and nodes
+   * are positioned immediately without animation.
+   * Default: false
+   */
+  skipAnimation?: boolean;
 
   // ============================================================================
   // Empty State

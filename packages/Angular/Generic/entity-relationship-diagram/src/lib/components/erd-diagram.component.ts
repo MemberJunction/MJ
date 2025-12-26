@@ -90,6 +90,7 @@ const DEFAULT_CONFIG: Required<ERDConfig> = {
   enableMultiSelect: false,
   animationDuration: 750,
   fitOnLoad: true,
+  skipAnimation: false,
   emptyStateMessage: 'No entities to display',
   emptyStateIcon: 'fa-solid fa-diagram-project',
   layoutAlgorithm: 'force',
@@ -1426,21 +1427,44 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       .append('title')
       .text((d) => `${d.name}\nPrimary Keys: ${d.primaryKeys.length}\nForeign Keys: ${d.foreignKeys.length}`);
 
-    // Simulation tick
-    this.simulation.on('tick', () => {
-      this.updatePositions(link, nodeGroup);
-    });
+    // If skipAnimation is enabled, run simulation to completion synchronously
+    if (cfg.skipAnimation) {
+      // Run simulation to completion without animation
+      this.simulation.stop();
 
-    // Layout complete detection
-    this.simulation.on('end', () => {
-      if (!this.layoutCompleted) {
-        this.layoutCompleted = true;
-        this.layoutComplete.emit();
-        if (cfg.fitOnLoad && this.visibleNodes.length > 1) {
-          setTimeout(() => this.zoomToFit(), 100);
-        }
+      // Run enough ticks to settle the layout (typically 300 is enough)
+      const tickCount = 300;
+      for (let i = 0; i < tickCount; i++) {
+        this.simulation.tick();
       }
-    });
+
+      // Update positions once at the end
+      this.updatePositions(link, nodeGroup);
+      this.layoutCompleted = true;
+      this.layoutComplete.emit();
+
+      // Fit to view after positions are set
+      if (cfg.fitOnLoad && this.visibleNodes.length > 1) {
+        setTimeout(() => this.zoomToFit(), 50);
+      }
+    } else {
+      // Normal animated mode
+      // Simulation tick
+      this.simulation.on('tick', () => {
+        this.updatePositions(link, nodeGroup);
+      });
+
+      // Layout complete detection
+      this.simulation.on('end', () => {
+        if (!this.layoutCompleted) {
+          this.layoutCompleted = true;
+          this.layoutComplete.emit();
+          if (cfg.fitOnLoad && this.visibleNodes.length > 1) {
+            setTimeout(() => this.zoomToFit(), 100);
+          }
+        }
+      });
+    }
 
     // Apply initial selection highlighting
     this.updateSelectionHighlighting();

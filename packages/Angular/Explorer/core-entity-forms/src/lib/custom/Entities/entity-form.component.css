@@ -831,6 +831,104 @@
     color: var(--success-color);
 }
 
+/* Grouped relationship styles */
+.relationship-group-title .group-count {
+    margin-left: auto;
+    background: var(--accent-light);
+    color: var(--accent-color);
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.relationship-items.grouped {
+    padding: 8px 0;
+}
+
+.relationship-item-grouped {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.relationship-item-grouped:last-child {
+    border-bottom: none;
+}
+
+.rel-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.rel-icon.outgoing {
+    background: var(--info-light, #e3f2fd);
+    color: var(--info-color, #1976d2);
+}
+
+.rel-icon.incoming {
+    background: var(--success-light, #e8f5e9);
+    color: var(--success-color, #388e3c);
+}
+
+.rel-entity-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.rel-fields-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-left: 44px; /* Align with entity name (icon width + gap) */
+}
+
+.field-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.field-chip i {
+    font-size: 10px;
+}
+
+.field-chip.outgoing {
+    background: var(--info-light, #e3f2fd);
+    color: var(--info-color, #1976d2);
+    border: 1px solid var(--info-border, #90caf9);
+}
+
+.field-chip.outgoing:hover {
+    background: var(--info-color, #1976d2);
+    color: white;
+}
+
+.field-chip.incoming {
+    background: var(--success-light, #e8f5e9);
+    color: var(--success-color, #388e3c);
+    border: 1px solid var(--success-border, #a5d6a7);
+}
+
+.field-chip.incoming:hover {
+    background: var(--success-color, #388e3c);
+    color: white;
+}
+
+.field-chip .bundle-icon {
+    font-size: 9px;
+    margin-left: 2px;
+    opacity: 0.8;
+}
+
 /* ============================================================
    PERMISSIONS SECTION
    ============================================================ */

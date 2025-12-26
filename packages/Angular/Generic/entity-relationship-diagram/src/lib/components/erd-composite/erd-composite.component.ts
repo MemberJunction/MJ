@@ -4,7 +4,7 @@ import { debounceTime } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
 import { MJEntityERDComponent } from '../mj-entity-erd.component';
 import { EntitySelectedEvent, OpenEntityRecordEvent } from '../mj-entity-erd.component';
-import { ERDState } from '../../interfaces/erd-types';
+import { ERDConfig, ERDState } from '../../interfaces/erd-types';
 import { EntityFilter } from '../entity-filter-panel/entity-filter-panel.component';
 
 /**
@@ -97,6 +97,9 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   public filterPanelVisible = true;
   public fieldsSectionExpanded = true;
   public relationshipsSectionExpanded = true;
+
+  /** ERD configuration - skip animation for faster rendering */
+  public erdConfig: ERDConfig = { skipAnimation: true };
 
   // Entity state
   public selectedEntity: EntityInfo | null = null;
