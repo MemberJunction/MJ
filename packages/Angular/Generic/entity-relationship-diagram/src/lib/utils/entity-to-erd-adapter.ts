@@ -191,7 +191,8 @@ export function buildERDDataFromEntities(
     // Incoming relationships (other entities reference this one)
     if (includeIncoming) {
       for (const rel of entity.RelatedEntities) {
-        const relEntity = allEntities.find(e => e.Name === rel.Entity);
+        // rel.RelatedEntity is the entity that has the FK pointing to this entity
+        const relEntity = allEntities.find(e => e.Name === rel.RelatedEntity);
         if (relEntity) {
           addNode(relEntity);
 
@@ -219,6 +220,8 @@ export function buildERDDataFromEntities(
     let currentDepthEntities = [...nodes]
       .map(n => getOriginalEntityFromERDNode(n))
       .filter((e): e is EntityInfo => e !== null && !processedIds.has(e.ID));
+
+    console.log(`[buildERDDataFromEntities] depth=${depth}, starting expansion. Initial nodes=${nodes.length}, currentDepthEntities=${currentDepthEntities.length}`);
 
     for (let d = 1; d < depth; d++) {
       const nextDepthEntities: EntityInfo[] = [];
@@ -253,7 +256,8 @@ export function buildERDDataFromEntities(
         // Incoming
         if (includeIncoming) {
           for (const rel of entity.RelatedEntities) {
-            const relEntity = allEntities.find(e => e.Name === rel.Entity);
+            // rel.RelatedEntity is the entity that has the FK pointing to this entity
+            const relEntity = allEntities.find(e => e.Name === rel.RelatedEntity);
             if (relEntity && !addedNodeIds.has(relEntity.ID)) {
               addNode(relEntity);
               nextDepthEntities.push(relEntity);
@@ -276,9 +280,11 @@ export function buildERDDataFromEntities(
         }
       }
 
+      console.log(`[buildERDDataFromEntities] d=${d}, processed entities, nextDepthEntities=${nextDepthEntities.length}, total nodes now=${nodes.length}`);
       currentDepthEntities = nextDepthEntities;
     }
   }
 
+  console.log(`[buildERDDataFromEntities] FINAL: nodes=${nodes.length}, links=${links.length}`);
   return { nodes, links };
 }

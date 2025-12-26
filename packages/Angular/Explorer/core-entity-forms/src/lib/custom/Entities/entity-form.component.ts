@@ -417,6 +417,12 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     private buildRelationships(): void {
         if (!this.entity) return;
 
+        // DEBUG: Log relationship data
+        console.log(`[buildRelationships] Entity: ${this.entity.Name}`);
+        console.log(`[buildRelationships] Fields with RelatedEntityID:`, this.entity.Fields.filter(f => f.RelatedEntityID).map(f => ({ name: f.Name, relatedEntityID: f.RelatedEntityID, relatedEntity: f.RelatedEntity })));
+        console.log(`[buildRelationships] RelatedEntities (first 5):`, this.entity.RelatedEntities.slice(0, 5).map(r => ({ entity: r.Entity, relatedEntity: r.RelatedEntity, joinField: r.RelatedEntityJoinField })));
+        console.log(`[buildRelationships] Unique Entity values:`, [...new Set(this.entity.RelatedEntities.map(r => r.Entity))]);
+
         // Incoming: Relationships defined on this entity (other entities that reference this one)
         this.incomingRelationships = this.entity.RelatedEntities;
 
@@ -444,10 +450,11 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
             .sort((a, b) => a.entityName.localeCompare(b.entityName));
 
         // Build grouped incoming relationships (fields on OTHER entities that reference THIS entity)
-        // Group by entity name, then deduplicate fields by fieldName within each group
+        // Group by RelatedEntity name (the entity that references this one), deduplicate fields
         const incomingMap = new Map<string, GroupedIncomingRelationship>();
         for (const rel of this.entity.RelatedEntities) {
-            const existing = incomingMap.get(rel.Entity);
+            // rel.RelatedEntity is the entity that has the FK pointing to THIS entity
+            const existing = incomingMap.get(rel.RelatedEntity);
             if (existing) {
                 // Only add if this field name isn't already in the list
                 const fieldExists = existing.fields.some(f => f.fieldName === rel.RelatedEntityJoinField);
@@ -459,8 +466,8 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
                     });
                 }
             } else {
-                incomingMap.set(rel.Entity, {
-                    entityName: rel.Entity,
+                incomingMap.set(rel.RelatedEntity, {
+                    entityName: rel.RelatedEntity,
                     fields: [{
                         fieldName: rel.RelatedEntityJoinField,
                         type: rel.Type,
