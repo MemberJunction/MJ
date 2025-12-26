@@ -73,11 +73,11 @@
             <!-- ============================================================ -->
             <section class="section overview-section" *ngIf="activeSection === 'overview'">
                 <div class="section-content">
-                    <!-- Stats Cards Row -->
+                    <!-- Stats Cards Row - Clickable to navigate to sections -->
                     <div class="stats-cards">
-                        <div class="stat-card">
+                        <div class="stat-card clickable" (click)="setActiveSection('fields')" title="View all fields">
                             <div class="stat-card-header">
-                                <i class="fa-solid fa-table-columns"></i>
+                                <i class="fa-solid fa-table-cells"></i>
                                 <span>Fields</span>
                             </div>
                             <div class="stat-card-body">
@@ -88,24 +88,31 @@
                                     <span *ngIf="stats.encryptedFieldCount">{{ stats.encryptedFieldCount }} Encrypted</span>
                                 </div>
                             </div>
+                            <div class="stat-card-action">
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </div>
                         </div>
 
-                        <div class="stat-card">
+                        <div class="stat-card clickable" (click)="setActiveSection('relationships')" title="View relationships">
                             <div class="stat-card-header">
-                                <i class="fa-solid fa-link"></i>
+                                <i class="fa-solid fa-diagram-project"></i>
                                 <span>Relationships</span>
                             </div>
                             <div class="stat-card-body">
                                 <div class="stat-main">{{ stats.relationshipCount }}</div>
                                 <div class="stat-details">
-                                    <span>{{ incomingRelationships.length }} Incoming</span>
+                                    <span>{{ groupedOutgoingRelationships.length }} Out</span>
+                                    <span>{{ groupedIncomingRelationships.length }} In</span>
                                 </div>
+                            </div>
+                            <div class="stat-card-action">
+                                <i class="fa-solid fa-arrow-right"></i>
                             </div>
                         </div>
 
-                        <div class="stat-card">
+                        <div class="stat-card clickable" (click)="setActiveSection('permissions')" title="View security settings">
                             <div class="stat-card-header">
-                                <i class="fa-solid fa-shield-halved"></i>
+                                <i class="fa-solid fa-lock"></i>
                                 <span>Security</span>
                             </div>
                             <div class="stat-card-body">
@@ -113,6 +120,9 @@
                                 <div class="stat-details">
                                     <span>Roles configured</span>
                                 </div>
+                            </div>
+                            <div class="stat-card-action">
+                                <i class="fa-solid fa-arrow-right"></i>
                             </div>
                         </div>
 
@@ -301,20 +311,45 @@
                 </div>
 
                 <div class="section-content">
-                    <!-- Graph View using the mj-entity-erd wrapper -->
+                    <!-- Graph View using the focused ERD component with details panel -->
                     <div class="relationships-graph" *ngIf="relationshipViewMode === 'graph'">
-                        <mj-entity-erd
-                            [entities]="entity ? [entity] : []"
-                            [allEntities]="allEntities"
-                            [selectedEntityId]="entity.ID || null"
-                            [depth]="1"
-                            [includeIncoming]="true"
-                            [includeOutgoing]="true"
-                            [showHeader]="false"
-                            [config]="{ skipAnimation: true }"
-                            (entitySelected)="onERDEntitySelected($event)"
-                            (openRecord)="onERDOpenRecord($event)">
-                        </mj-entity-erd>
+                        <kendo-splitter orientation="horizontal" class="erd-splitter">
+                            <!-- ERD Diagram -->
+                            <kendo-splitter-pane [resizable]="true" [scrollable]="false">
+                                <mj-entity-erd
+                                    [entities]="entity ? [entity] : []"
+                                    [allEntities]="allEntities"
+                                    [selectedEntityId]="erdSelectedEntity?.ID || null"
+                                    [depth]="1"
+                                    [includeIncoming]="true"
+                                    [includeOutgoing]="true"
+                                    [showHeader]="false"
+                                    [config]="{ skipAnimation: true }"
+                                    (entitySelected)="onERDEntitySelected($event)"
+                                    (entityDeselected)="onERDEntityDeselected()"
+                                    (openRecord)="onERDOpenRecord($event)">
+                                </mj-entity-erd>
+                            </kendo-splitter-pane>
+
+                            <!-- Entity Details Panel (shown when entity selected) -->
+                            <kendo-splitter-pane
+                                [size]="erdSelectedEntity ? '320px' : '0px'"
+                                [collapsible]="false"
+                                [resizable]="!!erdSelectedEntity"
+                                [scrollable]="false"
+                                [hidden]="!erdSelectedEntity">
+                                <mj-entity-details
+                                    [selectedEntity]="erdSelectedEntity"
+                                    [allEntityFields]="allEntityFields"
+                                    [fieldsSectionExpanded]="true"
+                                    [relationshipsSectionExpanded]="true"
+                                    (openEntity)="onERDOpenRecord({EntityName: 'Entities', RecordID: $event.ID})"
+                                    (closePanel)="onERDEntityDeselected()"
+                                    (entitySelected)="onERDEntitySelected({entity: $event, node: null})"
+                                    (openRecord)="onERDOpenRecord($event)">
+                                </mj-entity-details>
+                            </kendo-splitter-pane>
+                        </kendo-splitter>
                     </div>
 
                     <!-- List View -->
@@ -409,7 +444,7 @@
                             </thead>
                             <tbody>
                                 <tr *ngFor="let perm of entity.Permissions">
-                                    <td class="role-name">{{ perm.Role }}</td>
+                                    <td class="role-name">{{ getRoleName(perm) }}</td>
                                     <td class="center">
                                         <i class="permission-icon" [ngClass]="perm.CanCreate ? 'fa-solid fa-check granted' : 'fa-solid fa-xmark denied'"></i>
                                     </td>

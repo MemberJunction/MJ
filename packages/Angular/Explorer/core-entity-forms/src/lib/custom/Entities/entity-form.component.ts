@@ -10,9 +10,12 @@ import {
     EntityInfo,
     EntityFieldInfo,
     EntityRelationshipInfo,
-    Metadata
+    EntityPermissionInfo,
+    Metadata,
+    CompositeKey
 } from '@memberjunction/core';
 import { EntityEntity } from '@memberjunction/core-entities';
+import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form.component';
@@ -102,6 +105,9 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     /** All entities for relationship lookups */
     public allEntities: EntityInfo[] = [];
 
+    /** All entity fields (flattened from all entities) for ERD details panel */
+    public allEntityFields: EntityFieldInfo[] = [];
+
     /** Loading state */
     public isExplorerLoading = true;
 
@@ -111,16 +117,22 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     /** Current active section in the explorer */
     public activeSection: ExplorerSection = 'overview';
 
-    /** Navigation items for the rail */
+    /** Navigation items for the rail - world-class minimalist icons */
     public navItems: NavItem[] = [
-        { id: 'overview', icon: 'fa-solid fa-diagram-project', label: 'Overview' },
-        { id: 'fields', icon: 'fa-solid fa-table-columns', label: 'Fields' },
-        { id: 'relationships', icon: 'fa-solid fa-link', label: 'Relationships' },
-        { id: 'permissions', icon: 'fa-solid fa-shield-halved', label: 'Permissions' },
-        { id: 'lineage', icon: 'fa-solid fa-sitemap', label: 'Lineage' },
+        { id: 'overview', icon: 'fa-solid fa-house', label: 'Overview' },
+        { id: 'fields', icon: 'fa-solid fa-table-cells', label: 'Fields' },
+        { id: 'relationships', icon: 'fa-solid fa-diagram-project', label: 'Relations' },
+        { id: 'permissions', icon: 'fa-solid fa-lock', label: 'Security' },
+        { id: 'lineage', icon: 'fa-solid fa-code-branch', label: 'Lineage' },
         { id: 'history', icon: 'fa-solid fa-clock-rotate-left', label: 'History' },
-        { id: 'settings', icon: 'fa-solid fa-gear', label: 'Settings' }
+        { id: 'settings', icon: 'fa-solid fa-sliders', label: 'Settings' }
     ];
+
+    /** ERD filter panel visibility state */
+    public erdFilterPanelVisible = false;
+
+    /** Selected entity in ERD for details panel */
+    public erdSelectedEntity: EntityInfo | null = null;
 
     /** Computed statistics for the entity */
     public stats: EntityStats = {
@@ -198,6 +210,9 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
 
         try {
             this.allEntities = this._metadata.Entities;
+
+            // Flatten all entity fields for ERD details panel
+            this.allEntityFields = this.allEntities.flatMap(e => e.Fields);
 
             // Find the EntityInfo by the record's ID
             if (this.record?.ID) {
@@ -480,21 +495,44 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
 
     /**
      * Handle entity selection from the ERD diagram.
-     * Currently just logs the selection - could be used for highlighting.
+     * Updates the selected entity for the details panel.
      */
-    public onERDEntitySelected(_event: { entity: EntityInfo; node: unknown }): void {
-        // Could be used to highlight the entity or show additional info
+    public onERDEntitySelected(event: { entity: EntityInfo; node: unknown }): void {
+        this.erdSelectedEntity = event.entity;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Handle entity deselection from the ERD diagram.
+     */
+    public onERDEntityDeselected(): void {
+        this.erdSelectedEntity = null;
         this.cdr.markForCheck();
     }
 
     /**
      * Handle open record from the ERD diagram (double-click).
-     * Navigates to the selected entity's form.
+     * Navigates to the selected entity's form using SharedService.
      */
-    public onERDOpenRecord(_event: { EntityName: string; RecordID: string }): void {
-        // Use shared service to open the entity record
-        this.sharedService.InvokeManualResize();
-        // Navigation would typically be handled by the container/router
+    public onERDOpenRecord(event: { EntityName: string; RecordID: string }): void {
+        const pkey = new CompositeKey([{ FieldName: 'ID', Value: event.RecordID }]);
+        this.sharedService.OpenEntityRecord(event.EntityName, pkey);
+    }
+
+    /**
+     * Handle ERD state changes for persistence.
+     */
+    public onERDStateChange(state: ERDCompositeState): void {
+        this.erdFilterPanelVisible = state.filterPanelVisible;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Toggle the ERD filter panel visibility.
+     */
+    public toggleERDFilterPanel(): void {
+        this.erdFilterPanelVisible = !this.erdFilterPanelVisible;
+        this.cdr.markForCheck();
     }
 
     public onFieldSearch(term: string): void {
@@ -587,8 +625,18 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     public navigateToRelatedEntity(field: EntityFieldInfo): void {
         const related = this.getRelatedEntity(field);
         if (related) {
-            // Use the shared service to open the entity record
-            this.sharedService.InvokeManualResize();
+            const pkey = new CompositeKey([{ FieldName: 'ID', Value: related.ID }]);
+            this.sharedService.OpenEntityRecord('Entities', pkey);
+        }
+    }
+
+    /**
+     * Open an entity record from the field detail panel.
+     */
+    public openRelatedEntityFromField(entityId: string): void {
+        if (entityId) {
+            const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityId }]);
+            this.sharedService.OpenEntityRecord('Entities', pkey);
         }
     }
 
@@ -600,6 +648,18 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
             type += `(${field.Precision},${field.Scale})`;
         }
         return type;
+    }
+
+    /**
+     * Get the role name for a permission entry.
+     * The EntityPermissionInfo.Role property is not populated because the database view
+     * returns 'RoleName' but the class expects 'Role'. This helper looks up the role
+     * from the Metadata.Roles collection using the RoleID.
+     */
+    public getRoleName(perm: EntityPermissionInfo): string {
+        if (!perm.RoleID) return 'Unknown';
+        const role = this._metadata.Roles.find(r => r.ID === perm.RoleID);
+        return role?.Name || 'Unknown';
     }
 }
 
