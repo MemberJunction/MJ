@@ -1,0 +1,70 @@
+<div class="erd-composite">
+  <kendo-splitter
+      class="main-splitter"
+      orientation="horizontal"
+      (layoutChange)="onSplitterLayoutChange($event)">
+
+      <!-- Filter Panel (Left) -->
+      <kendo-splitter-pane
+        [size]="filterPanelVisible ? '320px' : '0px'"
+        [collapsible]="false"
+        [resizable]="filterPanelVisible"
+        [scrollable]="false"
+        [hidden]="!filterPanelVisible">
+        <mj-entity-filter-panel
+          [entities]="entities"
+          [filteredEntities]="filteredEntities"
+          [filters]="filters"
+          (filtersChange)="onFiltersChange($event)"
+          (filterChange)="onFilterChange()"
+          (resetFilters)="onResetFilters()"
+          (closePanel)="onToggleFilterPanel()">
+        </mj-entity-filter-panel>
+      </kendo-splitter-pane>
+
+      <!-- ERD Diagram (Center) -->
+      <kendo-splitter-pane
+        [resizable]="true"
+        [scrollable]="false">
+        <div class="erd-pane-container">
+          <mj-entity-erd
+            [entities]="filteredEntities"
+            [allEntities]="entities"
+            [selectedEntityId]="selectedEntity?.ID || null"
+            [isRefreshing]="isRefreshingERD"
+            [depth]="depth"
+            [includeIncoming]="true"
+            [includeOutgoing]="true"
+            [showHeader]="showHeader"
+            [config]="erdConfig"
+            headerTitle="Entity Relationship Diagram"
+            (entitySelected)="onERDEntitySelected($event)"
+            (entityDeselected)="onEntityDeselected()"
+            (openRecord)="onERDOpenRecord($event)"
+            (stateChange)="onERDStateChange($event)">
+          </mj-entity-erd>
+        </div>
+      </kendo-splitter-pane>
+
+      <!-- Entity Details Panel (Right) -->
+      <kendo-splitter-pane
+        [size]="selectedEntity ? '320px' : '0px'"
+        [collapsible]="false"
+        [resizable]="!!selectedEntity"
+        [scrollable]="false"
+        [hidden]="!selectedEntity">
+        <mj-entity-details
+          [selectedEntity]="selectedEntity"
+          [allEntityFields]="allEntityFields"
+          [fieldsSectionExpanded]="fieldsSectionExpanded"
+          [relationshipsSectionExpanded]="relationshipsSectionExpanded"
+          (openEntity)="onEntityOpened($event)"
+          (closePanel)="onEntityDeselected()"
+          (fieldsSectionToggle)="onFieldsSectionToggle()"
+          (relationshipsSectionToggle)="onRelationshipsSectionToggle()"
+          (entitySelected)="onEntitySelected($event)"
+          (openRecord)="onOpenRecord($event)">
+        </mj-entity-details>
+      </kendo-splitter-pane>
+  </kendo-splitter>
+</div>

@@ -17,7 +17,7 @@ export class AIPromptModelFormComponent extends BaseFormComponent {
             { sectionKey: 'promptModelMapping', sectionName: 'Prompt & Model Mapping', isExpanded: true },
             { sectionKey: 'vendorConfiguration', sectionName: 'Vendor & Configuration', isExpanded: true },
             { sectionKey: 'executionParallelSettings', sectionName: 'Execution & Parallel Settings', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'effortCredentialSettings', sectionName: 'Effort & Credential Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

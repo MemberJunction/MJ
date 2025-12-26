@@ -34,7 +34,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:19:58.759Z",
             "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -49,7 +69,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:19:58.759Z",
             "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -64,7 +104,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:19:58.759Z",
             "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
         },
         {
           "fields": {
@@ -79,7 +139,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:02.902Z",
             "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -94,7 +174,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:02.914Z",
             "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -109,7 +209,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:02.926Z",
             "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         }
       ]
     },
@@ -119,7 +239,21 @@
     "sync": {
       "lastModified": "2025-12-17T22:36:21.837Z",
       "checksum": "e44bd2c64830cfb748869674267c9d27ce5e80f889832d42fd137c732c4f94e7"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
   },
   {
     "fields": {
@@ -156,7 +290,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:19:58.762Z",
             "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -171,7 +325,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:19:58.763Z",
             "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -186,7 +360,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:19:58.763Z",
             "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
         },
         {
           "fields": {
@@ -201,7 +395,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:02.935Z",
             "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -216,7 +430,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.093Z",
             "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -231,7 +465,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.104Z",
             "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         }
       ]
     },
@@ -239,9 +493,23 @@
       "ID": "FA000A4D-09F5-4557-858F-AC01E19D8238"
     },
     "sync": {
-      "lastModified": "2025-12-17T22:36:15.545Z",
+      "lastModified": "2025-12-25T16:13:52.517Z",
       "checksum": "4c629a0d84f45bae44391dd5a85d42bb68196203b8ef7f48c6426a11b5274287"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
   },
   {
     "fields": {
@@ -278,7 +546,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.077Z",
             "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -293,7 +581,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.078Z",
             "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -308,7 +616,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.078Z",
             "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
         },
         {
           "fields": {
@@ -323,7 +651,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.113Z",
             "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -338,7 +686,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.123Z",
             "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -353,7 +721,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.131Z",
             "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         }
       ]
     },
@@ -361,9 +749,23 @@
       "ID": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
     },
     "sync": {
-      "lastModified": "2025-12-16T03:37:35.062Z",
+      "lastModified": "2025-12-25T16:13:52.512Z",
       "checksum": "83951cf4127d501bf9e9f33c13c47801d55cc85487e6ce5c4c711a0b0be904d2"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
   },
   {
     "fields": {
@@ -400,7 +802,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.080Z",
             "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -415,7 +837,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.082Z",
             "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -430,7 +872,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.257Z",
             "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
         },
         {
           "fields": {
@@ -445,7 +907,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.275Z",
             "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -460,7 +942,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.285Z",
             "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -475,7 +977,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.296Z",
             "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         }
       ]
     },
@@ -483,9 +1005,23 @@
       "ID": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
     },
     "sync": {
-      "lastModified": "2025-12-16T18:15:09.386Z",
+      "lastModified": "2025-12-25T16:14:16.171Z",
       "checksum": "f0c32ff05e7032292690551d6a90593ef861bae39c5244a0c4c1f55c718be201"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
   },
   {
     "fields": {
@@ -522,7 +1058,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.260Z",
             "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -537,7 +1093,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.260Z",
             "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -552,7 +1128,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.261Z",
             "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
         },
         {
           "fields": {
@@ -567,7 +1163,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.306Z",
             "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -582,7 +1198,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.315Z",
             "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -597,7 +1233,27 @@
           "sync": {
             "lastModified": "2025-12-13T02:20:03.324Z",
             "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         }
       ]
     },
@@ -605,9 +1261,23 @@
       "ID": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
     },
     "sync": {
-      "lastModified": "2025-12-17T22:36:15.546Z",
+      "lastModified": "2025-12-25T16:13:52.501Z",
       "checksum": "d3d637cfd55a4e93102cb751e671c8f7852b54acd6eb16020ff3e7b7fc93fc7c"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
   },
   {
     "fields": {
@@ -644,7 +1314,27 @@
           "sync": {
             "lastModified": "2025-12-15T01:54:39.792Z",
             "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -659,7 +1349,27 @@
           "sync": {
             "lastModified": "2025-12-15T01:54:39.803Z",
             "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -674,7 +1384,27 @@
           "sync": {
             "lastModified": "2025-12-15T01:54:39.814Z",
             "checksum": "b8e416981a5c79b71c1af2bea70d02c9597f583d720444a11ce596d9d3c26045"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -689,7 +1419,27 @@
           "sync": {
             "lastModified": "2025-12-15T01:54:39.828Z",
             "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -704,7 +1454,27 @@
           "sync": {
             "lastModified": "2025-12-15T01:54:39.839Z",
             "checksum": "c2acfe66d1a6e3414b1734691aa9aac06274300212ab0218fad0dfd145360f15"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Llama 3.3 70B Versatile",
+              "resolved": "853E890E-F2E3-EF11-B015-286B35C04427"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         },
         {
           "fields": {
@@ -719,7 +1489,27 @@
           "sync": {
             "lastModified": "2025-12-15T01:54:39.849Z",
             "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
         }
       ]
     },
@@ -729,6 +1519,20 @@
     "sync": {
       "lastModified": "2025-12-17T23:34:52.081Z",
       "checksum": "571be0baabaf6b1cfecb0aeeaf707947f7c3c96e88605692740ef0f2c92915d0"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
   }
 ]

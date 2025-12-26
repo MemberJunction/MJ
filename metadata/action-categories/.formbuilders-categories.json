@@ -12,6 +12,14 @@
     "sync": {
       "lastModified": "2025-10-29T15:24:47.992Z",
       "checksum": "7df08ac02b95a635454bfdb7e1361e1e9f87e0911e4166fbaad3b469841ef6cd"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.ParentID",
+        "expression": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+        "resolved": "0DC7433E-F36B-1410-8DB6-00021F8B792E"
+      }
+    ]
   }
 ]

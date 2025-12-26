@@ -596,6 +596,41 @@ export class AIPromptParams {
    * ```
    */
   maxErrorLength?: number;
+
+  /**
+   * Optional credential ID for per-request authentication override.
+   *
+   * Takes highest priority in the credential resolution hierarchy:
+   * 1. **This parameter** (per-request override) - highest priority
+   * 2. AIPromptModel.CredentialID (prompt-model specific)
+   * 3. AIModelVendor.CredentialID (model-vendor specific)
+   * 4. AIVendor.CredentialID (vendor default)
+   * 5. Legacy: apiKeys[] parameter
+   * 6. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
+   *
+   * **Important**: When any credential ID is set (priorities 1-4), the system uses
+   * the Credentials system exclusively and ignores legacy authentication methods
+   * (priorities 5-6). This ensures consistent, audited credential usage.
+   *
+   * Use this for:
+   * - Multi-tenant scenarios where different tenants have different API keys
+   * - Testing with specific credentials without modifying database configuration
+   * - Runtime credential rotation or override
+   *
+   * @example
+   * ```typescript
+   * // Override credential at runtime for a specific tenant
+   * const params = new AIPromptParams();
+   * params.prompt = myPrompt;
+   * params.credentialId = tenantCredentialId;  // Highest priority
+   * params.contextUser = currentUser;
+   *
+   * const result = await AIPromptRunner.RunPrompt(params);
+   * ```
+   *
+   * @see {@link https://docs.memberjunction.org/ai-authentication AI Authentication Guide}
+   */
+  credentialId?: string;
 }
 
 

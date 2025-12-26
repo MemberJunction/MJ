@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "username": {
+      "type": "string",
+      "title": "Username",
+      "description": "The username or account identifier",
+      "isSecret": false,
+      "order": 0
+    },
+    "password": {
+      "type": "string",
+      "title": "Password",
+      "description": "The password or secret",
+      "isSecret": true,
+      "order": 1
+    }
+  },
+  "required": ["username", "password"]
+}

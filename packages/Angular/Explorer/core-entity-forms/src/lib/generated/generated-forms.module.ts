@@ -173,8 +173,14 @@ import { ConversationArtifactVersionFormComponent, LoadConversationArtifactVersi
 import { ConversationArtifactFormComponent, LoadConversationArtifactFormComponent } from "./Entities/ConversationArtifact/conversationartifact.form.component";
 import { ConversationDetailArtifactFormComponent, LoadConversationDetailArtifactFormComponent } from "./Entities/ConversationDetailArtifact/conversationdetailartifact.form.component";
 import { ConversationDetailRatingFormComponent, LoadConversationDetailRatingFormComponent } from "./Entities/ConversationDetailRating/conversationdetailrating.form.component";
+import { CredentialCategoryFormComponent, LoadCredentialCategoryFormComponent } from "./Entities/CredentialCategory/credentialcategory.form.component";
+import { CredentialTypeFormComponent, LoadCredentialTypeFormComponent } from "./Entities/CredentialType/credentialtype.form.component";
+import { CredentialFormComponent, LoadCredentialFormComponent } from "./Entities/Credential/credential.form.component";
 import { DashboardUserPreferenceFormComponent, LoadDashboardUserPreferenceFormComponent } from "./Entities/DashboardUserPreference/dashboarduserpreference.form.component";
 import { DashboardUserStateFormComponent, LoadDashboardUserStateFormComponent } from "./Entities/DashboardUserState/dashboarduserstate.form.component";
+import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent } from "./Entities/EncryptionAlgorithm/encryptionalgorithm.form.component";
+import { EncryptionKeySourceFormComponent, LoadEncryptionKeySourceFormComponent } from "./Entities/EncryptionKeySource/encryptionkeysource.form.component";
+import { EncryptionKeyFormComponent, LoadEncryptionKeyFormComponent } from "./Entities/EncryptionKey/encryptionkey.form.component";
 import { EnvironmentFormComponent, LoadEnvironmentFormComponent } from "./Entities/Environment/environment.form.component";
 import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
 import { PublicLinkFormComponent, LoadPublicLinkFormComponent } from "./Entities/PublicLink/publiclink.form.component";
@@ -581,19 +587,19 @@ declarations: [
     ConversationArtifactFormComponent,
     ConversationDetailArtifactFormComponent,
     ConversationDetailRatingFormComponent,
+    CredentialCategoryFormComponent,
+    CredentialTypeFormComponent,
+    CredentialFormComponent,
     DashboardUserPreferenceFormComponent,
     DashboardUserStateFormComponent,
+    EncryptionAlgorithmFormComponent,
+    EncryptionKeySourceFormComponent,
+    EncryptionKeyFormComponent,
     EnvironmentFormComponent,
     ProjectFormComponent,
     PublicLinkFormComponent,
     QueryParameterFormComponent,
-    RecordLinkFormComponent,
-    ReportUserStateFormComponent,
-    ReportVersionFormComponent,
-    ScheduledJobRunFormComponent,
-    ScheduledJobTypeFormComponent,
-    ScheduledJobFormComponent,
-    TaskDependencyFormComponent],
+    RecordLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -619,6 +625,12 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    ReportUserStateFormComponent,
+    ReportVersionFormComponent,
+    ScheduledJobRunFormComponent,
+    ScheduledJobTypeFormComponent,
+    ScheduledJobFormComponent,
+    TaskDependencyFormComponent,
     TaskTypeFormComponent,
     TaskFormComponent,
     TestRubricFormComponent,
@@ -632,13 +644,7 @@ declarations: [
     UserSettingFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
-    OutputTriggerTypeFormComponent,
-    QueryFormComponent,
-    QueryCategoryFormComponent,
-    QueryEntityFormComponent,
-    QueryFieldFormComponent,
-    QueryPermissionFormComponent,
-    QueueTaskFormComponent],
+    OutputTriggerTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -664,6 +670,12 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    QueryFormComponent,
+    QueryCategoryFormComponent,
+    QueryEntityFormComponent,
+    QueryFieldFormComponent,
+    QueryPermissionFormComponent,
+    QueueTaskFormComponent,
     QueueTypeFormComponent,
     QueueFormComponent,
     RecommendationItemFormComponent,
@@ -677,13 +689,7 @@ declarations: [
     ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
     ReportFormComponent,
-    ResourceLinkFormComponent,
-    ResourcePermissionFormComponent,
-    ResourceTypeFormComponent,
-    RoleFormComponent,
-    RowLevelSecurityFilterFormComponent,
-    ScheduledActionParamFormComponent,
-    ScheduledActionFormComponent],
+    ResourceLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -709,6 +715,12 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    ResourcePermissionFormComponent,
+    ResourceTypeFormComponent,
+    RoleFormComponent,
+    RowLevelSecurityFilterFormComponent,
+    ScheduledActionParamFormComponent,
+    ScheduledActionFormComponent,
     SchemaInfoFormComponent,
     SkillFormComponent,
     TaggedItemFormComponent,
@@ -722,13 +734,7 @@ declarations: [
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
     UserNotificationFormComponent,
-    UserRecordLogFormComponent,
-    UserRoleFormComponent,
-    UserViewCategoryFormComponent,
-    UserViewRunDetailFormComponent,
-    UserViewRunFormComponent,
-    UserViewFormComponent,
-    UserFormComponent],
+    UserRecordLogFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -754,6 +760,12 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    UserRoleFormComponent,
+    UserViewCategoryFormComponent,
+    UserViewRunDetailFormComponent,
+    UserViewRunFormComponent,
+    UserViewFormComponent,
+    UserFormComponent,
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
@@ -958,8 +970,14 @@ export function LoadCoreGeneratedForms() {
     LoadConversationArtifactFormComponent();
     LoadConversationDetailArtifactFormComponent();
     LoadConversationDetailRatingFormComponent();
+    LoadCredentialCategoryFormComponent();
+    LoadCredentialTypeFormComponent();
+    LoadCredentialFormComponent();
     LoadDashboardUserPreferenceFormComponent();
     LoadDashboardUserStateFormComponent();
+    LoadEncryptionAlgorithmFormComponent();
+    LoadEncryptionKeySourceFormComponent();
+    LoadEncryptionKeyFormComponent();
     LoadEnvironmentFormComponent();
     LoadProjectFormComponent();
     LoadPublicLinkFormComponent();

@@ -858,3 +858,80 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
   ```
 - Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
 - The component displays the animated MJ logo with optional text below
+
+### Creating Custom Entity Forms
+
+MemberJunction uses `@RegisterClass` to allow custom forms to override generated forms. **To ensure your custom form takes priority, you MUST extend the generated form class** (not `BaseFormComponent` directly).
+
+```typescript
+// CORRECT: Extend the generated form to ensure priority
+import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form.component';
+
+@RegisterClass(BaseFormComponent, 'Entities')
+@Component({...})
+export class EntityFormComponentExtended extends EntityFormComponent {
+    // Custom implementation
+}
+```
+
+**Why this works**: The `@RegisterClass` system uses registration order for priority. Since your custom form imports and extends the generated form, it creates a dependency that ensures it compiles AFTER the generated form, giving it higher priority.
+
+**See [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md)** for complete custom form documentation including:
+- Full checklist for creating custom forms
+- Module registration requirements
+- Tree-shaking prevention patterns
+- Examples of existing custom forms
+
+## Metadata Files and mj-sync
+
+### Metadata File Organization
+The `/metadata/` directory contains declarative JSON files used by mj-sync to manage database records. Follow these conventions:
+
+### File Format Preferences
+- **Complex JSON values** (schemas, templates, etc.) should be stored in separate files and referenced using `@file:` syntax
+- This improves readability and maintainability over escaped JSON strings
+- Example:
+  ```json
+  // ❌ BAD - Escaped JSON in main file is hard to read
+  {
+    "fields": {
+      "Name": "API Key",
+      "FieldSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"object\",\"properties\":{\"apiKey\":{\"type\":\"string\"}}}"
+    }
+  }
+
+  // ✅ GOOD - Reference external file
+  {
+    "fields": {
+      "Name": "API Key",
+      "FieldSchema": "@file:schemas/api-key.schema.json"
+    }
+  }
+  ```
+
+### Directory Structure for Schemas/Templates
+When metadata records contain JSON blobs (schemas, templates, etc.):
+1. Create a subdirectory named for the content type (e.g., `schemas/`, `templates/`)
+2. Name files descriptively with appropriate extension (e.g., `api-key.schema.json`)
+3. Use the `@file:relative/path.json` syntax in the main metadata file
+
+### Application Metadata
+When creating new applications with custom dashboards:
+1. Create `.{app-name}-application.json` in `/metadata/applications/`
+2. Set `DefaultForNewUser: false` unless it should appear for all users
+3. Define `DefaultNavItems` array with:
+   - `Label`: Display name for the nav item
+   - `Icon`: Font Awesome icon class
+   - `ResourceType`: Usually `"Custom"` for dashboard resources
+   - `DriverClass`: Class name registered with `@RegisterClass(BaseResourceComponent, 'ClassName')`
+   - `isDefault`: Set to `true` for the default tab (only one per app)
+4. For new apps, omit `primaryKey` and `sync` sections - they're populated by mj-sync
+5. Include `"relatedEntities": { "Application Entities": [] }` for the sync structure
+
+### Resource Components for Custom Dashboards
+Each nav item with `ResourceType: "Custom"` requires a corresponding component:
+1. Create component extending `BaseResourceComponent`
+2. Add `@RegisterClass(BaseResourceComponent, 'YourDriverClassName')` decorator
+3. Add a tree-shaking prevention function: `export function LoadYourResource() {}`
+4. Call the load function from the module's `public-api.ts`
+5. Register the component in the module's declarations and exports

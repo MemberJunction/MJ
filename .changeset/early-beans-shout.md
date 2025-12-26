@@ -1,0 +1,5 @@
+---
+"@memberjunction/credentials": patch
+---
+
+none

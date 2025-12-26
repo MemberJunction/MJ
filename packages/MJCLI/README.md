@@ -177,6 +177,31 @@ Available sync commands:
 
 **📚 For detailed documentation:** See the [MetadataSync README](../MetadataSync/README.md)
 
+#### Adding Comments to JSON Metadata Files
+
+Since JSON doesn't support comments natively, you can add documentation to your metadata files using custom keys with an underscore prefix. These keys are preserved but ignored during sync operations:
+
+```json
+{
+  "_comments": [
+    "This file configures encryption for sensitive fields",
+    "See /metadata/encryption-keys/ for key configuration"
+  ],
+  "fields": {
+    "Name": "My Entity",
+    "Encrypt": true
+  },
+  "_note": "Comments can appear anywhere in the record"
+}
+```
+
+**Key points:**
+- Use underscore prefix (`_comments`, `_note`, etc.) by convention
+- Comments are preserved in their original position after sync operations
+- Reserved keys: `fields`, `relatedEntities`, `primaryKey`, `sync`, `deleteRecord`
+
+See the [MetadataSync README](../MetadataSync/README.md#adding-comments-to-json-metadata-files) for complete documentation.
+
 #### Quick Examples:
 ```bash
 # Validate all metadata files

@@ -14,7 +14,15 @@
     "sync": {
       "lastModified": "2025-11-10T17:44:39.656Z",
       "checksum": "29e2c7c758e95710a648c6cf93cfe3c480b5153c6070e17d3fd276eab9851bd7"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.ParentID",
+        "expression": "@lookup:MJ: Artifact Types.Name=JSON",
+        "resolved": "AE674C7E-EA0D-49EA-89E4-0649F5EB20D4"
+      }
+    ]
   },
   {
     "fields": {
@@ -31,7 +39,15 @@
     "sync": {
       "lastModified": "2025-11-10T17:55:53.335Z",
       "checksum": "0d7fd28d144d627d0f653d2e3c194b986cfbbc3b7b2c8b172997966abd087beb"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.ParentID",
+        "expression": "@lookup:MJ: Artifact Types.Name=JSON",
+        "resolved": "AE674C7E-EA0D-49EA-89E4-0649F5EB20D4"
+      }
+    ]
   },
   {
     "fields": {

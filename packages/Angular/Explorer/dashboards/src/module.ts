@@ -8,10 +8,9 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { LayoutModule, TabStripModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
-import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
-import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
-import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
-import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
+// ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent are now in
+// @memberjunction/ng-entity-relationship-diagram and imported via EntityRelationshipDiagramModule
+import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
 import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
@@ -105,16 +104,24 @@ import { CommunicationMonitorResourceComponent } from './Communication/communica
 import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
 import { CommunicationProvidersResourceComponent } from './Communication/communication-providers-resource.component';
 import { CommunicationRunsResourceComponent } from './Communication/communication-runs-resource.component';
+// Credentials Dashboard Components
+import { CredentialsDashboardComponent } from './Credentials/credentials-dashboard.component';
+import { CredentialsOverviewResourceComponent } from './Credentials/components/credentials-overview-resource.component';
+import { CredentialsListResourceComponent } from './Credentials/components/credentials-list-resource.component';
+import { CredentialsTypesResourceComponent } from './Credentials/components/credentials-types-resource.component';
+import { CredentialsCategoriesResourceComponent } from './Credentials/components/credentials-categories-resource.component';
+import { CredentialsAuditResourceComponent } from './Credentials/components/credentials-audit-resource.component';
+import { CredentialEditPanelComponent } from './Credentials/components/credential-edit-panel.component';
+import { CredentialTypeEditPanelComponent } from './Credentials/components/credential-type-edit-panel.component';
+import { CredentialCategoryEditPanelComponent } from './Credentials/components/credential-category-edit-panel.component';
+import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
 
 
 
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
-    ERDCompositeComponent,
-    EntityFilterPanelComponent,
-    EntityDetailsComponent,
-    ERDDiagramComponent,
+    // ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent now in Generic package
     ModelManagementV2Component,
     PromptManagementV2Component,
     PromptFilterPanelComponent,
@@ -186,9 +193,18 @@ import { CommunicationRunsResourceComponent } from './Communication/communicatio
     CommunicationMonitorResourceComponent,
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
-    CommunicationRunsResourceComponent
-
-
+    CommunicationRunsResourceComponent,
+    // Credentials Dashboard Components
+    CredentialsDashboardComponent,
+    CredentialsOverviewResourceComponent,
+    CredentialsListResourceComponent,
+    CredentialsTypesResourceComponent,
+    CredentialsCategoriesResourceComponent,
+    CredentialsAuditResourceComponent,
+    CredentialEditPanelComponent,
+    CredentialTypeEditPanelComponent,
+    CredentialCategoryEditPanelComponent,
+    GroupByPipe
   ],
   imports: [
     CommonModule,
@@ -220,7 +236,8 @@ import { CommunicationRunsResourceComponent } from './Communication/communicatio
     EntityViewerModule,
     ExplorerSettingsModule,
     SharedGenericModule,
-    FilterBuilderModule
+    FilterBuilderModule,
+    EntityRelationshipDiagramModule
   ],
   providers: [
     AIInstrumentationService,
@@ -267,9 +284,18 @@ import { CommunicationRunsResourceComponent } from './Communication/communicatio
     CommunicationMonitorResourceComponent,
     CommunicationLogsResourceComponent,
     CommunicationProvidersResourceComponent,
-    CommunicationRunsResourceComponent
-
-
+    CommunicationRunsResourceComponent,
+    // Export Credentials Dashboard
+    CredentialsDashboardComponent,
+    CredentialsOverviewResourceComponent,
+    CredentialsListResourceComponent,
+    CredentialsTypesResourceComponent,
+    CredentialsCategoriesResourceComponent,
+    CredentialsAuditResourceComponent,
+    CredentialEditPanelComponent,
+    CredentialTypeEditPanelComponent,
+    CredentialCategoryEditPanelComponent,
+    GroupByPipe
   ]
 })
 export class DashboardsModule { }

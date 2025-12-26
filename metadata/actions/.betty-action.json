@@ -32,7 +32,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.802Z",
             "checksum": "df4144626306b3dfe4e9c2405dc4ca3cd54099198dbad5fa1df3f05a74a1b526"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -51,7 +59,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.814Z",
             "checksum": "f5cd4ba3fbda60ead9e9db3d1ac7355995403210d8e30717f6badac669c2e01c"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -70,7 +86,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.826Z",
             "checksum": "4f103ec6546fe13b954c4d3ba9ff62bcff273c93606e1a8672daba5e5c723373"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -89,7 +113,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.840Z",
             "checksum": "6a95e45156a101dad7946d7ceeb420ff6ff41a24879d2e620b15563ec7b9ee0f"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         }
       ],
       "Action Result Codes": [
@@ -106,7 +138,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.859Z",
             "checksum": "8b8bf1fc653e0c3a3f52e6e5995384f47568ecbf37e04ff1cac866acbe39cd16"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -121,7 +161,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.871Z",
             "checksum": "1bd29d0b11ced5b5203003cb97dc2c6d1b367049399f646abd1d13516bbe0d11"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -136,7 +184,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.882Z",
             "checksum": "3ebbbb8ad635aa24707312670c3b46b591c01078044a250b84e285748a23148b"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -151,7 +207,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.892Z",
             "checksum": "e30bcbae261b77f934ac5e1375eb50ca6cacac5330d97fbb0fc42cb47cd6cf47"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -166,7 +230,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.902Z",
             "checksum": "ac6fd86895d8d08abccb6fcddce65f7f606285d9b61ec4128f48c67528d971f7"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -181,7 +253,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.911Z",
             "checksum": "c790e62200f2644b3b26fe6a7fdbf9e8b83bc30c0990d88200099567d8ad9a2d"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         },
         {
           "fields": {
@@ -196,7 +276,15 @@
           "sync": {
             "lastModified": "2025-11-10T00:28:09.928Z",
             "checksum": "8e28e258866c83950c007c38dcc20428697e043fc8c2a0f8e8e64c68316060a6"
-          }
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.ActionID",
+              "expression": "@parent:ID",
+              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
+            }
+          ]
         }
       ]
     },
@@ -206,6 +294,14 @@
     "sync": {
       "lastModified": "2025-11-10T00:28:09.730Z",
       "checksum": "42962428904ca6fe140baf87e832c38da96f76b34013565ff432bcf6697df38f"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Action Categories.Name=AI",
+        "resolved": "75DD6103-E7B1-4B83-81C1-B5D135403344"
+      }
+    ]
   }
 ]

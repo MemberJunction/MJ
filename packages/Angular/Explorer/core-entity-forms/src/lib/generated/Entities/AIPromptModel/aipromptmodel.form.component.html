@@ -161,18 +161,36 @@
 
     </mj-collapsible-panel>
 
-    <!-- Details Section -->
+    <!-- Effort & Credential Settings Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="effortCredentialSettings"
+        sectionName="Effort & Credential Settings"
+        icon="fa fa-key"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="EffortLevel"
             Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CredentialID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Credential"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>

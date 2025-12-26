@@ -18,6 +18,14 @@
     "sync": {
       "lastModified": "2025-10-29T15:26:41.182Z",
       "checksum": "29a4f6080feb2542b15860e148d636f1fa409a3ab1e9d1ec0abcdf0b8e14a94c"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Conversations",
+        "resolved": "5FB6FAFF-8904-490D-9BEE-CA1FF906BD44"
+      }
+    ]
   }
 ]

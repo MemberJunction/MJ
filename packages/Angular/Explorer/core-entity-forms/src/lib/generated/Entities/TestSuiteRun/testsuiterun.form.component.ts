@@ -15,7 +15,11 @@ export class TestSuiteRunFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'runIdentification', sectionName: 'Run Identification', isExpanded: true },
+            { sectionKey: 'executionTimelineStatus', sectionName: 'Execution Timeline & Status', isExpanded: true },
+            { sectionKey: 'testMetrics', sectionName: 'Test Metrics', isExpanded: false },
+            { sectionKey: 'technicalOutput', sectionName: 'Technical Output', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'MJ: Test Runs', isExpanded: false }
         ]);
     }

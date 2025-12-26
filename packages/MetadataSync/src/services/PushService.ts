@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
-import { SyncEngine, RecordData, DeferrableLookupError } from '../lib/sync-engine';
+import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig, EntityConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
@@ -697,16 +697,56 @@ export class PushService {
     if (!entity) {
       throw new Error(`Failed to create entity object for ${entityName}`);
     }
-    
+
+    // Get parent entity from context if available (needed for @parent refs in primaryKey)
+    let parentEntity: BaseEntity | null = null;
+    if (parentContext) {
+      const parentRecordId = flattenedRecord.dependencies.values().next().value;
+      if (parentRecordId) {
+        parentEntity = batchContext.get(parentRecordId) || null;
+      }
+      if (!parentEntity) {
+        throw new Error(`Parent entity not found in batch context for ${entityName}. Parent dependencies: ${Array.from(flattenedRecord.dependencies).join(', ')}`);
+      }
+    }
+
     // Check if record exists
-    const primaryKey = record.primaryKey;
+    // Process primaryKey values through processFieldValue to resolve @lookup, @parent, etc.
+    // Create a resolution collector to track @lookup and @parent resolutions
+    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey' };
+
+    let resolvedPrimaryKey: Record<string, any> | undefined;
+    if (record.primaryKey && Object.keys(record.primaryKey).length > 0) {
+      resolvedPrimaryKey = {};
+      for (const [pkField, pkValue] of Object.entries(record.primaryKey)) {
+        try {
+          resolvedPrimaryKey[pkField] = await this.syncEngine.processFieldValue(
+            pkValue,
+            entityDir,
+            parentEntity,
+            null, // rootRecord
+            0,
+            batchContext,
+            resolutionCollector,
+            pkField
+          );
+        } catch (pkError: unknown) {
+          // Check if this is a deferrable lookup error
+          if (pkError instanceof DeferrableLookupError) {
+            throw new Error(`Cannot defer lookup in primaryKey field '${pkField}': ${(pkError as DeferrableLookupError).message}. Primary key lookups must resolve immediately.`);
+          }
+          throw pkError;
+        }
+      }
+    }
+
     let exists = false;
     let isNew = false;
-    
-    if (primaryKey && Object.keys(primaryKey).length > 0) {
+
+    if (resolvedPrimaryKey && Object.keys(resolvedPrimaryKey).length > 0) {
       // First check if the record exists using the sync engine's loadEntity method
       // This avoids the "Error in BaseEntity.Load" message for missing records
-      const existingEntity = await this.syncEngine.loadEntity(entityName, primaryKey);
+      const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedPrimaryKey);
       
       if (existingEntity) {
         // Record exists, use the loaded entity
@@ -715,10 +755,10 @@ export class PushService {
       } else {
         // Record doesn't exist in database
         const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
-        const pkDisplay = Object.entries(primaryKey)
+        const pkDisplay = Object.entries(resolvedPrimaryKey)
           .map(([key, value]) => `${key}=${value}`)
           .join(', ');
-        
+
         if (!autoCreate) {
           const warning = `Record not found: ${entityName} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
           this.warnings.push(warning);
@@ -732,14 +772,14 @@ export class PushService {
         }
       }
     }
-    
+
     if (!exists) {
       entity.NewRecord();
       isNew = true;
 
-      // Set primary key values for new records if provided
-      if (primaryKey) {
-        for (const [pkField, pkValue] of Object.entries(primaryKey)) {
+      // Set primary key values for new records if provided (use resolved values)
+      if (resolvedPrimaryKey) {
+        for (const [pkField, pkValue] of Object.entries(resolvedPrimaryKey)) {
           entity.Set(pkField, pkValue);
         }
       }
@@ -759,27 +799,15 @@ export class PushService {
 
     // Store original field values to preserve @ references
     const originalFields = { ...record.fields };
-    
-    // Get parent entity from context if available
-    let parentEntity: BaseEntity | null = null;
-    if (parentContext) {
-      // Find the parent's flattened record ID
-      // The parent record was flattened before this child, so it should have a lower ID number
-      const parentRecordId = flattenedRecord.dependencies.values().next().value;
-      if (parentRecordId) {
-        parentEntity = batchContext.get(parentRecordId) || null;
-      }
-      
-      if (!parentEntity) {
-        // Parent should have been processed before child due to dependency ordering
-        throw new Error(`Parent entity not found in batch context for ${entityName}. Parent dependencies: ${Array.from(flattenedRecord.dependencies).join(', ')}`);
-      }
-    }
-    
+
     // Process field values with parent context and batch context
+    // Note: parentEntity was already resolved above for primaryKey processing
     // Process each field with better error reporting
     // Track if we hit any deferrable lookup errors
     let hasDeferrableLookupError = false;
+
+    // Switch the collector to track field resolutions
+    resolutionCollector.fieldPrefix = 'fields';
 
     for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
       try {
@@ -789,7 +817,9 @@ export class PushService {
           parentEntity,
           null, // rootRecord
           0,
-          batchContext // Pass batch context for lookups
+          batchContext, // Pass batch context for lookups
+          resolutionCollector,
+          fieldName
         );
         entity.Set(fieldName, processedValue);
       } catch (fieldError: unknown) {
@@ -1115,6 +1145,17 @@ export class PushService {
     
     // Restore original field values to preserve @ references
     record.fields = originalFields;
+
+    // Update __mj_sync_notes with resolution information
+    // This helps users understand how @lookup and @parent references were resolved
+    // Use type assertion through unknown to handle the dynamic property
+    const recordWithNotes = record as unknown as Record<string, unknown>;
+    if (resolutionCollector.notes.length > 0) {
+      recordWithNotes.__mj_sync_notes = resolutionCollector.notes;
+    } else {
+      // Remove existing notes if no resolutions were tracked
+      delete recordWithNotes.__mj_sync_notes;
+    }
 
     // Return appropriate status
     // If we had deferred lookups, return 'deferred' to indicate partial save
