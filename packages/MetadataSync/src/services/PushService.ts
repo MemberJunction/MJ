@@ -1146,15 +1146,19 @@ export class PushService {
     // Restore original field values to preserve @ references
     record.fields = originalFields;
 
-    // Update __mj_sync_notes with resolution information
-    // This helps users understand how @lookup and @parent references were resolved
-    // Use type assertion through unknown to handle the dynamic property
-    const recordWithNotes = record as unknown as Record<string, unknown>;
-    if (resolutionCollector.notes.length > 0) {
-      recordWithNotes.__mj_sync_notes = resolutionCollector.notes;
-    } else {
-      // Remove existing notes if no resolutions were tracked
-      delete recordWithNotes.__mj_sync_notes;
+    // Only update __mj_sync_notes if the record was actually dirty (changed)
+    // For unchanged records, preserve existing notes to maintain stability
+    if (isNew || isDirty) {
+      // Update __mj_sync_notes with resolution information
+      // This helps users understand how @lookup and @parent references were resolved
+      // Use type assertion through unknown to handle the dynamic property
+      const recordWithNotes = record as unknown as Record<string, unknown>;
+      if (resolutionCollector.notes.length > 0) {
+        recordWithNotes.__mj_sync_notes = resolutionCollector.notes;
+      } else {
+        // Remove existing notes if no resolutions were tracked
+        delete recordWithNotes.__mj_sync_notes;
+      }
     }
 
     // Return appropriate status
