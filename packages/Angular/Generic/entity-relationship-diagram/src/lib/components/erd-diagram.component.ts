@@ -29,8 +29,10 @@ import {
   ERDDiagramContextMenuEvent,
   ERDNodeDragEvent,
   ERDRelationshipInfo,
-  ERDLayoutAlgorithm
+  ERDLayoutAlgorithm,
+  ERDDagreConfig
 } from '../interfaces/erd-types';
+import * as dagre from '@dagrejs/dagre';
 
 /**
  * Internal node representation for D3 force simulation.
@@ -61,12 +63,24 @@ interface InternalLink {
   sourceField: ERDField;
   targetField?: ERDField;
   isSelfReference: boolean;
+  /** Edge points computed by dagre for orthogonal routing */
+  points?: Array<{ x: number; y: number }>;
 }
 
 /**
  * Default configuration values for the ERD diagram.
  * These values provide a good starting point for most use cases.
  */
+/** Default dagre configuration */
+const DEFAULT_DAGRE_CONFIG: Required<ERDDagreConfig> = {
+  rankDir: 'LR',
+  nodeSep: 80,      // Increased from 50 - more vertical space between nodes in same rank
+  rankSep: 150,     // Increased from 100 - more horizontal space between ranks for labels
+  edgeSep: 20,      // Increased from 10 - more space between edge paths
+  ranker: 'network-simplex',
+  align: undefined as unknown as 'UL' | 'UR' | 'DL' | 'DR'
+};
+
 const DEFAULT_CONFIG: Required<ERDConfig> = {
   nodeWidth: 180,
   nodeBaseHeight: 60,
@@ -93,7 +107,8 @@ const DEFAULT_CONFIG: Required<ERDConfig> = {
   skipAnimation: false,
   emptyStateMessage: 'No entities to display',
   emptyStateIcon: 'fa-solid fa-diagram-project',
-  layoutAlgorithm: 'force',
+  layoutAlgorithm: 'dagre',
+  dagreConfig: DEFAULT_DAGRE_CONFIG,
   colors: {
     nodeBackground: '#f8f9fa',
     nodeBorder: '#333',
@@ -1022,8 +1037,19 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       colors: {
         ...DEFAULT_CONFIG.colors,
         ...this.config.colors
+      },
+      dagreConfig: {
+        ...DEFAULT_DAGRE_CONFIG,
+        ...this.config.dagreConfig
       }
     };
+
+    // Map 'horizontal' and 'vertical' layout algorithms to dagre with appropriate direction
+    if (this.mergedConfig.layoutAlgorithm === 'horizontal') {
+      this.mergedConfig.dagreConfig.rankDir = 'LR';
+    } else if (this.mergedConfig.layoutAlgorithm === 'vertical') {
+      this.mergedConfig.dagreConfig.rankDir = 'TB';
+    }
   }
 
   private resizeSVG(): void {
@@ -1210,6 +1236,91 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
   }
 
   // ============================================================================
+  // DAGRE LAYOUT
+  // ============================================================================
+
+  /**
+   * Applies dagre hierarchical layout to position nodes and compute edge paths.
+   * This provides clean, orthogonal edge routing.
+   */
+  private applyDagreLayout(): void {
+    const cfg = this.mergedConfig;
+    const dagreCfg = cfg.dagreConfig as Required<ERDDagreConfig>;
+
+    // Create a new directed graph
+    const g = new dagre.graphlib.Graph({ directed: true, multigraph: true });
+
+    // Set graph options
+    g.setGraph({
+      rankdir: dagreCfg.rankDir,
+      nodesep: dagreCfg.nodeSep,
+      ranksep: dagreCfg.rankSep,
+      edgesep: dagreCfg.edgeSep,
+      ranker: dagreCfg.ranker,
+      align: dagreCfg.align
+    });
+
+    // Default edge label (required by dagre)
+    g.setDefaultEdgeLabel(() => ({}));
+
+    // Add nodes to the graph
+    this.visibleNodes.forEach(node => {
+      g.setNode(node.id, {
+        width: node.width,
+        height: node.height,
+        label: node.name
+      });
+    });
+
+    // Add edges to the graph
+    this.visibleLinks.forEach((link, index) => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+
+      // Use index as edge name for multigraph support (multiple edges between same nodes)
+      g.setEdge(sourceId, targetId, {
+        label: link.sourceField.name || '',
+        labelpos: 'c',
+        labeloffset: 10
+      }, `edge-${index}`);
+    });
+
+    // Run the layout algorithm
+    dagre.layout(g);
+
+    // Apply computed positions to nodes
+    this.visibleNodes.forEach(node => {
+      const dagreNode = g.node(node.id);
+      if (dagreNode) {
+        node.x = dagreNode.x;
+        node.y = dagreNode.y;
+        // Fix position to prevent force simulation from moving nodes
+        node.fx = dagreNode.x;
+        node.fy = dagreNode.y;
+      }
+    });
+
+    // Store edge points for orthogonal path rendering
+    this.visibleLinks.forEach((link, index) => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+
+      const edge = g.edge(sourceId, targetId, `edge-${index}`);
+      if (edge && edge.points) {
+        link.points = edge.points;
+      }
+    });
+  }
+
+  /**
+   * Checks if the current layout algorithm uses dagre.
+   */
+  private usesDagreLayout(): boolean {
+    const algo = this.mergedConfig.layoutAlgorithm;
+    return algo === 'dagre' || algo === 'horizontal' || algo === 'vertical';
+  }
+
+  // ============================================================================
   // VISUALIZATION
   // ============================================================================
 
@@ -1297,30 +1408,37 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       .attr('d', 'M0,-5L10,0L0,5')
       .attr('fill', colors.linkColor);
 
-    // Create force simulation with visible nodes only
-    this.simulation = d3
-      .forceSimulation<InternalNode>(this.visibleNodes)
-      .force(
-        'link',
-        d3
-          .forceLink<InternalNode, InternalLink>(this.visibleLinks)
-          .id((d) => d.id)
-          .distance((d) => {
-            const source = d.source as InternalNode;
-            const target = d.target as InternalNode;
-            const sourceSize = Math.max(source.width, source.height);
-            const targetSize = Math.max(target.width, target.height);
-            return (sourceSize + targetSize) / 2 + cfg.linkDistance;
+    // Apply layout based on algorithm
+    if (this.usesDagreLayout()) {
+      // Use dagre for hierarchical layout with orthogonal edges
+      this.applyDagreLayout();
+      this.simulation = null; // No force simulation needed
+    } else {
+      // Create force simulation with visible nodes only (original behavior)
+      this.simulation = d3
+        .forceSimulation<InternalNode>(this.visibleNodes)
+        .force(
+          'link',
+          d3
+            .forceLink<InternalNode, InternalLink>(this.visibleLinks)
+            .id((d) => d.id)
+            .distance((d) => {
+              const source = d.source as InternalNode;
+              const target = d.target as InternalNode;
+              const sourceSize = Math.max(source.width, source.height);
+              const targetSize = Math.max(target.width, target.height);
+              return (sourceSize + targetSize) / 2 + cfg.linkDistance;
+            })
+        )
+        .force('charge', d3.forceManyBody().strength(cfg.chargeStrength))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force(
+          'collision',
+          d3.forceCollide<InternalNode>().radius((d) => {
+            return Math.max(d.width, d.height) / 2 + cfg.collisionPadding;
           })
-      )
-      .force('charge', d3.forceManyBody().strength(cfg.chargeStrength))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force(
-        'collision',
-        d3.forceCollide<InternalNode>().radius((d) => {
-          return Math.max(d.width, d.height) / 2 + cfg.collisionPadding;
-        })
-      );
+        );
+    }
 
     // Create links
     const link = chartArea
@@ -1340,12 +1458,25 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       .attr('marker-end', (d) => (d.isSelfReference ? 'none' : 'url(#end-arrow)'));
 
     if (cfg.showRelationshipLabels) {
+      // Add background rect for label (will be sized after text is rendered)
+      link
+        .append('rect')
+        .attr('class', 'link-label-bg')
+        .attr('fill', 'white')
+        .attr('stroke', colors.linkColor)
+        .attr('stroke-width', 0.5)
+        .attr('stroke-opacity', 0.4)
+        .attr('rx', 2)
+        .attr('ry', 2);
+
+      // Add the label text
       link
         .append('text')
         .attr('class', 'link-label')
         .attr('font-size', '10px')
         .attr('fill', colors.linkColor)
         .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
         .text((d) => d.sourceField.name || '');
     }
 
@@ -1427,18 +1558,9 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       .append('title')
       .text((d) => `${d.name}\nPrimary Keys: ${d.primaryKeys.length}\nForeign Keys: ${d.foreignKeys.length}`);
 
-    // If skipAnimation is enabled, run simulation to completion synchronously
-    if (cfg.skipAnimation) {
-      // Run simulation to completion without animation
-      this.simulation.stop();
-
-      // Run enough ticks to settle the layout (typically 300 is enough)
-      const tickCount = 300;
-      for (let i = 0; i < tickCount; i++) {
-        this.simulation.tick();
-      }
-
-      // Update positions once at the end
+    // Handle layout completion based on algorithm type
+    if (this.usesDagreLayout()) {
+      // Dagre layout is synchronous - positions are already set
       this.updatePositions(link, nodeGroup);
       this.layoutCompleted = true;
       this.layoutComplete.emit();
@@ -1447,23 +1569,45 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       if (cfg.fitOnLoad && this.visibleNodes.length > 1) {
         setTimeout(() => this.zoomToFit(), 50);
       }
-    } else {
-      // Normal animated mode
-      // Simulation tick
-      this.simulation.on('tick', () => {
-        this.updatePositions(link, nodeGroup);
-      });
+    } else if (this.simulation) {
+      // Force simulation layout
+      if (cfg.skipAnimation) {
+        // Run simulation to completion without animation
+        this.simulation.stop();
 
-      // Layout complete detection
-      this.simulation.on('end', () => {
-        if (!this.layoutCompleted) {
-          this.layoutCompleted = true;
-          this.layoutComplete.emit();
-          if (cfg.fitOnLoad && this.visibleNodes.length > 1) {
-            setTimeout(() => this.zoomToFit(), 100);
-          }
+        // Run enough ticks to settle the layout (typically 300 is enough)
+        const tickCount = 300;
+        for (let i = 0; i < tickCount; i++) {
+          this.simulation.tick();
         }
-      });
+
+        // Update positions once at the end
+        this.updatePositions(link, nodeGroup);
+        this.layoutCompleted = true;
+        this.layoutComplete.emit();
+
+        // Fit to view after positions are set
+        if (cfg.fitOnLoad && this.visibleNodes.length > 1) {
+          setTimeout(() => this.zoomToFit(), 50);
+        }
+      } else {
+        // Normal animated mode
+        // Simulation tick
+        this.simulation.on('tick', () => {
+          this.updatePositions(link, nodeGroup);
+        });
+
+        // Layout complete detection
+        this.simulation.on('end', () => {
+          if (!this.layoutCompleted) {
+            this.layoutCompleted = true;
+            this.layoutComplete.emit();
+            if (cfg.fitOnLoad && this.visibleNodes.length > 1) {
+              setTimeout(() => this.zoomToFit(), 100);
+            }
+          }
+        });
+      }
     }
 
     // Apply initial selection highlighting
@@ -1721,6 +1865,8 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     link: d3.Selection<SVGGElement, InternalLink, SVGGElement, unknown>,
     nodeGroup: d3.Selection<SVGGElement, InternalNode, SVGGElement, unknown>
   ): void {
+    const usesDagre = this.usesDagreLayout();
+
     // Update link paths
     link.select('path').attr('d', (d) => {
       const source = d.source as InternalNode;
@@ -1731,24 +1877,60 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         return `M ${source.x! + source.width / 2} ${source.y!}
                 Q ${source.x! + source.width / 2 + loopSize} ${source.y! - loopSize}
                   ${source.x!} ${source.y! - source.height / 2}`;
-      } else {
-        const sourcePoint = this.getSourceConnectionPoint(source, d.sourceField);
-        const targetPoint = this.getTargetConnectionPoint(target, d.targetField);
-        return this.createOrthogonalPath(sourcePoint, targetPoint);
       }
+
+      // Use dagre edge points if available (provides cleaner orthogonal paths)
+      if (usesDagre && d.points && d.points.length >= 2) {
+        return this.createPathFromDagrePoints(d.points);
+      }
+
+      // Fallback to manual orthogonal path
+      const sourcePoint = this.getSourceConnectionPoint(source, d.sourceField);
+      const targetPoint = this.getTargetConnectionPoint(target, d.targetField);
+      return this.createOrthogonalPath(sourcePoint, targetPoint);
     });
 
-    // Update link labels
+    // Update link labels and their background boxes
     link.select('text').attr('transform', (d) => {
       const source = d.source as InternalNode;
       const target = d.target as InternalNode;
 
       if (d.isSelfReference) {
         return `translate(${source.x! + source.width / 2 + 15}, ${source.y! - source.height / 2 - 10})`;
-      } else {
-        const midX = (source.x! + target.x!) / 2;
-        const midY = (source.y! + target.y!) / 2;
-        return `translate(${midX}, ${midY - 8})`;
+      }
+
+      // Use midpoint of dagre edge points if available
+      if (usesDagre && d.points && d.points.length >= 2) {
+        const midIndex = Math.floor(d.points.length / 2);
+        const midPoint = d.points[midIndex];
+        return `translate(${midPoint.x}, ${midPoint.y})`;
+      }
+
+      // Fallback to midpoint between nodes
+      const midX = (source.x! + target.x!) / 2;
+      const midY = (source.y! + target.y!) / 2;
+      return `translate(${midX}, ${midY - 8})`;
+    });
+
+    // Update label background rects to match text size and position
+    link.each(function() {
+      const group = d3.select(this);
+      const textEl = group.select('text.link-label').node() as SVGTextElement | null;
+      const bgRect = group.select('rect.link-label-bg');
+
+      if (textEl && !bgRect.empty()) {
+        const bbox = textEl.getBBox();
+        const padding = 3;
+
+        // Get the transform from the text element
+        const transform = group.select('text.link-label').attr('transform');
+
+        bgRect
+          .attr('x', bbox.x - padding)
+          .attr('y', bbox.y - padding)
+          .attr('width', bbox.width + padding * 2)
+          .attr('height', bbox.height + padding * 2)
+          .attr('transform', transform);
       }
     });
 
@@ -1808,6 +1990,28 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
             L ${midX} ${source.y}
             L ${midX} ${target.y}
             L ${target.x} ${target.y}`;
+  }
+
+  /**
+   * Creates an SVG path string from dagre's edge points.
+   * Dagre provides an array of points for each edge that forms a clean orthogonal path.
+   * @param points Array of {x, y} coordinates from dagre layout
+   * @returns SVG path string
+   */
+  private createPathFromDagrePoints(points: Array<{ x: number; y: number }>): string {
+    if (!points || points.length < 2) {
+      return '';
+    }
+
+    // Start with Move to first point
+    let path = `M ${points[0].x} ${points[0].y}`;
+
+    // Add Line to each subsequent point
+    for (let i = 1; i < points.length; i++) {
+      path += ` L ${points[i].x} ${points[i].y}`;
+    }
+
+    return path;
   }
 
   private screenToDiagramCoords(screenX: number, screenY: number): { x: number; y: number } {

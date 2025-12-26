@@ -375,8 +375,31 @@ export interface ERDNodeDragEvent {
 
 /**
  * Layout algorithm options for the ERD diagram.
+ * - 'force': D3 force-directed layout (dynamic, animated)
+ * - 'dagre': Dagre hierarchical layout with orthogonal edges (static, clean)
+ * - 'horizontal': Left-to-right hierarchical layout using Dagre
+ * - 'vertical': Top-to-bottom hierarchical layout using Dagre
+ * - 'radial': Radial layout (not yet implemented)
  */
-export type ERDLayoutAlgorithm = 'force' | 'horizontal' | 'vertical' | 'radial';
+export type ERDLayoutAlgorithm = 'force' | 'dagre' | 'horizontal' | 'vertical' | 'radial';
+
+/**
+ * Dagre-specific layout configuration options.
+ */
+export interface ERDDagreConfig {
+  /** Direction of the graph layout. Default: 'LR' (left-to-right) */
+  rankDir?: 'TB' | 'BT' | 'LR' | 'RL';
+  /** Horizontal separation between nodes. Default: 50 */
+  nodeSep?: number;
+  /** Vertical separation between ranks/layers. Default: 100 */
+  rankSep?: number;
+  /** Separation between different edge paths. Default: 10 */
+  edgeSep?: number;
+  /** Algorithm for ranking nodes: 'network-simplex', 'tight-tree', 'longest-path'. Default: 'network-simplex' */
+  ranker?: 'network-simplex' | 'tight-tree' | 'longest-path';
+  /** Alignment of nodes within their rank: 'UL', 'UR', 'DL', 'DR'. Default: undefined (centered) */
+  align?: 'UL' | 'UR' | 'DL' | 'DR';
+}
 
 /**
  * Extended configuration options for the ERD diagram.
@@ -474,6 +497,9 @@ export interface ERDConfig {
 
   /** Layout algorithm to use. Default: 'force' */
   layoutAlgorithm?: ERDLayoutAlgorithm;
+
+  /** Dagre-specific layout configuration (only used when layoutAlgorithm is 'dagre', 'horizontal', or 'vertical') */
+  dagreConfig?: ERDDagreConfig;
 
   // ============================================================================
   // Colors
