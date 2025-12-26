@@ -1,27 +1,59 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewChild, ElementRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewChild, ElementRef } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@memberjunction/core';
 
+/**
+ * Event emitted when requesting to open an entity record.
+ */
+export interface EntityDetailsOpenRecordEvent {
+  EntityName: string;
+  RecordID: string;
+}
+
+/**
+ * Entity details panel component that displays detailed information about a selected entity.
+ * Shows entity metadata, fields with filtering capabilities, and related entities.
+ *
+ * This component is designed to be used alongside the ERD diagram to provide
+ * a detailed view of the currently selected entity.
+ */
 @Component({
   selector: 'mj-entity-details',
   templateUrl: './entity-details.component.html',
   styleUrls: ['./entity-details.component.css']
 })
-export class EntityDetailsComponent implements OnInit, OnChanges {
+export class EntityDetailsComponent implements OnChanges {
   @ViewChild('fieldsListContainer', { static: false }) fieldsListContainer!: ElementRef;
   @ViewChild('relationshipsListContainer', { static: false }) relationshipsListContainer!: ElementRef;
 
+  /** The currently selected entity to display details for */
   @Input() selectedEntity: EntityInfo | null = null;
+
+  /** All entity fields for looking up field information */
   @Input() allEntityFields: EntityFieldInfo[] = [];
+
+  /** Whether the fields section is expanded */
   @Input() fieldsSectionExpanded = true;
+
+  /** Whether the relationships section is expanded */
   @Input() relationshipsSectionExpanded = true;
 
+  /** Emitted when user clicks to open the entity record */
   @Output() openEntity = new EventEmitter<EntityInfo>();
+
+  /** Emitted when user clicks the close button */
   @Output() closePanel = new EventEmitter<void>();
+
+  /** Emitted when fields section is toggled */
   @Output() fieldsSectionToggle = new EventEmitter<void>();
+
+  /** Emitted when relationships section is toggled */
   @Output() relationshipsSectionToggle = new EventEmitter<void>();
+
+  /** Emitted when a related entity is selected (clicked in relationships list) */
   @Output() entitySelected = new EventEmitter<EntityInfo>();
-  @Output() openRecord = new EventEmitter<{EntityName: string, RecordID: string}>();
+
+  /** Emitted when requesting to open an entity record */
+  @Output() openRecord = new EventEmitter<EntityDetailsOpenRecordEvent>();
 
   public fieldFilter: 'all' | 'keys' | 'foreign_keys' | 'regular' = 'all';
   public expandedFieldDescriptions = new Set<string>();
@@ -29,19 +61,15 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
   public expandedFieldDetails = new Set<string>();
   private previousSelectedEntityId: string | null = null;
 
-  ngOnInit(): void {
-    // Component initialization
-  }
-
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['selectedEntity'] && !changes['selectedEntity'].firstChange) {
       const currentEntityId = this.selectedEntity?.ID || null;
-      
+
       // Check if entity actually changed
       if (currentEntityId !== this.previousSelectedEntityId) {
         // Reset scroll positions when entity changes
         this.resetScrollPositions();
-        
+
         this.previousSelectedEntityId = currentEntityId;
       }
     }
@@ -86,9 +114,9 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
 
   public getEntityFields(entityId: string): EntityFieldInfo[] {
     if (!entityId) return [];
-    
+
     let fields = this.allEntityFields.filter(f => f.EntityID === entityId);
-    
+
     switch (this.fieldFilter) {
       case 'keys':
         return fields.filter(f => f.IsPrimaryKey || f.Name.toLowerCase().includes('id'));

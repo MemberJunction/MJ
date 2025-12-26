@@ -5,19 +5,8 @@ import { EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 
-import { ERDCompositeComponent } from './components/erd-composite.component';
+import { ERDCompositeComponent, ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
 import { ResourceData } from '@memberjunction/core-entities';
-
-interface DashboardState {
-  filterPanelVisible: boolean;
-  filterPanelWidth: number;
-  filters: any;
-  selectedEntityId: string | null;
-  zoomLevel: number;
-  panPosition: { x: number; y: number };
-  fieldsSectionExpanded: boolean;
-  relationshipsSectionExpanded: boolean;
-}
 
 @Component({
   selector: 'mj-entity-admin-dashboard',
@@ -39,7 +28,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   public filteredEntities: EntityInfo[] = [];
 
   // State management
-  private userStateChangeSubject = new Subject<DashboardState>();
+  private userStateChangeSubject = new Subject<ERDCompositeState>();
   private hasLoadedUserState = false;
 
   ngAfterViewInit(): void {
@@ -77,7 +66,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   }
 
 
-  public onStateChange(state: DashboardState): void {
+  public onStateChange(state: ERDCompositeState): void {
     // Update local state to keep header controls in sync
     this.filterPanelVisible = state.filterPanelVisible;
     this.filteredEntities = this.erdComposite?.filteredEntities || [];
@@ -98,7 +87,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     }
   }
 
-  public onUserStateChange(state: DashboardState): void {
+  public onUserStateChange(state: ERDCompositeState): void {
     this.userStateChangeSubject.next(state);
   }
 
@@ -127,7 +116,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   private loadUserStateFromConfiguration(): void {
     if (this.Config?.userState) {
       try {
-        const state = this.Config.userState as Partial<DashboardState>;
+        const state = this.Config.userState as Partial<ERDCompositeState>;
         if (this.erdComposite) {
           this.erdComposite.loadUserState(state);
         }
@@ -137,7 +126,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     }
   }
 
-  private emitUserStateChange(state: DashboardState): void {
+  private emitUserStateChange(state: ERDCompositeState): void {
     // Emit user state for persistence
     this.UserStateChanged.emit(state);
   }

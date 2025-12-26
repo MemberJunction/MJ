@@ -859,6 +859,29 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
 - The component displays the animated MJ logo with optional text below
 
+### Creating Custom Entity Forms
+
+MemberJunction uses `@RegisterClass` to allow custom forms to override generated forms. **To ensure your custom form takes priority, you MUST extend the generated form class** (not `BaseFormComponent` directly).
+
+```typescript
+// CORRECT: Extend the generated form to ensure priority
+import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form.component';
+
+@RegisterClass(BaseFormComponent, 'Entities')
+@Component({...})
+export class EntityFormComponentExtended extends EntityFormComponent {
+    // Custom implementation
+}
+```
+
+**Why this works**: The `@RegisterClass` system uses registration order for priority. Since your custom form imports and extends the generated form, it creates a dependency that ensures it compiles AFTER the generated form, giving it higher priority.
+
+**See [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md)** for complete custom form documentation including:
+- Full checklist for creating custom forms
+- Module registration requirements
+- Tree-shaking prevention patterns
+- Examples of existing custom forms
+
 ## Metadata Files and mj-sync
 
 ### Metadata File Organization

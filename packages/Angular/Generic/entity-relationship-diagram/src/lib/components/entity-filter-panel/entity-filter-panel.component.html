@@ -9,7 +9,7 @@
       <span class="fa-solid fa-times"></span>
     </button>
   </div>
-  
+
   <div class="filter-content">
     <!-- Schema Filter -->
     <div class="filter-group">
@@ -17,7 +17,7 @@
         <span class="fa-solid fa-database"></span>
         Schema
       </label>
-      <select 
+      <select
         class="filter-select"
         [(ngModel)]="filters.schemaName"
         (ngModelChange)="onFilterChange()">
@@ -27,14 +27,14 @@
         </option>
       </select>
     </div>
-    
+
     <!-- Entity Name Filter -->
     <div class="filter-group">
       <label class="filter-label">
         <span class="fa-solid fa-search"></span>
         Entity Name
       </label>
-      <input 
+      <input
         type="text"
         class="filter-input"
         [(ngModel)]="filters.entityName"
@@ -42,14 +42,14 @@
         (input)="onFilterChange()"
         placeholder="Search entities...">
     </div>
-    
+
     <!-- Base Table Filter -->
     <div class="filter-group">
       <label class="filter-label">
         <span class="fa-solid fa-table"></span>
         Base Table
       </label>
-      <input 
+      <input
         type="text"
         class="filter-input"
         [(ngModel)]="filters.baseTable"
@@ -57,14 +57,14 @@
         (input)="onFilterChange()"
         placeholder="Search tables...">
     </div>
-    
+
     <!-- Entity Status Filter -->
     <div class="filter-group">
       <label class="filter-label">
         <span class="fa-solid fa-check-circle"></span>
         Status
       </label>
-      <select 
+      <select
         class="filter-select"
         [(ngModel)]="filters.entityStatus"
         (ngModelChange)="onFilterChange()">
@@ -74,7 +74,7 @@
         <option value="Disabled">Disabled</option>
       </select>
     </div>
-    
+
     <!-- Reset Button -->
     <div class="filter-actions">
       <button class="reset-btn" (click)="resetAllFilters()" title="Reset all filters">

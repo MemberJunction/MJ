@@ -2,22 +2,16 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild } 
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
-import {
-  ERDDiagramComponent,
-  ERDNode,
-  ERDNodeClickEvent
-} from '@memberjunction/ng-entity-relationship-diagram';
+import { MJEntityERDComponent } from '../mj-entity-erd.component';
+import { EntitySelectedEvent, OpenEntityRecordEvent } from '../mj-entity-erd.component';
+import { ERDState } from '../../interfaces/erd-types';
+import { EntityFilter } from '../entity-filter-panel/entity-filter-panel.component';
 
-import { entitiesToERDNodes, findEntityByNodeId } from '../utils/entity-to-erd-adapter';
-
-interface EntityFilter {
-  schemaName: string | null;
-  entityName: string;
-  entityStatus: string | null;
-  baseTable: string;
-}
-
-interface DashboardState {
+/**
+ * State object for the ERD composite component.
+ * Used for state persistence and restoration.
+ */
+export interface ERDCompositeState {
   filterPanelVisible: boolean;
   filterPanelWidth: number;
   filters: EntityFilter;
@@ -28,27 +22,75 @@ interface DashboardState {
   relationshipsSectionExpanded: boolean;
 }
 
+/**
+ * ERD Composite component that combines the ERD diagram with filter and details panels.
+ *
+ * This is a complete, ready-to-use ERD exploration interface that includes:
+ * - Left panel: Entity filter controls (schema, name, status, etc.)
+ * - Center: Interactive ERD diagram
+ * - Right panel: Entity details (shown when an entity is selected)
+ *
+ * The component handles all internal state but emits events for:
+ * - State changes (for parent to persist user preferences)
+ * - Open record requests (for parent to handle navigation)
+ *
+ * ## Usage
+ *
+ * ```html
+ * <mj-erd-composite
+ *   (stateChange)="onStateChange($event)"
+ *   (userStateChange)="saveUserPreferences($event)"
+ *   (openRecord)="navigateToRecord($event)">
+ * </mj-erd-composite>
+ * ```
+ *
+ * ## State Persistence
+ *
+ * The component emits `userStateChange` events (debounced 1s) when user changes
+ * any settings. The parent should save this state and restore it using `loadUserState()`:
+ *
+ * ```typescript
+ * @ViewChild(ERDCompositeComponent) erdComposite!: ERDCompositeComponent;
+ *
+ * ngAfterViewInit() {
+ *   const savedState = await this.loadSavedState();
+ *   if (savedState) {
+ *     this.erdComposite.loadUserState(savedState);
+ *   }
+ * }
+ *
+ * onUserStateChange(state: ERDCompositeState) {
+ *   await this.saveState(state);
+ * }
+ * ```
+ */
 @Component({
   selector: 'mj-erd-composite',
   templateUrl: './erd-composite.component.html',
   styleUrls: ['./erd-composite.component.css']
 })
 export class ERDCompositeComponent implements OnInit, OnDestroy {
-  @ViewChild(ERDDiagramComponent) erdDiagram!: ERDDiagramComponent;
+  @ViewChild(MJEntityERDComponent) mjEntityErd!: MJEntityERDComponent;
 
+  /** Whether the ERD is in a refreshing state */
   @Input() isRefreshingERD = false;
 
-  // Data loaded internally
+  /** All entities loaded from metadata */
   public entities: EntityInfo[] = [];
+
+  /** All entity fields (flattened from all entities) */
   public allEntityFields: EntityFieldInfo[] = [];
 
-  // ERD nodes converted from entities for the generic ERD component
-  public erdNodes: ERDNode[] = [];
-  public filteredERDNodes: ERDNode[] = [];
+  /** Emitted on any state change (debounced 50ms) */
+  @Output() stateChange = new EventEmitter<ERDCompositeState>();
 
-  @Output() stateChange = new EventEmitter<DashboardState>();
-  @Output() userStateChange = new EventEmitter<DashboardState>();
+  /** Emitted on user-initiated state changes (debounced 1s) for persistence */
+  @Output() userStateChange = new EventEmitter<ERDCompositeState>();
+
+  /** Emitted when an entity is opened (e.g., double-clicked in details panel) */
   @Output() entityOpened = new EventEmitter<EntityInfo>();
+
+  /** Emitted when requesting to open an entity record (for navigation) */
   @Output() openRecord = new EventEmitter<{EntityName: string, RecordID: string}>();
 
   // Panel visibility and configuration
@@ -60,7 +102,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   public selectedEntity: EntityInfo | null = null;
   public filteredEntities: EntityInfo[] = [];
   public isDataLoaded = false;
-  
+
   // Filters
   public filters: EntityFilter = {
     schemaName: null,
@@ -70,18 +112,14 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   };
 
   // State management
-  private stateChangeSubject = new Subject<DashboardState>();
-  private userStateChangeSubject = new Subject<DashboardState>();
+  private stateChangeSubject = new Subject<ERDCompositeState>();
+  private userStateChangeSubject = new Subject<ERDCompositeState>();
   private filterChangeSubject = new Subject<void>();
 
   async ngOnInit(): Promise<void> {
     this.setupStateManagement();
     await this.loadData();
     this.filteredEntities = [...this.entities];
-
-    // Convert entities to ERD nodes for the generic ERD component
-    this.erdNodes = entitiesToERDNodes(this.entities);
-    this.filteredERDNodes = [...this.erdNodes];
 
     this.applyFilters();
     this.isDataLoaded = true;
@@ -154,19 +192,19 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
   public onToggleFilterPanel(): void {
     this.filterPanelVisible = !this.filterPanelVisible;
-    
+
     // Trigger ERD resize when filter panel is toggled
-    if (this.erdDiagram) {
-      this.erdDiagram.triggerResize();
+    if (this.mjEntityErd) {
+      this.mjEntityErd.triggerResize();
     }
-    
+
     this.emitStateChange();
     this.emitUserStateChange();
   }
 
   public onEntityDeselected(): void {
     this.selectedEntity = null;
-    
+
     this.emitStateChange();
     this.emitUserStateChange();
   }
@@ -179,25 +217,29 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle node selection from the generic ERD component.
-   * Converts the ERDNode back to EntityInfo for the details panel.
+   * Handle entity selection from the mj-entity-erd wrapper.
+   * Updates internal state.
    */
-  public onERDNodeSelected(node: ERDNode): void {
-    const entity = findEntityByNodeId(node.id, this.entities);
-    if (entity) {
-      this.selectedEntity = entity;
-      this.emitStateChange();
-      this.emitUserStateChange();
-    }
+  public onERDEntitySelected(event: EntitySelectedEvent): void {
+    this.selectedEntity = event.entity;
+    this.emitStateChange();
+    this.emitUserStateChange();
   }
 
   /**
-   * Handle node click from the generic ERD component.
-   * Can be used to cancel default selection behavior if needed.
+   * Handle open record from the mj-entity-erd wrapper (double-click).
+   * Opens the entity record using the entity form.
    */
-  public onERDNodeClick(event: ERDNodeClickEvent): void {
-    // Let default behavior proceed - node will be selected
-    // Set event.cancel = true to prevent selection
+  public onERDOpenRecord(event: OpenEntityRecordEvent): void {
+    this.openRecord.emit({ EntityName: event.EntityName, RecordID: event.RecordID });
+  }
+
+  /**
+   * Handle state changes from the ERD component.
+   */
+  public onERDStateChange(_state: ERDState): void {
+    // State changes are tracked for user preference persistence
+    this.emitUserStateChange();
   }
 
   public onEntityOpened(entity: EntityInfo): void {
@@ -218,12 +260,12 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
     this.openRecord.emit(event);
   }
 
-  public onSplitterLayoutChange(event: any): void {
+  public onSplitterLayoutChange(_event: unknown): void {
     // Trigger ERD diagram resize when splitter layout changes
-    if (this.erdDiagram) {
-      this.erdDiagram.triggerResize();
+    if (this.mjEntityErd) {
+      this.mjEntityErd.triggerResize();
     }
-    
+
     this.emitStateChange();
     this.emitUserStateChange();
   }
@@ -260,29 +302,20 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
       return true;
     });
-
-    // Also filter ERD nodes to match
-    const filteredEntityIds = new Set(this.filteredEntities.map(e => e.ID));
-    this.filteredERDNodes = this.erdNodes.filter(node => filteredEntityIds.has(node.id));
   }
 
   private emitStateChange(): void {
-    const state: DashboardState = {
-      filterPanelVisible: this.filterPanelVisible,
-      filterPanelWidth: 320,
-      filters: { ...this.filters },
-      selectedEntityId: this.selectedEntity?.ID || null,
-      zoomLevel: 1,
-      panPosition: { x: 0, y: 0 },
-      fieldsSectionExpanded: this.fieldsSectionExpanded,
-      relationshipsSectionExpanded: this.relationshipsSectionExpanded,
-    };
-
+    const state = this.buildState();
     this.stateChangeSubject.next(state);
   }
 
   private emitUserStateChange(): void {
-    const state: DashboardState = {
+    const state = this.buildState();
+    this.userStateChangeSubject.next(state);
+  }
+
+  private buildState(): ERDCompositeState {
+    return {
       filterPanelVisible: this.filterPanelVisible,
       filterPanelWidth: 320,
       filters: { ...this.filters },
@@ -292,12 +325,17 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
       fieldsSectionExpanded: this.fieldsSectionExpanded,
       relationshipsSectionExpanded: this.relationshipsSectionExpanded,
     };
-
-    this.userStateChangeSubject.next(state);
   }
 
-  // Public methods for external control
-  public loadUserState(state: Partial<DashboardState>): void {
+  // ============================================================================
+  // PUBLIC API
+  // ============================================================================
+
+  /**
+   * Load user state from a previously saved state object.
+   * Call this after the component is initialized to restore user preferences.
+   */
+  public loadUserState(state: Partial<ERDCompositeState>): void {
     if (state.filterPanelVisible !== undefined) {
       this.filterPanelVisible = state.filterPanelVisible;
     }
@@ -318,11 +356,23 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
     } else {
       this.selectedEntity = null;
     }
-    
+
     this.applyFilters();
   }
 
+  /**
+   * Refresh the ERD diagram.
+   */
   public refreshERD(): void {
-    // Emit event to refresh ERD
+    if (this.mjEntityErd) {
+      this.mjEntityErd.refresh();
+    }
+  }
+
+  /**
+   * Get the current state for external use.
+   */
+  public getState(): ERDCompositeState {
+    return this.buildState();
   }
 }

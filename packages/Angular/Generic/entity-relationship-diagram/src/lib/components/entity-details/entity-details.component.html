@@ -11,7 +11,7 @@
       </button>
     </div>
   </div>
-  
+
   <div class="entity-info">
     <div class="info-row">
       <label>Schema:</label>
@@ -28,12 +28,12 @@
       </div>
     }
   </div>
-  
+
   <div class="fields-section" [class.section-expanded]="fieldsSectionExpanded" [class.section-collapsed]="!fieldsSectionExpanded">
     <div class="section-header extra-padding">
       <div class="section-title-group" (click)="toggleFieldsSection()">
-        <button 
-          class="expand-btn" 
+        <button
+          class="expand-btn"
           [class.expanded]="fieldsSectionExpanded"
           title="Toggle fields section">
           <span class="fa-solid fa-chevron-right"></span>
@@ -42,29 +42,29 @@
       </div>
       @if (fieldsSectionExpanded) {
         <div class="field-filters">
-          <button 
-            class="filter-btn" 
+          <button
+            class="filter-btn"
             [class.active]="fieldFilter === 'all'"
             (click)="setFieldFilter('all')"
             title="Show all fields">
             All
           </button>
-          <button 
-            class="filter-btn" 
+          <button
+            class="filter-btn"
             [class.active]="fieldFilter === 'keys'"
             (click)="setFieldFilter('keys')"
             title="Show primary keys and ID fields">
             Keys
           </button>
-          <button 
-            class="filter-btn" 
+          <button
+            class="filter-btn"
             [class.active]="fieldFilter === 'foreign_keys'"
             (click)="setFieldFilter('foreign_keys')"
             title="Show foreign key fields only">
             FKs
           </button>
-          <button 
-            class="filter-btn" 
+          <button
+            class="filter-btn"
             [class.active]="fieldFilter === 'regular'"
             (click)="setFieldFilter('regular')"
             title="Show regular data fields">
@@ -76,8 +76,8 @@
     @if (fieldsSectionExpanded) {
       <div class="fields-list" #fieldsListContainer>
         @for (field of getEntityFields(selectedEntity?.ID || ''); track field.ID) {
-          <div class="field-item" 
-               [class]="{ 
+          <div class="field-item"
+               [class]="{
                  'primary-key-field': field.IsPrimaryKey,
                  'foreign-key-field': field.RelatedEntityID && !field.IsPrimaryKey,
                  'regular-field': !field.IsPrimaryKey && !field.RelatedEntityID,
@@ -96,7 +96,7 @@
               </div>
               <div class="field-actions">
                 @if (hasFieldPossibleValues(field)) {
-                  <button 
+                  <button
                     class="field-values-btn"
                     (click)="toggleFieldValues(field.ID)"
                     [class.expanded]="isFieldValuesExpanded(field.ID)"
@@ -105,7 +105,7 @@
                   </button>
                 }
                 @if (field.Description) {
-                  <button 
+                  <button
                     class="field-info-btn"
                     (click)="toggleFieldDescription(field.ID)"
                     [class.expanded]="isFieldDescriptionExpanded(field.ID)"
@@ -221,7 +221,7 @@
                   @if (field.RelatedEntityID) {
                     <div class="detail-row">
                       <span class="detail-label">Related Entity:</span>
-                      <span class="detail-value related-entity" 
+                      <span class="detail-value related-entity"
                             (click)="onRelatedEntityClick($event, field)"
                             title="Click to select {{ field.RelatedEntity }} in ERD">
                         {{ field.RelatedEntity }}
@@ -243,12 +243,12 @@
       </div>
     }
   </div>
-    
+
   <div class="relationships-section" [class.section-expanded]="relationshipsSectionExpanded" [class.section-collapsed]="!relationshipsSectionExpanded">
     <div class="section-header extra-padding">
       <div class="section-title-group" (click)="toggleRelationshipsSection()">
-        <button 
-          class="expand-btn" 
+        <button
+          class="expand-btn"
           [class.expanded]="relationshipsSectionExpanded"
           title="Toggle relationships section">
           <span class="fa-solid fa-chevron-right"></span>

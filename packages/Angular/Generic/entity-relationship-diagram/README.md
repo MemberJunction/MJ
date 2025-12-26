@@ -1,6 +1,203 @@
 # @memberjunction/ng-entity-relationship-diagram
 
-A **generic, reusable Angular component** for rendering interactive Entity Relationship Diagrams (ERD) using D3.js force-directed graphs. This package is completely decoupled from MemberJunction-specific types and can be used in **any Angular project**.
+A package providing **two Angular components** for rendering interactive Entity Relationship Diagrams (ERD) using D3.js force-directed graphs:
+
+1. **`<mj-entity-erd>`** - Higher-level MemberJunction wrapper that accepts `EntityInfo[]` directly
+2. **`<mj-erd-diagram>`** - Generic, reusable component that works with any data
+
+## Which Component Should I Use?
+
+| Use Case | Component | Why |
+|----------|-----------|-----|
+| **MemberJunction project** | `<mj-entity-erd>` | Auto-discovers relationships, handles transformation |
+| **Custom data sources** | `<mj-erd-diagram>` | Full control over node/link data |
+| **Single entity + related** | `<mj-entity-erd>` | Built-in depth/relationship discovery |
+| **Non-MJ Angular project** | `<mj-erd-diagram>` | No MJ dependencies in your code |
+
+---
+
+## `<mj-entity-erd>` - MemberJunction Entity Wrapper
+
+The higher-level wrapper component designed specifically for MemberJunction projects. It accepts `EntityInfo[]` directly and handles all the transformation logic internally.
+
+### Features
+
+- **Direct EntityInfo Input** - No manual transformation needed
+- **Automatic Relationship Discovery** - Finds related entities automatically
+- **Configurable Depth** - Control how many relationship hops to include
+- **Parent-Controlled State** - Emits state changes for persistence by parent
+- **Bidirectional Relationships** - Optionally include incoming and outgoing relationships
+
+### Basic Usage
+
+```typescript
+import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
+import { EntityInfo, Metadata } from '@memberjunction/core';
+
+@Component({
+  selector: 'my-entity-viewer',
+  template: `
+    <mj-entity-erd
+      [entities]="selectedEntities"
+      [allEntities]="allEntities"
+      [selectedEntityId]="currentEntityId"
+      [depth]="1"
+      [includeIncoming]="true"
+      [includeOutgoing]="true"
+      (entitySelected)="onEntitySelected($event)"
+      (openRecord)="onOpenEntity($event)">
+    </mj-entity-erd>
+  `
+})
+export class MyEntityViewerComponent {
+  allEntities: EntityInfo[] = [];
+  selectedEntities: EntityInfo[] = [];
+  currentEntityId: string | null = null;
+
+  constructor() {
+    const md = new Metadata();
+    this.allEntities = md.Entities;
+  }
+
+  onEntitySelected(entity: EntityInfo) {
+    this.currentEntityId = entity.ID;
+  }
+
+  onOpenEntity(entity: EntityInfo) {
+    // Navigate to entity record
+    this.router.navigate(['/entities', entity.ID]);
+  }
+}
+```
+
+### API Reference
+
+#### Inputs
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `entities` | `EntityInfo[]` | `[]` | Primary entities to display |
+| `allEntities` | `EntityInfo[]` | `[]` | All entities for relationship discovery |
+| `selectedEntityId` | `string \| null` | `null` | ID of currently selected entity |
+| `depth` | `number` | `1` | Relationship hops to include (0 = only primary entities) |
+| `includeIncoming` | `boolean` | `true` | Include entities that reference primary entities |
+| `includeOutgoing` | `boolean` | `true` | Include entities referenced by primary entities via FK |
+| `showHeader` | `boolean` | `true` | Show header with zoom controls |
+| `headerTitle` | `string` | `'Entity Relationship Diagram'` | Header title |
+| `isRefreshing` | `boolean` | `false` | Show loading overlay |
+| `readOnly` | `boolean` | `false` | Disable interactions |
+| `config` | `ERDConfig` | `{}` | Configuration options |
+
+#### Outputs
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `entitySelected` | `EntityInfo` | Entity was selected |
+| `entityDeselected` | `void` | Selection was cleared |
+| `openRecord` | `EntityInfo` | Entity double-clicked (typically for navigation) |
+| `stateChange` | `ERDState` | Diagram state changed (zoom, pan, selection) |
+
+### Single Entity Mode (Entity Forms)
+
+Perfect for showing one entity with its relationships:
+
+```html
+<mj-entity-erd
+  [entities]="[currentEntity]"
+  [allEntities]="allEntities"
+  [selectedEntityId]="currentEntity.ID"
+  [depth]="1"
+  [showHeader]="false"
+  (openRecord)="navigateToEntity($event)">
+</mj-entity-erd>
+```
+
+### Multi-Entity Mode (Dashboards)
+
+Display multiple entities with full navigation:
+
+```html
+<mj-entity-erd
+  [entities]="filteredEntities"
+  [allEntities]="allEntities"
+  [selectedEntityId]="selectedId"
+  [depth]="1"
+  [includeIncoming]="true"
+  [includeOutgoing]="true"
+  (entitySelected)="onSelect($event)"
+  (entityDeselected)="onDeselect()"
+  (openRecord)="openEntityForm($event)"
+  (stateChange)="saveUserPreferences($event)">
+</mj-entity-erd>
+```
+
+### State Persistence Example
+
+The wrapper emits state changes but doesn't persist them. Handle persistence in your container:
+
+```typescript
+@Component({...})
+export class EntityDashboardComponent {
+  savedState: ERDState | null = null;
+
+  ngOnInit() {
+    // Load saved preferences
+    const saved = localStorage.getItem('entity-erd-state');
+    if (saved) {
+      this.savedState = JSON.parse(saved);
+    }
+  }
+
+  onStateChange(state: ERDState) {
+    // Save to user preferences
+    localStorage.setItem('entity-erd-state', JSON.stringify(state));
+  }
+}
+```
+
+### Utility Functions
+
+The package also exports utility functions for advanced use cases:
+
+```typescript
+import {
+  buildERDDataFromEntities,
+  entityInfoToERDNode,
+  entityFieldToERDField,
+  entitiesToERDNodes,
+  getOriginalEntityFromERDNode,
+  findEntityByNodeId
+} from '@memberjunction/ng-entity-relationship-diagram';
+
+// Build complete ERD data with automatic relationship discovery
+const { nodes, links } = buildERDDataFromEntities(primaryEntities, {
+  allEntities: md.Entities,
+  includeIncoming: true,
+  includeOutgoing: true,
+  depth: 2
+});
+
+// Convert single entity
+const erdNode = entityInfoToERDNode(entityInfo);
+
+// Convert entity field
+const erdField = entityFieldToERDField(entityFieldInfo);
+
+// Batch convert entities
+const erdNodes = entitiesToERDNodes(entityInfoArray);
+
+// Extract original EntityInfo from ERDNode (if available)
+const originalEntity = getOriginalEntityFromERDNode(erdNode);
+
+// Find entity by node ID
+const entity = findEntityByNodeId(nodeId, allEntities);
+```
+
+---
+
+## `<mj-erd-diagram>` - Generic ERD Component
+
+The lower-level generic component for full control over the data.
 
 ## Features
 

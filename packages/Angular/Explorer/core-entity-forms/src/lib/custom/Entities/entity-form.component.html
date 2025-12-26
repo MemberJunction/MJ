@@ -1,0 +1,874 @@
+<div class="entity-explorer" *ngIf="!isExplorerLoading && entity; else loadingOrError">
+    <!-- ============================================================ -->
+    <!-- HEADER BAR -->
+    <!-- ============================================================ -->
+    <header class="explorer-header">
+        <div class="entity-identity">
+            <div class="entity-icon" [style.background-color]="'#3b82f6'">
+                <i [class]="entityIcon"></i>
+            </div>
+            <div class="entity-info">
+                <div class="entity-title-row">
+                    <h1 class="entity-name">{{ entityDisplayName }}</h1>
+                    <span class="status-badge" [ngClass]="statusClass">
+                        {{ entity.Status }}
+                    </span>
+                </div>
+                <div class="entity-subtitle">
+                    <span class="schema-table">{{ entity.SchemaName }}.{{ entity.BaseTable }}</span>
+                    <span class="separator">|</span>
+                    <span class="entity-description" *ngIf="entity.Description" [title]="entity.Description">
+                        {{ entity.Description | slice:0:80 }}{{ entity.Description.length > 80 ? '...' : '' }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="header-stats">
+            <div class="stat-item" (click)="setActiveSection('fields')">
+                <i class="fa-solid fa-table-columns"></i>
+                <span class="stat-value">{{ stats.fieldCount }}</span>
+                <span class="stat-label">Fields</span>
+            </div>
+            <div class="stat-item" (click)="setActiveSection('relationships')">
+                <i class="fa-solid fa-link"></i>
+                <span class="stat-value">{{ stats.relationshipCount }}</span>
+                <span class="stat-label">Relations</span>
+            </div>
+            <div class="stat-item" (click)="setActiveSection('permissions')">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span class="stat-value">{{ stats.permissionCount }}</span>
+                <span class="stat-label">Roles</span>
+            </div>
+            <div class="stat-item">
+                <i class="fa-solid fa-database"></i>
+                <span class="stat-value">{{ formattedRowCount }}</span>
+                <span class="stat-label">Rows</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============================================================ -->
+    <!-- MAIN CONTENT AREA -->
+    <!-- ============================================================ -->
+    <div class="explorer-body">
+        <!-- Navigation Rail -->
+        <nav class="nav-rail">
+            <button
+                *ngFor="let item of navItems"
+                class="nav-item"
+                [class.active]="activeSection === item.id"
+                (click)="setActiveSection(item.id)"
+                [title]="item.label">
+                <i [class]="item.icon"></i>
+                <span class="nav-label">{{ item.label }}</span>
+                <span class="nav-badge" *ngIf="item.badge">{{ item.badge }}</span>
+            </button>
+        </nav>
+
+        <!-- Main Canvas -->
+        <main class="main-canvas" [class.panel-open]="detailPanelOpen">
+            <!-- ============================================================ -->
+            <!-- OVERVIEW SECTION -->
+            <!-- ============================================================ -->
+            <section class="section overview-section" *ngIf="activeSection === 'overview'">
+                <div class="section-content">
+                    <!-- Stats Cards Row -->
+                    <div class="stats-cards">
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <i class="fa-solid fa-table-columns"></i>
+                                <span>Fields</span>
+                            </div>
+                            <div class="stat-card-body">
+                                <div class="stat-main">{{ stats.fieldCount }}</div>
+                                <div class="stat-details">
+                                    <span>{{ stats.primaryKeyCount }} PKs</span>
+                                    <span>{{ stats.foreignKeyCount }} FKs</span>
+                                    <span *ngIf="stats.encryptedFieldCount">{{ stats.encryptedFieldCount }} Encrypted</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <i class="fa-solid fa-link"></i>
+                                <span>Relationships</span>
+                            </div>
+                            <div class="stat-card-body">
+                                <div class="stat-main">{{ stats.relationshipCount }}</div>
+                                <div class="stat-details">
+                                    <span>{{ incomingRelationships.length }} Incoming</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <i class="fa-solid fa-shield-halved"></i>
+                                <span>Security</span>
+                            </div>
+                            <div class="stat-card-body">
+                                <div class="stat-main">{{ stats.permissionCount }}</div>
+                                <div class="stat-details">
+                                    <span>Roles configured</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <i class="fa-solid fa-database"></i>
+                                <span>Data</span>
+                            </div>
+                            <div class="stat-card-body">
+                                <div class="stat-main">{{ formattedRowCount }}</div>
+                                <div class="stat-details">
+                                    <span *ngIf="entity.RowCountRunAt">Updated {{ entity.RowCountRunAt | date:'short' }}</span>
+                                    <span *ngIf="!entity.RowCountRunAt">Row count</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Capabilities -->
+                    <div class="info-panel capabilities-panel">
+                        <h3 class="panel-title">
+                            <i class="fa-solid fa-bolt"></i>
+                            Capabilities
+                        </h3>
+                        <div class="capability-tags">
+                            <span class="capability-tag" *ngFor="let cap of capabilitySummary">
+                                <i class="fa-solid fa-check"></i>
+                                {{ cap }}
+                            </span>
+                            <span class="capability-tag disabled" *ngIf="!entity.IncludeInAPI">
+                                <i class="fa-solid fa-xmark"></i>
+                                No API
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Database Info -->
+                    <div class="info-panel database-panel">
+                        <h3 class="panel-title">
+                            <i class="fa-solid fa-server"></i>
+                            Database
+                        </h3>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Schema</span>
+                                <span class="info-value">{{ entity.SchemaName }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Table</span>
+                                <span class="info-value">{{ entity.BaseTable }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">View</span>
+                                <span class="info-value">{{ entity.BaseView }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Delete Type</span>
+                                <span class="info-value">{{ entity.DeleteType }}</span>
+                            </div>
+                            <div class="info-item" *ngIf="entity.spCreate">
+                                <span class="info-label">SP Create</span>
+                                <span class="info-value code">{{ entity.spCreate }}</span>
+                            </div>
+                            <div class="info-item" *ngIf="entity.spUpdate">
+                                <span class="info-label">SP Update</span>
+                                <span class="info-value code">{{ entity.spUpdate }}</span>
+                            </div>
+                            <div class="info-item" *ngIf="entity.spDelete">
+                                <span class="info-label">SP Delete</span>
+                                <span class="info-value code">{{ entity.spDelete }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Code Gen Info -->
+                    <div class="info-panel codegen-panel">
+                        <h3 class="panel-title">
+                            <i class="fa-solid fa-code"></i>
+                            Code Generation
+                        </h3>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Class Name</span>
+                                <span class="info-value code">{{ entity.ClassName }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Code Name</span>
+                                <span class="info-value code">{{ entity.CodeName }}</span>
+                            </div>
+                            <div class="info-item" *ngIf="entity.EntityObjectSubclassName">
+                                <span class="info-label">Subclass</span>
+                                <span class="info-value code">{{ entity.EntityObjectSubclassName }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- FIELDS SECTION -->
+            <!-- ============================================================ -->
+            <section class="section fields-section" *ngIf="activeSection === 'fields'">
+                <div class="section-header">
+                    <div class="search-box">
+                        <i class="fa-solid fa-search"></i>
+                        <input
+                            type="text"
+                            placeholder="Search fields..."
+                            [ngModel]="fieldSearchTerm"
+                            (ngModelChange)="onFieldSearch($event)">
+                    </div>
+                </div>
+
+                <div class="section-content fields-content">
+                    <div class="field-groups">
+                        <div
+                            class="field-group"
+                            *ngFor="let group of getFilteredFieldGroups()"
+                            [class.expanded]="isFieldGroupExpanded(group.id)">
+
+                            <div class="group-header" (click)="toggleFieldGroup(group.id)">
+                                <i class="expand-icon fa-solid" [ngClass]="isFieldGroupExpanded(group.id) ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                                <i [class]="group.icon" class="group-icon"></i>
+                                <span class="group-label">{{ group.label }}</span>
+                                <span class="group-count">{{ group.fields.length }}</span>
+                            </div>
+
+                            <div class="group-content" *ngIf="isFieldGroupExpanded(group.id)">
+                                <div
+                                    class="field-item"
+                                    *ngFor="let field of group.fields"
+                                    (click)="selectField(field)"
+                                    [class.selected]="selectedField?.ID === field.ID">
+
+                                    <div class="field-icon">
+                                        <i [class]="getFieldTypeIcon(field)"></i>
+                                    </div>
+
+                                    <div class="field-info">
+                                        <div class="field-name">{{ field.DisplayName || field.Name }}</div>
+                                        <div class="field-meta">
+                                            <span class="field-type">{{ formatFieldType(field) }}</span>
+                                            <span class="field-nullable" *ngIf="!field.AllowsNull">Required</span>
+                                            <span class="field-related" *ngIf="field.RelatedEntityID" (click)="navigateToRelatedEntity(field); $event.stopPropagation()">
+                                                <i class="fa-solid fa-arrow-right"></i>
+                                                {{ getRelatedEntityName(field) }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="field-badges">
+                                        <span class="badge pk" *ngIf="field.IsPrimaryKey" title="Primary Key">PK</span>
+                                        <span class="badge fk" *ngIf="field.RelatedEntityID && !field.IsPrimaryKey" title="Foreign Key">FK</span>
+                                        <span class="badge encrypted" *ngIf="field.Encrypt" title="Encrypted">
+                                            <i class="fa-solid fa-lock"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- RELATIONSHIPS SECTION -->
+            <!-- ============================================================ -->
+            <section class="section relationships-section" *ngIf="activeSection === 'relationships'">
+                <div class="section-header">
+                    <div class="view-toggle">
+                        <button
+                            class="toggle-btn"
+                            [class.active]="relationshipViewMode === 'graph'"
+                            (click)="relationshipViewMode = 'graph'">
+                            <i class="fa-solid fa-diagram-project"></i>
+                            Graph
+                        </button>
+                        <button
+                            class="toggle-btn"
+                            [class.active]="relationshipViewMode === 'list'"
+                            (click)="relationshipViewMode = 'list'">
+                            <i class="fa-solid fa-list"></i>
+                            List
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section-content">
+                    <!-- Graph View using the mj-entity-erd wrapper -->
+                    <div class="relationships-graph" *ngIf="relationshipViewMode === 'graph'">
+                        <mj-entity-erd
+                            [entities]="entity ? [entity] : []"
+                            [allEntities]="allEntities"
+                            [selectedEntityId]="entity.ID || null"
+                            [depth]="1"
+                            [includeIncoming]="true"
+                            [includeOutgoing]="true"
+                            [showHeader]="false"
+                            (entitySelected)="onERDEntitySelected($event)"
+                            (openRecord)="onERDOpenRecord($event)">
+                        </mj-entity-erd>
+                    </div>
+
+                    <!-- List View -->
+                    <div class="relationships-list" *ngIf="relationshipViewMode === 'list'">
+                        <!-- Outgoing Relationships (FK fields on this entity) -->
+                        <div class="relationship-group">
+                            <h3 class="relationship-group-title">
+                                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                                Outgoing (References to other entities)
+                            </h3>
+                            <div class="relationship-items">
+                                <div
+                                    class="relationship-item"
+                                    *ngFor="let field of entity.Fields"
+                                    [class.hidden]="!field.RelatedEntityID">
+                                    <ng-container *ngIf="field.RelatedEntityID">
+                                        <div class="rel-icon">
+                                            <i class="fa-solid fa-arrow-right"></i>
+                                        </div>
+                                        <div class="rel-info">
+                                            <div class="rel-entity" (click)="navigateToRelatedEntity(field)">
+                                                {{ getRelatedEntityName(field) }}
+                                            </div>
+                                            <div class="rel-field">via {{ field.Name }}</div>
+                                        </div>
+                                        <div class="rel-meta">
+                                            <span class="rel-display-type">{{ field.RelatedEntityDisplayType }}</span>
+                                        </div>
+                                    </ng-container>
+                                </div>
+                                <div class="empty-state" *ngIf="stats.foreignKeyCount === 0">
+                                    <p>No outgoing relationships</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Incoming Relationships -->
+                        <div class="relationship-group">
+                            <h3 class="relationship-group-title">
+                                <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                                Incoming (Entities that reference this one)
+                            </h3>
+                            <div class="relationship-items">
+                                <div
+                                    class="relationship-item"
+                                    *ngFor="let rel of incomingRelationships"
+                                    (click)="selectRelationship(rel)">
+                                    <div class="rel-icon">
+                                        <i class="fa-solid fa-arrow-left"></i>
+                                    </div>
+                                    <div class="rel-info">
+                                        <div class="rel-entity">{{ rel.Entity }}</div>
+                                        <div class="rel-field">via {{ rel.RelatedEntityJoinField }}</div>
+                                    </div>
+                                    <div class="rel-meta">
+                                        <span class="rel-type">{{ rel.Type }}</span>
+                                        <span class="rel-bundle" *ngIf="rel.BundleInAPI">
+                                            <i class="fa-solid fa-box"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="empty-state" *ngIf="incomingRelationships.length === 0">
+                                    <p>No incoming relationships</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- PERMISSIONS SECTION -->
+            <!-- ============================================================ -->
+            <section class="section permissions-section" *ngIf="activeSection === 'permissions'">
+                <div class="section-content">
+                    <div class="permissions-matrix">
+                        <table class="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>Role</th>
+                                    <th class="center">Create</th>
+                                    <th class="center">Read</th>
+                                    <th class="center">Update</th>
+                                    <th class="center">Delete</th>
+                                    <th>RLS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr *ngFor="let perm of entity.Permissions">
+                                    <td class="role-name">{{ perm.Role }}</td>
+                                    <td class="center">
+                                        <i class="permission-icon" [ngClass]="perm.CanCreate ? 'fa-solid fa-check granted' : 'fa-solid fa-xmark denied'"></i>
+                                    </td>
+                                    <td class="center">
+                                        <i class="permission-icon" [ngClass]="perm.CanRead ? 'fa-solid fa-check granted' : 'fa-solid fa-xmark denied'"></i>
+                                    </td>
+                                    <td class="center">
+                                        <i class="permission-icon" [ngClass]="perm.CanUpdate ? 'fa-solid fa-check granted' : 'fa-solid fa-xmark denied'"></i>
+                                    </td>
+                                    <td class="center">
+                                        <i class="permission-icon" [ngClass]="perm.CanDelete ? 'fa-solid fa-check granted' : 'fa-solid fa-xmark denied'"></i>
+                                    </td>
+                                    <td class="rls-info">
+                                        <span *ngIf="perm.ReadRLSFilterID" class="rls-badge" title="Read RLS">R</span>
+                                        <span *ngIf="perm.CreateRLSFilterID" class="rls-badge" title="Create RLS">C</span>
+                                        <span *ngIf="perm.UpdateRLSFilterID" class="rls-badge" title="Update RLS">U</span>
+                                        <span *ngIf="perm.DeleteRLSFilterID" class="rls-badge" title="Delete RLS">D</span>
+                                        <span *ngIf="!perm.ReadRLSFilterID && !perm.CreateRLSFilterID && !perm.UpdateRLSFilterID && !perm.DeleteRLSFilterID" class="no-rls">None</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="empty-state" *ngIf="entity.Permissions.length === 0">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            <p>No permissions configured</p>
+                        </div>
+                    </div>
+
+                    <div class="api-capabilities">
+                        <h3 class="panel-title">
+                            <i class="fa-solid fa-plug"></i>
+                            API Capabilities
+                        </h3>
+                        <div class="capability-grid">
+                            <div class="capability-item" [class.enabled]="entity.IncludeInAPI">
+                                <i class="fa-solid" [ngClass]="entity.IncludeInAPI ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Include in API</span>
+                            </div>
+                            <div class="capability-item" [class.enabled]="entity.AllowAllRowsAPI">
+                                <i class="fa-solid" [ngClass]="entity.AllowAllRowsAPI ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Allow All Rows</span>
+                            </div>
+                            <div class="capability-item" [class.enabled]="entity.AllowCreateAPI">
+                                <i class="fa-solid" [ngClass]="entity.AllowCreateAPI ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Allow Create</span>
+                            </div>
+                            <div class="capability-item" [class.enabled]="entity.AllowUpdateAPI">
+                                <i class="fa-solid" [ngClass]="entity.AllowUpdateAPI ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Allow Update</span>
+                            </div>
+                            <div class="capability-item" [class.enabled]="entity.AllowDeleteAPI">
+                                <i class="fa-solid" [ngClass]="entity.AllowDeleteAPI ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Allow Delete</span>
+                            </div>
+                            <div class="capability-item" [class.enabled]="entity.AllowUserSearchAPI">
+                                <i class="fa-solid" [ngClass]="entity.AllowUserSearchAPI ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>User Search</span>
+                            </div>
+                            <div class="capability-item" [class.enabled]="entity.CustomResolverAPI">
+                                <i class="fa-solid" [ngClass]="entity.CustomResolverAPI ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Custom Resolver</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- LINEAGE SECTION -->
+            <!-- ============================================================ -->
+            <section class="section lineage-section" *ngIf="activeSection === 'lineage'">
+                <div class="section-content">
+                    <div class="lineage-diagram">
+                        <div class="lineage-stage sources">
+                            <h4>Data Sources</h4>
+                            <div class="lineage-items">
+                                <div class="lineage-item">
+                                    <i class="fa-solid fa-keyboard"></i>
+                                    <span>Manual Entry</span>
+                                </div>
+                                <div class="lineage-item" *ngIf="entity.IncludeInAPI">
+                                    <i class="fa-solid fa-plug"></i>
+                                    <span>API Create</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="lineage-arrow">
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+
+                        <div class="lineage-stage entity-node">
+                            <div class="entity-box">
+                                <i [class]="entityIcon"></i>
+                                <span>{{ entity.Name }}</span>
+                            </div>
+                        </div>
+
+                        <div class="lineage-arrow">
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+
+                        <div class="lineage-stage sinks">
+                            <h4>Data Sinks</h4>
+                            <div class="lineage-items">
+                                <div class="lineage-item" *ngIf="entity.TrackRecordChanges">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                    <span>Record Changes</span>
+                                </div>
+                                <div class="lineage-item" *ngIf="entity.AuditRecordAccess">
+                                    <i class="fa-solid fa-eye"></i>
+                                    <span>Access Audit</span>
+                                </div>
+                                <div class="lineage-item">
+                                    <i class="fa-solid fa-link"></i>
+                                    <span>Related Entities ({{ stats.relationshipCount }})</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tracking-config">
+                        <h3 class="panel-title">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            Tracking Configuration
+                        </h3>
+                        <div class="config-grid">
+                            <div class="config-item" [class.enabled]="entity.TrackRecordChanges">
+                                <i class="fa-solid" [ngClass]="entity.TrackRecordChanges ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Track Record Changes</span>
+                            </div>
+                            <div class="config-item" [class.enabled]="entity.AuditRecordAccess">
+                                <i class="fa-solid" [ngClass]="entity.AuditRecordAccess ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Audit Record Access</span>
+                            </div>
+                            <div class="config-item" [class.enabled]="entity.AuditViewRuns">
+                                <i class="fa-solid" [ngClass]="entity.AuditViewRuns ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Audit View Runs</span>
+                            </div>
+                            <div class="config-item">
+                                <span class="config-label">Delete Type:</span>
+                                <span class="config-value">{{ entity.DeleteType }}</span>
+                            </div>
+                            <div class="config-item" [class.enabled]="entity.CascadeDeletes">
+                                <i class="fa-solid" [ngClass]="entity.CascadeDeletes ? 'fa-check' : 'fa-xmark'"></i>
+                                <span>Cascade Deletes</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- HISTORY SECTION -->
+            <!-- ============================================================ -->
+            <section class="section history-section" *ngIf="activeSection === 'history'">
+                <div class="section-content">
+                    <div class="history-config">
+                        <div class="config-status" [class.enabled]="entity.TrackRecordChanges">
+                            <i class="fa-solid" [ngClass]="entity.TrackRecordChanges ? 'fa-circle-check' : 'fa-circle-xmark'"></i>
+                            <div class="config-text">
+                                <strong>Record Change Tracking</strong>
+                                <span>{{ entity.TrackRecordChanges ? 'Enabled - All changes are recorded' : 'Disabled - Changes are not tracked' }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="history-info">
+                        <div class="info-card">
+                            <h4>
+                                <i class="fa-solid fa-info-circle"></i>
+                                About Change Tracking
+                            </h4>
+                            <p *ngIf="entity.TrackRecordChanges">
+                                This entity has change tracking enabled. All modifications to records are stored in the
+                                <code>RecordChange</code> table, including the user who made the change, timestamp, and
+                                the before/after values.
+                            </p>
+                            <p *ngIf="!entity.TrackRecordChanges">
+                                This entity does not have change tracking enabled. To enable it, set
+                                <code>TrackRecordChanges</code> to <code>true</code> in the entity metadata.
+                            </p>
+                        </div>
+
+                        <div class="info-card" *ngIf="entity.TrackRecordChanges">
+                            <h4>
+                                <i class="fa-solid fa-database"></i>
+                                Audit Fields
+                            </h4>
+                            <ul class="audit-fields-list">
+                                <li>
+                                    <code>__mj_CreatedAt</code> - Record creation timestamp
+                                </li>
+                                <li>
+                                    <code>__mj_UpdatedAt</code> - Last modification timestamp
+                                </li>
+                                <li *ngIf="entity.DeleteType === 'Soft'">
+                                    <code>__mj_DeletedAt</code> - Soft delete timestamp (when applicable)
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- SETTINGS SECTION -->
+            <!-- ============================================================ -->
+            <section class="section settings-section" *ngIf="activeSection === 'settings'">
+                <div class="section-content">
+                    <!-- Entity Settings -->
+                    <div class="settings-panel">
+                        <h3 class="panel-title">
+                            <i class="fa-solid fa-sliders"></i>
+                            Entity Settings
+                        </h3>
+                        <div class="settings-list" *ngIf="entity.Settings.length > 0">
+                            <div class="setting-item" *ngFor="let setting of entity.Settings">
+                                <div class="setting-name">{{ setting.Name }}</div>
+                                <div class="setting-value">{{ setting.Value }}</div>
+                                <div class="setting-comment" *ngIf="setting.Comments">{{ setting.Comments }}</div>
+                            </div>
+                        </div>
+                        <div class="empty-state" *ngIf="entity.Settings.length === 0">
+                            <p>No custom settings configured</p>
+                        </div>
+                    </div>
+
+                    <!-- Full Text Search -->
+                    <div class="settings-panel">
+                        <h3 class="panel-title">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            Full-Text Search
+                        </h3>
+                        <div class="fts-config" *ngIf="entity.FullTextSearchEnabled">
+                            <div class="config-row">
+                                <span class="config-label">Status</span>
+                                <span class="config-value enabled">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    Enabled
+                                </span>
+                            </div>
+                            <div class="config-row" *ngIf="entity.FullTextCatalog">
+                                <span class="config-label">Catalog</span>
+                                <span class="config-value code">{{ entity.FullTextCatalog }}</span>
+                            </div>
+                            <div class="config-row" *ngIf="entity.FullTextIndex">
+                                <span class="config-label">Index</span>
+                                <span class="config-value code">{{ entity.FullTextIndex }}</span>
+                            </div>
+                            <div class="config-row" *ngIf="entity.FullTextSearchFunction">
+                                <span class="config-label">Function</span>
+                                <span class="config-value code">{{ entity.FullTextSearchFunction }}</span>
+                            </div>
+                        </div>
+                        <div class="empty-state" *ngIf="!entity.FullTextSearchEnabled">
+                            <p>Full-text search is not enabled for this entity</p>
+                        </div>
+                    </div>
+
+                    <!-- Row Packaging -->
+                    <div class="settings-panel">
+                        <h3 class="panel-title">
+                            <i class="fa-solid fa-box"></i>
+                            Schema Packaging
+                        </h3>
+                        <div class="config-grid">
+                            <div class="config-row">
+                                <span class="config-label">Rows to Pack</span>
+                                <span class="config-value">{{ entity.RowsToPackWithSchema || 'None' }}</span>
+                            </div>
+                            <div class="config-row" *ngIf="entity.RowsToPackSampleCount">
+                                <span class="config-label">Sample Count</span>
+                                <span class="config-value">{{ entity.RowsToPackSampleCount }}</span>
+                            </div>
+                            <div class="config-row" *ngIf="entity.RowsToPackSampleMethod">
+                                <span class="config-label">Sample Method</span>
+                                <span class="config-value">{{ entity.RowsToPackSampleMethod }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- ============================================================ -->
+        <!-- DETAIL PANEL (Slides in from right) -->
+        <!-- ============================================================ -->
+        <aside class="detail-panel" [class.open]="detailPanelOpen">
+            <div class="panel-header">
+                <h3 *ngIf="selectedField">Field Details</h3>
+                <h3 *ngIf="selectedRelationship">Relationship Details</h3>
+                <button class="close-btn" (click)="closeDetailPanel()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Field Details -->
+            <div class="panel-content" *ngIf="selectedField">
+                <div class="detail-section">
+                    <h4>{{ selectedField.DisplayName || selectedField.Name }}</h4>
+                    <p class="field-description" *ngIf="selectedField.Description">{{ selectedField.Description }}</p>
+                </div>
+
+                <div class="detail-section">
+                    <h5>Type Information</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="label">SQL Type</span>
+                            <span class="value code">{{ formatFieldType(selectedField) }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">TypeScript Type</span>
+                            <span class="value code">{{ selectedField.TSType }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Nullable</span>
+                            <span class="value">{{ selectedField.AllowsNull ? 'Yes' : 'No' }}</span>
+                        </div>
+                        <div class="detail-item" *ngIf="selectedField.DefaultValue">
+                            <span class="label">Default</span>
+                            <span class="value code">{{ selectedField.DefaultValue }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section" *ngIf="selectedField.RelatedEntityID">
+                    <h5>Relationship</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="label">Related Entity</span>
+                            <span class="value link" (click)="navigateToRelatedEntity(selectedField)">
+                                {{ getRelatedEntityName(selectedField) }}
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Display Type</span>
+                            <span class="value">{{ selectedField.RelatedEntityDisplayType }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section" *ngIf="selectedField.Encrypt">
+                    <h5>Encryption</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="label">Encrypted</span>
+                            <span class="value">Yes</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Decrypt in API</span>
+                            <span class="value">{{ selectedField.AllowDecryptInAPI ? 'Yes' : 'No' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h5>API Settings</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="label">Allow Update</span>
+                            <span class="value">{{ selectedField.AllowUpdateAPI ? 'Yes' : 'No' }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Include in Search</span>
+                            <span class="value">{{ selectedField.IncludeInUserSearchAPI ? 'Yes' : 'No' }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Full-Text Search</span>
+                            <span class="value">{{ selectedField.FullTextSearchEnabled ? 'Yes' : 'No' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h5>Form Settings</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="label">Include in Form</span>
+                            <span class="value">{{ selectedField.IncludeInGeneratedForm ? 'Yes' : 'No' }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Section</span>
+                            <span class="value">{{ selectedField.GeneratedFormSection }}</span>
+                        </div>
+                        <div class="detail-item" *ngIf="selectedField.Category">
+                            <span class="label">Category</span>
+                            <span class="value">{{ selectedField.Category }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Sequence</span>
+                            <span class="value">{{ selectedField.Sequence }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section" *ngIf="selectedField.EntityFieldValues.length > 0">
+                    <h5>Allowed Values</h5>
+                    <div class="value-list">
+                        <div class="value-item" *ngFor="let val of selectedField.EntityFieldValues">
+                            <span class="value-code" *ngIf="val.Code !== val.Value">{{ val.Code }}</span>
+                            <span class="value-display">{{ val.Value }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relationship Details -->
+            <div class="panel-content" *ngIf="selectedRelationship">
+                <div class="detail-section">
+                    <h4>{{ selectedRelationship.DisplayName || selectedRelationship.Entity }}</h4>
+                </div>
+
+                <div class="detail-section">
+                    <h5>Connection</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="label">From Entity</span>
+                            <span class="value">{{ selectedRelationship.Entity }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Join Field</span>
+                            <span class="value code">{{ selectedRelationship.RelatedEntityJoinField }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Type</span>
+                            <span class="value">{{ selectedRelationship.Type }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h5>Display Settings</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="label">Display in Form</span>
+                            <span class="value">{{ selectedRelationship.DisplayInForm ? 'Yes' : 'No' }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Location</span>
+                            <span class="value">{{ selectedRelationship.DisplayLocation }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Bundle in API</span>
+                            <span class="value">{{ selectedRelationship.BundleInAPI ? 'Yes' : 'No' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- Loading / Error State -->
+<ng-template #loadingOrError>
+    <div class="explorer-loading" *ngIf="isExplorerLoading">
+        <mj-loading text="Loading entity..."></mj-loading>
+    </div>
+    <div class="explorer-error" *ngIf="!isExplorerLoading && explorerError">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+        <p>{{ explorerError }}</p>
+    </div>
+    <div class="explorer-empty" *ngIf="!isExplorerLoading && !explorerError && !entity">
+        <i class="fa-solid fa-database"></i>
+        <p>Entity metadata not available</p>
+    </div>
+</ng-template>

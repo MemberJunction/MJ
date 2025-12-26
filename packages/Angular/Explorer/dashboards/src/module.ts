@@ -8,9 +8,8 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { LayoutModule, TabStripModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
-import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
-import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
-import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
+// ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent are now in
+// @memberjunction/ng-entity-relationship-diagram and imported via EntityRelationshipDiagramModule
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
 import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
@@ -113,6 +112,8 @@ import { CredentialsTypesResourceComponent } from './Credentials/components/cred
 import { CredentialsCategoriesResourceComponent } from './Credentials/components/credentials-categories-resource.component';
 import { CredentialsAuditResourceComponent } from './Credentials/components/credentials-audit-resource.component';
 import { CredentialEditPanelComponent } from './Credentials/components/credential-edit-panel.component';
+import { CredentialTypeEditPanelComponent } from './Credentials/components/credential-type-edit-panel.component';
+import { CredentialCategoryEditPanelComponent } from './Credentials/components/credential-category-edit-panel.component';
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
 
 
@@ -120,9 +121,7 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
-    ERDCompositeComponent,
-    EntityFilterPanelComponent,
-    EntityDetailsComponent,
+    // ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent now in Generic package
     ModelManagementV2Component,
     PromptManagementV2Component,
     PromptFilterPanelComponent,
@@ -203,6 +202,8 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CredentialsCategoriesResourceComponent,
     CredentialsAuditResourceComponent,
     CredentialEditPanelComponent,
+    CredentialTypeEditPanelComponent,
+    CredentialCategoryEditPanelComponent,
     GroupByPipe
   ],
   imports: [
@@ -292,6 +293,8 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CredentialsCategoriesResourceComponent,
     CredentialsAuditResourceComponent,
     CredentialEditPanelComponent,
+    CredentialTypeEditPanelComponent,
+    CredentialCategoryEditPanelComponent,
     GroupByPipe
   ]
 })
