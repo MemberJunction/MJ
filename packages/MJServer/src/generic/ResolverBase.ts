@@ -95,12 +95,14 @@ export class ResolverBase {
           if (value === null || value === undefined) continue;
 
           // Check if value is encrypted (raw SQL returns encrypted values)
-          if (typeof value === 'string' && IsValueEncrypted(value)) {
+          const engine = EncryptionEngine.Instance;
+          await engine.Config(false, contextUser);
+          const keyMarker = field.EncryptionKeyID ? engine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
+          if (typeof value === 'string' && IsValueEncrypted(value, keyMarker)) {
             if (field.AllowDecryptInAPI) {
               // Decrypt the value for the client
               if (contextUser) {
                 try {
-                  const engine = EncryptionEngine.Instance;
                   const decryptedValue = await engine.Decrypt(value, contextUser);
                   dataObject[fieldName] = decryptedValue;
                 } catch (err) {
@@ -175,12 +177,14 @@ export class ResolverBase {
       if (field.AllowDecryptInAPI) continue;
 
       // AllowDecryptInAPI is false - we need to filter the value
+      const engine = EncryptionEngine.Instance;
+      await engine.Config(false, contextUser);
+      const keyMarker = field.EncryptionKeyID ? engine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
       if (field.SendEncryptedValue) {
         // Re-encrypt the value before sending
         // Only re-encrypt if it's not already encrypted (data provider decrypted it)
-        if (typeof value === 'string' && !IsValueEncrypted(value)) {
+        if (typeof value === 'string' && !IsValueEncrypted(value, keyMarker)) {
           try {
-            const engine = EncryptionEngine.Instance;
             const encryptedValue = await engine.Encrypt(
               value,
               field.EncryptionKeyID as string,

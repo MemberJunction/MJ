@@ -26,6 +26,21 @@ import { MJLinkField } from './lib/link-field.component';
 import { FormSectionControlsComponent } from './lib/form-section-controls.component';
 import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
 
+// Encryption engine initialization
+import { EncryptionEngineBase } from '@memberjunction/core-entities';
+
+/**
+ * Initializes the EncryptionEngineBase for client-side use.
+ * Called automatically when the module loads.
+ * Client-side doesn't need contextUser since the user context is already established.
+ */
+export function initializeEncryptionEngine(): void {
+  // Config with forceRefresh=false, no contextUser needed on client side
+  EncryptionEngineBase.Instance.Config(false).catch(err => {
+    console.warn('EncryptionEngineBase initialization deferred - metadata not yet available:', err?.message || err);
+  });
+}
+
 @NgModule({
   declarations: [
     SectionLoaderComponent,
@@ -60,3 +75,6 @@ import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
   ]
 })
 export class BaseFormsModule { }
+
+// Initialize EncryptionEngineBase when module loads
+initializeEncryptionEngine();

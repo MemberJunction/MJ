@@ -155,6 +155,7 @@ export class RotateEncryptionKeyAction {
     ): Promise<RotateKeyResult> {
         const { encryptionKeyId, newKeyLookupValue, batchSize = 100 } = params;
         const engine = EncryptionEngine.Instance;
+        await engine.Config(false, contextUser);
         const md = new Metadata();
         const rv = new RunView();
 

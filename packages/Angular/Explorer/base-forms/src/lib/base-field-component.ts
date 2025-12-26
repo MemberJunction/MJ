@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, ViewChild, AfterViewInit, Renderer2 } from '@angular/core';
 import { BaseEntity, EntityField, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
-import { IsEncryptedSentinel, IsEncryptedOrSentinel } from '@memberjunction/global';
+import { IsEncryptedSentinel, IsValueEncrypted } from '@memberjunction/global';
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormContext } from './base-form-context';
 import { MarkdownComponent } from '@memberjunction/ng-markdown';
 import { languages } from '@codemirror/language-data';
+import { EncryptionEngineBase } from '@memberjunction/core-entities';
 
 /**
  * This component is used to automatically generate a UI for any field in a given BaseEntity object. The CodeGen tool will generate forms and form sections that
@@ -216,19 +217,22 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
    * For encrypted fields where AllowDecryptInAPI=false, any non-empty value should be hidden.
    */
   public get IsValueProtected(): boolean {
-    const value = this.record.Get(this.FieldName);
+    const f = this.record.GetFieldByName(this.FieldName);
+    if (f?.EntityFieldInfo?.Encrypt && f?.EntityFieldInfo.EncryptionKeyID) {
+      const value = this.record.Get(this.FieldName);
 
-    // If value is sentinel or encrypted ciphertext, it's protected
-    if (IsEncryptedOrSentinel(value)) {
-      return true;
+      // If value is sentinel or encrypted ciphertext, it's protected
+      const key = EncryptionEngineBase.Instance.GetKeyByID(f.EntityFieldInfo.EncryptionKeyID)
+      if (IsValueEncrypted(value, key?.Marker)) {
+        return true;
+      }
+
+      // For encrypted fields where AllowDecryptInAPI=false, treat any non-null value as protected
+      const fieldInfo = this.FieldInfo;
+      if (fieldInfo?.Encrypt && !fieldInfo.AllowDecryptInAPI) {
+        return value !== null && value !== undefined && value !== '';
+      }
     }
-
-    // For encrypted fields where AllowDecryptInAPI=false, treat any non-null value as protected
-    const fieldInfo = this.FieldInfo;
-    if (fieldInfo?.Encrypt && !fieldInfo.AllowDecryptInAPI) {
-      return value !== null && value !== undefined && value !== '';
-    }
-
     return false;
   }
 

@@ -18,29 +18,39 @@ export const ENCRYPTION_MARKER = '$ENC$';
 export const ENCRYPTED_SENTINEL = '[!ENCRYPTED$]';
 
 /**
- * Checks if a string value is encrypted (starts with the encryption marker).
+ * Checks if a string value is encrypted or is the encrypted sentinel.
+ *
+ * This function returns true if the value:
+ * - Equals the encrypted sentinel (`[!ENCRYPTED$]`), indicating a protected value not disclosed to the client
+ * - Starts with the encryption marker (default `$ENC$` or a custom marker if provided)
  *
  * @param value - The value to check
- * @returns True if the value starts with the encryption marker ($ENC$), false otherwise
+ * @param encryptionMarker - Optional custom encryption marker prefix. If not provided, uses the default `$ENC$`.
+ *                           This allows for per-key markers as defined in the EncryptionKey entity's Marker field.
+ * @returns True if the value is the encrypted sentinel or starts with the encryption marker, false otherwise
  *
  * @example
  * ```typescript
  * import { IsValueEncrypted, ENCRYPTION_MARKER } from '@memberjunction/global';
  *
  * const encrypted = '$ENC$keyId$AES-256-GCM$iv$ciphertext$authTag';
+ * const customEncrypted = '$CUSTOM$keyId$AES-256-GCM$iv$ciphertext';
+ * const sentinel = '[!ENCRYPTED$]';
  * const plaintext = 'Hello World';
  *
- * console.log(IsValueEncrypted(encrypted)); // true
- * console.log(IsValueEncrypted(plaintext)); // false
- * console.log(IsValueEncrypted(null));      // false
- * console.log(IsValueEncrypted(''));        // false
+ * console.log(IsValueEncrypted(encrypted));                    // true
+ * console.log(IsValueEncrypted(sentinel));                     // true
+ * console.log(IsValueEncrypted(customEncrypted, '$CUSTOM$'));  // true
+ * console.log(IsValueEncrypted(plaintext));                    // false
+ * console.log(IsValueEncrypted(null));                         // false
+ * console.log(IsValueEncrypted(''));                           // false
  * ```
  */
-export function IsValueEncrypted(value: string | null | undefined): boolean {
+export function IsValueEncrypted(value: string | null | undefined, encryptionMarker?: string): boolean {
   if (!value || typeof value !== 'string') {
     return false;
   }
-  return IsEncryptedSentinel(value) || value.startsWith(ENCRYPTION_MARKER);
+  return IsEncryptedSentinel(value) || value.startsWith(encryptionMarker || ENCRYPTION_MARKER);
 }
 
 /**
@@ -63,22 +73,3 @@ export function IsEncryptedSentinel(value: string | null | undefined): boolean {
   return value === ENCRYPTED_SENTINEL;
 }
 
-/**
- * Checks if a value represents an encrypted or protected field value.
- * This includes both actual encrypted ciphertext and the sentinel value.
- *
- * @param value - The value to check
- * @returns True if the value is encrypted ciphertext or the encrypted sentinel
- *
- * @example
- * ```typescript
- * import { IsEncryptedOrSentinel } from '@memberjunction/global';
- *
- * console.log(IsEncryptedOrSentinel('$ENC$...')); // true (encrypted)
- * console.log(IsEncryptedOrSentinel('[!ENCRYPTED$]')); // true (sentinel)
- * console.log(IsEncryptedOrSentinel('plaintext')); // false
- * ```
- */
-export function IsEncryptedOrSentinel(value: string | null | undefined): boolean {
-  return IsValueEncrypted(value) || IsEncryptedSentinel(value);
-}

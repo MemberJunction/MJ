@@ -2514,11 +2514,13 @@ export class SQLServerDataProvider
             // Lazy-load encryption engine only when needed
             if (!encryptionEngine) {
               encryptionEngine = EncryptionEngine.Instance;
+              await encryptionEngine.Config(false, contextUser);
             }
 
             // Only encrypt if the value is not already encrypted
             // This handles cases where values may already be encrypted (e.g., re-save scenarios)
-            if (!encryptionEngine.IsEncrypted(value)) {
+            const keyMarker = encryptionEngine.GetKeyByID(f.EncryptionKeyID)?.Marker;
+            if (!encryptionEngine.IsEncrypted(value, keyMarker)) {
               try {
                 // Convert value to string for encryption if it isn't already
                 const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
@@ -3712,6 +3714,7 @@ export class SQLServerDataProvider
     let encryptionEngine: EncryptionEngine | null = null;
     if (encryptedFields.length > 0) {
       encryptionEngine = EncryptionEngine.Instance;
+      await encryptionEngine.Config(false, contextUser);
     }
 
     // Process each row - need to use Promise.all for async decryption
@@ -3791,7 +3794,8 @@ export class SQLServerDataProvider
           }
 
           // Only decrypt if the value is actually encrypted
-          if (typeof fieldValue === 'string' && encryptionEngine.IsEncrypted(fieldValue)) {
+          const keyMarker = field.EncryptionKeyID ? encryptionEngine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
+          if (typeof fieldValue === 'string' && encryptionEngine.IsEncrypted(fieldValue, keyMarker)) {
             try {
               const decryptedValue = await encryptionEngine.Decrypt(fieldValue, contextUser);
               processedRow[field.Name] = decryptedValue;

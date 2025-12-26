@@ -6,7 +6,7 @@
  *
  * - AES-256-GCM/CBC encryption with authenticated encryption support
  * - Pluggable key sources via the ClassFactory pattern
- * - Multi-level caching for performance
+ * - Multi-level caching for performance (inherited from EncryptionEngineBase)
  * - Self-describing encrypted value format
  * - Key rotation support with explicit lookup overrides
  *
@@ -15,20 +15,21 @@
  * ```typescript
  * import { EncryptionEngine } from '@memberjunction/encryption';
  *
- * const engine = EncryptionEngine.Instance;
+ * // First, configure the engine to load metadata
+ * await EncryptionEngine.Instance.Config(false, contextUser);
  *
  * // Encrypt a value
- * const encrypted = await engine.Encrypt(
+ * const encrypted = await EncryptionEngine.Instance.Encrypt(
  *   'sensitive-data',
  *   encryptionKeyId,
  *   contextUser
  * );
  *
  * // Decrypt a value
- * const decrypted = await engine.Decrypt(encrypted, contextUser);
+ * const decrypted = await EncryptionEngine.Instance.Decrypt(encrypted, contextUser);
  *
  * // Check if a value is encrypted
- * if (engine.IsEncrypted(someValue)) {
+ * if (EncryptionEngine.Instance.IsEncrypted(someValue)) {
  *   // Handle encrypted value
  * }
  * ```
@@ -45,8 +46,9 @@
  */
 
 import * as crypto from 'crypto';
-import { MJGlobal, ENCRYPTION_MARKER } from '@memberjunction/global';
-import { LogError, RunView, UserInfo } from '@memberjunction/core';
+import { MJGlobal, ENCRYPTION_MARKER, IsValueEncrypted } from '@memberjunction/global';
+import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { EncryptionEngineBase } from '@memberjunction/core-entities';
 import { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
 import {
     EncryptedValueParts,
@@ -54,7 +56,7 @@ import {
 } from './interfaces';
 
 /**
- * Cache entry with TTL for key material and configurations.
+ * Cache entry with TTL for key material.
  *
  * @internal
  */
@@ -67,18 +69,16 @@ interface CacheEntry<T> {
  * Default cache time-to-live in milliseconds (5 minutes).
  * Balances security (key changes take effect) with performance.
  */
-const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_KEY_MATERIAL_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Core encryption engine for field-level encryption operations.
  *
- * This is a singleton class - use `EncryptionEngine.Instance` to access.
- * The engine handles:
+ * This class extends EncryptionEngineBase to inherit metadata caching for
+ * encryption keys, algorithms, and key sources. It adds the actual
+ * encryption/decryption operations using Node.js crypto.
  *
- * - Loading key configurations from the database
- * - Retrieving key material from configured sources
- * - Performing encryption/decryption with Node.js crypto
- * - Caching configurations and key material for performance
+ * Use `EncryptionEngine.Instance` to access the singleton.
  *
  * ## Thread Safety
  *
@@ -96,29 +96,16 @@ const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
  *
  * Callers should catch and handle errors appropriately.
  */
-export class EncryptionEngine {
-    /**
-     * Singleton instance of the encryption engine.
-     *
-     * @private
-     */
-    private static _instance: EncryptionEngine;
-
+export class EncryptionEngine extends EncryptionEngineBase {
     /**
      * Cache for decrypted key material.
      * Maps 'keyId:version' to Buffer.
+     * This is separate from the base class caches since key material
+     * is sensitive and needs different handling.
      *
      * @private
      */
     private _keyMaterialCache: Map<string, CacheEntry<Buffer>> = new Map();
-
-    /**
-     * Cache for key configurations loaded from database.
-     * Maps keyId to KeyConfiguration.
-     *
-     * @private
-     */
-    private _keyConfigCache: Map<string, CacheEntry<KeyConfiguration>> = new Map();
 
     /**
      * Cache for initialized key source instances.
@@ -129,19 +116,12 @@ export class EncryptionEngine {
     private _keySourceCache: Map<string, EncryptionKeySourceBase> = new Map();
 
     /**
-     * Cache TTL in milliseconds.
+     * Cache TTL for key material in milliseconds.
      * Can be configured for testing or specific deployment needs.
      *
      * @private
      */
-    private readonly _cacheTtlMs: number = DEFAULT_CACHE_TTL_MS;
-
-    /**
-     * Private constructor - use Instance getter.
-     */
-    private constructor() {
-        // Private to enforce singleton pattern
-    }
+    private readonly _keyMaterialCacheTtlMs: number = DEFAULT_KEY_MATERIAL_CACHE_TTL_MS;
 
     /**
      * Gets the singleton instance of the encryption engine.
@@ -151,21 +131,33 @@ export class EncryptionEngine {
      * @example
      * ```typescript
      * const engine = EncryptionEngine.Instance;
-     * const encrypted = await engine.Encrypt(data, keyId);
+     * await engine.Config(false, contextUser);
+     * const encrypted = await engine.Encrypt(data, keyId, contextUser);
      * ```
      */
-    static get Instance(): EncryptionEngine {
-        if (!this._instance) {
-            this._instance = new EncryptionEngine();
-        }
-        return this._instance;
+    public static override get Instance(): EncryptionEngine {
+        return super.getInstance<EncryptionEngine>();
+    }
+
+    /**
+     * Configures the engine by loading encryption metadata from the database.
+     *
+     * This overrides the base Config to ensure proper initialization.
+     * Must be called before performing encryption/decryption operations.
+     *
+     * @param forceRefresh - If true, reloads data even if already loaded
+     * @param contextUser - User context for database access (required server-side)
+     * @param provider - Optional metadata provider override
+     */
+    public override async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await super.Config(forceRefresh, contextUser, provider);
     }
 
     /**
      * Encrypts a value using the specified encryption key.
      *
      * The method:
-     * 1. Loads the key configuration from database (cached)
+     * 1. Gets the key configuration from cached metadata
      * 2. Retrieves key material from the configured source (cached)
      * 3. Generates a random IV
      * 4. Encrypts the data using the configured algorithm
@@ -183,7 +175,7 @@ export class EncryptionEngine {
      * @param contextUser - User context for database access
      * @returns The encrypted value as a string
      *
-     * @throws Error if the key cannot be loaded
+     * @throws Error if the key cannot be found or is invalid
      * @throws Error if key material retrieval fails
      *
      * @example
@@ -214,8 +206,11 @@ export class EncryptionEngine {
             );
         }
 
-        // Load key configuration
-        const keyConfig = await this.getKeyConfiguration(encryptionKeyId, contextUser);
+        // Ensure engine is configured
+        await this.ensureConfigured(contextUser);
+
+        // Get key configuration from cached metadata
+        const keyConfig = this.buildKeyConfiguration(encryptionKeyId);
 
         // Get the key material
         const keyMaterial = await this.getKeyMaterial(keyConfig);
@@ -231,7 +226,7 @@ export class EncryptionEngine {
      *
      * The method:
      * 1. Parses the encrypted value to extract key ID and parameters
-     * 2. Loads the key configuration from database (cached)
+     * 2. Gets the key configuration from cached metadata
      * 3. Retrieves key material from the configured source (cached)
      * 4. Decrypts using the algorithm and IV from the encrypted value
      * 5. Verifies the auth tag for AEAD algorithms
@@ -264,8 +259,11 @@ export class EncryptionEngine {
         // Parse the encrypted value
         const parsed = this.ParseEncryptedValue(value);
 
-        // Load key configuration
-        const keyConfig = await this.getKeyConfiguration(parsed.keyId, contextUser);
+        // Ensure engine is configured
+        await this.ensureConfigured(contextUser);
+
+        // Get key configuration from cached metadata
+        const keyConfig = this.buildKeyConfiguration(parsed.keyId);
 
         // Get key material
         const keyMaterial = await this.getKeyMaterial(keyConfig);
@@ -278,20 +276,28 @@ export class EncryptionEngine {
      * Checks if a value is encrypted.
      *
      * Encrypted values start with the marker prefix (default: '$ENC$').
+     * This also checks for the encrypted sentinel value.
      * This is a fast, synchronous check that doesn't require database access.
      *
      * @param value - The value to check
-     * @returns `true` if the value appears to be encrypted
+     * @param encryptionMarker - Optional custom marker to check for (defaults to '$ENC$')
+     * @returns `true` if the value appears to be encrypted or is the sentinel value
      *
      * @example
      * ```typescript
      * if (engine.IsEncrypted(fieldValue)) {
      *   const decrypted = await engine.Decrypt(fieldValue, user);
      * }
+     *
+     * // With custom marker from key
+     * const key = engine.GetKeyByID(keyId);
+     * if (engine.IsEncrypted(fieldValue, key?.Marker)) {
+     *   const decrypted = await engine.Decrypt(fieldValue, user);
+     * }
      * ```
      */
-    IsEncrypted(value: unknown): boolean {
-        return typeof value === 'string' && value.startsWith(ENCRYPTION_MARKER);
+    IsEncrypted(value: unknown, encryptionMarker?: string): boolean {
+        return IsValueEncrypted(value as string, encryptionMarker);
     }
 
     /**
@@ -389,8 +395,11 @@ export class EncryptionEngine {
             );
         }
 
+        // Ensure engine is configured
+        await this.ensureConfigured(contextUser);
+
         // Get the key configuration to know the source type and algorithm
-        const keyConfig = await this.getKeyConfiguration(encryptionKeyId, contextUser);
+        const keyConfig = this.buildKeyConfiguration(encryptionKeyId);
 
         // Get or create the key source
         const source = await this.getOrCreateKeySource(keyConfig.source.driverClass);
@@ -444,8 +453,11 @@ export class EncryptionEngine {
             return plaintext as unknown as string;
         }
 
+        // Ensure engine is configured
+        await this.ensureConfigured(contextUser);
+
         // Get the base configuration
-        const keyConfig = await this.getKeyConfiguration(encryptionKeyId, contextUser);
+        const keyConfig = this.buildKeyConfiguration(encryptionKeyId);
 
         // Get key material using the overridden lookup value
         const keyMaterial = await this.getKeyMaterialWithLookup(
@@ -458,20 +470,105 @@ export class EncryptionEngine {
     }
 
     /**
-     * Clears all caches.
+     * Clears key material and source caches.
      *
      * Call after key rotation or configuration changes to ensure
-     * fresh data is loaded. Normally not needed as caches have TTL.
+     * fresh data is loaded. The base class metadata caches are
+     * handled separately via RefreshAllItems().
      */
     ClearCaches(): void {
         this._keyMaterialCache.clear();
-        this._keyConfigCache.clear();
         // Don't clear source cache - sources can be reused
+    }
+
+    /**
+     * Clears all caches including base class metadata caches.
+     *
+     * This is more aggressive than ClearCaches() and should be used
+     * when you need to completely refresh all cached data.
+     */
+    async ClearAllCaches(): Promise<void> {
+        this._keyMaterialCache.clear();
+        await this.RefreshAllItems();
     }
 
     // ========================================================================
     // PRIVATE METHODS
     // ========================================================================
+
+    /**
+     * Ensures the engine is configured before operations.
+     *
+     * @private
+     */
+    private async ensureConfigured(contextUser?: UserInfo): Promise<void> {
+        if (!this.Loaded) {
+            await this.Config(false, contextUser);
+        }
+    }
+
+    /**
+     * Builds a KeyConfiguration object from the cached metadata.
+     *
+     * @private
+     */
+    private buildKeyConfiguration(keyId: string): KeyConfiguration {
+        const keyConfig = this.GetKeyConfiguration(keyId);
+        if (!keyConfig) {
+            throw new Error(
+                `Encryption key not found: ${keyId}. ` +
+                'Ensure the key exists and the engine is configured.'
+            );
+        }
+
+        const { key, algorithm, source } = keyConfig;
+
+        // Validate key is usable
+        if (key.Status === 'Expired') {
+            throw new Error(
+                `Encryption key "${key.Name}" has expired. ` +
+                'Please rotate to a new key or update the expiration.'
+            );
+        }
+
+        if (!key.IsActive) {
+            throw new Error(
+                `Encryption key "${key.Name}" is not active. ` +
+                'Activate the key or select a different active key.'
+            );
+        }
+
+        if (!algorithm.IsActive) {
+            throw new Error(
+                `Encryption algorithm "${algorithm.Name}" is not active. ` +
+                'The key is configured to use a disabled algorithm.'
+            );
+        }
+
+        if (!source.IsActive) {
+            throw new Error(
+                `Encryption key source "${source.Name}" is not active. ` +
+                'The key is configured to use a disabled source type.'
+            );
+        }
+
+        return {
+            keyId: key.ID,
+            keyVersion: key.KeyVersion || '1',
+            marker: key.Marker || ENCRYPTION_MARKER,
+            algorithm: {
+                name: algorithm.Name,
+                nodeCryptoName: algorithm.NodeCryptoName,
+                keyLengthBits: algorithm.KeyLengthBits,
+                ivLengthBytes: algorithm.IVLengthBytes,
+                isAEAD: !!algorithm.IsAEAD
+            },
+            source: {
+                driverClass: source.DriverClass,
+                lookupValue: key.KeyLookupValue
+            }
+        };
+    }
 
     /**
      * Performs the actual encryption operation.
@@ -604,142 +701,6 @@ export class EncryptionEngine {
     }
 
     /**
-     * Gets the key configuration from cache or database.
-     *
-     * @private
-     */
-    private async getKeyConfiguration(
-        keyId: string,
-        contextUser?: UserInfo
-    ): Promise<KeyConfiguration> {
-        // Check cache first
-        const cacheKey = keyId;
-        const cached = this._keyConfigCache.get(cacheKey);
-
-        if (cached && cached.expiry > new Date()) {
-            return cached.value;
-        }
-
-        // Load from database
-        const config = await this.loadKeyConfiguration(keyId, contextUser);
-
-        // Cache it
-        this._keyConfigCache.set(cacheKey, {
-            value: config,
-            expiry: new Date(Date.now() + this._cacheTtlMs)
-        });
-
-        return config;
-    }
-
-    /**
-     * Loads key configuration from the database.
-     *
-     * @private
-     */
-    private async loadKeyConfiguration(
-        keyId: string,
-        contextUser?: UserInfo
-    ): Promise<KeyConfiguration> {
-        const rv = new RunView();
-
-        // Load the encryption key
-        const keyResult = await rv.RunView({
-            EntityName: 'MJ: Encryption Keys',
-            ExtraFilter: `ID = '${keyId}'`,
-            ResultType: 'simple'
-        }, contextUser);
-
-        if (!keyResult.Success || keyResult.Results.length === 0) {
-            throw new Error(
-                `Encryption key not found: ${keyId}. ` +
-                'Ensure the key exists in the "MJ: Encryption Keys" table and is active.'
-            );
-        }
-
-        const key = keyResult.Results[0];
-
-        // Check key status
-        if (key.Status === 'Expired') {
-            throw new Error(
-                `Encryption key "${key.Name}" has expired. ` +
-                'Please rotate to a new key or update the expiration.'
-            );
-        }
-
-        if (!key.IsActive) {
-            throw new Error(
-                `Encryption key "${key.Name}" is not active. ` +
-                'Activate the key or select a different active key.'
-            );
-        }
-
-        // Load the algorithm
-        const algoResult = await rv.RunView({
-            EntityName: 'MJ: Encryption Algorithms',
-            ExtraFilter: `ID = '${key.EncryptionAlgorithmID}'`,
-            ResultType: 'simple'
-        }, contextUser);
-
-        if (!algoResult.Success || algoResult.Results.length === 0) {
-            throw new Error(
-                `Encryption algorithm not found: ${key.EncryptionAlgorithmID}. ` +
-                'The algorithm configuration may have been deleted.'
-            );
-        }
-
-        const algo = algoResult.Results[0];
-
-        if (!algo.IsActive) {
-            throw new Error(
-                `Encryption algorithm "${algo.Name}" is not active. ` +
-                'The key is configured to use a disabled algorithm.'
-            );
-        }
-
-        // Load the source
-        const sourceResult = await rv.RunView({
-            EntityName: 'MJ: Encryption Key Sources',
-            ExtraFilter: `ID = '${key.EncryptionKeySourceID}'`,
-            ResultType: 'simple'
-        }, contextUser);
-
-        if (!sourceResult.Success || sourceResult.Results.length === 0) {
-            throw new Error(
-                `Encryption key source not found: ${key.EncryptionKeySourceID}. ` +
-                'The key source configuration may have been deleted.'
-            );
-        }
-
-        const source = sourceResult.Results[0];
-
-        if (!source.IsActive) {
-            throw new Error(
-                `Encryption key source "${source.Name}" is not active. ` +
-                'The key is configured to use a disabled source type.'
-            );
-        }
-
-        // Build and return the configuration
-        return {
-            keyId: key.ID,
-            keyVersion: key.KeyVersion || '1',
-            marker: key.Marker || ENCRYPTION_MARKER,
-            algorithm: {
-                name: algo.Name,
-                nodeCryptoName: algo.NodeCryptoName,
-                keyLengthBits: algo.KeyLengthBits,
-                ivLengthBytes: algo.IVLengthBytes,
-                isAEAD: !!algo.IsAEAD
-            },
-            source: {
-                driverClass: source.DriverClass,
-                lookupValue: key.KeyLookupValue
-            }
-        };
-    }
-
-    /**
      * Gets key material from cache or source.
      *
      * @private
@@ -768,7 +729,7 @@ export class EncryptionEngine {
         // Cache it
         this._keyMaterialCache.set(cacheKey, {
             value: keyMaterial,
-            expiry: new Date(Date.now() + this._cacheTtlMs)
+            expiry: new Date(Date.now() + this._keyMaterialCacheTtlMs)
         });
 
         return keyMaterial;
