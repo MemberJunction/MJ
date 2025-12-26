@@ -160,6 +160,7 @@ export class FileContentProcessor {
             // Excel: Parse to structured text
             try {
                 const workbook = new ExcelJS.Workbook();
+                // @ts-expect-error - Node.js 24 Buffer type incompatibility with ExcelJS
                 await workbook.xlsx.load(buffer);
 
                 const sheets: Record<string, unknown[]> = {};

@@ -221,7 +221,7 @@ export class MJOktaProvider extends MJAuthBase {
     }
   }
 
-  async refresh(): Promise<Observable<any>> {
+  override async refresh(): Promise<Observable<any>> {
     try {
       // Set flag to prevent authStateManager from updating userClaims$
       this.isRefreshing = true;
@@ -305,7 +305,7 @@ export class MJOktaProvider extends MJAuthBase {
     return this.isAuthenticated$.asObservable();
   }
 
-  async getUser(): Promise<any> {
+  override async getUser(): Promise<any> {
     try {
       const isAuth = await this.oktaAuth.isAuthenticated();
       if (!isAuth) {
@@ -321,7 +321,7 @@ export class MJOktaProvider extends MJAuthBase {
     }
   }
 
-  async getUserClaims(): Promise<Observable<any>> {
+  override async getUserClaims(): Promise<Observable<any>> {
     try {
       const authState = await this.oktaAuth.authStateManager.getAuthState();
       
@@ -346,7 +346,7 @@ export class MJOktaProvider extends MJAuthBase {
     }
   }
 
-  checkExpiredTokenError(error: string): boolean {
+  override checkExpiredTokenError(error: string): boolean {
     // Check for Okta-specific token expiration errors
     if (!error || typeof error !== 'string') {
       return false;
@@ -448,11 +448,11 @@ export class MJOktaProvider extends MJAuthBase {
     return idToken || null;
   }
 
-  getRequiredConfig(): string[] {
+  override getRequiredConfig(): string[] {
     return ['clientId', 'domain'];
   }
 
-  validateConfig(_config: any): boolean {
+  override validateConfig(_config: any): boolean {
     // Prefix with underscore to indicate intentionally unused
     return _config.clientId && (_config.domain || _config.issuer);
   }

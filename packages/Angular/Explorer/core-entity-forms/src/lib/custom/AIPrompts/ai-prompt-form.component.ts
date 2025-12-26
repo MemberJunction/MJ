@@ -20,7 +20,7 @@ import { AIPromptManagementService } from './ai-prompt-management.service';
     styleUrls: ['./ai-prompt-form.component.css']
 })
 export class AIPromptFormComponentExtended extends AIPromptFormComponent implements OnInit {
-    public record!: AIPromptEntityExtended;
+    public override record!: AIPromptEntityExtended;
     public template: TemplateEntity | null = null;
     public templateContent: TemplateContentEntity | null = null;
     public templateParams: TemplateParamEntity[] = [];
@@ -203,7 +203,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         super(elementRef, sharedService, router, route, cdr);
     }
 
-    async ngOnInit() {
+    override async ngOnInit() {
         await super.ngOnInit();
 
         // make sure AI Engine Base is configured, this will load stuff only if not already

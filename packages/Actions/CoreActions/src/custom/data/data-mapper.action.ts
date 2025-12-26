@@ -124,8 +124,8 @@ export class DataMapperAction extends BaseAction {
 
             // Get other parameters
             const templateType = (templateTypeParam?.Value?.toString() || 'object').toLowerCase();
-            const iterateArrays = iterateArraysParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
-            const strictVariables = strictVariablesParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
+            const iterateArrays = iterateArraysParam?.Value?.toString()?.toLowerCase() === 'true';
+            const strictVariables = strictVariablesParam?.Value?.toString()?.toLowerCase() === 'true';
 
             // Configure Nunjucks environment for strict variables if needed
             let activeEnv = this.nunjucksEnv;

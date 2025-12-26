@@ -128,9 +128,9 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const createApp = () => express();
+export const createApp = (): express.Express => express();
 
-export const serve = async (resolverPaths: Array<string>, app = createApp(), options?: MJServerOptions) => {
+export const serve = async (resolverPaths: Array<string>, app = createApp(), options?: MJServerOptions): Promise<void> => {
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
@@ -274,9 +274,10 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     graphqlRootPath,
     cors<cors.CorsRequest>(),
     BodyParser.json({ limit: '50mb' }),
+    // @ts-expect-error - Type conflict between @types/express versions in dependency tree
     expressMiddleware(apolloServer, {
-      context: contextFunction({ 
-                                 setupComplete$, 
+      context: contextFunction({
+                                 setupComplete$,
                                  dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
                                  dataSources // all data source
                                }),

@@ -1203,7 +1203,7 @@ export class BoxFileStorage extends FileStorageBase {
         const chunks: Buffer[] = [];
         stream.on('data', (chunk: Buffer) => chunks.push(chunk));
         stream.on('error', reject);
-        stream.on('end', () => resolve(Buffer.concat(chunks)));
+        stream.on('end', () => resolve(Buffer.concat(chunks as readonly Uint8Array[])));
       });
     } catch (error) {
       console.error('Error getting object', { params, error });

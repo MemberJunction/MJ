@@ -68,7 +68,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     private destroy$ = new Subject<void>();
     private isUpdatingEditorValue = false;
 
-    async ngOnInit() {
+    override async ngOnInit() {
         await super.ngOnInit();
         
         // Load categories first to ensure they're available for the dropdown

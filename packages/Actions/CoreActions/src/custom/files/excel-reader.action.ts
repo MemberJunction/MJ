@@ -96,6 +96,7 @@ export class ExcelReaderAction extends BaseFileHandlerAction {
 
             // Read Excel file
             const workbook = new ExcelJS.Workbook();
+            // @ts-expect-error - Node.js 24 Buffer type incompatibility with ExcelJS
             await workbook.xlsx.load(excelBuffer);
 
             // Get the target worksheet

@@ -73,7 +73,7 @@ export interface UnifiedSubAgent {
 })
 export class AIAgentFormComponentExtended extends AIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
-    public record!: AIAgentEntityExtended;
+    public override record!: AIAgentEntityExtended;
     
     /** Subject for managing component lifecycle and cleaning up subscriptions */
     private destroy$ = new Subject<void>();
@@ -535,7 +535,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * After view initialization, load any custom form section if defined
      */
-    async ngOnInit() {
+    override async ngOnInit() {
         await super.ngOnInit();
         
         // Load agent types for dropdown (needed for both new and existing records)

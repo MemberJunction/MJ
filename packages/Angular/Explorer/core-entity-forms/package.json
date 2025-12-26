@@ -9,14 +9,17 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ngc"
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@angular/common": "21.0.6",
     "@angular/compiler": "21.0.6",
-    "@angular/compiler-cli": "21.0.4"
+    "@angular/compiler-cli": "21.0.4",
+    "@angular/platform-browser": "21.0.6",
+    "@types/d3": "^7.4.3"
   },
   "peerDependencies": {
     "@angular/common": "21.0.6",
@@ -56,21 +59,20 @@
     "@progress/kendo-angular-dialog": "21.3.0",
     "@progress/kendo-angular-dropdowns": "21.3.0",
     "@progress/kendo-angular-grid": "21.3.0",
+    "@progress/kendo-angular-icons": "21.3.0",
     "@progress/kendo-angular-inputs": "21.3.0",
+    "@progress/kendo-angular-intl": "21.3.0",
     "@progress/kendo-angular-layout": "21.3.0",
     "@progress/kendo-angular-notification": "21.3.0",
     "@progress/kendo-angular-treeview": "21.3.0",
     "@progress/kendo-data-query": "~1.7.0",
-    "@types/d3": "^7.4.3",
     "d3": "^7.9.0",
     "rete": "^2.0.6",
     "rete-area-plugin": "^2.0.3",
     "rete-connection-plugin": "^2.0.1",
     "rete-render-utils": "^2.0.2",
     "rxjs": "^7.8.2",
-    "tslib": "^2.8.1",
-    "@progress/kendo-angular-intl": "21.3.0",
-    "@progress/kendo-angular-icons": "21.3.0"
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

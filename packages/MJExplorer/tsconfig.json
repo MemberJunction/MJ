@@ -6,25 +6,107 @@
     "outDir": "./dist/out-tsc",
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "noImplicitOverride": true,
-    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitOverride": false,
+    "noPropertyAccessFromIndexSignature": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "sourceMap": true,
     "declaration": false,
     "downlevelIteration": true,
     "experimentalDecorators": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+    "emitDecoratorMetadata": true,
     "importHelpers": true,
     "target": "ES2022",
     "module": "ES2022",
     "useDefineForClassFields": false,
-    "lib": ["ES2022", "dom"],
+    "lib": [
+      "ES2022",
+      "dom"
+    ],
     "paths": {
-      "fs": ["./src/fs.ts"]
+      "fs": [
+        "./src/fs.ts"
+      ],
+      "@memberjunction/core": [
+        "../../packages/MJCore/src/index.ts"
+      ],
+      "@memberjunction/core-entities": [
+        "../../packages/MJCoreEntities/src/index.ts"
+      ],
+      "@memberjunction/global": [
+        "../../packages/MJGlobal/src/index.ts"
+      ],
+      "@memberjunction/graphql-dataprovider": [
+        "../../packages/GraphQLDataProvider/src/index.ts"
+      ],
+      "@memberjunction/ng-shared": [
+        "../../packages/Angular/Explorer/shared/src/public-api.ts"
+      ],
+      "@memberjunction/ng-shared-generic": [
+        "../../packages/Angular/Generic/shared/src/public-api.ts"
+      ],
+      "@memberjunction/ng-explorer-core": [
+        "../../packages/Angular/Explorer/explorer-core/src/public-api.ts"
+      ],
+      "@memberjunction/ng-core-entity-forms": [
+        "../../packages/Angular/Explorer/core-entity-forms/src/public-api.ts"
+      ],
+      "@memberjunction/ng-auth-services": [
+        "../../packages/Angular/Explorer/auth-services/src/public-api.ts"
+      ],
+      "@memberjunction/ng-user-view-grid": [
+        "../../packages/Angular/Explorer/user-view-grid/src/public-api.ts"
+      ],
+      "@memberjunction/ng-link-directives": [
+        "../../packages/Angular/Explorer/link-directives/src/public-api.ts"
+      ],
+      "@memberjunction/ng-container-directives": [
+        "../../packages/Angular/Generic/container-directives/src/public-api.ts"
+      ],
+      "@memberjunction/ng-explorer-settings": [
+        "../../packages/Angular/Explorer/explorer-settings/src/public-api.ts"
+      ],
+      "@memberjunction/ng-base-forms": [
+        "../../packages/Angular/Explorer/base-forms/src/public-api.ts"
+      ],
+      "@memberjunction/ng-form-toolbar": [
+        "../../packages/Angular/Explorer/form-toolbar/src/public-api.ts"
+      ],
+      "@memberjunction/ng-tabstrip": [
+        "../../packages/Angular/Generic/tab-strip/src/public-api.ts"
+      ],
+      "mj_generatedentities": [
+        "../../packages/GeneratedEntities/src/index.ts"
+      ],
+      "@angular/common/http": [
+        "../../node_modules/@angular/common/http/index.d.ts"
+      ],
+      "@angular/common/http/testing": [
+        "../../node_modules/@angular/common/http/testing/index.d.ts"
+      ],
+      "@angular/platform-browser/animations": [
+        "../../node_modules/@angular/platform-browser/animations/index.d.ts"
+      ],
+      "@angular/cdk/drag-drop": [
+        "../../node_modules/@angular/cdk/drag-drop/index.d.ts"
+      ],
+      "@angular/cdk/overlay": [
+        "../../node_modules/@angular/cdk/overlay/index.d.ts"
+      ],
+      "@angular/cdk/portal": [
+        "../../node_modules/@angular/cdk/portal/index.d.ts"
+      ],
+      "@angular/core/primitives/di": [
+        "../../node_modules/@angular/core/primitives/di/index.d.ts"
+      ],
+      "@angular/animations/browser": [
+        "../../node_modules/@angular/animations/browser/index.d.ts"
+      ]
     }
   },
   "angularCompilerOptions": {
+    "enableResourceInlining": true,
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,
     "strictInputAccessModifiers": true,

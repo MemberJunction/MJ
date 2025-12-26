@@ -127,6 +127,7 @@ export class ExcelWriterAction extends BaseFileHandlerAction {
             }
 
             // Generate Excel buffer
+            // @ts-expect-error - Node.js 24 Buffer type incompatibility with ExcelJS
             const buffer = await workbook.xlsx.writeBuffer() as Buffer;
 
             // Save to storage if requested

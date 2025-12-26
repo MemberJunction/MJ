@@ -78,9 +78,6 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 
 @NgModule({
   declarations: [
-    AppComponent, 
-    NavigationItemDemoComponent,
-    HelloDashboardComponent
   ],
   imports: [
     BrowserModule,
@@ -109,6 +106,9 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     ShellModule,
     // Import standalone components
     SystemValidationBannerComponent,
+    AppComponent,
+    NavigationItemDemoComponent,
+    HelloDashboardComponent,
   ],
   providers: [
     SharedService,
@@ -122,4 +122,4 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
   ],
   bootstrap: [AppComponent, RedirectComponent],
 })
-export class AppModule {}
+export class AppModule { }

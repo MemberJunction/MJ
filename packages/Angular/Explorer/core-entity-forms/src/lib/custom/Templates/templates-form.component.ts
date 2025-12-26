@@ -53,7 +53,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     private destroy$ = new Subject<void>();
     private activeTimeouts: number[] = [];
 
-    async ngOnInit() {
+    override async ngOnInit() {
         await super.ngOnInit();
         await this.loadTemplateContents();
         await this.loadCategories();

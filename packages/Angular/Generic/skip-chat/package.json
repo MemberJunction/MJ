@@ -10,14 +10,17 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ngc"
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@angular/compiler": "21.0.6",
-    "@angular/compiler-cli": "21.0.4"
+    "@angular/compiler-cli": "21.0.4",
+    "@angular/common": "21.0.6",
+    "@angular/platform-browser": "21.0.6",
+    "@angular/cdk": "21.0.5"
   },
   "peerDependencies": {
     "@angular/common": "21.0.6",
@@ -26,7 +29,7 @@
     "@angular/platform-browser": "21.0.6"
   },
   "dependencies": {
-    "@angular/cdk": "18.0.2",
+    "@angular/cdk": "21.0.5",
     "@angular/router": "21.0.6",
     "@codemirror/view": "latest",
     "@memberjunction/core": "2.127.0",

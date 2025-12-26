@@ -19,7 +19,7 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit, OnDestroy {
-    public record!: AIPromptRunEntityExtended;
+    public override record!: AIPromptRunEntityExtended;
     
     // Related entities
     public prompt: AIPromptEntityExtended | null = null;
@@ -77,7 +77,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         super(elementRef, sharedService, router, route, cdr);
     }
     
-    async ngOnInit() {
+    override async ngOnInit() {
         await super.ngOnInit();
         if (this.record?.ID) {
             // Set loading state immediately if input panel will be loaded and has messages

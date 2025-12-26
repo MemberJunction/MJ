@@ -125,6 +125,7 @@ export class GetFileContentAction extends BaseFileStorageAction {
             } else if (this.isExcel(contentType)) {
                 // Excel: Parse to structured text
                 const workbook = new ExcelJS.Workbook();
+                // @ts-expect-error - Node.js 24 Buffer type incompatibility with ExcelJS
                 await workbook.xlsx.load(buffer);
 
                 const sheets: Record<string, unknown[]> = {};

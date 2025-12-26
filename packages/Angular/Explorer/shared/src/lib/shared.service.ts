@@ -162,7 +162,7 @@ export class SharedService {
   }
 
   public ConvertMarkdownStringToHtmlList(listType: HtmlListType, text: string): string {
-    return ConvertMarkdownStringToHtmlList(listType, text);
+    return ConvertMarkdownStringToHtmlList(listType, text) ?? text;
   }
 
   

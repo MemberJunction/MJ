@@ -159,7 +159,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     });
   }
 
-  public async refresh(): Promise<Observable<any>> {
+  public override async refresh(): Promise<Observable<any>> {
     await this.ensureInitialized();
     const silentRequest: any = {
       scopes: ['User.Read', 'email', 'profile'],
@@ -168,7 +168,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     return from(this.auth.instance.acquireTokenSilent(silentRequest));
   }
 
-  async getUser(): Promise<AccountInfo | null> {
+  override async getUser(): Promise<AccountInfo | null> {
     await this.ensureInitialized();
     return this.auth.instance.getActiveAccount();
   }
@@ -178,7 +178,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     return this.isAuthenticated$.asObservable();
   }
 
-  async getUserClaims(): Promise<Observable<any>> {
+  override async getUserClaims(): Promise<Observable<any>> {
     await this.ensureInitialized();
     const account = this.auth.instance.getActiveAccount();
     
@@ -209,7 +209,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     );
   }
 
-  checkExpiredTokenError(error: string): boolean {
+  override checkExpiredTokenError(error: string): boolean {
     return error?.trim().toLowerCase().includes('you need to be authorized to perform');
   }
 
@@ -274,11 +274,11 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     await this.ensureInitialized();
   }
 
-  getRequiredConfig(): string[] {
+  override getRequiredConfig(): string[] {
     return ['clientId', 'tenantId'];
   }
 
-  validateConfig(_config: any): boolean {
+  override validateConfig(_config: any): boolean {
     // MSAL configuration is handled by Angular module providers
     return true;
   }

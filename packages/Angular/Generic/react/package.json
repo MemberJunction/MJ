@@ -3,7 +3,7 @@
   "version": "2.127.0",
   "description": "Angular components for hosting React components in MemberJunction applications",
   "scripts": {
-    "build": "ngc -p tsconfig.json",
+    "build": "tsc",
     "watch": "ngc -p tsconfig.json --watch",
     "test": "echo \"Tests not yet implemented\"",
     "patchVersion": "npm version patch"

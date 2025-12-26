@@ -245,7 +245,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     
     // Clear any tooltips that might be attached to body or other elements
     d3.selectAll('.d3-tooltip, .tooltip, .chart-tooltip').remove();
-    
+
     // Clear any D3 selections that might be cached globally
     // Note: This is more aggressive but necessary for preventing leaks
     try {
@@ -707,28 +707,28 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     
     const color = d3.scaleOrdinal(d3.schemeCategory10);
     
-    const pie = d3.pie<any>()
+    const pieLayout = d3.pie<any>()
       .value(d => d.value)
       .sort(null);
     
-    const arc = d3.arc()
+    const arcGenerator = d3.arc()
       .innerRadius(0)
       .outerRadius(radius);
     
     const arcs = svg.selectAll('arc')
-      .data(pie(data))
+      .data(pieLayout(data))
       .enter()
       .append('g');
     
     arcs.append('path')
-      .attr('d', arc as any)
+      .attr('d', arcGenerator as any)
       .attr('fill', (d, i) => color(i.toString()))
       .attr('stroke', 'white')
       .style('stroke-width', '2px');
     
     // Add labels
     arcs.append('text')
-      .attr('transform', (d: any) => `translate(${arc.centroid(d)})`)
+      .attr('transform', (d: any) => `translate(${arcGenerator.centroid(d)})`)
       .attr('text-anchor', 'middle')
       .style('font-size', '12px')
       .style('fill', 'white')
@@ -835,21 +835,21 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     
     const color = d3.scaleOrdinal(d3.schemeSet2);
     
-    const pie = d3.pie<any>()
+    const pieLayout = d3.pie<any>()
       .value(d => d.value)
       .sort(null);
     
-    const arc = d3.arc()
+    const arcGenerator = d3.arc()
       .innerRadius(radius * 0.5) // Doughnut chart
       .outerRadius(radius);
     
     const arcs = svg.selectAll('arc')
-      .data(pie(data))
+      .data(pieLayout(data))
       .enter()
       .append('g');
     
     arcs.append('path')
-      .attr('d', arc as any)
+      .attr('d', arcGenerator as any)
       .attr('fill', (d, i) => color(i.toString()))
       .attr('stroke', 'white')
       .style('stroke-width', '2px');
@@ -1063,21 +1063,21 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     
     const color = d3.scaleOrdinal(d3.schemeSet3);
     
-    const pie = d3.pie<any>()
+    const pieLayout = d3.pie<any>()
       .value(d => d.value)
       .sort(null);
     
-    const arc = d3.arc()
+    const arcGenerator = d3.arc()
       .innerRadius(0)
       .outerRadius(radius);
     
     const arcs = svg.selectAll('arc')
-      .data(pie(data))
+      .data(pieLayout(data))
       .enter()
       .append('g');
     
     arcs.append('path')
-      .attr('d', arc as any)
+      .attr('d', arcGenerator as any)
       .attr('fill', (d, i) => color(i.toString()))
       .attr('stroke', 'white')
       .style('stroke-width', '2px');
@@ -1085,7 +1085,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     // Add labels
     arcs.append('text')
       .attr('transform', (d: any) => {
-        const centroid = arc.centroid(d);
+        const centroid = arcGenerator.centroid(d);
         return `translate(${centroid})`;
       })
       .attr('text-anchor', 'middle')
@@ -1474,21 +1474,21 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     
     const color = d3.scaleOrdinal(d3.schemePurples[9].slice(2));
     
-    const pie = d3.pie<any>()
+    const pieLayout = d3.pie<any>()
       .value(d => d.value)
       .sort((a, b) => b.value - a.value);
     
-    const arc = d3.arc()
+    const arcGenerator = d3.arc()
       .innerRadius(radius * 0.5)
       .outerRadius(radius);
     
     const arcs = svg.selectAll('arc')
-      .data(pie(data))
+      .data(pieLayout(data))
       .enter()
       .append('g');
     
     arcs.append('path')
-      .attr('d', arc as any)
+      .attr('d', arcGenerator as any)
       .attr('fill', (d, i) => color(i.toString()))
       .attr('stroke', 'white')
       .style('stroke-width', '2px');
@@ -1577,10 +1577,10 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       .data(data)
       .enter().append('rect')
       .attr('class', 'bar')
-      .attr('x', d => x(d.name) || 0)
+      .attr('x', (d: { name: string; value: number }) => x(d.name) || 0)
       .attr('width', x.bandwidth())
-      .attr('y', d => y(d.value))
-      .attr('height', d => height - y(d.value))
+      .attr('y', (d: { name: string; value: number }) => y(d.value))
+      .attr('height', (d: { name: string; value: number }) => height - y(d.value))
       .attr('fill', 'url(#promptCountGradient)');
     
     // Add value labels on bars
@@ -1588,12 +1588,12 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       .data(data)
       .enter().append('text')
       .attr('class', 'bar-label')
-      .attr('x', d => (x(d.name) || 0) + x.bandwidth() / 2)
-      .attr('y', d => y(d.value) - 5)
+      .attr('x', (d: { name: string; value: number }) => (x(d.name) || 0) + x.bandwidth() / 2)
+      .attr('y', (d: { name: string; value: number }) => y(d.value) - 5)
       .attr('text-anchor', 'middle')
       .style('font-size', '12px')
       .style('font-weight', 'bold')
-      .text(d => d.value);
+      .text((d: { name: string; value: number }) => d.value);
     
     // Add x axis
     svg.append('g')

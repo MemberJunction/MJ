@@ -58,7 +58,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     super(elementRef, sharedService, router, route, cdr);
   }
 
-  async ngOnInit() {
+  override async ngOnInit() {
     await super.ngOnInit();
 
     if (this.record && this.record.ID) {

@@ -231,14 +231,14 @@ export class MJFlowTransformerService {
     
     // Update property values
     if (step.propertyValues) {
-      if (step.propertyValues.promptText !== undefined) {
-        mjStep.PromptText = step.propertyValues.promptText;
+      if (step.propertyValues['promptText'] !== undefined) {
+        mjStep.PromptText = step.propertyValues['promptText'];
       }
-      if (step.propertyValues.inputMapping !== undefined) {
-        mjStep.ActionInputMapping = step.propertyValues.inputMapping;
+      if (step.propertyValues['inputMapping'] !== undefined) {
+        mjStep.ActionInputMapping = step.propertyValues['inputMapping'];
       }
-      if (step.propertyValues.outputMapping !== undefined) {
-        mjStep.ActionOutputMapping = step.propertyValues.outputMapping;
+      if (step.propertyValues['outputMapping'] !== undefined) {
+        mjStep.ActionOutputMapping = step.propertyValues['outputMapping'];
       }
     }
     
@@ -271,9 +271,9 @@ export class MJFlowTransformerService {
       StartingStep: mjData.startingStep || false,
       Status: (mjData.status || 'Active') as 'Active' | 'Pending' | 'Disabled',
       Description: mjData.description || '',
-      PromptText: step.propertyValues?.promptText,
-      ActionInputMapping: step.propertyValues?.inputMapping,
-      ActionOutputMapping: step.propertyValues?.outputMapping
+      PromptText: step.propertyValues?.['promptText'],
+      ActionInputMapping: step.propertyValues?.['inputMapping'],
+      ActionOutputMapping: step.propertyValues?.['outputMapping']
     };
   }
   

@@ -1,30 +1,58 @@
 {
-    "compilerOptions": {
-      "target": "es2022",
-      "module": "es2022",
-      "moduleResolution": "node",
-      "declaration": true,
-      "declarationMap": true,
-      "experimentalDecorators": true,
-      "sourceMap": true,
-      "outDir": "./dist",
-      "strict": true,
-      "lib": ["es2022", "dom"],
-      "skipLibCheck": true,
-      "useDefineForClassFields": false
-    },
-    "angularCompilerOptions": {
-      "skipTemplateCodegen": true,
-      "strictMetadataEmit": true,
-      "enableResourceInlining": true,
-      "strictTemplates": true
-    },
-    "include": [
-      "src/**/*.ts"
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "node",
+    "declaration": true,
+    "declarationMap": true,
+    "experimentalDecorators": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "strict": true,
+    "lib": [
+      "es2022",
+      "dom"
     ],
-    "exclude": [
-      "src/**/EXAMPLE-*.ts",
-      "src/**/*.example.ts"
-    ]
-  }
-  
+    "skipLibCheck": true,
+    "useDefineForClassFields": false,
+    "paths": {
+      "@angular/common/http": [
+        "../../../../node_modules/@angular/common/types/http.d.ts"
+      ],
+      "@angular/common/http/testing": [
+        "../../../../node_modules/@angular/common/types/http-testing.d.ts"
+      ],
+      "@angular/platform-browser/animations": [
+        "../../../../node_modules/@angular/platform-browser/types/animations.d.ts"
+      ],
+      "@angular/cdk/drag-drop": [
+        "../../../../node_modules/@angular/cdk/types/drag-drop.d.ts"
+      ],
+      "@angular/core/primitives/di": [
+        "../../../../node_modules/@angular/core/types/primitives-di.d.ts"
+      ],
+      "@angular/animations/browser": [
+        "../../../../node_modules/@angular/animations/types/browser.d.ts"
+      ],
+      "@angular/cdk/overlay": [
+        "../../../../node_modules/@angular/cdk/types/overlay.d.ts"
+      ],
+      "@angular/cdk/portal": [
+        "../../../../node_modules/@angular/cdk/types/portal.d.ts"
+      ]
+    }
+  },
+  "angularCompilerOptions": {
+    "skipTemplateCodegen": true,
+    "strictMetadataEmit": true,
+    "enableResourceInlining": true,
+    "strictTemplates": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/EXAMPLE-*.ts",
+    "src/**/*.example.ts"
+  ]
+}

@@ -9,25 +9,25 @@ import * as _ from 'lodash';
  * @returns 
  */
 export function GetGlobalObjectStore() {
-    try    {
+    try {
         // we might be running in a browser, in that case, we use the window object for our global stuff
-        if (window) 
+        if (window)
             return window;
         else {
             // if we get here, we don't have a window object, so try the global object (node environment) 
             // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-            if (global) 
+            if (global)
                 return global;
-            else 
+            else
                 return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
         }
     }
     catch (e) {
         try {
             // if we get here, we don't have a window object, so try the global object (node environment)
-            if (global) 
+            if (global)
                 return global;
-            else 
+            else
                 return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
         }
         catch (e) {
@@ -223,8 +223,8 @@ export function CleanJSON(inputString: string | null): string | null {
         return null;
 
     let processedString = inputString.trim();
-    let originalException = null;
-    
+    let originalException: any = null;
+
     // First, try to parse the string as-is
     // This preserves any embedded JSON or markdown blocks within string values
     try {
@@ -243,7 +243,7 @@ export function CleanJSON(inputString: string | null): string | null {
             const newString = processedString.slice(0, -1);
             // now try to parse again
             const result = SafeJSONParse(newString);
-            if (result) { 
+            if (result) {
                 return JSON.stringify(result, null, 2);
             }
 
@@ -307,7 +307,7 @@ export function CleanJSON(inputString: string | null): string | null {
         const firstBraceIndex = processedString.indexOf('{');
         let startIndex = -1;
         let endIndex = -1;
-    
+
         // Determine the starting index based on the position of the first '[' and '{'
         if ((firstBracketIndex !== -1 && firstBracketIndex < firstBraceIndex) || firstBraceIndex === -1) {
             startIndex = firstBracketIndex;
@@ -316,12 +316,12 @@ export function CleanJSON(inputString: string | null): string | null {
             startIndex = firstBraceIndex;
             endIndex = processedString.lastIndexOf('}');
         }
-    
+
         if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
             console.warn("No JSON found in the input.");
             return processedString; // Return the processed string instead of jsonString
         }
-    
+
         const potentialJSON = processedString.substring(startIndex, endIndex + 1);
         try {
             // Parse and stringify to format the JSON nicely
@@ -331,8 +331,8 @@ export function CleanJSON(inputString: string | null): string | null {
         } catch (error) {
             // that was our last attempt and it failed so we need
             // to throw an exception here with the orignal exception
-            throw new Error(`Failed to find a path to CleanJSON\n\n${originalException?.message}`);
-        }     
+            throw new Error(`Failed to find a path to CleanJSON\n\n${(originalException as any)?.message}`);
+        }
     }
 }
 
@@ -379,7 +379,7 @@ export function CleanJavaScript(javaScriptCode: string): string {
  * // Invalid JSON returns null
  * const result = SafeJSONParse('invalid json', true); // logs error, returns null
  */
-export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = false): T {
+export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = false): T | null {
     if (!jsonString) {
         return null;
     }
@@ -399,19 +399,19 @@ export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = 
  * @param text 
  * @returns 
  */
-export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unordered', text: string): string {
+export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unordered', text: string): string | null {
     try {
         const listTag = htmlListType === 'Unordered' ? 'ul' : 'ol';
         if (!text.includes('\n')) {
             return text;
         }
         const listItems = text.split('\n').map(line => `<li>${line.trim().replace(/^-\s*/, '')}</li>`).join('');
-        return `<${listTag}>${listItems}</${listTag}>`;    
+        return `<${listTag}>${listItems}</${listTag}>`;
     }
     catch (e) {
         console.error("Error converting markdown string to HTML list:", e);
         return null;
-    }   
+    }
 }
 
 
@@ -428,15 +428,15 @@ export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unord
 export function convertCamelCaseToHaveSpaces(s: string): string {
     let result = '';
     for (let i = 0; i < s.length; ++i) {
-       if (
-          i > 0 && // Not the first character
-          ((s[i] === s[i].toUpperCase() && s[i - 1] !== s[i - 1].toUpperCase()) || // Transition from lowercase to uppercase
-             (s[i] === s[i].toUpperCase() && s[i - 1] === s[i - 1].toUpperCase() && // Transition within consecutive uppercase letters
-             i + 1 < s.length && s[i + 1] !== s[i + 1].toUpperCase())) // Followed by a lowercase
-       ) {
-          result += ' ';
-       }
-       result += s[i];
+        if (
+            i > 0 && // Not the first character
+            ((s[i] === s[i].toUpperCase() && s[i - 1] !== s[i - 1].toUpperCase()) || // Transition from lowercase to uppercase
+                (s[i] === s[i].toUpperCase() && s[i - 1] === s[i - 1].toUpperCase() && // Transition within consecutive uppercase letters
+                    i + 1 < s.length && s[i + 1] !== s[i + 1].toUpperCase())) // Followed by a lowercase
+        ) {
+            result += ' ';
+        }
+        result += s[i];
     }
     return result;
 }
@@ -600,12 +600,12 @@ function getSingularForm(word: string): string | null {
  * generatePluralName('dog'); // returns 'dogs'
  * ```
  */
-export function generatePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+export function generatePluralName(singularName: string, options?: { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
     // Check if it's already plural
     const detectedSingular = getSingularForm(singularName);
     if (!detectedSingular) {
         // if we did NOT find a singular, assume it is already plural
-        return adjustCasing(singularName, options); 
+        return adjustCasing(singularName, options);
     }
     else if (detectedSingular.trim().toLowerCase() !== singularName.trim().toLowerCase()) {
         // here we did detect a singular form. Check to see if it is DIFFERENT from
@@ -650,15 +650,16 @@ export function generatePluralName(singularName: string, options? : { capitalize
  * @param options 
  * @returns 
  */
-export function adjustCasing(word: string, options?: { 
-    capitalizeFirstLetterOnly?: boolean, 
+export function adjustCasing(word: string, options?: {
+    capitalizeFirstLetterOnly?: boolean,
     capitalizeEntireWord?: boolean
-    forceRestOfWordLowerCase?: boolean }): string {
+    forceRestOfWordLowerCase?: boolean
+}): string {
     if (word && word.length > 0 && options) {
         if (options.capitalizeEntireWord) {
             return word.toUpperCase();
         }
-        else if (options.capitalizeFirstLetterOnly) {   
+        else if (options.capitalizeFirstLetterOnly) {
             if (options.forceRestOfWordLowerCase) {
                 // make the first character upper case and rest lower case
                 return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
@@ -743,7 +744,7 @@ export function replaceAllSpaces(s: string): string {
     // Base case: No spaces left to replace
     return s;
 }
- 
+
 /**
  * This utility function sends a message to all components that are listening requesting a window resize. This is a cross-platform method of requesting a resize and is loosely coupled from
  * the actual implementation on a specific device/browser/etc.
@@ -752,13 +753,13 @@ export function replaceAllSpaces(s: string): string {
  */
 export function InvokeManualResize(delay: number = 50, component: any = null) {
     setTimeout(() => {
-      MJGlobal.Instance.RaiseEvent({
-        event: MJEventType.ManualResizeRequest,
-        eventCode: '',
-        args: null,
-        component: component || this
-      })
-    }, delay ); // give the tabstrip time to render
+        MJGlobal.Instance.RaiseEvent({
+            event: MJEventType.ManualResizeRequest,
+            eventCode: '',
+            args: null,
+            component: component
+        })
+    }, delay); // give the tabstrip time to render
 }
 
 /**
@@ -785,7 +786,7 @@ export function compareStringsByLine(str1: string, str2: string, logToConsole: b
     const lines2 = str2.split('\n');
     const maxLines = Math.max(lines1.length, lines2.length);
     const returnArray: string[] = [];
-    function emit (message: string) {
+    function emit(message: string) {
         if (logToConsole) {
             console.log(message);
         }
@@ -832,17 +833,17 @@ export function compareStringsByLine(str1: string, str2: string, logToConsole: b
 
 
 
- 
+
 /**
  * Options for the ParseJSONRecursive function
  */
 export interface ParseJSONOptions {
-  /** Maximum recursion depth to prevent infinite loops (default: 100) */
-  maxDepth?: number;
-  /** If true, extracts embedded JSON from strings and places it in a separate key with '_' suffix (default: false) */
-  extractInlineJson?: boolean;
-  /** If true, enables debug logging to console (default: false) */
-  debug?: boolean;
+    /** Maximum recursion depth to prevent infinite loops (default: 100) */
+    maxDepth?: number;
+    /** If true, extracts embedded JSON from strings and places it in a separate key with '_' suffix (default: false) */
+    extractInlineJson?: boolean;
+    /** If true, enables debug logging to console (default: false) */
+    debug?: boolean;
 }
 
 /**
@@ -850,16 +851,16 @@ export interface ParseJSONOptions {
  * This interface extends the public options with internal tracking fields
  */
 interface InternalParseJSONOptions {
-  /** Public options */
-  options: ParseJSONOptions;
-  /** Current depth level (used for recursion tracking) */
-  currentDepth: number;
-  /** Set to track objects we've already processed to prevent circular references */
-  processedObjects: WeakSet<object>;
-  /** Set to track JSON strings we've already parsed to prevent infinite loops */
-  processedStrings: Set<string>;
-  /** Current path for debugging */
-  currentPath: string;
+    /** Public options */
+    options: ParseJSONOptions;
+    /** Current depth level (used for recursion tracking) */
+    currentDepth: number;
+    /** Set to track objects we've already processed to prevent circular references */
+    processedObjects: WeakSet<object>;
+    /** Set to track JSON strings we've already parsed to prevent infinite loops */
+    processedStrings: Set<string>;
+    /** Current path for debugging */
+    currentPath: string;
 }
 
 /**
@@ -898,152 +899,152 @@ interface InternalParseJSONOptions {
  * //   content: "Action results:",
  * //   content_: [{ action: "test" }]
  * // }
- */ 
+ */
 export function ParseJSONRecursive(obj: any, options: ParseJSONOptions = {}): any {
-  // Set default options with more conservative depth limit for performance
-  const opts: Required<ParseJSONOptions> = {
-    maxDepth: options.maxDepth ?? 100,
-    extractInlineJson: options.extractInlineJson ?? false,
-    debug: options.debug ?? false
-  };
+    // Set default options with more conservative depth limit for performance
+    const opts: Required<ParseJSONOptions> = {
+        maxDepth: options.maxDepth ?? 100,
+        extractInlineJson: options.extractInlineJson ?? false,
+        debug: options.debug ?? false
+    };
 
-  // Start recursive parsing with depth 0
-  return parseJSONRecursiveWithDepth(obj, opts, 0, 'root');
+    // Start recursive parsing with depth 0
+    return parseJSONRecursiveWithDepth(obj, opts, 0, 'root');
 }
 
 function parseJSONRecursiveWithDepth(obj: any, options: Required<ParseJSONOptions>, depth: number, path: string): any {
-  // Check depth limit
-  if (depth >= options.maxDepth) {
-    if (options.debug) {
-      console.warn(`[ParseJSONRecursive] Maximum depth of ${options.maxDepth} reached at path: ${path}`);
+    // Check depth limit
+    if (depth >= options.maxDepth) {
+        if (options.debug) {
+            console.warn(`[ParseJSONRecursive] Maximum depth of ${options.maxDepth} reached at path: ${path}`);
+        }
+        return obj;
     }
-    return obj;
-  }
 
-  // Handle null/undefined
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
+    // Handle null/undefined
+    if (obj === null || obj === undefined) {
+        return obj;
+    }
 
-  // Handle non-objects
-  if (typeof obj !== 'object') {
-    return obj;
-  }
+    // Handle non-objects
+    if (typeof obj !== 'object') {
+        return obj;
+    }
 
-  // Use recursiveReplaceKey which handles all types
-  return recursiveReplaceKey(obj, options, depth, path);
+    // Use recursiveReplaceKey which handles all types
+    return recursiveReplaceKey(obj, options, depth, path);
 }
 
 function recursiveReplaceKey(value: any, options: Required<ParseJSONOptions>, depth: number, path: string): any {
-  if (options.debug) {
-    console.log(`[ParseJSONRecursive] Depth: ${depth}, Path: ${path}, Type: ${typeof value}${Array.isArray(value) ? ' (array)' : ''}`);
-  }
+    if (options.debug) {
+        console.log(`[ParseJSONRecursive] Depth: ${depth}, Path: ${path}, Type: ${typeof value}${Array.isArray(value) ? ' (array)' : ''}`);
+    }
 
-  if (typeof value === 'string') {
-    return recursiveReplaceString(value, options, depth, path);
-  }
-  else if (Array.isArray(value)) {
-    // Create a new array instead of modifying the original
-    const newArray = new Array(value.length);
-    for (let i = 0; i < value.length; i++) {
-      newArray[i] = recursiveReplaceKey(value[i], options, depth + 1, `${path}[${i}]`);
+    if (typeof value === 'string') {
+        return recursiveReplaceString(value, options, depth, path);
     }
-    return newArray;
-  }
-  else if (typeof value === 'object' && value !== null) {
-    // Create a new object instead of modifying the original
-    const result: any = {};
-    const keys = Object.keys(value);
-    
-    for (const key of keys) {
-      if (options.debug) {
-        console.log(`[ParseJSONRecursive] Processing key: ${key} at path: ${path}.${key}`);
-      }
-      result[key] = recursiveReplaceKey(value[key], options, depth + 1, `${path}.${key}`);
+    else if (Array.isArray(value)) {
+        // Create a new array instead of modifying the original
+        const newArray = new Array(value.length);
+        for (let i = 0; i < value.length; i++) {
+            newArray[i] = recursiveReplaceKey(value[i], options, depth + 1, `${path}[${i}]`);
+        }
+        return newArray;
     }
-    return result;
-  }
-  else {
-    return value; // return as-is for non-string, non-array, and non-object types
-  }
+    else if (typeof value === 'object' && value !== null) {
+        // Create a new object instead of modifying the original
+        const result: any = {};
+        const keys = Object.keys(value);
+
+        for (const key of keys) {
+            if (options.debug) {
+                console.log(`[ParseJSONRecursive] Processing key: ${key} at path: ${path}.${key}`);
+            }
+            result[key] = recursiveReplaceKey(value[key], options, depth + 1, `${path}.${key}`);
+        }
+        return result;
+    }
+    else {
+        return value; // return as-is for non-string, non-array, and non-object types
+    }
 }
 
 function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>, depth: number, path: string): any {
-  if (options.debug) {
-    console.log(`[ParseJSONRecursive] String preview: ${str.substring(0, 100)}${str.length > 100 ? '...' : ''}`);
-  }
-
-  // PERFORMANCE OPTIMIZATION: Early exit for non-JSON strings
-  // Check if the first non-whitespace character is { or [ - if not, it's definitely not JSON
-  const trimmed = str.trim();
-  if (trimmed.length === 0 || (trimmed[0] !== '{' && trimmed[0] !== '[' && trimmed[0] !== '"')) {
-    // Not JSON-like, skip expensive JSON.parse() attempt unless extractInlineJson is enabled
-    if (!options.extractInlineJson) {
-      return str;
+    if (options.debug) {
+        console.log(`[ParseJSONRecursive] String preview: ${str.substring(0, 100)}${str.length > 100 ? '...' : ''}`);
     }
-    // With extractInlineJson, we still need to check for embedded JSON, but skip the initial parse
-  } else {
-    // Looks JSON-like, attempt to parse
-    try {
-      const parsed = JSON.parse(str);
-      
-      // Check if parsing returned the same value (e.g., JSON.parse('"user"') === "user")
-      if (parsed === str) {
-        if (options.debug) {
-          console.log(`[ParseJSONRecursive] JSON.parse returned same value at path: ${path}, stopping`);
-        }
-        return str;
-      }
 
-      if (parsed && typeof parsed === 'object') {
-        if (options.debug) {
-          console.log(`[ParseJSONRecursive] Successfully parsed JSON at path: ${path}`);
+    // PERFORMANCE OPTIMIZATION: Early exit for non-JSON strings
+    // Check if the first non-whitespace character is { or [ - if not, it's definitely not JSON
+    const trimmed = str.trim();
+    if (trimmed.length === 0 || (trimmed[0] !== '{' && trimmed[0] !== '[' && trimmed[0] !== '"')) {
+        // Not JSON-like, skip expensive JSON.parse() attempt unless extractInlineJson is enabled
+        if (!options.extractInlineJson) {
+            return str;
         }
-        return parseJSONRecursiveWithDepth(parsed, options, depth + 1, `${path}[parsed-json]`);
-      } else {
-        return parsed; // Keep simple values as-is
-      }
-    } catch (e) {
-      // JSON.parse failed, continue to inline extraction if enabled
+        // With extractInlineJson, we still need to check for embedded JSON, but skip the initial parse
+    } else {
+        // Looks JSON-like, attempt to parse
+        try {
+            const parsed = JSON.parse(str);
+
+            // Check if parsing returned the same value (e.g., JSON.parse('"user"') === "user")
+            if (parsed === str) {
+                if (options.debug) {
+                    console.log(`[ParseJSONRecursive] JSON.parse returned same value at path: ${path}, stopping`);
+                }
+                return str;
+            }
+
+            if (parsed && typeof parsed === 'object') {
+                if (options.debug) {
+                    console.log(`[ParseJSONRecursive] Successfully parsed JSON at path: ${path}`);
+                }
+                return parseJSONRecursiveWithDepth(parsed, options, depth + 1, `${path}[parsed-json]`);
+            } else {
+                return parsed; // Keep simple values as-is
+            }
+        } catch (e) {
+            // JSON.parse failed, continue to inline extraction if enabled
+        }
     }
-  }
 
-  // Handle extractInlineJson or return original string
-  if (options?.extractInlineJson) {
-      // Look for JSON patterns within the string
-      // First try ```json blocks
-      const codeBlockMatch = str.match(/```json\s*\n([\s\S]*?)\n```/);
-      if (codeBlockMatch) {
-        try {
-          const parsedJson = JSON.parse(codeBlockMatch[1]);
-          return {
-            text: str.replace(codeBlockMatch[0], '').trim(),
-            json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
-          };
-        } catch (e) {
-          // If parsing fails, continue
+    // Handle extractInlineJson or return original string
+    if (options?.extractInlineJson) {
+        // Look for JSON patterns within the string
+        // First try ```json blocks
+        const codeBlockMatch = str.match(/```json\s*\n([\s\S]*?)\n```/);
+        if (codeBlockMatch) {
+            try {
+                const parsedJson = JSON.parse(codeBlockMatch[1]);
+                return {
+                    text: str.replace(codeBlockMatch[0], '').trim(),
+                    json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
+                };
+            } catch (e) {
+                // If parsing fails, continue
+            }
         }
-      }
 
-      // Simple approach: find first { or [ and try to parse from there
-      const jsonStartIndex = str.search(/[{\[]/);
-      if (jsonStartIndex !== -1) {
-        // Try to parse from the JSON start to the end of string
-        const possibleJson = str.substring(jsonStartIndex);
-        try {
-          const parsedJson = JSON.parse(possibleJson);
-          const textBefore = str.substring(0, jsonStartIndex).trim();
-          return {
-            text: textBefore || undefined,
-            json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
-          };
-        } catch (e) {
-          // JSON.parse failed, the string doesn't contain valid JSON
+        // Simple approach: find first { or [ and try to parse from there
+        const jsonStartIndex = str.search(/[{\[]/);
+        if (jsonStartIndex !== -1) {
+            // Try to parse from the JSON start to the end of string
+            const possibleJson = str.substring(jsonStartIndex);
+            try {
+                const parsedJson = JSON.parse(possibleJson);
+                const textBefore = str.substring(0, jsonStartIndex).trim();
+                return {
+                    text: textBefore || undefined,
+                    json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
+                };
+            } catch (e) {
+                // JSON.parse failed, the string doesn't contain valid JSON
+            }
         }
-      }
-  }
-  
-  // If we get here, return the original string
-  return str;
+    }
+
+    // If we get here, return the original string
+    return str;
 }
 

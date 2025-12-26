@@ -22,7 +22,33 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@angular/common/http": [
+        "../../../../node_modules/@angular/common/types/http.d.ts"
+      ],
+      "@angular/common/http/testing": [
+        "../../../../node_modules/@angular/common/types/http-testing.d.ts"
+      ],
+      "@angular/platform-browser/animations": [
+        "../../../../node_modules/@angular/platform-browser/types/animations.d.ts"
+      ],
+      "@angular/cdk/drag-drop": [
+        "../../../../node_modules/@angular/cdk/types/drag-drop.d.ts"
+      ],
+      "@angular/core/primitives/di": [
+        "../../../../node_modules/@angular/core/types/primitives-di.d.ts"
+      ],
+      "@angular/animations/browser": [
+        "../../../../node_modules/@angular/animations/types/browser.d.ts"
+      ],
+      "@angular/cdk/overlay": [
+        "../../../../node_modules/@angular/cdk/types/overlay.d.ts"
+      ],
+      "@angular/cdk/portal": [
+        "../../../../node_modules/@angular/cdk/types/portal.d.ts"
+      ]
+    }
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

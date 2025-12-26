@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "ngc",
+    "build": "tsc",
     "watch": "ngc --watch"
   },
   "dependencies": {
@@ -28,5 +28,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
+  },
+  "devDependencies": {
+    "@angular/common": "21.0.6",
+    "@angular/platform-browser": "21.0.6"
   }
 }

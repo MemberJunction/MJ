@@ -104,8 +104,15 @@ export class ApplicationManager {
     if (this.initialized) {
       return;
     }
-
-    // Subscribe with replay (true) to catch the event even if it already fired
+    
+    // Check if already logged in and load immediately
+    const md = new Metadata();
+    if (md.CurrentUser) {
+      // Already logged in - load now
+      this.loadApplications();
+    }
+    
+    // Also subscribe for future login events
     MJGlobal.Instance.GetEventListener(true).subscribe(event => {
       if (event.event === MJEventType.LoggedIn) {
         this.loadApplications();

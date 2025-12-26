@@ -22,7 +22,7 @@ import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
   styleUrls: ['./ai-agent-run.component.css']
 })
 export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent implements OnInit, OnDestroy {
-  public record!: AIAgentRunEntityExtended;
+  public override record!: AIAgentRunEntityExtended;
   
   private destroy$ = new Subject<void>();
   
@@ -68,7 +68,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     this.dataHelper = new AIAgentRunDataHelper();
   }
   
-  async ngOnInit() {
+  override async ngOnInit() {
     await super.ngOnInit();
     
     if (this.record && this.record.ID) {

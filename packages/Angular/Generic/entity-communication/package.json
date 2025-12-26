@@ -9,14 +9,17 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ngc"
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@angular/compiler": "21.0.6",
-    "@angular/compiler-cli": "21.0.4"
+    "@angular/compiler-cli": "21.0.4",
+    "@angular/common": "21.0.6",
+    "@angular/platform-browser": "21.0.6",
+    "@progress/kendo-angular-listbox": "21.3.0"
   },
   "peerDependencies": {
     "@angular/common": "21.0.6",

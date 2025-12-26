@@ -41,7 +41,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     super(elementRef, sharedService, router, route, cdr);
   }
 
-  async ngOnInit() {
+  override async ngOnInit() {
     await super.ngOnInit();
   }
 

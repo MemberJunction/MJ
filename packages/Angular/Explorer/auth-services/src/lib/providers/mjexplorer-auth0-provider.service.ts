@@ -78,7 +78,7 @@ export class MJAuth0Provider extends MJAuthBase {
     this.auth.logout({ logoutParams: { returnTo: document.location.origin } });
   }
 
-  public async refresh(): Promise<Observable<any>> {
+  public override async refresh(): Promise<Observable<any>> {
     try {
       console.log('[Auth0] refresh() - Attempting to refresh session...');
 
@@ -113,7 +113,7 @@ export class MJAuth0Provider extends MJAuthBase {
     }
   }
 
-  async getUser(): Promise<Observable<User | null | undefined>> {
+  override async getUser(): Promise<Observable<User | null | undefined>> {
     return this.auth.user$;
   }
 
@@ -123,7 +123,7 @@ export class MJAuth0Provider extends MJAuthBase {
     return this.auth.isAuthenticated$;
   }
 
-  async getUserClaims(): Promise<Observable<any>> {
+  override async getUserClaims(): Promise<Observable<any>> {
     await this.ensureInitialized();
 
     console.log('[Auth0] getUserClaims: Getting ID token claims...');
@@ -138,7 +138,7 @@ export class MJAuth0Provider extends MJAuthBase {
     return of(idTokenClaims);
   }
 
-  checkExpiredTokenError(error: string): boolean {
+  override checkExpiredTokenError(error: string): boolean {
     return error?.includes('jwt expired');
   }
 
@@ -176,11 +176,11 @@ export class MJAuth0Provider extends MJAuthBase {
     // This method is here for interface compatibility
   }
 
-  getRequiredConfig(): string[] {
+  override getRequiredConfig(): string[] {
     return ['clientId', 'domain'];
   }
 
-  validateConfig(_config: any): boolean {
+  override validateConfig(_config: any): boolean {
     // Auth0 configuration is handled by Angular module providers
     // Prefix with underscore to indicate intentionally unused
     return true;

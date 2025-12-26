@@ -903,14 +903,14 @@ export class SharePointFileStorage extends FileStorageBase {
         for (let i = 0; i < data.length; i += maxChunkSize) {
           const chunk = data.slice(i, Math.min(i + maxChunkSize, data.length));
           const contentRange = `bytes ${i}-${i + chunk.length - 1}/${data.length}`;
-          
+
           await fetch(uploadSession.uploadUrl, {
             method: 'PUT',
             headers: {
               'Content-Length': chunk.length.toString(),
               'Content-Range': contentRange
             },
-            body: chunk
+            body: new Uint8Array(chunk)
           });
         }
       }
