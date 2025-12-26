@@ -183,7 +183,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
                 },
                 {
                     EntityName: 'Audit Logs',
-                    ExtraFilter: `AuditLogTypeName LIKE '%Credential%' AND ${dateFilter}`,
+                    ExtraFilter: `AuditLogType LIKE '%Credential%' AND ${dateFilter}`,
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: 100,
                     ResultType: 'entity_object'
@@ -401,7 +401,10 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     // === Navigation Actions ===
 
     public createNewCredential(): void {
-        this.navigationService.OpenEntityRecord('MJ: Credentials', new CompositeKey([]));
+        // Navigate to Credentials tab with openCreatePanel flag to show the slide-in editor
+        this.navigationService.OpenNavItemByName('Credentials', {
+            openCreatePanel: true
+        });
     }
 
     public openCredential(credentialId: string): void {

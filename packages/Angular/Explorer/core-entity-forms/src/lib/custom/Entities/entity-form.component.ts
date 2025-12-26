@@ -12,7 +12,8 @@ import {
     EntityRelationshipInfo,
     EntityPermissionInfo,
     Metadata,
-    CompositeKey
+    CompositeKey,
+    RunView
 } from '@memberjunction/core';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
@@ -128,11 +129,6 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         { id: 'settings', icon: 'fa-solid fa-sliders', label: 'Settings' }
     ];
 
-    /** ERD filter panel visibility state */
-    public erdFilterPanelVisible = false;
-
-    /** Selected entity in ERD for details panel */
-    public erdSelectedEntity: EntityInfo | null = null;
 
     /** Computed statistics for the entity */
     public stats: EntityStats = {
@@ -155,8 +151,21 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     /** Set of expanded field group IDs */
     public expandedFieldGroups = new Set<string>();
 
+    /** Field view mode: grouped by category or flat list */
+    public fieldViewMode: 'grouped' | 'list' = 'grouped';
+
+    /** Field list sort configuration */
+    public fieldListSortColumn: string = 'Sequence';
+    public fieldListSortDirection: 'asc' | 'desc' = 'asc';
+
     /** Relationship view mode toggle */
-    public relationshipViewMode: 'graph' | 'list' = 'graph';
+    public relationshipViewMode: 'diagram' | 'list' = 'diagram';
+
+    /** ERD depth level (1-5) */
+    public erdDepth: number = 1;
+
+    /** Whether the row count is loading */
+    public isRowCountLoading = false;
 
     /** Outgoing relationships (this entity references others) */
     public outgoingRelationships: EntityRelationshipInfo[] = [];
@@ -224,6 +233,9 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
                 this.buildFieldGroups();
                 this.buildRelationships();
                 this.updateNavBadges();
+
+                // Load row count asynchronously (don't block UI)
+                this.loadRowCountAsync();
             } else {
                 this.explorerError = `Entity metadata not found for: ${this.record?.Name || 'Unknown'}`;
             }
@@ -232,6 +244,38 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
             console.error('Error loading entity explorer data:', err);
         } finally {
             this.isExplorerLoading = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Loads the row count asynchronously using RunView with count_only.
+     * This doesn't block the UI - updates when complete.
+     */
+    private async loadRowCountAsync(): Promise<void> {
+        if (!this.entity) return;
+
+        this.isRowCountLoading = true;
+        this.cdr.markForCheck();
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: this.entity.Name,
+                ResultType: 'count_only'
+            });
+
+            if (result.Success) {
+                this.stats = {
+                    ...this.stats,
+                    rowCount: result.TotalRowCount
+                };
+            }
+        } catch (err) {
+            console.warn('Failed to load row count:', err);
+            // Keep the default N/A - don't show error for this
+        } finally {
+            this.isRowCountLoading = false;
             this.cdr.markForCheck();
         }
     }
@@ -467,6 +511,91 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         return this.expandedFieldGroups.has(groupId);
     }
 
+    public expandAllFieldGroups(): void {
+        for (const group of this.fieldGroups) {
+            this.expandedFieldGroups.add(group.id);
+        }
+        this.cdr.markForCheck();
+    }
+
+    public collapseAllFieldGroups(): void {
+        this.expandedFieldGroups.clear();
+        this.cdr.markForCheck();
+    }
+
+    public get allFieldGroupsExpanded(): boolean {
+        return this.fieldGroups.length > 0 &&
+               this.fieldGroups.every(g => this.expandedFieldGroups.has(g.id));
+    }
+
+    public get allFieldGroupsCollapsed(): boolean {
+        return this.expandedFieldGroups.size === 0;
+    }
+
+    /**
+     * Get all fields for the list view with sorting and filtering applied.
+     */
+    public getFilteredFieldsList(): EntityFieldInfo[] {
+        if (!this.entity) return [];
+        let fields = [...this.entity.Fields];
+
+        // Apply search filter
+        if (this.fieldSearchTerm) {
+            const term = this.fieldSearchTerm.toLowerCase();
+            fields = fields.filter(f =>
+                f.Name.toLowerCase().includes(term) ||
+                (f.DisplayName && f.DisplayName.toLowerCase().includes(term)) ||
+                (f.Description && f.Description.toLowerCase().includes(term)) ||
+                f.Type.toLowerCase().includes(term)
+            );
+        }
+
+        // Apply sorting
+        fields.sort((a, b) => {
+            const col = this.fieldListSortColumn;
+            const dir = this.fieldListSortDirection === 'asc' ? 1 : -1;
+
+            let aVal = this.getFieldSortValue(a, col);
+            let bVal = this.getFieldSortValue(b, col);
+
+            if (aVal == null && bVal == null) return 0;
+            if (aVal == null) return 1;
+            if (bVal == null) return -1;
+
+            if (typeof aVal === 'string' && typeof bVal === 'string') {
+                return aVal.localeCompare(bVal) * dir;
+            }
+            if (typeof aVal === 'boolean' && typeof bVal === 'boolean') {
+                return (aVal === bVal ? 0 : aVal ? -1 : 1) * dir;
+            }
+            return ((aVal as number) - (bVal as number)) * dir;
+        });
+
+        return fields;
+    }
+
+    private getFieldSortValue(field: EntityFieldInfo, column: string): string | number | boolean | null {
+        switch (column) {
+            case 'Sequence': return field.Sequence;
+            case 'Name': return field.DisplayName || field.Name;
+            case 'Type': return field.Type;
+            case 'Length': return field.Length;
+            case 'AllowsNull': return field.AllowsNull;
+            case 'Description': return field.Description || '';
+            default: return field.Sequence;
+        }
+    }
+
+    public sortFieldList(column: string): void {
+        if (this.fieldListSortColumn === column) {
+            this.fieldListSortDirection = this.fieldListSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.fieldListSortColumn = column;
+            this.fieldListSortDirection = 'asc';
+        }
+        this.cdr.markForCheck();
+    }
+
     public selectField(field: EntityFieldInfo): void {
         this.selectedField = field;
         this.selectedRelationship = null;
@@ -489,29 +618,22 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     }
 
     public toggleRelationshipView(): void {
-        this.relationshipViewMode = this.relationshipViewMode === 'graph' ? 'list' : 'graph';
+        this.relationshipViewMode = this.relationshipViewMode === 'diagram' ? 'list' : 'diagram';
         this.cdr.markForCheck();
     }
 
     /**
-     * Handle entity selection from the ERD diagram.
-     * Updates the selected entity for the details panel.
+     * Change the ERD depth level.
      */
-    public onERDEntitySelected(event: { entity: EntityInfo; node: unknown }): void {
-        this.erdSelectedEntity = event.entity;
-        this.cdr.markForCheck();
+    public setErdDepth(depth: number): void {
+        if (depth >= 1 && depth <= 5) {
+            this.erdDepth = depth;
+            this.cdr.markForCheck();
+        }
     }
 
     /**
-     * Handle entity deselection from the ERD diagram.
-     */
-    public onERDEntityDeselected(): void {
-        this.erdSelectedEntity = null;
-        this.cdr.markForCheck();
-    }
-
-    /**
-     * Handle open record from the ERD diagram (double-click).
+     * Handle open record from the ERD composite component.
      * Navigates to the selected entity's form using SharedService.
      */
     public onERDOpenRecord(event: { EntityName: string; RecordID: string }): void {
@@ -520,19 +642,11 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
     }
 
     /**
-     * Handle ERD state changes for persistence.
+     * Handle ERD composite state changes (for future persistence if needed).
      */
-    public onERDStateChange(state: ERDCompositeState): void {
-        this.erdFilterPanelVisible = state.filterPanelVisible;
-        this.cdr.markForCheck();
-    }
-
-    /**
-     * Toggle the ERD filter panel visibility.
-     */
-    public toggleERDFilterPanel(): void {
-        this.erdFilterPanelVisible = !this.erdFilterPanelVisible;
-        this.cdr.markForCheck();
+    public onERDStateChange(_state: ERDCompositeState): void {
+        // ERD composite now handles all internal state management
+        // This handler is kept for potential future state persistence needs
     }
 
     public onFieldSearch(term: string): void {
@@ -660,6 +774,34 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         if (!perm.RoleID) return 'Unknown';
         const role = this._metadata.Roles.find(r => r.ID === perm.RoleID);
         return role?.Name || 'Unknown';
+    }
+
+    /**
+     * Checks if a string value is valid JSON (object or array).
+     */
+    public isJsonValue(value: string): boolean {
+        if (!value || typeof value !== 'string') return false;
+        const trimmed = value.trim();
+        if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+        try {
+            JSON.parse(trimmed);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Formats a JSON string for display with proper indentation.
+     */
+    public formatJsonValue(value: string): string {
+        if (!value) return '';
+        try {
+            const parsed = JSON.parse(value.trim());
+            return JSON.stringify(parsed, null, 2);
+        } catch {
+            return value;
+        }
     }
 }
 

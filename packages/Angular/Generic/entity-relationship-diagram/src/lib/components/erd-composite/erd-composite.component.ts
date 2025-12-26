@@ -75,6 +75,30 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   /** Whether the ERD is in a refreshing state */
   @Input() isRefreshingERD = false;
 
+  /**
+   * Optional: Focus entities to display in the ERD.
+   * When provided, only these entities will be shown (useful for single-entity views).
+   * When not provided, all entities from metadata are loaded.
+   */
+  @Input() focusEntities: EntityInfo[] | null = null;
+
+  /**
+   * Whether to show the filter panel on the left.
+   * Set to false for focused/single-entity views.
+   */
+  @Input() showFilterPanel = true;
+
+  /**
+   * Depth of relationships to display.
+   * 1 = only direct relationships, 2 = relationships of relationships, etc.
+   */
+  @Input() depth = 1;
+
+  /**
+   * Whether to show the ERD header bar.
+   */
+  @Input() showHeader = true;
+
   /** All entities loaded from metadata */
   public entities: EntityInfo[] = [];
 
@@ -120,11 +144,20 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   private filterChangeSubject = new Subject<void>();
 
   async ngOnInit(): Promise<void> {
+    // Initialize filter panel visibility based on input
+    this.filterPanelVisible = this.showFilterPanel;
+
     this.setupStateManagement();
     await this.loadData();
-    this.filteredEntities = [...this.entities];
 
-    this.applyFilters();
+    // Use focusEntities if provided, otherwise use all entities
+    if (this.focusEntities && this.focusEntities.length > 0) {
+      this.filteredEntities = [...this.focusEntities];
+    } else {
+      this.filteredEntities = [...this.entities];
+      this.applyFilters();
+    }
+
     this.isDataLoaded = true;
 
     // Notify parent that data is loaded and ready for state loading
@@ -138,7 +171,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   }
 
   private async loadData(): Promise<void> {
-    // Load entities
+    // Load entities from metadata (always needed for allEntityFields and relationship lookups)
     const md = new Metadata();
     this.entities = md.Entities;
 

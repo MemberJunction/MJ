@@ -171,15 +171,16 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             this.applyFilters();
         }
 
-        if (config.categoryId && config.openCreatePanel) {
-            // Open create panel with category pre-selected
+        if (config.openCreatePanel) {
+            // Open create panel (optionally with type/category pre-selected)
             setTimeout(() => {
-                this.createNewCredentialWithType(config.typeId as string, config.categoryId as string);
-            }, 100);
-        } else if (config.openCreatePanel && config.typeId) {
-            // Open create panel with type pre-selected
-            setTimeout(() => {
-                this.createNewCredentialWithType(config.typeId as string);
+                if (config.categoryId) {
+                    this.createNewCredentialWithType(config.typeId as string, config.categoryId as string);
+                } else if (config.typeId) {
+                    this.createNewCredentialWithType(config.typeId as string);
+                } else {
+                    this.createNewCredential();
+                }
             }, 100);
         }
     }

@@ -42,7 +42,10 @@
             </div>
             <div class="stat-item">
                 <i class="fa-solid fa-database"></i>
-                <span class="stat-value">{{ formattedRowCount }}</span>
+                <span class="stat-value" *ngIf="!isRowCountLoading">{{ formattedRowCount }}</span>
+                <span class="stat-value loading" *ngIf="isRowCountLoading">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                </span>
                 <span class="stat-label">Rows</span>
             </div>
         </div>
@@ -234,10 +237,49 @@
                             [ngModel]="fieldSearchTerm"
                             (ngModelChange)="onFieldSearch($event)">
                     </div>
+
+                    <div class="header-controls">
+                        <!-- View mode toggle -->
+                        <div class="view-mode-toggle">
+                            <button
+                                class="toggle-btn"
+                                [class.active]="fieldViewMode === 'grouped'"
+                                (click)="fieldViewMode = 'grouped'"
+                                title="Group by category">
+                                <i class="fa-solid fa-layer-group"></i>
+                            </button>
+                            <button
+                                class="toggle-btn"
+                                [class.active]="fieldViewMode === 'list'"
+                                (click)="fieldViewMode = 'list'"
+                                title="List view">
+                                <i class="fa-solid fa-list"></i>
+                            </button>
+                        </div>
+
+                        <!-- Expand/Collapse controls (only in grouped mode) -->
+                        <div class="expand-collapse-controls" *ngIf="fieldViewMode === 'grouped'">
+                            <button
+                                class="control-btn"
+                                (click)="expandAllFieldGroups()"
+                                [disabled]="allFieldGroupsExpanded"
+                                title="Expand all">
+                                <i class="fa-solid fa-angles-down"></i>
+                            </button>
+                            <button
+                                class="control-btn"
+                                (click)="collapseAllFieldGroups()"
+                                [disabled]="allFieldGroupsCollapsed"
+                                title="Collapse all">
+                                <i class="fa-solid fa-angles-up"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="section-content fields-content">
-                    <div class="field-groups">
+                    <!-- Grouped View -->
+                    <div class="field-groups" *ngIf="fieldViewMode === 'grouped'">
                         <div
                             class="field-group"
                             *ngFor="let group of getFilteredFieldGroups()"
@@ -284,6 +326,90 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- List View - Modern Card-style Table -->
+                    <div class="fields-list-view" *ngIf="fieldViewMode === 'list'">
+                        <!-- Table Header -->
+                        <div class="list-header">
+                            <div class="list-col col-seq sortable" (click)="sortFieldList('Sequence')" [class.sorted]="fieldListSortColumn === 'Sequence'">
+                                #
+                                <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Sequence' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
+                            </div>
+                            <div class="list-col col-name sortable" (click)="sortFieldList('Name')" [class.sorted]="fieldListSortColumn === 'Name'">
+                                Field Name
+                                <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Name' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
+                            </div>
+                            <div class="list-col col-type sortable" (click)="sortFieldList('Type')" [class.sorted]="fieldListSortColumn === 'Type'">
+                                Type
+                                <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Type' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
+                            </div>
+                            <div class="list-col col-length sortable" (click)="sortFieldList('Length')" [class.sorted]="fieldListSortColumn === 'Length'">
+                                Length
+                                <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Length' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
+                            </div>
+                            <div class="list-col col-nullable sortable" (click)="sortFieldList('AllowsNull')" [class.sorted]="fieldListSortColumn === 'AllowsNull'">
+                                Required
+                                <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'AllowsNull' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
+                            </div>
+                            <div class="list-col col-flags">Flags</div>
+                            <div class="list-col col-desc sortable" (click)="sortFieldList('Description')" [class.sorted]="fieldListSortColumn === 'Description'">
+                                Description
+                                <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Description' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
+                            </div>
+                        </div>
+
+                        <!-- Table Body -->
+                        <div class="list-body">
+                            <div
+                                class="list-row"
+                                *ngFor="let field of getFilteredFieldsList(); let i = index"
+                                [class.selected]="selectedField?.ID === field.ID"
+                                (click)="selectField(field)">
+                                <div class="list-col col-seq">
+                                    <span class="seq-num">{{ field.Sequence }}</span>
+                                </div>
+                                <div class="list-col col-name">
+                                    <i [class]="getFieldTypeIcon(field)" class="field-type-icon"></i>
+                                    <span class="field-name-text">{{ field.DisplayName || field.Name }}</span>
+                                </div>
+                                <div class="list-col col-type">
+                                    <span class="type-tag">{{ field.Type }}</span>
+                                </div>
+                                <div class="list-col col-length">
+                                    <span class="length-value" *ngIf="field.Length > 0">{{ field.Length }}</span>
+                                    <span class="length-value muted" *ngIf="field.Length <= 0">—</span>
+                                </div>
+                                <div class="list-col col-nullable">
+                                    <span class="required-indicator" [class.required]="!field.AllowsNull" [class.optional]="field.AllowsNull">
+                                        <i [class]="field.AllowsNull ? 'fa-solid fa-circle-minus' : 'fa-solid fa-circle-check'"></i>
+                                        {{ field.AllowsNull ? 'Optional' : 'Required' }}
+                                    </span>
+                                </div>
+                                <div class="list-col col-flags">
+                                    <div class="flag-badges">
+                                        <span class="flag-badge pk" *ngIf="field.IsPrimaryKey" title="Primary Key">
+                                            <i class="fa-solid fa-key"></i> PK
+                                        </span>
+                                        <span class="flag-badge fk" *ngIf="field.RelatedEntityID && !field.IsPrimaryKey" title="Foreign Key">
+                                            <i class="fa-solid fa-link"></i> FK
+                                        </span>
+                                        <span class="flag-badge encrypted" *ngIf="field.Encrypt" title="Encrypted">
+                                            <i class="fa-solid fa-lock"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="list-col col-desc">
+                                    <span class="desc-text" [title]="field.Description || ''">{{ field.Description || '—' }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Empty state -->
+                        <div class="list-empty" *ngIf="getFilteredFieldsList().length === 0">
+                            <i class="fa-solid fa-search"></i>
+                            <span>No fields match your search</span>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -295,10 +421,10 @@
                     <div class="view-toggle">
                         <button
                             class="toggle-btn"
-                            [class.active]="relationshipViewMode === 'graph'"
-                            (click)="relationshipViewMode = 'graph'">
+                            [class.active]="relationshipViewMode === 'diagram'"
+                            (click)="relationshipViewMode = 'diagram'">
                             <i class="fa-solid fa-diagram-project"></i>
-                            Graph
+                            Diagram
                         </button>
                         <button
                             class="toggle-btn"
@@ -308,48 +434,34 @@
                             List
                         </button>
                     </div>
+
+                    <!-- Depth selector (only in diagram mode) -->
+                    <div class="depth-selector" *ngIf="relationshipViewMode === 'diagram'">
+                        <span class="depth-label">Depth:</span>
+                        <div class="depth-buttons">
+                            <button
+                                *ngFor="let d of [1, 2, 3, 4, 5]"
+                                class="depth-btn"
+                                [class.active]="erdDepth === d"
+                                (click)="setErdDepth(d)"
+                                [title]="'Show ' + d + ' level(s) of relationships'">
+                                {{ d }}
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="section-content">
-                    <!-- Graph View using the focused ERD component with details panel -->
-                    <div class="relationships-graph" *ngIf="relationshipViewMode === 'graph'">
-                        <kendo-splitter orientation="horizontal" class="erd-splitter">
-                            <!-- ERD Diagram -->
-                            <kendo-splitter-pane [resizable]="true" [scrollable]="false">
-                                <mj-entity-erd
-                                    [entities]="entity ? [entity] : []"
-                                    [allEntities]="allEntities"
-                                    [selectedEntityId]="erdSelectedEntity?.ID || null"
-                                    [depth]="1"
-                                    [includeIncoming]="true"
-                                    [includeOutgoing]="true"
-                                    [showHeader]="false"
-                                    [config]="{ skipAnimation: true }"
-                                    (entitySelected)="onERDEntitySelected($event)"
-                                    (entityDeselected)="onERDEntityDeselected()"
-                                    (openRecord)="onERDOpenRecord($event)">
-                                </mj-entity-erd>
-                            </kendo-splitter-pane>
-
-                            <!-- Entity Details Panel (shown when entity selected) -->
-                            <kendo-splitter-pane
-                                [size]="erdSelectedEntity ? '320px' : '0px'"
-                                [collapsible]="false"
-                                [resizable]="!!erdSelectedEntity"
-                                [scrollable]="false"
-                                [hidden]="!erdSelectedEntity">
-                                <mj-entity-details
-                                    [selectedEntity]="erdSelectedEntity"
-                                    [allEntityFields]="allEntityFields"
-                                    [fieldsSectionExpanded]="true"
-                                    [relationshipsSectionExpanded]="true"
-                                    (openEntity)="onERDOpenRecord({EntityName: 'Entities', RecordID: $event.ID})"
-                                    (closePanel)="onERDEntityDeselected()"
-                                    (entitySelected)="onERDEntitySelected({entity: $event, node: null})"
-                                    (openRecord)="onERDOpenRecord($event)">
-                                </mj-entity-details>
-                            </kendo-splitter-pane>
-                        </kendo-splitter>
+                    <!-- Diagram View using the ERD composite component -->
+                    <div class="relationships-graph" *ngIf="relationshipViewMode === 'diagram'">
+                        <mj-erd-composite
+                            [focusEntities]="entity ? [entity] : []"
+                            [showFilterPanel]="false"
+                            [showHeader]="false"
+                            [depth]="erdDepth"
+                            (stateChange)="onERDStateChange($event)"
+                            (openRecord)="onERDOpenRecord($event)">
+                        </mj-erd-composite>
                     </div>
 
                     <!-- List View -->
@@ -664,7 +776,20 @@
                         <div class="settings-list" *ngIf="entity.Settings.length > 0">
                             <div class="setting-item" *ngFor="let setting of entity.Settings">
                                 <div class="setting-name">{{ setting.Name }}</div>
-                                <div class="setting-value">{{ setting.Value }}</div>
+                                <ng-container *ngIf="isJsonValue(setting.Value); else plainValue">
+                                    <div class="setting-value-json">
+                                        <mj-code-editor
+                                            [value]="formatJsonValue(setting.Value)"
+                                            language="json"
+                                            [readonly]="true"
+                                            [lineWrapping]="true"
+                                            setup="minimal">
+                                        </mj-code-editor>
+                                    </div>
+                                </ng-container>
+                                <ng-template #plainValue>
+                                    <div class="setting-value">{{ setting.Value }}</div>
+                                </ng-template>
                                 <div class="setting-comment" *ngIf="setting.Comments">{{ setting.Comments }}</div>
                             </div>
                         </div>
