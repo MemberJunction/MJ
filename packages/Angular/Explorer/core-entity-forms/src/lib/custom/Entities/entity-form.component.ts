@@ -284,9 +284,14 @@ export class EntityFormComponentExtended extends EntityFormComponent implements 
         if (!this.entity) return;
 
         const fields = this.entity.Fields;
+        // Count unique outgoing relationships (fields with RelatedEntityID, grouped by target entity)
+        const outgoingEntityIds = new Set(fields.filter(f => f.RelatedEntityID).map(f => f.RelatedEntityID));
+        // Count unique incoming relationships (RelatedEntities, grouped by source entity)
+        const incomingEntityNames = new Set(this.entity.RelatedEntities.map(r => r.RelatedEntity));
+
         this.stats = {
             fieldCount: fields.length,
-            relationshipCount: this.entity.RelatedEntities.length,
+            relationshipCount: outgoingEntityIds.size + incomingEntityNames.size,
             permissionCount: this.entity.Permissions.length,
             rowCount: this.entity.RowCount,
             primaryKeyCount: fields.filter(f => f.IsPrimaryKey).length,
