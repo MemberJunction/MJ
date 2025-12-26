@@ -4,6 +4,8 @@ Advanced AI prompt execution engine with hierarchical template composition, inte
 
 > **Note on Parameters**: This package uses the parameter types defined in `@memberjunction/ai`. For a complete reference of available LLM parameters (temperature, topP, topK, etc.), see the [Parameter Reference](../Core/README.md#parameter-reference) in the AI Core documentation.
 
+> **Authentication**: For details on how AI provider credentials are resolved, including the hierarchical credential system, integration with encrypted credentials, and legacy environment variable support, see the [AI Authentication Guide](./AI-AUTHENTICATION.md).
+
 [![npm version](https://badge.fury.io/js/%40memberjunction%2Fai-prompts.svg)](https://www.npmjs.com/package/@memberjunction/ai-prompts)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 

@@ -16,6 +16,7 @@ export class AIVendorFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'vendorDetails', sectionName: 'Vendor Details', isExpanded: true },
+            { sectionKey: 'vendorCredentials', sectionName: 'Vendor Credentials', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'aIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJAIModelCosts', sectionName: 'MJ: AI Model Costs', isExpanded: false },

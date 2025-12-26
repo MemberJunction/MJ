@@ -4285,6 +4285,10 @@ export const ConversationDetailSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
+    TestRun: z.string().nullable().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -4409,6 +4413,10 @@ export const ConversationSchema = z.object({
     Project: z.string().nullable().describe(`
         * * Field Name: Project
         * * Display Name: Project
+        * * SQL Data Type: nvarchar(255)`),
+    TestRun: z.string().nullable().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -9417,6 +9425,10 @@ each time the agent processes a prompt step.`),
         * * Field Name: ScheduledJobRun
         * * Display Name: Scheduled Job Run
         * * SQL Data Type: nvarchar(200)`),
+    TestRun: z.string().nullable().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run
+        * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
         * * Display Name: Root Parent Run ID
@@ -10049,12 +10061,12 @@ export const AIModelVendorSchema = z.object({
         * * Default Value: newsequentialid()`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model ID
+        * * Display Name: Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
     VendorID: z.string().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor ID
+        * * Display Name: Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
     Priority: z.number().describe(`
@@ -10130,10 +10142,16 @@ export const AIModelVendorSchema = z.object({
         * * Default Value: getutcdate()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
         * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional reference to a credential specific to this model-vendor combination. Takes precedence over AIVendor.CredentialID. Useful for scenarios where a model requires different credentials per vendor (e.g., Azure OpenAI vs direct OpenAI). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.`),
     Model: z.string().describe(`
         * * Field Name: Model
         * * Display Name: Model
@@ -10146,6 +10164,10 @@ export const AIModelVendorSchema = z.object({
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type AIModelVendorEntityType = z.infer<typeof AIModelVendorSchema>;
@@ -10161,25 +10183,25 @@ export const AIPromptModelSchema = z.object({
         * * Default Value: newsequentialid()`),
     PromptID: z.string().describe(`
         * * Field Name: PromptID
-        * * Display Name: Prompt ID
+        * * Display Name: Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: References the AI prompt this model association applies to.`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model ID
+        * * Display Name: Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         * * Description: References the AI model to use for this prompt.`),
     VendorID: z.string().nullable().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor ID
+        * * Display Name: Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: Optional reference to a specific vendor for the model. If NULL, uses the highest priority vendor for the model.`),
     ConfigurationID: z.string().nullable().describe(`
         * * Field Name: ConfigurationID
-        * * Display Name: Configuration ID
+        * * Display Name: Configuration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
         * * Description: Optional reference to a specific configuration. If NULL, this model is available in all configurations.`),
@@ -10249,6 +10271,12 @@ export const AIPromptModelSchema = z.object({
         * * Display Name: Effort Level
         * * SQL Data Type: int
         * * Description: Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional reference to a credential specific to this prompt-model configuration. Takes precedence over AIModelVendor.CredentialID and AIVendor.CredentialID. Useful for prompts that require dedicated credentials (e.g., high-rate-limit keys for critical prompts). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -10265,6 +10293,10 @@ export const AIPromptModelSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type AIPromptModelEntityType = z.infer<typeof AIPromptModelSchema>;
@@ -10776,6 +10808,10 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: ChildPrompt
         * * Display Name: Child Prompt
         * * SQL Data Type: nvarchar(255)`),
+    TestRun: z.string().nullable().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -10908,6 +10944,16 @@ export const AIVendorSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional reference to a default credential for this vendor. When set, all models using this vendor will use this credential unless overridden at a higher priority level (AIModelVendor or AIPromptModel). When any credential is configured in the hierarchy, legacy authentication methods (environment variables, apiKeys parameter) are bypassed in favor of the Credentials system.`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type AIVendorEntityType = z.infer<typeof AIVendorSchema>;
@@ -13923,6 +13969,10 @@ export const TestRunFeedbackSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    TestRun: z.string().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run
+        * * SQL Data Type: nvarchar(255)`),
     ReviewerUser: z.string().describe(`
         * * Field Name: ReviewerUser
         * * Display Name: Reviewer Name
@@ -14065,6 +14115,10 @@ export const TestRunSchema = z.object({
     Test: z.string().describe(`
         * * Field Name: Test
         * * Display Name: Test
+        * * SQL Data Type: nvarchar(255)`),
+    TestSuiteRun: z.string().nullable().describe(`
+        * * Field Name: TestSuiteRun
+        * * Display Name: Test Suite Run
         * * SQL Data Type: nvarchar(255)`),
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
@@ -29364,6 +29418,15 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string | null {
+        return this.Get('TestRun');
+    }
+
+    /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
@@ -29705,6 +29768,15 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     */
     get Project(): string | null {
         return this.Get('Project');
+    }
+
+    /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string | null {
+        return this.Get('TestRun');
     }
 }
 
@@ -42330,6 +42402,15 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string | null {
+        return this.Get('TestRun');
+    }
+
+    /**
     * * Field Name: RootParentRunID
     * * Display Name: Root Parent Run ID
     * * SQL Data Type: uniqueidentifier
@@ -44175,7 +44256,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model ID
+    * * Display Name: Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     */
@@ -44188,7 +44269,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor ID
+    * * Display Name: Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     */
@@ -44362,7 +44443,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
@@ -44372,6 +44453,20 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     }
     set TypeID(value: string) {
         this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional reference to a credential specific to this model-vendor combination. Takes precedence over AIVendor.CredentialID. Useful for scenarios where a model requires different credentials per vendor (e.g., Azure OpenAI vs direct OpenAI). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
     }
 
     /**
@@ -44399,6 +44494,15 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     */
     get Type(): string {
         return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 
@@ -44543,7 +44647,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * * Field Name: PromptID
-    * * Display Name: Prompt ID
+    * * Display Name: Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: References the AI prompt this model association applies to.
@@ -44557,7 +44661,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model ID
+    * * Display Name: Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: References the AI model to use for this prompt.
@@ -44571,7 +44675,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor ID
+    * * Display Name: Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: Optional reference to a specific vendor for the model. If NULL, uses the highest priority vendor for the model.
@@ -44585,7 +44689,7 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * * Field Name: ConfigurationID
-    * * Display Name: Configuration ID
+    * * Display Name: Configuration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
     * * Description: Optional reference to a specific configuration. If NULL, this model is available in all configurations.
@@ -44738,6 +44842,20 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     }
 
     /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional reference to a credential specific to this prompt-model configuration. Takes precedence over AIModelVendor.CredentialID and AIVendor.CredentialID. Useful for prompts that require dedicated credentials (e.g., high-rate-limit keys for critical prompts). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -44771,6 +44889,15 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 
@@ -46089,6 +46216,15 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string | null {
+        return this.Get('TestRun');
+    }
+
+    /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
@@ -46455,6 +46591,29 @@ export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional reference to a default credential for this vendor. When set, all models using this vendor will use this credential unless overridden at a higher priority level (AIModelVendor or AIPromptModel). When any credential is configured in the hierarchy, legacy authentication methods (environment variables, apiKeys parameter) are bypassed in favor of the Credentials system.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 
@@ -54353,6 +54512,15 @@ export class TestRunFeedbackEntity extends BaseEntity<TestRunFeedbackEntityType>
     }
 
     /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string {
+        return this.Get('TestRun');
+    }
+
+    /**
     * * Field Name: ReviewerUser
     * * Display Name: Reviewer Name
     * * SQL Data Type: nvarchar(100)
@@ -54705,6 +54873,15 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     */
     get Test(): string {
         return this.Get('Test');
+    }
+
+    /**
+    * * Field Name: TestSuiteRun
+    * * Display Name: Test Suite Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestSuiteRun(): string | null {
+        return this.Get('TestSuiteRun');
     }
 
     /**

@@ -737,6 +737,10 @@ export class MJTestRunFeedback_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
+    @MaxLength(510)
+    TestRun: string;
+        
+    @Field() 
     @MaxLength(200)
     ReviewerUser: string;
         
@@ -1986,6 +1990,10 @@ each time the agent processes a prompt step.`})
     ScheduledJobRun?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(510)
+    TestRun?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(16)
     RootParentRunID?: string;
         
@@ -2892,6 +2900,14 @@ export class MJAIVendor_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional reference to a default credential for this vendor. When set, all models using this vendor will use this credential unless overridden at a higher priority level (AIModelVendor or AIPromptModel). When any credential is configured in the hierarchy, legacy authentication methods (environment variables, apiKeys parameter) are bypassed in favor of the Credentials system.`}) 
+    @MaxLength(16)
+    CredentialID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    Credential?: string;
+        
     @Field(() => [MJAIPromptModel_])
     MJ_AIPromptModels_VendorIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
     
@@ -2928,6 +2944,9 @@ export class CreateMJAIVendorInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
 }
     
 
@@ -2944,6 +2963,9 @@ export class UpdateMJAIVendorInput {
 
     @Field({ nullable: true })
     Description?: string | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5571,6 +5593,10 @@ export class MJAIPromptModel_ {
     @Field(() => Int, {nullable: true, description: `Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`}) 
     EffortLevel?: number;
         
+    @Field({nullable: true, description: `Optional reference to a credential specific to this prompt-model configuration. Takes precedence over AIModelVendor.CredentialID and AIVendor.CredentialID. Useful for prompts that require dedicated credentials (e.g., high-rate-limit keys for critical prompts). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.`}) 
+    @MaxLength(16)
+    CredentialID?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -5586,6 +5612,10 @@ export class MJAIPromptModel_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     Configuration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    Credential?: string;
         
 }
 
@@ -5632,6 +5662,9 @@ export class CreateMJAIPromptModelInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
 }
     
 
@@ -5678,6 +5711,9 @@ export class UpdateMJAIPromptModelInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26629,6 +26665,10 @@ export class MJConversationDetail_ {
     Agent?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(510)
+    TestRun?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(16)
     RootParentID?: string;
         
@@ -27088,6 +27128,10 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Project?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    TestRun?: string;
         
     @Field(() => [MJConversationDetail_])
     ConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to ConversationDetails
@@ -41647,6 +41691,10 @@ export class MJTestRun_ {
     @MaxLength(510)
     Test: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    TestSuiteRun?: string;
+        
     @Field() 
     @MaxLength(200)
     RunByUser: string;
@@ -42600,6 +42648,10 @@ export class MJAIModelVendor_ {
     @MaxLength(16)
     TypeID: string;
         
+    @Field({nullable: true, description: `Optional reference to a credential specific to this model-vendor combination. Takes precedence over AIVendor.CredentialID. Useful for scenarios where a model requires different credentials per vendor (e.g., Azure OpenAI vs direct OpenAI). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.`}) 
+    @MaxLength(16)
+    CredentialID?: string;
+        
     @Field() 
     @MaxLength(100)
     Model: string;
@@ -42611,6 +42663,10 @@ export class MJAIModelVendor_ {
     @Field() 
     @MaxLength(100)
     Type: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    Credential?: string;
         
 }
 
@@ -42660,6 +42716,9 @@ export class CreateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
 }
     
 
@@ -42709,6 +42768,9 @@ export class UpdateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46102,6 +46164,15 @@ export class MJCredential_ {
     @MaxLength(200)
     Category?: string;
         
+    @Field(() => [MJAIPromptModel_])
+    MJ_AIPromptModels_CredentialIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
+    
+    @Field(() => [MJAIModelVendor_])
+    MJ_AIModelVendors_CredentialIDArray: MJAIModelVendor_[]; // Link to MJ_AIModelVendors
+    
+    @Field(() => [MJAIVendor_])
+    MJ_AIVendors_CredentialIDArray: MJAIVendor_[]; // Link to MJ_AIVendors
+    
 }
 
 //****************************************************************************
@@ -46250,6 +46321,39 @@ export class MJCredentialResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJAIPromptModel_])
+    async MJ_AIPromptModels_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIModelVendor_])
+    async MJ_AIModelVendors_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Vendors', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIVendor_])
+    async MJ_AIVendors_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIVendors] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Vendors', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Vendors', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJCredential_)
     async CreateMJCredential(
         @Arg('input', () => CreateMJCredentialInput) input: CreateMJCredentialInput,
@@ -52365,6 +52469,10 @@ export class MJAIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     ChildPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    TestRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)

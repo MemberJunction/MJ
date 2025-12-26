@@ -733,7 +733,8 @@ declarations: [
     UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
-    UserNotificationFormComponent],
+    UserNotificationFormComponent,
+    UserRecordLogFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -759,7 +760,6 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
-    UserRecordLogFormComponent,
     UserRoleFormComponent,
     UserViewCategoryFormComponent,
     UserViewRunDetailFormComponent,
