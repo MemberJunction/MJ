@@ -554,27 +554,27 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
   // ============================================================================
 
   /**
-   * Zoom in on the diagram by a fixed factor (1.5x).
+   * Zoom in on the diagram by a fixed factor (1.2x).
    * Uses smooth animation transition.
    */
   public zoomIn(): void {
     if (this.zoom && this.svg) {
       this.svg.transition().duration(300).call(
         this.zoom.scaleBy as unknown as (transition: d3.Transition<SVGSVGElement, unknown, null, undefined>, k: number) => void,
-        1.5
+        1.2
       );
     }
   }
 
   /**
-   * Zoom out on the diagram by a fixed factor (0.67x).
+   * Zoom out on the diagram by a fixed factor (0.83x).
    * Uses smooth animation transition.
    */
   public zoomOut(): void {
     if (this.zoom && this.svg) {
       this.svg.transition().duration(300).call(
         this.zoom.scaleBy as unknown as (transition: d3.Transition<SVGSVGElement, unknown, null, undefined>, k: number) => void,
-        0.67
+        0.83
       );
     }
   }
@@ -1459,13 +1459,14 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
     if (cfg.showRelationshipLabels) {
       // Add background rect for label (will be sized after text is rendered)
+      // Self-referencing links get a green background to stand out
       link
         .append('rect')
         .attr('class', 'link-label-bg')
-        .attr('fill', 'white')
-        .attr('stroke', colors.linkColor)
+        .attr('fill', (d) => d.isSelfReference ? '#e8f5e9' : 'white')
+        .attr('stroke', (d) => d.isSelfReference ? '#4CAF50' : colors.linkColor)
         .attr('stroke-width', 0.5)
-        .attr('stroke-opacity', 0.4)
+        .attr('stroke-opacity', (d) => d.isSelfReference ? 0.6 : 0.4)
         .attr('rx', 2)
         .attr('ry', 2);
 
@@ -1474,7 +1475,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         .append('text')
         .attr('class', 'link-label')
         .attr('font-size', '10px')
-        .attr('fill', colors.linkColor)
+        .attr('fill', (d) => d.isSelfReference ? '#2e7d32' : colors.linkColor)
         .attr('text-anchor', 'middle')
         .attr('dominant-baseline', 'middle')
         .text((d) => d.sourceField.name || '');
@@ -1873,10 +1874,21 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       const target = d.target as InternalNode;
 
       if (d.isSelfReference) {
-        const loopSize = 30;
-        return `M ${source.x! + source.width / 2} ${source.y!}
-                Q ${source.x! + source.width / 2 + loopSize} ${source.y! - loopSize}
-                  ${source.x!} ${source.y! - source.height / 2}`;
+        // Create a larger loop that goes around the bottom of the entity
+        // Start from right side, loop down and around, return to left side
+        const startX = source.x! + source.width / 2;  // Right edge center
+        const startY = source.y!;
+        const endY = source.y! + source.height / 2;   // Bottom edge Y
+        const loopExtent = 60;  // How far out the loop extends
+
+        // Use a path that goes: right edge -> curves down-right -> bottom -> curves up to bottom edge
+        return `M ${startX} ${startY}
+                C ${startX + loopExtent} ${startY},
+                  ${startX + loopExtent} ${endY + loopExtent},
+                  ${source.x!} ${endY + loopExtent}
+                C ${source.x! - loopExtent} ${endY + loopExtent},
+                  ${source.x! - source.width / 2 - loopExtent / 2} ${endY},
+                  ${source.x! - source.width / 2} ${endY}`;
       }
 
       // Use dagre edge points if available (provides cleaner orthogonal paths)
@@ -1896,7 +1908,9 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       const target = d.target as InternalNode;
 
       if (d.isSelfReference) {
-        return `translate(${source.x! + source.width / 2 + 15}, ${source.y! - source.height / 2 - 10})`;
+        // Position label at the bottom of the loop (below the entity)
+        const loopExtent = 60;
+        return `translate(${source.x!}, ${source.y! + source.height / 2 + loopExtent + 8})`;
       }
 
       // Use midpoint of dagre edge points if available
