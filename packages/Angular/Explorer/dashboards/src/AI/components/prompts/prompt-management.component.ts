@@ -31,11 +31,11 @@ export function LoadAIPromptsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIPromptsResource')
 @Component({
-  selector: 'app-prompt-management-v2',
-  templateUrl: './prompt-management-v2.component.html',
-  styleUrls: ['./prompt-management-v2.component.css']
+  selector: 'app-prompt-management',
+  templateUrl: './prompt-management.component.html',
+  styleUrls: ['./prompt-management.component.css']
 })
-export class PromptManagementV2Component extends BaseResourceComponent implements OnInit, OnDestroy {
+export class PromptManagementComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   // View state
   public viewMode: 'grid' | 'list' | 'priority-matrix' = 'grid';

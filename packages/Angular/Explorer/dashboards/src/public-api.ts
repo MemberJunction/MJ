@@ -59,11 +59,11 @@ export * from './SystemDiagnostics';
 export {
   ExecutionMonitoringComponent,
   LoadAIMonitorResource,
-  PromptManagementV2Component,
+  PromptManagementComponent,
   LoadAIPromptsResource,
   AgentConfigurationComponent,
   LoadAIAgentsResource,
-  ModelManagementV2Component,
+  ModelManagementComponent,
   LoadAIModelsResource,
   SystemConfigurationComponent,
   LoadAIConfigResource,
