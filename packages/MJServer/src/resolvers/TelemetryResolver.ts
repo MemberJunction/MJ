@@ -1,4 +1,4 @@
-import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Mutation, Resolver, Float } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver, Float } from 'type-graphql';
 import { AppContext } from '../types.js';
 import {
     TelemetryManager,
@@ -556,57 +556,12 @@ export class TelemetryResolver {
         }));
     }
 
-    /**
-     * Enable or disable server telemetry
-     */
-    @Mutation(() => Boolean)
-    SetServerTelemetryEnabled(
-        @Ctx() _context: AppContext,
-        @Arg('enabled', () => Boolean) enabled: boolean
-    ): boolean {
-        const tm = TelemetryManager.Instance;
-        tm.SetEnabled(enabled);
-        return tm.IsEnabled;
-    }
-
-    /**
-     * Clear all server telemetry data
-     */
-    @Mutation(() => Boolean)
-    ClearServerTelemetry(@Ctx() _context: AppContext): boolean {
-        const tm = TelemetryManager.Instance;
-        tm.Clear();
-        tm.ClearInsights();
-        return true;
-    }
-
-    /**
-     * Clear only server telemetry patterns
-     */
-    @Mutation(() => Boolean)
-    ClearServerTelemetryPatterns(@Ctx() _context: AppContext): boolean {
-        const tm = TelemetryManager.Instance;
-        tm.ClearPatterns();
-        return true;
-    }
-
-    /**
-     * Clear only server telemetry insights
-     */
-    @Mutation(() => Boolean)
-    ClearServerTelemetryInsights(@Ctx() _context: AppContext): boolean {
-        const tm = TelemetryManager.Instance;
-        tm.ClearInsights();
-        return true;
-    }
-
-    /**
-     * Reset server telemetry to defaults
-     */
-    @Mutation(() => Boolean)
-    ResetServerTelemetry(@Ctx() _context: AppContext): boolean {
-        const tm = TelemetryManager.Instance;
-        tm.Reset();
-        return true;
-    }
+    // Note: Server telemetry settings are configured via mj.config.cjs and cannot be changed at runtime.
+    // Use the telemetry config section in mj.config.cjs to enable/disable or change the level.
+    // Example:
+    //   telemetry: {
+    //     enabled: true,
+    //     level: 'standard'  // 'minimal' | 'standard' | 'verbose' | 'debug'
+    //   }
+    // Or set MJ_TELEMETRY_ENABLED=false environment variable to disable.
 }

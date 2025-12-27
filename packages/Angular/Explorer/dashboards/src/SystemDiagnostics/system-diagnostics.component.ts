@@ -485,14 +485,22 @@ export function LoadSystemDiagnosticsResource() {
                                         </button>
                                     </div>
                                     <span class="action-divider"></span>
-                                    <button class="action-btn" [class.active]="telemetryEnabled" (click)="toggleTelemetry()">
-                                        <i class="fa-solid" [class.fa-toggle-on]="telemetryEnabled" [class.fa-toggle-off]="!telemetryEnabled"></i>
-                                        {{ telemetryEnabled ? 'Enabled' : 'Disabled' }}
-                                    </button>
-                                    <button class="action-btn" (click)="clearTelemetry()" [disabled]="!telemetryEnabled">
-                                        <i class="fa-solid fa-trash"></i>
-                                        Clear
-                                    </button>
+                                    @if (telemetrySource === 'client') {
+                                        <button class="action-btn" [class.active]="telemetryEnabled" (click)="toggleTelemetry()">
+                                            <i class="fa-solid" [class.fa-toggle-on]="telemetryEnabled" [class.fa-toggle-off]="!telemetryEnabled"></i>
+                                            {{ telemetryEnabled ? 'Enabled' : 'Disabled' }}
+                                        </button>
+                                        <button class="action-btn" (click)="clearTelemetry()" [disabled]="!telemetryEnabled">
+                                            <i class="fa-solid fa-trash"></i>
+                                            Clear
+                                        </button>
+                                    } @else {
+                                        <span class="status-indicator" [class.enabled]="serverTelemetryEnabled" [class.disabled]="!serverTelemetryEnabled">
+                                            <i class="fa-solid" [class.fa-circle-check]="serverTelemetryEnabled" [class.fa-circle-xmark]="!serverTelemetryEnabled"></i>
+                                            {{ serverTelemetryEnabled ? 'Enabled' : 'Disabled' }}
+                                            <span class="config-note" title="Configure via mj.config.cjs telemetry section">(config)</span>
+                                        </span>
+                                    }
                                     @if (serverTelemetryLoading) {
                                         <span class="loading-indicator">
                                             <i class="fa-solid fa-spinner fa-spin"></i>
@@ -1932,6 +1940,33 @@ export function LoadSystemDiagnosticsResource() {
         .action-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        /* Status indicator for read-only server telemetry status */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .status-indicator.enabled {
+            background: rgba(76, 175, 80, 0.1);
+            color: #4caf50;
+        }
+
+        .status-indicator.disabled {
+            background: rgba(158, 158, 158, 0.1);
+            color: #9e9e9e;
+        }
+
+        .status-indicator .config-note {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-left: 4px;
         }
 
         /* Empty State */
@@ -4553,6 +4588,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     telemetrySource: 'client' | 'server' = 'client';
     serverTelemetryLoading = false;
     serverTelemetryError: string | null = null;
+    serverTelemetryEnabled = false; // Read from server config, not changeable at runtime
 
     // Timeline data
     telemetryEvents: TelemetryEventDisplay[] = [];
@@ -5171,14 +5207,10 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     clearTelemetry(): void {
-        if (this.telemetrySource === 'client') {
-            TelemetryManager.Instance.Clear();
-            TelemetryManager.Instance.ClearInsights();
-            this.refreshTelemetryData();
-        } else {
-            // Clear server telemetry via GraphQL mutation
-            this.clearServerTelemetry();
-        }
+        // Only client telemetry can be cleared (server telemetry is read-only)
+        TelemetryManager.Instance.Clear();
+        TelemetryManager.Instance.ClearInsights();
+        this.refreshTelemetryData();
         this.cdr.markForCheck();
     }
 
@@ -5210,6 +5242,16 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
         try {
             const gqlProvider = GraphQLDataProvider.Instance;
+
+            // Query for server telemetry settings (read-only, configured via mj.config.cjs)
+            const settingsQuery = `
+                query GetServerTelemetrySettings {
+                    GetServerTelemetrySettings {
+                        enabled
+                        level
+                    }
+                }
+            `;
 
             // Query for server telemetry stats
             const statsQuery = `
@@ -5286,12 +5328,18 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             `;
 
             // Execute queries in parallel
-            const [statsResult, eventsResult, patternsResult, insightsResult] = await Promise.all([
+            const [settingsResult, statsResult, eventsResult, patternsResult, insightsResult] = await Promise.all([
+                gqlProvider.ExecuteGQL(settingsQuery, {}),
                 gqlProvider.ExecuteGQL(statsQuery, {}),
                 gqlProvider.ExecuteGQL(eventsQuery, { filter: { limit: 200 } }),
                 gqlProvider.ExecuteGQL(patternsQuery, { filter: { minCount: 1 } }),
                 gqlProvider.ExecuteGQL(insightsQuery, { filter: { limit: 20 } })
             ]);
+
+            // Process settings (read-only status from server config)
+            if (settingsResult?.GetServerTelemetrySettings) {
+                this.serverTelemetryEnabled = settingsResult.GetServerTelemetrySettings.enabled;
+            }
 
             // Process stats
             if (statsResult?.GetServerTelemetryStats) {
@@ -5441,33 +5489,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             this.telemetryPatterns = [];
             this.telemetryInsights = [];
             this.slowQueries = [];
-        } finally {
-            this.serverTelemetryLoading = false;
-            this.cdr.markForCheck();
-        }
-    }
-
-    /**
-     * Clear server telemetry via GraphQL mutation
-     */
-    private async clearServerTelemetry(): Promise<void> {
-        this.serverTelemetryLoading = true;
-        this.cdr.markForCheck();
-
-        try {
-            const gqlProvider = GraphQLDataProvider.Instance;
-            const mutation = `
-                mutation ClearServerTelemetry {
-                    ClearServerTelemetry
-                }
-            `;
-            await gqlProvider.ExecuteGQL(mutation, {});
-
-            // Reload server telemetry
-            await this.loadServerTelemetry();
-        } catch (error) {
-            console.error('Failed to clear server telemetry:', error);
-            this.serverTelemetryError = `Failed to clear server telemetry: ${error instanceof Error ? error.message : String(error)}`;
         } finally {
             this.serverTelemetryLoading = false;
             this.cdr.markForCheck();

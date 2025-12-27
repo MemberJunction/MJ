@@ -69,6 +69,7 @@ LoadSendGridProvider();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
+import { TelemetryManager, TelemetryLevel } from '@memberjunction/global';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -152,6 +153,19 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
   const md = new Metadata();
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+
+  // Initialize server telemetry based on config
+  const tm = TelemetryManager.Instance;
+  if (configInfo.telemetry?.enabled) {
+    tm.SetEnabled(true);
+    if (configInfo.telemetry?.level) {
+      tm.UpdateSettings({ level: configInfo.telemetry.level as TelemetryLevel });
+    }
+    console.log(`Server telemetry enabled with level: ${configInfo.telemetry.level || 'standard'}`);
+  } else {
+    tm.SetEnabled(false);
+    console.log('Server telemetry disabled');
+  }
 
   const dataSources = [new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
   
