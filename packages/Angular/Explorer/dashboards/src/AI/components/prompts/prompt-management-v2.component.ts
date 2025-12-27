@@ -2,8 +2,9 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
-import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -204,29 +205,20 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
 
   private async loadInitialData(): Promise<void> {
     try {
-      // Ensure AIEngineBase is configured (no-op if already loaded)
-      await AIEngineBase.Instance.Config(false);
+      // Configure both engines in parallel (no-op if already loaded)
+      await Promise.all([
+        AIEngineBase.Instance.Config(false),
+        TemplateEngineBase.Instance.Config(false)
+      ]);
 
       // Get cached data from AIEngineBase
       const prompts = AIEngineBase.Instance.Prompts;
       this.categories = AIEngineBase.Instance.PromptCategories;
       this.types = AIEngineBase.Instance.PromptTypes;
 
-      // Templates and TemplateContents are not in AIEngineBase, so we still need RunView for those
-      const rv = new RunView();
-      const [templateResults, templateContentResults] = await rv.RunViews([
-        {
-          EntityName: 'Templates',
-          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)`
-        },
-        {
-          EntityName: 'Template Contents'
-        }
-      ]);
-
-      // Combine prompts with their templates
-      const templates = templateResults.Results as TemplateEntity[];
-      const templateContents = templateContentResults.Results as TemplateContentEntity[];
+      // Get cached data from TemplateEngineBase
+      const templates = TemplateEngineBase.Instance.Templates as TemplateEntity[];
+      const templateContents = TemplateEngineBase.Instance.TemplateContents;
       
       // Create lookup maps
       const templateMap = new Map(templates.map(t => [t.ID, t]));
