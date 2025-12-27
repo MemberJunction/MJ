@@ -1,10 +1,13 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, ViewChild, AfterViewInit, NgZone } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RegisterClass, TelemetryManager, TelemetryEvent, TelemetryPattern, TelemetryInsight, TelemetryCategory } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
-import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType } from '@memberjunction/core';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { CompositeKey } from '@memberjunction/core';
+import { ResourceData, UserSettingEntity } from '@memberjunction/core-entities';
+import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata, RunView } from '@memberjunction/core';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import * as d3 from 'd3';
 
 /**
@@ -35,6 +38,12 @@ export interface EngineConfigItemDisplay {
     memoryDisplay: string;
     sampleData: unknown[];
     expanded: boolean;
+    // Paging support
+    displayedData: unknown[];
+    allDataLoaded: boolean;
+    isLoadingMore: boolean;
+    currentPage: number;
+    pageSize: number;
 }
 
 /**
@@ -127,6 +136,25 @@ export interface TelemetrySummary {
 }
 
 /**
+ * Settings key for persisting user preferences
+ */
+const SYSTEM_DIAGNOSTICS_SETTINGS_KEY = 'SystemDiagnostics.UserPreferences';
+
+/**
+ * Interface for persisted user preferences
+ */
+export interface SystemDiagnosticsUserPreferences {
+    kpiCardsCollapsed: boolean;
+    activeSection: 'engines' | 'redundant' | 'performance' | 'cache';
+    perfTab: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights';
+    telemetrySource: 'client' | 'server';
+    categoryFilter: 'all' | TelemetryCategory;
+    chartZoomLevel: number;
+    chartGapCompression: boolean;
+    autoRefresh: boolean;
+}
+
+/**
  * Tree-shaking prevention function - ensures component is included in builds
  */
 export function LoadSystemDiagnosticsResource() {
@@ -174,46 +202,76 @@ export function LoadSystemDiagnosticsResource() {
                 </div>
             </div>
 
-            <!-- Overview Cards -->
-            <div class="overview-cards">
-                <div class="overview-card">
-                    <div class="card-icon card-icon--engines">
-                        <i class="fa-solid fa-cogs"></i>
-                    </div>
-                    <div class="card-content">
-                        <div class="card-value">{{ engineStats?.totalEngines || 0 }}</div>
-                        <div class="card-label">Registered Engines</div>
-                        <div class="card-subtitle">{{ engineStats?.loadedEngines || 0 }} loaded</div>
-                    </div>
-                </div>
+            <!-- Overview Cards (Collapsible) -->
+            <div class="overview-cards-container" [class.collapsed]="kpiCardsCollapsed">
+                <button class="kpi-toggle-btn" (click)="toggleKpiCards()" [title]="kpiCardsCollapsed ? 'Expand KPI cards' : 'Collapse KPI cards'">
+                    <i class="fa-solid" [class.fa-chevron-up]="!kpiCardsCollapsed" [class.fa-chevron-down]="kpiCardsCollapsed"></i>
+                </button>
 
-                <div class="overview-card">
-                    <div class="card-icon card-icon--memory">
-                        <i class="fa-solid fa-microchip"></i>
-                    </div>
-                    <div class="card-content">
-                        <div class="card-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</div>
-                        <div class="card-label">Engine Memory</div>
-                        <div class="card-subtitle">Estimated total</div>
-                    </div>
-                </div>
+                @if (!kpiCardsCollapsed) {
+                    <!-- Expanded View -->
+                    <div class="overview-cards">
+                        <div class="overview-card">
+                            <div class="card-icon card-icon--engines">
+                                <i class="fa-solid fa-cogs"></i>
+                            </div>
+                            <div class="card-content">
+                                <div class="card-value">{{ engineStats?.totalEngines || 0 }}</div>
+                                <div class="card-label">Registered Engines</div>
+                                <div class="card-subtitle">{{ engineStats?.loadedEngines || 0 }} loaded</div>
+                            </div>
+                        </div>
 
-                <div class="overview-card">
-                    <div class="card-icon" [class.card-icon--warning]="redundantLoads.length > 0" [class.card-icon--success]="redundantLoads.length === 0">
-                        <i class="fa-solid fa-copy"></i>
-                    </div>
-                    <div class="card-content">
-                        <div class="card-value">{{ redundantLoads.length }}</div>
-                        <div class="card-label">Redundant Loads</div>
-                        <div class="card-subtitle">
-                            @if (redundantLoads.length === 0) {
-                                No redundant loading detected
-                            } @else {
-                                {{ redundantLoads.length }} entities loaded by multiple engines
-                            }
+                        <div class="overview-card">
+                            <div class="card-icon card-icon--memory">
+                                <i class="fa-solid fa-microchip"></i>
+                            </div>
+                            <div class="card-content">
+                                <div class="card-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</div>
+                                <div class="card-label">Engine Memory</div>
+                                <div class="card-subtitle">Estimated total</div>
+                            </div>
+                        </div>
+
+                        <div class="overview-card">
+                            <div class="card-icon" [class.card-icon--warning]="redundantLoads.length > 0" [class.card-icon--success]="redundantLoads.length === 0">
+                                <i class="fa-solid fa-copy"></i>
+                            </div>
+                            <div class="card-content">
+                                <div class="card-value">{{ redundantLoads.length }}</div>
+                                <div class="card-label">Redundant Loads</div>
+                                <div class="card-subtitle">
+                                    @if (redundantLoads.length === 0) {
+                                        No redundant loading detected
+                                    } @else {
+                                        {{ redundantLoads.length }} entities loaded by multiple engines
+                                    }
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                } @else {
+                    <!-- Collapsed View - Mini KPI bar -->
+                    <div class="overview-cards-mini">
+                        <div class="mini-kpi" title="Registered Engines">
+                            <i class="fa-solid fa-cogs"></i>
+                            <span class="mini-value">{{ engineStats?.totalEngines || 0 }}</span>
+                            <span class="mini-label">Engines</span>
+                        </div>
+                        <div class="mini-divider"></div>
+                        <div class="mini-kpi" title="Engine Memory">
+                            <i class="fa-solid fa-microchip"></i>
+                            <span class="mini-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</span>
+                            <span class="mini-label">Memory</span>
+                        </div>
+                        <div class="mini-divider"></div>
+                        <div class="mini-kpi" [class.warning]="redundantLoads.length > 0" title="Redundant Loads">
+                            <i class="fa-solid fa-copy"></i>
+                            <span class="mini-value">{{ redundantLoads.length }}</span>
+                            <span class="mini-label">Redundant</span>
+                        </div>
+                    </div>
+                }
             </div>
 
             <!-- Main Content with Left Nav -->
@@ -415,6 +473,18 @@ export function LoadSystemDiagnosticsResource() {
                                     Performance Telemetry
                                 </h3>
                                 <div class="panel-actions">
+                                    <!-- Source toggle -->
+                                    <div class="source-toggle">
+                                        <button class="source-btn" [class.active]="telemetrySource === 'client'" (click)="setTelemetrySource('client')">
+                                            <i class="fa-solid fa-browser"></i>
+                                            Client
+                                        </button>
+                                        <button class="source-btn" [class.active]="telemetrySource === 'server'" (click)="setTelemetrySource('server')">
+                                            <i class="fa-solid fa-server"></i>
+                                            Server
+                                        </button>
+                                    </div>
+                                    <span class="action-divider"></span>
                                     <button class="action-btn" [class.active]="telemetryEnabled" (click)="toggleTelemetry()">
                                         <i class="fa-solid" [class.fa-toggle-on]="telemetryEnabled" [class.fa-toggle-off]="!telemetryEnabled"></i>
                                         {{ telemetryEnabled ? 'Enabled' : 'Disabled' }}
@@ -423,8 +493,22 @@ export function LoadSystemDiagnosticsResource() {
                                         <i class="fa-solid fa-trash"></i>
                                         Clear
                                     </button>
+                                    @if (serverTelemetryLoading) {
+                                        <span class="loading-indicator">
+                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                        </span>
+                                    }
                                 </div>
                             </div>
+                            @if (serverTelemetryError) {
+                                <div class="error-banner">
+                                    <i class="fa-solid fa-exclamation-triangle"></i>
+                                    {{ serverTelemetryError }}
+                                    <button class="dismiss-btn" (click)="serverTelemetryError = null">
+                                        <i class="fa-solid fa-times"></i>
+                                    </button>
+                                </div>
+                            }
 
                             <!-- Performance Sub-Navigation Tabs -->
                             <div class="perf-tabs">
@@ -480,6 +564,24 @@ export function LoadSystemDiagnosticsResource() {
                                                 <span class="legend-item ai"><span class="legend-dot"></span> AI</span>
                                             </div>
                                             <div class="perfmon-controls">
+                                                <!-- Interaction Mode Toggle -->
+                                                <div class="mode-toggle" title="Chart Interaction Mode">
+                                                    <button
+                                                        class="mode-btn"
+                                                        [class.active]="chartInteractionMode === 'select'"
+                                                        (click)="setChartInteractionMode('select')"
+                                                        title="Select mode - drag to zoom into a time range">
+                                                        <i class="fa-solid fa-vector-square"></i>
+                                                    </button>
+                                                    <button
+                                                        class="mode-btn"
+                                                        [class.active]="chartInteractionMode === 'pan'"
+                                                        (click)="setChartInteractionMode('pan')"
+                                                        title="Pan mode - click events to view details">
+                                                        <i class="fa-solid fa-hand"></i>
+                                                    </button>
+                                                </div>
+                                                <span class="control-divider"></span>
                                                 <button class="chart-control-btn" (click)="zoomPerfChart('in')" title="Zoom In">
                                                     <i class="fa-solid fa-search-plus"></i>
                                                 </button>
@@ -505,10 +607,12 @@ export function LoadSystemDiagnosticsResource() {
                                         <div class="perfmon-footer">
                                             <span class="footer-note">
                                                 <i class="fa-solid fa-info-circle"></i>
-                                                @if (chartGapCompression) {
-                                                    Gaps >5s compressed. Click striped areas to expand.
+                                                @if (chartTimeRangeStart !== null && chartTimeRangeEnd !== null) {
+                                                    Viewing {{ formatRelativeTime(chartTimeRangeStart) }} - {{ formatRelativeTime(chartTimeRangeEnd) }}. Click Reset to show all.
+                                                } @else if (chartGapCompression) {
+                                                    Drag to select a time range. Gaps >5s compressed.
                                                 } @else {
-                                                    Time relative to telemetry start. Hover over points for details.
+                                                    Drag to select a time range. Hover over points for details.
                                                 }
                                             </span>
                                             <span class="footer-stats" *ngIf="telemetrySummary">
@@ -568,7 +672,7 @@ export function LoadSystemDiagnosticsResource() {
                                             </h4>
                                             <div class="slow-queries-list">
                                                 @for (query of slowQueries.slice(0, 10); track query.id) {
-                                                    <div class="slow-query-item">
+                                                    <div class="slow-query-item clickable" (click)="openEventDetailPanel(query)">
                                                         <div class="slow-query-main">
                                                             <span class="category-chip small" [class]="'cat-' + query.category.toLowerCase()">
                                                                 {{ query.category }}
@@ -1224,30 +1328,58 @@ export function LoadSystemDiagnosticsResource() {
                                                     </div>
                                                 }
 
-                                                <!-- Sample Data -->
-                                                @if (item.sampleData.length > 0) {
+                                                <!-- Data Table with Paging -->
+                                                @if (item.displayedData.length > 0) {
                                                     <div class="sample-data-section">
                                                         <div class="sample-header">
-                                                            <span class="sample-title">Sample Data (first {{ item.sampleData.length }})</span>
-                                                            @if (item.entityName) {
-                                                                <button class="view-all-btn" (click)="openEntityInExplorer(item.entityName)" title="Open in Entity Explorer">
-                                                                    <i class="fa-solid fa-external-link-alt"></i>
-                                                                    View All
-                                                                </button>
-                                                            }
+                                                            <span class="sample-title">Data ({{ item.displayedData.length }} of {{ item.itemCount }})</span>
+                                                            <div class="sample-header-actions">
+                                                                @if (!item.allDataLoaded && item.itemCount > item.displayedData.length) {
+                                                                    <button class="load-more-btn" (click)="loadMoreData(item)" [disabled]="item.isLoadingMore" title="Load more records">
+                                                                        @if (item.isLoadingMore) {
+                                                                            <i class="fa-solid fa-spinner spinning"></i>
+                                                                        } @else {
+                                                                            <i class="fa-solid fa-plus"></i>
+                                                                        }
+                                                                        Load More
+                                                                    </button>
+                                                                    <button class="load-all-btn" (click)="loadAllData(item)" [disabled]="item.isLoadingMore" title="Load all records">
+                                                                        @if (item.isLoadingMore) {
+                                                                            <i class="fa-solid fa-spinner spinning"></i>
+                                                                        } @else {
+                                                                            <i class="fa-solid fa-download"></i>
+                                                                        }
+                                                                        Load All
+                                                                    </button>
+                                                                }
+                                                                @if (item.allDataLoaded) {
+                                                                    <span class="all-loaded-badge">
+                                                                        <i class="fa-solid fa-check"></i>
+                                                                        All Loaded
+                                                                    </span>
+                                                                }
+                                                            </div>
                                                         </div>
                                                         <div class="sample-data-table-wrapper">
                                                             <table class="sample-data-table">
                                                                 <thead>
                                                                     <tr>
+                                                                        <th class="action-col"></th>
                                                                         @for (col of getSampleDataColumns(item); track col) {
                                                                             <th>{{ col }}</th>
                                                                         }
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
-                                                                    @for (row of item.sampleData; track $index) {
+                                                                    @for (row of item.displayedData; track $index) {
                                                                         <tr>
+                                                                            <td class="action-col">
+                                                                                @if (item.entityName && getRecordId(row)) {
+                                                                                    <button class="open-record-btn" (click)="openEntityRecord(item.entityName, row)" title="Open record">
+                                                                                        <i class="fa-solid fa-external-link-alt"></i>
+                                                                                    </button>
+                                                                                }
+                                                                            </td>
                                                                             @for (col of getSampleDataColumns(item); track col) {
                                                                                 <td [title]="getSampleDataValue(row, col)">{{ truncateString(getSampleDataValue(row, col), 30) }}</td>
                                                                             }
@@ -1380,15 +1512,100 @@ export function LoadSystemDiagnosticsResource() {
             100% { transform: rotate(360deg); }
         }
 
+        /* Overview Cards Container (Collapsible) */
+        .overview-cards-container {
+            position: relative;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .overview-cards-container.collapsed {
+            padding: 0;
+        }
+
+        .kpi-toggle-btn {
+            position: absolute;
+            right: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid #e0e0e0;
+            background: white;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        .kpi-toggle-btn:hover {
+            background: #f5f5f5;
+            border-color: #ccc;
+            color: #333;
+        }
+
+        .overview-cards-container.collapsed .kpi-toggle-btn {
+            top: 50%;
+        }
+
         /* Overview Cards */
         .overview-cards {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 16px;
             padding: 20px 24px;
+            padding-right: 60px;
             background: white;
-            border-bottom: 1px solid #e0e0e0;
             flex-shrink: 0;
+        }
+
+        /* Mini KPI Bar (Collapsed State) */
+        .overview-cards-mini {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            padding: 10px 60px 10px 24px;
+            background: white;
+        }
+
+        .mini-kpi {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+        }
+
+        .mini-kpi i {
+            font-size: 14px;
+            color: #667eea;
+        }
+
+        .mini-kpi.warning i {
+            color: #ff9800;
+        }
+
+        .mini-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .mini-label {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .mini-divider {
+            width: 1px;
+            height: 20px;
+            background: #e0e0e0;
         }
 
         .overview-card {
@@ -1605,7 +1822,84 @@ export function LoadSystemDiagnosticsResource() {
 
         .panel-actions {
             display: flex;
+            align-items: center;
             gap: 12px;
+        }
+
+        .action-divider {
+            width: 1px;
+            height: 24px;
+            background: #ddd;
+        }
+
+        .source-toggle {
+            display: flex;
+            background: #e8e8e8;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .source-btn {
+            background: transparent;
+            border: none;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .source-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        .source-btn.active {
+            background: #4caf50;
+            color: white;
+        }
+
+        .source-btn i {
+            font-size: 11px;
+        }
+
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            color: #4caf50;
+        }
+
+        .error-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: #ffebee;
+            border: 1px solid #ffcdd2;
+            border-radius: 6px;
+            color: #c62828;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .error-banner i {
+            color: #e53935;
+        }
+
+        .error-banner .dismiss-btn {
+            margin-left: auto;
+            background: transparent;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .error-banner .dismiss-btn:hover {
+            color: #c62828;
         }
 
         .action-btn {
@@ -2223,6 +2517,17 @@ export function LoadSystemDiagnosticsResource() {
             border-radius: 6px;
             padding: 10px 12px;
             border: 1px solid #ffe0b2;
+            transition: all 0.15s ease;
+        }
+
+        .slow-query-item.clickable {
+            cursor: pointer;
+        }
+
+        .slow-query-item.clickable:hover {
+            background: #fff8e1;
+            border-color: #ffb74d;
+            transform: translateX(2px);
         }
 
         .slow-query-main {
@@ -3033,6 +3338,51 @@ export function LoadSystemDiagnosticsResource() {
             font-size: 14px;
         }
 
+        /* Mode Toggle Buttons */
+        .mode-toggle {
+            display: flex;
+            background: #1a1a1a;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #444;
+        }
+
+        .mode-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 28px;
+            padding: 0;
+            background: transparent;
+            color: #666;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .mode-btn:first-child {
+            border-right: 1px solid #333;
+        }
+
+        .mode-btn:hover {
+            color: #aaa;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .mode-btn.active {
+            background: #00ff88;
+            color: #1a1a1a;
+        }
+
+        .mode-btn.active:hover {
+            background: #00cc6a;
+        }
+
+        .mode-btn i {
+            font-size: 12px;
+        }
+
         .control-divider {
             width: 1px;
             height: 24px;
@@ -3097,6 +3447,33 @@ export function LoadSystemDiagnosticsResource() {
 
         .perfmon-chart :deep(.gap-expand-btn:hover) {
             opacity: 1;
+        }
+
+        /* Selection brush overlay */
+        .perfmon-chart :deep(.selection-overlay) {
+            pointer-events: all;
+        }
+
+        .perfmon-chart :deep(.selection-rect) {
+            pointer-events: none;
+        }
+
+        /* Zoom info display */
+        .zoom-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .zoom-info .zoom-level {
+            color: #00ff88;
+        }
+
+        .zoom-info .time-range {
+            color: #666;
         }
 
         /* Responsive */
@@ -3800,10 +4177,17 @@ export function LoadSystemDiagnosticsResource() {
             color: #666;
         }
 
-        .view-all-btn {
+        .sample-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .load-more-btn,
+        .load-all-btn {
             background: none;
-            border: 1px solid #4caf50;
-            color: #4caf50;
+            border: 1px solid #667eea;
+            color: #667eea;
             font-size: 11px;
             padding: 4px 10px;
             border-radius: 4px;
@@ -3814,8 +4198,54 @@ export function LoadSystemDiagnosticsResource() {
             transition: all 0.2s ease;
         }
 
-        .view-all-btn:hover {
-            background: #4caf50;
+        .load-more-btn:hover:not(:disabled),
+        .load-all-btn:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+        }
+
+        .load-more-btn:disabled,
+        .load-all-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .all-loaded-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: #4caf50;
+            padding: 4px 10px;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 4px;
+        }
+
+        .action-col {
+            width: 36px;
+            min-width: 36px;
+            max-width: 36px;
+            padding: 4px !important;
+            text-align: center;
+        }
+
+        .open-record-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: #f0f4f8;
+            color: #667eea;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            transition: all 0.2s ease;
+        }
+
+        .open-record-btn:hover {
+            background: #667eea;
             color: white;
         }
 
@@ -4086,12 +4516,19 @@ export function LoadSystemDiagnosticsResource() {
 export class SystemDiagnosticsComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     private destroy$ = new Subject<void>();
 
+    // User settings persistence
+    private metadata = new Metadata();
+    private userSettingEntity: UserSettingEntity | null = null;
+    private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
+    private settingsLoaded = false;
+
     // State
     isLoading = false;
     autoRefresh = false;
     activeSection: 'engines' | 'redundant' | 'performance' | 'cache' = 'engines';
     lastUpdated = new Date();
     isRefreshingEngines = false;
+    kpiCardsCollapsed = false;
 
     // Data
     engineStats: EngineMemoryStats | null = null;
@@ -4104,6 +4541,11 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     telemetryInsights: TelemetryInsightDisplay[] = [];
     telemetryEnabled = false;
     categoriesWithData: { name: string; events: number; avgMs: number }[] = [];
+
+    // Telemetry source toggle (client vs server)
+    telemetrySource: 'client' | 'server' = 'client';
+    serverTelemetryLoading = false;
+    serverTelemetryError: string | null = null;
 
     // Timeline data
     telemetryEvents: TelemetryEventDisplay[] = [];
@@ -4122,6 +4564,21 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     private chartViewportStart = 0;
     private chartViewportEnd = 0;
     private expandedGaps = new Set<number>(); // Track which gaps are expanded
+
+    // Selection-based zoom state
+    private isSelecting = false;
+    private selectionStartX = 0;
+    private selectionRect: d3.Selection<SVGRectElement, unknown, null, undefined> | null = null;
+    private chartXScale: d3.ScaleLinear<number, number> | null = null;
+    private chartMarginLeft = 50;
+    chartTimeRangeStart: number | null = null;  // Currently visible time range start
+
+    // Chart interaction mode: 'select' for drag-to-zoom, 'pan' for click to view event details
+    chartInteractionMode: 'select' | 'pan' = 'select';
+
+    // Store gap segments for inverse mapping (x -> time)
+    private chartGapSegments: Array<{ type: 'events' | 'gap'; startTime: number; endTime: number; gapIndex?: number; displayStart: number; displayEnd: number }> = [];
+    chartTimeRangeEnd: number | null = null;    // Currently visible time range end
 
     // Slow queries
     slowQueries: TelemetryEventDisplay[] = [];
@@ -4160,11 +4617,33 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     };
     isRefreshingSingleEngine: string | null = null;
 
-    constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
+    constructor(
+        private cdr: ChangeDetectorRef,
+        private ngZone: NgZone,
+        private navigationService: NavigationService,
+        private route: ActivatedRoute,
+        private router: Router
+    ) {
         super();
     }
 
-    ngOnInit() {
+    async ngOnInit() {
+        // Load user preferences first
+        await this.loadUserPreferences();
+
+        // Apply query params (override preferences if present)
+        this.applyQueryParams();
+
+        // Subscribe to query param changes
+        this.route.queryParams
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(() => {
+                // Only apply if we've already loaded settings
+                if (this.settingsLoaded) {
+                    this.applyQueryParams();
+                }
+            });
+
         this.refreshData();
         this.NotifyLoadComplete();
     }
@@ -4172,6 +4651,10 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
+        // Clear any pending save timeout
+        if (this.saveSettingsTimeout) {
+            clearTimeout(this.saveSettingsTimeout);
+        }
     }
 
     setActiveSection(section: 'engines' | 'redundant' | 'performance' | 'cache'): void {
@@ -4184,6 +4667,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             setTimeout(() => this.renderPerfChart(), 50);
         }
         this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
     }
 
     toggleAutoRefresh(): void {
@@ -4197,6 +4681,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     }
                 });
         }
+        this.saveUserPreferencesDebounced();
+    }
+
+    toggleKpiCards(): void {
+        this.kpiCardsCollapsed = !this.kpiCardsCollapsed;
+        this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
     }
 
     async refreshData(): Promise<void> {
@@ -4390,6 +4881,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             setTimeout(() => this.renderPerfChart(), 0);
         }
         this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
     }
 
     jumpToPatternsByCategory(categoryName: string): void {
@@ -4564,21 +5056,37 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     setCategoryFilter(category: TelemetryCategory | 'all'): void {
         this.categoryFilter = category;
         this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
     }
 
     setCategoryFilterByName(name: string): void {
         // Cast string to TelemetryCategory since we know it comes from categoriesWithData
         this.categoryFilter = name as TelemetryCategory;
         this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
     }
 
     onSearchChange(): void {
         this.cdr.markForCheck();
+        // Debounce URL update for search to avoid too many history changes
+        this.updateQueryParamsDebounced();
     }
 
     clearSearch(): void {
         this.searchQuery = '';
         this.cdr.markForCheck();
+        this.updateQueryParams();
+    }
+
+    private searchParamsTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    private updateQueryParamsDebounced(): void {
+        if (this.searchParamsTimeout) {
+            clearTimeout(this.searchParamsTimeout);
+        }
+        this.searchParamsTimeout = setTimeout(() => {
+            this.updateQueryParams();
+        }, 300);
     }
 
     get filteredPatterns(): TelemetryPatternDisplay[] {
@@ -4648,10 +5156,307 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     clearTelemetry(): void {
-        TelemetryManager.Instance.Clear();
-        TelemetryManager.Instance.ClearInsights();
-        this.refreshTelemetryData();
+        if (this.telemetrySource === 'client') {
+            TelemetryManager.Instance.Clear();
+            TelemetryManager.Instance.ClearInsights();
+            this.refreshTelemetryData();
+        } else {
+            // Clear server telemetry via GraphQL mutation
+            this.clearServerTelemetry();
+        }
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Switch between client and server telemetry sources
+     */
+    setTelemetrySource(source: 'client' | 'server'): void {
+        if (this.telemetrySource === source) return;
+
+        this.telemetrySource = source;
+        this.serverTelemetryError = null;
+
+        if (source === 'server') {
+            this.loadServerTelemetry();
+        } else {
+            this.refreshTelemetryData();
+        }
+        this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
+    }
+
+    /**
+     * Load telemetry data from the server via GraphQL
+     */
+    private async loadServerTelemetry(): Promise<void> {
+        this.serverTelemetryLoading = true;
+        this.serverTelemetryError = null;
+        this.cdr.markForCheck();
+
+        try {
+            const gqlProvider = GraphQLDataProvider.Instance;
+
+            // Query for server telemetry stats
+            const statsQuery = `
+                query GetServerTelemetryStats {
+                    GetServerTelemetryStats {
+                        totalEvents
+                        totalPatterns
+                        totalInsights
+                        activeEvents
+                        byCategory {
+                            category
+                            events
+                            avgMs
+                        }
+                    }
+                }
+            `;
+
+            // Query for server telemetry events
+            const eventsQuery = `
+                query GetServerTelemetryEvents($filter: TelemetryEventFilterInput) {
+                    GetServerTelemetryEvents(filter: $filter) {
+                        id
+                        category
+                        operation
+                        fingerprint
+                        startTime
+                        endTime
+                        elapsedMs
+                        userId
+                        params
+                        tags
+                        parentEventId
+                    }
+                }
+            `;
+
+            // Query for server telemetry patterns
+            const patternsQuery = `
+                query GetServerTelemetryPatterns($filter: TelemetryPatternFilterInput) {
+                    GetServerTelemetryPatterns(filter: $filter) {
+                        fingerprint
+                        category
+                        operation
+                        sampleParams
+                        count
+                        totalElapsedMs
+                        avgElapsedMs
+                        minElapsedMs
+                        maxElapsedMs
+                        firstSeen
+                        lastSeen
+                    }
+                }
+            `;
+
+            // Query for server telemetry insights
+            const insightsQuery = `
+                query GetServerTelemetryInsights($filter: TelemetryInsightFilterInput) {
+                    GetServerTelemetryInsights(filter: $filter) {
+                        id
+                        severity
+                        analyzerName
+                        category
+                        title
+                        message
+                        suggestion
+                        relatedEventIds
+                        entityName
+                        metadata
+                        timestamp
+                    }
+                }
+            `;
+
+            // Execute queries in parallel
+            const [statsResult, eventsResult, patternsResult, insightsResult] = await Promise.all([
+                gqlProvider.ExecuteGQL(statsQuery, {}),
+                gqlProvider.ExecuteGQL(eventsQuery, { filter: { limit: 200 } }),
+                gqlProvider.ExecuteGQL(patternsQuery, { filter: { minCount: 1 } }),
+                gqlProvider.ExecuteGQL(insightsQuery, { filter: { limit: 20 } })
+            ]);
+
+            // Process stats
+            if (statsResult?.GetServerTelemetryStats) {
+                const stats = statsResult.GetServerTelemetryStats;
+                const byCategory: Record<TelemetryCategory, { events: number; avgMs: number }> = {
+                    'RunView': { events: 0, avgMs: 0 },
+                    'RunQuery': { events: 0, avgMs: 0 },
+                    'Engine': { events: 0, avgMs: 0 },
+                    'AI': { events: 0, avgMs: 0 },
+                    'Cache': { events: 0, avgMs: 0 },
+                    'Network': { events: 0, avgMs: 0 },
+                    'Custom': { events: 0, avgMs: 0 }
+                };
+
+                for (const cat of stats.byCategory || []) {
+                    if (cat.category in byCategory) {
+                        byCategory[cat.category as TelemetryCategory] = {
+                            events: cat.events,
+                            avgMs: cat.avgMs
+                        };
+                    }
+                }
+
+                this.telemetrySummary = {
+                    totalEvents: stats.totalEvents,
+                    totalPatterns: stats.totalPatterns,
+                    totalInsights: stats.totalInsights,
+                    activeEvents: stats.activeEvents,
+                    byCategory
+                };
+
+                // Build categories with data
+                const categoryNames: TelemetryCategory[] = ['RunView', 'RunQuery', 'Engine', 'AI', 'Cache'];
+                this.categoriesWithData = categoryNames
+                    .filter(cat => byCategory[cat]?.events > 0)
+                    .map(cat => ({
+                        name: cat,
+                        events: byCategory[cat].events,
+                        avgMs: byCategory[cat].avgMs
+                    }));
+            }
+
+            // Process events
+            if (eventsResult?.GetServerTelemetryEvents) {
+                this.telemetryEvents = eventsResult.GetServerTelemetryEvents.map((e: {
+                    id: string;
+                    category: string;
+                    operation: string;
+                    startTime: number;
+                    endTime?: number;
+                    elapsedMs?: number;
+                    params: string;
+                }) => {
+                    const params = e.params ? JSON.parse(e.params) : {};
+                    return {
+                        id: e.id,
+                        category: e.category as TelemetryCategory,
+                        operation: e.operation,
+                        entityName: params?.EntityName || params?.QueryName || null,
+                        filter: params?.ExtraFilter || null,
+                        startTime: e.startTime,
+                        endTime: e.endTime,
+                        elapsedMs: e.elapsedMs,
+                        timestamp: new Date(e.startTime),
+                        params
+                    };
+                });
+
+                // Update slow queries
+                this.slowQueries = this.telemetryEvents
+                    .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.slowQueryThresholdMs)
+                    .sort((a, b) => (b.elapsedMs || 0) - (a.elapsedMs || 0))
+                    .slice(0, 20);
+            }
+
+            // Process patterns
+            if (patternsResult?.GetServerTelemetryPatterns) {
+                this.telemetryPatterns = patternsResult.GetServerTelemetryPatterns.slice(0, 100).map((p: {
+                    fingerprint: string;
+                    category: string;
+                    operation: string;
+                    sampleParams: string;
+                    count: number;
+                    avgElapsedMs: number;
+                    totalElapsedMs: number;
+                    minElapsedMs: number;
+                    maxElapsedMs: number;
+                    lastSeen: number;
+                }) => {
+                    const sampleParams = p.sampleParams ? JSON.parse(p.sampleParams) : {};
+                    return {
+                        fingerprint: p.fingerprint,
+                        category: p.category as TelemetryCategory,
+                        operation: p.operation,
+                        entityName: sampleParams?.EntityName || sampleParams?.QueryName || null,
+                        filter: sampleParams?.ExtraFilter || null,
+                        orderBy: sampleParams?.OrderBy || null,
+                        count: p.count,
+                        avgElapsedMs: Math.round(p.avgElapsedMs * 100) / 100,
+                        totalElapsedMs: Math.round(p.totalElapsedMs),
+                        minElapsedMs: Math.round(p.minElapsedMs),
+                        maxElapsedMs: Math.round(p.maxElapsedMs),
+                        lastSeen: new Date(p.lastSeen),
+                        sampleParams
+                    };
+                });
+            }
+
+            // Process insights
+            if (insightsResult?.GetServerTelemetryInsights) {
+                this.telemetryInsights = insightsResult.GetServerTelemetryInsights.map((i: {
+                    id: string;
+                    severity: string;
+                    analyzerName: string;
+                    category: string;
+                    title: string;
+                    message: string;
+                    suggestion: string;
+                    relatedEventIds: string[];
+                    entityName?: string;
+                    metadata?: string;
+                    timestamp: number;
+                }) => ({
+                    id: i.id,
+                    severity: i.severity,
+                    analyzerName: i.analyzerName,
+                    category: i.category,
+                    title: i.title,
+                    message: i.message,
+                    suggestion: i.suggestion,
+                    relatedEventIds: i.relatedEventIds || [],
+                    entityName: i.entityName,
+                    metadata: i.metadata ? JSON.parse(i.metadata) : undefined,
+                    timestamp: i.timestamp,
+                    expanded: false,
+                    relatedEvents: []
+                }));
+            }
+
+            this.telemetryEnabled = true; // Server telemetry is available
+        } catch (error) {
+            console.error('Failed to load server telemetry:', error);
+            this.serverTelemetryError = `Failed to load server telemetry: ${error instanceof Error ? error.message : String(error)}`;
+            // Clear data on error
+            this.telemetrySummary = null;
+            this.telemetryEvents = [];
+            this.telemetryPatterns = [];
+            this.telemetryInsights = [];
+            this.slowQueries = [];
+        } finally {
+            this.serverTelemetryLoading = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Clear server telemetry via GraphQL mutation
+     */
+    private async clearServerTelemetry(): Promise<void> {
+        this.serverTelemetryLoading = true;
+        this.cdr.markForCheck();
+
+        try {
+            const gqlProvider = GraphQLDataProvider.Instance;
+            const mutation = `
+                mutation ClearServerTelemetry {
+                    ClearServerTelemetry
+                }
+            `;
+            await gqlProvider.ExecuteGQL(mutation, {});
+
+            // Reload server telemetry
+            await this.loadServerTelemetry();
+        } catch (error) {
+            console.error('Failed to clear server telemetry:', error);
+            this.serverTelemetryError = `Failed to clear server telemetry: ${error instanceof Error ? error.message : String(error)}`;
+        } finally {
+            this.serverTelemetryLoading = false;
+            this.cdr.markForCheck();
+        }
     }
 
     getSeverityClass(severity: string): string {
@@ -4808,6 +5613,9 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 .domain([0, d3.max(chartData, d => d.relativeTime) || 1000])
                 .range([0, Math.min(totalDisplayWidth, effectiveWidth)]);
 
+            // Store gap segments for inverse mapping
+            this.chartGapSegments = gapSegments;
+
             // Create a custom mapping function for segment-based positioning
             const mapTimeToX = (time: number): number => {
                 // Find which segment this time falls into
@@ -4832,17 +5640,45 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 return baseScale(time);
             };
 
+            // Create inverse mapping function for x -> time (used by selection brush)
+            const mapXToTime = (x: number): number => {
+                // Find which segment this x position falls into
+                for (const seg of gapSegments) {
+                    if (x >= seg.displayStart && x <= seg.displayEnd) {
+                        if (seg.type === 'gap') {
+                            const isExpanded = seg.gapIndex !== undefined && this.expandedGaps.has(seg.gapIndex);
+                            if (isExpanded) {
+                                // Linear interpolation within expanded gap
+                                const displayRange = seg.displayEnd - seg.displayStart;
+                                if (displayRange <= 0) return seg.startTime;
+                                const ratio = (x - seg.displayStart) / displayRange;
+                                return seg.startTime + ratio * (seg.endTime - seg.startTime);
+                            }
+                            // Compressed gap - return start time (the gap itself has no meaningful selection)
+                            return seg.startTime;
+                        } else {
+                            // Event segment - linear interpolation
+                            const displayRange = seg.displayEnd - seg.displayStart;
+                            if (displayRange <= 0) return seg.startTime;
+                            const ratio = (x - seg.displayStart) / displayRange;
+                            return seg.startTime + ratio * (seg.endTime - seg.startTime);
+                        }
+                    }
+                }
+                return baseScale.invert(x);
+            };
+
             // Use base scale but override the call behavior via a proxy-like wrapper
             xScale = Object.assign(
                 (time: number) => mapTimeToX(time),
                 {
                     domain: baseScale.domain.bind(baseScale),
-                    range: baseScale.range.bind(baseScale),
+                    range: () => [0, Math.min(totalDisplayWidth, effectiveWidth)] as [number, number],
                     ticks: baseScale.ticks.bind(baseScale),
                     tickFormat: baseScale.tickFormat.bind(baseScale),
                     nice: baseScale.nice.bind(baseScale),
                     copy: baseScale.copy.bind(baseScale),
-                    invert: baseScale.invert.bind(baseScale),
+                    invert: mapXToTime, // Use our custom inverse function!
                     clamp: baseScale.clamp.bind(baseScale),
                     unknown: baseScale.unknown.bind(baseScale),
                     interpolate: baseScale.interpolate.bind(baseScale),
@@ -4867,7 +5703,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 }
             }
         } else {
-            // Standard linear scale
+            // Standard linear scale - clear gap segments
+            this.chartGapSegments = [];
             xScale = d3.scaleLinear()
                 .domain([0, d3.max(chartData, d => d.relativeTime) || 1000])
                 .range([0, effectiveWidth]);
@@ -4909,6 +5746,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
         // Draw threshold line for slow queries
         this.drawThresholdLine(g, yScale, effectiveWidth, this.slowQueryThresholdMs);
+
+        // Add selection brush for drag-to-zoom
+        this.addSelectionBrush(svg, g, xScale, innerHeight, margin, chartData);
+
+        // Store scale and dimensions for selection calculations
+        this.chartXScale = xScale;
+        this.chartMarginLeft = margin.left;
 
         this.chartInitialized = true;
     }
@@ -5143,12 +5987,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     zoomPerfChart(direction: 'in' | 'out'): void {
         const zoomFactor = 1.5;
         if (direction === 'in') {
-            this.chartZoomLevel = Math.min(this.chartZoomLevel * zoomFactor, 10);
+            this.chartZoomLevel = Math.min(this.chartZoomLevel * zoomFactor, 100); // Allow up to 100x zoom
         } else {
-            this.chartZoomLevel = Math.max(this.chartZoomLevel / zoomFactor, 0.5);
+            this.chartZoomLevel = Math.max(this.chartZoomLevel / zoomFactor, 0.25); // Allow zoom out to 25%
         }
         this.renderPerfChart();
         this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
     }
 
     /**
@@ -5158,9 +6003,12 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.chartZoomLevel = 1;
         this.chartViewportStart = 0;
         this.chartViewportEnd = 0;
+        this.chartTimeRangeStart = null;
+        this.chartTimeRangeEnd = null;
         this.expandedGaps.clear();
         this.renderPerfChart();
         this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
     }
 
     /**
@@ -5169,6 +6017,16 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     onGapCompressionChange(): void {
         this.expandedGaps.clear();
         this.renderPerfChart();
+        this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
+    }
+
+    /**
+     * Set chart interaction mode (select for drag-to-zoom, pan for click-to-view)
+     */
+    setChartInteractionMode(mode: 'select' | 'pan'): void {
+        this.chartInteractionMode = mode;
+        this.renderPerfChart(); // Re-render to update cursor and behavior
         this.cdr.markForCheck();
     }
 
@@ -5308,6 +6166,141 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 this.renderPerfChart();
             });
         });
+    }
+
+    /**
+     * Adds a drag-to-select brush overlay for zooming into a time range
+     * Only active when chartInteractionMode is 'select'
+     */
+    private addSelectionBrush(
+        svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
+        g: d3.Selection<SVGGElement, unknown, null, undefined>,
+        xScale: d3.ScaleLinear<number, number>,
+        innerHeight: number,
+        _margin: { top: number; right: number; bottom: number; left: number },
+        chartData: Array<{ relativeTime: number; duration: number }>
+    ): void {
+        // Create a transparent overlay for mouse events
+        // Cursor depends on interaction mode
+        const overlay = g.append('rect')
+            .attr('class', 'selection-overlay')
+            .attr('width', xScale.range()[1])
+            .attr('height', innerHeight)
+            .attr('fill', 'transparent')
+            .style('cursor', this.chartInteractionMode === 'select' ? 'crosshair' : 'default');
+
+        // Selection rectangle (initially hidden) - only used in select mode
+        const selectionRect = g.append('rect')
+            .attr('class', 'selection-rect')
+            .attr('fill', 'rgba(0, 255, 136, 0.15)')
+            .attr('stroke', '#00ff88')
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '4,2')
+            .style('display', 'none');
+
+        let startX = 0;
+        let isDragging = false;
+
+        // Store the inverse scale function for mapping x back to time
+        const getTimeFromX = (x: number): number => {
+            // For gap-compressed scales, we need to use invert if available
+            if (typeof xScale.invert === 'function') {
+                return xScale.invert(x);
+            }
+            // Fallback: linear interpolation
+            const domain = xScale.domain();
+            const range = xScale.range();
+            const ratio = (x - range[0]) / (range[1] - range[0]);
+            return domain[0] + ratio * (domain[1] - domain[0]);
+        };
+
+        overlay.on('mousedown', (event: MouseEvent) => {
+            // Only allow selection in 'select' mode
+            if (this.chartInteractionMode !== 'select') return;
+
+            isDragging = true;
+            this.isSelecting = true;
+            const [x] = d3.pointer(event, overlay.node());
+            startX = Math.max(0, Math.min(x, xScale.range()[1]));
+            this.selectionStartX = startX;
+
+            selectionRect
+                .attr('x', startX)
+                .attr('y', 0)
+                .attr('width', 0)
+                .attr('height', innerHeight)
+                .style('display', 'block');
+        });
+
+        svg.on('mousemove', (event: MouseEvent) => {
+            if (!isDragging || this.chartInteractionMode !== 'select') return;
+
+            const [x] = d3.pointer(event, g.node());
+            const currentX = Math.max(0, Math.min(x, xScale.range()[1]));
+
+            const rectX = Math.min(startX, currentX);
+            const rectWidth = Math.abs(currentX - startX);
+
+            selectionRect
+                .attr('x', rectX)
+                .attr('width', rectWidth);
+        });
+
+        svg.on('mouseup', (event: MouseEvent) => {
+            if (!isDragging || this.chartInteractionMode !== 'select') return;
+            isDragging = false;
+            this.isSelecting = false;
+
+            const [x] = d3.pointer(event, g.node());
+            const endX = Math.max(0, Math.min(x, xScale.range()[1]));
+
+            selectionRect.style('display', 'none');
+
+            // Only zoom if selection is significant (> 20 pixels)
+            const selectionWidth = Math.abs(endX - startX);
+            if (selectionWidth > 20) {
+                const startTime = getTimeFromX(Math.min(startX, endX));
+                const endTime = getTimeFromX(Math.max(startX, endX));
+
+                this.ngZone.run(() => {
+                    this.zoomToTimeRange(startTime, endTime, chartData);
+                });
+            }
+        });
+
+        // Cancel selection on mouse leave
+        svg.on('mouseleave', () => {
+            if (isDragging) {
+                isDragging = false;
+                this.isSelecting = false;
+                selectionRect.style('display', 'none');
+            }
+        });
+    }
+
+    /**
+     * Zooms the chart to show only events within the specified time range
+     */
+    private zoomToTimeRange(
+        startTime: number,
+        endTime: number,
+        allData: Array<{ relativeTime: number; duration: number }>
+    ): void {
+        // Store the time range for filtering
+        this.chartTimeRangeStart = startTime;
+        this.chartTimeRangeEnd = endTime;
+
+        // Calculate zoom level based on selection
+        const fullRange = (d3.max(allData, d => d.relativeTime) || 1000) - (d3.min(allData, d => d.relativeTime) || 0);
+        const selectedRange = endTime - startTime;
+        const newZoomLevel = fullRange / Math.max(selectedRange, 10); // Allow very fine selections (down to 10ms)
+
+        this.chartZoomLevel = Math.min(Math.max(newZoomLevel, 1), 100); // Allow up to 100x zoom
+        this.chartViewportStart = startTime;
+        this.chartViewportEnd = endTime;
+
+        this.renderPerfChart();
+        this.cdr.markForCheck();
     }
 
     // === Local Cache Methods ===
@@ -5508,6 +6501,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             const propValue = engineObj[config.PropertyName];
             const dataArray = Array.isArray(propValue) ? propValue : [];
             const estimatedBytes = this.estimateArrayMemory(dataArray);
+            const initialPageSize = 10;
+            const initialData = dataArray.slice(0, initialPageSize);
 
             items.push({
                 propertyName: config.PropertyName,
@@ -5519,8 +6514,14 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 itemCount: dataArray.length,
                 estimatedMemoryBytes: estimatedBytes,
                 memoryDisplay: this.formatBytes(estimatedBytes),
-                sampleData: dataArray.slice(0, 5), // First 5 items as sample
-                expanded: false
+                sampleData: dataArray, // Store all data for paging
+                expanded: false,
+                // Paging support
+                displayedData: initialData,
+                allDataLoaded: dataArray.length <= initialPageSize,
+                isLoadingMore: false,
+                currentPage: 1,
+                pageSize: initialPageSize
             });
         }
 
@@ -5632,6 +6633,87 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     /**
+     * Load more data for a config item (paging)
+     */
+    loadMoreData(item: EngineConfigItemDisplay): void {
+        if (item.isLoadingMore || item.allDataLoaded) return;
+
+        item.isLoadingMore = true;
+        this.cdr.markForCheck();
+
+        // Simulate async loading (data is already in memory)
+        setTimeout(() => {
+            const nextPage = item.currentPage + 1;
+            const startIndex = item.currentPage * item.pageSize;
+            const endIndex = startIndex + item.pageSize;
+            const newData = item.sampleData.slice(startIndex, endIndex);
+
+            item.displayedData = [...item.displayedData, ...newData];
+            item.currentPage = nextPage;
+            item.allDataLoaded = item.displayedData.length >= item.sampleData.length;
+            item.isLoadingMore = false;
+            this.cdr.markForCheck();
+        }, 100);
+    }
+
+    /**
+     * Load all remaining data for a config item
+     */
+    loadAllData(item: EngineConfigItemDisplay): void {
+        if (item.isLoadingMore || item.allDataLoaded) return;
+
+        item.isLoadingMore = true;
+        this.cdr.markForCheck();
+
+        // Simulate async loading (data is already in memory)
+        setTimeout(() => {
+            item.displayedData = [...item.sampleData];
+            item.allDataLoaded = true;
+            item.isLoadingMore = false;
+            this.cdr.markForCheck();
+        }, 100);
+    }
+
+    /**
+     * Get the record ID from a row (for opening entity records)
+     */
+    getRecordId(row: unknown): string | null {
+        if (!row || typeof row !== 'object') return null;
+
+        const obj = row as Record<string, unknown>;
+
+        // For BaseEntity objects, use the ID property
+        if ('ID' in obj) {
+            return String(obj.ID);
+        }
+
+        // Try GetAll for BaseEntity
+        if ('GetAll' in obj && typeof obj.GetAll === 'function') {
+            const allData = (obj as { GetAll: () => Record<string, unknown> }).GetAll();
+            if ('ID' in allData) {
+                return String(allData.ID);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Open an entity record using NavigationService
+     */
+    openEntityRecord(entityName: string, row: unknown): void {
+        const recordId = this.getRecordId(row);
+        if (!recordId || !entityName) return;
+
+        // Create a CompositeKey with the ID
+        const compositeKey = new CompositeKey([
+            { FieldName: 'ID', Value: recordId }
+        ]);
+
+        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+    }
+
+    /**
      * Open an entity in the explorer (placeholder - would need routing integration)
      */
     openEntityInExplorer(entityName: string): void {
@@ -5640,6 +6722,211 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         console.log(`Would open entity in explorer: ${entityName}`);
         // Could emit an event or use router:
         // this.router.navigate(['/entities', entityName]);
+    }
+
+    // === Deep Linking via Query Parameters ===
+
+    /**
+     * Apply query parameters to component state (deep linking support)
+     * Query params take precedence over saved preferences
+     */
+    private applyQueryParams(): void {
+        const params = this.route.snapshot.queryParams;
+
+        // Section: ?section=engines|redundant|performance|cache
+        if (params['section']) {
+            const section = params['section'] as string;
+            if (['engines', 'redundant', 'performance', 'cache'].includes(section)) {
+                this.activeSection = section as 'engines' | 'redundant' | 'performance' | 'cache';
+            }
+        }
+
+        // Performance tab: ?tab=monitor|overview|events|patterns|insights
+        if (params['tab']) {
+            const tab = params['tab'] as string;
+            if (['monitor', 'overview', 'events', 'patterns', 'insights'].includes(tab)) {
+                this.perfTab = tab as 'monitor' | 'overview' | 'events' | 'patterns' | 'insights';
+            }
+        }
+
+        // Telemetry source: ?source=client|server
+        if (params['source']) {
+            const source = params['source'] as string;
+            if (['client', 'server'].includes(source)) {
+                this.telemetrySource = source as 'client' | 'server';
+            }
+        }
+
+        // Category filter: ?category=all|data|api|render|...
+        if (params['category']) {
+            const category = params['category'] as string;
+            if (category === 'all') {
+                this.categoryFilter = 'all';
+            } else {
+                this.categoryFilter = category as TelemetryCategory;
+            }
+        }
+
+        // Search query: ?search=...
+        if (params['search']) {
+            this.searchQuery = params['search'] as string;
+        }
+
+        // KPI cards collapsed: ?kpi=collapsed|expanded
+        if (params['kpi']) {
+            this.kpiCardsCollapsed = params['kpi'] === 'collapsed';
+        }
+
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Update query parameters to reflect current state (for deep linking)
+     */
+    private updateQueryParams(): void {
+        const queryParams: Record<string, string | null> = {
+            section: this.activeSection !== 'engines' ? this.activeSection : null,
+            tab: this.perfTab !== 'monitor' ? this.perfTab : null,
+            source: this.telemetrySource !== 'client' ? this.telemetrySource : null,
+            category: this.categoryFilter !== 'all' ? this.categoryFilter : null,
+            search: this.searchQuery.trim() || null,
+            kpi: this.kpiCardsCollapsed ? 'collapsed' : null
+        };
+
+        // Remove null values for cleaner URLs
+        const cleanParams: Record<string, string> = {};
+        for (const [key, value] of Object.entries(queryParams)) {
+            if (value !== null) {
+                cleanParams[key] = value;
+            }
+        }
+
+        // Update URL without navigation
+        this.router.navigate([], {
+            relativeTo: this.route,
+            queryParams: cleanParams,
+            queryParamsHandling: '', // Replace all query params
+            replaceUrl: true // Don't add to browser history
+        });
+    }
+
+    // === User Preferences Persistence ===
+
+    /**
+     * Load user preferences from MJ: User Settings entity
+     */
+    private async loadUserPreferences(): Promise<void> {
+        try {
+            const userId = this.metadata.CurrentUser?.ID;
+            if (!userId) {
+                this.settingsLoaded = true;
+                return;
+            }
+
+            const rv = new RunView();
+            const result = await rv.RunView<UserSettingEntity>({
+                EntityName: 'MJ: User Settings',
+                ExtraFilter: `UserID='${userId}' AND Setting='${SYSTEM_DIAGNOSTICS_SETTINGS_KEY}'`,
+                ResultType: 'entity_object'
+            });
+
+            if (result.Success && result.Results.length > 0) {
+                this.userSettingEntity = result.Results[0];
+                if (this.userSettingEntity.Value) {
+                    const prefs = JSON.parse(this.userSettingEntity.Value) as Partial<SystemDiagnosticsUserPreferences>;
+                    this.applyUserPreferences(prefs);
+                }
+            }
+
+            this.settingsLoaded = true;
+        } catch (error) {
+            console.warn('Failed to load user preferences:', error);
+            this.settingsLoaded = true;
+        }
+    }
+
+    /**
+     * Apply loaded user preferences to component state
+     */
+    private applyUserPreferences(prefs: Partial<SystemDiagnosticsUserPreferences>): void {
+        if (prefs.kpiCardsCollapsed !== undefined) this.kpiCardsCollapsed = prefs.kpiCardsCollapsed;
+        if (prefs.activeSection !== undefined) this.activeSection = prefs.activeSection;
+        if (prefs.perfTab !== undefined) this.perfTab = prefs.perfTab;
+        if (prefs.telemetrySource !== undefined) this.telemetrySource = prefs.telemetrySource;
+        if (prefs.categoryFilter !== undefined) this.categoryFilter = prefs.categoryFilter;
+        if (prefs.chartZoomLevel !== undefined) this.chartZoomLevel = prefs.chartZoomLevel;
+        if (prefs.chartGapCompression !== undefined) this.chartGapCompression = prefs.chartGapCompression;
+        if (prefs.autoRefresh !== undefined) this.autoRefresh = prefs.autoRefresh;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Get current preferences as an object
+     */
+    private getCurrentPreferences(): SystemDiagnosticsUserPreferences {
+        return {
+            kpiCardsCollapsed: this.kpiCardsCollapsed,
+            activeSection: this.activeSection,
+            perfTab: this.perfTab,
+            telemetrySource: this.telemetrySource,
+            categoryFilter: this.categoryFilter,
+            chartZoomLevel: this.chartZoomLevel,
+            chartGapCompression: this.chartGapCompression,
+            autoRefresh: this.autoRefresh
+        };
+    }
+
+    /**
+     * Debounced save of user preferences (500ms delay)
+     * Also updates query params for deep linking
+     */
+    private saveUserPreferencesDebounced(): void {
+        if (!this.settingsLoaded) return; // Don't save until we've loaded
+
+        // Update query params immediately for deep linking
+        this.updateQueryParams();
+
+        if (this.saveSettingsTimeout) {
+            clearTimeout(this.saveSettingsTimeout);
+        }
+
+        this.saveSettingsTimeout = setTimeout(() => {
+            this.saveUserPreferences();
+        }, 500);
+    }
+
+    /**
+     * Save user preferences to MJ: User Settings entity
+     */
+    private async saveUserPreferences(): Promise<void> {
+        try {
+            const userId = this.metadata.CurrentUser?.ID;
+            if (!userId) return;
+
+            // Create setting entity if it doesn't exist
+            if (!this.userSettingEntity) {
+                const rv = new RunView();
+                const result = await rv.RunView<UserSettingEntity>({
+                    EntityName: 'MJ: User Settings',
+                    ExtraFilter: `UserID='${userId}' AND Setting='${SYSTEM_DIAGNOSTICS_SETTINGS_KEY}'`,
+                    ResultType: 'entity_object'
+                });
+
+                if (result.Success && result.Results.length > 0) {
+                    this.userSettingEntity = result.Results[0];
+                } else {
+                    this.userSettingEntity = await this.metadata.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+                    this.userSettingEntity.UserID = userId;
+                    this.userSettingEntity.Setting = SYSTEM_DIAGNOSTICS_SETTINGS_KEY;
+                }
+            }
+
+            // Save the preferences as JSON
+            this.userSettingEntity.Value = JSON.stringify(this.getCurrentPreferences());
+            await this.userSettingEntity.Save();
+        } catch (error) {
+            console.warn('Failed to save user preferences:', error);
+        }
     }
 
     // === BaseResourceComponent Required Methods ===

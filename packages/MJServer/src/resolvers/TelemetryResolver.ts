@@ -1,10 +1,8 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Mutation, Resolver, Float } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { RequireSystemUser } from '../directives/index.js';
 import {
     TelemetryManager,
     TelemetryCategory,
-    TelemetryLevel,
     TelemetryInsightSeverity
 } from '@memberjunction/global';
 
@@ -321,11 +319,11 @@ export class TelemetryInsightFilterInput {
 @Resolver()
 export class TelemetryResolver {
     /**
-     * Get telemetry settings (system users only)
+     * Get telemetry settings
+     * Accessible to any authenticated user - telemetry data is not sensitive
      */
-    @RequireSystemUser()
     @Query(() => TelemetrySettingsGQL)
-    GetServerTelemetrySettings(): TelemetrySettingsGQL {
+    GetServerTelemetrySettings(@Ctx() _context: AppContext): TelemetrySettingsGQL {
         const tm = TelemetryManager.Instance;
         const settings = tm.Settings;
 
@@ -364,11 +362,10 @@ export class TelemetryResolver {
     }
 
     /**
-     * Get telemetry statistics (system users only)
+     * Get telemetry statistics
      */
-    @RequireSystemUser()
     @Query(() => TelemetryStatsGQL)
-    GetServerTelemetryStats(): TelemetryStatsGQL {
+    GetServerTelemetryStats(@Ctx() _context: AppContext): TelemetryStatsGQL {
         const tm = TelemetryManager.Instance;
         const stats = tm.GetStats();
 
@@ -390,11 +387,11 @@ export class TelemetryResolver {
     }
 
     /**
-     * Get telemetry events with optional filtering (system users only)
+     * Get telemetry events with optional filtering
      */
-    @RequireSystemUser()
     @Query(() => [TelemetryEventGQL])
     GetServerTelemetryEvents(
+        @Ctx() _context: AppContext,
         @Arg('filter', () => TelemetryEventFilterInput, { nullable: true }) filter?: TelemetryEventFilterInput
     ): TelemetryEventGQL[] {
         const tm = TelemetryManager.Instance;
@@ -426,11 +423,11 @@ export class TelemetryResolver {
     }
 
     /**
-     * Get telemetry patterns with optional filtering (system users only)
+     * Get telemetry patterns with optional filtering
      */
-    @RequireSystemUser()
     @Query(() => [TelemetryPatternGQL])
     GetServerTelemetryPatterns(
+        @Ctx() _context: AppContext,
         @Arg('filter', () => TelemetryPatternFilterInput, { nullable: true }) filter?: TelemetryPatternFilterInput
     ): TelemetryPatternGQL[] {
         const tm = TelemetryManager.Instance;
@@ -467,11 +464,11 @@ export class TelemetryResolver {
     }
 
     /**
-     * Get telemetry insights with optional filtering (system users only)
+     * Get telemetry insights with optional filtering
      */
-    @RequireSystemUser()
     @Query(() => [TelemetryInsightGQL])
     GetServerTelemetryInsights(
+        @Ctx() _context: AppContext,
         @Arg('filter', () => TelemetryInsightFilterInput, { nullable: true }) filter?: TelemetryInsightFilterInput
     ): TelemetryInsightGQL[] {
         const tm = TelemetryManager.Instance;
@@ -499,11 +496,11 @@ export class TelemetryResolver {
     }
 
     /**
-     * Get duplicate patterns (patterns with count >= threshold) (system users only)
+     * Get duplicate patterns (patterns with count >= threshold)
      */
-    @RequireSystemUser()
     @Query(() => [TelemetryPatternGQL])
     GetServerTelemetryDuplicates(
+        @Ctx() _context: AppContext,
         @Arg('minCount', () => Int, { defaultValue: 2 }) minCount: number
     ): TelemetryPatternGQL[] {
         const tm = TelemetryManager.Instance;
@@ -534,11 +531,10 @@ export class TelemetryResolver {
     }
 
     /**
-     * Get currently active (in-progress) events (system users only)
+     * Get currently active (in-progress) events
      */
-    @RequireSystemUser()
     @Query(() => [TelemetryEventGQL])
-    GetServerTelemetryActiveEvents(): TelemetryEventGQL[] {
+    GetServerTelemetryActiveEvents(@Ctx() _context: AppContext): TelemetryEventGQL[] {
         const tm = TelemetryManager.Instance;
         const events = tm.GetActiveEvents();
 
@@ -561,11 +557,11 @@ export class TelemetryResolver {
     }
 
     /**
-     * Enable or disable server telemetry (system users only)
+     * Enable or disable server telemetry
      */
-    @RequireSystemUser()
     @Mutation(() => Boolean)
     SetServerTelemetryEnabled(
+        @Ctx() _context: AppContext,
         @Arg('enabled', () => Boolean) enabled: boolean
     ): boolean {
         const tm = TelemetryManager.Instance;
@@ -574,11 +570,10 @@ export class TelemetryResolver {
     }
 
     /**
-     * Clear all server telemetry data (system users only)
+     * Clear all server telemetry data
      */
-    @RequireSystemUser()
     @Mutation(() => Boolean)
-    ClearServerTelemetry(): boolean {
+    ClearServerTelemetry(@Ctx() _context: AppContext): boolean {
         const tm = TelemetryManager.Instance;
         tm.Clear();
         tm.ClearInsights();
@@ -586,33 +581,30 @@ export class TelemetryResolver {
     }
 
     /**
-     * Clear only server telemetry patterns (system users only)
+     * Clear only server telemetry patterns
      */
-    @RequireSystemUser()
     @Mutation(() => Boolean)
-    ClearServerTelemetryPatterns(): boolean {
+    ClearServerTelemetryPatterns(@Ctx() _context: AppContext): boolean {
         const tm = TelemetryManager.Instance;
         tm.ClearPatterns();
         return true;
     }
 
     /**
-     * Clear only server telemetry insights (system users only)
+     * Clear only server telemetry insights
      */
-    @RequireSystemUser()
     @Mutation(() => Boolean)
-    ClearServerTelemetryInsights(): boolean {
+    ClearServerTelemetryInsights(@Ctx() _context: AppContext): boolean {
         const tm = TelemetryManager.Instance;
         tm.ClearInsights();
         return true;
     }
 
     /**
-     * Reset server telemetry to defaults (system users only)
+     * Reset server telemetry to defaults
      */
-    @RequireSystemUser()
     @Mutation(() => Boolean)
-    ResetServerTelemetry(): boolean {
+    ResetServerTelemetry(@Ctx() _context: AppContext): boolean {
         const tm = TelemetryManager.Instance;
         tm.Reset();
         return true;
