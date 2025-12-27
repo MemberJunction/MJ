@@ -568,6 +568,13 @@ export function LoadSystemDiagnosticsResource() {
                                                 <div class="mode-toggle" title="Chart Interaction Mode">
                                                     <button
                                                         class="mode-btn"
+                                                        [class.active]="chartInteractionMode === 'pointer'"
+                                                        (click)="setChartInteractionMode('pointer')"
+                                                        title="Pointer mode - click events to view details">
+                                                        <i class="fa-solid fa-arrow-pointer"></i>
+                                                    </button>
+                                                    <button
+                                                        class="mode-btn"
                                                         [class.active]="chartInteractionMode === 'select'"
                                                         (click)="setChartInteractionMode('select')"
                                                         title="Select mode - drag to zoom into a time range">
@@ -577,7 +584,7 @@ export function LoadSystemDiagnosticsResource() {
                                                         class="mode-btn"
                                                         [class.active]="chartInteractionMode === 'pan'"
                                                         (click)="setChartInteractionMode('pan')"
-                                                        title="Pan mode - click events to view details">
+                                                        title="Pan mode - drag to pan the chart">
                                                         <i class="fa-solid fa-hand"></i>
                                                     </button>
                                                 </div>
@@ -4513,7 +4520,7 @@ export function LoadSystemDiagnosticsResource() {
         }
     `]
 })
-export class SystemDiagnosticsComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class SystemDiagnosticsComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
     private destroy$ = new Subject<void>();
 
     // User settings persistence
@@ -4573,8 +4580,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     private chartMarginLeft = 50;
     chartTimeRangeStart: number | null = null;  // Currently visible time range start
 
-    // Chart interaction mode: 'select' for drag-to-zoom, 'pan' for click to view event details
-    chartInteractionMode: 'select' | 'pan' = 'select';
+    // Chart interaction mode: 'pointer' to click events, 'select' for drag-to-zoom, 'pan' for panning
+    chartInteractionMode: 'pointer' | 'select' | 'pan' = 'pointer';
 
     // Store gap segments for inverse mapping (x -> time)
     private chartGapSegments: Array<{ type: 'events' | 'gap'; startTime: number; endTime: number; gapIndex?: number; displayStart: number; displayEnd: number }> = [];
@@ -4654,6 +4661,14 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         // Clear any pending save timeout
         if (this.saveSettingsTimeout) {
             clearTimeout(this.saveSettingsTimeout);
+        }
+    }
+
+    ngAfterViewInit() {
+        // Render the PerfMon chart if we're on the monitor tab
+        // Need a small delay to ensure the DOM is fully ready
+        if (this.activeSection === 'performance' && this.perfTab === 'monitor') {
+            setTimeout(() => this.renderPerfChart(), 100);
         }
     }
 
@@ -5551,11 +5566,37 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.telemetryBootTime = Math.min(...events.map(e => e.startTime));
 
         // Prepare data with relative time
-        const chartData = events.map(e => ({
+        const allChartData = events.map(e => ({
             ...e,
             relativeTime: e.startTime - this.telemetryBootTime,
             duration: e.elapsedMs || 0
         })).sort((a, b) => a.relativeTime - b.relativeTime);
+
+        // Calculate full time range
+        const fullTimeRange = d3.max(allChartData, d => d.relativeTime) || 1000;
+
+        // Determine viewport bounds
+        let viewportStart = this.chartViewportStart;
+        let viewportEnd = this.chartViewportEnd;
+
+        // If no viewport set or zoom level is 1, show everything
+        if (this.chartZoomLevel <= 1 || (viewportStart === 0 && viewportEnd === 0)) {
+            viewportStart = 0;
+            viewportEnd = fullTimeRange;
+        }
+
+        // Filter data to only include events within the viewport (with some padding for edge visibility)
+        const padding = (viewportEnd - viewportStart) * 0.05; // 5% padding
+        const chartData = allChartData.filter(d =>
+            d.relativeTime >= (viewportStart - padding) &&
+            d.relativeTime <= (viewportEnd + padding)
+        );
+
+        // If no data in viewport, show a message
+        if (chartData.length === 0) {
+            container.innerHTML = '<div style="color: #666; text-align: center; padding: 100px 20px;">No events in the current view.<br>Try zooming out or panning to see events.</div>';
+            return;
+        }
 
         // Calculate effective width with zoom
         const effectiveWidth = innerWidth * this.chartZoomLevel;
@@ -5705,13 +5746,16 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         } else {
             // Standard linear scale - clear gap segments
             this.chartGapSegments = [];
+            // Use viewport bounds for domain when zoomed
             xScale = d3.scaleLinear()
-                .domain([0, d3.max(chartData, d => d.relativeTime) || 1000])
-                .range([0, effectiveWidth]);
+                .domain([viewportStart, viewportEnd])
+                .range([0, innerWidth]); // Use innerWidth, not effectiveWidth for proper fit
         }
 
+        // Calculate Y-scale from VISIBLE data only (not all data)
+        const visibleMaxDuration = d3.max(chartData, d => d.duration) || 100;
         const yScale = d3.scaleLinear()
-            .domain([0, d3.max(chartData, d => d.duration) || 100])
+            .domain([0, visibleMaxDuration * 1.1]) // Add 10% padding at top
             .range([innerHeight, 0])
             .nice();
 
@@ -5747,8 +5791,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         // Draw threshold line for slow queries
         this.drawThresholdLine(g, yScale, effectiveWidth, this.slowQueryThresholdMs);
 
-        // Add selection brush for drag-to-zoom
-        this.addSelectionBrush(svg, g, xScale, innerHeight, margin, chartData);
+        // Add selection brush for drag-to-zoom and pan
+        this.addSelectionBrush(svg, g, xScale, innerHeight, margin, allChartData, fullTimeRange);
 
         // Store scale and dimensions for selection calculations
         this.chartXScale = xScale;
@@ -5799,30 +5843,93 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         yScale: d3.ScaleLinear<number, number>,
         height: number
     ): void {
-        // X axis
-        const xAxis = d3.axisBottom(xScale)
-            .ticks(10)
-            .tickFormat(d => this.formatRelativeTime(d as number));
+        // X axis with better time formatting
+        const xDomain = xScale.domain();
+        const timeRange = xDomain[1] - xDomain[0];
 
-        g.append('g')
+        // Choose appropriate number of ticks based on range
+        const numTicks = Math.min(10, Math.max(5, Math.floor(timeRange / 1000)));
+
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(numTicks)
+            .tickFormat(d => this.formatAxisTime(d as number));
+
+        const xAxisGroup = g.append('g')
             .attr('transform', `translate(0,${height})`)
             .call(xAxis)
-            .attr('class', 'axis-line')
-            .selectAll('text')
-            .attr('class', 'axis-text')
-            .attr('fill', '#888');
+            .attr('class', 'axis-line');
 
-        // Y axis
+        xAxisGroup.selectAll('text')
+            .attr('class', 'axis-text')
+            .attr('fill', '#888')
+            .attr('font-size', '11px');
+
+        // X axis label
+        xAxisGroup.append('text')
+            .attr('class', 'axis-label')
+            .attr('x', xScale.range()[1] / 2)
+            .attr('y', 35)
+            .attr('fill', '#666')
+            .attr('font-size', '11px')
+            .attr('text-anchor', 'middle')
+            .text('Time since process start');
+
+        // Y axis with proper duration formatting
+        const yMax = yScale.domain()[1];
         const yAxis = d3.axisLeft(yScale)
-            .ticks(5)
-            .tickFormat(d => `${d}ms`);
+            .ticks(6)
+            .tickFormat(d => this.formatAxisDuration(d as number, yMax));
 
-        g.append('g')
+        const yAxisGroup = g.append('g')
             .call(yAxis)
-            .attr('class', 'axis-line')
-            .selectAll('text')
+            .attr('class', 'axis-line');
+
+        yAxisGroup.selectAll('text')
             .attr('class', 'axis-text')
-            .attr('fill', '#888');
+            .attr('fill', '#888')
+            .attr('font-size', '11px');
+
+        // Y axis label
+        yAxisGroup.append('text')
+            .attr('class', 'axis-label')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -height / 2)
+            .attr('y', -40)
+            .attr('fill', '#666')
+            .attr('font-size', '11px')
+            .attr('text-anchor', 'middle')
+            .text('Duration');
+    }
+
+    /**
+     * Format time for axis labels - shows relative time since process start
+     */
+    private formatAxisTime(ms: number): string {
+        if (ms < 1000) {
+            return `${Math.round(ms)}ms`;
+        } else if (ms < 60000) {
+            const secs = ms / 1000;
+            return secs % 1 === 0 ? `${secs}s` : `${secs.toFixed(1)}s`;
+        } else if (ms < 3600000) {
+            const mins = Math.floor(ms / 60000);
+            const secs = Math.floor((ms % 60000) / 1000);
+            return secs > 0 ? `${mins}m${secs}s` : `${mins}m`;
+        } else {
+            const hours = Math.floor(ms / 3600000);
+            const mins = Math.floor((ms % 3600000) / 60000);
+            return mins > 0 ? `${hours}h${mins}m` : `${hours}h`;
+        }
+    }
+
+    /**
+     * Format duration for Y axis labels
+     */
+    private formatAxisDuration(ms: number, maxValue: number): string {
+        // If max is >= 1000ms, show in seconds for values >= 1000
+        if (maxValue >= 1000 && ms >= 1000) {
+            return `${(ms / 1000).toFixed(1)}s`;
+        }
+        return `${Math.round(ms)}ms`;
     }
 
     private drawCategoryArea(
@@ -6024,10 +6131,35 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     /**
      * Set chart interaction mode (select for drag-to-zoom, pan for click-to-view)
      */
-    setChartInteractionMode(mode: 'select' | 'pan'): void {
+    setChartInteractionMode(mode: 'pointer' | 'select' | 'pan'): void {
         this.chartInteractionMode = mode;
         this.renderPerfChart(); // Re-render to update cursor and behavior
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Returns the appropriate cursor style based on the current chart interaction mode
+     */
+    private getChartCursor(): string {
+        switch (this.chartInteractionMode) {
+            case 'pointer':
+                return 'default';
+            case 'select':
+                return 'crosshair';
+            case 'pan':
+                return 'grab';
+            default:
+                return 'default';
+        }
+    }
+
+    /**
+     * Returns whether the overlay should intercept pointer events based on the current mode
+     */
+    private getOverlayPointerEvents(): string {
+        // In pointer mode, let events pass through to the data points
+        // In select/pan mode, the overlay needs to capture events
+        return this.chartInteractionMode === 'pointer' ? 'none' : 'all';
     }
 
     /**
@@ -6178,16 +6310,18 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         xScale: d3.ScaleLinear<number, number>,
         innerHeight: number,
         _margin: { top: number; right: number; bottom: number; left: number },
-        chartData: Array<{ relativeTime: number; duration: number }>
+        allChartData: Array<{ relativeTime: number; duration: number }>,
+        fullTimeRange: number
     ): void {
         // Create a transparent overlay for mouse events
-        // Cursor depends on interaction mode
+        // Cursor and pointer-events depend on interaction mode
         const overlay = g.append('rect')
             .attr('class', 'selection-overlay')
             .attr('width', xScale.range()[1])
             .attr('height', innerHeight)
             .attr('fill', 'transparent')
-            .style('cursor', this.chartInteractionMode === 'select' ? 'crosshair' : 'default');
+            .style('cursor', this.getChartCursor())
+            .style('pointer-events', this.getOverlayPointerEvents());
 
         // Selection rectangle (initially hidden) - only used in select mode
         const selectionRect = g.append('rect')
@@ -6200,6 +6334,9 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
         let startX = 0;
         let isDragging = false;
+        let isPanning = false;
+        let panStartX = 0;
+        let panStartViewportStart = 0;
 
         // Store the inverse scale function for mapping x back to time
         const getTimeFromX = (x: number): number => {
@@ -6215,65 +6352,102 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         };
 
         overlay.on('mousedown', (event: MouseEvent) => {
-            // Only allow selection in 'select' mode
-            if (this.chartInteractionMode !== 'select') return;
+            if (this.chartInteractionMode === 'select') {
+                // Selection mode - drag to zoom
+                isDragging = true;
+                this.isSelecting = true;
+                const [x] = d3.pointer(event, overlay.node());
+                startX = Math.max(0, Math.min(x, xScale.range()[1]));
+                this.selectionStartX = startX;
 
-            isDragging = true;
-            this.isSelecting = true;
-            const [x] = d3.pointer(event, overlay.node());
-            startX = Math.max(0, Math.min(x, xScale.range()[1]));
-            this.selectionStartX = startX;
-
-            selectionRect
-                .attr('x', startX)
-                .attr('y', 0)
-                .attr('width', 0)
-                .attr('height', innerHeight)
-                .style('display', 'block');
+                selectionRect
+                    .attr('x', startX)
+                    .attr('y', 0)
+                    .attr('width', 0)
+                    .attr('height', innerHeight)
+                    .style('display', 'block');
+            } else if (this.chartInteractionMode === 'pan') {
+                // Pan mode - drag to pan
+                isPanning = true;
+                const [x] = d3.pointer(event, overlay.node());
+                panStartX = x;
+                panStartViewportStart = this.chartViewportStart;
+                overlay.style('cursor', 'grabbing');
+            }
         });
 
         svg.on('mousemove', (event: MouseEvent) => {
-            if (!isDragging || this.chartInteractionMode !== 'select') return;
+            if (isDragging && this.chartInteractionMode === 'select') {
+                const [x] = d3.pointer(event, g.node());
+                const currentX = Math.max(0, Math.min(x, xScale.range()[1]));
 
-            const [x] = d3.pointer(event, g.node());
-            const currentX = Math.max(0, Math.min(x, xScale.range()[1]));
+                const rectX = Math.min(startX, currentX);
+                const rectWidth = Math.abs(currentX - startX);
 
-            const rectX = Math.min(startX, currentX);
-            const rectWidth = Math.abs(currentX - startX);
+                selectionRect
+                    .attr('x', rectX)
+                    .attr('width', rectWidth);
+            } else if (isPanning && this.chartInteractionMode === 'pan') {
+                const [x] = d3.pointer(event, g.node());
+                const deltaX = x - panStartX;
 
-            selectionRect
-                .attr('x', rectX)
-                .attr('width', rectWidth);
-        });
+                // Convert pixel delta to time delta
+                const pixelsPerMs = xScale.range()[1] / ((xScale.domain()[1] - xScale.domain()[0]) || 1);
+                const timeDelta = -deltaX / pixelsPerMs; // Negative because dragging right should move viewport left
 
-        svg.on('mouseup', (event: MouseEvent) => {
-            if (!isDragging || this.chartInteractionMode !== 'select') return;
-            isDragging = false;
-            this.isSelecting = false;
+                // Calculate new viewport position using the full time range
+                const viewportSize = (this.chartViewportEnd - this.chartViewportStart) || fullTimeRange / this.chartZoomLevel;
 
-            const [x] = d3.pointer(event, g.node());
-            const endX = Math.max(0, Math.min(x, xScale.range()[1]));
+                let newStart = panStartViewportStart + timeDelta;
+                // Clamp to valid range
+                newStart = Math.max(0, Math.min(newStart, fullTimeRange - viewportSize));
 
-            selectionRect.style('display', 'none');
+                this.chartViewportStart = newStart;
+                this.chartViewportEnd = newStart + viewportSize;
 
-            // Only zoom if selection is significant (> 20 pixels)
-            const selectionWidth = Math.abs(endX - startX);
-            if (selectionWidth > 20) {
-                const startTime = getTimeFromX(Math.min(startX, endX));
-                const endTime = getTimeFromX(Math.max(startX, endX));
-
+                // Re-render chart with new viewport
                 this.ngZone.run(() => {
-                    this.zoomToTimeRange(startTime, endTime, chartData);
+                    this.renderPerfChart();
                 });
             }
         });
 
-        // Cancel selection on mouse leave
+        svg.on('mouseup', (event: MouseEvent) => {
+            if (isDragging && this.chartInteractionMode === 'select') {
+                isDragging = false;
+                this.isSelecting = false;
+
+                const [x] = d3.pointer(event, g.node());
+                const endX = Math.max(0, Math.min(x, xScale.range()[1]));
+
+                selectionRect.style('display', 'none');
+
+                // Only zoom if selection is significant (> 20 pixels)
+                const selectionWidth = Math.abs(endX - startX);
+                if (selectionWidth > 20) {
+                    const startTime = getTimeFromX(Math.min(startX, endX));
+                    const endTime = getTimeFromX(Math.max(startX, endX));
+
+                    this.ngZone.run(() => {
+                        this.zoomToTimeRange(startTime, endTime, allChartData);
+                    });
+                }
+            } else if (isPanning) {
+                isPanning = false;
+                overlay.style('cursor', 'grab');
+            }
+        });
+
+        // Cancel selection/pan on mouse leave
         svg.on('mouseleave', () => {
             if (isDragging) {
                 isDragging = false;
                 this.isSelecting = false;
                 selectionRect.style('display', 'none');
+            }
+            if (isPanning) {
+                isPanning = false;
+                overlay.style('cursor', 'grab');
             }
         });
     }
