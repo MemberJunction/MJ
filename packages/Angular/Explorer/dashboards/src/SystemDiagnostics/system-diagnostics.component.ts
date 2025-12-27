@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { RegisterClass, TelemetryManager, TelemetryEvent, TelemetryPattern, TelemetryInsight, TelemetryCategory } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { BaseEngineRegistry, EngineMemoryStats } from '@memberjunction/core';
+import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType } from '@memberjunction/core';
 import * as d3 from 'd3';
 
 /**
@@ -18,6 +18,33 @@ export interface EngineDiagnosticInfo {
     estimatedMemoryBytes: number;
     itemCount: number;
     memoryDisplay: string;
+}
+
+/**
+ * Interface for engine config items for drill-down detail
+ */
+export interface EngineConfigItemDisplay {
+    propertyName: string;
+    type: 'entity' | 'dataset';
+    entityName?: string;
+    datasetName?: string;
+    filter?: string;
+    orderBy?: string;
+    itemCount: number;
+    estimatedMemoryBytes: number;
+    memoryDisplay: string;
+    sampleData: unknown[];
+    expanded: boolean;
+}
+
+/**
+ * Engine detail panel state
+ */
+export interface EngineDetailPanelState {
+    isOpen: boolean;
+    engine: EngineDiagnosticInfo | null;
+    configItems: EngineConfigItemDisplay[];
+    isRefreshing: boolean;
 }
 
 /**
@@ -226,6 +253,15 @@ export function LoadSystemDiagnosticsResource() {
                             <span>Performance</span>
                             <span class="nav-badge">{{ telemetrySummary?.totalEvents || 0 }}</span>
                         </div>
+                        <div
+                            class="nav-item"
+                            [class.active]="activeSection === 'cache'"
+                            (click)="setActiveSection('cache')"
+                        >
+                            <i class="fa-solid fa-database"></i>
+                            <span>Local Cache</span>
+                            <span class="nav-badge">{{ cacheStats?.totalEntries || 0 }}</span>
+                        </div>
                     </div>
                 </div>
 
@@ -259,7 +295,7 @@ export function LoadSystemDiagnosticsResource() {
                                     @for (engine of engines; track engine.className) {
                                         <div class="engine-card" [class.loaded]="engine.isLoaded">
                                             <div class="engine-header">
-                                                <div class="engine-name">{{ engine.className }}</div>
+                                                <div class="engine-name" [title]="engine.className">{{ engine.className }}</div>
                                                 <div class="engine-status" [class.status-loaded]="engine.isLoaded" [class.status-pending]="!engine.isLoaded">
                                                     {{ engine.isLoaded ? 'Loaded' : 'Not Loaded' }}
                                                 </div>
@@ -282,6 +318,14 @@ export function LoadSystemDiagnosticsResource() {
                                                         <span class="stat-value">{{ formatTime(engine.lastLoadedAt) }}</span>
                                                     </div>
                                                 }
+                                            </div>
+                                            <div class="engine-actions">
+                                                <button class="engine-action-btn" (click)="refreshSingleEngine(engine, $event)" [disabled]="!engine.isLoaded || isRefreshingSingleEngine === engine.className" title="Refresh this engine">
+                                                    <i class="fa-solid fa-sync" [class.spinning]="isRefreshingSingleEngine === engine.className"></i>
+                                                </button>
+                                                <button class="engine-action-btn" (click)="openEngineDetailPanel(engine)" [disabled]="!engine.isLoaded" title="View engine details">
+                                                    <i class="fa-solid fa-arrow-right"></i>
+                                                </button>
                                             </div>
                                         </div>
                                     }
@@ -435,6 +479,22 @@ export function LoadSystemDiagnosticsResource() {
                                                 <span class="legend-item engine"><span class="legend-dot"></span> Engine</span>
                                                 <span class="legend-item ai"><span class="legend-dot"></span> AI</span>
                                             </div>
+                                            <div class="perfmon-controls">
+                                                <button class="chart-control-btn" (click)="zoomPerfChart('in')" title="Zoom In">
+                                                    <i class="fa-solid fa-search-plus"></i>
+                                                </button>
+                                                <button class="chart-control-btn" (click)="zoomPerfChart('out')" title="Zoom Out">
+                                                    <i class="fa-solid fa-search-minus"></i>
+                                                </button>
+                                                <button class="chart-control-btn" (click)="resetPerfChartZoom()" title="Reset Zoom">
+                                                    <i class="fa-solid fa-expand"></i>
+                                                </button>
+                                                <span class="control-divider"></span>
+                                                <label class="compress-toggle" title="Automatically compress gaps with no activity">
+                                                    <input type="checkbox" [(ngModel)]="chartGapCompression" (change)="onGapCompressionChange()">
+                                                    <span>Compress Gaps</span>
+                                                </label>
+                                            </div>
                                         </div>
                                         <div class="perfmon-chart-container">
                                             <div class="perfmon-y-axis">
@@ -445,10 +505,17 @@ export function LoadSystemDiagnosticsResource() {
                                         <div class="perfmon-footer">
                                             <span class="footer-note">
                                                 <i class="fa-solid fa-info-circle"></i>
-                                                Time relative to telemetry start. Hover over points for details.
+                                                @if (chartGapCompression) {
+                                                    Gaps >5s compressed. Click striped areas to expand.
+                                                } @else {
+                                                    Time relative to telemetry start. Hover over points for details.
+                                                }
                                             </span>
                                             <span class="footer-stats" *ngIf="telemetrySummary">
                                                 {{ telemetrySummary.totalEvents }} events
+                                                @if (chartZoomLevel !== 1) {
+                                                    &bull; {{ (chartZoomLevel * 100) | number:'1.0-0' }}% zoom
+                                                }
                                             </span>
                                         </div>
                                     </div>
@@ -788,6 +855,152 @@ export function LoadSystemDiagnosticsResource() {
                             </div>
                         </div>
                     }
+
+                    <!-- Local Cache Section -->
+                    @if (activeSection === 'cache') {
+                        <div class="section-panel">
+                            <div class="panel-header">
+                                <h3>
+                                    <i class="fa-solid fa-database"></i>
+                                    Local Cache
+                                </h3>
+                                <div class="panel-actions">
+                                    <button class="action-btn" (click)="clearAllCache()" [disabled]="!cacheStats || cacheStats.totalEntries === 0">
+                                        <i class="fa-solid fa-trash"></i>
+                                        Clear All
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="section-panel-content">
+                                @if (!cacheInitialized) {
+                                    <div class="info-banner warning-banner">
+                                        <i class="fa-solid fa-exclamation-triangle"></i>
+                                        <div>
+                                            <strong>Cache not initialized.</strong>
+                                            The LocalCacheManager requires initialization with a storage provider during app startup.
+                                        </div>
+                                    </div>
+                                } @else {
+                                    <!-- Cache Summary Stats -->
+                                    <div class="cache-summary">
+                                        <div class="summary-card">
+                                            <div class="summary-value">{{ cacheStats?.totalEntries || 0 }}</div>
+                                            <div class="summary-label">Total Entries</div>
+                                        </div>
+                                        <div class="summary-card">
+                                            <div class="summary-value">{{ formatBytes(cacheStats?.totalSizeBytes || 0) }}</div>
+                                            <div class="summary-label">Total Size</div>
+                                        </div>
+                                        <div class="summary-card">
+                                            <div class="summary-value">{{ cacheStats?.hits || 0 }}</div>
+                                            <div class="summary-label">Cache Hits</div>
+                                        </div>
+                                        <div class="summary-card">
+                                            <div class="summary-value">{{ cacheStats?.misses || 0 }}</div>
+                                            <div class="summary-label">Cache Misses</div>
+                                        </div>
+                                        <div class="summary-card">
+                                            <div class="summary-value">{{ cacheHitRate | number:'1.1-1' }}%</div>
+                                            <div class="summary-label">Hit Rate</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Cache Type Breakdown -->
+                                    <div class="cache-type-breakdown">
+                                        <h4>By Type</h4>
+                                        <div class="type-grid">
+                                            <div class="type-item" (click)="setCacheTypeFilter('dataset')">
+                                                <span class="type-icon"><i class="fa-solid fa-layer-group"></i></span>
+                                                <span class="type-name">Datasets</span>
+                                                <span class="type-count">{{ cacheStats?.byType?.dataset?.count || 0 }}</span>
+                                                <span class="type-size">{{ formatBytes(cacheStats?.byType?.dataset?.sizeBytes || 0) }}</span>
+                                            </div>
+                                            <div class="type-item" (click)="setCacheTypeFilter('runview')">
+                                                <span class="type-icon"><i class="fa-solid fa-table"></i></span>
+                                                <span class="type-name">RunViews</span>
+                                                <span class="type-count">{{ cacheStats?.byType?.runview?.count || 0 }}</span>
+                                                <span class="type-size">{{ formatBytes(cacheStats?.byType?.runview?.sizeBytes || 0) }}</span>
+                                            </div>
+                                            <div class="type-item" (click)="setCacheTypeFilter('runquery')">
+                                                <span class="type-icon"><i class="fa-solid fa-code"></i></span>
+                                                <span class="type-name">RunQueries</span>
+                                                <span class="type-count">{{ cacheStats?.byType?.runquery?.count || 0 }}</span>
+                                                <span class="type-size">{{ formatBytes(cacheStats?.byType?.runquery?.sizeBytes || 0) }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Cache Entries Table -->
+                                    @if (filteredCacheEntries.length > 0) {
+                                        <div class="cache-entries-section">
+                                            <div class="section-header">
+                                                <h4>Cache Entries</h4>
+                                                <div class="filter-controls">
+                                                    <button class="filter-btn" [class.active]="cacheTypeFilter === 'all'" (click)="setCacheTypeFilter('all')">All</button>
+                                                    <button class="filter-btn" [class.active]="cacheTypeFilter === 'dataset'" (click)="setCacheTypeFilter('dataset')">Datasets</button>
+                                                    <button class="filter-btn" [class.active]="cacheTypeFilter === 'runview'" (click)="setCacheTypeFilter('runview')">RunViews</button>
+                                                    <button class="filter-btn" [class.active]="cacheTypeFilter === 'runquery'" (click)="setCacheTypeFilter('runquery')">RunQueries</button>
+                                                </div>
+                                            </div>
+                                            <div class="cache-entries-table-wrapper">
+                                                <table class="cache-entries-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Type</th>
+                                                            <th>Name</th>
+                                                            <th class="text-right">Size</th>
+                                                            <th class="text-right">Hits</th>
+                                                            <th>Cached At</th>
+                                                            <th>Last Accessed</th>
+                                                            <th></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @for (entry of filteredCacheEntries.slice(0, 50); track entry.key) {
+                                                            <tr>
+                                                                <td>
+                                                                    <span class="cache-type-chip" [class]="'type-' + entry.type">
+                                                                        {{ entry.type }}
+                                                                    </span>
+                                                                </td>
+                                                                <td class="entry-name">
+                                                                    {{ entry.name }}
+                                                                    @if (entry.fingerprint) {
+                                                                        <code class="entry-fingerprint">{{ truncateString(entry.fingerprint, 20) }}</code>
+                                                                    }
+                                                                </td>
+                                                                <td class="text-right">{{ formatBytes(entry.sizeBytes) }}</td>
+                                                                <td class="text-right">{{ entry.accessCount }}</td>
+                                                                <td>{{ formatCacheTimestamp(entry.cachedAt) }}</td>
+                                                                <td>{{ formatCacheTimestamp(entry.lastAccessedAt) }}</td>
+                                                                <td>
+                                                                    <button class="icon-btn" (click)="invalidateCacheEntry(entry)" title="Invalidate">
+                                                                        <i class="fa-solid fa-times"></i>
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            @if (filteredCacheEntries.length > 50) {
+                                                <div class="table-footer">
+                                                    Showing 50 of {{ filteredCacheEntries.length }} entries
+                                                </div>
+                                            }
+                                        </div>
+                                    } @else if (cacheStats && cacheStats.totalEntries === 0) {
+                                        <div class="empty-state">
+                                            <i class="fa-solid fa-database"></i>
+                                            <p>No cached data</p>
+                                            <span class="empty-hint">Data will be cached as you use the application</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
                 </div>
             </div>
 
@@ -913,6 +1126,143 @@ export function LoadSystemDiagnosticsResource() {
                                 <i class="fa-solid fa-filter"></i>
                                 Filter by Entity
                             </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Engine Detail Slide-in Panel -->
+        @if (engineDetailPanel.isOpen && engineDetailPanel.engine) {
+            <div class="engine-detail-overlay" (click)="closeEngineDetailPanel()"></div>
+            <div class="engine-detail-panel" [class.open]="engineDetailPanel.isOpen">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <i class="fa-solid fa-cogs"></i>
+                        <h3>{{ engineDetailPanel.engine.className }}</h3>
+                    </div>
+                    <div class="panel-header-actions">
+                        <button class="icon-btn" (click)="refreshEngineInDetailPanel()" [disabled]="engineDetailPanel.isRefreshing" title="Refresh engine">
+                            <i class="fa-solid fa-sync" [class.spinning]="engineDetailPanel.isRefreshing"></i>
+                        </button>
+                        <button class="close-btn" (click)="closeEngineDetailPanel()">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="panel-body">
+                    <!-- Engine Summary -->
+                    <div class="engine-summary-section">
+                        <div class="summary-stat">
+                            <span class="summary-label">Status</span>
+                            <span class="summary-value">
+                                <span class="status-dot" [class.status-loaded]="engineDetailPanel.engine.isLoaded"></span>
+                                {{ engineDetailPanel.engine.isLoaded ? 'Loaded' : 'Not Loaded' }}
+                            </span>
+                        </div>
+                        <div class="summary-stat">
+                            <span class="summary-label">Memory</span>
+                            <span class="summary-value">{{ engineDetailPanel.engine.memoryDisplay }}</span>
+                        </div>
+                        <div class="summary-stat">
+                            <span class="summary-label">Items</span>
+                            <span class="summary-value">{{ engineDetailPanel.engine.itemCount.toLocaleString() }}</span>
+                        </div>
+                        @if (engineDetailPanel.engine.lastLoadedAt) {
+                            <div class="summary-stat">
+                                <span class="summary-label">Last Loaded</span>
+                                <span class="summary-value">{{ formatTime(engineDetailPanel.engine.lastLoadedAt) }}</span>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Config Items -->
+                    <div class="config-items-section">
+                        <h4>
+                            <i class="fa-solid fa-database"></i>
+                            Data Configs ({{ engineDetailPanel.configItems.length }})
+                        </h4>
+
+                        @if (engineDetailPanel.configItems.length === 0) {
+                            <div class="empty-state small">
+                                <i class="fa-solid fa-inbox"></i>
+                                <p>No config items found</p>
+                            </div>
+                        } @else {
+                            <div class="config-items-list">
+                                @for (item of engineDetailPanel.configItems; track item.propertyName) {
+                                    <div class="config-item" [class.expanded]="item.expanded">
+                                        <div class="config-item-header" (click)="toggleConfigItemExpanded(item)">
+                                            <div class="config-item-info">
+                                                <span class="config-type-chip" [class]="'type-' + item.type">{{ item.type }}</span>
+                                                <span class="config-name">{{ item.entityName || item.datasetName || item.propertyName }}</span>
+                                            </div>
+                                            <div class="config-item-stats">
+                                                <span class="config-stat">{{ item.itemCount }} items</span>
+                                                <span class="config-stat">{{ item.memoryDisplay }}</span>
+                                                <i class="fa-solid expand-icon" [class.fa-chevron-down]="!item.expanded" [class.fa-chevron-up]="item.expanded"></i>
+                                            </div>
+                                        </div>
+
+                                        @if (item.expanded) {
+                                            <div class="config-item-details">
+                                                <div class="config-detail-row">
+                                                    <span class="detail-label">Property:</span>
+                                                    <code class="detail-value">{{ item.propertyName }}</code>
+                                                </div>
+                                                @if (item.filter) {
+                                                    <div class="config-detail-row">
+                                                        <span class="detail-label">Filter:</span>
+                                                        <code class="detail-value">{{ item.filter }}</code>
+                                                    </div>
+                                                }
+                                                @if (item.orderBy) {
+                                                    <div class="config-detail-row">
+                                                        <span class="detail-label">Order By:</span>
+                                                        <code class="detail-value">{{ item.orderBy }}</code>
+                                                    </div>
+                                                }
+
+                                                <!-- Sample Data -->
+                                                @if (item.sampleData.length > 0) {
+                                                    <div class="sample-data-section">
+                                                        <div class="sample-header">
+                                                            <span class="sample-title">Sample Data (first {{ item.sampleData.length }})</span>
+                                                            @if (item.entityName) {
+                                                                <button class="view-all-btn" (click)="openEntityInExplorer(item.entityName)" title="Open in Entity Explorer">
+                                                                    <i class="fa-solid fa-external-link-alt"></i>
+                                                                    View All
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                        <div class="sample-data-table-wrapper">
+                                                            <table class="sample-data-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        @for (col of getSampleDataColumns(item); track col) {
+                                                                            <th>{{ col }}</th>
+                                                                        }
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    @for (row of item.sampleData; track $index) {
+                                                                        <tr>
+                                                                            @for (col of getSampleDataColumns(item); track col) {
+                                                                                <td [title]="getSampleDataValue(row, col)">{{ truncateString(getSampleDataValue(row, col), 30) }}</td>
+                                                                            }
+                                                                        </tr>
+                                                                    }
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
                         }
                     </div>
                 </div>
@@ -1347,12 +1697,19 @@ export function LoadSystemDiagnosticsResource() {
         }
 
         .engine-name {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
             color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 180px;
+            flex: 1;
+            min-width: 0;
         }
 
         .engine-status {
+            flex-shrink: 0;
             font-size: 11px;
             font-weight: 600;
             padding: 4px 10px;
@@ -1388,6 +1745,39 @@ export function LoadSystemDiagnosticsResource() {
         .stat-item i {
             width: 16px;
             color: #999;
+        }
+
+        .engine-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .engine-action-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.05);
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .engine-action-btn:hover:not(:disabled) {
+            background: #4caf50;
+            color: white;
+        }
+
+        .engine-action-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
         .stat-label {
@@ -2602,6 +2992,113 @@ export function LoadSystemDiagnosticsResource() {
             opacity: 0.8;
         }
 
+        /* PerfMon Chart Controls */
+        .perfmon-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        .chart-control-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            background: #2a2a2a;
+            color: #888;
+            border: 1px solid #444;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .chart-control-btn:hover {
+            background: #333;
+            color: #00ff88;
+            border-color: #00ff88;
+        }
+
+        .chart-control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .chart-control-btn i {
+            font-size: 14px;
+        }
+
+        .control-divider {
+            width: 1px;
+            height: 24px;
+            background: #444;
+            margin: 0 4px;
+        }
+
+        .compress-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #888;
+            user-select: none;
+        }
+
+        .compress-toggle:hover {
+            color: #00ff88;
+        }
+
+        .compress-toggle input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            accent-color: #00ff88;
+            cursor: pointer;
+        }
+
+        .compress-toggle span {
+            white-space: nowrap;
+        }
+
+        .zoom-level {
+            font-size: 11px;
+            color: #666;
+            font-family: monospace;
+            margin-left: 8px;
+        }
+
+        /* Gap indicators in chart */
+        .perfmon-chart :deep(.gap-indicator) {
+            cursor: pointer;
+            transition: opacity 0.15s ease;
+        }
+
+        .perfmon-chart :deep(.gap-indicator:hover) {
+            opacity: 0.8;
+        }
+
+        .perfmon-chart :deep(.gap-text) {
+            fill: #666;
+            font-size: 10px;
+            font-family: monospace;
+            pointer-events: none;
+        }
+
+        .perfmon-chart :deep(.gap-expand-btn) {
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.15s ease;
+        }
+
+        .perfmon-chart :deep(.gap-expand-btn:hover) {
+            opacity: 1;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .main-content {
@@ -2993,6 +3490,597 @@ export function LoadSystemDiagnosticsResource() {
         .timeline-item.clickable:hover .marker-dot {
             transform: scale(1.3);
         }
+
+        /* ========================================
+           ENGINE DETAIL PANEL STYLES
+           ======================================== */
+
+        .engine-detail-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 999;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .engine-detail-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 550px;
+            max-width: 95vw;
+            height: 100vh;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            animation: slideIn 0.25s ease;
+        }
+
+        .engine-detail-panel .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+            color: white;
+        }
+
+        .engine-detail-panel .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .engine-detail-panel .panel-title h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .engine-detail-panel .panel-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .engine-detail-panel .icon-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .engine-detail-panel .icon-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .engine-detail-panel .icon-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .engine-detail-panel .close-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            font-size: 18px;
+        }
+
+        .engine-detail-panel .close-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .engine-detail-panel .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        /* Engine Summary */
+        .engine-summary-section {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .engine-summary-section .summary-stat {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+
+        .engine-summary-section .summary-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .engine-summary-section .summary-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff9800;
+        }
+
+        .status-dot.status-loaded {
+            background: #4caf50;
+        }
+
+        /* Config Items Section */
+        .config-items-section h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .config-items-section h4 i {
+            color: #4caf50;
+        }
+
+        .config-items-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .config-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .config-item.expanded {
+            border-color: #4caf50;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.1);
+        }
+
+        .config-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .config-item-header:hover {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .config-item-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .config-type-chip {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            flex-shrink: 0;
+        }
+
+        .config-type-chip.type-entity {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .config-type-chip.type-dataset {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .config-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .config-item-stats {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .config-stat {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .expand-icon {
+            color: #999;
+            transition: transform 0.2s ease;
+        }
+
+        .config-item.expanded .expand-icon {
+            color: #4caf50;
+        }
+
+        .config-item-details {
+            padding: 0 16px 16px;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+        }
+
+        .config-detail-row {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .config-detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .config-detail-row .detail-label {
+            font-size: 12px;
+            color: #888;
+            min-width: 70px;
+            flex-shrink: 0;
+        }
+
+        .config-detail-row .detail-value {
+            font-size: 12px;
+            color: #333;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+
+        /* Sample Data Section */
+        .sample-data-section {
+            margin-top: 16px;
+        }
+
+        .sample-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .sample-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .view-all-btn {
+            background: none;
+            border: 1px solid #4caf50;
+            color: #4caf50;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .view-all-btn:hover {
+            background: #4caf50;
+            color: white;
+        }
+
+        .sample-data-table-wrapper {
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+
+        .sample-data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        .sample-data-table th {
+            background: #f8f9fa;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 1px solid #e0e0e0;
+            white-space: nowrap;
+        }
+
+        .sample-data-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #333;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .sample-data-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .sample-data-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* Small empty state */
+        .empty-state.small {
+            padding: 30px 20px;
+        }
+
+        .empty-state.small i {
+            font-size: 32px;
+        }
+
+        .empty-state.small p {
+            font-size: 14px;
+        }
+
+        /* Spinning animation for refresh icon */
+        .spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* ========================================
+           LOCAL CACHE SECTION STYLES
+           ======================================== */
+
+        .cache-summary {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .cache-type-breakdown {
+            margin-bottom: 24px;
+        }
+
+        .cache-type-breakdown h4 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .type-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .type-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .type-item:hover {
+            border-color: #4caf50;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.15);
+        }
+
+        .type-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f0f0f0;
+            border-radius: 8px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .type-name {
+            flex: 1;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .type-count {
+            font-size: 18px;
+            font-weight: 600;
+            color: #4caf50;
+        }
+
+        .type-size {
+            font-size: 12px;
+            color: #888;
+            margin-left: 8px;
+        }
+
+        .cache-entries-section {
+            margin-top: 24px;
+        }
+
+        .cache-entries-section .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .cache-entries-section .section-header h4 {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .cache-entries-table-wrapper {
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .cache-entries-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .cache-entries-table th {
+            padding: 12px 16px;
+            text-align: left;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: 600;
+            color: #555;
+            white-space: nowrap;
+        }
+
+        .cache-entries-table td {
+            padding: 10px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+        }
+
+        .cache-entries-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .cache-entries-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .cache-type-chip {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .cache-type-chip.type-dataset {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .cache-type-chip.type-runview {
+            background: #e0f7fa;
+            color: #00838f;
+        }
+
+        .cache-type-chip.type-runquery {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .entry-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .entry-fingerprint {
+            display: block;
+            font-size: 10px;
+            color: #888;
+            margin-top: 2px;
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .icon-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .icon-btn:hover {
+            border-color: #f44336;
+            color: #f44336;
+            background: #fff5f5;
+        }
+
+        .table-footer {
+            padding: 12px 16px;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+        }
     `]
 })
 export class SystemDiagnosticsComponent extends BaseResourceComponent implements OnInit, OnDestroy {
@@ -3001,7 +4089,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     // State
     isLoading = false;
     autoRefresh = false;
-    activeSection: 'engines' | 'redundant' | 'performance' = 'engines';
+    activeSection: 'engines' | 'redundant' | 'performance' | 'cache' = 'engines';
     lastUpdated = new Date();
     isRefreshingEngines = false;
 
@@ -3028,6 +4116,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     @ViewChild('perfChart', { static: false }) perfChartRef!: ElementRef<HTMLDivElement>;
     private chartInitialized = false;
 
+    // Chart zoom and gap compression state
+    chartZoomLevel = 1;
+    chartGapCompression = true;
+    private chartViewportStart = 0;
+    private chartViewportEnd = 0;
+    private expandedGaps = new Set<number>(); // Track which gaps are expanded
+
     // Slow queries
     slowQueries: TelemetryEventDisplay[] = [];
     slowQueryThresholdMs = 500;
@@ -3049,6 +4144,22 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         relatedPattern: null
     };
 
+    // Local Cache data
+    cacheStats: CacheStats | null = null;
+    cacheEntries: CacheEntryInfo[] = [];
+    cacheTypeFilter: CacheEntryType | 'all' = 'all';
+    cacheInitialized = false;
+    cacheHitRate = 0;
+
+    // Engine detail panel state
+    engineDetailPanel: EngineDetailPanelState = {
+        isOpen: false,
+        engine: null,
+        configItems: [],
+        isRefreshing: false
+    };
+    isRefreshingSingleEngine: string | null = null;
+
     constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
         super();
     }
@@ -3063,8 +4174,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.destroy$.complete();
     }
 
-    setActiveSection(section: 'engines' | 'redundant' | 'performance'): void {
+    setActiveSection(section: 'engines' | 'redundant' | 'performance' | 'cache'): void {
         this.activeSection = section;
+        if (section === 'cache') {
+            this.refreshCacheData();
+        }
+        if (section === 'performance' && this.perfTab === 'monitor') {
+            // Need to wait for DOM to render before chart can be drawn
+            setTimeout(() => this.renderPerfChart(), 50);
+        }
         this.cdr.markForCheck();
     }
 
@@ -3634,19 +4752,126 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             duration: e.elapsedMs || 0
         })).sort((a, b) => a.relativeTime - b.relativeTime);
 
-        // Create SVG
+        // Calculate effective width with zoom
+        const effectiveWidth = innerWidth * this.chartZoomLevel;
+
+        // Create SVG with potential scroll for zoomed view
         const svg = d3.select(container)
             .append('svg')
-            .attr('width', width)
+            .attr('width', Math.max(width, effectiveWidth + margin.left + margin.right))
             .attr('height', height);
 
         const g = svg.append('g')
             .attr('transform', `translate(${margin.left},${margin.top})`);
 
-        // Scales
-        const xScale = d3.scaleLinear()
-            .domain([0, d3.max(chartData, d => d.relativeTime) || 1000])
-            .range([0, innerWidth]);
+        // Handle gap compression
+        let xScale: d3.ScaleLinear<number, number>;
+        let gapSegments: Array<{ type: 'events' | 'gap'; startTime: number; endTime: number; gapIndex?: number; displayStart: number; displayEnd: number }> = [];
+
+        if (this.chartGapCompression && chartData.length > 1) {
+            // Identify gaps and create compressed scale
+            const segments = this.identifyGaps(chartData, 5000); // 5 second threshold
+            const compressedGapWidth = 30; // Fixed width for compressed gaps
+
+            // Calculate total display width needed
+            let currentX = 0;
+            for (const segment of segments) {
+                const segmentDuration = segment.endTime - segment.startTime;
+
+                if (segment.type === 'gap') {
+                    const isExpanded = segment.gapIndex !== undefined && this.expandedGaps.has(segment.gapIndex);
+                    const gapWidth = isExpanded ? (segmentDuration / (d3.max(chartData, d => d.relativeTime) || 1000)) * effectiveWidth : compressedGapWidth;
+
+                    gapSegments.push({
+                        ...segment,
+                        displayStart: currentX,
+                        displayEnd: currentX + gapWidth
+                    });
+                    currentX += gapWidth;
+                } else {
+                    // Event segments get proportional width
+                    const proportionalWidth = (segmentDuration / (d3.max(chartData, d => d.relativeTime) || 1000)) * effectiveWidth;
+                    const segmentWidth = Math.max(proportionalWidth, 50); // Minimum width for visibility
+
+                    gapSegments.push({
+                        ...segment,
+                        displayStart: currentX,
+                        displayEnd: currentX + segmentWidth
+                    });
+                    currentX += segmentWidth;
+                }
+            }
+
+            // Create custom scale function based on segments
+            const totalDisplayWidth = currentX;
+            const baseScale = d3.scaleLinear()
+                .domain([0, d3.max(chartData, d => d.relativeTime) || 1000])
+                .range([0, Math.min(totalDisplayWidth, effectiveWidth)]);
+
+            // Create a custom mapping function for segment-based positioning
+            const mapTimeToX = (time: number): number => {
+                // Find which segment this time falls into
+                for (const seg of gapSegments) {
+                    if (time >= seg.startTime && time <= seg.endTime) {
+                        if (seg.type === 'gap') {
+                            const isExpanded = seg.gapIndex !== undefined && this.expandedGaps.has(seg.gapIndex);
+                            if (isExpanded) {
+                                // Linear interpolation within expanded gap
+                                const ratio = (time - seg.startTime) / (seg.endTime - seg.startTime);
+                                return seg.displayStart + ratio * (seg.displayEnd - seg.displayStart);
+                            }
+                            // Compressed gap - map to center
+                            return seg.displayStart + (seg.displayEnd - seg.displayStart) / 2;
+                        } else {
+                            // Event segment - linear interpolation
+                            const ratio = (time - seg.startTime) / Math.max(seg.endTime - seg.startTime, 1);
+                            return seg.displayStart + ratio * (seg.displayEnd - seg.displayStart);
+                        }
+                    }
+                }
+                return baseScale(time);
+            };
+
+            // Use base scale but override the call behavior via a proxy-like wrapper
+            xScale = Object.assign(
+                (time: number) => mapTimeToX(time),
+                {
+                    domain: baseScale.domain.bind(baseScale),
+                    range: baseScale.range.bind(baseScale),
+                    ticks: baseScale.ticks.bind(baseScale),
+                    tickFormat: baseScale.tickFormat.bind(baseScale),
+                    nice: baseScale.nice.bind(baseScale),
+                    copy: baseScale.copy.bind(baseScale),
+                    invert: baseScale.invert.bind(baseScale),
+                    clamp: baseScale.clamp.bind(baseScale),
+                    unknown: baseScale.unknown.bind(baseScale),
+                    interpolate: baseScale.interpolate.bind(baseScale),
+                    rangeRound: baseScale.rangeRound.bind(baseScale)
+                }
+            ) as unknown as d3.ScaleLinear<number, number>;
+
+            // Draw gap indicators
+            for (const seg of gapSegments) {
+                if (seg.type === 'gap' && seg.gapIndex !== undefined) {
+                    const isExpanded = this.expandedGaps.has(seg.gapIndex);
+                    if (!isExpanded) {
+                        this.drawGapIndicator(
+                            g,
+                            seg.displayStart,
+                            seg.displayEnd - seg.displayStart,
+                            innerHeight,
+                            seg.endTime - seg.startTime,
+                            seg.gapIndex
+                        );
+                    }
+                }
+            }
+        } else {
+            // Standard linear scale
+            xScale = d3.scaleLinear()
+                .domain([0, d3.max(chartData, d => d.relativeTime) || 1000])
+                .range([0, effectiveWidth]);
+        }
 
         const yScale = d3.scaleLinear()
             .domain([0, d3.max(chartData, d => d.duration) || 100])
@@ -3654,7 +4879,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .nice();
 
         // Draw grid lines
-        this.drawGridLines(g, xScale, yScale, innerWidth, innerHeight);
+        this.drawGridLines(g, xScale, yScale, effectiveWidth, innerHeight);
 
         // Draw axes
         this.drawAxes(g, xScale, yScale, innerHeight);
@@ -3683,7 +4908,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.drawEventPoints(g, chartData, xScale, yScale, categoryColors, container);
 
         // Draw threshold line for slow queries
-        this.drawThresholdLine(g, yScale, innerWidth, this.slowQueryThresholdMs);
+        this.drawThresholdLine(g, yScale, effectiveWidth, this.slowQueryThresholdMs);
 
         this.chartInitialized = true;
     }
@@ -3908,6 +5133,513 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 .attr('font-size', '10px')
                 .text(`Slow (>${threshold}ms)`);
         }
+    }
+
+    // === Chart Zoom and Gap Compression Methods ===
+
+    /**
+     * Zoom the chart in or out
+     */
+    zoomPerfChart(direction: 'in' | 'out'): void {
+        const zoomFactor = 1.5;
+        if (direction === 'in') {
+            this.chartZoomLevel = Math.min(this.chartZoomLevel * zoomFactor, 10);
+        } else {
+            this.chartZoomLevel = Math.max(this.chartZoomLevel / zoomFactor, 0.5);
+        }
+        this.renderPerfChart();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Reset chart zoom to default
+     */
+    resetPerfChartZoom(): void {
+        this.chartZoomLevel = 1;
+        this.chartViewportStart = 0;
+        this.chartViewportEnd = 0;
+        this.expandedGaps.clear();
+        this.renderPerfChart();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Handle gap compression toggle
+     */
+    onGapCompressionChange(): void {
+        this.expandedGaps.clear();
+        this.renderPerfChart();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Identifies gaps in the data where there's no activity
+     * Returns segments with their type (events or gap)
+     */
+    private identifyGaps(
+        events: Array<{ relativeTime: number; duration: number }>,
+        gapThresholdMs: number = 5000
+    ): Array<{ type: 'events' | 'gap'; startTime: number; endTime: number; gapIndex?: number; events?: typeof events }> {
+        if (events.length === 0) return [];
+
+        const segments: Array<{ type: 'events' | 'gap'; startTime: number; endTime: number; gapIndex?: number; events?: typeof events }> = [];
+        let gapIndex = 0;
+
+        // Sort events by time
+        const sortedEvents = [...events].sort((a, b) => a.relativeTime - b.relativeTime);
+
+        let currentSegmentStart = sortedEvents[0].relativeTime;
+        let currentSegmentEvents: typeof events = [];
+        let lastEventTime = sortedEvents[0].relativeTime;
+
+        for (let i = 0; i < sortedEvents.length; i++) {
+            const event = sortedEvents[i];
+            const timeSinceLastEvent = event.relativeTime - lastEventTime;
+
+            if (timeSinceLastEvent > gapThresholdMs && currentSegmentEvents.length > 0) {
+                // Close current event segment
+                segments.push({
+                    type: 'events',
+                    startTime: currentSegmentStart,
+                    endTime: lastEventTime,
+                    events: currentSegmentEvents
+                });
+
+                // Add gap segment
+                segments.push({
+                    type: 'gap',
+                    startTime: lastEventTime,
+                    endTime: event.relativeTime,
+                    gapIndex: gapIndex++
+                });
+
+                // Start new segment
+                currentSegmentStart = event.relativeTime;
+                currentSegmentEvents = [event];
+            } else {
+                currentSegmentEvents.push(event);
+            }
+
+            lastEventTime = event.relativeTime;
+        }
+
+        // Close final segment
+        if (currentSegmentEvents.length > 0) {
+            segments.push({
+                type: 'events',
+                startTime: currentSegmentStart,
+                endTime: lastEventTime,
+                events: currentSegmentEvents
+            });
+        }
+
+        return segments;
+    }
+
+    /**
+     * Draws a compressed gap indicator
+     */
+    private drawGapIndicator(
+        g: d3.Selection<SVGGElement, unknown, null, undefined>,
+        x: number,
+        width: number,
+        height: number,
+        gapDurationMs: number,
+        gapIndex: number
+    ): void {
+        const isExpanded = this.expandedGaps.has(gapIndex);
+
+        // Draw striped background
+        const pattern = g.append('defs')
+            .append('pattern')
+            .attr('id', `gap-pattern-${gapIndex}`)
+            .attr('patternUnits', 'userSpaceOnUse')
+            .attr('width', 8)
+            .attr('height', 8)
+            .attr('patternTransform', 'rotate(45)');
+
+        pattern.append('rect')
+            .attr('width', 8)
+            .attr('height', 8)
+            .attr('fill', '#f5f5f5');
+
+        pattern.append('line')
+            .attr('x1', 0)
+            .attr('y1', 0)
+            .attr('x2', 0)
+            .attr('y2', 8)
+            .attr('stroke', '#e0e0e0')
+            .attr('stroke-width', 4);
+
+        // Gap rectangle
+        const gapRect = g.append('rect')
+            .attr('x', x)
+            .attr('y', 0)
+            .attr('width', width)
+            .attr('height', height)
+            .attr('fill', `url(#gap-pattern-${gapIndex})`)
+            .attr('stroke', '#ccc')
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '4,2')
+            .style('cursor', 'pointer');
+
+        // Vertical text showing gap duration
+        const gapText = this.formatRelativeTime(gapDurationMs);
+        const textG = g.append('g')
+            .attr('transform', `translate(${x + width / 2}, ${height / 2})`)
+            .style('pointer-events', 'none');
+
+        textG.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#888')
+            .attr('font-size', '10px')
+            .attr('font-weight', '500')
+            .text(`${gapText} gap`);
+
+        // Click handler to expand/collapse
+        gapRect.on('click', () => {
+            this.ngZone.run(() => {
+                if (this.expandedGaps.has(gapIndex)) {
+                    this.expandedGaps.delete(gapIndex);
+                } else {
+                    this.expandedGaps.add(gapIndex);
+                }
+                this.renderPerfChart();
+            });
+        });
+    }
+
+    // === Local Cache Methods ===
+
+    /**
+     * Refreshes cache data from LocalCacheManager
+     */
+    refreshCacheData(): void {
+        const lcm = LocalCacheManager.Instance;
+        this.cacheInitialized = lcm.IsInitialized;
+
+        if (this.cacheInitialized) {
+            this.cacheStats = lcm.GetStats();
+            this.cacheEntries = lcm.GetAllEntries();
+            this.cacheHitRate = lcm.GetHitRate();
+        } else {
+            this.cacheStats = null;
+            this.cacheEntries = [];
+            this.cacheHitRate = 0;
+        }
+
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Getter for filtered cache entries based on type filter
+     */
+    get filteredCacheEntries(): CacheEntryInfo[] {
+        if (this.cacheTypeFilter === 'all') {
+            return this.cacheEntries;
+        }
+        return this.cacheEntries.filter(e => e.type === this.cacheTypeFilter);
+    }
+
+    /**
+     * Sets the cache type filter
+     */
+    setCacheTypeFilter(type: CacheEntryType | 'all'): void {
+        this.cacheTypeFilter = type;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Clears all cache entries
+     */
+    async clearAllCache(): Promise<void> {
+        const lcm = LocalCacheManager.Instance;
+        if (lcm.IsInitialized) {
+            await lcm.ClearAll();
+            this.refreshCacheData();
+        }
+    }
+
+    /**
+     * Invalidates a single cache entry
+     */
+    async invalidateCacheEntry(entry: CacheEntryInfo): Promise<void> {
+        const lcm = LocalCacheManager.Instance;
+        if (!lcm.IsInitialized) return;
+
+        // Remove based on type
+        if (entry.type === 'runview' && entry.fingerprint) {
+            await lcm.InvalidateRunViewResult(entry.fingerprint);
+        } else if (entry.type === 'dataset') {
+            // For datasets, we need to call ClearDataset with proper params
+            // Since we don't have the full params, use the key directly
+            // This is a simplified approach - in production you'd want more robust handling
+            await lcm.InvalidateRunViewResult(entry.key);
+        } else if (entry.type === 'runquery' && entry.fingerprint) {
+            await lcm.InvalidateRunViewResult(entry.fingerprint);
+        }
+
+        this.refreshCacheData();
+    }
+
+    /**
+     * Formats a cache timestamp (unix ms) to display string
+     */
+    formatCacheTimestamp(timestamp: number): string {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+
+    // === Engine Detail Panel Methods ===
+
+    /**
+     * Refresh a single engine
+     */
+    async refreshSingleEngine(engine: EngineDiagnosticInfo, event: Event): Promise<void> {
+        event.stopPropagation();
+        this.isRefreshingSingleEngine = engine.className;
+        this.cdr.markForCheck();
+
+        try {
+            const engineInstance = BaseEngineRegistry.Instance.GetEngine<{ RefreshAllItems: () => Promise<void> }>(engine.className);
+            if (engineInstance && typeof engineInstance.RefreshAllItems === 'function') {
+                await engineInstance.RefreshAllItems();
+                console.log(`Refreshed engine: ${engine.className}`);
+            }
+            this.refreshData();
+        } catch (error) {
+            console.error(`Error refreshing engine ${engine.className}:`, error);
+        } finally {
+            this.isRefreshingSingleEngine = null;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Opens the engine detail panel for a specific engine
+     */
+    openEngineDetailPanel(engine: EngineDiagnosticInfo): void {
+        const configItems = this.getEngineConfigItems(engine.className);
+
+        this.engineDetailPanel = {
+            isOpen: true,
+            engine,
+            configItems,
+            isRefreshing: false
+        };
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Closes the engine detail panel
+     */
+    closeEngineDetailPanel(): void {
+        this.engineDetailPanel = {
+            isOpen: false,
+            engine: null,
+            configItems: [],
+            isRefreshing: false
+        };
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Refreshes the engine shown in the detail panel
+     */
+    async refreshEngineInDetailPanel(): Promise<void> {
+        if (!this.engineDetailPanel.engine) return;
+
+        this.engineDetailPanel.isRefreshing = true;
+        this.cdr.markForCheck();
+
+        try {
+            const engineInstance = BaseEngineRegistry.Instance.GetEngine<{ RefreshAllItems: () => Promise<void> }>(
+                this.engineDetailPanel.engine.className
+            );
+            if (engineInstance && typeof engineInstance.RefreshAllItems === 'function') {
+                await engineInstance.RefreshAllItems();
+            }
+
+            // Refresh the data and reopen panel with updated info
+            await this.refreshData();
+
+            // Update the panel with refreshed data
+            const updatedEngine = this.engines.find(e => e.className === this.engineDetailPanel.engine?.className);
+            if (updatedEngine) {
+                this.engineDetailPanel.engine = updatedEngine;
+                this.engineDetailPanel.configItems = this.getEngineConfigItems(updatedEngine.className);
+            }
+        } catch (error) {
+            console.error('Error refreshing engine in detail panel:', error);
+        } finally {
+            this.engineDetailPanel.isRefreshing = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Gets config items for an engine by examining its Configs property
+     */
+    private getEngineConfigItems(className: string): EngineConfigItemDisplay[] {
+        const engineInstance = BaseEngineRegistry.Instance.GetEngine<{
+            Configs?: Array<{
+                Type: 'entity' | 'dataset';
+                PropertyName: string;
+                EntityName?: string;
+                DatasetName?: string;
+                Filter?: string;
+                OrderBy?: string;
+            }>;
+        }>(className);
+
+        if (!engineInstance || !engineInstance.Configs) {
+            return [];
+        }
+
+        const engineObj = engineInstance as Record<string, unknown>;
+        const items: EngineConfigItemDisplay[] = [];
+
+        for (const config of engineInstance.Configs) {
+            const propValue = engineObj[config.PropertyName];
+            const dataArray = Array.isArray(propValue) ? propValue : [];
+            const estimatedBytes = this.estimateArrayMemory(dataArray);
+
+            items.push({
+                propertyName: config.PropertyName,
+                type: config.Type || 'entity',
+                entityName: config.EntityName,
+                datasetName: config.DatasetName,
+                filter: config.Filter,
+                orderBy: config.OrderBy,
+                itemCount: dataArray.length,
+                estimatedMemoryBytes: estimatedBytes,
+                memoryDisplay: this.formatBytes(estimatedBytes),
+                sampleData: dataArray.slice(0, 5), // First 5 items as sample
+                expanded: false
+            });
+        }
+
+        return items.sort((a, b) => b.itemCount - a.itemCount);
+    }
+
+    /**
+     * Estimates memory for an array of objects
+     */
+    private estimateArrayMemory(arr: unknown[]): number {
+        if (arr.length === 0) return 0;
+
+        // Sample first item to estimate size
+        const sample = arr[0];
+        let bytesPerItem = 100; // default
+
+        if (sample && typeof sample === 'object') {
+            try {
+                const json = JSON.stringify(sample);
+                bytesPerItem = json.length * 2; // UTF-16
+            } catch {
+                bytesPerItem = 500;
+            }
+        }
+
+        return arr.length * bytesPerItem;
+    }
+
+    /**
+     * Toggle expansion of a config item
+     */
+    toggleConfigItemExpanded(item: EngineConfigItemDisplay): void {
+        item.expanded = !item.expanded;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Get column names for sample data display
+     */
+    getSampleDataColumns(item: EngineConfigItemDisplay): string[] {
+        if (item.sampleData.length === 0) return [];
+
+        const sample = item.sampleData[0];
+        if (!sample || typeof sample !== 'object') return [];
+
+        // For BaseEntity objects, try to get key properties
+        const obj = sample as Record<string, unknown>;
+
+        // Check if it's a BaseEntity with GetAll method
+        if ('GetAll' in obj && typeof obj.GetAll === 'function') {
+            const allData = (obj as { GetAll: () => Record<string, unknown> }).GetAll();
+            // Return priority columns first
+            const priorityKeys = ['ID', 'Name', 'Description', 'Code', 'Status', 'Type'];
+            const availableKeys = Object.keys(allData);
+            const result: string[] = [];
+
+            for (const key of priorityKeys) {
+                if (availableKeys.includes(key)) {
+                    result.push(key);
+                }
+            }
+
+            // Add remaining keys up to 6 total
+            for (const key of availableKeys) {
+                if (!result.includes(key) && result.length < 6 && !key.startsWith('_')) {
+                    result.push(key);
+                }
+            }
+
+            return result;
+        }
+
+        // For plain objects
+        const keys = Object.keys(obj).filter(k => !k.startsWith('_'));
+        return keys.slice(0, 6);
+    }
+
+    /**
+     * Get a value from sample data for display
+     */
+    getSampleDataValue(row: unknown, column: string): string {
+        if (!row || typeof row !== 'object') return '';
+
+        const obj = row as Record<string, unknown>;
+
+        // For BaseEntity objects, use GetAll
+        if ('GetAll' in obj && typeof obj.GetAll === 'function') {
+            const allData = (obj as { GetAll: () => Record<string, unknown> }).GetAll();
+            const value = allData[column];
+            return this.formatValueForDisplay(value);
+        }
+
+        // For plain objects
+        const value = obj[column];
+        return this.formatValueForDisplay(value);
+    }
+
+    /**
+     * Format a value for display in sample data table
+     */
+    private formatValueForDisplay(value: unknown): string {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return value.toString();
+        if (typeof value === 'boolean') return value ? 'true' : 'false';
+        if (value instanceof Date) return value.toLocaleDateString();
+        if (typeof value === 'object') return JSON.stringify(value);
+        return String(value);
+    }
+
+    /**
+     * Open an entity in the explorer (placeholder - would need routing integration)
+     */
+    openEntityInExplorer(entityName: string): void {
+        // This would integrate with the app's navigation/routing system
+        // For now, just log and could be extended to emit an event or use router
+        console.log(`Would open entity in explorer: ${entityName}`);
+        // Could emit an event or use router:
+        // this.router.navigate(['/entities', entityName]);
     }
 
     // === BaseResourceComponent Required Methods ===

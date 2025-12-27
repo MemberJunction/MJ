@@ -3,6 +3,7 @@ import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/i
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
 import { EntityInfo } from '../generic/entityInfo';
+import { LocalCacheManager } from '../generic/localCacheManager';
 
 /**
  * Parameters for running either a stored or dynamic view. 
@@ -114,6 +115,25 @@ export type RunViewParams = {
      * @internal This property is for framework internal use only.
      */
     _fromEngine?: boolean;
+
+    /**
+     * When set to true, the RunView will first check the LocalCacheManager for cached results.
+     * If cached results exist and are still valid, they will be returned immediately without
+     * hitting the server. This is useful for frequently-accessed, relatively-static data.
+     *
+     * Note: The LocalCacheManager must be initialized before this can work.
+     * Cached results are automatically invalidated when the underlying entity data changes.
+     *
+     * @default false
+     */
+    CacheLocal?: boolean;
+
+    /**
+     * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
+     * After this time, cached results will be considered stale and fresh data will be fetched.
+     * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
+     */
+    CacheLocalTTL?: number;
 } 
 
 /**
@@ -148,6 +168,14 @@ export class RunView  {
      * @returns
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        // Check local cache first if CacheLocal is enabled
+        if (params.CacheLocal) {
+            const cachedResult = await this.checkLocalCache<T>(params);
+            if (cachedResult) {
+                return cachedResult;
+            }
+        }
+
         // Start telemetry tracking
         const eventId = TelemetryManager.Instance.StartEvent(
             'RunView',
@@ -161,7 +189,8 @@ export class RunView  {
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
-                _fromEngine: params._fromEngine
+                _fromEngine: params._fromEngine,
+                CacheLocal: params.CacheLocal
             },
             contextUser?.ID
         );
@@ -169,10 +198,80 @@ export class RunView  {
         try {
             // simple proxy to the provider, pre/post process moved to ProviderBase and called by each sub-class
             // for validation and for optional transformation of the result
-            return await this.ProviderToUse.RunView<T>(params, contextUser);
+            const result = await this.ProviderToUse.RunView<T>(params, contextUser);
+
+            // Cache the result if CacheLocal is enabled and request was successful
+            if (params.CacheLocal && result.Success) {
+                await this.cacheLocally(params, result);
+            }
+
+            return result;
         } finally {
             TelemetryManager.Instance.EndEvent(eventId);
         }
+    }
+
+    /**
+     * Checks the local cache for a cached RunView result
+     */
+    private async checkLocalCache<T>(params: RunViewParams): Promise<RunViewResult<T> | null> {
+        const lcm = LocalCacheManager.Instance;
+        if (!lcm.IsInitialized) return null;
+
+        const fingerprint = lcm.GenerateRunViewFingerprint(params);
+        const cached = await lcm.GetRunViewResult(fingerprint);
+
+        if (cached) {
+            // Track cache hit in telemetry
+            TelemetryManager.Instance.StartEvent(
+                'Cache',
+                'RunView.CacheHit',
+                {
+                    EntityName: params.EntityName,
+                    fingerprint,
+                    resultCount: cached.results.length
+                }
+            );
+
+            return {
+                Success: true,
+                Results: cached.results as T[],
+                RowCount: cached.results.length,
+                TotalRowCount: cached.results.length,
+                ExecutionTime: 0, // Instant from cache
+                ErrorMessage: ''
+            };
+        }
+
+        return null;
+    }
+
+    /**
+     * Caches a RunView result locally
+     */
+    private async cacheLocally<T>(params: RunViewParams, result: RunViewResult<T>): Promise<void> {
+        const lcm = LocalCacheManager.Instance;
+        if (!lcm.IsInitialized) return;
+
+        const fingerprint = lcm.GenerateRunViewFingerprint(params);
+
+        // Find the max __mj_UpdatedAt from results for freshness tracking
+        let maxUpdatedAt = new Date().toISOString();
+        if (result.Results.length > 0) {
+            const firstResult = result.Results[0] as Record<string, unknown>;
+            if (firstResult && firstResult['__mj_UpdatedAt']) {
+                // Find max updated timestamp
+                const timestamps = result.Results
+                    .map(r => (r as Record<string, unknown>)['__mj_UpdatedAt'])
+                    .filter(t => t != null)
+                    .map(t => new Date(t as string).getTime());
+                if (timestamps.length > 0) {
+                    maxUpdatedAt = new Date(Math.max(...timestamps)).toISOString();
+                }
+            }
+        }
+
+        await lcm.SetRunViewResult(fingerprint, params, result.Results, maxUpdatedAt);
     }
 
     /**

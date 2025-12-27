@@ -39,8 +39,8 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     DatasetItemFilters?: DatasetItemFilterType[];
     /**
-     * Optional, only used if Type is 'dataset', specifies how to handle the results of the dataset load. Defaults to 'single_property' if not specified. When set to 'single_property', the entire dataset is set to the property specified by PropertyName. 
-     * When set to 'individual_properties', each item in the dataset is set to a property on the object with the name of the item's key plus the item's Code name. 
+     * Optional, only used if Type is 'dataset', specifies how to handle the results of the dataset load. Defaults to 'single_property' if not specified. When set to 'single_property', the entire dataset is set to the property specified by PropertyName.
+     * When set to 'individual_properties', each item in the dataset is set to a property on the object with the name of the item's key plus the item's Code name.
      * For example, if the item's key is 'Demo' and the item's Code name is 'FirstItem', the property set on the object would be 'Demo_FirstItem'.
      */
     DatasetResultHandling?: 'single_property' | 'individual_properties' = 'single_property';
@@ -51,11 +51,11 @@ export class BaseEnginePropertyConfig extends BaseInfo {
     /**
      * Optional, expiration time in milliseconds
      */
-    Expiration?: number; 
+    Expiration?: number;
     /**
      * Optional, whether to add the result to the object, defaults to true if not specified
      */
-    AddToObject?: boolean;  
+    AddToObject?: boolean;
     /**
      * Optional, defaults to true. If set to false, AutoRefresh for this item will be disabled. By default, whenever a BaseEntity event is emitted for a save/delete, if the entity name
      * for this config matches the BaseEntity's entity name, the config will be refreshed. If this is set to false, that will not happen. NOTE: This is not a network notification mechanism,
@@ -69,6 +69,25 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      * This allows different entities to have different debounce delays.
      */
     DebounceTime?: number;
+
+    /**
+     * When set to true, the engine will use the LocalCacheManager to cache results locally.
+     * On subsequent loads (unless forceRefresh is true), cached results will be returned
+     * immediately without hitting the server if they are still valid.
+     *
+     * This is useful for frequently-accessed, relatively-static data that doesn't need
+     * real-time freshness. The cache is automatically invalidated when entity data changes.
+     *
+     * @default false
+     */
+    CacheLocal?: boolean;
+
+    /**
+     * Optional TTL (time-to-live) in milliseconds for locally cached results when CacheLocal is true.
+     * After this time, cached results will be considered stale and fresh data will be fetched.
+     * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
+     */
+    CacheLocalTTL?: number;
 
     constructor(init?: Partial<BaseEnginePropertyConfig>) {
         super();
@@ -499,8 +518,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
 
     /**
      * Handles the process of loading a single config of type 'entity'.
-     * @param config 
-     * @param contextUser 
+     * @param config
+     * @param contextUser
      */
     protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
         const p = this.RunViewProviderToUse;
@@ -510,7 +529,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
             ResultType: 'entity_object',
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
-            _fromEngine: true  // Mark as engine-initiated to avoid false positive telemetry warnings
+            _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
+            CacheLocal: config.CacheLocal,
+            CacheLocalTTL: config.CacheLocalTTL
         }, contextUser);
 
         this.HandleSingleViewResult(config, result);
@@ -549,7 +570,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
                     ResultType: 'entity_object',
                     ExtraFilter: c.Filter,
                     OrderBy: c.OrderBy,
-                    _fromEngine: true  // Mark as engine-initiated to avoid false positive telemetry warnings
+                    _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
+                    CacheLocal: c.CacheLocal,
+                    CacheLocalTTL: c.CacheLocalTTL
                 };
             });
             const results = await rv.RunViews(viewConfigs, contextUser);
