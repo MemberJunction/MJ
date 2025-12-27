@@ -17,12 +17,6 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         ResourceTypes: ResourceTypeEntity[];
     };
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
-        // Enable DataPool - engine enforces this, overriding any caller ConfigEx options
-        // Only call on first config - subsequent forceRefresh calls skip this
-        if (!this.IsConfigured) {
-            this.SetEngineConfig({ useDataPool: true }, true);
-        }
-
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',

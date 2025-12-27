@@ -82,6 +82,12 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     private _engines: Map<string, EngineRegistrationInfo> = new Map();
 
     /**
+     * Cache of estimated bytes per row for each entity type.
+     * This avoids re-sampling the same entity type multiple times during a session.
+     */
+    private _entitySizeCache: Map<string, number> = new Map();
+
+    /**
      * Returns the singleton instance of BaseEngineRegistry
      */
     public static get Instance(): BaseEngineRegistry {
@@ -331,63 +337,116 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     }
 
     /**
-     * Estimate the size of an array in bytes using a fast heuristic.
-     * Avoids JSON.stringify which blocks the event loop and is slow on large objects.
-     *
-     * This uses a sampling approach: estimate based on first few items and extrapolate.
+     * Default bytes per row when we can't sample (fallback)
+     */
+    private static readonly DEFAULT_BYTES_PER_ROW = 500;
+
+    /**
+     * Estimate the size of an array in bytes by sampling the first row.
+     * Uses a cache to avoid re-sampling the same entity type multiple times.
      */
     private EstimateArraySize(arr: unknown[]): number {
         if (arr.length === 0) return 0;
 
-        // For very small arrays, we can measure them directly
-        if (arr.length <= 3) {
-            return this.EstimateSingleItemSize(arr[0]) * arr.length;
-        }
-
-        // For larger arrays, sample first few items and extrapolate
-        const sampleSize = Math.min(3, arr.length);
-        let sampleTotal = 0;
-        for (let i = 0; i < sampleSize; i++) {
-            sampleTotal += this.EstimateSingleItemSize(arr[i]);
-        }
-        const avgItemSize = sampleTotal / sampleSize;
-        return Math.round(avgItemSize * arr.length);
+        const firstItem = arr[0];
+        const bytesPerRow = this.GetBytesPerRow(firstItem);
+        return arr.length * bytesPerRow;
     }
 
     /**
-     * Estimate size of a single item without using JSON.stringify
+     * Get the estimated bytes per row for an item, using cache when possible.
      */
-    private EstimateSingleItemSize(item: unknown): number {
-        if (item === null || item === undefined) return 8;
+    private GetBytesPerRow(item: unknown): number {
+        if (!item || typeof item !== 'object') {
+            return BaseEngineRegistry.DEFAULT_BYTES_PER_ROW;
+        }
 
-        const type = typeof item;
-        switch (type) {
+        // Try to get entity name for caching
+        let entityName: string | null = null;
+        if (item instanceof BaseEntity) {
+            entityName = item.EntityInfo?.Name || null;
+        }
+
+        // Check cache first
+        if (entityName && this._entitySizeCache.has(entityName)) {
+            return this._entitySizeCache.get(entityName)!;
+        }
+
+        // Sample this item to estimate size
+        const estimatedSize = this.SampleItemSize(item);
+
+        // Cache the result if we have an entity name
+        if (entityName) {
+            this._entitySizeCache.set(entityName, estimatedSize);
+        }
+
+        return estimatedSize;
+    }
+
+    /**
+     * Sample a single item to estimate its size in bytes.
+     * For BaseEntity objects, uses GetAll() to get plain field values.
+     */
+    private SampleItemSize(item: unknown): number {
+        if (!item || typeof item !== 'object') {
+            return BaseEngineRegistry.DEFAULT_BYTES_PER_ROW;
+        }
+
+        try {
+            // Get plain object representation
+            let obj: Record<string, unknown>;
+            if (item instanceof BaseEntity) {
+                obj = item.GetAll();
+            } else {
+                obj = item as Record<string, unknown>;
+            }
+
+            // Sum up the size of all values
+            let totalBytes = 0;
+            for (const key of Object.keys(obj)) {
+                // Key name size (UTF-16)
+                totalBytes += key.length * 2;
+                // Value size
+                totalBytes += this.EstimateValueSize(obj[key]);
+            }
+
+            // Minimum of 100 bytes per object for overhead
+            return Math.max(totalBytes, 100);
+        } catch {
+            return BaseEngineRegistry.DEFAULT_BYTES_PER_ROW;
+        }
+    }
+
+    /**
+     * Estimate the size of a single value in bytes.
+     */
+    private EstimateValueSize(value: unknown): number {
+        if (value === null || value === undefined) {
+            return 8;
+        }
+
+        switch (typeof value) {
             case 'string':
-                return (item as string).length * 2;
+                return (value as string).length * 2; // UTF-16
             case 'number':
                 return 8;
             case 'boolean':
                 return 4;
-            case 'object': {
-                // For BaseEntity objects, use GetAll() to get plain field values
-                // This avoids serializing methods and internal properties
-                let obj: Record<string, unknown>;
-                if (item instanceof BaseEntity) {
-                    obj = item.GetAll();
-                } else {
-                    obj = item as Record<string, unknown>;
+            case 'object':
+                if (value instanceof Date) {
+                    return 8;
                 }
-
-                const keys = Object.keys(obj);
-                // Estimate: key name size + ~50 bytes per property on average
-                let size = 0;
-                for (const key of keys) {
-                    size += key.length * 2 + 50;
-                }
-                return Math.max(size, 200); // Minimum 200 bytes per object
-            }
+                // For nested objects/arrays, use a rough estimate
+                return 50;
             default:
-                return 100; // Default estimate for other types
+                return 8;
         }
+    }
+
+    /**
+     * Clear the entity size cache (useful if schema changes)
+     */
+    public ClearSizeCache(): void {
+        this._entitySizeCache.clear();
     }
 }

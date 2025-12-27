@@ -117,11 +117,6 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * ```
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        // Enable DataPool for efficient batched loading
-        if (!this.IsConfigured) {
-            this.SetEngineConfig({ useDataPool: true }, true);
-        }
-
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 PropertyName: '_encryptionKeys',

@@ -36,11 +36,6 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
     * @param contextUser If you are running on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
     */
    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-      // Enable DataPool for efficient batched loading
-      if (!this.IsConfigured) {
-         this.SetEngineConfig({ useDataPool: true }, true);
-      }
-
       const config: Partial<BaseEnginePropertyConfig>[] = [
          {
                Type: 'dataset',

@@ -367,13 +367,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
 
     /**
      * Get DataPool request options from engine configuration.
+     * Includes the engine class name for tracking cache sharing.
      */
-    protected get DataPoolRequestOptions(): { forceRefresh?: boolean; skipPooling?: boolean; skipCache?: boolean } | undefined {
-        if (!this._configExOptions) return undefined;
+    protected get DataPoolRequestOptions(): { forceRefresh?: boolean; skipPooling?: boolean; skipCache?: boolean; engineClassName?: string } | undefined {
+        if (!this._configExOptions) {
+            // Even without config options, return the engine class name for tracking
+            return { engineClassName: this.constructor.name };
+        }
         return {
             forceRefresh: this._configExOptions.forceRefresh,
             skipPooling: this._configExOptions.skipPooling,
-            skipCache: this._configExOptions.skipLocalCache
+            skipCache: this._configExOptions.skipLocalCache,
+            engineClassName: this.constructor.name
         };
     }
 

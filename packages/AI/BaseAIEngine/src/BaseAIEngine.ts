@@ -57,11 +57,6 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentConfigurations: AIAgentConfigurationEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
-        // Enable DataPool for efficient batched loading
-        if (!this.IsConfigured) {
-            this.SetEngineConfig({ useDataPool: true }, true);
-        }
-
         const params = [
             {
                 PropertyName: '_models',

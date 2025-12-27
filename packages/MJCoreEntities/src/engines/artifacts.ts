@@ -17,11 +17,6 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
     private _artifactTypes: ArtifactTypeEntity[];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
-        // Enable DataPool for efficient batched loading
-        if (!this.IsConfigured) {
-            this.SetEngineConfig({ useDataPool: true }, true);
-        }
-
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',

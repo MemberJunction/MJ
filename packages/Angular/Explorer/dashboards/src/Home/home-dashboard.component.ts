@@ -115,6 +115,7 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
 
         this.isLoading = false;
         this.NotifyLoadComplete();
+        console.log(`Home Dashboard: Notify Load Complete from appManager.Applications.subscribe`)
 
         this.cdr.detectChanges();
       });
@@ -139,6 +140,7 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
 
     // Favorites and recents load asynchronously in the sidebar
     this.NotifyLoadComplete();
+    console.log(`Home Dashboard: Notify Load Complete from main branch of ngAfterViewInit`)
 
     // Load favorites and recents asynchronously (don't block rendering)
     this.loadFavorites();
@@ -207,10 +209,14 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
     this.showConfigDialog = false;
   }
 
+  private _counter = 0;
   /**
    * Get nav items count for an app
    */
   getNavItemsCount(app: BaseApplication): number {
+    if (this._counter++ === 0) {
+      console.log("got first getNavItesCount()")
+    }
     return app.GetNavItems().length;
   }
 

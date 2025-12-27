@@ -30,11 +30,6 @@ export class EntityCommunicationResult {
 
 export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCommunicationsEngineBase> {
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
-        // Enable DataPool for efficient batched loading
-        if (!this.IsConfigured) {
-            this.SetEngineConfig({ useDataPool: true }, true);
-        }
-
         // just rely on the metadata from the base engine, can do extra loading here down the road as needed
         // it is faster to use the base engine's metadata than to load it again here even though the metadata
         // is cached we still have to check to see if the dataset is up to date and that takes time

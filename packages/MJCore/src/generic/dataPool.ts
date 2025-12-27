@@ -30,6 +30,28 @@ export interface DataPoolRequest {
 }
 
 /**
+ * Tracks an engine's access to a cache entry
+ */
+export interface CacheEntryEngineAccess {
+    /**
+     * The engine class name that accessed this cache entry
+     */
+    engineClassName: string;
+    /**
+     * When this engine first loaded/accessed this cache entry
+     */
+    firstAccessedAt: Date;
+    /**
+     * When this engine last accessed this cache entry
+     */
+    lastAccessedAt: Date;
+    /**
+     * Number of times this engine has accessed this entry
+     */
+    accessCount: number;
+}
+
+/**
  * A cached entry in the DataPool
  */
 export interface DataPoolCacheEntry {
@@ -61,6 +83,10 @@ export interface DataPoolCacheEntry {
      * Estimated size in bytes
      */
     estimatedSizeBytes: number;
+    /**
+     * Engines that have accessed this cache entry
+     */
+    engineAccesses: CacheEntryEngineAccess[];
 }
 
 /**
@@ -105,6 +131,10 @@ export interface DataPoolRequestOptions {
      * Skip local cache (IndexedDB) for this request
      */
     skipCache?: boolean;
+    /**
+     * The engine class name making this request (for tracking cache sharing)
+     */
+    engineClassName?: string;
 }
 
 /**
@@ -145,10 +175,16 @@ interface QueuedRequest {
  */
 export class DataPool extends BaseSingleton<DataPool> {
     private _config: DataPoolConfig = {
-        enablePooling: true,
+        // Pooling disabled temporarily - causing 36+ second delays when batching
+        // many requests together. The server struggles with large batched RunViews calls.
+        // TODO: Investigate server-side RunViews performance with large batch sizes.
+        enablePooling: false,
         poolingWindowMs: 50,
         poolingMaxExtensionMs: 250,
-        enableLocalCache: true,
+        // Local cache disabled by default - JSON.stringify of BaseEntity objects
+        // causes RangeError for large datasets. TODO: Implement proper serialization
+        // using GetAll() for storage and LoadFromData() for retrieval.
+        enableLocalCache: false,
         enableCrossEngineSharing: true
     };
 
@@ -235,6 +271,7 @@ export class DataPool extends BaseSingleton<DataPool> {
         const uncachedRequests: { index: number; request: DataPoolRequest }[] = [];
 
         // First pass: check caches and collect uncached requests
+        const engineClassName = options?.engineClassName;
         for (let i = 0; i < requests.length; i++) {
             const request = requests[i];
             const cacheKey = this.BuildCacheKey(request);
@@ -243,7 +280,7 @@ export class DataPool extends BaseSingleton<DataPool> {
             if (this._config.enableCrossEngineSharing && !options?.forceRefresh && !options?.skipCache) {
                 const cached = this._sharedCache.get(cacheKey);
                 if (cached) {
-                    cached.lastAccessedAt = new Date();
+                    this.TrackCacheHit(cacheKey, engineClassName);
                     results[i] = cached.data;
                     continue;
                 }
@@ -259,7 +296,12 @@ export class DataPool extends BaseSingleton<DataPool> {
             if (this._config.enableLocalCache && !options?.forceRefresh && !options?.skipCache) {
                 const localCacheData = await this.CheckLocalStorageCache(cacheKey);
                 if (localCacheData) {
+                    // Initialize engineAccesses if missing (from older cached data)
+                    if (!localCacheData.engineAccesses) {
+                        localCacheData.engineAccesses = [];
+                    }
                     this._sharedCache.set(cacheKey, localCacheData);
+                    this.TrackCacheHit(cacheKey, engineClassName);
                     results[i] = localCacheData.data;
                     continue;
                 }
@@ -270,14 +312,18 @@ export class DataPool extends BaseSingleton<DataPool> {
 
         // If all cached, return immediately
         if (uncachedRequests.length === 0) {
+            const cachedCount = requests.length;
+            console.log(`[DataPool.Request] All ${cachedCount} requests served from cache`);
             return results as (BaseEntity[] | Record<string, unknown>[])[];
         }
 
+        const cachedCount = requests.length - uncachedRequests.length;
+        console.log(`[DataPool.Request] ${cachedCount} cached, ${uncachedRequests.length} uncached requests to execute`);
+
         // Execute uncached requests - use pooling or batch RunViews
-        console.log(`[DataPool.Request] ${uncachedRequests.length} uncached requests to execute`);
         if (this._config.enablePooling && !options?.skipPooling) {
-            // Use pooling for uncached requests
-            console.log(`[DataPool.Request] Using pooling path`);
+            // Use pooling for uncached requests (capped debounce)
+            console.log(`[DataPool.Request] Using pooling path (may delay for batching)`);
             const pooledResults = await Promise.all(
                 uncachedRequests.map(item => this.QueueRequest(item.request, contextUser, options))
             );
@@ -285,9 +331,9 @@ export class DataPool extends BaseSingleton<DataPool> {
                 results[uncachedRequests[i].index] = pooledResults[i];
             }
         } else {
-            // Use batched RunViews for immediate execution
-            console.log(`[DataPool.Request] Using ExecuteBatchImmediate path`);
-            await this.ExecuteBatchImmediate(uncachedRequests, results, contextUser);
+            // Use batched RunViews for immediate execution (no delay)
+            console.log(`[DataPool.Request] Using immediate batch path`);
+            await this.ExecuteBatchImmediate(uncachedRequests, results, contextUser, engineClassName);
         }
 
         console.log(`[DataPool.Request] END - took ${Date.now() - startTime}ms`);
@@ -300,7 +346,8 @@ export class DataPool extends BaseSingleton<DataPool> {
     private async ExecuteBatchImmediate(
         uncachedRequests: { index: number; request: DataPoolRequest }[],
         results: (BaseEntity[] | Record<string, unknown>[] | null)[],
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        engineClassName?: string
     ): Promise<void> {
         console.log(`[DataPool.ExecuteBatchImmediate] START - ${uncachedRequests.length} requests`);
         const startTime = Date.now();
@@ -342,8 +389,8 @@ export class DataPool extends BaseSingleton<DataPool> {
             if (result && result.Success) {
                 const data = result.Results as BaseEntity[] | Record<string, unknown>[];
 
-                // Cache the result
-                this.CacheResult(key, data, request);
+                // Cache the result with engine tracking
+                this.CacheResult(key, data, request, engineClassName);
 
                 // Assign to all indices that requested this data
                 for (const idx of indices) {
@@ -365,6 +412,7 @@ export class DataPool extends BaseSingleton<DataPool> {
         options?: DataPoolRequestOptions
     ): Promise<BaseEntity[] | Record<string, unknown>[]> {
         const cacheKey = this.BuildCacheKey(request);
+        const engineClassName = options?.engineClassName;
         console.log(`[DataPool.RequestSingle] ${request.entityName} - checking caches...`);
 
         // 1. Check shared memory cache (cross-engine sharing)
@@ -372,7 +420,7 @@ export class DataPool extends BaseSingleton<DataPool> {
             const cached = this._sharedCache.get(cacheKey);
             if (cached) {
                 console.log(`[DataPool.RequestSingle] ${request.entityName} - HIT memory cache`);
-                cached.lastAccessedAt = new Date();
+                this.TrackCacheHit(cacheKey, engineClassName);
                 return cached.data;
             }
         }
@@ -388,8 +436,13 @@ export class DataPool extends BaseSingleton<DataPool> {
             const localCacheData = await this.CheckLocalStorageCache(cacheKey);
             if (localCacheData) {
                 console.log(`[DataPool.RequestSingle] ${request.entityName} - HIT local storage cache`);
+                // Initialize engineAccesses if missing (from older cached data)
+                if (!localCacheData.engineAccesses) {
+                    localCacheData.engineAccesses = [];
+                }
                 // Promote to memory cache
                 this._sharedCache.set(cacheKey, localCacheData);
+                this.TrackCacheHit(cacheKey, engineClassName);
                 return localCacheData.data;
             }
         }
@@ -399,7 +452,7 @@ export class DataPool extends BaseSingleton<DataPool> {
         if (this._config.enablePooling && !options?.skipPooling) {
             return this.QueueRequest(request, contextUser, options);
         } else {
-            return this.ExecuteImmediate(request, contextUser, cacheKey);
+            return this.ExecuteImmediate(request, contextUser, cacheKey, engineClassName);
         }
     }
 
@@ -506,21 +559,22 @@ export class DataPool extends BaseSingleton<DataPool> {
      */
     private DistributeResults(
         queue: QueuedRequest[],
-        uniqueRequests: DataPoolRequest[],
+        _uniqueRequests: DataPoolRequest[],
         results: RunViewResult[],
         requestMap: Map<string, number>
     ): void {
         for (const item of queue) {
             const key = this.BuildCacheKey(item.request);
             const index = requestMap.get(key);
+            const engineClassName = item.options?.engineClassName;
 
             if (index !== undefined && results[index]) {
                 const result = results[index];
                 if (result.Success) {
                     const data = result.Results as BaseEntity[] | Record<string, unknown>[];
 
-                    // Cache the result
-                    this.CacheResult(key, data, item.request);
+                    // Cache the result with engine tracking
+                    this.CacheResult(key, data, item.request, engineClassName);
 
                     item.resolve(data);
                 } else {
@@ -538,12 +592,13 @@ export class DataPool extends BaseSingleton<DataPool> {
     private async ExecuteImmediate(
         request: DataPoolRequest,
         contextUser?: UserInfo,
-        cacheKey?: string
+        cacheKey?: string,
+        engineClassName?: string
     ): Promise<BaseEntity[] | Record<string, unknown>[]> {
         const key = cacheKey || this.BuildCacheKey(request);
 
         // Create promise and store for deduplication
-        const promise = this.DoExecute(request, contextUser, key);
+        const promise = this.DoExecute(request, contextUser, key, engineClassName);
         this._inFlightRequests.set(key, promise);
 
         try {
@@ -560,7 +615,8 @@ export class DataPool extends BaseSingleton<DataPool> {
     private async DoExecute(
         request: DataPoolRequest,
         contextUser?: UserInfo,
-        cacheKey?: string
+        cacheKey?: string,
+        engineClassName?: string
     ): Promise<BaseEntity[] | Record<string, unknown>[]> {
         const rv = new RunView(this.ProviderToUse);
         const result = await rv.RunView({
@@ -577,16 +633,20 @@ export class DataPool extends BaseSingleton<DataPool> {
         const data = result.Results as BaseEntity[] | Record<string, unknown>[];
         const key = cacheKey || this.BuildCacheKey(request);
 
-        // Cache the result
-        this.CacheResult(key, data, request);
+        // Cache the result with engine tracking
+        this.CacheResult(key, data, request, engineClassName);
 
         return data;
     }
 
     /**
      * Cache a result in memory (and optionally IndexedDB)
+     * @param cacheKey - The cache key
+     * @param data - The data to cache
+     * @param request - The original request
+     * @param engineClassName - Optional engine class name that is caching this data
      */
-    private CacheResult(cacheKey: string, data: BaseEntity[] | Record<string, unknown>[], request: DataPoolRequest): void {
+    private CacheResult(cacheKey: string, data: BaseEntity[] | Record<string, unknown>[], request: DataPoolRequest, engineClassName?: string): void {
         // Get the max __mj_UpdatedAt if available
         let entityUpdatedAt: Date | null = null;
         if (data.length > 0) {
@@ -605,6 +665,15 @@ export class DataPool extends BaseSingleton<DataPool> {
             }
         }
 
+        // Check if entry already exists to preserve engine access history
+        const existingEntry = this._sharedCache.get(cacheKey);
+        const engineAccesses: CacheEntryEngineAccess[] = existingEntry?.engineAccesses || [];
+
+        // Track this engine's access if provided
+        if (engineClassName) {
+            this.RecordEngineAccess(engineAccesses, engineClassName);
+        }
+
         const entry: DataPoolCacheEntry = {
             data,
             entityName: request.entityName,
@@ -612,7 +681,8 @@ export class DataPool extends BaseSingleton<DataPool> {
             loadedAt: new Date(),
             lastAccessedAt: new Date(),
             entityUpdatedAt,
-            estimatedSizeBytes: this.EstimateSize(data)
+            estimatedSizeBytes: this.EstimateSize(data),
+            engineAccesses
         };
 
         // Store in memory cache
@@ -625,6 +695,38 @@ export class DataPool extends BaseSingleton<DataPool> {
             this.SaveToLocalStorage(cacheKey, entry).catch((err: Error) => {
                 LogError(`Failed to save to local storage: ${err}`);
             });
+        }
+    }
+
+    /**
+     * Record an engine's access to a cache entry
+     */
+    private RecordEngineAccess(engineAccesses: CacheEntryEngineAccess[], engineClassName: string): void {
+        const now = new Date();
+        const existing = engineAccesses.find(ea => ea.engineClassName === engineClassName);
+        if (existing) {
+            existing.lastAccessedAt = now;
+            existing.accessCount++;
+        } else {
+            engineAccesses.push({
+                engineClassName,
+                firstAccessedAt: now,
+                lastAccessedAt: now,
+                accessCount: 1
+            });
+        }
+    }
+
+    /**
+     * Track an engine accessing a cached entry (for cache hits)
+     */
+    private TrackCacheHit(cacheKey: string, engineClassName?: string): void {
+        if (!engineClassName) return;
+
+        const entry = this._sharedCache.get(cacheKey);
+        if (entry) {
+            entry.lastAccessedAt = new Date();
+            this.RecordEngineAccess(entry.engineAccesses, engineClassName);
         }
     }
 
@@ -697,7 +799,23 @@ export class DataPool extends BaseSingleton<DataPool> {
     }
 
     /**
-     * Get detailed statistics about the cache including per-entry info
+     * Detailed entry info returned by GetDetailedCacheStats
+     */
+    public static readonly CacheEntryDetailType: {
+        key: string;
+        entityName: string;
+        filter: string | undefined;
+        itemCount: number;
+        estimatedSizeBytes: number;
+        loadedAt: Date;
+        lastAccessedAt: Date;
+        entityUpdatedAt: Date | null;
+        engineAccesses: CacheEntryEngineAccess[];
+        sharedByEngines: string[];
+    };
+
+    /**
+     * Get detailed statistics about the cache including per-entry info and engine sharing
      */
     public GetDetailedCacheStats(): {
         memoryEntries: number;
@@ -713,6 +831,8 @@ export class DataPool extends BaseSingleton<DataPool> {
             loadedAt: Date;
             lastAccessedAt: Date;
             entityUpdatedAt: Date | null;
+            engineAccesses: CacheEntryEngineAccess[];
+            sharedByEngines: string[];
         }>;
     } {
         let totalBytes = 0;
@@ -727,6 +847,8 @@ export class DataPool extends BaseSingleton<DataPool> {
             loadedAt: Date;
             lastAccessedAt: Date;
             entityUpdatedAt: Date | null;
+            engineAccesses: CacheEntryEngineAccess[];
+            sharedByEngines: string[];
         }> = [];
 
         for (const [key, entry] of this._sharedCache.entries()) {
@@ -734,6 +856,7 @@ export class DataPool extends BaseSingleton<DataPool> {
             if (!oldest || entry.loadedAt < oldest) oldest = entry.loadedAt;
             if (!newest || entry.loadedAt > newest) newest = entry.loadedAt;
 
+            const engineAccesses = entry.engineAccesses || [];
             entries.push({
                 key,
                 entityName: entry.entityName,
@@ -742,7 +865,9 @@ export class DataPool extends BaseSingleton<DataPool> {
                 estimatedSizeBytes: entry.estimatedSizeBytes,
                 loadedAt: entry.loadedAt,
                 lastAccessedAt: entry.lastAccessedAt,
-                entityUpdatedAt: entry.entityUpdatedAt
+                entityUpdatedAt: entry.entityUpdatedAt,
+                engineAccesses: engineAccesses,
+                sharedByEngines: engineAccesses.map(ea => ea.engineClassName)
             });
         }
 
@@ -777,6 +902,187 @@ export class DataPool extends BaseSingleton<DataPool> {
             // Since we mirror memory cache to local storage, count is the same
             entriesSynced: available && this._config.enableLocalCache ? this._sharedCache.size : 0
         };
+    }
+
+    /**
+     * Get cache sharing graph showing how engines share cache entries.
+     * Returns data structured for visualization (nodes and links).
+     */
+    public GetCacheSharingGraph(): {
+        engines: Array<{
+            name: string;
+            cacheEntriesUsed: number;
+            totalAccessCount: number;
+            sharedWithEngines: string[];
+        }>;
+        cacheEntries: Array<{
+            entityName: string;
+            filter: string | undefined;
+            itemCount: number;
+            usedByEngines: string[];
+            isShared: boolean;
+        }>;
+        sharingLinks: Array<{
+            engine1: string;
+            engine2: string;
+            sharedEntities: string[];
+            sharedEntryCount: number;
+        }>;
+    } {
+        // Build engine-to-entries map
+        const engineMap = new Map<string, {
+            cacheEntriesUsed: number;
+            totalAccessCount: number;
+            entries: Set<string>;
+        }>();
+
+        // Build entry info
+        const cacheEntries: Array<{
+            entityName: string;
+            filter: string | undefined;
+            itemCount: number;
+            usedByEngines: string[];
+            isShared: boolean;
+        }> = [];
+
+        for (const [_key, entry] of this._sharedCache.entries()) {
+            const engineNames = (entry.engineAccesses || []).map(ea => ea.engineClassName);
+
+            cacheEntries.push({
+                entityName: entry.entityName,
+                filter: entry.filter,
+                itemCount: Array.isArray(entry.data) ? entry.data.length : 0,
+                usedByEngines: engineNames,
+                isShared: engineNames.length > 1
+            });
+
+            // Track per-engine stats
+            for (const access of entry.engineAccesses || []) {
+                let engineStats = engineMap.get(access.engineClassName);
+                if (!engineStats) {
+                    engineStats = { cacheEntriesUsed: 0, totalAccessCount: 0, entries: new Set() };
+                    engineMap.set(access.engineClassName, engineStats);
+                }
+                engineStats.cacheEntriesUsed++;
+                engineStats.totalAccessCount += access.accessCount;
+                engineStats.entries.add(entry.entityName);
+            }
+        }
+
+        // Build engine stats with sharing info
+        const engines: Array<{
+            name: string;
+            cacheEntriesUsed: number;
+            totalAccessCount: number;
+            sharedWithEngines: string[];
+        }> = [];
+
+        for (const [engineName, stats] of engineMap.entries()) {
+            // Find other engines that share entries with this one
+            const sharedWith = new Set<string>();
+            for (const entry of this._sharedCache.values()) {
+                const engineNames = (entry.engineAccesses || []).map(ea => ea.engineClassName);
+                if (engineNames.includes(engineName)) {
+                    for (const otherEngine of engineNames) {
+                        if (otherEngine !== engineName) {
+                            sharedWith.add(otherEngine);
+                        }
+                    }
+                }
+            }
+
+            engines.push({
+                name: engineName,
+                cacheEntriesUsed: stats.cacheEntriesUsed,
+                totalAccessCount: stats.totalAccessCount,
+                sharedWithEngines: Array.from(sharedWith)
+            });
+        }
+
+        // Build sharing links between engines
+        const sharingLinks: Array<{
+            engine1: string;
+            engine2: string;
+            sharedEntities: string[];
+            sharedEntryCount: number;
+        }> = [];
+
+        const processedPairs = new Set<string>();
+        for (const engine of engines) {
+            for (const otherEngine of engine.sharedWithEngines) {
+                const pairKey = [engine.name, otherEngine].sort().join('|');
+                if (!processedPairs.has(pairKey)) {
+                    processedPairs.add(pairKey);
+
+                    // Find shared entities
+                    const sharedEntities = new Set<string>();
+                    let sharedCount = 0;
+                    for (const entry of this._sharedCache.values()) {
+                        const engineNames = (entry.engineAccesses || []).map(ea => ea.engineClassName);
+                        if (engineNames.includes(engine.name) && engineNames.includes(otherEngine)) {
+                            sharedEntities.add(entry.entityName);
+                            sharedCount++;
+                        }
+                    }
+
+                    sharingLinks.push({
+                        engine1: engine.name,
+                        engine2: otherEngine,
+                        sharedEntities: Array.from(sharedEntities),
+                        sharedEntryCount: sharedCount
+                    });
+                }
+            }
+        }
+
+        return { engines, cacheEntries, sharingLinks };
+    }
+
+    /**
+     * Get cache entries used by a specific engine
+     */
+    public GetCacheEntriesForEngine(engineClassName: string): Array<{
+        entityName: string;
+        filter: string | undefined;
+        itemCount: number;
+        sizeBytes: number;
+        firstAccessedAt: Date;
+        lastAccessedAt: Date;
+        accessCount: number;
+        sharedWith: string[];
+    }> {
+        const entries: Array<{
+            entityName: string;
+            filter: string | undefined;
+            itemCount: number;
+            sizeBytes: number;
+            firstAccessedAt: Date;
+            lastAccessedAt: Date;
+            accessCount: number;
+            sharedWith: string[];
+        }> = [];
+
+        for (const entry of this._sharedCache.values()) {
+            const access = (entry.engineAccesses || []).find(ea => ea.engineClassName === engineClassName);
+            if (access) {
+                const otherEngines = (entry.engineAccesses || [])
+                    .filter(ea => ea.engineClassName !== engineClassName)
+                    .map(ea => ea.engineClassName);
+
+                entries.push({
+                    entityName: entry.entityName,
+                    filter: entry.filter,
+                    itemCount: Array.isArray(entry.data) ? entry.data.length : 0,
+                    sizeBytes: entry.estimatedSizeBytes,
+                    firstAccessedAt: access.firstAccessedAt,
+                    lastAccessedAt: access.lastAccessedAt,
+                    accessCount: access.accessCount,
+                    sharedWith: otherEngines
+                });
+            }
+        }
+
+        return entries.sort((a, b) => a.entityName.localeCompare(b.entityName));
     }
 
     /**
@@ -920,6 +1226,13 @@ export class DataPool extends BaseSingleton<DataPool> {
     }
 
     /**
+     * Maximum size in bytes for a single local storage entry.
+     * Entries larger than this will be skipped for local storage but still cached in memory.
+     * Set to 5MB to be safe for browser localStorage limits.
+     */
+    private static readonly MAX_LOCAL_STORAGE_ENTRY_SIZE = 5 * 1024 * 1024;
+
+    /**
      * Save data to local storage
      */
     private async SaveToLocalStorage(cacheKey: string, entry: DataPoolCacheEntry): Promise<void> {
@@ -931,10 +1244,26 @@ export class DataPool extends BaseSingleton<DataPool> {
             const ls = this.LocalStorageProvider;
             if (!ls) return;
 
+            // Skip entries that are estimated to be too large to avoid RangeError
+            // Use the already-calculated estimate plus some overhead for metadata
+            const estimatedSize = entry.estimatedSizeBytes + 1000; // Add overhead for metadata
+            if (estimatedSize > DataPool.MAX_LOCAL_STORAGE_ENTRY_SIZE) {
+                // Skip this entry for local storage - it will remain in memory cache only
+                return;
+            }
+
             const storageKey = this.BuildStorageKey(cacheKey);
             const val = JSON.stringify(entry);
             await ls.SetItem(storageKey, val);
         } catch (error) {
+            // Check for quota/size errors and skip silently for those
+            const errorMessage = String(error);
+            if (errorMessage.includes('RangeError') ||
+                errorMessage.includes('QuotaExceededError') ||
+                errorMessage.includes('Invalid string length')) {
+                // Silently skip - entry is too large for local storage
+                return;
+            }
             LogError(`Local storage save error: ${error}`);
         }
     }
