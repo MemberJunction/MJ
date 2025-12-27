@@ -2,6 +2,10 @@
   <!-- Header -->
   <div class="dashboard-header">
     <div class="header-info">
+      <h2 class="dashboard-title">
+        <i class="fa-solid fa-sliders"></i>
+        AI Configuration
+      </h2>
       <button
         type="button"
         class="filter-toggle-btn"
@@ -251,9 +255,10 @@
                         <button
                           type="button"
                           class="action-btn"
-                          (click)="toggleExpanded(config)">
-                          <i class="fa-solid" [class.fa-eye]="!config.isExpanded" [class.fa-eye-slash]="config.isExpanded"></i>
-                          {{ config.isExpanded ? 'Collapse' : 'Expand' }}
+                          (click)="showConfigDetails(config, $event)"
+                          title="View Details">
+                          <i class="fa-solid fa-eye"></i>
+                          Details
                         </button>
 
                         <button
@@ -275,10 +280,38 @@
                   <table class="configurations-table">
                     <thead>
                       <tr>
-                        <th>Configuration</th>
-                        <th>Status</th>
-                        <th>Parameters</th>
-                        <th>Updated</th>
+                        <th (click)="sortBy('Name')"
+                            [class.sorted]="sortColumn === 'Name'"
+                            [class.desc]="sortColumn === 'Name' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Configuration
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Status')"
+                            [class.sorted]="sortColumn === 'Status'"
+                            [class.desc]="sortColumn === 'Status' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Status
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Parameters')"
+                            [class.sorted]="sortColumn === 'Parameters'"
+                            [class.desc]="sortColumn === 'Parameters' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Parameters
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Updated')"
+                            [class.sorted]="sortColumn === 'Updated'"
+                            [class.desc]="sortColumn === 'Updated' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Updated
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -318,10 +351,16 @@
                             <div class="table-actions">
                               <button
                                 type="button"
+                                class="action-btn-small"
+                                (click)="showConfigDetails(config)"
+                                title="View Details">
+                                <i class="fa-solid fa-eye"></i>
+                              </button>
+                              <button
+                                type="button"
                                 class="action-btn-small primary"
                                 (click)="onOpenConfiguration(config)">
                                 <i class="fa-solid fa-edit"></i>
-                                Configure
                               </button>
                             </div>
                           </td>
@@ -336,5 +375,164 @@
         </div>
       </kendo-splitter-pane>
     </kendo-splitter>
+  </div>
+
+  <!-- Detail Panel Overlay -->
+  @if (detailPanelVisible) {
+    <div class="detail-panel-overlay" (click)="closeDetailPanel()"></div>
+  }
+
+  <!-- Detail Panel -->
+  <div class="detail-panel" [class.visible]="detailPanelVisible">
+    @if (selectedConfig) {
+      <!-- Panel Header -->
+      <div class="detail-panel-header">
+        <div class="detail-panel-title">
+          <div class="detail-icon">
+            <i class="fa-solid fa-sliders"></i>
+          </div>
+          <div class="detail-title-info">
+            <h3>{{ selectedConfig.Name }}</h3>
+            <span class="detail-subtitle">AI Configuration</span>
+          </div>
+        </div>
+        <button class="detail-panel-close" (click)="closeDetailPanel()">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Panel Content -->
+      <div class="detail-panel-content">
+        <!-- Status Section -->
+        <div class="detail-section">
+          <div class="detail-badges">
+            <span class="status-badge" [ngClass]="getStatusClass(selectedConfig.Status)">
+              <i [class]="getStatusIcon(selectedConfig.Status)"></i>
+              {{ selectedConfig.Status }}
+            </span>
+            @if (selectedConfig.IsDefault) {
+              <span class="feature-badge default">
+                <i class="fa-solid fa-star"></i>
+                Default Configuration
+              </span>
+            }
+          </div>
+        </div>
+
+        <!-- Description -->
+        @if (selectedConfig.Description) {
+          <div class="detail-section">
+            <h4 class="detail-section-title">
+              <i class="fa-solid fa-align-left"></i>
+              Description
+            </h4>
+            <p class="detail-description">{{ selectedConfig.Description }}</p>
+          </div>
+        }
+
+        <!-- Configuration Stats -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-chart-bar"></i>
+            Overview
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Parameters</span>
+              <span class="detail-value">{{ selectedConfig.params?.length || 0 }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Status</span>
+              <span class="detail-value">{{ selectedConfig.Status }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linked Prompts -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-message-lines"></i>
+            Linked Prompts
+          </h4>
+          <div class="detail-grid single-column">
+            <div class="detail-item">
+              <span class="detail-label">Context Compression</span>
+              <span class="detail-value">
+                @if (selectedConfig.compressionPrompt) {
+                  {{ selectedConfig.compressionPrompt.Name }}
+                } @else {
+                  <span class="muted">Not configured</span>
+                }
+              </span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Context Summarization</span>
+              <span class="detail-value">
+                @if (selectedConfig.summarizationPrompt) {
+                  {{ selectedConfig.summarizationPrompt.Name }}
+                } @else {
+                  <span class="muted">Not configured</span>
+                }
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Parameters Preview -->
+        @if (selectedConfig.params && selectedConfig.params.length > 0) {
+          <div class="detail-section">
+            <h4 class="detail-section-title">
+              <i class="fa-solid fa-gear"></i>
+              Parameters ({{ selectedConfig.params.length }})
+            </h4>
+            <div class="detail-params-list">
+              @for (param of selectedConfig.params.slice(0, 5); track param.ID) {
+                <div class="detail-param-item">
+                  <div class="param-info">
+                    <i [class]="getParamTypeIcon(param.Type)"></i>
+                    <span class="param-name">{{ param.Name }}</span>
+                  </div>
+                  <span class="param-value">{{ formatParamValue(param) }}</span>
+                </div>
+              }
+              @if (selectedConfig.params.length > 5) {
+                <div class="params-more">
+                  +{{ selectedConfig.params.length - 5 }} more parameters
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Timestamps -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-clock"></i>
+            Timestamps
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Created</span>
+              <span class="detail-value">{{ formatDate(selectedConfig.__mj_CreatedAt) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Updated</span>
+              <span class="detail-value">{{ formatDate(selectedConfig.__mj_UpdatedAt) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel Actions -->
+      <div class="detail-panel-actions">
+        <button
+          type="button"
+          class="detail-action-btn primary"
+          (click)="openConfigFromPanel()">
+          <i class="fa-solid fa-edit"></i>
+          Open Full Record
+        </button>
+      </div>
+    }
   </div>
 </div>

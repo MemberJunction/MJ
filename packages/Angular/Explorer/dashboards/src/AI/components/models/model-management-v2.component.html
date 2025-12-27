@@ -294,10 +294,10 @@
                         <button
                           type="button"
                           class="action-btn"
-                          (click)="openModel(model.ID); $event.stopPropagation()"
-                          title="Open Model">
-                          <i class="fa-solid fa-external-link-alt"></i>
-                          Open
+                          (click)="showModelDetails(model, $event)"
+                          title="View Details">
+                          <i class="fa-solid fa-eye"></i>
+                          Details
                         </button>
                       </div>
                     </div>
@@ -394,8 +394,8 @@
                             </span>
                           </td>
                           <td>
-                            <button class="action-button small" (click)="openModel(model.ID)">
-                              <i class="fa-solid fa-edit"></i>
+                            <button class="action-button small" (click)="showModelDetails(model)" title="View Details">
+                              <i class="fa-solid fa-eye"></i>
                             </button>
                           </td>
                         </tr>
@@ -409,5 +409,173 @@
         </div>
       </kendo-splitter-pane>
     </kendo-splitter>
+
+    <!-- Detail Panel Overlay -->
+    @if (detailPanelVisible) {
+      <div class="detail-panel-overlay" (click)="closeDetailPanel()"></div>
+    }
+
+    <!-- Detail Panel -->
+    <div class="detail-panel" [class.visible]="detailPanelVisible">
+      @if (selectedModel) {
+        <!-- Panel Header -->
+        <div class="detail-panel-header">
+          <div class="detail-panel-title">
+            <div class="detail-icon">
+              <i [class]="getModelIcon(selectedModel)"></i>
+            </div>
+            <div class="detail-title-info">
+              <h3>{{ selectedModel.Name }}</h3>
+              <span class="detail-subtitle">{{ selectedModel.Vendor || 'AI Model' }}</span>
+            </div>
+          </div>
+          <button class="detail-panel-close" (click)="closeDetailPanel()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+
+        <!-- Panel Content -->
+        <div class="detail-panel-content">
+          <!-- Status Section -->
+          <div class="detail-section">
+            <div class="detail-badges">
+              @if (selectedModel.IsActive) {
+                <span class="status-badge status-active">
+                  <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+                  Active
+                </span>
+              } @else {
+                <span class="status-badge status-inactive">
+                  <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+                  Inactive
+                </span>
+              }
+              @if (selectedModel.AIModelType) {
+                <span class="feature-badge">
+                  <i class="fa-solid fa-microchip"></i>
+                  {{ selectedModel.AIModelType }}
+                </span>
+              }
+            </div>
+          </div>
+
+          <!-- Description -->
+          @if (selectedModel.Description) {
+            <div class="detail-section">
+              <h4 class="detail-section-title">
+                <i class="fa-solid fa-align-left"></i>
+                Description
+              </h4>
+              <p class="detail-description">{{ selectedModel.Description }}</p>
+            </div>
+          }
+
+          <!-- Ranking Details -->
+          <div class="detail-section">
+            <h4 class="detail-section-title">
+              <i class="fa-solid fa-chart-bar"></i>
+              Rankings
+            </h4>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="detail-label">Power Rank</span>
+                <span class="detail-value rank-badge" [class]="getRankClass(selectedModel.PowerRank, 'power')">
+                  {{ formatRank(selectedModel.PowerRank, 'power') }}
+                </span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Speed Rank</span>
+                <span class="detail-value rank-badge" [class]="getRankClass(selectedModel.SpeedRank, 'speed')">
+                  {{ formatRank(selectedModel.SpeedRank, 'speed') }}
+                </span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Cost Rank</span>
+                <span class="detail-value rank-badge" [class]="getRankClass(selectedModel.CostRank, 'cost')">
+                  {{ formatRank(selectedModel.CostRank, 'cost') }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Configuration Details -->
+          <div class="detail-section">
+            <h4 class="detail-section-title">
+              <i class="fa-solid fa-cog"></i>
+              Configuration
+            </h4>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="detail-label">Vendor</span>
+                <span class="detail-value">{{ selectedModel.Vendor || 'Unknown' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Model Type</span>
+                <span class="detail-value">{{ selectedModel.AIModelType || 'Unknown' }}</span>
+              </div>
+              @if (selectedModel.APIName) {
+                <div class="detail-item">
+                  <span class="detail-label">API Name</span>
+                  <span class="detail-value">{{ selectedModel.APIName }}</span>
+                </div>
+              }
+              @if (selectedModel.InputTokenLimit) {
+                <div class="detail-item">
+                  <span class="detail-label">Input Token Limit</span>
+                  <span class="detail-value">{{ formatTokenLimit(selectedModel.InputTokenLimit) }}</span>
+                </div>
+              }
+              @if (selectedModel.SupportedResponseFormats) {
+                <div class="detail-item">
+                  <span class="detail-label">Response Formats</span>
+                  <span class="detail-value">{{ selectedModel.SupportedResponseFormats }}</span>
+                </div>
+              }
+              @if (selectedModel.SupportsEffortLevel) {
+                <div class="detail-item">
+                  <span class="detail-label">Supports Effort Level</span>
+                  <span class="detail-value">Yes</span>
+                </div>
+              }
+              @if (selectedModel.DriverClass) {
+                <div class="detail-item">
+                  <span class="detail-label">Driver Class</span>
+                  <span class="detail-value">{{ selectedModel.DriverClass }}</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Timestamps -->
+          <div class="detail-section">
+            <h4 class="detail-section-title">
+              <i class="fa-solid fa-clock"></i>
+              Timestamps
+            </h4>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="detail-label">Created</span>
+                <span class="detail-value">{{ selectedModel.__mj_CreatedAt | date:'medium' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Updated</span>
+                <span class="detail-value">{{ selectedModel.__mj_UpdatedAt | date:'medium' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Actions -->
+        <div class="detail-panel-actions">
+          <button
+            type="button"
+            class="detail-action-btn primary"
+            (click)="openModelFromPanel()">
+            <i class="fa-solid fa-external-link-alt"></i>
+            Open Full Record
+          </button>
+        </div>
+      }
+    </div>
   }
 </div>

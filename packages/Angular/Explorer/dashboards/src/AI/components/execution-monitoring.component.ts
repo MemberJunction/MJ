@@ -598,11 +598,13 @@ export function LoadAIMonitorResource() {
   styles: [`
     .execution-monitoring {
       padding: 0;
-      background: linear-gradient(180deg, #f0f1ff 0%, #f8f9fa 100%);
+      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
       width: 100%;
       height: 100%;
       position: relative;
       overflow: auto;
+      display: flex;
+      flex-direction: column;
     }
 
     .execution-monitoring.loading {
@@ -628,7 +630,6 @@ export function LoadAIMonitorResource() {
     .monitoring-header {
       background: white;
       padding: 16px 24px;
-      margin-bottom: 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -744,20 +745,18 @@ export function LoadAIMonitorResource() {
     }
 
     .kpi-dashboard {
-      margin-bottom: 20px;
-      padding: 0 20px;
+      padding: 20px;
     }
 
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px;
     }
 
     .dashboard-splitter {
-      height: calc(100vh - 550px);
-      min-height: 600px;
-      margin-bottom: 20px;
+      flex: 1;
+      min-height: 500px;
       margin: 0 20px 20px 20px;
     }
 
@@ -1679,8 +1678,7 @@ export function LoadAIMonitorResource() {
     /* Responsive Design */
     @media (max-width: 1200px) {
       .dashboard-splitter {
-        height: calc(100vh - 270px); /* Consistent with main height */
-        margin-bottom: 20px;
+        min-height: 400px;
       }
       
       .table-header,
@@ -1718,9 +1716,7 @@ export function LoadAIMonitorResource() {
       }
       
       .dashboard-splitter {
-        height: calc(100vh - 270px); /* Consistent with main height */
-        min-height: 400px;
-        margin-bottom: 20px;
+        min-height: 350px;
       }
       
       .kpi-grid {

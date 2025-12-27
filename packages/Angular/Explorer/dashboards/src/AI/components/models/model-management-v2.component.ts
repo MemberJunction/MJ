@@ -57,6 +57,10 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
   public speedRankRange = { min: 0, max: 10 };
   public costRankRange = { min: 0, max: 10 };
 
+  // Detail panel
+  public selectedModel: ModelDisplayData | null = null;
+  public detailPanelVisible = false;
+
   // Sorting
   public sortBy = 'name';
   public sortDirection: 'asc' | 'desc' = 'asc';
@@ -383,6 +387,39 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
   public openModel(modelId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: modelId }]);
     this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+  }
+
+  /**
+   * Show the detail panel for a model
+   */
+  public showModelDetails(model: AIModelEntityExtended, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedModel = model as ModelDisplayData;
+    this.detailPanelVisible = true;
+  }
+
+  /**
+   * Close the detail panel
+   */
+  public closeDetailPanel(): void {
+    this.detailPanelVisible = false;
+    // Delay clearing selectedModel for smoother animation
+    setTimeout(() => {
+      if (!this.detailPanelVisible) {
+        this.selectedModel = null;
+      }
+    }, 300);
+  }
+
+  /**
+   * Open the full entity record from the detail panel
+   */
+  public openModelFromPanel(): void {
+    if (this.selectedModel) {
+      this.openModel(this.selectedModel.ID);
+    }
   }
 
   public async createNewModel(): Promise<void> {

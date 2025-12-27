@@ -41,6 +41,10 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   public agents: AIAgentEntityExtended[] = [];
   public filteredAgents: AIAgentEntityExtended[] = [];
 
+  // Detail panel
+  public selectedAgent: AIAgentEntityExtended | null = null;
+  public detailPanelVisible = false;
+
   // Sorting state
   public sortColumn: string = 'Name';
   public sortDirection: 'asc' | 'desc' = 'asc';
@@ -339,6 +343,55 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   public toggleAgentExpansion(agentId: string): void {
     this.expandedAgentId = this.expandedAgentId === agentId ? null : agentId;
+  }
+
+  /**
+   * Show the detail panel for an agent
+   */
+  public showAgentDetails(agent: AIAgentEntityExtended, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedAgent = agent;
+    this.detailPanelVisible = true;
+  }
+
+  /**
+   * Close the detail panel
+   */
+  public closeDetailPanel(): void {
+    this.detailPanelVisible = false;
+    // Delay clearing selectedAgent for smoother animation
+    setTimeout(() => {
+      if (!this.detailPanelVisible) {
+        this.selectedAgent = null;
+      }
+    }, 300);
+  }
+
+  /**
+   * Open the full entity record from the detail panel
+   */
+  public openAgentFromPanel(): void {
+    if (this.selectedAgent) {
+      this.openAgentRecord(this.selectedAgent.ID);
+    }
+  }
+
+  /**
+   * Get the parent agent name if it exists
+   */
+  public getParentAgentName(agent: AIAgentEntityExtended): string | null {
+    if (!agent.ParentID) return null;
+    const parent = this.agents.find(a => a.ID === agent.ParentID);
+    return parent?.Name || 'Unknown Parent';
+  }
+
+  /**
+   * Get agent type name
+   */
+  public getAgentTypeName(agent: AIAgentEntityExtended): string {
+    return agent.Type || 'Standard Agent';
   }
 
   public openAgentRecord(agentId: string): void {

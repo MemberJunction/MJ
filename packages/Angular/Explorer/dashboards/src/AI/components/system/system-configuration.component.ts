@@ -53,6 +53,14 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
     isDefault: 'all'
   };
 
+  // Sorting
+  public sortColumn: string = 'Name';
+  public sortDirection: 'asc' | 'desc' = 'asc';
+
+  // Detail panel
+  public selectedConfig: ConfigurationWithParams | null = null;
+  public detailPanelVisible = false;
+
   // Stats
   public totalConfigs = 0;
   public activeConfigs = 0;
@@ -175,8 +183,69 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
       filtered = filtered.filter(config => config.IsDefault === isDefault);
     }
 
-    this.filteredConfigurations = filtered;
+    // Apply sorting
+    this.filteredConfigurations = this.applySorting(filtered);
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Sort the configurations by the specified column
+   */
+  public sortBy(column: string): void {
+    if (this.sortColumn === column) {
+      // Toggle direction if same column
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column, default to ascending
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.applyFilters();
+  }
+
+  /**
+   * Apply sorting to the filtered list
+   */
+  private applySorting(configs: ConfigurationWithParams[]): ConfigurationWithParams[] {
+    return configs.sort((a, b) => {
+      let valueA: string | number | boolean | null | undefined;
+      let valueB: string | number | boolean | null | undefined;
+
+      switch (this.sortColumn) {
+        case 'Name':
+          valueA = a.Name;
+          valueB = b.Name;
+          break;
+        case 'Status':
+          valueA = a.Status;
+          valueB = b.Status;
+          break;
+        case 'Parameters':
+          valueA = a.params?.length || 0;
+          valueB = b.params?.length || 0;
+          break;
+        case 'Updated':
+          valueA = a.__mj_UpdatedAt ? new Date(a.__mj_UpdatedAt).getTime() : 0;
+          valueB = b.__mj_UpdatedAt ? new Date(b.__mj_UpdatedAt).getTime() : 0;
+          break;
+        default:
+          valueA = a.Name;
+          valueB = b.Name;
+      }
+
+      // Handle numeric comparison
+      if (typeof valueA === 'number' && typeof valueB === 'number') {
+        const comparison = valueA - valueB;
+        return this.sortDirection === 'desc' ? -comparison : comparison;
+      }
+
+      // Handle string/other comparison
+      const strA = (valueA ?? '').toString().toLowerCase();
+      const strB = (valueB ?? '').toString().toLowerCase();
+
+      const comparison = strA.localeCompare(strB);
+      return this.sortDirection === 'desc' ? -comparison : comparison;
+    });
   }
 
   public onOpenConfiguration(config: ConfigurationWithParams): void {
@@ -192,6 +261,39 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
   public onOpenParam(param: AIConfigurationParamEntity): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: param.ID }]);
     this.navigationService.OpenEntityRecord('MJ: AI Configuration Params', compositeKey);
+  }
+
+  /**
+   * Show the detail panel for a configuration
+   */
+  public showConfigDetails(config: ConfigurationWithParams, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedConfig = config;
+    this.detailPanelVisible = true;
+  }
+
+  /**
+   * Close the detail panel
+   */
+  public closeDetailPanel(): void {
+    this.detailPanelVisible = false;
+    // Delay clearing selectedConfig for smoother animation
+    setTimeout(() => {
+      if (!this.detailPanelVisible) {
+        this.selectedConfig = null;
+      }
+    }, 300);
+  }
+
+  /**
+   * Open the full entity record from the detail panel
+   */
+  public openConfigFromPanel(): void {
+    if (this.selectedConfig) {
+      this.onOpenConfiguration(this.selectedConfig);
+    }
   }
 
   public getStatusClass(status: string): string {

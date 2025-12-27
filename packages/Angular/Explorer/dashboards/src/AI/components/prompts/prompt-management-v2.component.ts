@@ -55,6 +55,10 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
   public selectedType = 'all';
   public selectedStatus = 'all';
 
+  // Detail panel
+  public selectedPrompt: PromptWithTemplate | null = null;
+  public detailPanelVisible = false;
+
   // Sorting
   public sortColumn: string = 'Name';
   public sortDirection: 'asc' | 'desc' = 'asc';
@@ -404,6 +408,39 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
   public openPrompt(promptId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: promptId }]);
     this.navigationService.OpenEntityRecord('AI Prompts', compositeKey);
+  }
+
+  /**
+   * Show the detail panel for a prompt
+   */
+  public showPromptDetails(prompt: PromptWithTemplate, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedPrompt = prompt;
+    this.detailPanelVisible = true;
+  }
+
+  /**
+   * Close the detail panel
+   */
+  public closeDetailPanel(): void {
+    this.detailPanelVisible = false;
+    // Delay clearing selectedPrompt for smoother animation
+    setTimeout(() => {
+      if (!this.detailPanelVisible) {
+        this.selectedPrompt = null;
+      }
+    }, 300);
+  }
+
+  /**
+   * Open the full entity record from the detail panel
+   */
+  public openPromptFromPanel(): void {
+    if (this.selectedPrompt) {
+      this.openPrompt(this.selectedPrompt.ID);
+    }
   }
 
   public testPrompt(promptId: string, event?: Event): void {
