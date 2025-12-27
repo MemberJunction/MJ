@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { BaseEngineRegistry, DataPool, EngineMemoryStats } from '@memberjunction/core';
+import { BaseEngineRegistry, EngineMemoryStats } from '@memberjunction/core';
 
 /**
  * Interface representing a single engine's diagnostic info for display
@@ -20,70 +20,11 @@ export interface EngineDiagnosticInfo {
 }
 
 /**
- * Interface for DataPool cache statistics
+ * Interface for redundant entity loading info
  */
-export interface DataPoolStats {
-    memoryEntries: number;
-    totalEstimatedBytes: number;
-    totalDisplay: string;
-    oldestEntry: Date | null;
-    newestEntry: Date | null;
-    config: {
-        enablePooling: boolean;
-        poolingWindowMs: number;
-        poolingMaxExtensionMs: number;
-        enableLocalCache: boolean;
-        enableCrossEngineSharing: boolean;
-    };
-    entries: CacheEntryInfo[];
-    localStorage: {
-        available: boolean;
-        enabled: boolean;
-        providerType: string | null;
-        entriesSynced: number;
-    };
-}
-
-/**
- * Interface for individual cache entry info
- */
-export interface CacheEntryInfo {
-    key: string;
+export interface RedundantLoadInfo {
     entityName: string;
-    filter: string | undefined;
-    itemCount: number;
-    estimatedSizeBytes: number;
-    sizeDisplay: string;
-    loadedAt: Date;
-    lastAccessedAt: Date;
-    entityUpdatedAt: Date | null;
-    sharedByEngines: string[];
-    isShared: boolean;
-}
-
-/**
- * Interface for cache sharing graph visualization
- */
-export interface CacheSharingGraph {
-    engines: Array<{
-        name: string;
-        cacheEntriesUsed: number;
-        totalAccessCount: number;
-        sharedWithEngines: string[];
-    }>;
-    cacheEntries: Array<{
-        entityName: string;
-        filter: string | undefined;
-        itemCount: number;
-        usedByEngines: string[];
-        isShared: boolean;
-    }>;
-    sharingLinks: Array<{
-        engine1: string;
-        engine2: string;
-        sharedEntities: string[];
-        sharedEntryCount: number;
-    }>;
+    engines: string[];
 }
 
 /**
@@ -98,8 +39,7 @@ export function LoadSystemDiagnosticsResource() {
  *
  * Provides a comprehensive view of:
  * - All registered BaseEngine instances and their memory usage
- * - DataPool cache statistics and configuration
- * - System health overview
+ * - Entity load tracking across engines (identifies redundant loading)
  *
  * This is a client-side only dashboard - all data comes from in-memory registries.
  */
@@ -160,28 +100,17 @@ export function LoadSystemDiagnosticsResource() {
                 </div>
 
                 <div class="overview-card">
-                    <div class="card-icon card-icon--cache">
-                        <i class="fa-solid fa-database"></i>
+                    <div class="card-icon" [class.card-icon--warning]="redundantLoads.length > 0" [class.card-icon--success]="redundantLoads.length === 0">
+                        <i class="fa-solid fa-copy"></i>
                     </div>
                     <div class="card-content">
-                        <div class="card-value">{{ dataPoolStats?.memoryEntries || 0 }}</div>
-                        <div class="card-label">Cache Entries</div>
-                        <div class="card-subtitle">{{ dataPoolStats?.totalDisplay || '0 B' }}</div>
-                    </div>
-                </div>
-
-                <div class="overview-card">
-                    <div class="card-icon card-icon--pooling">
-                        <i class="fa-solid fa-layer-group"></i>
-                    </div>
-                    <div class="card-content">
-                        <div class="card-value">{{ dataPoolStats?.config?.enablePooling ? 'Active' : 'Disabled' }}</div>
-                        <div class="card-label">Request Pooling</div>
+                        <div class="card-value">{{ redundantLoads.length }}</div>
+                        <div class="card-label">Redundant Loads</div>
                         <div class="card-subtitle">
-                            @if (dataPoolStats?.config?.enablePooling) {
-                                {{ dataPoolStats?.config?.poolingWindowMs }}ms window
+                            @if (redundantLoads.length === 0) {
+                                No redundant loading detected
                             } @else {
-                                Not configured
+                                {{ redundantLoads.length }} entities loaded by multiple engines
                             }
                         </div>
                     </div>
@@ -205,31 +134,16 @@ export function LoadSystemDiagnosticsResource() {
                         </div>
                         <div
                             class="nav-item"
-                            [class.active]="activeSection === 'datapool'"
-                            (click)="setActiveSection('datapool')"
+                            [class.active]="activeSection === 'redundant'"
+                            (click)="setActiveSection('redundant')"
                         >
-                            <i class="fa-solid fa-database"></i>
-                            <span>DataPool Cache</span>
-                            <span class="nav-badge">{{ dataPoolStats?.memoryEntries || 0 }}</span>
-                        </div>
-                        <div
-                            class="nav-item"
-                            [class.active]="activeSection === 'sharing'"
-                            (click)="setActiveSection('sharing')"
-                        >
-                            <i class="fa-solid fa-share-nodes"></i>
-                            <span>Cache Sharing</span>
-                            @if (cacheSharingGraph?.sharingLinks?.length) {
-                                <span class="nav-badge nav-badge--success">{{ cacheSharingGraph?.sharingLinks?.length }}</span>
+                            <i class="fa-solid fa-copy"></i>
+                            <span>Redundant Loading</span>
+                            @if (redundantLoads.length > 0) {
+                                <span class="nav-badge nav-badge--warning">{{ redundantLoads.length }}</span>
+                            } @else {
+                                <span class="nav-badge nav-badge--success">0</span>
                             }
-                        </div>
-                        <div
-                            class="nav-item"
-                            [class.active]="activeSection === 'config'"
-                            (click)="setActiveSection('config')"
-                        >
-                            <i class="fa-solid fa-sliders-h"></i>
-                            <span>Configuration</span>
                         </div>
                     </div>
                 </div>
@@ -296,449 +210,73 @@ export function LoadSystemDiagnosticsResource() {
                         </div>
                     }
 
-                    <!-- DataPool Cache Section -->
-                    @if (activeSection === 'datapool') {
+                    <!-- Redundant Loading Section -->
+                    @if (activeSection === 'redundant') {
                         <div class="section-panel">
                             <div class="panel-header">
                                 <h3>
-                                    <i class="fa-solid fa-database"></i>
-                                    DataPool Cache
+                                    <i class="fa-solid fa-copy"></i>
+                                    Redundant Entity Loading
                                 </h3>
-                                <div class="panel-actions">
-                                    <button class="action-btn action-btn--warning" (click)="invalidateAllCache()">
-                                        <i class="fa-solid fa-trash-alt"></i>
-                                        Clear All Cache
-                                    </button>
-                                </div>
                             </div>
 
                             <div class="section-panel-content">
-                            <div class="cache-overview">
-                                <div class="cache-stat-row">
-                                    <div class="cache-stat">
-                                        <div class="cache-stat-icon">
-                                            <i class="fa-solid fa-cubes"></i>
-                                        </div>
-                                        <div class="cache-stat-content">
-                                            <div class="cache-stat-value">{{ dataPoolStats?.memoryEntries || 0 }}</div>
-                                            <div class="cache-stat-label">Cached Entries</div>
-                                        </div>
-                                    </div>
-                                    <div class="cache-stat">
-                                        <div class="cache-stat-icon">
-                                            <i class="fa-solid fa-hdd"></i>
-                                        </div>
-                                        <div class="cache-stat-content">
-                                            <div class="cache-stat-value">{{ dataPoolStats?.totalDisplay || '0 B' }}</div>
-                                            <div class="cache-stat-label">Total Size</div>
-                                        </div>
-                                    </div>
-                                    @if (dataPoolStats?.oldestEntry) {
-                                        <div class="cache-stat">
-                                            <div class="cache-stat-icon">
-                                                <i class="fa-solid fa-hourglass-start"></i>
-                                            </div>
-                                            <div class="cache-stat-content">
-                                                <div class="cache-stat-value">{{ formatTimeNullable(dataPoolStats!.oldestEntry) }}</div>
-                                                <div class="cache-stat-label">Oldest Entry</div>
-                                            </div>
-                                        </div>
-                                    }
-                                    @if (dataPoolStats?.newestEntry) {
-                                        <div class="cache-stat">
-                                            <div class="cache-stat-icon">
-                                                <i class="fa-solid fa-hourglass-end"></i>
-                                            </div>
-                                            <div class="cache-stat-content">
-                                                <div class="cache-stat-value">{{ formatTimeNullable(dataPoolStats!.newestEntry) }}</div>
-                                                <div class="cache-stat-label">Newest Entry</div>
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-
-                            <div class="feature-grid">
-                                <div class="feature-card" [class.feature-enabled]="dataPoolStats?.config?.enableCrossEngineSharing">
-                                    <div class="feature-icon">
-                                        <i class="fa-solid fa-share-alt"></i>
-                                    </div>
-                                    <div class="feature-content">
-                                        <div class="feature-name">Cross-Engine Sharing</div>
-                                        <div class="feature-status">
-                                            {{ dataPoolStats?.config?.enableCrossEngineSharing ? 'Enabled' : 'Disabled' }}
-                                        </div>
-                                        <div class="feature-description">
-                                            Allows engines to share cached data
-                                        </div>
+                                <div class="info-banner">
+                                    <i class="fa-solid fa-info-circle"></i>
+                                    <div>
+                                        <strong>What is this?</strong>
+                                        This section shows entities that are loaded by multiple engines.
+                                        Redundant loading indicates potential optimization opportunities where engines
+                                        could share data or consolidate their loading logic.
                                     </div>
                                 </div>
 
-                                <div class="feature-card" [class.feature-enabled]="dataPoolStats?.config?.enableLocalCache">
-                                    <div class="feature-icon">
-                                        <i class="fa-solid fa-save"></i>
+                                @if (redundantLoads.length === 0) {
+                                    <div class="empty-state success-state">
+                                        <i class="fa-solid fa-check-circle"></i>
+                                        <p>No redundant entity loading detected</p>
+                                        <span class="empty-hint">Each entity is being loaded by only one engine</span>
                                     </div>
-                                    <div class="feature-content">
-                                        <div class="feature-name">Local Cache</div>
-                                        <div class="feature-status">
-                                            {{ dataPoolStats?.config?.enableLocalCache ? 'Enabled' : 'Disabled' }}
-                                        </div>
-                                        <div class="feature-description">
-                                            Persists cache to browser storage
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Local Storage Status -->
-                            <div class="storage-status-section">
-                                <h4>
-                                    <i class="fa-solid fa-hard-drive"></i>
-                                    Local Storage Status
-                                </h4>
-                                <div class="storage-status-grid">
-                                    <div class="storage-status-item">
-                                        <span class="status-label">Provider Available:</span>
-                                        <span class="status-value" [class.status-yes]="dataPoolStats?.localStorage?.available" [class.status-no]="!dataPoolStats?.localStorage?.available">
-                                            {{ dataPoolStats?.localStorage?.available ? 'Yes' : 'No' }}
-                                        </span>
-                                    </div>
-                                    <div class="storage-status-item">
-                                        <span class="status-label">Caching Enabled:</span>
-                                        <span class="status-value" [class.status-yes]="dataPoolStats?.localStorage?.enabled" [class.status-no]="!dataPoolStats?.localStorage?.enabled">
-                                            {{ dataPoolStats?.localStorage?.enabled ? 'Yes' : 'No' }}
-                                        </span>
-                                    </div>
-                                    @if (dataPoolStats?.localStorage?.providerType) {
-                                        <div class="storage-status-item">
-                                            <span class="status-label">Provider Type:</span>
-                                            <span class="status-value">{{ dataPoolStats?.localStorage?.providerType }}</span>
-                                        </div>
-                                    }
-                                    <div class="storage-status-item">
-                                        <span class="status-label">Entries Synced:</span>
-                                        <span class="status-value">{{ dataPoolStats?.localStorage?.entriesSynced || 0 }}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Cache Entries Table -->
-                            @if (dataPoolStats && dataPoolStats.entries && dataPoolStats.entries.length > 0) {
-                                <div class="cache-entries-section">
-                                    <h4>
-                                        <i class="fa-solid fa-list"></i>
-                                        Cached Entries ({{ dataPoolStats.entries.length }})
-                                    </h4>
-                                    <div class="cache-entries-table-wrapper">
-                                        <table class="cache-entries-table">
+                                } @else {
+                                    <div class="redundant-loads-table-wrapper">
+                                        <table class="redundant-loads-table">
                                             <thead>
                                                 <tr>
-                                                    <th>Entity</th>
-                                                    <th>Filter</th>
-                                                    <th class="text-right">Items</th>
-                                                    <th class="text-right">Size</th>
-                                                    <th>Loaded</th>
-                                                    <th>Last Accessed</th>
+                                                    <th>Entity Name</th>
+                                                    <th>Loaded By Engines</th>
+                                                    <th class="text-right">Engine Count</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @for (entry of dataPoolStats!.entries; track entry.key) {
+                                                @for (load of redundantLoads; track load.entityName) {
                                                     <tr>
-                                                        <td class="entity-name">{{ entry.entityName }}</td>
-                                                        <td class="filter-cell">
-                                                            @if (entry.filter) {
-                                                                <code class="filter-text">{{ entry.filter }}</code>
-                                                            } @else {
-                                                                <span class="no-filter">All records</span>
-                                                            }
+                                                        <td class="entity-name">{{ load.entityName }}</td>
+                                                        <td class="engines-cell">
+                                                            <div class="engine-chips">
+                                                                @for (engine of load.engines; track engine) {
+                                                                    <span class="engine-chip">{{ engine }}</span>
+                                                                }
+                                                            </div>
                                                         </td>
-                                                        <td class="text-right">{{ entry.itemCount.toLocaleString() }}</td>
-                                                        <td class="text-right">{{ entry.sizeDisplay }}</td>
-                                                        <td>{{ formatTime(entry.loadedAt) }}</td>
-                                                        <td>{{ formatTime(entry.lastAccessedAt) }}</td>
+                                                        <td class="text-right count-cell">
+                                                            <span class="count-badge">{{ load.engines.length }}</span>
+                                                        </td>
                                                     </tr>
                                                 }
                                             </tbody>
                                         </table>
                                     </div>
-                                </div>
-                            } @else {
-                                <div class="cache-entries-section">
-                                    <h4>
-                                        <i class="fa-solid fa-list"></i>
-                                        Cached Entries
-                                    </h4>
-                                    <div class="empty-entries">
-                                        <i class="fa-solid fa-inbox"></i>
-                                        <p>No entries in cache</p>
-                                    </div>
-                                </div>
-                            }
-                            </div>
-                        </div>
-                    }
 
-                    <!-- Cache Sharing Section -->
-                    @if (activeSection === 'sharing') {
-                        <div class="section-panel">
-                            <div class="panel-header">
-                                <h3>
-                                    <i class="fa-solid fa-share-nodes"></i>
-                                    Cache Sharing Analysis
-                                </h3>
-                            </div>
-
-                            <div class="section-panel-content">
-                                @if (!cacheSharingGraph || cacheSharingGraph.engines.length === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-network-wired"></i>
-                                        <p>No cache sharing data available yet</p>
-                                        <span class="empty-hint">Cache sharing data appears when engines load data via DataPool</span>
-                                    </div>
-                                } @else {
-                                    <!-- Sharing Overview -->
-                                    <div class="sharing-overview">
-                                        <div class="sharing-stat-row">
-                                            <div class="sharing-stat">
-                                                <div class="sharing-stat-icon">
-                                                    <i class="fa-solid fa-cogs"></i>
-                                                </div>
-                                                <div class="sharing-stat-content">
-                                                    <div class="sharing-stat-value">{{ cacheSharingGraph.engines.length }}</div>
-                                                    <div class="sharing-stat-label">Engines Using Cache</div>
-                                                </div>
-                                            </div>
-                                            <div class="sharing-stat">
-                                                <div class="sharing-stat-icon sharing-stat-icon--shared">
-                                                    <i class="fa-solid fa-share-alt"></i>
-                                                </div>
-                                                <div class="sharing-stat-content">
-                                                    <div class="sharing-stat-value">{{ cacheSharingGraph.sharingLinks.length }}</div>
-                                                    <div class="sharing-stat-label">Sharing Connections</div>
-                                                </div>
-                                            </div>
-                                            <div class="sharing-stat">
-                                                <div class="sharing-stat-icon sharing-stat-icon--entries">
-                                                    <i class="fa-solid fa-database"></i>
-                                                </div>
-                                                <div class="sharing-stat-content">
-                                                    <div class="sharing-stat-value">{{ getSharedEntryCount() }}</div>
-                                                    <div class="sharing-stat-label">Shared Cache Entries</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Engine Cards -->
-                                    <div class="sharing-engines-section">
-                                        <h4>
-                                            <i class="fa-solid fa-cogs"></i>
-                                            Engines &amp; Their Cache Usage
-                                        </h4>
-                                        <div class="engine-sharing-grid">
-                                            @for (engine of cacheSharingGraph.engines; track engine.name) {
-                                                <div class="engine-sharing-card" [class.has-sharing]="engine.sharedWithEngines.length > 0">
-                                                    <div class="engine-sharing-header">
-                                                        <div class="engine-sharing-name">{{ engine.name }}</div>
-                                                        @if (engine.sharedWithEngines.length > 0) {
-                                                            <span class="sharing-badge">
-                                                                <i class="fa-solid fa-share-alt"></i>
-                                                                Shares with {{ engine.sharedWithEngines.length }}
-                                                            </span>
-                                                        }
-                                                    </div>
-                                                    <div class="engine-sharing-stats">
-                                                        <div class="engine-sharing-stat">
-                                                            <span class="stat-label">Cache Entries:</span>
-                                                            <span class="stat-value">{{ engine.cacheEntriesUsed }}</span>
-                                                        </div>
-                                                        <div class="engine-sharing-stat">
-                                                            <span class="stat-label">Total Accesses:</span>
-                                                            <span class="stat-value">{{ engine.totalAccessCount }}</span>
-                                                        </div>
-                                                    </div>
-                                                    @if (engine.sharedWithEngines.length > 0) {
-                                                        <div class="shared-with-list">
-                                                            <span class="shared-with-label">Shares data with:</span>
-                                                            <div class="shared-with-chips">
-                                                                @for (other of engine.sharedWithEngines; track other) {
-                                                                    <span class="shared-with-chip">{{ other }}</span>
-                                                                }
-                                                            </div>
-                                                        </div>
-                                                    }
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-
-                                    <!-- Sharing Links -->
-                                    @if (cacheSharingGraph.sharingLinks.length > 0) {
-                                        <div class="sharing-links-section">
-                                            <h4>
-                                                <i class="fa-solid fa-link"></i>
-                                                Sharing Connections
-                                            </h4>
-                                            <div class="sharing-links-table-wrapper">
-                                                <table class="sharing-links-table">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Engine 1</th>
-                                                            <th></th>
-                                                            <th>Engine 2</th>
-                                                            <th class="text-right">Shared Entries</th>
-                                                            <th>Shared Entities</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @for (link of cacheSharingGraph.sharingLinks; track link.engine1 + link.engine2) {
-                                                            <tr>
-                                                                <td class="engine-name">{{ link.engine1 }}</td>
-                                                                <td class="link-arrow">
-                                                                    <i class="fa-solid fa-arrows-left-right"></i>
-                                                                </td>
-                                                                <td class="engine-name">{{ link.engine2 }}</td>
-                                                                <td class="text-right">{{ link.sharedEntryCount }}</td>
-                                                                <td class="shared-entities-cell">
-                                                                    <div class="shared-entities-chips">
-                                                                        @for (entity of link.sharedEntities.slice(0, 3); track entity) {
-                                                                            <span class="entity-chip">{{ entity }}</span>
-                                                                        }
-                                                                        @if (link.sharedEntities.length > 3) {
-                                                                            <span class="entity-chip entity-chip--more">+{{ link.sharedEntities.length - 3 }} more</span>
-                                                                        }
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    }
-
-                                    <!-- Shared Cache Entries -->
-                                    @if (getSharedEntries().length > 0) {
-                                        <div class="shared-entries-section">
-                                            <h4>
-                                                <i class="fa-solid fa-clone"></i>
-                                                Shared Cache Entries ({{ getSharedEntries().length }})
-                                            </h4>
-                                            <div class="shared-entries-table-wrapper">
-                                                <table class="shared-entries-table">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Entity</th>
-                                                            <th>Filter</th>
-                                                            <th class="text-right">Items</th>
-                                                            <th>Used By Engines</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @for (entry of getSharedEntries(); track entry.entityName + (entry.filter || '')) {
-                                                            <tr>
-                                                                <td class="entity-name">{{ entry.entityName }}</td>
-                                                                <td class="filter-cell">
-                                                                    @if (entry.filter) {
-                                                                        <code class="filter-text">{{ entry.filter }}</code>
-                                                                    } @else {
-                                                                        <span class="no-filter">All records</span>
-                                                                    }
-                                                                </td>
-                                                                <td class="text-right">{{ entry.itemCount.toLocaleString() }}</td>
-                                                                <td class="engines-cell">
-                                                                    <div class="engine-chips">
-                                                                        @for (eng of entry.usedByEngines; track eng) {
-                                                                            <span class="engine-chip">{{ eng }}</span>
-                                                                        }
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    }
-                                }
-                            </div>
-                        </div>
-                    }
-
-                    <!-- Configuration Section -->
-                    @if (activeSection === 'config') {
-                        <div class="section-panel">
-                            <div class="panel-header">
-                                <h3>
-                                    <i class="fa-solid fa-sliders-h"></i>
-                                    DataPool Configuration
-                                </h3>
-                            </div>
-
-                            <div class="section-panel-content">
-                            <div class="config-grid">
-                                <div class="config-item">
-                                    <div class="config-label">Request Pooling</div>
-                                    <div class="config-value">
-                                        <span class="config-badge" [class.badge-enabled]="dataPoolStats?.config?.enablePooling" [class.badge-disabled]="!dataPoolStats?.config?.enablePooling">
-                                            {{ dataPoolStats?.config?.enablePooling ? 'Enabled' : 'Disabled' }}
-                                        </span>
-                                    </div>
-                                    <div class="config-description">
-                                        Batches multiple data requests together for efficiency
-                                    </div>
-                                </div>
-
-                                @if (dataPoolStats?.config?.enablePooling) {
-                                    <div class="config-item">
-                                        <div class="config-label">Pooling Window</div>
-                                        <div class="config-value">{{ dataPoolStats?.config?.poolingWindowMs }}ms</div>
-                                        <div class="config-description">
-                                            Initial window for collecting requests before executing
-                                        </div>
-                                    </div>
-
-                                    <div class="config-item">
-                                        <div class="config-label">Max Extension</div>
-                                        <div class="config-value">{{ dataPoolStats?.config?.poolingMaxExtensionMs }}ms</div>
-                                        <div class="config-description">
-                                            Maximum time the window can be extended by new requests (capped debounce)
+                                    <div class="recommendation-banner">
+                                        <i class="fa-solid fa-lightbulb"></i>
+                                        <div>
+                                            <strong>Recommendation:</strong>
+                                            Consider consolidating data loading by having dependent engines
+                                            access data from a parent engine, or restructuring the engine
+                                            hierarchy to avoid duplicate data fetches.
                                         </div>
                                     </div>
                                 }
-
-                                <div class="config-item">
-                                    <div class="config-label">Cross-Engine Sharing</div>
-                                    <div class="config-value">
-                                        <span class="config-badge" [class.badge-enabled]="dataPoolStats?.config?.enableCrossEngineSharing" [class.badge-disabled]="!dataPoolStats?.config?.enableCrossEngineSharing">
-                                            {{ dataPoolStats?.config?.enableCrossEngineSharing ? 'Enabled' : 'Disabled' }}
-                                        </span>
-                                    </div>
-                                    <div class="config-description">
-                                        When enabled, engines share cached data through a central memory cache
-                                    </div>
-                                </div>
-
-                                <div class="config-item">
-                                    <div class="config-label">Local Cache</div>
-                                    <div class="config-value">
-                                        <span class="config-badge" [class.badge-enabled]="dataPoolStats?.config?.enableLocalCache" [class.badge-disabled]="!dataPoolStats?.config?.enableLocalCache">
-                                            {{ dataPoolStats?.config?.enableLocalCache ? 'Enabled' : 'Disabled' }}
-                                        </span>
-                                    </div>
-                                    <div class="config-description">
-                                        Persists cache to local storage for faster subsequent page loads
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="config-note">
-                                <i class="fa-solid fa-info-circle"></i>
-                                <div>
-                                    <strong>Note:</strong> Configuration changes can be made programmatically via
-                                    <code>DataPool.Instance.Configure()</code> or by using <code>ConfigEx()</code> on any BaseEngine.
-                                </div>
-                            </div>
                             </div>
                         </div>
                     }
@@ -913,12 +451,12 @@ export function LoadSystemDiagnosticsResource() {
             color: white;
         }
 
-        .card-icon--cache {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        .card-icon--warning {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
             color: white;
         }
 
-        .card-icon--pooling {
+        .card-icon--success {
             background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
             color: white;
         }
@@ -1027,6 +565,16 @@ export function LoadSystemDiagnosticsResource() {
             color: white;
         }
 
+        .nav-badge--warning {
+            background: #ff9800 !important;
+            color: white !important;
+        }
+
+        .nav-badge--success {
+            background: #4caf50 !important;
+            color: white !important;
+        }
+
         /* Content Area */
         .content-area {
             flex: 1;
@@ -1052,6 +600,7 @@ export function LoadSystemDiagnosticsResource() {
             flex: 1;
             overflow-y: auto;
             min-height: 0;
+            padding: 20px 24px;
         }
 
         .panel-header {
@@ -1107,11 +656,6 @@ export function LoadSystemDiagnosticsResource() {
             cursor: not-allowed;
         }
 
-        .action-btn--warning:hover:not(:disabled) {
-            background: #ffebee;
-            color: #d32f2f;
-        }
-
         /* Empty State */
         .empty-state {
             display: flex;
@@ -1126,6 +670,10 @@ export function LoadSystemDiagnosticsResource() {
             font-size: 48px;
             margin-bottom: 16px;
             color: #ddd;
+        }
+
+        .empty-state.success-state i {
+            color: #4caf50;
         }
 
         .empty-state p {
@@ -1144,7 +692,6 @@ export function LoadSystemDiagnosticsResource() {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 16px;
-            padding: 20px 24px;
         }
 
         .engine-card {
@@ -1225,197 +772,114 @@ export function LoadSystemDiagnosticsResource() {
             color: #333;
         }
 
-        /* Cache Overview */
-        .cache-overview {
-            padding: 24px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .cache-stat-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 20px;
-        }
-
-        .cache-stat {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 16px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-
-        .cache-stat-icon {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 18px;
-        }
-
-        .cache-stat-content {
-            flex: 1;
-        }
-
-        .cache-stat-value {
-            font-size: 18px;
-            font-weight: 700;
-            color: #333;
-        }
-
-        .cache-stat-label {
-            font-size: 12px;
-            color: #999;
-            margin-top: 2px;
-        }
-
-        /* Feature Grid */
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 16px;
-            padding: 24px;
-        }
-
-        .feature-card {
-            display: flex;
-            gap: 16px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border: 2px solid #e0e0e0;
-            transition: all 0.2s ease;
-        }
-
-        .feature-card.feature-enabled {
-            border-color: #4caf50;
-            background: #f1f8e9;
-        }
-
-        .feature-icon {
-            width: 48px;
-            height: 48px;
-            background: #e0e0e0;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            color: #999;
-            flex-shrink: 0;
-        }
-
-        .feature-card.feature-enabled .feature-icon {
-            background: #4caf50;
-            color: white;
-        }
-
-        .feature-content {
-            flex: 1;
-        }
-
-        .feature-name {
-            font-size: 15px;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .feature-status {
-            font-size: 12px;
-            font-weight: 500;
-            color: #999;
-            margin-top: 4px;
-        }
-
-        .feature-card.feature-enabled .feature-status {
-            color: #4caf50;
-        }
-
-        .feature-description {
-            font-size: 12px;
-            color: #666;
-            margin-top: 8px;
-            line-height: 1.4;
-        }
-
-        /* Configuration Grid */
-        .config-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            padding: 24px;
-        }
-
-        .config-item {
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-
-        .config-label {
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 8px;
-        }
-
-        .config-value {
-            font-size: 18px;
-            font-weight: 600;
-            color: #4caf50;
-            margin-bottom: 8px;
-        }
-
-        .config-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .badge-enabled {
-            background: #c8e6c9;
-            color: #2e7d32;
-        }
-
-        .badge-disabled {
-            background: #ffcdd2;
-            color: #c62828;
-        }
-
-        .config-description {
-            font-size: 12px;
-            color: #666;
-            line-height: 1.5;
-        }
-
-        .config-note {
+        /* Info Banner */
+        .info-banner {
             display: flex;
             gap: 12px;
-            margin: 0 24px 24px;
             padding: 16px 20px;
             background: #e3f2fd;
             border-radius: 8px;
             font-size: 13px;
             color: #1565c0;
+            margin-bottom: 20px;
         }
 
-        .config-note i {
+        .info-banner i {
             margin-top: 2px;
+            flex-shrink: 0;
         }
 
-        .config-note code {
-            background: rgba(0, 0, 0, 0.08);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: monospace;
+        /* Recommendation Banner */
+        .recommendation-banner {
+            display: flex;
+            gap: 12px;
+            padding: 16px 20px;
+            background: #fff3e0;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #e65100;
+            margin-top: 20px;
+        }
+
+        .recommendation-banner i {
+            margin-top: 2px;
+            flex-shrink: 0;
+            color: #ff9800;
+        }
+
+        /* Redundant Loads Table */
+        .redundant-loads-table-wrapper {
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .redundant-loads-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .redundant-loads-table th {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 1px solid #e0e0e0;
+            white-space: nowrap;
+        }
+
+        .redundant-loads-table th.text-right {
+            text-align: right;
+        }
+
+        .redundant-loads-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #333;
+        }
+
+        .redundant-loads-table td.text-right {
+            text-align: right;
+        }
+
+        .redundant-loads-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .redundant-loads-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .redundant-loads-table .entity-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .engine-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .engine-chip {
+            padding: 4px 10px;
+            background: #667eea;
+            color: white;
+            font-size: 11px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .count-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #ff9800;
+            color: white;
             font-size: 12px;
+            font-weight: 600;
+            border-radius: 12px;
         }
 
         /* Footer */
@@ -1436,503 +900,6 @@ export function LoadSystemDiagnosticsResource() {
         }
 
         /* Responsive */
-        /* Storage Status Section */
-        .storage-status-section {
-            padding: 24px;
-            border-top: 1px solid #f0f0f0;
-        }
-
-        .storage-status-section h4 {
-            margin: 0 0 16px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .storage-status-section h4 i {
-            color: #4caf50;
-        }
-
-        .storage-status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-        }
-
-        .storage-status-item {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            padding: 12px 16px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            min-width: 0;
-        }
-
-        .status-label {
-            font-size: 12px;
-            color: #666;
-        }
-
-        .status-value {
-            font-size: 13px;
-            font-weight: 600;
-            color: #333;
-            word-break: break-word;
-            overflow-wrap: break-word;
-        }
-
-        .status-value.status-yes {
-            color: #2e7d32;
-        }
-
-        .status-value.status-no {
-            color: #c62828;
-        }
-
-        /* Cache Entries Section */
-        .cache-entries-section {
-            padding: 24px;
-            border-top: 1px solid #f0f0f0;
-        }
-
-        .cache-entries-section h4 {
-            margin: 0 0 16px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .cache-entries-section h4 i {
-            color: #4caf50;
-        }
-
-        .cache-entries-table-wrapper {
-            overflow-x: auto;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-        }
-
-        .cache-entries-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        .cache-entries-table th {
-            background: #f8f9fa;
-            padding: 12px 16px;
-            text-align: left;
-            font-weight: 600;
-            color: #666;
-            border-bottom: 1px solid #e0e0e0;
-            white-space: nowrap;
-        }
-
-        .cache-entries-table th.text-right {
-            text-align: right;
-        }
-
-        .cache-entries-table td {
-            padding: 12px 16px;
-            border-bottom: 1px solid #f0f0f0;
-            color: #333;
-        }
-
-        .cache-entries-table td.text-right {
-            text-align: right;
-        }
-
-        .cache-entries-table tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        .cache-entries-table tbody tr:hover {
-            background: #f8f9fa;
-        }
-
-        .cache-entries-table .entity-name {
-            font-weight: 500;
-            color: #333;
-        }
-
-        .cache-entries-table .filter-cell {
-            max-width: 300px;
-        }
-
-        .cache-entries-table .filter-text {
-            font-size: 11px;
-            background: #e3f2fd;
-            color: #1565c0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            display: inline-block;
-            max-width: 280px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .cache-entries-table .no-filter {
-            font-size: 12px;
-            color: #999;
-            font-style: italic;
-        }
-
-        .empty-entries {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px 20px;
-            color: #999;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .empty-entries i {
-            font-size: 36px;
-            margin-bottom: 12px;
-            color: #ddd;
-        }
-
-        .empty-entries p {
-            margin: 0;
-            font-size: 14px;
-            color: #666;
-        }
-
-        /* Nav badge variant for success/sharing */
-        .nav-badge--success {
-            background: #4caf50;
-            color: white;
-        }
-
-        /* Cache Sharing Section Styles */
-        .sharing-overview {
-            padding: 24px;
-        }
-
-        .sharing-stat-row {
-            display: flex;
-            gap: 24px;
-            flex-wrap: wrap;
-        }
-
-        .sharing-stat {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 16px 24px;
-            background: #f8f9fa;
-            border-radius: 12px;
-            flex: 1;
-            min-width: 180px;
-        }
-
-        .sharing-stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
-        }
-
-        .sharing-stat-icon--shared {
-            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
-        }
-
-        .sharing-stat-icon--entries {
-            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
-        }
-
-        .sharing-stat-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: #333;
-        }
-
-        .sharing-stat-label {
-            font-size: 13px;
-            color: #666;
-        }
-
-        /* Engine Sharing Section */
-        .sharing-engines-section {
-            padding: 24px;
-            border-top: 1px solid #f0f0f0;
-        }
-
-        .sharing-engines-section h4 {
-            margin: 0 0 16px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .sharing-engines-section h4 i {
-            color: #667eea;
-        }
-
-        .engine-sharing-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 16px;
-        }
-
-        .engine-sharing-card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 16px;
-            border: 2px solid transparent;
-            transition: border-color 0.2s;
-        }
-
-        .engine-sharing-card.has-sharing {
-            border-color: #4caf50;
-            background: linear-gradient(135deg, rgba(76, 175, 80, 0.05) 0%, rgba(46, 125, 50, 0.05) 100%);
-        }
-
-        .engine-sharing-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 12px;
-            gap: 8px;
-        }
-
-        .engine-sharing-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            word-break: break-word;
-        }
-
-        .sharing-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
-            background: #4caf50;
-            color: white;
-            font-size: 11px;
-            font-weight: 500;
-            border-radius: 12px;
-            white-space: nowrap;
-        }
-
-        .engine-sharing-stats {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 12px;
-        }
-
-        .engine-sharing-stat {
-            display: flex;
-            gap: 6px;
-            font-size: 12px;
-        }
-
-        .engine-sharing-stat .stat-label {
-            color: #666;
-        }
-
-        .engine-sharing-stat .stat-value {
-            font-weight: 600;
-            color: #333;
-        }
-
-        .shared-with-list {
-            padding-top: 12px;
-            border-top: 1px solid rgba(0,0,0,0.08);
-        }
-
-        .shared-with-label {
-            font-size: 11px;
-            color: #666;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .shared-with-chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        .shared-with-chip {
-            padding: 3px 8px;
-            background: #e8f5e9;
-            color: #2e7d32;
-            font-size: 11px;
-            border-radius: 10px;
-            font-weight: 500;
-        }
-
-        /* Sharing Links Table */
-        .sharing-links-section {
-            padding: 24px;
-            border-top: 1px solid #f0f0f0;
-        }
-
-        .sharing-links-section h4 {
-            margin: 0 0 16px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .sharing-links-section h4 i {
-            color: #4caf50;
-        }
-
-        .sharing-links-table-wrapper {
-            overflow-x: auto;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-        }
-
-        .sharing-links-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        .sharing-links-table th {
-            background: #f8f9fa;
-            padding: 12px 16px;
-            text-align: left;
-            font-weight: 600;
-            color: #666;
-            border-bottom: 1px solid #e0e0e0;
-            white-space: nowrap;
-        }
-
-        .sharing-links-table td {
-            padding: 12px 16px;
-            border-bottom: 1px solid #f0f0f0;
-            color: #333;
-        }
-
-        .sharing-links-table tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        .sharing-links-table tbody tr:hover {
-            background: #f8f9fa;
-        }
-
-        .sharing-links-table .link-arrow {
-            text-align: center;
-            color: #4caf50;
-        }
-
-        .shared-entities-chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
-        .entity-chip {
-            padding: 2px 8px;
-            background: #e3f2fd;
-            color: #1565c0;
-            font-size: 11px;
-            border-radius: 10px;
-        }
-
-        .entity-chip--more {
-            background: #f5f5f5;
-            color: #666;
-        }
-
-        /* Shared Entries Section */
-        .shared-entries-section {
-            padding: 24px;
-            border-top: 1px solid #f0f0f0;
-        }
-
-        .shared-entries-section h4 {
-            margin: 0 0 16px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .shared-entries-section h4 i {
-            color: #ff9800;
-        }
-
-        .shared-entries-table-wrapper {
-            overflow-x: auto;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-        }
-
-        .shared-entries-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        .shared-entries-table th {
-            background: #f8f9fa;
-            padding: 12px 16px;
-            text-align: left;
-            font-weight: 600;
-            color: #666;
-            border-bottom: 1px solid #e0e0e0;
-            white-space: nowrap;
-        }
-
-        .shared-entries-table td {
-            padding: 12px 16px;
-            border-bottom: 1px solid #f0f0f0;
-            color: #333;
-        }
-
-        .shared-entries-table tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        .shared-entries-table tbody tr:hover {
-            background: #f8f9fa;
-        }
-
-        .engine-chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
-        .engine-chip {
-            padding: 2px 8px;
-            background: #667eea;
-            color: white;
-            font-size: 11px;
-            border-radius: 10px;
-            font-weight: 500;
-        }
-
         @media (max-width: 1024px) {
             .main-content {
                 flex-direction: column;
@@ -1989,15 +956,14 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     // State
     isLoading = false;
     autoRefresh = false;
-    activeSection: 'engines' | 'datapool' | 'sharing' | 'config' = 'engines';
+    activeSection: 'engines' | 'redundant' = 'engines';
     lastUpdated = new Date();
     isRefreshingEngines = false;
 
     // Data
     engineStats: EngineMemoryStats | null = null;
     engines: EngineDiagnosticInfo[] = [];
-    dataPoolStats: DataPoolStats | null = null;
-    cacheSharingGraph: CacheSharingGraph | null = null;
+    redundantLoads: RedundantLoadInfo[] = [];
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
@@ -2013,7 +979,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.destroy$.complete();
     }
 
-    setActiveSection(section: 'engines' | 'datapool' | 'sharing' | 'config'): void {
+    setActiveSection(section: 'engines' | 'redundant'): void {
         this.activeSection = section;
         this.cdr.markForCheck();
     }
@@ -2050,45 +1016,14 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 memoryDisplay: this.formatBytes(engine.estimatedMemoryBytes)
             }));
 
-            // Get DataPool detailed stats
-            const detailedStats = DataPool.Instance.GetDetailedCacheStats();
-            const config = DataPool.Instance.Config;
-            const localStorageStatus = await DataPool.Instance.GetLocalStorageStatus();
-
-            // Transform entries for display with sharing info
-            const entries: CacheEntryInfo[] = detailedStats.entries.map(entry => ({
-                key: entry.key,
-                entityName: entry.entityName,
-                filter: entry.filter,
-                itemCount: entry.itemCount,
-                estimatedSizeBytes: entry.estimatedSizeBytes,
-                sizeDisplay: this.formatBytes(entry.estimatedSizeBytes),
-                loadedAt: entry.loadedAt,
-                lastAccessedAt: entry.lastAccessedAt,
-                entityUpdatedAt: entry.entityUpdatedAt,
-                sharedByEngines: entry.sharedByEngines || [],
-                isShared: (entry.sharedByEngines?.length || 0) > 1
-            }));
-
-            // Get cache sharing graph
-            this.cacheSharingGraph = DataPool.Instance.GetCacheSharingGraph();
-
-            this.dataPoolStats = {
-                memoryEntries: detailedStats.memoryEntries,
-                totalEstimatedBytes: detailedStats.totalEstimatedBytes,
-                totalDisplay: this.formatBytes(detailedStats.totalEstimatedBytes),
-                oldestEntry: detailedStats.oldestEntry,
-                newestEntry: detailedStats.newestEntry,
-                config: {
-                    enablePooling: config.enablePooling,
-                    poolingWindowMs: config.poolingWindowMs,
-                    poolingMaxExtensionMs: config.poolingMaxExtensionMs,
-                    enableLocalCache: config.enableLocalCache,
-                    enableCrossEngineSharing: config.enableCrossEngineSharing
-                },
-                entries,
-                localStorage: localStorageStatus
-            };
+            // Get redundantly loaded entities
+            const redundantMap = BaseEngineRegistry.Instance.GetRedundantlyLoadedEntities();
+            this.redundantLoads = Array.from(redundantMap.entries())
+                .map(([entityName, engines]) => ({
+                    entityName,
+                    engines
+                }))
+                .sort((a, b) => b.engines.length - a.engines.length);
 
             this.lastUpdated = new Date();
         } catch (error) {
@@ -2115,15 +1050,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
     }
 
-    async invalidateAllCache(): Promise<void> {
-        try {
-            await DataPool.Instance.InvalidateAll();
-            this.refreshData();
-        } catch (error) {
-            console.error('Error invalidating cache:', error);
-        }
-    }
-
     formatBytes(bytes: number): string {
         if (bytes === 0) return '0 B';
 
@@ -2136,29 +1062,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
     formatTime(date: Date): string {
         return date.toLocaleTimeString();
-    }
-
-    formatTimeNullable(date: Date | null): string {
-        if (!date) return 'N/A';
-        return date.toLocaleTimeString();
-    }
-
-    // === Cache Sharing Helper Methods ===
-
-    getSharedEntryCount(): number {
-        if (!this.cacheSharingGraph) return 0;
-        return this.cacheSharingGraph.cacheEntries.filter(e => e.isShared).length;
-    }
-
-    getSharedEntries(): Array<{
-        entityName: string;
-        filter: string | undefined;
-        itemCount: number;
-        usedByEngines: string[];
-        isShared: boolean;
-    }> {
-        if (!this.cacheSharingGraph) return [];
-        return this.cacheSharingGraph.cacheEntries.filter(e => e.isShared);
     }
 
     // === BaseResourceComponent Required Methods ===

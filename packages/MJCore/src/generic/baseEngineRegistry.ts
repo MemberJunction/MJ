@@ -1,4 +1,4 @@
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, WarningManager } from '@memberjunction/global';
 import { LogError } from './logging';
 import { BaseEntity } from './baseEntity';
 
@@ -86,6 +86,12 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * This avoids re-sampling the same entity type multiple times during a session.
      */
     private _entitySizeCache: Map<string, number> = new Map();
+
+    /**
+     * Tracks which engines have loaded which entities.
+     * Key: entity name, Value: Set of engine class names
+     */
+    private _entityLoadTracking: Map<string, Set<string>> = new Map();
 
     /**
      * Returns the singleton instance of BaseEngineRegistry
@@ -448,5 +454,80 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      */
     public ClearSizeCache(): void {
         this._entitySizeCache.clear();
+    }
+
+    // ========================================================================
+    // ENTITY LOAD TRACKING - Detects redundant loading across engines
+    // ========================================================================
+
+    /**
+     * Records that an engine has loaded a specific entity.
+     * If another engine has already loaded this entity, a warning is queued.
+     *
+     * @param engineClassName - The class name of the engine loading the entity
+     * @param entityName - The name of the entity being loaded
+     */
+    public RecordEntityLoad(engineClassName: string, entityName: string): void {
+        if (!this._entityLoadTracking.has(entityName)) {
+            this._entityLoadTracking.set(entityName, new Set());
+        }
+
+        const engines = this._entityLoadTracking.get(entityName)!;
+        engines.add(engineClassName);
+
+        // If 2+ engines have loaded this entity, emit a warning
+        if (engines.size >= 2) {
+            WarningManager.Instance.RecordRedundantLoadWarning(
+                entityName,
+                Array.from(engines)
+            );
+        }
+    }
+
+    /**
+     * Records that an engine has loaded multiple entities.
+     * Convenience method for batch recording.
+     *
+     * @param engineClassName - The class name of the engine
+     * @param entityNames - Array of entity names being loaded
+     */
+    public RecordEntityLoads(engineClassName: string, entityNames: string[]): void {
+        for (const entityName of entityNames) {
+            this.RecordEntityLoad(engineClassName, entityName);
+        }
+    }
+
+    /**
+     * Gets a list of engines that have loaded a specific entity.
+     *
+     * @param entityName - The name of the entity
+     * @returns Array of engine class names that have loaded this entity
+     */
+    public GetEnginesLoadingEntity(entityName: string): string[] {
+        const engines = this._entityLoadTracking.get(entityName);
+        return engines ? Array.from(engines) : [];
+    }
+
+    /**
+     * Gets all entities that have been loaded by multiple engines.
+     *
+     * @returns Map of entity name to array of engine class names
+     */
+    public GetRedundantlyLoadedEntities(): Map<string, string[]> {
+        const result = new Map<string, string[]>();
+        for (const [entityName, engines] of this._entityLoadTracking) {
+            if (engines.size >= 2) {
+                result.set(entityName, Array.from(engines));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Clears entity load tracking data.
+     * Useful for testing or when engines are being reconfigured.
+     */
+    public ClearEntityLoadTracking(): void {
+        this._entityLoadTracking.clear();
     }
 }
