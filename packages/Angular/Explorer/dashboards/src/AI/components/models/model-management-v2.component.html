@@ -310,12 +310,54 @@
                   <table class="data-table">
                     <thead>
                       <tr>
-                        <th>Name</th>
-                        <th>Vendor</th>
-                        <th>Type</th>
-                        <th>Power</th>
-                        <th>Speed</th>
-                        <th>Cost</th>
+                        <th (click)="onSortChange('name')"
+                            [class.sorted]="sortBy === 'name'"
+                            [class.desc]="sortBy === 'name' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Name
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="onSortChange('vendor')"
+                            [class.sorted]="sortBy === 'vendor'"
+                            [class.desc]="sortBy === 'vendor' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Vendor
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="onSortChange('type')"
+                            [class.sorted]="sortBy === 'type'"
+                            [class.desc]="sortBy === 'type' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Type
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="onSortChange('powerRank')"
+                            [class.sorted]="sortBy === 'powerRank'"
+                            [class.desc]="sortBy === 'powerRank' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Power
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="onSortChange('speedRank')"
+                            [class.sorted]="sortBy === 'speedRank'"
+                            [class.desc]="sortBy === 'speedRank' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Speed
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="onSortChange('costRank')"
+                            [class.sorted]="sortBy === 'costRank'"
+                            [class.desc]="sortBy === 'costRank' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Cost
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
                         <th>Status</th>
                         <th>Actions</th>
                       </tr>

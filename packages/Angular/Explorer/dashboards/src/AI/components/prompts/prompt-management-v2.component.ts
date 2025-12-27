@@ -3,6 +3,7 @@ import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -53,6 +54,10 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
   public selectedCategory = 'all';
   public selectedType = 'all';
   public selectedStatus = 'all';
+
+  // Sorting
+  public sortColumn: string = 'Name';
+  public sortDirection: 'asc' | 'desc' = 'asc';
 
   // Loading messages
   public loadingMessages = [
@@ -195,34 +200,25 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
 
   private async loadInitialData(): Promise<void> {
     try {
-      const rv = new RunView();
-      const md = new Metadata();
+      // Ensure AIEngineBase is configured (no-op if already loaded)
+      await AIEngineBase.Instance.Config(false);
 
-      // Load all data in parallel using RunViews
-      const [promptResults, categoryResults, typeResults, templateResults, templateContentResults] = await rv.RunViews([
-        {
-          EntityName: 'AI Prompts',
-          OrderBy: 'Name' 
-        },
-        {
-          EntityName: 'AI Prompt Categories',
-          OrderBy: 'Name', 
-        },
-        {
-          EntityName: 'AI Prompt Types',
-          OrderBy: 'Name' 
-        },
+      // Get cached data from AIEngineBase
+      const prompts = AIEngineBase.Instance.Prompts;
+      this.categories = AIEngineBase.Instance.PromptCategories;
+      this.types = AIEngineBase.Instance.PromptTypes;
+
+      // Templates and TemplateContents are not in AIEngineBase, so we still need RunView for those
+      const rv = new RunView();
+      const [templateResults, templateContentResults] = await rv.RunViews([
         {
           EntityName: 'Templates',
-          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)` 
+          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)`
         },
         {
-          EntityName: 'Template Contents' 
+          EntityName: 'Template Contents'
         }
       ]);
-
-      this.categories = categoryResults.Results as AIPromptCategoryEntity[];
-      this.types = typeResults.Results as AIPromptTypeEntity[];
 
       // Combine prompts with their templates
       const templates = templateResults.Results as TemplateEntity[];
@@ -242,7 +238,7 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
       const typeMap = new Map(this.types.map(t => [t.ID, t.Name]));
 
       // Combine the data - keep the actual entity objects
-      this.prompts = (promptResults.Results as AIPromptEntityExtended[]).map(prompt => {
+      this.prompts = prompts.map(prompt => {
         const template = templateMap.get(prompt.ID);
         
         // Add the extra properties directly to the entity
@@ -330,6 +326,63 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
       }
 
       return true;
+    });
+
+    // Apply sorting
+    this.filteredPrompts = this.applySorting(this.filteredPrompts);
+  }
+
+  /**
+   * Sort the prompts by the specified column
+   */
+  public sortBy(column: string): void {
+    if (this.sortColumn === column) {
+      // Toggle direction if same column
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column, default to ascending
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.applyFilters();
+  }
+
+  /**
+   * Apply sorting to the filtered list
+   */
+  private applySorting(prompts: PromptWithTemplate[]): PromptWithTemplate[] {
+    return prompts.sort((a, b) => {
+      let valueA: string | boolean | null | undefined;
+      let valueB: string | boolean | null | undefined;
+
+      switch (this.sortColumn) {
+        case 'Name':
+          valueA = a.Name;
+          valueB = b.Name;
+          break;
+        case 'Category':
+          valueA = a.CategoryName;
+          valueB = b.CategoryName;
+          break;
+        case 'Type':
+          valueA = a.TypeName;
+          valueB = b.TypeName;
+          break;
+        case 'Status':
+          valueA = a.Status;
+          valueB = b.Status;
+          break;
+        default:
+          valueA = a.Name;
+          valueB = b.Name;
+      }
+
+      // Handle null/undefined values
+      const strA = (valueA ?? '').toString().toLowerCase();
+      const strB = (valueB ?? '').toString().toLowerCase();
+
+      let comparison = strA.localeCompare(strB);
+      return this.sortDirection === 'desc' ? -comparison : comparison;
     });
   }
 

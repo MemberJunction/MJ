@@ -216,9 +216,30 @@
                   <table class="agents-table">
                     <thead>
                       <tr>
-                        <th>Name</th>
-                        <th>Status</th>
-                        <th>Execution Mode</th>
+                        <th (click)="sortBy('Name')"
+                            [class.sorted]="sortColumn === 'Name'"
+                            [class.desc]="sortColumn === 'Name' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Name
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Status')"
+                            [class.sorted]="sortColumn === 'Status'"
+                            [class.desc]="sortColumn === 'Status' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Status
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('ExecutionMode')"
+                            [class.sorted]="sortColumn === 'ExecutionMode'"
+                            [class.desc]="sortColumn === 'ExecutionMode' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Execution Mode
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
                         <th>Actions</th>
                       </tr>
                     </thead>

@@ -275,10 +275,38 @@
                   <table class="prompts-table">
                     <thead>
                       <tr>
-                        <th>Name</th>
-                        <th>Category</th>
-                        <th>Type</th>
-                        <th>Status</th>
+                        <th (click)="sortBy('Name')"
+                            [class.sorted]="sortColumn === 'Name'"
+                            [class.desc]="sortColumn === 'Name' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Name
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Category')"
+                            [class.sorted]="sortColumn === 'Category'"
+                            [class.desc]="sortColumn === 'Category' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Category
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Type')"
+                            [class.sorted]="sortColumn === 'Type'"
+                            [class.desc]="sortColumn === 'Type' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Type
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Status')"
+                            [class.sorted]="sortColumn === 'Status'"
+                            [class.desc]="sortColumn === 'Status' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Status
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
                         <th>Template</th>
                         <th>Actions</th>
                       </tr>

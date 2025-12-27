@@ -1,6 +1,7 @@
 import { Component, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
-import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIAgentEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -39,7 +40,11 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   
   public agents: AIAgentEntityExtended[] = [];
   public filteredAgents: AIAgentEntityExtended[] = [];
-  
+
+  // Sorting state
+  public sortColumn: string = 'Name';
+  public sortDirection: 'asc' | 'desc' = 'asc';
+
   public currentFilters: AgentFilter = {
     searchTerm: '',
     agentType: 'all',
@@ -173,20 +178,17 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   private async loadAgents(): Promise<void> {
     try {
       this.isLoading = true;
-      const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntityExtended>({
-        EntityName: 'AI Agents',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        MaxRows: 1000 
-      });
-      
-      this.agents = result.Results || [];
+
+      // Ensure AIEngineBase is configured (no-op if already loaded)
+      await AIEngineBase.Instance.Config(false);
+
+      // Get cached agents from AIEngineBase
+      this.agents = AIEngineBase.Instance.Agents;
       this.filteredAgents = [...this.agents];
     } catch (error) {
       console.error('Error loading AI agents:', error);
     } finally {
-      this.isLoading = false;     
+      this.isLoading = false;
       // force change detection to update the view
       this.cdr.detectChanges();
     }
@@ -228,7 +230,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     // Apply search filter (name contains)
     if (this.currentFilters.searchTerm) {
       const searchTerm = this.currentFilters.searchTerm.toLowerCase();
-      filtered = filtered.filter(agent => 
+      filtered = filtered.filter(agent =>
         (agent.Name || '').toLowerCase().includes(searchTerm) ||
         (agent.Description || '').toLowerCase().includes(searchTerm)
       );
@@ -269,7 +271,60 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       filtered = filtered.filter(agent => agent.ExposeAsAction === isExposed);
     }
 
+    // Apply sorting
+    filtered = this.applySorting(filtered);
+
     this.filteredAgents = filtered;
+  }
+
+  /**
+   * Sort the agents by the specified column
+   */
+  public sortBy(column: string): void {
+    if (this.sortColumn === column) {
+      // Toggle direction if same column
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column, default to ascending
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.applyFilters();
+  }
+
+  /**
+   * Apply sorting to the filtered list
+   */
+  private applySorting(agents: AIAgentEntityExtended[]): AIAgentEntityExtended[] {
+    return agents.sort((a, b) => {
+      let valueA: string | boolean | null | undefined;
+      let valueB: string | boolean | null | undefined;
+
+      switch (this.sortColumn) {
+        case 'Name':
+          valueA = a.Name;
+          valueB = b.Name;
+          break;
+        case 'Status':
+          valueA = a.Status;
+          valueB = b.Status;
+          break;
+        case 'ExecutionMode':
+          valueA = a.ExecutionMode;
+          valueB = b.ExecutionMode;
+          break;
+        default:
+          valueA = a.Name;
+          valueB = b.Name;
+      }
+
+      // Handle null/undefined values
+      const strA = (valueA ?? '').toString().toLowerCase();
+      const strB = (valueB ?? '').toString().toLowerCase();
+
+      let comparison = strA.localeCompare(strB);
+      return this.sortDirection === 'desc' ? -comparison : comparison;
+    });
   }
 
   private emitStateChange(): void {

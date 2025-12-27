@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
-import { RunView, LogError, LogStatus, CompositeKey } from '@memberjunction/core';
-import { AIConfigurationEntity, AIConfigurationParamEntity, AIPromptEntity, ResourceData } from '@memberjunction/core-entities';
+import { LogError, LogStatus, CompositeKey } from '@memberjunction/core';
+import { AIConfigurationEntity, AIConfigurationParamEntity, AIPromptEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
@@ -13,8 +14,8 @@ interface SystemConfigFilter {
 interface ConfigurationWithParams extends AIConfigurationEntity {
   params?: AIConfigurationParamEntity[];
   isExpanded?: boolean;
-  compressionPrompt?: AIPromptEntity | null;
-  summarizationPrompt?: AIPromptEntity | null;
+  compressionPrompt?: AIPromptEntityExtended | null;
+  summarizationPrompt?: AIPromptEntityExtended | null;
 }
 
 /**
@@ -44,7 +45,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
   public configurations: ConfigurationWithParams[] = [];
   public filteredConfigurations: ConfigurationWithParams[] = [];
   public allParams: AIConfigurationParamEntity[] = [];
-  public allPrompts: AIPromptEntity[] = [];
+  public allPrompts: AIPromptEntityExtended[] = [];
 
   public currentFilters: SystemConfigFilter = {
     searchTerm: '',
@@ -74,56 +75,41 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
       this.error = null;
       this.cdr.detectChanges();
 
-      const rv = new RunView();
+      // Ensure AIEngineBase is configured (no-op if already loaded)
+      await AIEngineBase.Instance.Config(false);
 
-      // Load configurations, params, and prompts in parallel
-      const [configResult, paramsResult, promptsResult] = await rv.RunViews([
-        {
-          EntityName: 'MJ: AI Configurations',
-          OrderBy: 'Name',
-          ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'MJ: AI Configuration Params',
-          OrderBy: 'Name',
-          ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'AI Prompts',
-          OrderBy: 'Name',
-          ResultType: 'entity_object'
+      // Get cached data from AIEngineBase
+      const configs = AIEngineBase.Instance.Configurations;
+      const params = AIEngineBase.Instance.ConfigurationParams;
+      const prompts = AIEngineBase.Instance.Prompts;
+
+      // Create extended configurations with associated data
+      this.configurations = configs.map(config => {
+        const extended = config as ConfigurationWithParams;
+        extended.params = params.filter(p => p.ConfigurationID === config.ID);
+        extended.isExpanded = false;
+
+        // Find linked prompts
+        if (config.DefaultPromptForContextCompressionID) {
+          extended.compressionPrompt = prompts.find(p => p.ID === config.DefaultPromptForContextCompressionID) || null;
         }
-      ]);
+        if (config.DefaultPromptForContextSummarizationID) {
+          extended.summarizationPrompt = prompts.find(p => p.ID === config.DefaultPromptForContextSummarizationID) || null;
+        }
 
-      if (configResult?.Success && configResult.Results) {
-        this.configurations = configResult.Results as ConfigurationWithParams[];
-        this.allParams = (paramsResult?.Success ? paramsResult.Results : []) as AIConfigurationParamEntity[];
-        this.allPrompts = (promptsResult?.Success ? promptsResult.Results : []) as AIPromptEntity[];
+        return extended;
+      });
 
-        // Associate params and prompts with configurations
-        this.configurations.forEach(config => {
-          config.params = this.allParams.filter(p => p.ConfigurationID === config.ID);
-          config.isExpanded = false;
+      this.allParams = params;
+      this.allPrompts = prompts;
 
-          // Find linked prompts
-          if (config.DefaultPromptForContextCompressionID) {
-            config.compressionPrompt = this.allPrompts.find(p => p.ID === config.DefaultPromptForContextCompressionID) || null;
-          }
-          if (config.DefaultPromptForContextSummarizationID) {
-            config.summarizationPrompt = this.allPrompts.find(p => p.ID === config.DefaultPromptForContextSummarizationID) || null;
-          }
-        });
+      // Calculate stats
+      this.totalConfigs = this.configurations.length;
+      this.activeConfigs = this.configurations.filter(c => c.Status === 'Active').length;
+      this.defaultConfig = this.configurations.find(c => c.IsDefault) || null;
 
-        // Calculate stats
-        this.totalConfigs = this.configurations.length;
-        this.activeConfigs = this.configurations.filter(c => c.Status === 'Active').length;
-        this.defaultConfig = this.configurations.find(c => c.IsDefault) || null;
-
-        this.applyFilters();
-        LogStatus('AI Configurations loaded successfully');
-      } else {
-        throw new Error('Failed to load AI configurations');
-      }
+      this.applyFilters();
+      LogStatus('AI Configurations loaded successfully');
     } catch (error) {
       this.error = 'Failed to load AI configurations. Please try again.';
       LogError('Error loading AI configurations', undefined, error);
