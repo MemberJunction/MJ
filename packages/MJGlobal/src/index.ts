@@ -13,6 +13,7 @@ export * from './SafeExpressionEvaluator'
 export * from './warningManager'
 export * from './EncryptionUtils'
 export * from './LoadOnStartup'
+export * from './telemetryManager'
 
 // Export the main classes
 export * from './Global'

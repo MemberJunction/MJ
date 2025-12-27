@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, TelemetryManager, TelemetryEvent, TelemetryPattern, TelemetryInsight, TelemetryCategory } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { BaseEngineRegistry, EngineMemoryStats } from '@memberjunction/core';
@@ -25,6 +25,33 @@ export interface EngineDiagnosticInfo {
 export interface RedundantLoadInfo {
     entityName: string;
     engines: string[];
+}
+
+/**
+ * Display-friendly telemetry pattern info
+ */
+export interface TelemetryPatternDisplay {
+    fingerprint: string;
+    category: TelemetryCategory;
+    operation: string;
+    entityName: string | null;
+    count: number;
+    avgElapsedMs: number;
+    totalElapsedMs: number;
+    minElapsedMs: number;
+    maxElapsedMs: number;
+    lastSeen: Date;
+}
+
+/**
+ * Summary stats for telemetry
+ */
+export interface TelemetrySummary {
+    totalEvents: number;
+    totalPatterns: number;
+    totalInsights: number;
+    activeEvents: number;
+    byCategory: Record<TelemetryCategory, { events: number; avgMs: number }>;
 }
 
 /**
@@ -144,6 +171,15 @@ export function LoadSystemDiagnosticsResource() {
                             } @else {
                                 <span class="nav-badge nav-badge--success">0</span>
                             }
+                        </div>
+                        <div
+                            class="nav-item"
+                            [class.active]="activeSection === 'performance'"
+                            (click)="setActiveSection('performance')"
+                        >
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span>Performance</span>
+                            <span class="nav-badge">{{ telemetrySummary?.totalEvents || 0 }}</span>
                         </div>
                     </div>
                 </div>
@@ -275,6 +311,149 @@ export function LoadSystemDiagnosticsResource() {
                                             access data from a parent engine, or restructuring the engine
                                             hierarchy to avoid duplicate data fetches.
                                         </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Performance Section -->
+                    @if (activeSection === 'performance') {
+                        <div class="section-panel">
+                            <div class="panel-header">
+                                <h3>
+                                    <i class="fa-solid fa-chart-line"></i>
+                                    Performance Telemetry
+                                </h3>
+                                <div class="panel-actions">
+                                    <button class="action-btn" [class.active]="telemetryEnabled" (click)="toggleTelemetry()">
+                                        <i class="fa-solid" [class.fa-toggle-on]="telemetryEnabled" [class.fa-toggle-off]="!telemetryEnabled"></i>
+                                        {{ telemetryEnabled ? 'Enabled' : 'Disabled' }}
+                                    </button>
+                                    <button class="action-btn" (click)="clearTelemetry()" [disabled]="!telemetryEnabled">
+                                        <i class="fa-solid fa-trash"></i>
+                                        Clear Data
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="section-panel-content">
+                                @if (!telemetryEnabled) {
+                                    <div class="info-banner warning-banner">
+                                        <i class="fa-solid fa-exclamation-triangle"></i>
+                                        <div>
+                                            <strong>Telemetry is disabled.</strong>
+                                            Enable telemetry to track RunView, RunQuery, and Engine loading performance.
+                                            Data is collected in-memory only and persists until page refresh.
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Summary Stats -->
+                                <div class="telemetry-summary">
+                                    <div class="summary-card">
+                                        <div class="summary-value">{{ telemetrySummary?.totalEvents || 0 }}</div>
+                                        <div class="summary-label">Total Events</div>
+                                    </div>
+                                    <div class="summary-card">
+                                        <div class="summary-value">{{ telemetrySummary?.totalPatterns || 0 }}</div>
+                                        <div class="summary-label">Unique Patterns</div>
+                                    </div>
+                                    <div class="summary-card">
+                                        <div class="summary-value">{{ telemetrySummary?.totalInsights || 0 }}</div>
+                                        <div class="summary-label">Insights</div>
+                                    </div>
+                                    <div class="summary-card">
+                                        <div class="summary-value">{{ telemetrySummary?.activeEvents || 0 }}</div>
+                                        <div class="summary-label">Active</div>
+                                    </div>
+                                </div>
+
+                                <!-- Category Breakdown -->
+                                @if (telemetrySummary && telemetrySummary.totalEvents > 0) {
+                                    <div class="category-breakdown">
+                                        <h4>By Category</h4>
+                                        <div class="category-grid">
+                                            @for (cat of categoriesWithData; track cat.name) {
+                                                <div class="category-item">
+                                                    <span class="category-name">{{ cat.name }}</span>
+                                                    <span class="category-events">{{ cat.events }}</span>
+                                                    <span class="category-avg">avg {{ cat.avgMs | number:'1.0-0' }}ms</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Insights -->
+                                @if (telemetryInsights.length > 0) {
+                                    <div class="insights-section">
+                                        <h4><i class="fa-solid fa-lightbulb"></i> Optimization Insights</h4>
+                                        <div class="insights-list">
+                                            @for (insight of telemetryInsights; track insight.id) {
+                                                <div class="insight-card" [class]="getSeverityClass(insight.severity)">
+                                                    <div class="insight-header">
+                                                        <i class="fa-solid" [class]="getSeverityIcon(insight.severity)"></i>
+                                                        <span class="insight-title">{{ insight.title }}</span>
+                                                        <span class="insight-category">{{ insight.category }}</span>
+                                                    </div>
+                                                    <div class="insight-message">{{ insight.message }}</div>
+                                                    <div class="insight-suggestion">
+                                                        <i class="fa-solid fa-arrow-right"></i>
+                                                        {{ insight.suggestion }}
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Patterns Table -->
+                                @if (telemetryPatterns.length > 0) {
+                                    <div class="patterns-section">
+                                        <h4><i class="fa-solid fa-fingerprint"></i> Operation Patterns</h4>
+                                        <div class="patterns-table-wrapper">
+                                            <table class="patterns-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Category</th>
+                                                        <th>Operation</th>
+                                                        <th>Entity/Query</th>
+                                                        <th class="text-right">Count</th>
+                                                        <th class="text-right">Avg (ms)</th>
+                                                        <th class="text-right">Total (ms)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @for (pattern of telemetryPatterns; track pattern.fingerprint) {
+                                                        <tr [class.duplicate-row]="pattern.count >= 2">
+                                                            <td>
+                                                                <span class="category-chip" [class]="'cat-' + pattern.category.toLowerCase()">
+                                                                    {{ pattern.category }}
+                                                                </span>
+                                                            </td>
+                                                            <td class="operation-cell">{{ pattern.operation }}</td>
+                                                            <td class="entity-cell">{{ pattern.entityName || '-' }}</td>
+                                                            <td class="text-right">
+                                                                @if (pattern.count >= 2) {
+                                                                    <span class="count-warning">{{ pattern.count }}</span>
+                                                                } @else {
+                                                                    {{ pattern.count }}
+                                                                }
+                                                            </td>
+                                                            <td class="text-right">{{ pattern.avgElapsedMs | number:'1.1-1' }}</td>
+                                                            <td class="text-right">{{ pattern.totalElapsedMs | number:'1.0-0' }}</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                } @else if (telemetryEnabled) {
+                                    <div class="empty-state">
+                                        <i class="fa-solid fa-hourglass-start"></i>
+                                        <p>No telemetry data yet</p>
+                                        <span class="empty-hint">Navigate around the app to generate performance data</span>
                                     </div>
                                 }
                             </div>
@@ -899,6 +1078,279 @@ export function LoadSystemDiagnosticsResource() {
             gap: 6px;
         }
 
+        /* Performance Section Styles */
+        .warning-banner {
+            background: #fff3e0 !important;
+            color: #e65100 !important;
+        }
+
+        .warning-banner i {
+            color: #ff9800;
+        }
+
+        .telemetry-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .summary-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .summary-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .summary-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .category-breakdown {
+            margin-bottom: 24px;
+        }
+
+        .category-breakdown h4 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .category-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #f0f4f8;
+            border-radius: 20px;
+            font-size: 13px;
+        }
+
+        .category-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .category-events {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .category-avg {
+            color: #999;
+            font-size: 11px;
+        }
+
+        .insights-section {
+            margin-bottom: 24px;
+        }
+
+        .insights-section h4 {
+            margin: 0 0 16px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .insights-section h4 i {
+            color: #ff9800;
+        }
+
+        .insights-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .insight-card {
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #ccc;
+        }
+
+        .insight-card.severity-info {
+            background: #e3f2fd;
+            border-left-color: #2196f3;
+        }
+
+        .insight-card.severity-warning {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+        }
+
+        .insight-card.severity-optimization {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+
+        .insight-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .insight-header i {
+            font-size: 16px;
+        }
+
+        .severity-info .insight-header i { color: #2196f3; }
+        .severity-warning .insight-header i { color: #ff9800; }
+        .severity-optimization .insight-header i { color: #4caf50; }
+
+        .insight-title {
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+        }
+
+        .insight-category {
+            font-size: 11px;
+            padding: 2px 8px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 10px;
+            color: #666;
+        }
+
+        .insight-message {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        .insight-suggestion {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .insight-suggestion i {
+            color: #4caf50;
+            font-size: 10px;
+        }
+
+        .patterns-section h4 {
+            margin: 0 0 16px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .patterns-section h4 i {
+            color: #667eea;
+        }
+
+        .patterns-table-wrapper {
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .patterns-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .patterns-table th {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 1px solid #e0e0e0;
+            white-space: nowrap;
+        }
+
+        .patterns-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #333;
+        }
+
+        .patterns-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .patterns-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .duplicate-row {
+            background: #fff3e0;
+        }
+
+        .duplicate-row:hover {
+            background: #ffe0b2 !important;
+        }
+
+        .category-chip {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .cat-runview { background: #e3f2fd; color: #1565c0; }
+        .cat-runquery { background: #f3e5f5; color: #7b1fa2; }
+        .cat-engine { background: #e8f5e9; color: #2e7d32; }
+        .cat-ai { background: #fff3e0; color: #e65100; }
+        .cat-cache { background: #fce4ec; color: #c2185b; }
+        .cat-network { background: #e0f2f1; color: #00695c; }
+        .cat-custom { background: #f5f5f5; color: #616161; }
+
+        .operation-cell {
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .entity-cell {
+            font-weight: 500;
+        }
+
+        .count-warning {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #ff9800;
+            color: white;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .action-btn.active {
+            background: #4caf50;
+            color: white;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .main-content {
@@ -956,7 +1408,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     // State
     isLoading = false;
     autoRefresh = false;
-    activeSection: 'engines' | 'redundant' = 'engines';
+    activeSection: 'engines' | 'redundant' | 'performance' = 'engines';
     lastUpdated = new Date();
     isRefreshingEngines = false;
 
@@ -964,6 +1416,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     engineStats: EngineMemoryStats | null = null;
     engines: EngineDiagnosticInfo[] = [];
     redundantLoads: RedundantLoadInfo[] = [];
+
+    // Telemetry data
+    telemetrySummary: TelemetrySummary | null = null;
+    telemetryPatterns: TelemetryPatternDisplay[] = [];
+    telemetryInsights: TelemetryInsight[] = [];
+    telemetryEnabled = false;
+    categoriesWithData: { name: string; events: number; avgMs: number }[] = [];
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
@@ -979,7 +1438,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.destroy$.complete();
     }
 
-    setActiveSection(section: 'engines' | 'redundant'): void {
+    setActiveSection(section: 'engines' | 'redundant' | 'performance'): void {
         this.activeSection = section;
         this.cdr.markForCheck();
     }
@@ -1025,12 +1484,90 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 }))
                 .sort((a, b) => b.engines.length - a.engines.length);
 
+            // Get telemetry data
+            this.refreshTelemetryData();
+
             this.lastUpdated = new Date();
         } catch (error) {
             console.error('Error refreshing diagnostics data:', error);
         } finally {
             this.isLoading = false;
             this.cdr.markForCheck();
+        }
+    }
+
+    private refreshTelemetryData(): void {
+        const tm = TelemetryManager.Instance;
+        this.telemetryEnabled = tm.IsEnabled;
+
+        // Get summary stats
+        const stats = tm.GetStats();
+        this.telemetrySummary = {
+            totalEvents: stats.totalEvents,
+            totalPatterns: stats.totalPatterns,
+            totalInsights: stats.totalInsights,
+            activeEvents: stats.activeEvents,
+            byCategory: stats.byCategory
+        };
+
+        // Build categories with data for display
+        const categoryNames: TelemetryCategory[] = ['RunView', 'RunQuery', 'Engine', 'AI', 'Cache'];
+        this.categoriesWithData = categoryNames
+            .filter(cat => stats.byCategory[cat]?.events > 0)
+            .map(cat => ({
+                name: cat,
+                events: stats.byCategory[cat].events,
+                avgMs: stats.byCategory[cat].avgMs
+            }));
+
+        // Get patterns sorted by count (duplicates first)
+        const patterns = tm.GetPatterns({ minCount: 1, sortBy: 'count' });
+        this.telemetryPatterns = patterns.slice(0, 50).map(p => ({
+            fingerprint: p.fingerprint,
+            category: p.category,
+            operation: p.operation,
+            entityName: (p.sampleParams?.EntityName as string) || (p.sampleParams?.QueryName as string) || null,
+            count: p.count,
+            avgElapsedMs: Math.round(p.avgElapsedMs * 100) / 100,
+            totalElapsedMs: Math.round(p.totalElapsedMs),
+            minElapsedMs: p.minElapsedMs === Infinity ? 0 : Math.round(p.minElapsedMs),
+            maxElapsedMs: Math.round(p.maxElapsedMs),
+            lastSeen: new Date(p.lastSeen)
+        }));
+
+        // Get insights
+        this.telemetryInsights = tm.GetInsights({ limit: 20 });
+    }
+
+    toggleTelemetry(): void {
+        const tm = TelemetryManager.Instance;
+        tm.SetEnabled(!tm.IsEnabled);
+        this.telemetryEnabled = tm.IsEnabled;
+        this.cdr.markForCheck();
+    }
+
+    clearTelemetry(): void {
+        TelemetryManager.Instance.Clear();
+        TelemetryManager.Instance.ClearInsights();
+        this.refreshTelemetryData();
+        this.cdr.markForCheck();
+    }
+
+    getSeverityClass(severity: string): string {
+        switch (severity) {
+            case 'info': return 'severity-info';
+            case 'warning': return 'severity-warning';
+            case 'optimization': return 'severity-optimization';
+            default: return '';
+        }
+    }
+
+    getSeverityIcon(severity: string): string {
+        switch (severity) {
+            case 'info': return 'fa-info-circle';
+            case 'warning': return 'fa-exclamation-triangle';
+            case 'optimization': return 'fa-lightbulb';
+            default: return 'fa-circle';
         }
     }
 

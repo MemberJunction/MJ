@@ -1,4 +1,4 @@
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal } from "@memberjunction/global";
+import { BaseSingleton, MJEvent, MJEventType, MJGlobal, TelemetryManager } from "@memberjunction/global";
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 import { debounceTime } from "rxjs/operators";
 
@@ -199,6 +199,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
         }
 
         if (!this._loaded || forceRefresh) {
+            // Start telemetry tracking for engine load
+            const entityNames = configs
+                .filter(c => c.Type !== 'dataset' && c.EntityName)
+                .map(c => c.EntityName);
+            const datasetNames = configs
+                .filter(c => c.Type === 'dataset' && c.DatasetName)
+                .map(c => c.DatasetName);
+
+            const eventId = TelemetryManager.Instance.StartEvent(
+                'Engine',
+                'Engine.Load',
+                {
+                    engineClass: this.constructor.name,
+                    operation: forceRefresh ? 'refresh' : 'initial',
+                    configCount: configs.length,
+                    entityNames,
+                    datasetNames
+                },
+                contextUser?.ID
+            );
+
             this._loadingSubject.next(true);
             try {
                 this.SetProvider(provider);
@@ -218,6 +239,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
                 LogError(e);
             } finally {
                 this._loadingSubject.next(false);
+                TelemetryManager.Instance.EndEvent(eventId);
             }
         }
     }
@@ -487,7 +509,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
             EntityName: config.EntityName,
             ResultType: 'entity_object',
             ExtraFilter: config.Filter,
-            OrderBy: config.OrderBy
+            OrderBy: config.OrderBy,
+            _fromEngine: true  // Mark as engine-initiated to avoid false positive telemetry warnings
         }, contextUser);
 
         this.HandleSingleViewResult(config, result);
@@ -525,7 +548,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
                     EntityName: c.EntityName,
                     ResultType: 'entity_object',
                     ExtraFilter: c.Filter,
-                    OrderBy: c.OrderBy
+                    OrderBy: c.OrderBy,
+                    _fromEngine: true  // Mark as engine-initiated to avoid false positive telemetry warnings
                 };
             });
             const results = await rv.RunViews(viewConfigs, contextUser);

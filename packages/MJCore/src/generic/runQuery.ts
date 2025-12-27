@@ -1,4 +1,4 @@
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, TelemetryManager } from '@memberjunction/global';
 import { IRunQueryProvider, RunQueryResult } from './interfaces';
 import { UserInfo } from './securityInfo';
 
@@ -85,7 +85,27 @@ export class RunQuery  {
      * @returns Query results including data rows and execution metadata
      */
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
-        return this.ProviderToUse.RunQuery(params, contextUser);
+        // Start telemetry tracking
+        const eventId = TelemetryManager.Instance.StartEvent(
+            'RunQuery',
+            'RunQuery.Execute',
+            {
+                QueryID: params.QueryID,
+                QueryName: params.QueryName,
+                CategoryPath: params.CategoryPath,
+                CategoryID: params.CategoryID,
+                MaxRows: params.MaxRows,
+                StartRow: params.StartRow,
+                HasParameters: params.Parameters ? Object.keys(params.Parameters).length > 0 : false
+            },
+            contextUser?.ID
+        );
+
+        try {
+            return this.ProviderToUse.RunQuery(params, contextUser);
+        } finally {
+            TelemetryManager.Instance.EndEvent(eventId);
+        }
     }
 
     private static _globalProviderKey: string = 'MJ_RunQueryProvider';

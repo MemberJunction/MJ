@@ -1,4 +1,4 @@
-import { BaseSingleton, WarningManager } from '@memberjunction/global';
+import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
 import { LogError } from './logging';
 import { BaseEntity } from './baseEntity';
 
@@ -98,6 +98,30 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      */
     public static get Instance(): BaseEngineRegistry {
         return super.getInstance<BaseEngineRegistry>();
+    }
+
+    protected constructor() {
+        super();
+        // Register this instance in the global store for TelemetryManager access
+        // This allows TelemetryAnalyzers to query loaded entities without circular dependencies
+        const g = GetGlobalObjectStore();
+        if (g) {
+            g.__MJ_ENGINE_REGISTRY__ = {
+                GetEntityLoadTracking: () => this.GetEntityLoadTrackingMap()
+            };
+        }
+    }
+
+    /**
+     * Returns the entity load tracking data as a Map suitable for TelemetryAnalyzerContext.
+     * Key: entity name, Value: array of engine class names that have loaded this entity.
+     */
+    public GetEntityLoadTrackingMap(): Map<string, string[]> {
+        const result = new Map<string, string[]>();
+        for (const [entityName, engines] of this._entityLoadTracking) {
+            result.set(entityName, Array.from(engines));
+        }
+        return result;
     }
 
     /**
