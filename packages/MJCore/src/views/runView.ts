@@ -176,39 +176,16 @@ export class RunView  {
             }
         }
 
-        // Start telemetry tracking
-        const eventId = TelemetryManager.Instance.StartEvent(
-            'RunView',
-            'RunView.Execute',
-            {
-                EntityName: params.EntityName,
-                ViewID: params.ViewID,
-                ViewName: params.ViewName,
-                ExtraFilter: params.ExtraFilter,
-                OrderBy: params.OrderBy,
-                ResultType: params.ResultType,
-                MaxRows: params.MaxRows,
-                StartRow: params.StartRow,
-                _fromEngine: params._fromEngine,
-                CacheLocal: params.CacheLocal
-            },
-            contextUser?.ID
-        );
+        // Simple proxy to the provider, pre/post process moved to ProviderBase and called by each sub-class
+        // for validation, telemetry, and optional transformation of the result
+        const result = await this.ProviderToUse.RunView<T>(params, contextUser);
 
-        try {
-            // simple proxy to the provider, pre/post process moved to ProviderBase and called by each sub-class
-            // for validation and for optional transformation of the result
-            const result = await this.ProviderToUse.RunView<T>(params, contextUser);
-
-            // Cache the result if CacheLocal is enabled and request was successful
-            if (params.CacheLocal && result.Success) {
-                await this.cacheLocally(params, result);
-            }
-
-            return result;
-        } finally {
-            TelemetryManager.Instance.EndEvent(eventId);
+        // Cache the result if CacheLocal is enabled and request was successful
+        if (params.CacheLocal && result.Success) {
+            await this.cacheLocally(params, result);
         }
+
+        return result;
     }
 
     /**
@@ -281,27 +258,9 @@ export class RunView  {
      * @returns
      */
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-        // Start telemetry tracking for batch operation
-        // Check if any params have _fromEngine flag set
-        const fromEngine = params.some(p => p._fromEngine);
-        const eventId = TelemetryManager.Instance.StartEvent(
-            'RunView',
-            'RunView.ExecuteBatch',
-            {
-                BatchSize: params.length,
-                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
-                _fromEngine: fromEngine
-            },
-            contextUser?.ID
-        );
-
-        try {
-            // same as RunView, a simple proxy to the provider, pre/post processes are moved to
-            // ProviderBase as with RunView
-            return this.ProviderToUse.RunViews(params, contextUser);
-        } finally {
-            TelemetryManager.Instance.EndEvent(eventId);
-        }
+        // Simple proxy to the provider, pre/post processes are moved to
+        // ProviderBase which handles telemetry and transformation
+        return this.ProviderToUse.RunViews(params, contextUser);
     }
 
     private static _globalProviderKey: string = 'MJ_RunViewProvider';

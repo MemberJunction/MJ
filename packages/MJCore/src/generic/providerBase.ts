@@ -4,7 +4,7 @@ import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageP
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
+import { MJGlobal, SafeJSONParse, TelemetryManager } from "@memberjunction/global";
 import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
@@ -199,10 +199,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Base class pre-processor that all sub-classes should call before they start their RunView process
-     * @param params 
-     * @param contextUser 
+     * @param params
+     * @param contextUser
      */
     protected async PreProcessRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
+        // Start telemetry tracking
+        const eventId = TelemetryManager.Instance.StartEvent(
+            'RunView',
+            'ProviderBase.RunView',
+            {
+                EntityName: params.EntityName,
+                ViewID: params.ViewID,
+                ViewName: params.ViewName,
+                ExtraFilter: params.ExtraFilter,
+                OrderBy: params.OrderBy,
+                ResultType: params.ResultType,
+                MaxRows: params.MaxRows,
+                StartRow: params.StartRow,
+                _fromEngine: params._fromEngine
+            },
+            contextUser?.ID
+        );
+        // Store on params object for retrieval in PostProcessRunView
+        (params as Record<string, unknown>)._telemetryEventId = eventId;
+
         await this.EntityStatusCheck(params, 'PreProcessRunView');
 
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
@@ -218,23 +238,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Base class post-processor that all sub-classes should call after they finish their RunView process
-     * @param params 
-     * @param contextUser 
-     * @returns 
+     * @param params
+     * @param contextUser
+     * @returns
      */
     protected async PostProcessRunView(result: RunViewResult, params: RunViewParams, contextUser?: UserInfo): Promise<void> {
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
+
+        // End telemetry tracking
+        const eventId = (params as Record<string, unknown>)._telemetryEventId as string | undefined;
+        if (eventId) {
+            TelemetryManager.Instance.EndEvent(eventId);
+            delete (params as Record<string, unknown>)._telemetryEventId;
+        }
     }
 
     /**
-     * Base class implementation for handling pre-processing of RunViews() each sub-class should call this 
+     * Base class implementation for handling pre-processing of RunViews() each sub-class should call this
      * within their RunViews() method implementation
-     * @param params 
-     * @param contextUser 
-     * @returns 
+     * @param params
+     * @param contextUser
+     * @returns
      */
     protected async PreProcessRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
+        // Start telemetry tracking for batch operation
+        const fromEngine = params.some(p => p._fromEngine);
+        const eventId = TelemetryManager.Instance.StartEvent(
+            'RunView',
+            'ProviderBase.RunViews',
+            {
+                BatchSize: params.length,
+                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                _fromEngine: fromEngine
+            },
+            contextUser?.ID
+        );
+        // Store on first param for retrieval in PostProcessRunViews (using a special key to avoid collision)
+        if (params.length > 0) {
+            (params[0] as Record<string, unknown>)._telemetryBatchEventId = eventId;
+        }
+
         if (params && params.length > 0) {
             for (const param of params) {
                 this.EntityStatusCheck(param, 'PreProcessRunViews');
@@ -255,11 +299,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Base class utilty method that should be called after each sub-class handles its internal RunViews() process before returning results
-     * This handles the optional conversion of simple objects to entity objects for each requested view depending on if the params requests 
+     * This handles the optional conversion of simple objects to entity objects for each requested view depending on if the params requests
      * a result_type === 'entity_object'
-     * @param results 
-     * @param params 
-     * @param contextUser 
+     * @param results
+     * @param params
+     * @param contextUser
      */
     protected async PostProcessRunViews(results: RunViewResult[], params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
         if (params && params.length > 0) {
@@ -269,6 +313,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
             // await the promises for all transformations
             await Promise.all(promises);
+
+            // End telemetry tracking for batch operation
+            const eventId = (params[0] as Record<string, unknown>)._telemetryBatchEventId as string | undefined;
+            if (eventId) {
+                TelemetryManager.Instance.EndEvent(eventId);
+                delete (params[0] as Record<string, unknown>)._telemetryBatchEventId;
+            }
         }
     }
 
