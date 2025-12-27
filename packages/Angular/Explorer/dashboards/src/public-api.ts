@@ -14,6 +14,8 @@ import { LoadCredentialsListResource } from './Credentials/components/credential
 import { LoadCredentialsTypesResource } from './Credentials/components/credentials-types-resource.component';
 import { LoadCredentialsCategoriesResource } from './Credentials/components/credentials-categories-resource.component';
 import { LoadCredentialsAuditResource } from './Credentials/components/credentials-audit-resource.component';
+// System Diagnostics
+import { LoadSystemDiagnosticsResource } from './SystemDiagnostics/system-diagnostics.component';
 
 import {
   LoadActionsOverviewResource,
@@ -51,6 +53,7 @@ export * from './Testing/testing-dashboard.component';
 export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
+export * from './SystemDiagnostics';
 
 // Export AI components as resources (BaseResourceComponent-based)
 export {
@@ -187,3 +190,6 @@ LoadCredentialsListResource();
 LoadCredentialsTypesResource();
 LoadCredentialsCategoriesResource();
 LoadCredentialsAuditResource();
+
+// System Diagnostics resource loader
+LoadSystemDiagnosticsResource();

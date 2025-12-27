@@ -7,8 +7,10 @@ import { RunView, RunViewParams } from "../views/runView";
 import { LogError, LogStatus } from "./logging";
 import { Metadata } from "./metadata";
 import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewResult } from "./interfaces";
-import { BaseInfo } from "./baseInfo"; 
+import { BaseInfo } from "./baseInfo";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
+import { BaseEngineRegistry } from "./baseEngineRegistry";
+import { DataPool, DataPoolConfig } from "./dataPool";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -76,12 +78,45 @@ export class BaseEnginePropertyConfig extends BaseInfo {
             Object.assign(this, init);
     }
 }
- 
+
+/**
+ * Options for the ConfigEx method - provides a more flexible way to configure engines
+ */
+export interface ConfigExOptions {
+    /**
+     * Force refresh from server, bypassing all caches. Default: false
+     */
+    forceRefresh?: boolean;
+    /**
+     * The user context for permission checks (required for server-side)
+     */
+    contextUser?: UserInfo;
+    /**
+     * Custom provider to use instead of the default
+     */
+    provider?: IMetadataProvider;
+    /**
+     * Whether to use the DataPool for request pooling. Default: true
+     */
+    useDataPool?: boolean;
+    /**
+     * Custom DataPool configuration (only applies if useDataPool is true)
+     */
+    dataPoolConfig?: Partial<DataPoolConfig>;
+    /**
+     * Whether to skip provider-specific local cache, if there is one (e.g. IndexedDB). Default: false
+     */
+    skipLocalCache?: boolean;
+    /**
+     * Whether to skip the request pooling window and execute immediately. Default: false
+     */
+    skipPooling?: boolean;
+}
 
 /**
  * Abstract base class for any engine-style class which executes work on behalf of a caller typically using a provider-style architecture with plug-ins. This base class
  * provides a mechanism for loading metadata from the database and caching it for use by the engine. Subclasses must implement the Config abstract method and within that
- * generally it is recommended to call the Load method to load the metadata. Subclasses can also override the AdditionalLoading method to perform additional loading tasks. 
+ * generally it is recommended to call the Load method to load the metadata. Subclasses can also override the AdditionalLoading method to perform additional loading tasks.
  */
 export abstract class BaseEngine<T> extends BaseSingleton<T> {
     private _loaded: boolean = false;
@@ -89,10 +124,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     private _contextUser: UserInfo;
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
-    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: any[] }> = new Map();
+    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: unknown[] }> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
+    private _configExOptions: ConfigExOptions | undefined;
+    private _callerConfigExOptions: ConfigExOptions | undefined; // Options explicitly passed by caller via ConfigEx
+    private _callerConfigured: boolean = false;  // True after ConfigEx/Config called by external caller
+    private _engineConfigSet: boolean = false;   // True after SetEngineConfig called by subclass
 
     /**
      * While the BaseEngine class is a singleton, normally, it is possible to have multiple instances of the class in an application if the class is used in multiple contexts that have different providers.
@@ -125,16 +164,74 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     }
  
     /**
-     * Configures the engine by loading metadata from the database.  
+     * Configures the engine by loading metadata from the database.
+     * Subclasses must implement this method to define their configuration behavior.
+     *
+     * Note: This method is called by ConfigEx() - prefer using ConfigEx() directly for new code
+     * as it provides more options (DataPool, caching controls, etc).
      */
-    public abstract Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider);
+    public abstract Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown>;
+
+    /**
+     * Extended configuration method with object-based options.
+     * This provides a more flexible API compared to Config() with positional parameters.
+     *
+     * Internally calls Config() after setting up options that Load() can access.
+     *
+     * @param options - Configuration options object
+     * @returns Promise that resolves when configuration is complete
+     *
+     * @example
+     * ```typescript
+     * await MyEngine.Instance.ConfigEx({
+     *   forceRefresh: true,
+     *   contextUser: currentUser,
+     *   useDataPool: true,
+     *   dataPoolConfig: { poolingWindowMs: 100 }
+     * });
+     * ```
+     */
+    public async ConfigEx(options: ConfigExOptions = {}): Promise<unknown> {
+        // If caller already configured and this isn't a forceRefresh, warn and ignore new options
+        if (this._callerConfigured && !options.forceRefresh) {
+            const ignoredKeys = Object.keys(options).filter(k => k !== 'forceRefresh' && k !== 'contextUser' && k !== 'provider');
+            if (ignoredKeys.length > 0) {
+                console.warn(
+                    `[${this.constructor.name}] ConfigEx() called after engine was already configured. ` +
+                    `Ignoring options: ${ignoredKeys.join(', ')}. ` +
+                    `Use ConfigEx({ forceRefresh: true }) to reload data.`
+                );
+            }
+            // Still allow the call to proceed (engine is already loaded), just don't reconfigure
+            return;
+        }
+
+        // Store caller's explicit options (only on first config, not forceRefresh)
+        if (!this._callerConfigured) {
+            this._callerConfigured = true;
+            this._callerConfigExOptions = Object.keys(options).length > 0 ? { ...options } : undefined;
+            this._configExOptions = options;
+        }
+
+        // Apply DataPool configuration if specified
+        if (options.useDataPool && options.dataPoolConfig) {
+            DataPool.Instance.Configure(options.dataPoolConfig);
+        }
+
+        // Call the abstract Config method which subclasses implement
+        return await this.Config(
+            options.forceRefresh ?? false,
+            options.contextUser,
+            options.provider
+        );
+    }
 
     /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
-     * @param configs 
-     * @param contextUser 
-     * @returns 
+     * @param configs
+     * @param contextUser
+     * @returns
      */
     protected async Load(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
         if (this.ProviderToUse.ProviderType === ProviderType.Database && !contextUser)
@@ -156,16 +253,128 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
                 this.SetProvider(provider);
                 this._contextUser = contextUser;
 
+                // Register with the engine registry
+                BaseEngineRegistry.Instance.RegisterEngine(this);
+
                 await this.LoadConfigs(configs, contextUser);
                 await this.AdditionalLoading(contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
                 this._loaded = true;
+
+                // Notify registry that engine is loaded
+                BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
             } catch (e) {
                 LogError(e);
             } finally {
                 this._loadingSubject.next(false);
             }
         }
+    }
+
+    /**
+     * Sets the engine's configuration options. Since engines are singletons, these options
+     * define how THIS engine instance behaves (e.g., whether to use DataPool).
+     *
+     * This method can only be called ONCE per engine instance. Calling it again will throw
+     * an error, as the engine's configuration should not change after initial setup.
+     * Note: forceRefresh scenarios reload data but do not reconfigure the engine.
+     *
+     * Call this in your engine's Config() implementation to establish the engine's behavior.
+     * Options set here are merged with any options passed via ConfigEx() by the caller.
+     *
+     * @param options - The configuration options for this engine
+     * @param overrideCaller - If true, engine options override caller's ConfigEx() options.
+     *                        If false (default), caller's options take precedence.
+     * @throws Error if called more than once on the same engine instance
+     *
+     * @example
+     * ```typescript
+     * // In your engine's Config() implementation:
+     * async Config(forceRefresh, contextUser, provider) {
+     *     // Enable pooling by default - caller can still override via ConfigEx({ useDataPool: false })
+     *     this.SetEngineConfig({ useDataPool: true });
+     *
+     *     await this.Load([...], provider, forceRefresh, contextUser);
+     * }
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Force pooling - caller cannot override:
+     * this.SetEngineConfig({ useDataPool: true }, true);
+     * ```
+     */
+    protected SetEngineConfig(options: Partial<ConfigExOptions>, overrideCaller: boolean = false): void {
+        if (this._engineConfigSet) {
+            throw new Error(
+                `SetEngineConfig() can only be called once per engine instance. ` +
+                `Engine "${this.constructor.name}" has already been configured. ` +
+                `If you need to reload data, use Config(true) or ConfigEx({ forceRefresh: true }) instead.`
+            );
+        }
+        this._engineConfigSet = true;
+
+        if (overrideCaller && this._callerConfigExOptions) {
+            // Engine is overriding caller's explicit options - warn about any conflicts
+            const conflicts: string[] = [];
+            for (const key of Object.keys(options) as (keyof ConfigExOptions)[]) {
+                if (key in this._callerConfigExOptions &&
+                    this._callerConfigExOptions[key] !== undefined &&
+                    this._callerConfigExOptions[key] !== options[key]) {
+                    conflicts.push(`${key}: caller set "${this._callerConfigExOptions[key]}", engine forcing "${options[key]}"`);
+                }
+            }
+            if (conflicts.length > 0) {
+                console.warn(
+                    `[${this.constructor.name}] Engine is overriding caller's ConfigEx options:\n` +
+                    conflicts.map(c => `  - ${c}`).join('\n')
+                );
+            }
+            // Engine options take precedence over caller options
+            this._configExOptions = { ...this._configExOptions, ...options };
+        } else if (overrideCaller) {
+            // Engine options take precedence, no caller options to warn about
+            this._configExOptions = { ...this._configExOptions, ...options };
+        } else {
+            // Caller options take precedence - merge engine options first, then caller on top
+            this._configExOptions = { ...options, ...this._configExOptions };
+        }
+    }
+
+    /**
+     * Returns a read-only copy of the engine's current configuration options.
+     * The returned object is a deep copy to prevent external mutation.
+     */
+    public get EngineConfig(): Readonly<ConfigExOptions> {
+        return JSON.parse(JSON.stringify(this._configExOptions || {}));
+    }
+
+    /**
+     * Returns true if SetEngineConfig() has been called on this engine instance.
+     * Useful for subclasses to check before calling SetEngineConfig() in their Config() method.
+     */
+    protected get IsConfigured(): boolean {
+        return this._engineConfigSet;
+    }
+
+    /**
+     * Check if DataPool should be used for loading based on engine configuration.
+     * DataPool is opt-in - only enabled when explicitly set to true via SetEngineConfig() or ConfigEx().
+     */
+    protected get UseDataPool(): boolean {
+        return this._configExOptions?.useDataPool === true;
+    }
+
+    /**
+     * Get DataPool request options from engine configuration.
+     */
+    protected get DataPoolRequestOptions(): { forceRefresh?: boolean; skipPooling?: boolean; skipCache?: boolean } | undefined {
+        if (!this._configExOptions) return undefined;
+        return {
+            forceRefresh: this._configExOptions.forceRefresh,
+            skipPooling: this._configExOptions.skipPooling,
+            skipCache: this._configExOptions.skipLocalCache
+        };
     }
 
     /**********************************************************************
@@ -459,26 +668,67 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
 
     /**
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
-     * @param configs 
-     * @param contextUser 
+     * @param configs
+     * @param contextUser
      */
     protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
         if (configs && configs.length > 0) {
-            const p = this.RunViewProviderToUse;
-            const rv = new RunView(p);
-            const viewConfigs = configs.map(c => {
-                return <RunViewParams>{
-                    EntityName: c.EntityName,
-                    ResultType: 'entity_object',
-                    ExtraFilter: c.Filter,
-                    OrderBy: c.OrderBy
-                };
-            });
-            const results = await rv.RunViews(viewConfigs, contextUser);
-            // now loop through the results and process them
-            for (let i = 0; i < configs.length; i++) {
-                this.HandleSingleViewResult(configs[i], results[i]);
-            }    
+            // Check if we should use DataPool for request pooling
+            if (this.UseDataPool) {
+                await this.LoadMultipleEntityConfigsViaDataPool(configs, contextUser);
+            } else {
+                await this.LoadMultipleEntityConfigsViaRunViews(configs, contextUser);
+            }
+        }
+    }
+
+    /**
+     * Load multiple entity configs using DataPool for request pooling and caching
+     */
+    protected async LoadMultipleEntityConfigsViaDataPool(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+        const requests = configs.map(c => ({
+            entityName: c.EntityName!,
+            filter: c.Filter,
+            orderBy: c.OrderBy,
+            resultType: 'entity_object' as const
+        }));
+
+        const results = await DataPool.Instance.Request(requests, contextUser, this.DataPoolRequestOptions);
+
+        // Process results
+        for (let i = 0; i < configs.length; i++) {
+            const config = configs[i];
+            const data = results[i];
+
+            if (config.AddToObject !== false) {
+                (this as unknown as Record<string, unknown>)[config.PropertyName] = data;
+            }
+            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: data as unknown[] });
+
+            if (config.Expiration) {
+                this.SetExpirationTimer(config.PropertyName, config.Expiration);
+            }
+        }
+    }
+
+    /**
+     * Load multiple entity configs using RunViews directly (original method)
+     */
+    protected async LoadMultipleEntityConfigsViaRunViews(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+        const p = this.RunViewProviderToUse;
+        const rv = new RunView(p);
+        const viewConfigs = configs.map(c => {
+            return <RunViewParams>{
+                EntityName: c.EntityName,
+                ResultType: 'entity_object',
+                ExtraFilter: c.Filter,
+                OrderBy: c.OrderBy
+            };
+        });
+        const results = await rv.RunViews(viewConfigs, contextUser);
+        // now loop through the results and process them
+        for (let i = 0; i < configs.length; i++) {
+            this.HandleSingleViewResult(configs[i], results[i]);
         }
     }
 

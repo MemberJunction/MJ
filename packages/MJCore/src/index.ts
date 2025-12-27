@@ -33,6 +33,8 @@ export * from "./generic/metadataUtil";
 export * from "./generic/authTypes";
 
 export * from "./generic/databaseProviderBase";
+export * from "./generic/dataPool";
+export * from "./generic/baseEngineRegistry";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider;

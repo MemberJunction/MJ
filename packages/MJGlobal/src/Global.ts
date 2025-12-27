@@ -3,6 +3,7 @@ import { Subject, ReplaySubject, Observable } from 'rxjs';
 import { ClassFactory } from './ClassFactory'
 import { ObjectCache } from './ObjectCache';
 import { BaseSingleton } from './BaseSingleton';
+import { StartupRegistration, LoadResult, LoadAllResult, LoadOnStartupOptions, ILoadOnStartup } from './LoadOnStartup';
 
 /**
  * Global class used for coordinating events, creating class instances, and managing components across MemberJunction
@@ -91,5 +92,153 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
      */
     public get ObjectCache(): ObjectCache {
         return this._objectCache;
+    }
+
+    /***********************************************************************
+     * STARTUP LOADING INFRASTRUCTURE
+     *
+     * These methods support the @LoadOnStartup decorator pattern for
+     * automatic initialization of singleton classes at application startup.
+     ***********************************************************************/
+
+    private _startupRegistrations: StartupRegistration[] = [];
+    private _startupLoadCompleted: boolean = false;
+
+    /**
+     * Register a class for startup loading. Called by @LoadOnStartup decorator.
+     * @param registration - The registration information for the class
+     */
+    public RegisterForStartup(registration: Omit<StartupRegistration, 'loadedAt' | 'loadDurationMs'>): void {
+        this._startupRegistrations.push(registration as StartupRegistration);
+    }
+
+    /**
+     * Get all registered startup classes, sorted by priority (lower numbers first).
+     * @returns Array of startup registrations sorted by priority
+     */
+    public GetStartupRegistrations(): StartupRegistration[] {
+        return [...this._startupRegistrations].sort((a, b) => {
+            const priorityA = this.ResolvePriority(a.options);
+            const priorityB = this.ResolvePriority(b.options);
+            return priorityA - priorityB;
+        });
+    }
+
+    /**
+     * Check if startup loading has been completed
+     */
+    public get StartupLoadCompleted(): boolean {
+        return this._startupLoadCompleted;
+    }
+
+    /**
+     * Load all registered startup classes in priority order.
+     * Classes with the same priority are loaded in parallel.
+     *
+     * @param contextUser - The authenticated user context (type is unknown to avoid circular deps)
+     * @returns Results of all load operations
+     */
+    public async LoadAll(contextUser?: unknown): Promise<LoadAllResult> {
+        const startTime = Date.now();
+        const registrations = this.GetStartupRegistrations();
+        const groups = this.GroupByPriority(registrations);
+        const results: LoadResult[] = [];
+
+        for (const group of groups) {
+            const groupResults = await Promise.all(
+                group.map(async (reg): Promise<LoadResult> => {
+                    const loadStart = Date.now();
+                    try {
+                        const instance = reg.getInstance();
+                        await instance.Load(contextUser);
+
+                        reg.loadedAt = new Date();
+                        reg.loadDurationMs = Date.now() - loadStart;
+
+                        return {
+                            className: reg.constructor.name,
+                            success: true,
+                            durationMs: reg.loadDurationMs
+                        };
+                    } catch (error) {
+                        const durationMs = Date.now() - loadStart;
+                        return {
+                            className: reg.constructor.name,
+                            success: false,
+                            error: error as Error,
+                            severity: reg.options.severity || 'error',
+                            durationMs
+                        };
+                    }
+                })
+            );
+
+            results.push(...groupResults);
+
+            // Check for fatal errors - stop immediately
+            const fatal = groupResults.find(r => !r.success && r.severity === 'fatal');
+            if (fatal) {
+                return {
+                    success: false,
+                    results,
+                    totalDurationMs: Date.now() - startTime,
+                    fatalError: fatal.error
+                };
+            }
+
+            // Log non-fatal errors
+            for (const result of groupResults) {
+                if (!result.success) {
+                    if (result.severity === 'error') {
+                        console.error(`[MJGlobal] Error loading ${result.className}:`, result.error);
+                    } else if (result.severity === 'warn') {
+                        console.warn(`[MJGlobal] Warning loading ${result.className}:`, result.error);
+                    }
+                    // 'silent' - do nothing
+                }
+            }
+        }
+
+        this._startupLoadCompleted = true;
+
+        return {
+            success: results.every(r => r.success || r.severity !== 'fatal'),
+            results,
+            totalDurationMs: Date.now() - startTime
+        };
+    }
+
+    /**
+     * Resolve the priority from options, defaulting to 100 if not specified.
+     */
+    private ResolvePriority(options: LoadOnStartupOptions): number {
+        return options.priority ?? 100;
+    }
+
+    /**
+     * Group registrations by their priority for parallel loading within priority levels.
+     */
+    private GroupByPriority(registrations: StartupRegistration[]): StartupRegistration[][] {
+        const groups = new Map<number, StartupRegistration[]>();
+
+        for (const reg of registrations) {
+            const priority = this.ResolvePriority(reg.options);
+            if (!groups.has(priority)) {
+                groups.set(priority, []);
+            }
+            groups.get(priority)!.push(reg);
+        }
+
+        return Array.from(groups.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([_, group]) => group);
+    }
+
+    /**
+     * Reset startup registrations. Use with caution, primarily for testing.
+     */
+    public ResetStartupRegistrations(): void {
+        this._startupRegistrations = [];
+        this._startupLoadCompleted = false;
     }
 }

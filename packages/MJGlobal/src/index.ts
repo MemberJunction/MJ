@@ -12,6 +12,7 @@ export * from './JSONValidator'
 export * from './SafeExpressionEvaluator'
 export * from './warningManager'
 export * from './EncryptionUtils'
+export * from './LoadOnStartup'
 
 // Export the main classes
 export * from './Global'

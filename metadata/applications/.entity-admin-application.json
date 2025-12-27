@@ -48,6 +48,13 @@
         "ResourceType": "Dashboards",
         "RecordID": "@lookup:Dashboards.Name=SQL Logging?allowDefer",
         "isDefault": true
+      },
+      {
+        "Label": "Diagnostics",
+        "Icon": "fa-solid fa-stethoscope",
+        "ResourceType": "Custom",
+        "DriverClass": "SystemDiagnosticsResource",
+        "isDefault": false
       }
     ]
   },
@@ -58,7 +65,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-12-04T21:07:42.726Z",
-    "checksum": "6786ab289e64db40e9bb53c5262ecc7e21beab1b92c9ddb240e7b0c860798a9d"
+    "lastModified": "2025-12-26T17:18:33.345Z",
+    "checksum": "632748f75eb8e80202c9fb13a0a86b54ec222b63df1bb32e77a959f40c353192"
   }
 }

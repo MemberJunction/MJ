@@ -115,6 +115,8 @@ import { CredentialEditPanelComponent } from './Credentials/components/credentia
 import { CredentialTypeEditPanelComponent } from './Credentials/components/credential-type-edit-panel.component';
 import { CredentialCategoryEditPanelComponent } from './Credentials/components/credential-category-edit-panel.component';
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
+// System Diagnostics Components
+import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 
 
 
@@ -204,7 +206,9 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CredentialEditPanelComponent,
     CredentialTypeEditPanelComponent,
     CredentialCategoryEditPanelComponent,
-    GroupByPipe
+    GroupByPipe,
+    // System Diagnostics Components
+    SystemDiagnosticsComponent
   ],
   imports: [
     CommonModule,
@@ -295,7 +299,9 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CredentialEditPanelComponent,
     CredentialTypeEditPanelComponent,
     CredentialCategoryEditPanelComponent,
-    GroupByPipe
+    GroupByPipe,
+    // System Diagnostics Components
+    SystemDiagnosticsComponent
   ]
 })
 export class DashboardsModule { }

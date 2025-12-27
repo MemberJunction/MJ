@@ -20,6 +20,11 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
     private _dashboardUserStates: DashboardUserStateEntity[];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
+        // Enable DataPool for efficient batched loading
+        if (!this.IsConfigured) {
+            this.SetEngineConfig({ useDataPool: true }, true);
+        }
+
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
