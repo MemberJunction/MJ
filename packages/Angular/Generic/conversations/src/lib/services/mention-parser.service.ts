@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Mention, MentionParseResult } from '../models/conversation-state.model';
-import { AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo } from '@memberjunction/core';
 
 /**

@@ -1,5 +1,5 @@
 import { BaseEntity } from "@memberjunction/core";
-import { AIAgentActionEntity, AIAgentEntity, AIAgentModelEntity, AIAgentNoteEntity } from "../generated/entity_subclasses";
+import { AIAgentActionEntity, AIAgentEntity, AIAgentModelEntity, AIAgentNoteEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, "AI Agents")
@@ -22,3 +22,6 @@ export class AIAgentEntityExtended extends AIAgentEntity {
         return this._notes;
     }
 }
+
+// tree shaking load stub
+export function LoadAIAgentEntityExtended() {}

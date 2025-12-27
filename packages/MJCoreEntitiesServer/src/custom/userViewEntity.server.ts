@@ -1,6 +1,7 @@
 import { CleanJSON, MJGlobal, RegisterClass } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, Metadata, IMetadataProvider } from "@memberjunction/core";
-import { AIModelEntity, AIModelEntityExtended, UserViewEntityExtended } from '@memberjunction/core-entities'
+import { BaseEntity, EntityInfo, LogError, IMetadataProvider } from "@memberjunction/core";
+import { UserViewEntityExtended } from '@memberjunction/core-entities'
+import { AIModelEntityExtended } from "@memberjunction/ai-core-plus";
 import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 import { AIEngine } from "@memberjunction/aiengine";
 

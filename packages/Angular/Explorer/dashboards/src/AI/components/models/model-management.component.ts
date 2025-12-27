@@ -1,11 +1,12 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIModelEntityExtended, AIVendorEntity, AIModelTypeEntity, ResourceData } from '@memberjunction/core-entities';
+import { AIVendorEntity, AIModelTypeEntity, ResourceData } from '@memberjunction/core-entities';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface ModelDisplayData extends AIModelEntityExtended {
   VendorName?: string;

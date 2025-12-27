@@ -1,15 +1,13 @@
 import { BaseEngine, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity,
-         AIModelActionEntity, AIModelEntityExtended,
+import { AIActionEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity,
+         AIModelActionEntity,
          AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity,
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
-         AIPromptCategoryEntityExtended, AIAgentEntityExtended,
          AIAgentPromptEntity,
          AIAgentTypeEntity,
          AIVendorEntity,
          AIModelVendorEntity,
          AIModelTypeEntity,
-         AIPromptEntityExtended,
          AIModelCostEntity,
          AIModelPriceTypeEntity,
          AIModelPriceUnitTypeEntity,
@@ -23,6 +21,8 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIAgentConfigurationEntity,
          AIAgentExampleEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
+import { TemplateEngineBase } from "@memberjunction/templates-base-types";
+import { AIPromptEntityExtended, AIPromptCategoryEntityExtended, AIModelEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -175,6 +175,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'MJ: AI Agent Configurations'
             }
         ];
+
+        // make sure template engine base is loaded up
+        await TemplateEngineBase.Instance.Config(false, contextUser);
+        
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
 

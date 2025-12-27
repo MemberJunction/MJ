@@ -13,7 +13,8 @@ import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView, CompositeKey } from '@memberjunction/core';
-import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { ResourceData } from "@memberjunction/core-entities";
+import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 

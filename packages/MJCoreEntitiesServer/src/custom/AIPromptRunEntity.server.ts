@@ -1,6 +1,6 @@
 import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
-import { AIPromptRunEntityExtended } from "@memberjunction/core-entities";
+import { AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base";
 
 /**

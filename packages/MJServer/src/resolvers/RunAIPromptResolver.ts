@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata } from '@memberjunction/core';
-import { AIPromptEntityExtended, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { ResolverBase } from '../generic/ResolverBase.js';

@@ -1,6 +1,7 @@
-import { BaseEntity, BaseEntityResult, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogError, LogErrorEx, RunView, TransactionGroupBase } from "@memberjunction/core";
-import { compareStringsByLine, RegisterClass, uuidv4 } from "@memberjunction/global";
-import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity, AIPromptEntityExtended } from "@memberjunction/core-entities";
+import { BaseEntity, BaseEntityResult, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogErrorEx, TransactionGroupBase } from "@memberjunction/core";
+import { RegisterClass, uuidv4 } from "@memberjunction/global";
+import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity } from "@memberjunction/core-entities";
 
 /**
  * Server specific sub-class that handles the automatic creation and updating of

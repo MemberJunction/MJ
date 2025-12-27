@@ -1,7 +1,8 @@
 import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
-import { ActionEntity, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { ActionEntity } from '@memberjunction/core-entities';
 import { ActionMatchResult, ActionEmbeddingMetadata } from '../types/ActionMatchResult';
 import { EmbedTextResult } from '@memberjunction/ai';
+import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Utility service for action embedding operations.

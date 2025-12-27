@@ -13,9 +13,10 @@ import {
   ComponentObject,
   SimpleEntityInfo
 } from '@memberjunction/interactive-component-types';
-import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
  
 
 /**

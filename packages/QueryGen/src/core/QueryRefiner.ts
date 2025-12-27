@@ -6,7 +6,7 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo, LogStatus } from '@memberjunction/core';
 import { extractErrorMessage } from '../utils/error-handlers';
 import {

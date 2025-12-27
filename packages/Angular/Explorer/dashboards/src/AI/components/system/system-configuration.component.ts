@@ -1,9 +1,10 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { LogError, LogStatus, CompositeKey } from '@memberjunction/core';
-import { AIConfigurationEntity, AIConfigurationParamEntity, AIPromptEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { AIConfigurationEntity, AIConfigurationParamEntity, ResourceData } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface SystemConfigFilter {
   searchTerm: string;

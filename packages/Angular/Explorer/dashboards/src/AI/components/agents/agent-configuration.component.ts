@@ -1,10 +1,11 @@
 import { Component, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { AIAgentEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { ResourceData } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface AgentFilter {
   searchTerm: string;

@@ -1,13 +1,11 @@
 import {
-  ConversationEntity,
-  ConversationDetailEntity,
   ArtifactEntity,
-  ArtifactVersionEntity,
-  AIAgentRunEntityExtended,
-  CollectionEntity,
-  ProjectEntity,
-  TaskEntity
+  ArtifactVersionEntity
 } from '@memberjunction/core-entities';
+
+import {
+  AIAgentRunEntityExtended
+} from "@memberjunction/ai-core-plus";
 
 /**
  * Peripheral data loaded for a conversation detail message

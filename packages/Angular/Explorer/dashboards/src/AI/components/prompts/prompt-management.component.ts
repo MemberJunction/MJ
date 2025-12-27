@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
+import { AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
@@ -9,6 +9,7 @@ import { SharedService, BaseResourceComponent, NavigationService } from '@member
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass } from '@memberjunction/global';
+import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
   Template: string; // From AIPromptEntityExtended (view field)

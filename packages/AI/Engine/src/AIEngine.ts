@@ -8,7 +8,7 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIAgentEntityExtended, AIModelEntityExtended, ActionEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, ActionEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -18,6 +18,7 @@ import { ActionEmbeddingMetadata, ActionMatchResult } from "./types/ActionMatchR
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
+import { AIAgentEntityExtended, AIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
 
 /**
