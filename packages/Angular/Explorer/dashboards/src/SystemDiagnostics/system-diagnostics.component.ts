@@ -80,6 +80,15 @@ export interface PatternSortConfig {
 }
 
 /**
+ * Event detail panel state
+ */
+export interface EventDetailPanelState {
+    isOpen: boolean;
+    event: TelemetryEventDisplay | null;
+    relatedPattern: TelemetryPatternDisplay | null;
+}
+
+/**
  * Summary stats for telemetry
  */
 export interface TelemetrySummary {
@@ -548,7 +557,7 @@ export function LoadSystemDiagnosticsResource() {
                                         <div class="timeline-container">
                                             @if (filteredEvents.length > 0) {
                                                 @for (event of filteredEvents.slice(0, 50); track event.id) {
-                                                    <div class="timeline-item" [class]="'tl-' + event.category.toLowerCase()">
+                                                    <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" (click)="openEventDetailPanel(event)">
                                                         <div class="timeline-marker">
                                                             <div class="marker-dot"></div>
                                                             <div class="marker-line"></div>
@@ -788,8 +797,127 @@ export function LoadSystemDiagnosticsResource() {
                     <i class="fa-solid fa-clock"></i>
                     Last updated: {{ lastUpdated | date:'medium' }}
                 </span>
+                <button class="export-btn" (click)="exportTelemetryData()" [disabled]="!telemetryEnabled || telemetryEvents.length === 0">
+                    <i class="fa-solid fa-download"></i>
+                    Export JSON
+                </button>
             </div>
         </div>
+
+        <!-- Event Detail Slide-in Panel -->
+        @if (eventDetailPanel.isOpen && eventDetailPanel.event) {
+            <div class="event-detail-overlay" (click)="closeEventDetailPanel()"></div>
+            <div class="event-detail-panel" [class.open]="eventDetailPanel.isOpen">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="category-chip" [class]="'cat-' + eventDetailPanel.event.category.toLowerCase()">
+                            {{ eventDetailPanel.event.category }}
+                        </span>
+                        <h3>Event Details</h3>
+                    </div>
+                    <button class="close-btn" (click)="closeEventDetailPanel()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="panel-body">
+                    <!-- Key Metrics -->
+                    <div class="detail-metrics">
+                        <div class="metric">
+                            <div class="metric-value" [class.slow]="(eventDetailPanel.event.elapsedMs || 0) >= slowQueryThresholdMs">
+                                {{ eventDetailPanel.event.elapsedMs !== undefined ? (eventDetailPanel.event.elapsedMs | number:'1.0-0') + 'ms' : 'In Progress' }}
+                            </div>
+                            <div class="metric-label">Duration</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">{{ formatTimestamp(eventDetailPanel.event.timestamp) }}</div>
+                            <div class="metric-label">Time</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">+{{ formatRelativeTime(eventDetailPanel.event.startTime - telemetryBootTime) }}</div>
+                            <div class="metric-label">Relative</div>
+                        </div>
+                    </div>
+
+                    <!-- Operation Info -->
+                    <div class="detail-section">
+                        <h4><i class="fa-solid fa-code"></i> Operation</h4>
+                        <div class="detail-content">
+                            <div class="detail-row">
+                                <span class="detail-key">Operation:</span>
+                                <span class="detail-val">{{ eventDetailPanel.event.operation }}</span>
+                            </div>
+                            @if (eventDetailPanel.event.entityName) {
+                                <div class="detail-row">
+                                    <span class="detail-key">Entity:</span>
+                                    <span class="detail-val entity-highlight">{{ eventDetailPanel.event.entityName }}</span>
+                                </div>
+                            }
+                            @if (eventDetailPanel.event.filter) {
+                                <div class="detail-row">
+                                    <span class="detail-key">Filter:</span>
+                                    <code class="detail-val filter-val">{{ eventDetailPanel.event.filter }}</code>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- All Parameters -->
+                    <div class="detail-section">
+                        <h4><i class="fa-solid fa-sliders"></i> Parameters</h4>
+                        <div class="params-grid">
+                            @for (param of getEventParams(eventDetailPanel.event); track param.key) {
+                                <div class="param-item">
+                                    <span class="param-name">{{ param.key }}</span>
+                                    <span class="param-val">{{ param.value }}</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Related Pattern -->
+                    @if (eventDetailPanel.relatedPattern) {
+                        <div class="detail-section">
+                            <h4><i class="fa-solid fa-fingerprint"></i> Related Pattern</h4>
+                            <div class="pattern-summary">
+                                <div class="pattern-stat">
+                                    <span class="stat-val">{{ eventDetailPanel.relatedPattern.count }}</span>
+                                    <span class="stat-label">Total Calls</span>
+                                </div>
+                                <div class="pattern-stat">
+                                    <span class="stat-val">{{ eventDetailPanel.relatedPattern.avgElapsedMs | number:'1.1-1' }}ms</span>
+                                    <span class="stat-label">Avg Duration</span>
+                                </div>
+                                <div class="pattern-stat">
+                                    <span class="stat-val">{{ eventDetailPanel.relatedPattern.minElapsedMs | number:'1.0-0' }} - {{ eventDetailPanel.relatedPattern.maxElapsedMs | number:'1.0-0' }}ms</span>
+                                    <span class="stat-label">Range</span>
+                                </div>
+                            </div>
+                            @if (eventDetailPanel.relatedPattern.count >= 2) {
+                                <div class="pattern-warning">
+                                    <i class="fa-solid fa-exclamation-triangle"></i>
+                                    This pattern has been called {{ eventDetailPanel.relatedPattern.count }} times. Consider caching or batching.
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Actions -->
+                    <div class="detail-actions">
+                        <button class="action-button" (click)="copyEventToClipboard(eventDetailPanel.event)">
+                            <i class="fa-solid fa-copy"></i>
+                            Copy JSON
+                        </button>
+                        @if (eventDetailPanel.event.entityName) {
+                            <button class="action-button" (click)="filterByEntity(eventDetailPanel.event.entityName)">
+                                <i class="fa-solid fa-filter"></i>
+                                Filter by Entity
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
     `,
     styles: [`
         .system-diagnostics {
@@ -2528,6 +2656,343 @@ export function LoadSystemDiagnosticsResource() {
                 gap: 8px;
             }
         }
+
+        /* Export Button */
+        .export-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .export-btn:hover:not(:disabled) {
+            background: #43a047;
+            transform: translateY(-1px);
+        }
+
+        .export-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Event Detail Slide-in Panel */
+        .event-detail-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 999;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .event-detail-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 450px;
+            max-width: 90vw;
+            height: 100vh;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            animation: slideIn 0.25s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+
+        .event-detail-panel .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .event-detail-panel .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .event-detail-panel .panel-title h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .event-detail-panel .close-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #666;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .event-detail-panel .close-btn:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .event-detail-panel .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        /* Detail Metrics */
+        .detail-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .detail-metrics .metric {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .detail-metrics .metric-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            font-family: monospace;
+        }
+
+        .detail-metrics .metric-value.slow {
+            color: #e53935;
+        }
+
+        .detail-metrics .metric-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Detail Sections */
+        .event-detail-panel .detail-section {
+            margin-bottom: 24px;
+        }
+
+        .event-detail-panel .detail-section h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .event-detail-panel .detail-section h4 i {
+            color: #4caf50;
+            font-size: 14px;
+        }
+
+        .detail-content {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .detail-row {
+            display: flex;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-key {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+            min-width: 80px;
+            flex-shrink: 0;
+        }
+
+        .detail-val {
+            font-size: 12px;
+            color: #333;
+            word-break: break-all;
+        }
+
+        .detail-val.entity-highlight {
+            font-weight: 600;
+            color: #1565c0;
+        }
+
+        .detail-val.filter-val {
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 11px;
+            background: rgba(0, 0, 0, 0.05);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        /* Params Grid */
+        .params-grid {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .param-item {
+            display: flex;
+            gap: 12px;
+            padding: 6px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 12px;
+        }
+
+        .param-item:last-child {
+            border-bottom: none;
+        }
+
+        .param-name {
+            color: #6f42c1;
+            font-weight: 500;
+            min-width: 100px;
+            flex-shrink: 0;
+            font-family: monospace;
+        }
+
+        .param-val {
+            color: #333;
+            word-break: break-all;
+        }
+
+        /* Pattern Summary */
+        .pattern-summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .pattern-stat {
+            text-align: center;
+        }
+
+        .pattern-stat .stat-val {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            font-family: monospace;
+        }
+
+        .pattern-stat .stat-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        .pattern-warning {
+            margin-top: 12px;
+            padding: 12px;
+            background: #fff8e1;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #e65100;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .pattern-warning i {
+            color: #ff9800;
+            margin-top: 2px;
+        }
+
+        /* Detail Actions */
+        .detail-actions {
+            display: flex;
+            gap: 12px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .action-button {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-button:hover {
+            background: #e8e8e8;
+            border-color: #ccc;
+        }
+
+        .action-button i {
+            color: #666;
+        }
+
+        /* Clickable timeline items */
+        .timeline-item.clickable {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .timeline-item.clickable:hover {
+            background: rgba(76, 175, 80, 0.05);
+        }
+
+        .timeline-item.clickable:hover .marker-dot {
+            transform: scale(1.3);
+        }
     `]
 })
 export class SystemDiagnosticsComponent extends BaseResourceComponent implements OnInit, OnDestroy {
@@ -2574,8 +3039,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     searchQuery = '';
     categoryFilter: TelemetryCategory | 'all' = 'all';
 
-    // Store telemetry boot time for relative time calculations
-    private telemetryBootTime: number = 0;
+    // Store telemetry boot time for relative time calculations (public for template access)
+    telemetryBootTime: number = 0;
+
+    // Event detail panel state
+    eventDetailPanel: EventDetailPanelState = {
+        isOpen: false,
+        event: null,
+        relatedPattern: null
+    };
 
     constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
         super();
@@ -2856,6 +3328,119 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (Array.isArray(val)) return val.join(', ');
         if (typeof val === 'object') return JSON.stringify(val);
         return String(val);
+    }
+
+    // === Event Detail Panel Methods ===
+
+    openEventDetailPanel(event: TelemetryEventDisplay): void {
+        // Find related pattern
+        const relatedPattern = this.telemetryPatterns.find(p =>
+            p.category === event.category &&
+            p.operation === event.operation &&
+            p.entityName === event.entityName
+        ) || null;
+
+        this.eventDetailPanel = {
+            isOpen: true,
+            event,
+            relatedPattern
+        };
+        this.cdr.markForCheck();
+    }
+
+    closeEventDetailPanel(): void {
+        this.eventDetailPanel = {
+            isOpen: false,
+            event: null,
+            relatedPattern: null
+        };
+        this.cdr.markForCheck();
+    }
+
+    copyEventToClipboard(event: TelemetryEventDisplay): void {
+        const eventData = {
+            id: event.id,
+            category: event.category,
+            operation: event.operation,
+            entityName: event.entityName,
+            filter: event.filter,
+            startTime: event.startTime,
+            endTime: event.endTime,
+            elapsedMs: event.elapsedMs,
+            timestamp: event.timestamp.toISOString(),
+            params: event.params
+        };
+
+        navigator.clipboard.writeText(JSON.stringify(eventData, null, 2))
+            .then(() => {
+                // Could show a toast notification here
+                console.log('Event copied to clipboard');
+            })
+            .catch(err => {
+                console.error('Failed to copy event:', err);
+            });
+    }
+
+    filterByEntity(entityName: string | null): void {
+        if (!entityName) return;
+
+        this.closeEventDetailPanel();
+        this.searchQuery = entityName;
+        this.perfTab = 'patterns';
+        this.cdr.markForCheck();
+    }
+
+    exportTelemetryData(): void {
+        const exportData = {
+            exportedAt: new Date().toISOString(),
+            bootTime: this.telemetryBootTime,
+            summary: this.telemetrySummary,
+            events: this.telemetryEvents.map(e => ({
+                id: e.id,
+                category: e.category,
+                operation: e.operation,
+                entityName: e.entityName,
+                filter: e.filter,
+                startTime: e.startTime,
+                endTime: e.endTime,
+                elapsedMs: e.elapsedMs,
+                timestamp: e.timestamp.toISOString(),
+                params: e.params
+            })),
+            patterns: this.telemetryPatterns.map(p => ({
+                fingerprint: p.fingerprint,
+                category: p.category,
+                operation: p.operation,
+                entityName: p.entityName,
+                filter: p.filter,
+                count: p.count,
+                avgElapsedMs: p.avgElapsedMs,
+                totalElapsedMs: p.totalElapsedMs,
+                minElapsedMs: p.minElapsedMs,
+                maxElapsedMs: p.maxElapsedMs,
+                lastSeen: p.lastSeen.toISOString()
+            })),
+            insights: this.telemetryInsights.map(i => ({
+                id: i.id,
+                category: i.category,
+                severity: i.severity,
+                title: i.title,
+                message: i.message,
+                suggestion: i.suggestion,
+                entityName: i.entityName,
+                timestamp: typeof i.timestamp === 'number' ? new Date(i.timestamp).toISOString() : i.timestamp
+            }))
+        };
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `telemetry-export-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     setCategoryFilter(category: TelemetryCategory | 'all'): void {
@@ -3286,6 +3871,12 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 const target = event.target as SVGCircleElement;
                 d3.select(target).attr('r', d.duration >= this.slowQueryThresholdMs ? 5 : 3);
                 tooltip.style('display', 'none');
+            })
+            .on('click', (_event: MouseEvent, d) => {
+                // Open detail panel for this event
+                this.ngZone.run(() => {
+                    this.openEventDetailPanel(d);
+                });
             });
     }
 
