@@ -687,13 +687,13 @@ export function LoadSystemDiagnosticsResource() {
                                             </h4>
                                             <div class="slow-queries-list">
                                                 @for (query of slowQueries.slice(0, 10); track query.id) {
-                                                    <div class="slow-query-item clickable" [class.cache-hit]="query.params?.['cacheHit']" (click)="openEventDetailPanel(query)">
+                                                    <div class="slow-query-item clickable" [class.cache-hit]="query.params.cacheHit" (click)="openEventDetailPanel(query)">
                                                         <div class="slow-query-main">
                                                             <span class="category-chip small" [class]="'cat-' + query.category.toLowerCase()">
                                                                 {{ query.category }}
                                                             </span>
                                                             <span class="slow-query-entity">{{ query.entityName || query.operation }}</span>
-                                                            @if (query.params?.['cacheHit']) {
+                                                            @if (query.params.cacheHit) {
                                                                 <span class="cache-hit-badge small" title="Data served from local cache">
                                                                     <i class="fa-solid fa-bolt"></i>
                                                                     CACHED
@@ -771,9 +771,9 @@ export function LoadSystemDiagnosticsResource() {
                                         <div class="timeline-container">
                                             @if (filteredEvents.length > 0) {
                                                 @for (event of filteredEvents.slice(0, 50); track event.id) {
-                                                    <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" [class.cache-hit]="event.params?.['cacheHit']" (click)="openEventDetailPanel(event)">
+                                                    <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" [class.cache-hit]="event.params.cacheHit" (click)="openEventDetailPanel(event)">
                                                         <div class="timeline-marker">
-                                                            @if (event.params?.['cacheHit']) {
+                                                            @if (event.params.cacheHit) {
                                                                 <div class="marker-bolt">
                                                                     <i class="fa-solid fa-bolt"></i>
                                                                 </div>
@@ -788,7 +788,7 @@ export function LoadSystemDiagnosticsResource() {
                                                                 <span class="category-chip small" [class]="'cat-' + event.category.toLowerCase()">
                                                                     {{ event.category }}
                                                                 </span>
-                                                                @if (event.params?.['cacheHit']) {
+                                                                @if (event.params.cacheHit) {
                                                                     <span class="cache-hit-badge" title="Data served from local cache">
                                                                         <i class="fa-solid fa-bolt"></i>
                                                                         CACHED
