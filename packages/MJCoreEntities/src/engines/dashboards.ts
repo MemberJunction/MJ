@@ -24,22 +24,26 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
             {
                 Type: 'entity',
                 EntityName: 'Dashboards',
-                PropertyName: "_dashboards"
+                PropertyName: "_dashboards",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Dashboard User Preferences',
-                PropertyName: "_dashboardUserPreferences"
+                PropertyName: "_dashboardUserPreferences",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'Dashboard Categories',
-                PropertyName: "_dashboardCategories"
+                PropertyName: "_dashboardCategories",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Dashboard User States',
-                PropertyName: "_dashboardUserStates"
+                PropertyName: "_dashboardUserStates",
+                CacheLocal: true
             } 
         ]
         await this.Load(c, provider, forceRefresh, contextUser);
