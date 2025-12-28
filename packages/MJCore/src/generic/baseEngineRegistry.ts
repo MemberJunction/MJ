@@ -94,6 +94,13 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     private _entityLoadTracking: Map<string, Set<string>> = new Map();
 
     /**
+     * Tracks which engine instances have already recorded their entity loads.
+     * Uses WeakSet so engine instances can be garbage collected when no longer in use.
+     * This prevents false positive warnings when a subclass and base class share the same singleton.
+     */
+    private _recordedEngineInstances: WeakSet<object> = new WeakSet();
+
+    /**
      * Returns the singleton instance of BaseEngineRegistry
      */
     public static get Instance(): BaseEngineRegistry {
@@ -511,11 +518,22 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     /**
      * Records that an engine has loaded multiple entities.
      * Convenience method for batch recording.
+     * Uses instance identity to prevent false positives when a subclass and base class
+     * share the same singleton (e.g., AIEngine extends AIEngineBase).
      *
-     * @param engineClassName - The class name of the engine
+     * @param engine - The engine instance that loaded the entities
      * @param entityNames - Array of entity names being loaded
      */
-    public RecordEntityLoads(engineClassName: string, entityNames: string[]): void {
+    public RecordEntityLoads(engine: object, entityNames: string[]): void {
+        // Skip if this exact instance has already recorded its entity loads
+        // This prevents false positive warnings for inheritance hierarchies
+        // where AIEngine.Instance === AIEngineBase.Instance (same singleton)
+        if (this._recordedEngineInstances.has(engine)) {
+            return;
+        }
+        this._recordedEngineInstances.add(engine);
+
+        const engineClassName = engine.constructor.name;
         for (const entityName of entityNames) {
             this.RecordEntityLoad(engineClassName, entityName);
         }

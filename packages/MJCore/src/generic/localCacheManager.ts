@@ -370,13 +370,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     /**
      * Generates a cache fingerprint for a RunView request.
-     * This fingerprint uniquely identifies the query based on its parameters.
+     * This fingerprint uniquely identifies the query based on its parameters and connection.
      *
      * @param params - The RunView parameters
+     * @param connectionPrefix - Prefix identifying the connection (e.g., server URL) to differentiate caches across connections
      * @returns A unique fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string): string {
         const normalized = {
+            c: connectionPrefix || '',
             e: params.EntityName?.toLowerCase().trim() || '',
             f: (params.ExtraFilter || '').toLowerCase().trim(),
             o: (params.OrderBy || '').toLowerCase().trim(),
@@ -518,14 +520,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param queryId - The query ID
      * @param queryName - The query name
      * @param parameters - Optional query parameters
+     * @param connectionPrefix - Prefix identifying the connection (e.g., server URL) to differentiate caches across connections
      * @returns A unique fingerprint string
      */
     public GenerateRunQueryFingerprint(
         queryId?: string,
         queryName?: string,
-        parameters?: Record<string, unknown>
+        parameters?: Record<string, unknown>,
+        connectionPrefix?: string
     ): string {
         const normalized = {
+            c: connectionPrefix || '',
             id: queryId || '',
             n: queryName?.toLowerCase().trim() || '',
             p: parameters ? JSON.stringify(parameters) : ''

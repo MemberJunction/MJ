@@ -465,7 +465,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let fingerprint: string | undefined;
 
         if (params.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
-            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params);
+            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
                 // Reconstruct RunViewResult from cached data
@@ -535,10 +535,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Check local cache if enabled
             if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param);
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
-                    // Reconstruct RunViewResult from cached data
                     const cachedViewResult: RunViewResult = {
                         Success: true,
                         Results: cached.results,
@@ -548,6 +547,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         ErrorMessage: '',
                         UserViewRunID: ''
                     };
+                    // if needed this will transform each result into an entity object
+                    await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
+
                     cacheStatusMap.set(i, { status: 'hit', result: cachedViewResult });
                     cachedResults.push(cachedViewResult);
                     continue;
@@ -699,7 +701,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Store in local cache if enabled
             if (params[i].CacheLocal && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i]);
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 promises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -1013,7 +1015,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
         // only if needed (e.g. ResultType==='entity_object'), transform the result set into BaseEntity-derived objects
-        if (param.ResultType === 'entity_object' && result && result.Success){
+        if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0){
             // we need to transform each of the items in the result set into a BaseEntity-derived object
             // Create entities and load data in parallel for better performance
             const entityPromises = result.Results.map(async (item) => {

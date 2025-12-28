@@ -353,14 +353,18 @@ class DuplicateRunViewAnalyzer implements TelemetryAnalyzer {
 
         const pattern = context.patterns.get(event.fingerprint);
         if (pattern && pattern.count >= 2) {
+            // Handle both single RunView (EntityName) and batch RunViews (Entities array)
+            const entityName = event.params.EntityName as string ||
+                (Array.isArray(event.params.Entities) ? (event.params.Entities as string[]).join(', ') : 'Unknown');
+
             return {
                 id: `duplicate-${event.fingerprint}-${Date.now()}`,
                 severity: 'warning',
                 analyzerName: this.name,
                 category: this.category,
                 title: 'Duplicate RunView Detected',
-                entityName: event.params.EntityName as string,
-                message: `Identical RunView (${event.params.EntityName}, same filter/orderBy) called ${pattern.count} times`,
+                entityName,
+                message: `Identical RunView (${entityName}, same filter/orderBy) called ${pattern.count} times`,
                 suggestion: `Cache the result or use an engine to avoid redundant database queries`,
                 relatedEventIds: [event.id],
                 metadata: {

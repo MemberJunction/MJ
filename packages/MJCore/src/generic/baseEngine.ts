@@ -597,8 +597,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             }
 
             // Record which entities this engine loaded (for redundancy warnings)
+            // Pass 'this' so the registry can use instance identity to prevent false positives
+            // when a subclass and base class share the same singleton
             if (entityNames.length > 0) {
-                BaseEngineRegistry.Instance.RecordEntityLoads(this.constructor.name, entityNames);
+                BaseEngineRegistry.Instance.RecordEntityLoads(this, entityNames);
             }
         }
     }
