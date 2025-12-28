@@ -10,6 +10,7 @@ import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewPr
 import { BaseInfo } from "./baseInfo";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { BaseEngineRegistry } from "./baseEngineRegistry";
+import { IStartupSink } from "./RegisterForStartup";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -120,7 +121,7 @@ export interface ConfigExOptions {
  * provides a mechanism for loading metadata from the database and caching it for use by the engine. Subclasses must implement the Config abstract method and within that
  * generally it is recommended to call the Load method to load the metadata. Subclasses can also override the AdditionalLoading method to perform additional loading tasks.
  */
-export abstract class BaseEngine<T> extends BaseSingleton<T> {
+export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     private _contextUser: UserInfo;
@@ -136,6 +137,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      */
     public constructor() {
         super();
+    }
+
+    /**
+     * All BaseEngine sub-classes get an implementation of IStartupSink so they can be set the auto start in their
+     * app container, if desired, simply by adding the @see @RegisterForStartup decorator. The BaseEngine implementation
+     * of IStartupSink.HandleStartup is to simply call @see Config
+     */
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await this.Config(false, contextUser, provider);
     }
 
     /**

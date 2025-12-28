@@ -6,7 +6,7 @@ import { DashboardCategoryEntity, DashboardUserPreferenceEntity, DashboardUserSt
  * Caching of metadata for dashboards and related data
  */
 @RegisterForStartup()
-export class DashboardEngine extends BaseEngine<DashboardEngine> implements IStartupSink {
+export class DashboardEngine extends BaseEngine<DashboardEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
      */
@@ -18,14 +18,6 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> implements ISta
     private _dashboardUserPreferences: DashboardUserPreferenceEntity[];
     private _dashboardCategories: DashboardCategoryEntity[];
     private _dashboardUserStates: DashboardUserStateEntity[];
-
-    /**
-     * Implementation of IStartupSink - called automatically during app startup
-     * when decorated with @RegisterForStartup.
-     */
-    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        await this.Config(false, contextUser, provider);
-    }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [

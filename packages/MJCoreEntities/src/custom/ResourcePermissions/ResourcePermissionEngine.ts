@@ -5,7 +5,7 @@ import { ResourcePermissionEntity, ResourceTypeEntity } from "../../generated/en
  * Resource Permission Engine is used for accessing metadata about permissions for resources and also determining if a user has access to a resource and at what level.
  */
 @RegisterForStartup()
-export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngine> implements IStartupSink {
+export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
      */
@@ -17,14 +17,6 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     private _ResourceTypes: {
         ResourceTypes: ResourceTypeEntity[];
     };
-
-    /**
-     * Implementation of IStartupSink - called automatically during app startup
-     * when decorated with @RegisterForStartup. This calls Config() to load the engine data.
-     */
-    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        await this.Config(false, contextUser, provider);
-    }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [

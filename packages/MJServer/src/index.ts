@@ -70,6 +70,8 @@ LoadSendGridProvider();
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { TelemetryManager, TelemetryLevel } from '@memberjunction/global';
+import { LocalCacheManager, StartupManager } from '@memberjunction/core';
+import { getSystemUser } from './auth/index.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -184,6 +186,15 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
     console.log('Read-only Connection Pool has been initialized.');
   }
+
+  // Load all classes registered with @RegisterForStartup decorator
+  const systemUser = await getSystemUser(pool);
+  await StartupManager.Instance.LoadAll(false, systemUser, Metadata.Provider);
+  console.log('Startup classes loaded');
+
+  // Initialize LocalCacheManager with the server-side storage provider (in-memory)
+  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
+  console.log('LocalCacheManager initialized');
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
