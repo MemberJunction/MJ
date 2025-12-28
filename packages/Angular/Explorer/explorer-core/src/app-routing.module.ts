@@ -150,15 +150,11 @@ export class ResourceResolver implements Resolve<void> {
         take(1)
       )
     );
-    console.log('[ResourceResolver] LoggedIn event received, metadata is ready');
   }
 
   async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
-    console.log('[ResourceResolver.resolve] Called with URL:', state.url);
-
     // Wait for login/metadata to be ready before processing
     if (this.loggedInPromise) {
-      console.log('[ResourceResolver.resolve] Waiting for metadata to be ready...');
       await this.loggedInPromise;
     }
 
@@ -169,12 +165,10 @@ export class ResourceResolver implements Resolve<void> {
     const lastProcessed = this.processedUrls.get(state.url);
 
     if (lastProcessed && (now - lastProcessed) < this.URL_DEBOUNCE_MS) {
-      console.log('[ResourceResolver.resolve] Recently processed URL (debounced):', state.url);
       return;
     }
 
     this.processedUrls.set(state.url, now);
-    console.log('[ResourceResolver.resolve] Processing URL:', state.url);
 
     const md = new Metadata();
     const applications = md.Applications;
@@ -182,7 +176,6 @@ export class ResourceResolver implements Resolve<void> {
     // Handle app-level navigation: /app/:appName (no nav item - app default)
     if (route.params['appName'] !== undefined && route.params['navItemName'] === undefined) {
       const appName = decodeURIComponent(route.params['appName']);
-      console.log('[ResourceResolver.resolve] App-only URL detected:', appName);
 
       // Find the app
       const app = applications.find(a =>
@@ -193,9 +186,6 @@ export class ResourceResolver implements Resolve<void> {
         LogError(`Application ${appName} not found in metadata`);
         return;
       }
-
-      console.log('[ResourceResolver.resolve] Found app:', app.Name, 'ID:', app.ID);
-      console.log('[ResourceResolver.resolve] Letting shell handle default tab creation');
 
       // Let the app create its default tab (will load default dashboard if no nav items)
       // The shell component will handle this after setting the active app
@@ -208,8 +198,6 @@ export class ResourceResolver implements Resolve<void> {
       const appName = decodeURIComponent(route.params['appName']);
       const navItemName = decodeURIComponent(route.params['navItemName']);
 
-      console.log('[ResourceResolver.resolve] App nav item URL detected:', appName, '/', navItemName);
-
       // Find the app (applications already validated as non-null above)
       const app = applications.find(a =>
         a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
@@ -219,8 +207,6 @@ export class ResourceResolver implements Resolve<void> {
         LogError(`Application ${appName} not found in metadata`);
         return;
       }
-
-      console.log('[ResourceResolver.resolve] Found app:', app.Name, 'ID:', app.ID);
 
       // Get nav items from the app's DefaultNavItems JSON
       let navItems: any[] = [];
@@ -234,8 +220,6 @@ export class ResourceResolver implements Resolve<void> {
         }
       }
 
-      console.log('[ResourceResolver.resolve] Nav items count:', navItems.length);
-
       // Find the nav item by label (case-insensitive)
       const navItem = navItems.find(item =>
         item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
@@ -245,8 +229,6 @@ export class ResourceResolver implements Resolve<void> {
         LogError(`Nav item ${navItemName} not found in app ${appName}`);
         return;
       }
-
-      console.log('[ResourceResolver.resolve] Found nav item:', navItem.Label, 'ResourceType:', navItem.ResourceType);
 
       // Get the resource type from the nav item
       if (!navItem.ResourceType) {
@@ -258,8 +240,6 @@ export class ResourceResolver implements Resolve<void> {
       // based on the URL to avoid navigation loops
 
       // Queue tab request via TabService
-      console.log('[ResourceResolver.resolve] Queuing tab request via TabService');
-
       // Build configuration - include DriverClass for Custom resource types
       const config: any = {
         route: navItem.Route,
@@ -275,7 +255,6 @@ export class ResourceResolver implements Resolve<void> {
       // For Custom resource types, include the DriverClass
       if (navItem.ResourceType === 'Custom' && navItem.DriverClass) {
         config.driverClass = navItem.DriverClass;
-        console.log('[ResourceResolver.resolve] Added DriverClass for Custom resource:', navItem.DriverClass);
       }
 
       this.tabService.OpenTab({
@@ -284,7 +263,7 @@ export class ResourceResolver implements Resolve<void> {
         Configuration: config,
         IsPinned: false
       });
-      console.log('[ResourceResolver.resolve] Tab request queued');
+
       return;
     }
 

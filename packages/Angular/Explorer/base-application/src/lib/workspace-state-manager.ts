@@ -118,8 +118,6 @@ export class WorkspaceStateManager {
    * Load workspace from database
    */
   private async loadWorkspace(userId: string): Promise<void> {
-    console.log('[WorkspaceStateManager.loadWorkspace] Loading workspace for user:', userId);
-
     const rv = new RunView();
     const result = await rv.RunView<WorkspaceEntity>({
       EntityName: 'Workspaces',
@@ -127,46 +125,32 @@ export class WorkspaceStateManager {
       ResultType: 'entity_object'
     });
 
-    console.log('[WorkspaceStateManager.loadWorkspace] RunView result:', {
-      success: result.Success,
-      count: result.Results?.length || 0,
-      errorMessage: result.ErrorMessage
-    });
-
     if (result.Success && result.Results.length > 0) {
       const workspace = result.Results[0];
-      console.log('[WorkspaceStateManager.loadWorkspace] Found existing workspace:', workspace.ID);
       this.workspace$.next(workspace);
 
       // Parse configuration or create default
       const configJson = workspace.Get('Configuration') as string;
-      console.log('[WorkspaceStateManager.loadWorkspace] Configuration JSON length:', configJson?.length || 0);
 
       const config = configJson
         ? JSON.parse(configJson) as WorkspaceConfiguration
         : createDefaultWorkspaceConfiguration();
 
-      console.log('[WorkspaceStateManager.loadWorkspace] Loaded configuration with', config.tabs?.length || 0, 'tabs');
       this.configuration$.next(config);
-    } else {
+    } 
+    else {
       // Create new workspace for user
-      console.log('[WorkspaceStateManager.loadWorkspace] No workspace found, creating new one');
-      console.log('[WorkspaceStateManager.loadWorkspace] RunView error:', result.ErrorMessage);
-
       const md = new Metadata();
       const workspace = await md.GetEntityObject<WorkspaceEntity>('Workspaces');
       workspace.UserID = userId;
       workspace.Name = 'Default';
       workspace.Set('Configuration', JSON.stringify(createDefaultWorkspaceConfiguration()));
 
-      console.log('[WorkspaceStateManager.loadWorkspace] Saving new workspace...');
       const saveResult = await workspace.Save();
-      console.log('[WorkspaceStateManager.loadWorkspace] Save result:', saveResult);
 
       if (saveResult) {
         this.workspace$.next(workspace);
         this.configuration$.next(createDefaultWorkspaceConfiguration());
-        console.log('[WorkspaceStateManager.loadWorkspace] New workspace created successfully');
       } else {
         console.error('[WorkspaceStateManager.loadWorkspace] Failed to save workspace');
         throw new Error('Failed to create default workspace');

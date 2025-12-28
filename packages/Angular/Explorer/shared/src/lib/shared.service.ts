@@ -39,24 +39,17 @@ export class SharedService {
       switch (event.event) {
         case MJEventType.LoggedIn:
           if (SharedService._loaded === false)  {
-          // Initialize LocalCacheManager for IndexedDB-based RunView caching
-          // Get the storage provider from the metadata provider (uses IndexedDB)
-          const cacheStart = Date.now();
-          const storageProvider = Metadata.Provider.LocalStorageProvider;
-          await LocalCacheManager.Instance.Initialize(storageProvider);
-          console.log(`LocalCacheManager initialized in ${Date.now() - cacheStart}ms`);
+            // Handle app startup
+            await StartupManager.Instance.Startup();          
 
-          // Load all classes registered with @RegisterForStartup decorator in parallel by priority
-          await StartupManager.Instance.LoadAll();          
+            await SharedService.RefreshData(false);
 
-          await SharedService.RefreshData(false);
-
-          // Pre-warm other engines in the background (fire and forget)
-          // These are not needed immediately but will be ready when user navigates to
-          // Conversations, Dashboards, or Artifacts. The BaseEngine pattern ensures
-          // subsequent callers will wait for the existing load rather than starting a new one.
-          SharedService.preWarmEngines();
-        }
+            // Pre-warm other engines in the background (fire and forget)
+            // These are not needed immediately but will be ready when user navigates to
+            // Conversations, Dashboards, or Artifacts. The BaseEngine pattern ensures
+            // subsequent callers will wait for the existing load rather than starting a new one.
+            SharedService.preWarmEngines();
+          }
         break;
       }
     });    
@@ -184,8 +177,8 @@ export class SharedService {
   private static async handleDataLoading() {
     const md = new Metadata();
 
-    // Load all classes registered with @RegisterForStartup decorator in parallel by priority
-    await StartupManager.Instance.LoadAll();          
+    // make sure startup is done
+    await StartupManager.Instance.Startup();          
 
     this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
