@@ -23,9 +23,11 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteType
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { AIPromptEntityExtended, AIPromptCategoryEntityExtended, AIModelEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
  
 // this class handles execution of AI Actions
-export class AIEngineBase extends BaseEngine<AIEngineBase> {
+@RegisterForStartup()
+export class AIEngineBase extends BaseEngine<AIEngineBase> implements IStartupSink {
     private _models: AIModelEntityExtended[] = [];
     private _modelTypes: AIModelTypeEntity[] = [];
     private _vectorDatabases: VectorDatabaseEntity[] = [];
@@ -55,6 +57,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentStepPaths: AIAgentStepPathEntity[] = [];
     private _agentPermissions: AIAgentPermissionEntity[] = [];
     private _agentConfigurations: AIAgentConfigurationEntity[] = [];
+
+    public async HandleStartup(contextUser?: unknown): Promise<void> {
+        await this.Config(false, contextUser as UserInfo)
+    }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [

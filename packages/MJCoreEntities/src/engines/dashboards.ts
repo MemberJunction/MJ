@@ -1,12 +1,12 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { DashboardEntityExtended } from "../custom/DashboardEntityExtended";
 import { DashboardCategoryEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity } from "../generated/entity_subclasses";
-
 
 /**
  * Caching of metadata for dashboards and related data
  */
-export class DashboardEngine extends BaseEngine<DashboardEngine> {
+@RegisterForStartup()
+export class DashboardEngine extends BaseEngine<DashboardEngine> implements IStartupSink {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
      */
@@ -18,6 +18,14 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
     private _dashboardUserPreferences: DashboardUserPreferenceEntity[];
     private _dashboardCategories: DashboardCategoryEntity[];
     private _dashboardUserStates: DashboardUserStateEntity[];
+
+    /**
+     * Implementation of IStartupSink - called automatically during app startup
+     * when decorated with @RegisterForStartup.
+     */
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await this.Config(false, contextUser, provider);
+    }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [

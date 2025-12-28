@@ -46,7 +46,6 @@ export class RequestResourceAccessComponent  extends BaseAngularComponent implem
     public AfterRequest: boolean = false;
 
     async ngOnInit() {
-        await ResourcePermissionEngine.Instance.Config();
         const rt = ResourcePermissionEngine.Instance.ResourceTypes.find(x => x.Name.trim().toLowerCase() === this.ResourceType.trim().toLowerCase());        
         if (rt) 
             this.ResourceTypeObject = rt;

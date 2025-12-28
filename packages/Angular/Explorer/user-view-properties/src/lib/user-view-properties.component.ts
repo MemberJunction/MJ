@@ -191,7 +191,6 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   }
 
   async Load() {
-    await ResourcePermissionEngine.Instance.Config(); // make sure our permissions engine is loaded, this will do nothing if it's already loaded
     this._userCanEdit = undefined; // reset this so it recalculates on the next call to UserCanEdit
 
     const md = new Metadata();

@@ -1,5 +1,5 @@
 import { ElementRef, Injectable, Injector } from '@angular/core';
-import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
+import { CompositeKey, LocalCacheManager, LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
@@ -39,17 +39,25 @@ export class SharedService {
       switch (event.event) {
         case MJEventType.LoggedIn:
           if (SharedService._loaded === false)  {
-            const p1 = SharedService.RefreshData(false);
-            const p2 = ResourcePermissionEngine.Instance.Config(); // make sure that we get resource permissions configured
-            await Promise.all([p1, p2]);
+          // Initialize LocalCacheManager for IndexedDB-based RunView caching
+          // Get the storage provider from the metadata provider (uses IndexedDB)
+          const cacheStart = Date.now();
+          const storageProvider = Metadata.Provider.LocalStorageProvider;
+          await LocalCacheManager.Instance.Initialize(storageProvider);
+          console.log(`LocalCacheManager initialized in ${Date.now() - cacheStart}ms`);
 
-            // Pre-warm other engines in the background (fire and forget)
-            // These are not needed immediately but will be ready when user navigates to
-            // Conversations, Dashboards, or Artifacts. The BaseEngine pattern ensures
-            // subsequent callers will wait for the existing load rather than starting a new one.
-            SharedService.preWarmEngines();
-          }
-          break;
+          // Load all classes registered with @RegisterForStartup decorator in parallel by priority
+          await StartupManager.Instance.LoadAll();          
+
+          await SharedService.RefreshData(false);
+
+          // Pre-warm other engines in the background (fire and forget)
+          // These are not needed immediately but will be ready when user navigates to
+          // Conversations, Dashboards, or Artifacts. The BaseEngine pattern ensures
+          // subsequent callers will wait for the existing load rather than starting a new one.
+          SharedService.preWarmEngines();
+        }
+        break;
       }
     });    
   }
@@ -176,7 +184,9 @@ export class SharedService {
   private static async handleDataLoading() {
     const md = new Metadata();
 
-    await ResourcePermissionEngine.Instance.Config(); // don't reload if already loaded
+    // Load all classes registered with @RegisterForStartup decorator in parallel by priority
+    await StartupManager.Instance.LoadAll();          
+
     this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
     await SharedService.RefreshUserNotifications();  

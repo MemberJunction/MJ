@@ -35,6 +35,7 @@ export * from "./generic/authTypes";
 export * from "./generic/databaseProviderBase";
 export * from "./generic/baseEngineRegistry";
 export * from "./generic/localCacheManager";
+export * from "./generic/RegisterForStartup";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider;
