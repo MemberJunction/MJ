@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus } from "./interfaces";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
@@ -255,6 +255,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Pre-processing for batch
         const preResult = await this.PreRunViews(params, contextUser);
 
+        // Check for smart cache check mode
+        if (preResult.useSmartCacheCheck && preResult.smartCacheCheckParams) {
+            return this.executeSmartCacheCheck<T>(params, preResult, contextUser);
+        }
+
         // Check for cached results - if all are cached, end telemetry and return early
         if (preResult.allCached && preResult.cachedResults) {
             const totalResults = preResult.cachedResults.reduce((sum, r) => sum + (r.Results?.length ?? 0), 0);
@@ -388,6 +393,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         cachedResults?: RunViewResult[];
         uncachedParams?: RunViewParams[];
         cacheStatusMap?: Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>;
+        /** When CacheLocal is enabled, contains the cache check params to send to server */
+        smartCacheCheckParams?: RunViewWithCacheCheckParams[];
+        /** When CacheLocal is enabled, indicates we should use smart cache check */
+        useSmartCacheCheck?: boolean;
     };
 
     /**
@@ -513,6 +522,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             contextUser?.ID
         );
 
+        // Check if any params have CacheLocal enabled - smart caching is always used when caching locally
+        const useSmartCacheCheck = params.some(p => p.CacheLocal);
+
+        // If local caching is enabled, use smart cache check flow
+        if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
+            return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
+        }
+
+        // Traditional caching flow
         const cacheStatusMap = new Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>();
         const uncachedParams: RunViewParams[] = [];
         const cachedResults: (RunViewResult | null)[] = [];
@@ -571,6 +589,203 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             uncachedParams: allCached ? undefined : uncachedParams,
             cacheStatusMap
         };
+    }
+
+    /**
+     * Prepares smart cache check parameters for RunViews when CacheLocal is enabled.
+     * Instead of returning cached data immediately, this builds params to send to the server
+     * which will validate if the cache is current or return fresh data.
+     */
+    private async prepareSmartCacheCheckParams(
+        params: RunViewParams[],
+        telemetryEventId: string,
+        contextUser?: UserInfo
+    ): Promise<typeof this._preRunViewsResultType> {
+        const smartCacheCheckParams: RunViewWithCacheCheckParams[] = [];
+
+        for (const param of params) {
+            // Entity status check
+            await this.EntityStatusCheck(param, 'PreRunViews');
+
+            // Handle entity_object result type - need all fields
+            if (param.ResultType === 'entity_object') {
+                const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+                if (!entity) {
+                    throw new Error(`Entity ${param.EntityName} not found in metadata`);
+                }
+                param.Fields = entity.Fields.map(f => f.Name);
+            }
+
+            // Build the cache check param with optional cache status
+            let cacheStatus: RunViewCacheStatus | undefined;
+
+            if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+                if (cached) {
+                    cacheStatus = {
+                        maxUpdatedAt: cached.maxUpdatedAt,
+                        rowCount: cached.rowCount
+                    };
+                }
+            }
+
+            smartCacheCheckParams.push({
+                params: param,
+                cacheStatus
+            });
+        }
+
+        return {
+            telemetryEventId,
+            allCached: false, // Don't return cached directly - let server validate
+            useSmartCacheCheck: true,
+            smartCacheCheckParams,
+            cacheStatusMap: new Map()
+        };
+    }
+
+    /**
+     * Executes the smart cache check flow for RunViews.
+     * Calls RunViewsWithCacheCheck on the provider (if available) and processes the results,
+     * using cached data for 'current' items and fresh data for 'stale' items.
+     */
+    private async executeSmartCacheCheck<T>(
+        params: RunViewParams[],
+        preResult: typeof this._preRunViewsResultType,
+        contextUser?: UserInfo
+    ): Promise<RunViewResult<T>[]> {
+        // Cast to access RunViewsWithCacheCheck method
+        const provider = this as unknown as { RunViewsWithCacheCheck: <U>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo) => Promise<RunViewsWithCacheCheckResponse<U>> };
+
+        // Execute the smart cache check
+        const response = await provider.RunViewsWithCacheCheck<T>(preResult.smartCacheCheckParams!, contextUser);
+
+        if (!response.success) {
+            // If the smart cache check failed, log and return empty results
+            LogError(`SmartCacheCheck failed: ${response.errorMessage}`);
+            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+                smartCacheCheck: true,
+                success: false,
+                errorMessage: response.errorMessage
+            });
+            return params.map(() => ({
+                Success: false,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: response.errorMessage || 'SmartCacheCheck failed',
+                UserViewRunID: ''
+            }));
+        }
+
+        // Process results - for 'current' status, use cached data; for 'stale', use fresh data
+        const finalResults: RunViewResult<T>[] = [];
+        let cacheHits = 0;
+        let cacheMisses = 0;
+
+        for (let i = 0; i < params.length; i++) {
+            const param = params[i];
+            const checkResult = response.results.find(r => r.viewIndex === i);
+
+            if (!checkResult) {
+                // No result for this index - error
+                finalResults.push({
+                    Success: false,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'No result returned from server',
+                    UserViewRunID: ''
+                });
+                continue;
+            }
+
+            if (checkResult.status === 'current') {
+                // Cache is current - use cached data
+                cacheHits++;
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+
+                if (cached) {
+                    const cachedResult: RunViewResult<T> = {
+                        Success: true,
+                        Results: cached.results as T[],
+                        RowCount: cached.rowCount,
+                        TotalRowCount: cached.rowCount,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        UserViewRunID: ''
+                    };
+                    // Transform to entity objects if needed
+                    await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
+                    finalResults.push(cachedResult);
+                } else {
+                    // Cache miss - shouldn't happen but handle gracefully
+                    finalResults.push({
+                        Success: false,
+                        Results: [],
+                        RowCount: 0,
+                        TotalRowCount: 0,
+                        ExecutionTime: 0,
+                        ErrorMessage: 'Cache marked current but no cached data found',
+                        UserViewRunID: ''
+                    });
+                }
+            } else if (checkResult.status === 'stale') {
+                // Cache is stale - use fresh data and update cache
+                cacheMisses++;
+                const freshResult: RunViewResult<T> = {
+                    Success: true,
+                    Results: checkResult.results || [],
+                    RowCount: checkResult.rowCount || 0,
+                    TotalRowCount: checkResult.rowCount || 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    UserViewRunID: ''
+                };
+
+                // Update the local cache with fresh data
+                if (param.CacheLocal && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                    await LocalCacheManager.Instance.SetRunViewResult(
+                        fingerprint,
+                        param,
+                        checkResult.results || [],
+                        checkResult.maxUpdatedAt,
+                        checkResult.rowCount
+                    );
+                }
+
+                // Transform to entity objects if needed
+                await this.TransformSimpleObjectToEntityObject(param, freshResult, contextUser);
+                finalResults.push(freshResult);
+            } else {
+                // Error status
+                finalResults.push({
+                    Success: false,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: checkResult.errorMessage || 'Unknown error',
+                    UserViewRunID: ''
+                });
+            }
+        }
+
+        // End telemetry
+        TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
+            smartCacheCheck: true,
+            success: true,
+            cacheHits,
+            cacheMisses,
+            batchSize: params.length
+        });
+
+        return finalResults;
     }
 
     /**

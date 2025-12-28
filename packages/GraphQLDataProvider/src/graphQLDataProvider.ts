@@ -13,7 +13,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, BaseEntityResult,
-         KeyValuePair } from "@memberjunction/core";
+         KeyValuePair,
+         RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -792,6 +793,138 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         catch (e) {
             LogError(e);
             throw (e);
+        }
+    }
+
+    /**
+     * RunViewsWithCacheCheck - Smart cache validation for batch RunViews.
+     * For each view, if cacheStatus is provided, the server checks if the cache is current.
+     * If current, returns status='current' with no data. If stale, returns status='stale' with fresh data.
+     *
+     * @param params - Array of RunView requests with optional cache status
+     * @param contextUser - Optional user context
+     * @returns Response containing results for each view in the batch
+     */
+    public async RunViewsWithCacheCheck<T = unknown>(
+        params: RunViewWithCacheCheckParams[],
+        contextUser?: UserInfo
+    ): Promise<RunViewsWithCacheCheckResponse<T>> {
+        try {
+            // Build the GraphQL input
+            const input = params.map(item => ({
+                params: {
+                    EntityName: item.params.EntityName || '',
+                    ExtraFilter: item.params.ExtraFilter || '',
+                    OrderBy: item.params.OrderBy || '',
+                    Fields: item.params.Fields,
+                    UserSearchString: item.params.UserSearchString || '',
+                    IgnoreMaxRows: item.params.IgnoreMaxRows || false,
+                    MaxRows: item.params.MaxRows,
+                    StartRow: item.params.StartRow,
+                    ForceAuditLog: item.params.ForceAuditLog || false,
+                    AuditLogDescription: item.params.AuditLogDescription || '',
+                    ResultType: item.params.ResultType || 'simple',
+                },
+                cacheStatus: item.cacheStatus ? {
+                    maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+                    rowCount: item.cacheStatus.rowCount,
+                } : null,
+            }));
+
+            const query = gql`
+                query RunViewsWithCacheCheckQuery($input: [RunViewWithCacheCheckInput!]!) {
+                    RunViewsWithCacheCheck(input: $input) {
+                        success
+                        errorMessage
+                        results {
+                            viewIndex
+                            status
+                            maxUpdatedAt
+                            rowCount
+                            errorMessage
+                            Results {
+                                PrimaryKey {
+                                    FieldName
+                                    Value
+                                }
+                                EntityID
+                                Data
+                            }
+                        }
+                    }
+                }
+            `;
+
+            const responseData = await this.ExecuteGQL(query, { input });
+            const response = responseData?.['RunViewsWithCacheCheck'] as {
+                success: boolean;
+                errorMessage?: string;
+                results: Array<{
+                    viewIndex: number;
+                    status: string;
+                    maxUpdatedAt?: string;
+                    rowCount?: number;
+                    errorMessage?: string;
+                    Results?: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
+                }>;
+            };
+
+            if (!response) {
+                return {
+                    success: false,
+                    results: [],
+                    errorMessage: 'No response from server',
+                };
+            }
+
+            // Transform results - deserialize Data fields for stale results
+            const transformedResults: RunViewWithCacheCheckResult<T>[] = response.results.map((result, index) => {
+                const inputItem = params[index];
+
+                if (result.status === 'stale' && result.Results) {
+                    // Get entity info for field conversion
+                    const entityName = inputItem.params.EntityName;
+                    const entityInfo = this.Entities.find(e => e.Name === entityName);
+
+                    // Deserialize the Data field and convert back MJ fields
+                    const deserializedResults: T[] = result.Results.map(r => {
+                        const data = JSON.parse(r.Data);
+                        this.ConvertBackToMJFields(data);
+                        return data as T;
+                    });
+
+                    return {
+                        viewIndex: result.viewIndex,
+                        status: result.status as 'current' | 'stale' | 'error',
+                        results: deserializedResults,
+                        maxUpdatedAt: result.maxUpdatedAt,
+                        rowCount: result.rowCount,
+                        errorMessage: result.errorMessage,
+                    };
+                }
+
+                return {
+                    viewIndex: result.viewIndex,
+                    status: result.status as 'current' | 'stale' | 'error',
+                    results: undefined,
+                    maxUpdatedAt: result.maxUpdatedAt,
+                    rowCount: result.rowCount,
+                    errorMessage: result.errorMessage,
+                };
+            });
+
+            return {
+                success: response.success,
+                results: transformedResults,
+                errorMessage: response.errorMessage,
+            };
+        } catch (e) {
+            LogError(e);
+            return {
+                success: false,
+                results: [],
+                errorMessage: e instanceof Error ? e.message : String(e),
+            };
         }
     }
 

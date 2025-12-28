@@ -265,11 +265,49 @@ export class EntityRecordNameResult  {
  * Interface for local storage providers.
  * Abstracts storage operations to support different storage backends
  * (e.g., browser localStorage, IndexedDB, file system).
+ *
+ * Implementations should handle the optional category parameter as follows:
+ * - **IndexedDB**: Create separate object stores per category (e.g., `mj:RunViewCache`)
+ * - **localStorage**: Prefix keys with `[mj]:[category]:[key]`
+ * - **Memory**: Use nested Map structure (Map<category, Map<key, value>>)
+ *
+ * When category is not provided, use a default category (e.g., 'default' or 'general').
  */
 export interface ILocalStorageProvider {
-    GetItem(key: string): Promise<string | null>;
-    SetItem(key: string, value: string): Promise<void>;
-    Remove(key: string): Promise<void>;
+    /**
+     * Retrieves an item from storage.
+     * @param key - The key to retrieve
+     * @param category - Optional category for key isolation (e.g., 'RunViewCache', 'Metadata')
+     */
+    GetItem(key: string, category?: string): Promise<string | null>;
+
+    /**
+     * Stores an item in storage.
+     * @param key - The key to store under
+     * @param value - The value to store
+     * @param category - Optional category for key isolation
+     */
+    SetItem(key: string, value: string, category?: string): Promise<void>;
+
+    /**
+     * Removes an item from storage.
+     * @param key - The key to remove
+     * @param category - Optional category for key isolation
+     */
+    Remove(key: string, category?: string): Promise<void>;
+
+    /**
+     * Clears all items in a specific category.
+     * If no category is specified, clears the default category only.
+     * @param category - The category to clear
+     */
+    ClearCategory?(category: string): Promise<void>;
+
+    /**
+     * Gets all keys in a specific category.
+     * @param category - The category to list keys from
+     */
+    GetCategoryKeys?(category: string): Promise<string[]>;
 }
 
 /**
@@ -550,6 +588,106 @@ export interface IRunViewProvider {
 
     RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>>
     RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]>
+
+    /**
+     * Executes multiple RunView requests with smart cache checking.
+     * For each view with cacheStatus provided, the server checks if the cached data is still current
+     * before executing the full query. This reduces unnecessary data transfer when cached data is valid.
+     * @param params Array of view parameters with optional cache status for each
+     * @param contextUser Optional user context for permissions
+     * @returns Response containing status and fresh data only for stale caches
+     */
+    RunViewsWithCacheCheck?<T = unknown>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunViewsWithCacheCheckResponse<T>>
+}
+
+// ============================================================================
+// RUNVIEW SMART CACHE CHECK TYPES
+// ============================================================================
+
+/**
+ * Client-side cache status information for a single RunView request.
+ * Sent to the server to determine if cached data is still current.
+ */
+export type RunViewCacheStatus = {
+    /**
+     * The maximum __mj_UpdatedAt value from the client's cached results.
+     * Used to detect if any records have been added or updated.
+     */
+    maxUpdatedAt: string;
+    /**
+     * The number of rows in the client's cached results.
+     * Used to detect if any records have been deleted.
+     */
+    rowCount: number;
+}
+
+/**
+ * Parameters for a single RunView request with optional cache status.
+ * When cacheStatus is provided, the server will check if the cache is current
+ * before executing the full query.
+ */
+export type RunViewWithCacheCheckParams = {
+    /**
+     * The standard RunView parameters
+     */
+    params: RunViewParams;
+    /**
+     * Optional cache status from the client. If provided, the server will
+     * check if the cached data is still current before returning results.
+     * If not provided, the server will always execute the query.
+     */
+    cacheStatus?: RunViewCacheStatus;
+}
+
+/**
+ * Result for a single RunView with cache check.
+ * The server returns either 'current' (cache is valid) or 'stale' (with fresh data).
+ */
+export type RunViewWithCacheCheckResult<T = unknown> = {
+    /**
+     * The index of this view in the batch request (for correlation)
+     */
+    viewIndex: number;
+    /**
+     * 'current' means the client's cache is still valid - no data returned
+     * 'stale' means the cache is outdated - fresh data is included in results
+     * 'error' means there was an error checking/executing the view
+     */
+    status: 'current' | 'stale' | 'error';
+    /**
+     * The fresh results - only populated when status is 'stale'
+     */
+    results?: T[];
+    /**
+     * The maximum __mj_UpdatedAt from the results - only when status is 'stale'
+     */
+    maxUpdatedAt?: string;
+    /**
+     * The row count of the results - only when status is 'stale'
+     */
+    rowCount?: number;
+    /**
+     * Error message if status is 'error'
+     */
+    errorMessage?: string;
+}
+
+/**
+ * Response from RunViewsWithCacheCheck - contains results for each view in the batch
+ */
+export type RunViewsWithCacheCheckResponse<T = unknown> = {
+    /**
+     * Whether the overall operation succeeded
+     */
+    success: boolean;
+    /**
+     * Results for each view in the batch, in the same order as the input
+     */
+    results: RunViewWithCacheCheckResult<T>[];
+    /**
+     * Overall error message if success is false
+     */
+    errorMessage?: string;
 }
 
 /**

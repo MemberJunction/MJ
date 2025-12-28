@@ -36,6 +36,8 @@ export interface CacheEntryInfo {
     sizeBytes: number;
     /** Server timestamp for freshness check */
     maxUpdatedAt?: string;
+    /** Row count for cache validation (used with smart cache check) */
+    rowCount?: number;
     /** Optional TTL expiry timestamp */
     expiresAt?: number;
 }
@@ -87,6 +89,29 @@ const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     defaultTTLMs: 5 * 60 * 1000, // 5 minutes
     evictionPolicy: 'lru'
 };
+
+// ============================================================================
+// STORAGE CATEGORIES
+// ============================================================================
+
+/**
+ * Storage categories for organizing cache data.
+ * These map to IndexedDB object stores or localStorage key prefixes.
+ */
+export const CacheCategory = {
+    /** Cache for RunView results */
+    RunViewCache: 'RunViewCache',
+    /** Cache for RunQuery results */
+    RunQueryCache: 'RunQueryCache',
+    /** Cache for Dataset results */
+    DatasetCache: 'DatasetCache',
+    /** Cache for metadata */
+    Metadata: 'Metadata',
+    /** Default category for uncategorized data */
+    Default: 'default'
+} as const;
+
+export type CacheCategory = typeof CacheCategory[keyof typeof CacheCategory];
 
 // ============================================================================
 // LOCAL CACHE MANAGER
@@ -237,8 +262,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         await this.evictIfNeeded(sizeBytes);
 
         try {
-            await this._storageProvider.SetItem(key, value);
-            await this._storageProvider.SetItem(key + '_date', dataset.LatestUpdateDate.toISOString());
+            await this._storageProvider.SetItem(key, value, CacheCategory.DatasetCache);
+            await this._storageProvider.SetItem(key + '_date', dataset.LatestUpdateDate.toISOString(), CacheCategory.DatasetCache);
 
             this.registerEntry({
                 key,
@@ -274,7 +299,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
 
         try {
-            const value = await this._storageProvider.GetItem(key);
+            const value = await this._storageProvider.GetItem(key, CacheCategory.DatasetCache);
 
             if (value) {
                 this.recordAccess(key);
@@ -307,7 +332,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
 
         try {
-            const dateStr = await this._storageProvider.GetItem(key + '_date');
+            const dateStr = await this._storageProvider.GetItem(key + '_date', CacheCategory.DatasetCache);
             return dateStr ? new Date(dateStr) : null;
         } catch (e) {
             return null;
@@ -331,8 +356,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
 
         try {
-            await this._storageProvider.Remove(key);
-            await this._storageProvider.Remove(key + '_date');
+            await this._storageProvider.Remove(key, CacheCategory.DatasetCache);
+            await this._storageProvider.Remove(key + '_date', CacheCategory.DatasetCache);
             this.unregisterEntry(key);
         } catch (e) {
             LogError(`LocalCacheManager.ClearDataset failed: ${e}`);
@@ -357,7 +382,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
 
         try {
-            const val = await this._storageProvider.GetItem(key);
+            const val = await this._storageProvider.GetItem(key, CacheCategory.DatasetCache);
             return val != null;
         } catch (e) {
             return false;
@@ -369,26 +394,42 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     // ========================================================================
 
     /**
-     * Generates a cache fingerprint for a RunView request.
+     * Generates a human-readable cache fingerprint for a RunView request.
      * This fingerprint uniquely identifies the query based on its parameters and connection.
+     *
+     * Format: EntityName|filter|orderBy|resultType|maxRows|startRow|connection
+     * Example: Users|Active=1|Name ASC|simple|100|0|localhost
      *
      * @param params - The RunView parameters
      * @param connectionPrefix - Prefix identifying the connection (e.g., server URL) to differentiate caches across connections
-     * @returns A unique fingerprint string
+     * @returns A unique, human-readable fingerprint string
      */
     public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string): string {
-        const normalized = {
-            c: connectionPrefix || '',
-            e: params.EntityName?.toLowerCase().trim() || '',
-            f: (params.ExtraFilter || '').toLowerCase().trim(),
-            o: (params.OrderBy || '').toLowerCase().trim(),
-            r: params.ResultType || 'simple',
-            m: params.MaxRows ?? -1,
-            s: params.StartRow ?? 0
-        };
+        const entity = params.EntityName?.trim() || 'Unknown';
+        const filter = (params.ExtraFilter || '').trim();
+        const orderBy = (params.OrderBy || '').trim();
+        const resultType = params.ResultType || 'simple';
+        const maxRows = params.MaxRows ?? -1;
+        const startRow = params.StartRow ?? 0;
+        const connection = connectionPrefix || '';
 
-        // Use base64 encoding of JSON for readability in debugging
-        return 'rv_' + this.hashString(JSON.stringify(normalized));
+        // Build human-readable fingerprint with pipe separators
+        // Format: Entity|Filter|OrderBy|ResultType|MaxRows|StartRow|Connection
+        const parts = [
+            entity,
+            filter || '_',           // Use underscore for empty filter
+            orderBy || '_',          // Use underscore for empty orderBy
+            resultType,
+            maxRows.toString(),
+            startRow.toString()
+        ];
+
+        // Only include connection if provided
+        if (connection) {
+            parts.push(connection);
+        }
+
+        return parts.join('|');
     }
 
     /**
@@ -398,23 +439,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param params - The original RunView parameters
      * @param results - The results to cache
      * @param maxUpdatedAt - The latest __mj_UpdatedAt from the results
+     * @param rowCount - Optional row count (defaults to results.length if not provided)
      */
     public async SetRunViewResult(
         fingerprint: string,
         params: RunViewParams,
         results: unknown[],
-        maxUpdatedAt: string
+        maxUpdatedAt: string,
+        rowCount?: number
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
-        const value = JSON.stringify({ results, maxUpdatedAt });
+        const actualRowCount = rowCount ?? results.length;
+        const value = JSON.stringify({ results, maxUpdatedAt, rowCount: actualRowCount });
         const sizeBytes = this.estimateSize(value);
 
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
 
         try {
-            await this._storageProvider.SetItem(fingerprint, value);
+            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
 
             this.registerEntry({
                 key: fingerprint,
@@ -432,7 +476,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 lastAccessedAt: Date.now(),
                 accessCount: 1,
                 sizeBytes,
-                maxUpdatedAt
+                maxUpdatedAt,
+                rowCount: actualRowCount
             });
         } catch (e) {
             LogError(`LocalCacheManager.SetRunViewResult failed: ${e}`);
@@ -443,18 +488,24 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Retrieves a cached RunView result.
      *
      * @param fingerprint - The cache fingerprint
-     * @returns The cached results and maxUpdatedAt, or null if not found
+     * @returns The cached results, maxUpdatedAt, and rowCount, or null if not found
      */
-    public async GetRunViewResult(fingerprint: string): Promise<{ results: unknown[]; maxUpdatedAt: string } | null> {
+    public async GetRunViewResult(fingerprint: string): Promise<{ results: unknown[]; maxUpdatedAt: string; rowCount: number } | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
-            const value = await this._storageProvider.GetItem(fingerprint);
+            const value = await this._storageProvider.GetItem(fingerprint, CacheCategory.RunViewCache);
 
             if (value) {
                 this.recordAccess(fingerprint);
                 this._stats.hits++;
-                return JSON.parse(value);
+                const parsed = JSON.parse(value);
+                // Handle legacy entries that may not have rowCount
+                return {
+                    results: parsed.results,
+                    maxUpdatedAt: parsed.maxUpdatedAt,
+                    rowCount: parsed.rowCount ?? parsed.results?.length ?? 0
+                };
             }
         } catch (e) {
             LogError(`LocalCacheManager.GetRunViewResult failed: ${e}`);
@@ -473,7 +524,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider) return;
 
         try {
-            await this._storageProvider.Remove(fingerprint);
+            await this._storageProvider.Remove(fingerprint, CacheCategory.RunViewCache);
             this.unregisterEntry(fingerprint);
         } catch (e) {
             LogError(`LocalCacheManager.InvalidateRunViewResult failed: ${e}`);
@@ -500,7 +551,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         for (const key of toRemove) {
             try {
-                await this._storageProvider.Remove(key);
+                await this._storageProvider.Remove(key, CacheCategory.RunViewCache);
                 this._registry.delete(key);
             } catch (e) {
                 LogError(`LocalCacheManager.InvalidateEntityCaches failed for key ${key}: ${e}`);
@@ -515,13 +566,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     // ========================================================================
 
     /**
-     * Generates a cache fingerprint for a RunQuery request.
+     * Generates a human-readable cache fingerprint for a RunQuery request.
+     *
+     * Format: QueryName|QueryID|params|connection
+     * Example: GetActiveUsers|abc123|{"status":"active"}|localhost
      *
      * @param queryId - The query ID
      * @param queryName - The query name
      * @param parameters - Optional query parameters
      * @param connectionPrefix - Prefix identifying the connection (e.g., server URL) to differentiate caches across connections
-     * @returns A unique fingerprint string
+     * @returns A unique, human-readable fingerprint string
      */
     public GenerateRunQueryFingerprint(
         queryId?: string,
@@ -529,14 +583,21 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         parameters?: Record<string, unknown>,
         connectionPrefix?: string
     ): string {
-        const normalized = {
-            c: connectionPrefix || '',
-            id: queryId || '',
-            n: queryName?.toLowerCase().trim() || '',
-            p: parameters ? JSON.stringify(parameters) : ''
-        };
+        const name = queryName?.trim() || 'Unknown';
+        const id = queryId || '_';
+        const params = parameters ? JSON.stringify(parameters) : '_';
+        const connection = connectionPrefix || '';
 
-        return 'rq_' + this.hashString(JSON.stringify(normalized));
+        // Build human-readable fingerprint with pipe separators
+        // Format: QueryName|QueryID|Params|Connection
+        const parts = [name, id, params];
+
+        // Only include connection if provided
+        if (connection) {
+            parts.push(connection);
+        }
+
+        return parts.join('|');
     }
 
     /**
@@ -562,7 +623,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         await this.evictIfNeeded(sizeBytes);
 
         try {
-            await this._storageProvider.SetItem(fingerprint, value);
+            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunQueryCache);
 
             this.registerEntry({
                 key: fingerprint,
@@ -590,7 +651,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
-            const value = await this._storageProvider.GetItem(fingerprint);
+            const value = await this._storageProvider.GetItem(fingerprint, CacheCategory.RunQueryCache);
 
             if (value) {
                 this.recordAccess(fingerprint);
@@ -675,11 +736,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider) return 0;
 
         const entries = this.GetEntriesByType(type);
+        const category = this.getCategoryForType(type);
+
         for (const entry of entries) {
             try {
-                await this._storageProvider.Remove(entry.key);
+                await this._storageProvider.Remove(entry.key, category);
                 if (entry.type === 'dataset') {
-                    await this._storageProvider.Remove(entry.key + '_date');
+                    await this._storageProvider.Remove(entry.key + '_date', category);
                 }
                 this._registry.delete(entry.key);
             } catch (e) {
@@ -702,9 +765,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const count = this._registry.size;
         for (const entry of this._registry.values()) {
             try {
-                await this._storageProvider.Remove(entry.key);
+                const category = this.getCategoryForType(entry.type);
+                await this._storageProvider.Remove(entry.key, category);
                 if (entry.type === 'dataset') {
-                    await this._storageProvider.Remove(entry.key + '_date');
+                    await this._storageProvider.Remove(entry.key + '_date', category);
                 }
             } catch (e) {
                 LogError(`LocalCacheManager.ClearAll failed for key ${entry.key}: ${e}`);
@@ -727,6 +791,22 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     // ========================================================================
     // INTERNAL HELPERS
     // ========================================================================
+
+    /**
+     * Maps a cache entry type to its storage category.
+     */
+    private getCategoryForType(type: CacheEntryType): CacheCategory {
+        switch (type) {
+            case 'runview':
+                return CacheCategory.RunViewCache;
+            case 'runquery':
+                return CacheCategory.RunQueryCache;
+            case 'dataset':
+                return CacheCategory.DatasetCache;
+            default:
+                return CacheCategory.Default;
+        }
+    }
 
     /**
      * Builds a cache key for a dataset.
@@ -778,7 +858,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider) return;
 
         try {
-            const stored = await this._storageProvider.GetItem(this.REGISTRY_KEY);
+            const stored = await this._storageProvider.GetItem(this.REGISTRY_KEY, CacheCategory.Metadata);
             if (stored) {
                 const parsed = JSON.parse(stored) as CacheEntryInfo[];
                 this._registry = new Map(parsed.map(e => [e.key, e]));
@@ -810,7 +890,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         try {
             const data = JSON.stringify(this.GetAllEntries());
-            await this._storageProvider.SetItem(this.REGISTRY_KEY, data);
+            await this._storageProvider.SetItem(this.REGISTRY_KEY, data, CacheCategory.Metadata);
         } catch (e) {
             // Ignore persistence errors - cache is still functional
         }
@@ -822,19 +902,6 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private estimateSize(value: string): number {
         // Approximate size: UTF-16 strings are ~2 bytes per character
         return value.length * 2;
-    }
-
-    /**
-     * Simple hash function for fingerprint generation.
-     */
-    private hashString(str: string): string {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32-bit integer
-        }
-        return Math.abs(hash).toString(36);
     }
 
     /**
@@ -891,9 +958,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         for (const key of toDelete) {
             try {
                 const entry = this._registry.get(key);
-                await this._storageProvider.Remove(key);
+                const category = this.getCategoryForType(entry?.type);
+                await this._storageProvider.Remove(key, category);
                 if (entry?.type === 'dataset') {
-                    await this._storageProvider.Remove(key + '_date');
+                    await this._storageProvider.Remove(key + '_date', category);
                 }
                 this._registry.delete(key);
             } catch (e) {

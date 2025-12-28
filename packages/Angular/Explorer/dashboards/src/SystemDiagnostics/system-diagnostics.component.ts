@@ -687,14 +687,42 @@ export function LoadSystemDiagnosticsResource() {
                                             </h4>
                                             <div class="slow-queries-list">
                                                 @for (query of slowQueries.slice(0, 10); track query.id) {
-                                                    <div class="slow-query-item clickable" (click)="openEventDetailPanel(query)">
+                                                    <div class="slow-query-item clickable" [class.cache-hit]="query.params?.['cacheHit']" (click)="openEventDetailPanel(query)">
                                                         <div class="slow-query-main">
                                                             <span class="category-chip small" [class]="'cat-' + query.category.toLowerCase()">
                                                                 {{ query.category }}
                                                             </span>
                                                             <span class="slow-query-entity">{{ query.entityName || query.operation }}</span>
+                                                            @if (query.params?.['cacheHit']) {
+                                                                <span class="cache-hit-badge small" title="Data served from local cache">
+                                                                    <i class="fa-solid fa-bolt"></i>
+                                                                    CACHED
+                                                                </span>
+                                                            }
                                                             <span class="slow-query-time">{{ query.elapsedMs | number:'1.0-0' }}ms</span>
                                                         </div>
+                                                        <!-- Show entities for RunViews batch operation -->
+                                                        @if (isRunViewsOperation(query)) {
+                                                            <div class="slow-query-entities">
+                                                                @for (entity of getRunViewsEntities(query, 4); track entity) {
+                                                                    <span class="entity-pill small">{{ entity }}</span>
+                                                                }
+                                                                @if (hasMoreEntities(query, 4)) {
+                                                                    <span class="entity-pill small more">+{{ getRunViewsEntityCount(query) - 4 }} more</span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                        <!-- RunView parameter pills -->
+                                                        @if (isRunViewOperation(query) && getRunViewPills(query).length > 0) {
+                                                            <div class="slow-query-pills">
+                                                                @for (pill of getRunViewPills(query); track pill.label) {
+                                                                    <span class="param-pill small" [class]="'pill-' + pill.type" [title]="pill.value">
+                                                                        <span class="pill-label">{{ pill.label }}:</span>
+                                                                        <span class="pill-value">{{ pill.value }}</span>
+                                                                    </span>
+                                                                }
+                                                            </div>
+                                                        }
                                                         @if (query.filter) {
                                                             <div class="slow-query-filter">{{ truncateString(query.filter, 60) }}</div>
                                                         }
@@ -743,9 +771,15 @@ export function LoadSystemDiagnosticsResource() {
                                         <div class="timeline-container">
                                             @if (filteredEvents.length > 0) {
                                                 @for (event of filteredEvents.slice(0, 50); track event.id) {
-                                                    <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" (click)="openEventDetailPanel(event)">
+                                                    <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" [class.cache-hit]="event.params?.['cacheHit']" (click)="openEventDetailPanel(event)">
                                                         <div class="timeline-marker">
-                                                            <div class="marker-dot"></div>
+                                                            @if (event.params?.['cacheHit']) {
+                                                                <div class="marker-bolt">
+                                                                    <i class="fa-solid fa-bolt"></i>
+                                                                </div>
+                                                            } @else {
+                                                                <div class="marker-dot"></div>
+                                                            }
                                                             <div class="marker-line"></div>
                                                         </div>
                                                         <div class="timeline-content">
@@ -754,6 +788,12 @@ export function LoadSystemDiagnosticsResource() {
                                                                 <span class="category-chip small" [class]="'cat-' + event.category.toLowerCase()">
                                                                     {{ event.category }}
                                                                 </span>
+                                                                @if (event.params?.['cacheHit']) {
+                                                                    <span class="cache-hit-badge" title="Data served from local cache">
+                                                                        <i class="fa-solid fa-bolt"></i>
+                                                                        CACHED
+                                                                    </span>
+                                                                }
                                                                 @if (event.elapsedMs !== undefined) {
                                                                     <span class="timeline-duration" [class.slow]="(event.elapsedMs || 0) >= slowQueryThresholdMs">
                                                                         {{ event.elapsedMs | number:'1.0-0' }}ms
@@ -765,7 +805,29 @@ export function LoadSystemDiagnosticsResource() {
                                                                 @if (event.entityName) {
                                                                     <span class="timeline-entity">{{ event.entityName }}</span>
                                                                 }
+                                                                <!-- Show entities for RunViews batch operation -->
+                                                                @if (isRunViewsOperation(event)) {
+                                                                    <div class="timeline-entities">
+                                                                        @for (entity of getRunViewsEntities(event, 3); track entity) {
+                                                                            <span class="entity-pill">{{ entity }}</span>
+                                                                        }
+                                                                        @if (hasMoreEntities(event, 3)) {
+                                                                            <span class="entity-pill more">+{{ getRunViewsEntityCount(event) - 3 }} more</span>
+                                                                        }
+                                                                    </div>
+                                                                }
                                                             </div>
+                                                            <!-- RunView parameter pills -->
+                                                            @if (isRunViewOperation(event) && getRunViewPills(event).length > 0) {
+                                                                <div class="timeline-pills">
+                                                                    @for (pill of getRunViewPills(event); track pill.label) {
+                                                                        <span class="param-pill" [class]="'pill-' + pill.type" [title]="pill.value">
+                                                                            <span class="pill-label">{{ pill.label }}:</span>
+                                                                            <span class="pill-value">{{ pill.value }}</span>
+                                                                        </span>
+                                                                    }
+                                                                </div>
+                                                            }
                                                             @if (event.filter) {
                                                                 <div class="timeline-filter">{{ truncateString(event.filter, 80) }}</div>
                                                             }
@@ -2775,6 +2837,56 @@ export function LoadSystemDiagnosticsResource() {
         .tl-ai .marker-dot { background: #e65100; }
         .tl-cache .marker-dot { background: #c2185b; }
 
+        /* Cache hit bolt marker */
+        .marker-bolt {
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+            color: #f59e0b;
+            font-size: 14px;
+            margin-left: -4px;
+        }
+
+        .marker-bolt i {
+            filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.6));
+        }
+
+        /* Category-specific bolt colors */
+        .tl-runview.cache-hit .marker-bolt { color: #1565c0; }
+        .tl-runquery.cache-hit .marker-bolt { color: #7b1fa2; }
+        .tl-engine.cache-hit .marker-bolt { color: #2e7d32; }
+        .tl-ai.cache-hit .marker-bolt { color: #e65100; }
+        .tl-cache.cache-hit .marker-bolt { color: #c2185b; }
+
+        /* Cache hit badge */
+        .cache-hit-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #f59e0b;
+            border-radius: 10px;
+            font-size: 9px;
+            font-weight: 700;
+            color: #92400e;
+            letter-spacing: 0.5px;
+        }
+
+        .cache-hit-badge i {
+            font-size: 8px;
+            color: #f59e0b;
+        }
+
+        /* Highlighted background for cache hit items */
+        .timeline-item.cache-hit .timeline-content {
+            background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+            border: 1px solid #fde047;
+        }
+
         .timeline-content {
             flex: 1;
             background: #f8f9fa;
@@ -2830,6 +2942,126 @@ export function LoadSystemDiagnosticsResource() {
             color: #999;
             font-family: monospace;
             margin-top: 4px;
+        }
+
+        /* Entity Pills for RunViews batch operations */
+        .timeline-entities,
+        .slow-query-entities {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .entity-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #1565c0;
+        }
+
+        .entity-pill.small {
+            padding: 1px 6px;
+            font-size: 10px;
+        }
+
+        .entity-pill.more {
+            background: #f5f5f5;
+            border-color: #e0e0e0;
+            color: #757575;
+            font-style: italic;
+        }
+
+        /* Parameter Pills */
+        .timeline-pills,
+        .slow-query-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .param-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: monospace;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .param-pill.small {
+            padding: 2px 6px;
+            font-size: 9px;
+            max-width: 150px;
+        }
+
+        .param-pill .pill-label {
+            font-weight: 600;
+            opacity: 0.8;
+        }
+
+        .param-pill .pill-value {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Pill type colors */
+        .param-pill.pill-filter {
+            background: #fff3e0;
+            border: 1px solid #ffcc80;
+            color: #e65100;
+        }
+
+        .param-pill.pill-order {
+            background: #e8f5e9;
+            border: 1px solid #a5d6a7;
+            color: #2e7d32;
+        }
+
+        .param-pill.pill-result {
+            background: #f3e5f5;
+            border: 1px solid #ce93d8;
+            color: #7b1fa2;
+        }
+
+        .param-pill.pill-limit {
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            color: #1565c0;
+        }
+
+        .param-pill.pill-batch {
+            background: #fce4ec;
+            border: 1px solid #f48fb1;
+            color: #c2185b;
+        }
+
+        .param-pill.pill-info {
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            color: #616161;
+        }
+
+        /* Slow query cache hit styling */
+        .slow-query-item.cache-hit {
+            background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+            border-color: #fde047;
+        }
+
+        .cache-hit-badge.small {
+            padding: 1px 6px;
+            font-size: 8px;
         }
 
         /* Filter Bar */
@@ -4991,6 +5223,88 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return String(val);
     }
 
+    /**
+     * Check if this is a RunView/RunViews operation
+     */
+    isRunViewOperation(event: TelemetryEventDisplay): boolean {
+        return event.operation === 'ProviderBase.RunView' || event.operation === 'ProviderBase.RunViews';
+    }
+
+    /**
+     * Check if this is a batch RunViews operation
+     */
+    isRunViewsOperation(event: TelemetryEventDisplay): boolean {
+        return event.operation === 'ProviderBase.RunViews';
+    }
+
+    /**
+     * Get entity names for RunViews batch operation (first few for display)
+     */
+    getRunViewsEntities(event: TelemetryEventDisplay, maxDisplay: number = 3): string[] {
+        const entities = event.params?.['Entities'] as string[] | undefined;
+        if (!entities || !Array.isArray(entities)) return [];
+        return entities.slice(0, maxDisplay);
+    }
+
+    /**
+     * Get total entity count for RunViews batch operation
+     */
+    getRunViewsEntityCount(event: TelemetryEventDisplay): number {
+        const entities = event.params?.['Entities'] as string[] | undefined;
+        return entities?.length || 0;
+    }
+
+    /**
+     * Check if there are more entities than displayed
+     */
+    hasMoreEntities(event: TelemetryEventDisplay, maxDisplay: number = 3): boolean {
+        return this.getRunViewsEntityCount(event) > maxDisplay;
+    }
+
+    /**
+     * Get RunView parameter pills for display
+     */
+    getRunViewPills(event: TelemetryEventDisplay): Array<{ label: string; value: string; type: 'filter' | 'order' | 'result' | 'limit' | 'batch' | 'info' }> {
+        const pills: Array<{ label: string; value: string; type: 'filter' | 'order' | 'result' | 'limit' | 'batch' | 'info' }> = [];
+
+        // For batch operations, show batch size
+        if (this.isRunViewsOperation(event)) {
+            const batchSize = event.params?.['BatchSize'] || event.params?.['batchSize'];
+            if (batchSize) {
+                pills.push({ label: 'Batch', value: String(batchSize), type: 'batch' });
+            }
+            const totalResults = event.params?.['totalResultCount'];
+            if (totalResults !== undefined) {
+                pills.push({ label: 'Results', value: String(totalResults), type: 'info' });
+            }
+        }
+
+        // For single RunView, show params
+        if (!this.isRunViewsOperation(event)) {
+            const extraFilter = event.params?.['ExtraFilter'] as string;
+            if (extraFilter) {
+                pills.push({ label: 'Filter', value: this.truncateString(extraFilter, 25), type: 'filter' });
+            }
+
+            const orderBy = event.params?.['OrderBy'] as string;
+            if (orderBy) {
+                pills.push({ label: 'Order', value: this.truncateString(orderBy, 20), type: 'order' });
+            }
+
+            const resultType = event.params?.['ResultType'] as string;
+            if (resultType && resultType !== 'simple') {
+                pills.push({ label: 'Type', value: resultType, type: 'result' });
+            }
+
+            const maxRows = event.params?.['MaxRows'] as number;
+            if (maxRows && maxRows > 0) {
+                pills.push({ label: 'Limit', value: String(maxRows), type: 'limit' });
+            }
+        }
+
+        return pills;
+    }
+
     // === Event Detail Panel Methods ===
 
     openEventDetailPanel(event: TelemetryEventDisplay): void {
@@ -6014,12 +6328,58 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .attr('font-size', '11px')
             .attr('font-family', 'monospace');
 
-        // Draw points
-        g.selectAll('.event-point')
-            .data(data)
+        // Split data into cached and non-cached events
+        const nonCachedData = data.filter(d => !d.params?.['cacheHit']);
+        const cachedData = data.filter(d => d.params?.['cacheHit']);
+
+        // Helper to show tooltip
+        const showTooltip = (event: MouseEvent, d: TelemetryEventDisplay & { relativeTime: number; duration: number }) => {
+            // Update tooltip content
+            const isCached = d.params?.['cacheHit'];
+            const lines = [
+                `${d.category}: ${d.operation}`,
+                d.entityName ? `Entity: ${d.entityName}` : null,
+                `Duration: ${d.duration.toFixed(0)}ms`,
+                isCached ? '⚡ CACHED' : null,
+                `Time: +${this.formatRelativeTime(d.relativeTime)}`
+            ].filter(Boolean);
+
+            tooltipText.selectAll('tspan').remove();
+            lines.forEach((line, i) => {
+                tooltipText.append('tspan')
+                    .attr('x', 8)
+                    .attr('dy', i === 0 ? '1.2em' : '1.4em')
+                    .text(line as string);
+            });
+
+            // Size tooltip background
+            const textBBox = (tooltipText.node() as SVGTextElement).getBBox();
+            tooltip.select('.tooltip-bg')
+                .attr('width', textBBox.width + 16)
+                .attr('height', textBBox.height + 12)
+                .attr('y', textBBox.y - 6);
+
+            // Position tooltip
+            const x = xScale(d.relativeTime);
+            const y = yScale(d.duration);
+            const tooltipWidth = textBBox.width + 16;
+
+            // Flip tooltip if too close to right edge
+            const translateX = x + tooltipWidth + 20 > (container.clientWidth - 80) ? x - tooltipWidth - 10 : x + 10;
+            tooltip.attr('transform', `translate(${translateX},${y - 20})`);
+            tooltip.style('display', 'block');
+        };
+
+        const hideTooltip = () => {
+            tooltip.style('display', 'none');
+        };
+
+        // Draw circles for non-cached events
+        g.selectAll('.event-point-circle')
+            .data(nonCachedData)
             .enter()
             .append('circle')
-            .attr('class', 'event-point')
+            .attr('class', 'event-point event-point-circle')
             .attr('cx', d => xScale(d.relativeTime))
             .attr('cy', d => yScale(d.duration))
             .attr('r', d => d.duration >= this.slowQueryThresholdMs ? 5 : 3)
@@ -6030,44 +6390,49 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .on('mouseenter', (event: MouseEvent, d) => {
                 const target = event.target as SVGCircleElement;
                 d3.select(target).attr('r', 7);
-
-                // Update tooltip content
-                const lines = [
-                    `${d.category}: ${d.operation}`,
-                    d.entityName ? `Entity: ${d.entityName}` : null,
-                    `Duration: ${d.duration.toFixed(0)}ms`,
-                    `Time: +${this.formatRelativeTime(d.relativeTime)}`
-                ].filter(Boolean);
-
-                tooltipText.selectAll('tspan').remove();
-                lines.forEach((line, i) => {
-                    tooltipText.append('tspan')
-                        .attr('x', 8)
-                        .attr('dy', i === 0 ? '1.2em' : '1.4em')
-                        .text(line as string);
-                });
-
-                // Size tooltip background
-                const textBBox = (tooltipText.node() as SVGTextElement).getBBox();
-                tooltip.select('.tooltip-bg')
-                    .attr('width', textBBox.width + 16)
-                    .attr('height', textBBox.height + 12)
-                    .attr('y', textBBox.y - 6);
-
-                // Position tooltip
-                const x = xScale(d.relativeTime);
-                const y = yScale(d.duration);
-                const tooltipWidth = textBBox.width + 16;
-
-                // Flip tooltip if too close to right edge
-                const translateX = x + tooltipWidth + 20 > (container.clientWidth - 80) ? x - tooltipWidth - 10 : x + 10;
-                tooltip.attr('transform', `translate(${translateX},${y - 20})`);
-                tooltip.style('display', 'block');
+                showTooltip(event, d);
             })
             .on('mouseleave', (event: MouseEvent, d) => {
                 const target = event.target as SVGCircleElement;
                 d3.select(target).attr('r', d.duration >= this.slowQueryThresholdMs ? 5 : 3);
-                tooltip.style('display', 'none');
+                hideTooltip();
+            })
+            .on('click', (_event: MouseEvent, d) => {
+                // Open detail panel for this event
+                this.ngZone.run(() => {
+                    this.openEventDetailPanel(d);
+                });
+            });
+
+        // Draw bolt symbols for cached events
+        // SVG path for a lightning bolt shape
+        const boltPath = 'M-3,-6 L1,-6 L0,-1 L4,-1 L-2,6 L0,1 L-4,1 Z';
+
+        g.selectAll('.event-point-bolt')
+            .data(cachedData)
+            .enter()
+            .append('path')
+            .attr('class', 'event-point event-point-bolt')
+            .attr('d', boltPath)
+            .attr('transform', d => `translate(${xScale(d.relativeTime)},${yScale(d.duration)}) scale(${d.duration >= this.slowQueryThresholdMs ? 1.3 : 1})`)
+            .attr('fill', '#f59e0b')
+            .attr('stroke', d => d.duration >= this.slowQueryThresholdMs ? '#ff5252' : categoryColors[d.category] || '#78909c')
+            .attr('stroke-width', 1.5)
+            .style('cursor', 'pointer')
+            .style('filter', 'drop-shadow(0 0 2px rgba(245, 158, 11, 0.5))')
+            .on('mouseenter', (event: MouseEvent, d) => {
+                const target = event.target as SVGPathElement;
+                d3.select(target)
+                    .attr('transform', `translate(${xScale(d.relativeTime)},${yScale(d.duration)}) scale(1.5)`)
+                    .style('filter', 'drop-shadow(0 0 4px rgba(245, 158, 11, 0.8))');
+                showTooltip(event, d);
+            })
+            .on('mouseleave', (event: MouseEvent, d) => {
+                const target = event.target as SVGPathElement;
+                d3.select(target)
+                    .attr('transform', `translate(${xScale(d.relativeTime)},${yScale(d.duration)}) scale(${d.duration >= this.slowQueryThresholdMs ? 1.3 : 1})`)
+                    .style('filter', 'drop-shadow(0 0 2px rgba(245, 158, 11, 0.5))');
+                hideTooltip();
             })
             .on('click', (_event: MouseEvent, d) => {
                 // Open detail panel for this event
