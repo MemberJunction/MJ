@@ -54,7 +54,6 @@ import {
   RecordMergeResult,
   RecordMergeDetailResult,
   EntityDependency,
-  IRunQueryProvider,
   RunQueryResult,
   RunQueryParams,
   PotentialDuplicateRequest,
@@ -237,7 +236,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends DatabaseProviderBase
-  implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
+  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider
 {
   private _pool: sql.ConnectionPool;
   
@@ -787,7 +786,8 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IRunQueryProvider
   /**************************************************************************/
-  public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+  protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
     try {
       // Find and validate query
       const query = await this.findAndValidateQuery(params, contextUser);
@@ -1025,6 +1025,20 @@ export class SQLServerDataProvider
     LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
   }
 
+  /**
+   * Internal implementation of batch query execution.
+   * Runs multiple queries in parallel for efficiency.
+   * @param params - Array of query parameters
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of query results
+   */
+  protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
+    // Run all queries in parallel
+    const promises = params.map((p) => this.InternalRunQuery(p, contextUser));
+    return Promise.all(promises);
+  }
+
   /**************************************************************************/
   // END ---- IRunQueryProvider
   /**************************************************************************/
@@ -1089,10 +1103,8 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IRunViewProvider
   /**************************************************************************/
-  public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-    // add call to pre-processor that was previously in the @memberjunction/core RunView class but now
-    // is handled in ProviderBase when sub-classes like this one invoke the pre/post process properly
-    await this.PreProcessRunView(params, contextUser);
+  protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
 
     const startTime = new Date();
     try {
@@ -1321,10 +1333,6 @@ export class SQLServerDataProvider
           ErrorMessage: null,
         };
 
-        // add call to post-processor that was previously in the @memberjunction/core RunView class but now
-        // is handled in ProviderBase when sub-classes like this one invoke the post process properly
-        await this.PostProcessRunView(result, params, contextUser); 
-
         return result;
       } 
       else {
@@ -1345,17 +1353,11 @@ export class SQLServerDataProvider
     }
   }
 
-  public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-    // pre-process in base class
-    await this.PreProcessRunViews(params, contextUser);
-
-    // do the work
-    const promises = params.map((p) => this.RunView<T>(p, contextUser));
+  protected async InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunViews()
+    // Note: We call InternalRunView directly since we're already inside the internal flow
+    const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
     const results = await Promise.all(promises);
-
-    // post-process in base class
-    await this.PostProcessRunViews(results, params, contextUser);
-
     return results;
   }
 

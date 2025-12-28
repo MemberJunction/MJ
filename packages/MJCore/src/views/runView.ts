@@ -1,9 +1,7 @@
-import { MJGlobal, TelemetryManager } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
-import { EntityInfo } from '../generic/entityInfo';
-import { LocalCacheManager } from '../generic/localCacheManager';
 
 /**
  * Parameters for running either a stored or dynamic view. 
@@ -168,87 +166,8 @@ export class RunView  {
      * @returns
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        // Check local cache first if CacheLocal is enabled
-        if (params.CacheLocal) {
-            const cachedResult = await this.checkLocalCache<T>(params);
-            if (cachedResult) {
-                return cachedResult;
-            }
-        }
-
-        // Simple proxy to the provider, pre/post process moved to ProviderBase and called by each sub-class
-        // for validation, telemetry, and optional transformation of the result
-        const result = await this.ProviderToUse.RunView<T>(params, contextUser);
-
-        // Cache the result if CacheLocal is enabled and request was successful
-        if (params.CacheLocal && result.Success) {
-            await this.cacheLocally(params, result);
-        }
-
-        return result;
-    }
-
-    /**
-     * Checks the local cache for a cached RunView result
-     */
-    private async checkLocalCache<T>(params: RunViewParams): Promise<RunViewResult<T> | null> {
-        const lcm = LocalCacheManager.Instance;
-        if (!lcm.IsInitialized) return null;
-
-        const fingerprint = lcm.GenerateRunViewFingerprint(params);
-        const cached = await lcm.GetRunViewResult(fingerprint);
-
-        if (cached) {
-            // Track cache hit in telemetry
-            TelemetryManager.Instance.StartEvent(
-                'Cache',
-                'RunView.CacheHit',
-                {
-                    EntityName: params.EntityName,
-                    fingerprint,
-                    resultCount: cached.results.length
-                }
-            );
-
-            return {
-                Success: true,
-                Results: cached.results as T[],
-                RowCount: cached.results.length,
-                TotalRowCount: cached.results.length,
-                ExecutionTime: 0, // Instant from cache
-                ErrorMessage: ''
-            };
-        }
-
-        return null;
-    }
-
-    /**
-     * Caches a RunView result locally
-     */
-    private async cacheLocally<T>(params: RunViewParams, result: RunViewResult<T>): Promise<void> {
-        const lcm = LocalCacheManager.Instance;
-        if (!lcm.IsInitialized) return;
-
-        const fingerprint = lcm.GenerateRunViewFingerprint(params);
-
-        // Find the max __mj_UpdatedAt from results for freshness tracking
-        let maxUpdatedAt = new Date().toISOString();
-        if (result.Results.length > 0) {
-            const firstResult = result.Results[0] as Record<string, unknown>;
-            if (firstResult && firstResult['__mj_UpdatedAt']) {
-                // Find max updated timestamp
-                const timestamps = result.Results
-                    .map(r => (r as Record<string, unknown>)['__mj_UpdatedAt'])
-                    .filter(t => t != null)
-                    .map(t => new Date(t as string).getTime());
-                if (timestamps.length > 0) {
-                    maxUpdatedAt = new Date(Math.max(...timestamps)).toISOString();
-                }
-            }
-        }
-
-        await lcm.SetRunViewResult(fingerprint, params, result.Results, maxUpdatedAt);
+        // Simple proxy to the provider - caching, telemetry, and transformation are handled by ProviderBase Pre/Post hooks
+        return this.ProviderToUse.RunView<T>(params, contextUser);
     }
 
     /**

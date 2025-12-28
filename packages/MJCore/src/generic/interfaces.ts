@@ -596,6 +596,15 @@ export interface IRunQueryProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
     RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult>
+
+    /**
+     * Executes multiple queries in a single batch operation.
+     * More efficient than calling RunQuery multiple times as it reduces network overhead.
+     * @param params - Array of query parameters
+     * @param contextUser - Optional user context for permissions
+     * @returns Array of query results in the same order as input params
+     */
+    RunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]>
 }
 
 /**

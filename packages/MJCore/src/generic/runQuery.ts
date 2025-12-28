@@ -1,4 +1,4 @@
-import { MJGlobal, TelemetryManager } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
 import { IRunQueryProvider, RunQueryResult } from './interfaces';
 import { UserInfo } from './securityInfo';
 
@@ -85,27 +85,21 @@ export class RunQuery  {
      * @returns Query results including data rows and execution metadata
      */
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
-        // Start telemetry tracking
-        const eventId = TelemetryManager.Instance.StartEvent(
-            'RunQuery',
-            'RunQuery.Execute',
-            {
-                QueryID: params.QueryID,
-                QueryName: params.QueryName,
-                CategoryPath: params.CategoryPath,
-                CategoryID: params.CategoryID,
-                MaxRows: params.MaxRows,
-                StartRow: params.StartRow,
-                HasParameters: params.Parameters ? Object.keys(params.Parameters).length > 0 : false
-            },
-            contextUser?.ID
-        );
+        // Simple proxy to the provider - telemetry is handled by ProviderBase Pre/Post hooks
+        return this.ProviderToUse.RunQuery(params, contextUser);
+    }
 
-        try {
-            return this.ProviderToUse.RunQuery(params, contextUser);
-        } finally {
-            TelemetryManager.Instance.EndEvent(eventId);
-        }
+    /**
+     * Executes multiple queries in a single batch operation.
+     * More efficient than calling RunQuery multiple times as it reduces network overhead
+     * and allows the database to execute queries in parallel.
+     * @param params - Array of query parameters, each specifying a query to execute
+     * @param contextUser - Optional user context for permissions (mainly used server-side)
+     * @returns Array of query results in the same order as the input params
+     */
+    public async RunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        // Simple proxy to the provider - telemetry is handled by ProviderBase Pre/Post hooks
+        return this.ProviderToUse.RunQueries(params, contextUser);
     }
 
     private static _globalProviderKey: string = 'MJ_RunQueryProvider';

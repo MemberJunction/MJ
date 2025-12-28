@@ -527,14 +527,22 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     /**
      * Complete an event that was started with StartEvent
+     * @param eventId - The event ID returned from StartEvent
+     * @param additionalParams - Optional additional parameters to merge into the event's params
+     *                           Useful for adding context like cacheHit, resultCount, etc.
      */
-    public EndEvent(eventId: string | null): TelemetryEvent | null {
+    public EndEvent(eventId: string | null, additionalParams?: Record<string, unknown>): TelemetryEvent | null {
         if (!eventId) return null;
 
         const event = this._activeEvents.get(eventId);
         if (!event) return null;
 
         this._activeEvents.delete(eventId);
+
+        // Merge additional params if provided
+        if (additionalParams) {
+            event.params = { ...event.params, ...additionalParams };
+        }
 
         event.endTime = this.getTimestamp();
         event.elapsedMs = event.endTime - event.startTime;

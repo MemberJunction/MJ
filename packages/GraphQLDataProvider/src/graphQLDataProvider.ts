@@ -105,7 +105,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
  * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider interfaces and connects to the
  * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
  */
-export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider {
+export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
     private static _instance: GraphQLDataProvider;
     public static get Instance(): GraphQLDataProvider {
         return GraphQLDataProvider._instance;
@@ -402,7 +402,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     // START ---- IRunQueryProvider
     /**************************************************************************/
-    public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+    protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
@@ -412,6 +413,38 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         else {
             throw new Error("No QueryID or QueryName provided to RunQuery");
         }
+    }
+
+    protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
+        // Make a single batch GraphQL call for efficiency (single network roundtrip)
+        const query = gql`
+            query RunQueriesBatch($input: [RunQueryInput!]!) {
+                RunQueries(input: $input) {
+                    ${this.QueryReturnFieldList}
+                }
+            }
+        `;
+
+        // Convert params to the input format expected by the GraphQL resolver
+        const input = params.map(p => ({
+            QueryID: p.QueryID,
+            QueryName: p.QueryName,
+            CategoryID: p.CategoryID,
+            CategoryPath: p.CategoryPath,
+            Parameters: p.Parameters,
+            MaxRows: p.MaxRows,
+            StartRow: p.StartRow,
+            ForceAuditLog: p.ForceAuditLog,
+            AuditLogDescription: p.AuditLogDescription
+        }));
+
+        const result = await this.ExecuteGQL(query, { input });
+        if (result && result.RunQueries) {
+            // Transform each result in the batch
+            return result.RunQueries.map((r: unknown) => this.TransformQueryPayload(r));
+        }
+        return [];
     }
 
     public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
@@ -521,10 +554,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     // START ---- IRunViewProvider
     /**************************************************************************/
-    public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        // pre-process via the base-class 
-        await this.PreProcessRunView(params, contextUser);
-
+    protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
         try {
             let qName: string = ''
             let paramType: string = ''
@@ -620,9 +651,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
                     const result = viewData[qName];
 
-                    // post-process via the base class
-                    await this.PostProcessRunView(result, params, contextUser);
-
                     return result;
                 }
             }
@@ -637,9 +665,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-        // pre-process via the base class
-        await this.PreProcessRunViews(params, contextUser);
+    protected async InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
 
         try {
             let innerParams: any[] = [];
@@ -757,9 +783,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     });
                 }
 
-                // post-process via the base class
-                await this.PostProcessRunViews(results, params, contextUser);
-                
                 return results;
             }
 

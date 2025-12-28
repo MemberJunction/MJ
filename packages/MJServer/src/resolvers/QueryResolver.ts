@@ -1,10 +1,43 @@
-import { Arg, Ctx, ObjectType, Query, Resolver, Field, Int } from 'type-graphql';
-import { RunQuery, QueryInfo, IRunQueryProvider, IMetadataProvider } from '@memberjunction/core';
+import { Arg, Ctx, ObjectType, Query, Resolver, Field, Int, InputType } from 'type-graphql';
+import { RunQuery, QueryInfo, IRunQueryProvider, IMetadataProvider, RunQueryParams } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { Metadata } from '@memberjunction/core';
 import { GetReadOnlyProvider } from '../util.js';
+
+/**
+ * Input type for batch query execution - allows running multiple queries in a single network call
+ */
+@InputType()
+export class RunQueryInput {
+  @Field(() => String, { nullable: true, description: 'Query ID to run - either QueryID or QueryName must be provided' })
+  QueryID?: string;
+
+  @Field(() => String, { nullable: true, description: 'Query Name to run - either QueryID or QueryName must be provided' })
+  QueryName?: string;
+
+  @Field(() => String, { nullable: true, description: 'Category ID to help disambiguate queries with the same name' })
+  CategoryID?: string;
+
+  @Field(() => String, { nullable: true, description: 'Category path to help disambiguate queries with the same name' })
+  CategoryPath?: string;
+
+  @Field(() => GraphQLJSONObject, { nullable: true, description: 'Parameters to pass to the query' })
+  Parameters?: Record<string, unknown>;
+
+  @Field(() => Int, { nullable: true, description: 'Maximum number of rows to return' })
+  MaxRows?: number;
+
+  @Field(() => Int, { nullable: true, description: 'Starting row offset for pagination' })
+  StartRow?: number;
+
+  @Field(() => Boolean, { nullable: true, description: 'Force audit logging regardless of query settings' })
+  ForceAuditLog?: boolean;
+
+  @Field(() => String, { nullable: true, description: 'Description to use in audit log' })
+  AuditLogDescription?: string;
+}
 
 @ObjectType()
 export class RunQueryResultType {
@@ -272,5 +305,99 @@ export class RunQueryResolver {
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
+  }
+
+  /**
+   * Batch query execution - runs multiple queries in a single network call
+   * This is more efficient than making multiple individual query calls
+   */
+  @Query(() => [RunQueryResultType])
+  async RunQueries(
+    @Arg('input', () => [RunQueryInput]) input: RunQueryInput[],
+    @Ctx() context: AppContext
+  ): Promise<RunQueryResultType[]> {
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+    const rq = new RunQuery(provider as unknown as IRunQueryProvider);
+
+    // Convert input to RunQueryParams array
+    const params: RunQueryParams[] = input.map(i => ({
+      QueryID: i.QueryID,
+      QueryName: i.QueryName,
+      CategoryID: i.CategoryID,
+      CategoryPath: i.CategoryPath,
+      Parameters: i.Parameters,
+      MaxRows: i.MaxRows,
+      StartRow: i.StartRow,
+      ForceAuditLog: i.ForceAuditLog,
+      AuditLogDescription: i.AuditLogDescription
+    }));
+
+    // Execute all queries in parallel using the batch method
+    const results = await rq.RunQueries(params, context.userPayload.userRecord);
+
+    // Map results to output format
+    return results.map((result, index) => {
+      const inputItem = input[index];
+      return {
+        QueryID: result.QueryID || inputItem.QueryID || '',
+        QueryName: result.QueryName || inputItem.QueryName || 'Unknown Query',
+        Success: result.Success ?? false,
+        Results: JSON.stringify(result.Results ?? null),
+        RowCount: result.RowCount ?? 0,
+        TotalRowCount: result.TotalRowCount ?? 0,
+        ExecutionTime: result.ExecutionTime ?? 0,
+        ErrorMessage: result.ErrorMessage || '',
+        AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+        CacheHit: (result as Record<string, unknown>).CacheHit as boolean | undefined,
+        CacheTTLRemaining: (result as Record<string, unknown>).CacheTTLRemaining as number | undefined
+      };
+    });
+  }
+
+  /**
+   * Batch query execution with system user privileges
+   */
+  @RequireSystemUser()
+  @Query(() => [RunQueryResultType])
+  async RunQueriesSystemUser(
+    @Arg('input', () => [RunQueryInput]) input: RunQueryInput[],
+    @Ctx() context: AppContext
+  ): Promise<RunQueryResultType[]> {
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+    const rq = new RunQuery(provider as unknown as IRunQueryProvider);
+
+    // Convert input to RunQueryParams array
+    const params: RunQueryParams[] = input.map(i => ({
+      QueryID: i.QueryID,
+      QueryName: i.QueryName,
+      CategoryID: i.CategoryID,
+      CategoryPath: i.CategoryPath,
+      Parameters: i.Parameters,
+      MaxRows: i.MaxRows,
+      StartRow: i.StartRow,
+      ForceAuditLog: i.ForceAuditLog,
+      AuditLogDescription: i.AuditLogDescription
+    }));
+
+    // Execute all queries in parallel using the batch method
+    const results = await rq.RunQueries(params, context.userPayload.userRecord);
+
+    // Map results to output format
+    return results.map((result, index) => {
+      const inputItem = input[index];
+      return {
+        QueryID: result.QueryID || inputItem.QueryID || '',
+        QueryName: result.QueryName || inputItem.QueryName || 'Unknown Query',
+        Success: result.Success ?? false,
+        Results: JSON.stringify(result.Results ?? null),
+        RowCount: result.RowCount ?? 0,
+        TotalRowCount: result.TotalRowCount ?? 0,
+        ExecutionTime: result.ExecutionTime ?? 0,
+        ErrorMessage: result.ErrorMessage || '',
+        AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+        CacheHit: (result as Record<string, unknown>).CacheHit as boolean | undefined,
+        CacheTTLRemaining: (result as Record<string, unknown>).CacheTTLRemaining as number | undefined
+      };
+    });
   }
 }
