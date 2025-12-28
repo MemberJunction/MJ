@@ -17,13 +17,13 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
-import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
+import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -2292,107 +2292,3 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 }
 
-
-// this class implements a simple in-memory only storage as a fallback if the browser doesn't support local storage
-class BrowserStorageProviderBase implements ILocalStorageProvider {
-    private _localStorage: { [key: string]: string } = {};
-
-    public async GetItem(key: string): Promise<string | null> {
-        return new Promise((resolve) => {
-            if (this._localStorage.hasOwnProperty(key))
-                resolve(this._localStorage[key]);
-            else
-                resolve(null);
-        });
-    }
-
-    public async SetItem(key: string, value: string): Promise<void> {
-        return new Promise((resolve) => {
-            this._localStorage[key] = value;
-            resolve();
-        });
-    }
-
-    public async Remove(key: string): Promise<void> {
-        return new Promise((resolve) => {
-            if (this._localStorage.hasOwnProperty(key)) {
-                delete this._localStorage[key];
-            }
-            resolve();
-        });
-    }
-}
-
-
-// This implementation just wraps the browser local storage and if for some reason the browser doesn't
-// have a localStorage object, we just use a simple object to store the data in memory.
-class BrowserLocalStorageProvider extends BrowserStorageProviderBase  {
-    public async getItem(key: string): Promise<string | null> {
-        if (localStorage)
-            return localStorage.getItem(key);
-        else
-            return await super.GetItem(key)
-    }
-
-    public async setItem(key: string, value: string): Promise<void> {
-        if (localStorage)
-            localStorage.setItem(key, value);
-        else
-            await super.SetItem(key, value)
-    }
-
-    public async remove(key: string): Promise<void> {
-        if (localStorage)
-            localStorage.removeItem(key);
-        else
-            await super.Remove(key)
-    }
-}
-
-
-
-const IDB_DB_NAME = 'MJ_Metadata';
-const IDB_DB_ObjectStoreName = 'Metadata_KVPairs';
-
-interface MJ_MetadataDB extends DBSchema {
-    'Metadata_KVPairs': {
-        key: string;
-        value: any;
-    };
-}
-
-class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
-    private dbPromise: Promise<IDBPDatabase<MJ_MetadataDB>>;
-
-    constructor() {
-        super();
-
-        this.dbPromise = openDB<MJ_MetadataDB>(IDB_DB_NAME, 1, {
-            upgrade(db) {
-                if (!db.objectStoreNames.contains(IDB_DB_ObjectStoreName)) {
-                    db.createObjectStore(IDB_DB_ObjectStoreName);
-                }
-            },
-        });
-    }
-
-    async setItem(key: string, value: any): Promise<void> {
-        const db = await this.dbPromise;
-        const tx = db.transaction(IDB_DB_ObjectStoreName, 'readwrite');
-        await tx.objectStore(IDB_DB_ObjectStoreName).put(value, key);
-        await tx.done;
-    }
-
-    async getItem(key: string): Promise<any> {
-        const db = await this.dbPromise;
-        const value = await db.transaction(IDB_DB_ObjectStoreName).objectStore(IDB_DB_ObjectStoreName).get(key);
-        return value;
-    }
-
-    async remove(key: string): Promise<void> {
-        const db = await this.dbPromise;
-        const tx = db.transaction(IDB_DB_ObjectStoreName, 'readwrite');
-        await tx.objectStore(IDB_DB_ObjectStoreName).delete(key);
-        await tx.done;
-    }
-}

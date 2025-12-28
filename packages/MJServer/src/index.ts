@@ -189,7 +189,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
 
   // Load all classes registered with @RegisterForStartup decorator
   const systemUser = await getSystemUser(pool);
-  await StartupManager.Instance.LoadAll(false, systemUser, Metadata.Provider);
+  await StartupManager.Instance.Startup(false, systemUser, Metadata.Provider);
   console.log('Startup classes loaded');
 
   // Initialize LocalCacheManager with the server-side storage provider (in-memory)

@@ -100,10 +100,7 @@ export class ComponentResolver {
     }
     
     // Resolve the component hierarchy
-    console.log(`🔄 [ComponentResolver] About to call resolveComponentHierarchy for root: ${spec.name}`);
     await this.resolveComponentHierarchy(spec, resolved, namespace, new Set(), contextUser);
-    console.log(`✅ [ComponentResolver] Returned from resolveComponentHierarchy`);
-    console.log(`🔍 [ComponentResolver] Looking for root component '${spec.name}' in resolved:`, !!resolved[spec.name]);
     
     if (!resolved[spec.name]) {
       console.error(`❌ [ComponentResolver] Root component '${spec.name}' was NOT added to resolved map!`);

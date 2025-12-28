@@ -127,6 +127,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private _storageProvider: ILocalStorageProvider | null = null;
     private _registry: Map<string, CacheEntryInfo> = new Map();
     private _initialized: boolean = false;
+    private _initializePromise: Promise<void> | null = null;
     private _stats = { hits: 0, misses: 0 };
     private _config: LocalCacheManagerConfig = { ...DEFAULT_CONFIG };
 
@@ -144,15 +145,40 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Initialize the cache manager with a storage provider.
      * This should be called during app startup after the storage provider is available.
      *
+     * This method is safe to call multiple times - subsequent calls will return the same
+     * promise as the first caller, ensuring initialization only happens once.
+     *
      * @param storageProvider - The local storage provider to use for persistence
      * @param config - Optional configuration overrides
+     * @returns A promise that resolves when initialization is complete
      */
-    public async Initialize(
+    public Initialize(
         storageProvider: ILocalStorageProvider,
         config?: Partial<LocalCacheManagerConfig>
     ): Promise<void> {
-        if (this._initialized) return;
+        // If already initialized, return immediately
+        if (this._initialized) {
+            return Promise.resolve();
+        }
 
+        // If initialization is in progress, return the existing promise
+        // so all callers await the same initialization
+        if (this._initializePromise) {
+            return this._initializePromise;
+        }
+
+        // First caller - start initialization and store the promise
+        this._initializePromise = this.doInitialize(storageProvider, config);
+        return this._initializePromise;
+    }
+
+    /**
+     * Internal initialization logic - only called once by the first caller
+     */
+    private async doInitialize(
+        storageProvider: ILocalStorageProvider,
+        config?: Partial<LocalCacheManagerConfig>
+    ): Promise<void> {
         this._storageProvider = storageProvider;
         if (config) {
             this._config = { ...this._config, ...config };

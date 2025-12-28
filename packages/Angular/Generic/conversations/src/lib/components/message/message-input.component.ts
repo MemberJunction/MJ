@@ -1483,8 +1483,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     const agentName = previousAgent.Name || 'Agent';
 
-    console.log(`🔄 Agent continuity: Continuing with ${agentName} (AgentID: ${lastAIMessage.AgentID})`);
-
     let previousPayload: any = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
 

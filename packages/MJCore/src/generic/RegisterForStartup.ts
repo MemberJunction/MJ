@@ -1,5 +1,7 @@
 import { UserInfo } from "./securityInfo";
 import { IMetadataProvider } from "./interfaces";
+import { Metadata } from "./metadata";
+import { LocalCacheManager } from "./localCacheManager";
 
 /**
  * Options for the @RegisterForStartup decorator
@@ -271,7 +273,9 @@ export class StartupManager {
     }
 
     /**
-     * Load all registered startup classes in priority order.
+     * Handles all startup activities including initializing the local cache manager and then
+     * loading all registered startup classes in priority order.
+     * 
      * Classes with the same priority are loaded in parallel.
      *
      * This method is idempotent - multiple callers will receive the same promise
@@ -283,7 +287,7 @@ export class StartupManager {
      * @param provider - Optional metadata provider
      * @returns Results of all load operations
      */
-    public async LoadAll(
+    public async Startup(
         forceRefresh: boolean = false,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
@@ -322,6 +326,15 @@ export class StartupManager {
      * Internal method that performs the actual startup loading work.
      */
     private async ExecuteLoad(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<LoadAllResult> {
+        // first, init the LocalCacheManager and await its completion
+        // Get the storage provider from the metadata provider (uses IndexedDB)
+        const cacheStart = Date.now();
+        const storageProvider = Metadata.Provider.LocalStorageProvider;
+        await LocalCacheManager.Instance.Initialize(storageProvider);
+        console.log(`LocalCacheManager initialized in ${Date.now() - cacheStart}ms`);
+
+
+
         const startTime = Date.now();
         const registrations = this.GetRegistrations();
         const groups = this.GroupByPriority(registrations);

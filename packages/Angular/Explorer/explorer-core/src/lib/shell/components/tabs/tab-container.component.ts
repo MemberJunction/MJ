@@ -287,7 +287,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const shouldUseSingleResourceMode = !tabBarVisible;
 
     if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
-      console.log(`🔄 Switching to ${shouldUseSingleResourceMode ? 'single-resource' : 'multi-tab'} mode`);
       this.useSingleResourceMode = shouldUseSingleResourceMode;
       this.cdr.detectChanges();
 
@@ -298,7 +297,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         setTimeout(() => {
           // First, destroy Golden Layout if it was initialized (prevents stale state)
           if (this.layoutInitialized) {
-            console.log('[TabContainer] Destroying Golden Layout when transitioning to single-resource mode');
             this.layoutManager.Destroy();
             this.layoutInitialized = false;
           }
