@@ -17,7 +17,8 @@ import { AIActionEntity, ActionEntity,
          AIModelCostEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity,
          AIConfigurationEntity, AIConfigurationParamEntity, AIAgentStepEntity,
          AIAgentStepPathEntity, AIAgentRelationshipEntity, AIAgentPermissionEntity,
-         AIAgentDataSourceEntity, AIAgentConfigurationEntity, AIAgentExampleEntity } from "@memberjunction/core-entities";
+         AIAgentDataSourceEntity, AIAgentConfigurationEntity, AIAgentExampleEntity,
+         AICredentialBindingEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -122,6 +123,19 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
     public get Vendors(): AIVendorEntity[] { return this.Base.Vendors; }
     public get ModelVendors(): AIModelVendorEntity[] { return this.Base.ModelVendors; }
+    public get CredentialBindings(): AICredentialBindingEntity[] { return this.Base.CredentialBindings; }
+    public GetCredentialBindingsForTarget(
+        bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
+        targetId: string
+    ): AICredentialBindingEntity[] {
+        return this.Base.GetCredentialBindingsForTarget(bindingType, targetId);
+    }
+    public HasCredentialBindings(
+        bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
+        targetId: string
+    ): boolean {
+        return this.Base.HasCredentialBindings(bindingType, targetId);
+    }
     public get ModelTypes(): AIModelTypeEntity[] { return this.Base.ModelTypes; }
     public get Prompts(): AIPromptEntityExtended[] { return this.Base.Prompts; }
     public get PromptModels(): AIPromptModelEntity[] { return this.Base.PromptModels; }

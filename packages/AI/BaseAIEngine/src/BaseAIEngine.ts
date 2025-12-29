@@ -19,7 +19,8 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteType
          AIAgentPermissionEntity,
          AIAgentDataSourceEntity,
          AIAgentConfigurationEntity,
-         AIAgentExampleEntity} from "@memberjunction/core-entities";
+         AIAgentExampleEntity,
+         AICredentialBindingEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { AIPromptEntityExtended, AIPromptCategoryEntityExtended, AIModelEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
@@ -57,6 +58,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentStepPaths: AIAgentStepPathEntity[] = [];
     private _agentPermissions: AIAgentPermissionEntity[] = [];
     private _agentConfigurations: AIAgentConfigurationEntity[] = [];
+    private _credentialBindings: AICredentialBindingEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
@@ -204,6 +206,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentConfigurations',
                 EntityName: 'MJ: AI Agent Configurations',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_credentialBindings',
+                EntityName: 'MJ: AI Credential Bindings',
                 CacheLocal: true
             }
         ];
@@ -461,6 +468,53 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get ModelVendors(): AIModelVendorEntity[] {
         return this._modelVendors;
+    }
+
+    public get CredentialBindings(): AICredentialBindingEntity[] {
+        return this._credentialBindings;
+    }
+
+    /**
+     * Gets credential bindings for a specific target, filtered by binding type and sorted by priority.
+     * Only returns active bindings.
+     * @param bindingType - The type of binding: 'Vendor', 'ModelVendor', or 'PromptModel'
+     * @param targetId - The ID of the target entity (AIVendorID, AIModelVendorID, or AIPromptModelID)
+     * @returns Array of active credential bindings sorted by Priority (lower = higher priority)
+     */
+    public GetCredentialBindingsForTarget(
+        bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
+        targetId: string
+    ): AICredentialBindingEntity[] {
+        return this._credentialBindings
+            .filter(b => {
+                if (!b.IsActive) return false;
+                if (b.BindingType !== bindingType) return false;
+
+                switch (bindingType) {
+                    case 'Vendor':
+                        return b.AIVendorID === targetId;
+                    case 'ModelVendor':
+                        return b.AIModelVendorID === targetId;
+                    case 'PromptModel':
+                        return b.AIPromptModelID === targetId;
+                    default:
+                        return false;
+                }
+            })
+            .sort((a, b) => a.Priority - b.Priority);
+    }
+
+    /**
+     * Checks if any credential bindings exist for a specific target.
+     * @param bindingType - The type of binding: 'Vendor', 'ModelVendor', or 'PromptModel'
+     * @param targetId - The ID of the target entity
+     * @returns True if at least one active binding exists
+     */
+    public HasCredentialBindings(
+        bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
+        targetId: string
+    ): boolean {
+        return this.GetCredentialBindingsForTarget(bindingType, targetId).length > 0;
     }
 
     public get ModelTypes(): AIModelTypeEntity[] {

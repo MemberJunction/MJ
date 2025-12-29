@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity, TemplateEntityExtended, AICredentialBindingEntity, CredentialEntity } from '@memberjunction/core-entities';
 import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -264,96 +264,208 @@ export class AIPromptRunner {
   ): Promise<string> {
     const verbose = params.verbose === true || IsVerboseLoggingEnabled();
 
-    // Determine credential ID using resolution hierarchy
-    let credentialId: string | null = null;
-    let credentialSource: string | null = null;
-
-    // Priority 1: Per-request override
+    // Priority 1: Per-request override - no failover, explicit choice
     if (params.credentialId) {
-      credentialId = params.credentialId;
-      credentialSource = 'per-request override';
+      return await this.resolveCredentialById(params.credentialId, 'per-request override', params, verbose);
     }
 
-    // Priority 2: Prompt-Model specific
-    if (!credentialId && promptId && modelId) {
+    // Ensure CredentialEngine is configured for binding lookups
+    await CredentialEngine.Instance.Config(false, params.contextUser);
+
+    // Priority 2: PromptModel bindings (most specific) - with failover
+    if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
         pm => pm.PromptID === promptId && pm.ModelID === modelId
       );
-      if (promptModel?.CredentialID) {
-        credentialId = promptModel.CredentialID;
-        credentialSource = 'AIPromptModel';
+      if (promptModel) {
+        const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('PromptModel', promptModel.ID);
+        const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(PromptModel)', params, verbose);
+        if (result) return result;
       }
     }
 
-    // Priority 3: Model-Vendor specific
-    if (!credentialId && modelId && vendorId) {
+    // Priority 3: ModelVendor bindings - with failover
+    if (modelId && vendorId) {
       const modelVendor = AIEngine.Instance.ModelVendors.find(
         mv => mv.ModelID === modelId && mv.VendorID === vendorId && mv.Status === 'Active'
       );
-      if (modelVendor?.CredentialID) {
-        credentialId = modelVendor.CredentialID;
-        credentialSource = 'AIModelVendor';
+      if (modelVendor) {
+        const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('ModelVendor', modelVendor.ID);
+        const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(ModelVendor)', params, verbose);
+        if (result) return result;
       }
     }
 
-    // Priority 4: Vendor default
-    if (!credentialId && vendorId) {
+    // Priority 4: Vendor bindings - with failover
+    if (vendorId) {
+      const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('Vendor', vendorId);
+      const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(Vendor)', params, verbose);
+      if (result) return result;
+    }
+
+    // Priority 5: Type-based default credential
+    // If the vendor declares a CredentialTypeID, try to find a default credential of that type
+    if (vendorId) {
       const vendor = AIEngine.Instance.Vendors.find(v => v.ID === vendorId);
-      if (vendor?.CredentialID) {
-        credentialId = vendor.CredentialID;
-        credentialSource = 'AIVendor';
+      if (vendor?.CredentialTypeID) {
+        const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
+        if (defaultCredential) {
+          const result = await this.tryResolveCredential(defaultCredential, 'type-based default', params, verbose);
+          if (result) return result;
+        }
       }
     }
 
-    // If we found a credential ID, use the Credentials system
-    if (credentialId) {
-      try {
-        // Ensure CredentialEngine is configured
-        await CredentialEngine.Instance.Config(false, params.contextUser);
-
-        // Get the credential by ID
-        const credential = CredentialEngine.Instance.getCredentialById(credentialId);
-        if (!credential) {
-          throw new Error(`Credential with ID ${credentialId} not found`);
-        }
-
-        // Use getCredential to get decrypted values with audit logging
-        const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
-          credentialId,
-          contextUser: params.contextUser,
-          subsystem: 'AIPromptRunner'
-        });
-
-        if (verbose) {
-          this.logStatus(`   🔐 Using credential from ${credentialSource}: "${credential.Name}"`, true, params);
-        }
-
-        // Return stringified credential values for the LLM constructor
-        // The LLM will parse this as JSON to extract apiKey and any additional config
-        return JSON.stringify(resolved.values);
-
-      } catch (error) {
-        this.logError(error instanceof Error ? error : new Error(String(error)), {
-          category: 'CredentialResolution',
-          severity: 'error',
-          metadata: {
-            credentialId,
-            credentialSource,
-            driverClass
-          },
-          maxErrorLength: params.maxErrorLength
-        });
-        throw new Error(`Failed to resolve credential from ${credentialSource}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    // No credential ID found - fall back to legacy methods
+    // No credential bindings found - fall back to legacy methods
     if (verbose) {
       this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
     }
 
-    // Priority 5 & 6: Legacy apiKeys array and environment variables
+    // Priority 6 & 7: Legacy apiKeys array and environment variables
     return GetAIAPIKey(driverClass, params.apiKeys, verbose);
+  }
+
+  /**
+   * Attempts to resolve credentials from bindings with priority-based failover.
+   * Tries each binding in priority order until one succeeds.
+   */
+  private async tryCredentialBindingsWithFailover(
+    bindings: AICredentialBindingEntity[],
+    source: string,
+    params: AIPromptParams,
+    verbose: boolean
+  ): Promise<string | null> {
+    if (bindings.length === 0) return null;
+
+    for (let i = 0; i < bindings.length; i++) {
+      const binding = bindings[i];
+      const credential = CredentialEngine.Instance.getCredentialById(binding.CredentialID);
+
+      if (!credential) {
+        if (verbose) {
+          this.logStatus(`   ⚠️ Credential ${binding.CredentialID} not found (priority ${binding.Priority}), trying next...`, true, params);
+        }
+        continue;
+      }
+
+      const result = await this.tryResolveCredential(
+        credential,
+        `${source} priority ${binding.Priority}`,
+        params,
+        verbose,
+        i < bindings.length - 1  // hasMoreBindings
+      );
+
+      if (result) return result;
+    }
+
+    return null;
+  }
+
+  /**
+   * Attempts to resolve a single credential, returning null on failure for failover support.
+   */
+  private async tryResolveCredential(
+    credential: CredentialEntity,
+    source: string,
+    params: AIPromptParams,
+    verbose: boolean,
+    hasMoreBindings: boolean = false
+  ): Promise<string | null> {
+    try {
+      // Check if credential is active and not expired
+      if (!credential.IsActive) {
+        if (verbose) {
+          this.logStatus(`   ⚠️ Credential "${credential.Name}" is inactive, trying next...`, true, params);
+        }
+        return null;
+      }
+
+      if (credential.ExpiresAt && new Date(credential.ExpiresAt) < new Date()) {
+        if (verbose) {
+          this.logStatus(`   ⚠️ Credential "${credential.Name}" has expired, trying next...`, true, params);
+        }
+        return null;
+      }
+
+      // Resolve the credential values
+      const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
+        credentialId: credential.ID,
+        contextUser: params.contextUser,
+        subsystem: 'AIPromptRunner'
+      });
+
+      if (verbose) {
+        this.logStatus(`   🔐 Using credential from ${source}: "${credential.Name}"`, true, params);
+      }
+
+      return JSON.stringify(resolved.values);
+
+    } catch (error) {
+      if (hasMoreBindings) {
+        // More bindings to try - log warning and continue
+        if (verbose) {
+          this.logStatus(`   ⚠️ Failed to resolve credential "${credential.Name}" from ${source}: ${error instanceof Error ? error.message : String(error)}, trying next...`, true, params);
+        }
+        return null;
+      } else {
+        // No more bindings - log error but still return null for legacy fallback
+        this.logError(error instanceof Error ? error : new Error(String(error)), {
+          category: 'CredentialResolution',
+          severity: 'warning',
+          metadata: {
+            credentialId: credential.ID,
+            credentialName: credential.Name,
+            source
+          },
+          maxErrorLength: params.maxErrorLength
+        });
+        return null;
+      }
+    }
+  }
+
+  /**
+   * Resolves a credential by its explicit ID (used for per-request override).
+   * This does not support failover since it's an explicit choice.
+   */
+  private async resolveCredentialById(
+    credentialId: string,
+    source: string,
+    params: AIPromptParams,
+    verbose: boolean
+  ): Promise<string> {
+    await CredentialEngine.Instance.Config(false, params.contextUser);
+
+    const credential = CredentialEngine.Instance.getCredentialById(credentialId);
+    if (!credential) {
+      throw new Error(`Credential with ID ${credentialId} not found`);
+    }
+
+    const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
+      credentialId,
+      contextUser: params.contextUser,
+      subsystem: 'AIPromptRunner'
+    });
+
+    if (verbose) {
+      this.logStatus(`   🔐 Using credential from ${source}: "${credential.Name}"`, true, params);
+    }
+
+    return JSON.stringify(resolved.values);
+  }
+
+  /**
+   * Finds a default credential matching a specific credential type.
+   */
+  private findDefaultCredentialByType(credentialTypeId: string): CredentialEntity | null {
+    const credentials = CredentialEngine.Instance.Credentials;
+    return credentials.find(c =>
+      c.CredentialTypeID === credentialTypeId &&
+      c.IsDefault === true &&
+      c.IsActive === true &&
+      (!c.ExpiresAt || new Date(c.ExpiresAt) > new Date())
+    ) || null;
   }
 
   /**
@@ -363,16 +475,17 @@ export class AIPromptRunner {
    *
    * Checks the credential hierarchy:
    * 1. Per-request override: params.credentialId
-   * 2. Prompt-Model specific: AIPromptModel.CredentialID
-   * 3. Model-Vendor specific: AIModelVendor.CredentialID
-   * 4. Vendor default: AIVendor.CredentialID
-   * 5. Legacy: params.apiKeys[] array
-   * 6. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
+   * 2. PromptModel bindings: AICredentialBinding WHERE BindingType='PromptModel'
+   * 3. ModelVendor bindings: AICredentialBinding WHERE BindingType='ModelVendor'
+   * 4. Vendor bindings: AICredentialBinding WHERE BindingType='Vendor'
+   * 5. Type-based default: Credential.IsDefault=1 matching AIVendor.CredentialTypeID
+   * 6. Legacy: params.apiKeys[] array
+   * 7. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
    * @param driverClass - The driver class name (e.g., 'OpenAILLM')
-   * @param promptId - The prompt ID for looking up AIPromptModel credentials
-   * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor credentials
-   * @param vendorId - The vendor ID for looking up AIModelVendor and AIVendor credentials
+   * @param promptId - The prompt ID for looking up AIPromptModel bindings
+   * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor bindings
+   * @param vendorId - The vendor ID for looking up AIModelVendor and AIVendor bindings
    * @param params - The prompt execution parameters
    * @returns true if credentials are available, false otherwise
    */
@@ -389,35 +502,45 @@ export class AIPromptRunner {
       return true;
     }
 
-    // Priority 2: Prompt-Model specific
+    // Priority 2: PromptModel bindings
     if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
         pm => pm.PromptID === promptId && pm.ModelID === modelId
       );
-      if (promptModel?.CredentialID) {
+      if (promptModel && AIEngine.Instance.HasCredentialBindings('PromptModel', promptModel.ID)) {
         return true;
       }
     }
 
-    // Priority 3: Model-Vendor specific
+    // Priority 3: ModelVendor bindings
     if (modelId && vendorId) {
       const modelVendor = AIEngine.Instance.ModelVendors.find(
         mv => mv.ModelID === modelId && mv.VendorID === vendorId && mv.Status === 'Active'
       );
-      if (modelVendor?.CredentialID) {
+      if (modelVendor && AIEngine.Instance.HasCredentialBindings('ModelVendor', modelVendor.ID)) {
         return true;
       }
     }
 
-    // Priority 4: Vendor default
+    // Priority 4: Vendor bindings
+    if (vendorId) {
+      if (AIEngine.Instance.HasCredentialBindings('Vendor', vendorId)) {
+        return true;
+      }
+    }
+
+    // Priority 5: Type-based default credential
     if (vendorId) {
       const vendor = AIEngine.Instance.Vendors.find(v => v.ID === vendorId);
-      if (vendor?.CredentialID) {
-        return true;
+      if (vendor?.CredentialTypeID) {
+        const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
+        if (defaultCredential) {
+          return true;
+        }
       }
     }
 
-    // Priority 5 & 6: Legacy methods - check if API key is available
+    // Priority 6 & 7: Legacy methods - check if API key is available
     const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose);
     return this.isValidAPIKey(apiKey);
   }

@@ -1,5 +1,6 @@
 import {
     BaseEngine,
+    EntityInfo,
     IMetadataProvider,
     LogError,
     LogStatus,
@@ -91,30 +92,24 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                 CacheLocal: true
             }
         ];
-        return await this.Load(params, provider, forceRefresh, contextUser);
-    }
 
-    /**
-     * Additional loading after main entities are cached.
-     * Looks up the Credentials entity ID for audit logging.
-     */
-    protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // Get the entity ID for "MJ: Credentials" entity - needed for audit logging
-        try {
-            const rv = new RunView();
-            const result = await rv.RunView<EntityEntity>({
-                EntityName: 'Entities',
-                ExtraFilter: `Name = 'MJ: Credentials'`,
-                ResultType: 'entity_object'
-            }, contextUser);
-
-            if (result.Success && result.Results.length > 0) {
-                this._credentialsEntityId = result.Results[0].ID;
-            }
-        } catch (e) {
-            LogError(e);
-            // Non-fatal - audit logging will work without entity ID
+        // get the entity ID for MJ: Credentials
+        let entityMatch: EntityInfo;
+        if (provider) {
+            entityMatch = provider.Entities.find(e => e.Name?.trim().toLowerCase() === 'mj: credentials')
         }
+        else {
+            const md = new Metadata();
+            entityMatch = md.EntityByName("MJ: Credentials");
+        }
+        if (entityMatch) {
+            this._credentialsEntityId = entityMatch.ID;
+        }
+        else {
+            throw new Error("Entity not found for MJ: Credentials!")
+        }
+
+        return await this.Load(params, provider, forceRefresh, contextUser);
     }
 
     /**
