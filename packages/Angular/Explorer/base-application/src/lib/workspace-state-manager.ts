@@ -122,7 +122,8 @@ export class WorkspaceStateManager {
     const result = await rv.RunView<WorkspaceEntity>({
       EntityName: 'Workspaces',
       ExtraFilter: `UserID='${userId}'`,
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
+      CacheLocal: true
     });
 
     if (result.Success && result.Results.length > 0) {
