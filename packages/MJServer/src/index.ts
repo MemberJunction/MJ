@@ -274,7 +274,6 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     graphqlRootPath,
     cors<cors.CorsRequest>(),
     BodyParser.json({ limit: '50mb' }),
-    // @ts-expect-error - Type conflict between @types/express versions in dependency tree
     expressMiddleware(apolloServer, {
       context: contextFunction({
                                  setupComplete$,
