@@ -221,24 +221,24 @@ export abstract class BaseRecordMutationAction extends BaseAction {
      */
     protected handleError(e: any, operation: string): ActionResultSimple {
         LogError(e);
-        
+
         // Build detailed error message
         let errorMessage = `Error ${operation} record: ${e.message}`;
-        
+
         // If this is an entity error, include more details
         if (e.LatestResult) {
-            errorMessage += ` (Entity Error: ${e.LatestResult.Message || 'Unknown entity error'})`;
+            errorMessage += ` (Entity Error: ${e.LatestResult.CompleteMessage || 'Unknown entity error'})`;
         }
-        
+
         // Include stack trace in verbose mode for debugging
         const errorDetails = {
             originalError: e.message,
             stack: e.stack,
             timestamp: new Date().toISOString()
         };
-        
+
         LogError(`Detailed error information: ${JSON.stringify(errorDetails)}`);
-        
+
         return {
             Success: false,
             ResultCode: 'FAILED',

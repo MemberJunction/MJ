@@ -4265,7 +4265,7 @@ export class AIPromptRunner {
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        // Safely extract error message - LatestResult.Message might be an Error object or string
+        // Safely extract error message using CompleteMessage getter
         let errorMsg = 'Unknown error';
         try {
           if (promptRun.LatestResult?.CompleteMessage) {

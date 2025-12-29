@@ -1014,15 +1014,9 @@ export class PushService {
 
       // Log the LatestResult for debugging
       if (entity.LatestResult) {
-        if (entity.LatestResult.CompleteMessage) {
-          logError(`   Database Message: ${entity.LatestResult.CompleteMessage}`);
-        }
-        if (entity.LatestResult.Errors && entity.LatestResult.Errors.length > 0) {
-          logError(`   Errors:`);
-          entity.LatestResult.Errors.forEach((err: any, idx: number) => {
-            const errorMsg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err));
-            logError(`     ${idx + 1}. ${errorMsg}`);
-          });
+        const completeMessage = entity.LatestResult.CompleteMessage;
+        if (completeMessage) {
+          logError(`   Database Error: ${completeMessage}`);
         }
         if ((entity.LatestResult as any).SQL) {
           // Don't log the full SQL as it might be huge, just indicate it's available
