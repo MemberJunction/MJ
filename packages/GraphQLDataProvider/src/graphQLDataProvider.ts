@@ -9,11 +9,11 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          EntityInfo, EntityFieldInfo, EntityFieldTSType,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError,
-         TransactionGroupBase, TransactionItem, TransactionResult, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
+         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, BaseEntityResult,
-         KeyValuePair, sanitizeGraphQLName, getGraphQLTypeNameBase, MJ_CORE_SCHEMA } from "@memberjunction/core";
+         KeyValuePair, getGraphQLTypeNameBase } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'

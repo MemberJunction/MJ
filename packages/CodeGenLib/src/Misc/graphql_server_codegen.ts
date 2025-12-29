@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption, sanitizeGraphQLName, getGraphQLTypeNameBase, MJ_CORE_SCHEMA } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption, getGraphQLTypeNameBase } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';

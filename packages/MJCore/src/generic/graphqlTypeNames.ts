@@ -12,7 +12,6 @@ import { EntityInfo } from './entityInfo';
 /**
  * The core schema name constant. This should match the mjCoreSchema config value.
  *
- * @see https://github.com/MemberJunction/MJ/issues/1452
  */
 export const MJ_CORE_SCHEMA = '__mj';
 
