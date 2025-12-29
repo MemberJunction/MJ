@@ -9,9 +9,10 @@ import {
   BaseApplication,
   TabService,
   WorkspaceConfiguration,
-  WorkspaceTab
+  WorkspaceTab,
+  AppAccessResult
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
@@ -21,6 +22,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
 import { LoadingTheme, getActiveTheme } from './loading-themes';
+import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -78,6 +80,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   searchableEntities: EntityInfo[] = [];
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+
+  // App access dialog
+  @ViewChild('appAccessDialog') appAccessDialog!: AppAccessDialogComponent;
+  private pendingAppPath: string | null = null; // Store the app path we tried to access
 
   /**
    * Get Nav Bar apps positioned to the left of the app switcher
@@ -237,42 +243,50 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Subscribe to applications loading - set app based on URL or default to first
     this.subscriptions.push(
       this.appManager.Applications.subscribe(async apps => {
-        if (apps.length > 0) {
-          // Check if URL specifies an app by parsing the browser URL
-          const currentUrl = this.router.url;
-          const appMatch = currentUrl.match(/\/app\/([^\/]+)/);
+        // Handle the case where user has no apps at all
+        if (apps.length === 0) {
+          await this.handleNoAppsAvailable();
+          return;
+        }
 
-          if (appMatch) {
-            const routeAppPath = decodeURIComponent(appMatch[1]);
-            // Find the app from the URL by Path (or Name for backwards compatibility)
-            const urlApp = this.appManager.GetAppByPath(routeAppPath);
+        // Check if URL specifies an app by parsing the browser URL
+        const currentUrl = this.router.url;
+        const appMatch = currentUrl.match(/\/app\/([^\/]+)/);
 
-            if (urlApp) {
-              // Set the app from URL - takes precedence over workspace restoration
-              await this.appManager.SetActiveApp(urlApp.ID);
+        if (appMatch) {
+          const routeAppPath = decodeURIComponent(appMatch[1]);
+          // Find the app from the URL by Path (or Name for backwards compatibility)
+          const urlApp = this.appManager.GetAppByPath(routeAppPath);
 
-              // If the URL is just /app/:appName (no nav item), create default tab
-              const hasNavItem = currentUrl.match(/\/app\/[^\/]+\/[^\/]+/);
+          if (urlApp) {
+            // Set the app from URL - takes precedence over workspace restoration
+            await this.appManager.SetActiveApp(urlApp.ID);
 
-              if (!hasNavItem) {
-                const existingTabs = this.workspaceManager.GetAppTabs(urlApp.ID);
-                if (existingTabs.length === 0) {
-                  const tabRequest = await urlApp.CreateDefaultTab();
-                  if (tabRequest) {
-                    this.tabService.OpenTab(tabRequest);
-                  }
+            // If the URL is just /app/:appName (no nav item), create default tab
+            const hasNavItem = currentUrl.match(/\/app\/[^\/]+\/[^\/]+/);
+
+            if (!hasNavItem) {
+              const existingTabs = this.workspaceManager.GetAppTabs(urlApp.ID);
+              if (existingTabs.length === 0) {
+                const tabRequest = await urlApp.CreateDefaultTab();
+                if (tabRequest) {
+                  this.tabService.OpenTab(tabRequest);
                 }
               }
-
-              return;
             }
-          }
 
-          // Set default app if URL doesn't specify one AND no app is active yet
-          const currentActiveApp = this.appManager.GetActiveApp();
-          if (!appMatch && !currentActiveApp) {
-            await this.appManager.SetActiveApp(apps[0].ID);
+            return;
+          } else {
+            // App not found in user's list - check why and show appropriate dialog
+            await this.handleAppAccessError(routeAppPath, apps);
+            return;
           }
+        }
+
+        // Set default app if URL doesn't specify one AND no app is active yet
+        const currentActiveApp = this.appManager.GetActiveApp();
+        if (!appMatch && !currentActiveApp) {
+          await this.appManager.SetActiveApp(apps[0].ID);
         }
       })
     );
@@ -1406,5 +1420,237 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       IsPinned: false
     });
+  }
+
+  // ========================================
+  // APP ACCESS ERROR HANDLING
+  // ========================================
+
+  /**
+   * Handle app access error by showing the appropriate dialog based on the access check result.
+   * IMPORTANT: This keeps the loading screen visible and does NOT navigate to any app
+   * until the user makes a decision in the dialog.
+   * @param appPath The app path from the URL that the user tried to access
+   * @param availableApps The list of apps the user has access to (for fallback)
+   */
+  private async handleAppAccessError(appPath: string, availableApps: BaseApplication[]): Promise<void> {
+    const accessResult = this.appManager.CheckAppAccess(appPath);
+    this.pendingAppPath = appPath;
+
+    LogStatus(`App access check for "${appPath}": ${accessResult.status} - ${accessResult.message}`);
+
+    const dialogConfig = this.mapAccessResultToDialogConfig(accessResult);
+
+    // IMPORTANT: Keep loading screen visible while dialog is shown
+    // Do NOT set any active app or create any tabs yet
+    // The loading screen stays visible because we haven't called onFirstResourceLoadComplete
+
+    // Show the dialog on top of the loading screen
+    // Use setTimeout to ensure the dialog component is ready after view init
+    setTimeout(() => {
+      if (this.appAccessDialog) {
+        this.appAccessDialog.show(dialogConfig);
+      } else {
+        // Fallback if dialog not available - redirect to first app
+        console.warn('App access dialog not available, redirecting to first app');
+        this.redirectToFirstApp(availableApps);
+      }
+    }, 0);
+  }
+
+  /**
+   * Map an AppAccessResult to the dialog configuration
+   */
+  private mapAccessResultToDialogConfig(accessResult: AppAccessResult): AppAccessDialogConfig {
+    switch (accessResult.status) {
+      case 'not_found':
+        return {
+          type: 'not_found',
+          appName: accessResult.appName
+        };
+
+      case 'inactive':
+        return {
+          type: 'inactive',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      case 'not_installed':
+        return {
+          type: 'not_installed',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      case 'disabled':
+        return {
+          type: 'disabled',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      default:
+        // 'accessible' shouldn't reach here, but handle it as a generic error
+        return {
+          type: 'no_access',
+          appName: accessResult.appName
+        };
+    }
+  }
+
+  /**
+   * Handle when user has no apps available at all
+   */
+  private async handleNoAppsAvailable(): Promise<void> {
+    LogStatus('User has no applications available');
+
+    // Stop loading animation and show the dialog
+    this.stopLoadingAnimation();
+    this.loading = false;
+    this.cdr.detectChanges();
+
+    setTimeout(() => {
+      if (this.appAccessDialog) {
+        this.appAccessDialog.show({ type: 'no_apps' });
+      }
+    }, 0);
+  }
+
+  /**
+   * Handle Golden Layout initialization failure
+   */
+  handleLayoutError(): void {
+    LogStatus('Golden Layout initialization failed');
+
+    const availableApps = this.appManager.GetAllApps();
+    if (availableApps.length > 0) {
+      setTimeout(() => {
+        if (this.appAccessDialog) {
+          this.appAccessDialog.show({ type: 'layout_error' });
+        } else {
+          // Direct redirect if dialog not available
+          this.redirectToFirstApp(availableApps);
+        }
+      }, 0);
+    }
+  }
+
+  /**
+   * Handle dialog result (install, enable, or redirect)
+   */
+  async onAppAccessDialogResult(result: AppAccessDialogResult): Promise<void> {
+    const availableApps = this.appManager.GetAllApps();
+
+    switch (result.action) {
+      case 'install':
+        if (result.appId) {
+          await this.installAndNavigateToApp(result.appId);
+        }
+        break;
+
+      case 'enable':
+        if (result.appId) {
+          await this.enableAndNavigateToApp(result.appId);
+        }
+        break;
+
+      case 'redirect':
+      case 'dismissed':
+      default:
+        this.redirectToFirstApp(availableApps);
+        break;
+    }
+  }
+
+  /**
+   * Install an app for the user and navigate to it
+   */
+  private async installAndNavigateToApp(appId: string): Promise<void> {
+    try {
+      const userApp = await this.appManager.InstallAppForUser(appId);
+
+      if (userApp) {
+        // App installed successfully - navigate to it
+        const app = this.appManager.GetAppById(appId);
+        if (app) {
+          await this.navigateToApp(app);
+          this.appAccessDialog?.completeProcessing();
+        } else {
+          // Fallback - reload might be needed
+          this.appAccessDialog?.completeProcessing();
+          this.redirectToFirstApp(this.appManager.GetAllApps());
+        }
+      } else {
+        // Installation failed
+        this.appAccessDialog?.completeProcessing();
+        this.redirectToFirstApp(this.appManager.GetAllApps());
+      }
+    } catch (error) {
+      console.error('Error installing app:', error);
+      this.appAccessDialog?.completeProcessing();
+      this.redirectToFirstApp(this.appManager.GetAllApps());
+    }
+  }
+
+  /**
+   * Enable a disabled app for the user and navigate to it
+   */
+  private async enableAndNavigateToApp(appId: string): Promise<void> {
+    try {
+      const success = await this.appManager.EnableAppForUser(appId);
+
+      if (success) {
+        // App enabled successfully - navigate to it
+        const app = this.appManager.GetAppById(appId);
+        if (app) {
+          await this.navigateToApp(app);
+          this.appAccessDialog?.completeProcessing();
+        } else {
+          this.appAccessDialog?.completeProcessing();
+          this.redirectToFirstApp(this.appManager.GetAllApps());
+        }
+      } else {
+        this.appAccessDialog?.completeProcessing();
+        this.redirectToFirstApp(this.appManager.GetAllApps());
+      }
+    } catch (error) {
+      console.error('Error enabling app:', error);
+      this.appAccessDialog?.completeProcessing();
+      this.redirectToFirstApp(this.appManager.GetAllApps());
+    }
+  }
+
+  /**
+   * Navigate to a specific app and create its default tab
+   */
+  private async navigateToApp(app: BaseApplication): Promise<void> {
+    await this.appManager.SetActiveApp(app.ID);
+
+    const existingTabs = this.workspaceManager.GetAppTabs(app.ID);
+    if (existingTabs.length === 0) {
+      const tabRequest = await app.CreateDefaultTab();
+      if (tabRequest) {
+        this.tabService.OpenTab(tabRequest);
+      }
+    }
+
+    // Update URL to reflect the new app
+    const appPath = app.Path || app.Name;
+    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`, { replaceUrl: true });
+  }
+
+  /**
+   * Redirect to the first available app (fallback)
+   */
+  private async redirectToFirstApp(apps: BaseApplication[]): Promise<void> {
+    if (apps.length > 0) {
+      const firstApp = apps[0];
+      await this.navigateToApp(firstApp);
+    } else {
+      // No apps available - this shouldn't happen, but handle gracefully
+      this.loading = false;
+      this.cdr.detectChanges();
+    }
   }
 }

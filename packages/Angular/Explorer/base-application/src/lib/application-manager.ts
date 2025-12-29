@@ -371,4 +371,198 @@ export class ApplicationManager {
       app.NavigationStyle === 'App Switcher' || app.NavigationStyle === 'Both'
     );
   }
+
+  /**
+   * Check if an app exists in the system by path or name (case-insensitive).
+   * Returns the app from allApplications$ if found, regardless of user access.
+   */
+  GetSystemAppByPath(path: string): BaseApplication | undefined {
+    const normalizedPath = path.trim().toLowerCase();
+
+    // First try exact path match
+    const pathMatch = this.allApplications$.value.find(a =>
+      a.Path?.toLowerCase() === normalizedPath
+    );
+
+    if (pathMatch) {
+      return pathMatch;
+    }
+
+    // Fallback: try matching by name
+    return this.allApplications$.value.find(a =>
+      a.Name.trim().toLowerCase() === normalizedPath
+    );
+  }
+
+  /**
+   * Check if a system app is inactive (Status !== 'Active').
+   * Note: Inactive apps are filtered out during load, so this checks metadata directly.
+   */
+  IsAppInactive(path: string): boolean {
+    const normalizedPath = path.trim().toLowerCase();
+    const md = new Metadata();
+
+    // Check if app exists in metadata but is inactive
+    const appInfo = md.Applications.find(a =>
+      a.Path?.toLowerCase() === normalizedPath ||
+      a.Name.trim().toLowerCase() === normalizedPath
+    );
+
+    return appInfo != null && appInfo.Status !== 'Active';
+  }
+
+  /**
+   * Determine why a user cannot access an app by its URL path.
+   * Returns detailed access information for error handling.
+   */
+  CheckAppAccess(path: string): AppAccessResult {
+    const normalizedPath = path.trim().toLowerCase();
+    const md = new Metadata();
+
+    // Step 1: Check if app exists in metadata at all
+    const appInfo = md.Applications.find(a =>
+      a.Path?.toLowerCase() === normalizedPath ||
+      a.Name.trim().toLowerCase() === normalizedPath
+    );
+
+    if (!appInfo) {
+      return {
+        status: 'not_found',
+        message: `The application "${path}" does not exist.`,
+        appName: path
+      };
+    }
+
+    // Step 2: Check if app is inactive
+    if (appInfo.Status !== 'Active') {
+      return {
+        status: 'inactive',
+        message: `The application "${appInfo.Name}" is currently inactive.`,
+        appName: appInfo.Name,
+        appId: appInfo.ID
+      };
+    }
+
+    // Step 3: Check if user has access (app in their filtered list)
+    const userApp = this.applications$.value.find(a => a.ID === appInfo.ID);
+    if (userApp) {
+      return {
+        status: 'accessible',
+        message: 'User has access to this app',
+        appName: appInfo.Name,
+        appId: appInfo.ID,
+        app: userApp
+      };
+    }
+
+    // Step 4: Check if user has UserApplication record but isActive=false
+    const userAppConfig = this.userAppConfigs$.value.find(c => c.app.ID === appInfo.ID);
+    if (userAppConfig && !userAppConfig.isActive) {
+      return {
+        status: 'disabled',
+        message: `You have disabled "${appInfo.Name}" in your app configuration.`,
+        appName: appInfo.Name,
+        appId: appInfo.ID,
+        canInstall: true
+      };
+    }
+
+    // Step 5: User has no UserApplication record - can be installed
+    return {
+      status: 'not_installed',
+      message: `You don't have "${appInfo.Name}" installed.`,
+      appName: appInfo.Name,
+      appId: appInfo.ID,
+      canInstall: true
+    };
+  }
+
+  /**
+   * Install an application for the current user by creating a UserApplication record.
+   * Returns the newly created UserApplication entity.
+   */
+  async InstallAppForUser(appId: string): Promise<UserApplicationEntity | null> {
+    const md = new Metadata();
+
+    // Get the next sequence number
+    const existingApps = this.applications$.value;
+    const nextSequence = existingApps.length;
+
+    try {
+      const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
+      userApp.NewRecord();
+      userApp.UserID = md.CurrentUser.ID;
+      userApp.ApplicationID = appId;
+      userApp.Sequence = nextSequence;
+      userApp.IsActive = true;
+
+      const saved = await userApp.Save();
+      if (saved) {
+        LogStatus(`Installed application ${appId} for user ${md.CurrentUser.Name}`);
+
+        // Reload user applications to update the app list
+        await this.ReloadUserApplications();
+
+        return userApp;
+      } else {
+        LogError('Failed to install application:', undefined, userApp.LatestResult);
+        return null;
+      }
+    } catch (error) {
+      LogError('Error installing application:', undefined, error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
+  /**
+   * Enable an existing but disabled UserApplication record.
+   */
+  async EnableAppForUser(appId: string): Promise<boolean> {
+    const md = new Metadata();
+    const rv = new RunView();
+
+    try {
+      // Find the user's UserApplication record
+      const result = await rv.RunView<UserApplicationEntity>({
+        EntityName: 'User Applications',
+        ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND ApplicationID = '${appId}'`,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results.length > 0) {
+        const userApp = result.Results[0];
+        userApp.IsActive = true;
+
+        const saved = await userApp.Save();
+        if (saved) {
+          LogStatus(`Enabled application ${appId} for user ${md.CurrentUser.Name}`);
+          await this.ReloadUserApplications();
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      LogError('Error enabling application:', undefined, error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  }
+}
+
+/**
+ * Result of checking a user's access to an application
+ */
+export interface AppAccessResult {
+  /** Status of the access check */
+  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled';
+  /** Human-readable message describing the access status */
+  message: string;
+  /** Name of the application (if found) */
+  appName: string;
+  /** ID of the application (if found) */
+  appId?: string;
+  /** The BaseApplication instance (if accessible) */
+  app?: BaseApplication;
+  /** Whether the user can install/enable this app */
+  canInstall?: boolean;
 }

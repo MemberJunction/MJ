@@ -177,13 +177,14 @@ export class ResourceResolver implements Resolve<void> {
     if (route.params['appName'] !== undefined && route.params['navItemName'] === undefined) {
       const appName = decodeURIComponent(route.params['appName']);
 
-      // Find the app
-      const app = applications.find(a =>
-        a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
-      );
+      // IMPORTANT: Check if user has access to this app BEFORE proceeding
+      // Use the ApplicationManager's access check which respects UserApplication records
+      const accessResult = this.appManager.CheckAppAccess(appName);
 
-      if (!app) {
-        LogError(`Application ${appName} not found in metadata`);
+      if (accessResult.status !== 'accessible') {
+        // User doesn't have access - let the shell component handle the error dialog
+        // Don't create any tabs here
+        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 
@@ -198,7 +199,18 @@ export class ResourceResolver implements Resolve<void> {
       const appName = decodeURIComponent(route.params['appName']);
       const navItemName = decodeURIComponent(route.params['navItemName']);
 
-      // Find the app (applications already validated as non-null above)
+      // IMPORTANT: Check if user has access to this app BEFORE proceeding
+      // Use the ApplicationManager's access check which respects UserApplication records
+      const accessResult = this.appManager.CheckAppAccess(appName);
+
+      if (accessResult.status !== 'accessible') {
+        // User doesn't have access - let the shell component handle the error dialog
+        // Don't create any tabs here
+        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
+        return;
+      }
+
+      // Find the app in metadata for nav item details
       const app = applications.find(a =>
         a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
       );

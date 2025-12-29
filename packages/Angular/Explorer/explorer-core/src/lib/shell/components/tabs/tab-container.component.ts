@@ -59,7 +59,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   @Output() firstResourceLoadComplete = new EventEmitter<void>();
 
+  /**
+   * Emitted when Golden Layout fails to initialize after multiple retries.
+   * The shell can use this to show an error dialog and redirect.
+   */
+  @Output() layoutInitError = new EventEmitter<void>();
+
   private subscriptions: Subscription[] = [];
+  private layoutInitRetryCount = 0;
+  private readonly MAX_LAYOUT_INIT_RETRIES = 5;
   private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
 
@@ -169,10 +177,21 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private initializeGoldenLayout(forceCreateTabs = false): void {
     if (!this.glContainer?.nativeElement) {
-      console.warn('Golden Layout container not available, waiting...');
+      this.layoutInitRetryCount++;
+
+      if (this.layoutInitRetryCount > this.MAX_LAYOUT_INIT_RETRIES) {
+        console.error(`Golden Layout container not available after ${this.MAX_LAYOUT_INIT_RETRIES} retries, emitting error`);
+        this.layoutInitError.emit();
+        return;
+      }
+
+      console.warn(`Golden Layout container not available, retry ${this.layoutInitRetryCount}/${this.MAX_LAYOUT_INIT_RETRIES}...`);
       setTimeout(() => this.initializeGoldenLayout(forceCreateTabs), 50);
       return;
     }
+
+    // Reset retry counter on success
+    this.layoutInitRetryCount = 0;
 
     if (this.layoutInitialized) {
       return; // Already initialized
