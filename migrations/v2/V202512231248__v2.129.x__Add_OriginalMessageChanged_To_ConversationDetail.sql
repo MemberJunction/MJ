@@ -2108,5 +2108,8 @@ UPDATE [${flyway:defaultSchema}].EntityField
                SET Value = '{"Message Core":"fa fa-comment","User Feedback & Insights":"fa fa-star","System Metadata":"fa fa-cog","Related Entities":"fa fa-sitemap","Interactive Elements":"fa fa-hand-pointer"}',
                    __mj_UpdatedAt = GETUTCDATE()
                WHERE EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'FieldCategoryIcons'
+
+/* Sync EntityField sequences with actual database column order */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
             
 
