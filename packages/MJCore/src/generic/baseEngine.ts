@@ -1,4 +1,5 @@
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal, TelemetryManager } from "@memberjunction/global";
+import { BaseSingleton, MJEvent, MJEventType, MJGlobal } from "@memberjunction/global";
+import { TelemetryManager } from "./telemetryManager";
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 import { debounceTime } from "rxjs/operators";
 

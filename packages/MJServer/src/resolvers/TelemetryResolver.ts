@@ -4,7 +4,7 @@ import {
     TelemetryManager,
     TelemetryCategory,
     TelemetryInsightSeverity
-} from '@memberjunction/global';
+} from '@memberjunction/core';
 
 // ============================================================================
 // GraphQL Types for TelemetryEvent

@@ -26,8 +26,7 @@
  * ```
  */
 
-import { BaseSingleton, GetGlobalObjectStore } from '.';
-import { WarningManager } from './warningManager';
+import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
 
 // ============================================================================
 // TYPES - Using union types per MJ style guide
@@ -877,12 +876,32 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
         switch (category) {
             case 'RunView':
-                keyParams = {
-                    entity: (params.EntityName as string)?.toLowerCase().trim(),
-                    filter: (params.ExtraFilter as string)?.toLowerCase().trim(),
-                    orderBy: (params.OrderBy as string)?.toLowerCase().trim(),
-                    resultType: params.ResultType
-                };
+                // Check if this is a batch operation (has Entities array)
+                if (Array.isArray(params.Entities) && params.Entities.length > 0) {
+                    // Batch operation - create fingerprint from sorted entity list
+                    // Sort to ensure order-independent matching
+                    const sortedEntities = [...(params.Entities as string[])]
+                        .map(e => e?.toLowerCase().trim())
+                        .filter(Boolean)
+                        .sort();
+                    // Use a hash for long entity lists to keep fingerprint manageable
+                    const entityKey = sortedEntities.length > 5
+                        ? this.simpleHash(sortedEntities.join('|'))
+                        : sortedEntities.join('|');
+                    keyParams = {
+                        batch: true,
+                        batchSize: params.BatchSize,
+                        entities: entityKey
+                    };
+                } else {
+                    // Single operation
+                    keyParams = {
+                        entity: (params.EntityName as string)?.toLowerCase().trim(),
+                        filter: (params.ExtraFilter as string)?.toLowerCase().trim(),
+                        orderBy: (params.OrderBy as string)?.toLowerCase().trim(),
+                        resultType: params.ResultType
+                    };
+                }
                 break;
             case 'RunQuery':
                 keyParams = {
@@ -900,6 +919,21 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         }
 
         return `${category}:${operation}:${JSON.stringify(keyParams)}`;
+    }
+
+    /**
+     * Simple hash function for creating short fingerprints from long strings.
+     * Not cryptographic, just for deduplication purposes.
+     */
+    private simpleHash(str: string): string {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        // Convert to hex and ensure positive
+        return (hash >>> 0).toString(16);
     }
 
     private captureStackTrace(): string {
