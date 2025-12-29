@@ -595,6 +595,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       // Ensure current user is in the avatar map for new messages
       this.ensureCurrentUserInAvatarMap();
+
+      // Invalidate cache when new message is added.
+      // Without this, navigating away and back would load stale cached data
+      // that doesn't include this new message.
+      if (this.conversationId) {
+        this.invalidateConversationCache(this.conversationId);
+      }
     }
 
     // Scroll to bottom when new message is sent
