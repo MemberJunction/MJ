@@ -28983,7 +28983,7 @@ export class MJQuery_ {
     @Field(() => Boolean, {description: `When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`}) 
     AuditQueryRuns: boolean;
         
-    @Field(() => Boolean, {description: `When true, query results will be cached in memory with TTL expiration`}) 
+    @Field(() => Boolean, {description: `When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.`}) 
     CacheEnabled: boolean;
         
     @Field(() => Int, {nullable: true, description: `Time-to-live in minutes for cached query results. NULL uses default TTL.`}) 
@@ -28998,6 +28998,9 @@ export class MJQuery_ {
     @Field({nullable: true, description: `The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.`}) 
     @MaxLength(16)
     EmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`}) 
+    CacheValidationSQL?: string;
         
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -29085,6 +29088,9 @@ export class CreateMJQueryInput {
 
     @Field({ nullable: true })
     EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    CacheValidationSQL: string | null;
 }
     
 
@@ -29149,6 +29155,9 @@ export class UpdateMJQueryInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    CacheValidationSQL?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

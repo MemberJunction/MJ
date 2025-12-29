@@ -14697,7 +14697,7 @@ export const QuerySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)`),
     UserQuestion: z.string().nullable().describe(`
@@ -14753,12 +14753,12 @@ export const QuerySchema = z.object({
         * * Description: Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     UsesTemplate: z.boolean().nullable().describe(`
@@ -14778,7 +14778,7 @@ export const QuerySchema = z.object({
         * * Display Name: Cache Enabled
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: When true, query results will be cached in memory with TTL expiration`),
+        * * Description: When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.`),
     CacheTTLMinutes: z.number().nullable().describe(`
         * * Field Name: CacheTTLMinutes
         * * Display Name: Cache TTL Minutes
@@ -14796,10 +14796,15 @@ export const QuerySchema = z.object({
         * * Description: Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis`),
     EmbeddingModelID: z.string().nullable().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         * * Description: The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.`),
+    CacheValidationSQL: z.string().nullable().describe(`
+        * * Field Name: CacheValidationSQL
+        * * Display Name: Cache Validation SQL
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -56443,7 +56448,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
     */
@@ -56579,7 +56584,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -56589,7 +56594,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -56630,7 +56635,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: Cache Enabled
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: When true, query results will be cached in memory with TTL expiration
+    * * Description: When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.
     */
     get CacheEnabled(): boolean {
         return this.Get('CacheEnabled');
@@ -56680,7 +56685,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.
@@ -56690,6 +56695,19 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
     set EmbeddingModelID(value: string | null) {
         this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: CacheValidationSQL
+    * * Display Name: Cache Validation SQL
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'
+    */
+    get CacheValidationSQL(): string | null {
+        return this.Get('CacheValidationSQL');
+    }
+    set CacheValidationSQL(value: string | null) {
+        this.Set('CacheValidationSQL', value);
     }
 
     /**
