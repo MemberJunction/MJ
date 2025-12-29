@@ -606,21 +606,31 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param fingerprint - The cache fingerprint
      * @param queryName - The query name for display
      * @param results - The results to cache
-     * @param maxUpdatedAt - The latest update timestamp
+     * @param maxUpdatedAt - The latest update timestamp (for smart cache validation)
+     * @param rowCount - Optional row count (defaults to results.length if not provided)
+     * @param queryId - Optional query ID for reference
+     * @param ttlMs - Optional TTL in milliseconds (for cache expiry tracking)
      */
     public async SetRunQueryResult(
         fingerprint: string,
         queryName: string,
         results: unknown[],
-        maxUpdatedAt: string
+        maxUpdatedAt: string,
+        rowCount?: number,
+        queryId?: string,
+        ttlMs?: number
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
-        const value = JSON.stringify({ results, maxUpdatedAt });
+        const actualRowCount = rowCount ?? results.length;
+        const value = JSON.stringify({ results, maxUpdatedAt, rowCount: actualRowCount, queryId });
         const sizeBytes = this.estimateSize(value);
 
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
+
+        const now = Date.now();
+        const expiresAt = ttlMs ? now + ttlMs : undefined;
 
         try {
             await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunQueryCache);
@@ -630,11 +640,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 type: 'runquery',
                 name: queryName,
                 fingerprint,
-                cachedAt: Date.now(),
-                lastAccessedAt: Date.now(),
+                cachedAt: now,
+                lastAccessedAt: now,
                 accessCount: 1,
                 sizeBytes,
-                maxUpdatedAt
+                maxUpdatedAt,
+                rowCount: actualRowCount,
+                expiresAt
             });
         } catch (e) {
             LogError(`LocalCacheManager.SetRunQueryResult failed: ${e}`);
@@ -645,10 +657,24 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Retrieves a cached RunQuery result.
      *
      * @param fingerprint - The cache fingerprint
-     * @returns The cached results and maxUpdatedAt, or null if not found
+     * @returns The cached results, maxUpdatedAt, rowCount, and queryId, or null if not found
      */
-    public async GetRunQueryResult(fingerprint: string): Promise<{ results: unknown[]; maxUpdatedAt: string } | null> {
+    public async GetRunQueryResult(fingerprint: string): Promise<{
+        results: unknown[];
+        maxUpdatedAt: string;
+        rowCount: number;
+        queryId?: string;
+    } | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
+
+        // Check if entry has expired
+        const entry = this._registry.get(fingerprint);
+        if (entry?.expiresAt && Date.now() > entry.expiresAt) {
+            // Entry has expired, invalidate it
+            await this.InvalidateRunQueryResult(fingerprint);
+            this._stats.misses++;
+            return null;
+        }
 
         try {
             const value = await this._storageProvider.GetItem(fingerprint, CacheCategory.RunQueryCache);
@@ -656,7 +682,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             if (value) {
                 this.recordAccess(fingerprint);
                 this._stats.hits++;
-                return JSON.parse(value);
+                const parsed = JSON.parse(value);
+                // Handle legacy entries that may not have rowCount
+                return {
+                    results: parsed.results,
+                    maxUpdatedAt: parsed.maxUpdatedAt,
+                    rowCount: parsed.rowCount ?? parsed.results?.length ?? 0,
+                    queryId: parsed.queryId
+                };
             }
         } catch (e) {
             LogError(`LocalCacheManager.GetRunQueryResult failed: ${e}`);
@@ -664,6 +697,72 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         this._stats.misses++;
         return null;
+    }
+
+    /**
+     * Invalidates a cached RunQuery result.
+     *
+     * @param fingerprint - The cache fingerprint to invalidate
+     */
+    public async InvalidateRunQueryResult(fingerprint: string): Promise<void> {
+        if (!this._storageProvider) return;
+
+        try {
+            await this._storageProvider.Remove(fingerprint, CacheCategory.RunQueryCache);
+            this.unregisterEntry(fingerprint);
+        } catch (e) {
+            LogError(`LocalCacheManager.InvalidateRunQueryResult failed: ${e}`);
+        }
+    }
+
+    /**
+     * Invalidates all cached RunQuery results for a specific query.
+     * Useful when a query's underlying data changes and all related caches should be cleared.
+     *
+     * @param queryName - The query name to invalidate
+     */
+    public async InvalidateQueryCaches(queryName: string): Promise<void> {
+        if (!this._storageProvider) return;
+
+        const normalizedName = queryName.toLowerCase().trim();
+        const toRemove: string[] = [];
+
+        for (const [key, entry] of this._registry.entries()) {
+            if (entry.type === 'runquery' && entry.name.toLowerCase().trim() === normalizedName) {
+                toRemove.push(key);
+            }
+        }
+
+        for (const key of toRemove) {
+            try {
+                await this._storageProvider.Remove(key, CacheCategory.RunQueryCache);
+                this._registry.delete(key);
+            } catch (e) {
+                LogError(`LocalCacheManager.InvalidateQueryCaches failed for key ${key}: ${e}`);
+            }
+        }
+
+        await this.persistRegistry();
+    }
+
+    /**
+     * Gets the cache status (fingerprint data) for a RunQuery result.
+     * Used for smart cache validation with the server.
+     *
+     * @param fingerprint - The cache fingerprint
+     * @returns The cache status with maxUpdatedAt and rowCount, or null if not found/expired
+     */
+    public async GetRunQueryCacheStatus(fingerprint: string): Promise<{
+        maxUpdatedAt: string;
+        rowCount: number;
+    } | null> {
+        const cached = await this.GetRunQueryResult(fingerprint);
+        if (!cached) return null;
+
+        return {
+            maxUpdatedAt: cached.maxUpdatedAt,
+            rowCount: cached.rowCount
+        };
     }
 
     // ========================================================================

@@ -14,7 +14,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, BaseEntityResult,
          KeyValuePair,
-         RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult } from "@memberjunction/core";
+         RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
+         RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -546,8 +547,125 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * RunQueriesWithCacheCheck - Smart cache validation for batch RunQueries.
+     * For each query, if cacheStatus is provided, the server checks if the cache is current
+     * using the Query's CacheValidationSQL. If current, returns status='current' with no data.
+     * If stale, returns status='stale' with fresh data.
+     *
+     * @param params - Array of RunQuery requests with optional cache status
+     * @param contextUser - Optional user context
+     * @returns Response containing results for each query in the batch
+     */
+    public async RunQueriesWithCacheCheck<T = unknown>(
+        params: RunQueryWithCacheCheckParams[],
+        contextUser?: UserInfo
+    ): Promise<RunQueriesWithCacheCheckResponse<T>> {
+        try {
+            // Build the GraphQL input
+            const input = params.map(item => ({
+                params: {
+                    QueryID: item.params.QueryID || null,
+                    QueryName: item.params.QueryName || null,
+                    CategoryID: item.params.CategoryID || null,
+                    CategoryPath: item.params.CategoryPath || null,
+                    Parameters: item.params.Parameters || null,
+                    MaxRows: item.params.MaxRows ?? null,
+                    StartRow: item.params.StartRow ?? null,
+                    ForceAuditLog: item.params.ForceAuditLog || false,
+                    AuditLogDescription: item.params.AuditLogDescription || null,
+                },
+                cacheStatus: item.cacheStatus ? {
+                    maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+                    rowCount: item.cacheStatus.rowCount,
+                } : null,
+            }));
+
+            const query = gql`
+                query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
+                    RunQueriesWithCacheCheck(input: $input) {
+                        success
+                        errorMessage
+                        results {
+                            queryIndex
+                            queryId
+                            status
+                            Results
+                            maxUpdatedAt
+                            rowCount
+                            errorMessage
+                        }
+                    }
+                }
+            `;
+
+            const responseData = await this.ExecuteGQL(query, { input });
+            const response = responseData?.['RunQueriesWithCacheCheck'] as {
+                success: boolean;
+                errorMessage?: string;
+                results: Array<{
+                    queryIndex: number;
+                    queryId: string;
+                    status: string;
+                    Results?: string;
+                    maxUpdatedAt?: string;
+                    rowCount?: number;
+                    errorMessage?: string;
+                }>;
+            };
+
+            if (!response) {
+                return {
+                    success: false,
+                    results: [],
+                    errorMessage: 'No response from server',
+                };
+            }
+
+            // Transform results - deserialize Results for stale/no_validation results
+            const transformedResults: RunQueryWithCacheCheckResult<T>[] = response.results.map(result => {
+                if ((result.status === 'stale' || result.status === 'no_validation') && result.Results) {
+                    // Deserialize the Results JSON string
+                    const deserializedResults: T[] = JSON.parse(result.Results);
+
+                    return {
+                        queryIndex: result.queryIndex,
+                        queryId: result.queryId,
+                        status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
+                        results: deserializedResults,
+                        maxUpdatedAt: result.maxUpdatedAt,
+                        rowCount: result.rowCount,
+                        errorMessage: result.errorMessage,
+                    };
+                }
+
+                return {
+                    queryIndex: result.queryIndex,
+                    queryId: result.queryId,
+                    status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
+                    maxUpdatedAt: result.maxUpdatedAt,
+                    rowCount: result.rowCount,
+                    errorMessage: result.errorMessage,
+                };
+            });
+
+            return {
+                success: response.success,
+                results: transformedResults,
+                errorMessage: response.errorMessage,
+            };
+        } catch (e) {
+            LogError(`Error in RunQueriesWithCacheCheck: ${e}`);
+            return {
+                success: false,
+                results: [],
+                errorMessage: e instanceof Error ? e.message : String(e),
+            };
+        }
+    }
+
     /**************************************************************************/
-    // END ---- IRunReportProvider
+    // END ---- IRunQueryProvider
     /**************************************************************************/
 
 

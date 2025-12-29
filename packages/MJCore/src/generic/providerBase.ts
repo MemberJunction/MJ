@@ -2171,7 +2171,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const temp = JSON.parse(await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
                 if (temp) {
                     // we have local metadata
-                    LogStatus('Metadata loaded from local storage')
                     const metadata = MetadataFromSimpleObject(temp, this); // create a new object to start this up
                     this.UpdateLocalMetadata(metadata);
                 }

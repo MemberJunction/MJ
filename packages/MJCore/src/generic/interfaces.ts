@@ -725,6 +725,102 @@ export type RunQueryResult = {
     CacheTTLRemaining?: number;
 }
 
+// ============================================================================
+// RUNQUERY SMART CACHE CHECK TYPES
+// ============================================================================
+
+/**
+ * Client-side cache status information for a single RunQuery request.
+ * Sent to the server to determine if cached data is still current.
+ * Uses fingerprint data (maxUpdatedAt + rowCount) for efficient cache validation.
+ */
+export type RunQueryCacheStatus = {
+    /**
+     * The maximum __mj_UpdatedAt value from the client's cached results.
+     * Used to detect if any records have been added or updated.
+     */
+    maxUpdatedAt: string;
+    /**
+     * The number of rows in the client's cached results.
+     * Used to detect if any records have been deleted.
+     */
+    rowCount: number;
+}
+
+/**
+ * Parameters for a single RunQuery request with optional cache status.
+ * When cacheStatus is provided, the server will check if the cache is current
+ * before executing the full query.
+ */
+export type RunQueryWithCacheCheckParams = {
+    /**
+     * The standard RunQuery parameters
+     */
+    params: RunQueryParams;
+    /**
+     * Optional cache status from the client. If provided, the server will
+     * use the Query's CacheValidationSQL to check if cached data is still current.
+     * If not provided, the server will always execute the query.
+     */
+    cacheStatus?: RunQueryCacheStatus;
+}
+
+/**
+ * Result for a single RunQuery with cache check.
+ * The server returns either 'current' (cache is valid) or 'stale' (with fresh data).
+ */
+export type RunQueryWithCacheCheckResult<T = unknown> = {
+    /**
+     * The index of this query in the batch request (for correlation)
+     */
+    queryIndex: number;
+    /**
+     * The query ID for reference
+     */
+    queryId: string;
+    /**
+     * 'current' means the client's cache is still valid - no data returned
+     * 'stale' means the cache is outdated - fresh data is included in results
+     * 'error' means there was an error checking/executing the query
+     * 'no_validation' means the query doesn't have CacheValidationSQL configured
+     */
+    status: 'current' | 'stale' | 'error' | 'no_validation';
+    /**
+     * The fresh results - only populated when status is 'stale' or 'no_validation'
+     */
+    results?: T[];
+    /**
+     * The maximum __mj_UpdatedAt from the results - only when status is 'stale'
+     */
+    maxUpdatedAt?: string;
+    /**
+     * The row count of the results - only when status is 'stale'
+     */
+    rowCount?: number;
+    /**
+     * Error message if status is 'error'
+     */
+    errorMessage?: string;
+}
+
+/**
+ * Response from RunQueriesWithCacheCheck - contains results for each query in the batch
+ */
+export type RunQueriesWithCacheCheckResponse<T = unknown> = {
+    /**
+     * Whether the overall operation succeeded
+     */
+    success: boolean;
+    /**
+     * Results for each query in the batch, in the same order as the input
+     */
+    results: RunQueryWithCacheCheckResult<T>[];
+    /**
+     * Overall error message if success is false
+     */
+    errorMessage?: string;
+}
+
 /**
  * Interface for providers that execute stored queries.
  * Supports execution of pre-defined SQL queries with security controls.
@@ -743,6 +839,17 @@ export interface IRunQueryProvider {
      * @returns Array of query results in the same order as input params
      */
     RunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]>
+
+    /**
+     * Executes multiple query requests with smart cache checking.
+     * For each query with cacheStatus provided, the server uses the Query's CacheValidationSQL
+     * to check if the cached data is still current before executing the full query.
+     * This reduces unnecessary data transfer when cached data is valid.
+     * @param params Array of query parameters with optional cache status for each
+     * @param contextUser Optional user context for permissions
+     * @returns Response containing status and fresh data only for stale caches
+     */
+    RunQueriesWithCacheCheck?<T = unknown>(params: RunQueryWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunQueriesWithCacheCheckResponse<T>>
 }
 
 /**

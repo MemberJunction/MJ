@@ -47,10 +47,33 @@ export type RunQueryParams = {
      */
     ForceAuditLog?: boolean
     /**
-     * optional - if provided and either ForceAuditLog is set, or the query's property 
+     * optional - if provided and either ForceAuditLog is set, or the query's property
      * settings for logging query runs are set to true, this will be used as the Audit Log Description.
      */
     AuditLogDescription?: string
+
+    /**
+     * When set to true, the RunQuery will first check the LocalCacheManager for cached results.
+     * If cached results exist and are still valid (based on smart cache fingerprinting), they will
+     * be returned immediately without hitting the server. This is useful for frequently-accessed,
+     * relatively-static query results.
+     *
+     * Note: The LocalCacheManager must be initialized before this can work.
+     * For queries with CacheValidationSQL configured, the server will validate cache freshness
+     * using fingerprint comparison (maxUpdatedAt + rowCount) before returning fresh data.
+     *
+     * @default false
+     */
+    CacheLocal?: boolean
+
+    /**
+     * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
+     * After this time, cached results will be considered stale and fresh data will be fetched.
+     * If not specified:
+     * 1. The Query's CacheTTLMinutes property will be used if configured
+     * 2. Otherwise the LocalCacheManager's default TTL will be used (typically 5 minutes)
+     */
+    CacheLocalTTL?: number
 }
 
 /**

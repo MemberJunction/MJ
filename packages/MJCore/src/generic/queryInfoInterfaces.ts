@@ -202,6 +202,23 @@ export interface IQueryInfoBase {
      */
     QualityRank: number;
     /**
+     * When true, query results will be cached in memory with TTL expiration
+     */
+    CacheEnabled: boolean;
+    /**
+     * Time-to-live in minutes for cached query results. NULL uses default TTL.
+     */
+    CacheTTLMinutes: number | null;
+    /**
+     * Maximum number of cached result sets for this query. NULL uses default size limit.
+     */
+    CacheMaxSize: number | null;
+    /**
+     * SQL query that returns cache validation fingerprint data (MaxUpdatedAt, RowCount).
+     * Used for smart cache refresh to determine if cached data is stale.
+     */
+    CacheValidationSQL: string | null;
+    /**
      * Optional JSON-serialized embedding vector for similarity search
      */
     EmbeddingVector?: string | null;

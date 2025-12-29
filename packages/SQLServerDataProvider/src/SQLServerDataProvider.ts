@@ -72,6 +72,9 @@ import {
   RunViewWithCacheCheckParams,
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
+  RunQueryWithCacheCheckParams,
+  RunQueriesWithCacheCheckResponse,
+  RunQueryWithCacheCheckResult,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
 
@@ -1040,6 +1043,270 @@ export class SQLServerDataProvider
     // Run all queries in parallel
     const promises = params.map((p) => this.InternalRunQuery(p, contextUser));
     return Promise.all(promises);
+  }
+
+  /**
+   * RunQueriesWithCacheCheck - Smart cache validation for batch RunQueries.
+   * For each query request, if cacheStatus is provided, uses the Query's CacheValidationSQL
+   * to check if the cached data is still current by comparing MAX(__mj_UpdatedAt) and COUNT(*)
+   * with client's values. Returns 'current' if cache is valid (no data), or 'stale' with fresh data.
+   *
+   * Queries without CacheValidationSQL configured will return 'no_validation' status with full data.
+   */
+  public async RunQueriesWithCacheCheck<T = unknown>(
+    params: RunQueryWithCacheCheckParams[],
+    contextUser?: UserInfo
+  ): Promise<RunQueriesWithCacheCheckResponse<T>> {
+    try {
+      const user = contextUser || this.CurrentUser;
+      if (!user) {
+        return {
+          success: false,
+          results: [],
+          errorMessage: 'No user context available',
+        };
+      }
+
+      // Separate items that need cache check from those that don't
+      const itemsNeedingCacheCheck: Array<{
+        index: number;
+        item: RunQueryWithCacheCheckParams;
+        queryInfo: QueryInfo;
+      }> = [];
+      const itemsWithoutCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams }> = [];
+      const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+      const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
+
+      // Pre-process all items to resolve query info and validate
+      for (let i = 0; i < params.length; i++) {
+        const item = params[i];
+
+        // Resolve query info
+        const queryInfo = this.resolveQueryInfo(item.params);
+        if (!queryInfo) {
+          errorResults.push({
+            queryIndex: i,
+            queryId: item.params.QueryID || '',
+            status: 'error',
+            errorMessage: `Query not found: ${item.params.QueryID || item.params.QueryName}`,
+          });
+          continue;
+        }
+
+        // Check permissions
+        if (!queryInfo.UserCanRun(user)) {
+          errorResults.push({
+            queryIndex: i,
+            queryId: queryInfo.ID,
+            status: 'error',
+            errorMessage: `User does not have permission to run query: ${queryInfo.Name}`,
+          });
+          continue;
+        }
+
+        if (!item.cacheStatus) {
+          // No cache status provided - will run full query
+          itemsWithoutCacheCheck.push({ index: i, item });
+          continue;
+        }
+
+        // Check if query has CacheValidationSQL
+        if (!queryInfo.CacheValidationSQL) {
+          // No validation SQL configured - will run full query and return 'no_validation'
+          itemsWithoutValidationSQL.push({ index: i, item, queryInfo });
+          continue;
+        }
+
+        itemsNeedingCacheCheck.push({ index: i, item, queryInfo });
+      }
+
+      // Execute batched cache status check for all items that need it
+      const cacheStatusResults = await this.getBatchedQueryCacheStatus(itemsNeedingCacheCheck, contextUser);
+
+      // Determine which items are current vs stale
+      const staleItems: Array<{ index: number; params: RunQueryParams; queryInfo: QueryInfo }> = [];
+      const currentResults: RunQueryWithCacheCheckResult<T>[] = [];
+
+      for (const { index, item, queryInfo } of itemsNeedingCacheCheck) {
+        const serverStatus = cacheStatusResults.get(index);
+        if (!serverStatus || !serverStatus.success) {
+          errorResults.push({
+            queryIndex: index,
+            queryId: queryInfo.ID,
+            status: 'error',
+            errorMessage: serverStatus?.errorMessage || 'Failed to get cache status',
+          });
+          continue;
+        }
+
+        const isCurrent = this.isCacheCurrent(item.cacheStatus!, serverStatus);
+        if (isCurrent) {
+          currentResults.push({
+            queryIndex: index,
+            queryId: queryInfo.ID,
+            status: 'current',
+          });
+        } else {
+          staleItems.push({ index, params: item.params, queryInfo });
+        }
+      }
+
+      // Run full queries in parallel for:
+      // 1. Items without cache status (no fingerprint from client)
+      // 2. Items without CacheValidationSQL (always return data with 'no_validation' status)
+      // 3. Items with stale cache
+      const fullQueryPromises: Promise<RunQueryWithCacheCheckResult<T>>[] = [
+        ...itemsWithoutCacheCheck.map(({ index, item }) =>
+          this.runFullQueryAndReturnForQuery<T>(item.params, index, 'stale', contextUser)
+        ),
+        ...itemsWithoutValidationSQL.map(({ index, item, queryInfo }) =>
+          this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, queryInfo.ID)
+        ),
+        ...staleItems.map(({ index, params: queryParams, queryInfo }) =>
+          this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, queryInfo.ID)
+        ),
+      ];
+
+      const fullQueryResults = await Promise.all(fullQueryPromises);
+
+      // Combine all results and sort by queryIndex
+      const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+      allResults.sort((a, b) => a.queryIndex - b.queryIndex);
+
+      return {
+        success: true,
+        results: allResults,
+      };
+    } catch (e) {
+      LogError(e);
+      return {
+        success: false,
+        results: [],
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+    }
+  }
+
+  /**
+   * Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath).
+   */
+  protected resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
+    if (params.QueryID) {
+      return this.Queries.find((q) => q.ID === params.QueryID);
+    }
+
+    if (params.QueryName) {
+      // Match by name and optional category path
+      const matchingQueries = this.Queries.filter(
+        (q) => q.Name.trim().toLowerCase() === params.QueryName?.trim().toLowerCase()
+      );
+
+      if (matchingQueries.length === 0) return undefined;
+      if (matchingQueries.length === 1) return matchingQueries[0];
+
+      // Multiple matches - use CategoryPath or CategoryID to disambiguate
+      if (params.CategoryPath) {
+        const byPath = matchingQueries.find(
+          (q) => q.CategoryPath.toLowerCase() === params.CategoryPath?.toLowerCase()
+        );
+        if (byPath) return byPath;
+      }
+
+      if (params.CategoryID) {
+        const byId = matchingQueries.find((q) => q.CategoryID === params.CategoryID);
+        if (byId) return byId;
+      }
+
+      // Return first match if no category disambiguation
+      return matchingQueries[0];
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Executes a batched cache status check for multiple queries using their CacheValidationSQL.
+   */
+  protected async getBatchedQueryCacheStatus(
+    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+    contextUser?: UserInfo
+  ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+    const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
+
+    if (items.length === 0) {
+      return results;
+    }
+
+    // Build array of SQL statements for batch execution
+    const sqlStatements: string[] = [];
+    for (const { queryInfo } of items) {
+      // CacheValidationSQL should return MaxUpdatedAt and RowCount
+      sqlStatements.push(queryInfo.CacheValidationSQL!);
+    }
+
+    try {
+      // Execute the batched SQL
+      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+
+      // Process each result set and map to the corresponding item index
+      for (let i = 0; i < items.length; i++) {
+        const { index } = items[i];
+        const resultSet = resultSets[i];
+
+        if (resultSet && resultSet.length > 0) {
+          const row = resultSet[0] as { MaxUpdatedAt: Date | string | null; RowCount: number };
+          results.set(index, {
+            success: true,
+            rowCount: row.RowCount,
+            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
+          });
+        } else {
+          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+        }
+      }
+    } catch (e) {
+      // If batch fails, mark all items as failed
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      for (const { index } of items) {
+        results.set(index, { success: false, errorMessage });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Runs the full query and returns results with cache metadata.
+   */
+  protected async runFullQueryAndReturnForQuery<T = unknown>(
+    params: RunQueryParams,
+    queryIndex: number,
+    status: 'stale' | 'no_validation',
+    contextUser?: UserInfo,
+    queryId?: string
+  ): Promise<RunQueryWithCacheCheckResult<T>> {
+    const result = await this.InternalRunQuery(params, contextUser);
+
+    if (!result.Success) {
+      return {
+        queryIndex,
+        queryId: queryId || result.QueryID || '',
+        status: 'error',
+        errorMessage: result.ErrorMessage || 'Unknown error executing query',
+      };
+    }
+
+    // Extract maxUpdatedAt from results
+    const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+
+    return {
+      queryIndex,
+      queryId: result.QueryID,
+      status,
+      results: result.Results as T[],
+      maxUpdatedAt,
+      rowCount: result.Results.length,
+    };
   }
 
   /**************************************************************************/

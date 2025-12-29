@@ -1,10 +1,11 @@
 import { Arg, Ctx, ObjectType, Query, Resolver, Field, Int, InputType } from 'type-graphql';
-import { RunQuery, QueryInfo, IRunQueryProvider, IMetadataProvider, RunQueryParams } from '@memberjunction/core';
+import { RunQuery, QueryInfo, IRunQueryProvider, IMetadataProvider, RunQueryParams, LogError, RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { Metadata } from '@memberjunction/core';
 import { GetReadOnlyProvider } from '../util.js';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 /**
  * Input type for batch query execution - allows running multiple queries in a single network call
@@ -73,6 +74,70 @@ export class RunQueryResultType {
 
   @Field(() => Int, { nullable: true })
   CacheTTLRemaining?: number;
+}
+
+//****************************************************************************
+// INPUT/OUTPUT TYPES for RunQueriesWithCacheCheck
+//****************************************************************************
+
+@InputType()
+export class RunQueryCacheStatusInput {
+  @Field(() => String, { description: 'The maximum __mj_UpdatedAt value from cached results' })
+  maxUpdatedAt: string;
+
+  @Field(() => Int, { description: 'The number of rows in cached results' })
+  rowCount: number;
+}
+
+@InputType()
+export class RunQueryWithCacheCheckInput {
+  @Field(() => RunQueryInput, { description: 'The RunQuery parameters' })
+  params: RunQueryInput;
+
+  @Field(() => RunQueryCacheStatusInput, {
+    nullable: true,
+    description: 'Optional cache status - if provided, server will check if cache is current'
+  })
+  cacheStatus?: RunQueryCacheStatusInput;
+}
+
+@ObjectType()
+export class RunQueryWithCacheCheckResultOutput {
+  @Field(() => Int, { description: 'The index of this query in the batch request' })
+  queryIndex: number;
+
+  @Field(() => String, { description: 'The query ID' })
+  queryId: string;
+
+  @Field(() => String, { description: "'current', 'stale', 'no_validation', or 'error'" })
+  status: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'JSON-stringified results - only populated when status is stale or no_validation'
+  })
+  Results?: string;
+
+  @Field(() => String, { nullable: true, description: 'Max __mj_UpdatedAt from results when stale' })
+  maxUpdatedAt?: string;
+
+  @Field(() => Int, { nullable: true, description: 'Row count of results when stale' })
+  rowCount?: number;
+
+  @Field(() => String, { nullable: true, description: 'Error message if status is error' })
+  errorMessage?: string;
+}
+
+@ObjectType()
+export class RunQueriesWithCacheCheckOutput {
+  @Field(() => Boolean, { description: 'Whether the overall operation succeeded' })
+  success: boolean;
+
+  @Field(() => [RunQueryWithCacheCheckResultOutput], { description: 'Results for each query in the batch' })
+  results: RunQueryWithCacheCheckResultOutput[];
+
+  @Field(() => String, { nullable: true, description: 'Overall error message if success is false' })
+  errorMessage?: string;
 }
 
 @Resolver()
@@ -399,5 +464,87 @@ export class RunQueryResolver {
         CacheTTLRemaining: (result as Record<string, unknown>).CacheTTLRemaining as number | undefined
       };
     });
+  }
+
+  /**
+   * RunQueriesWithCacheCheck - Smart cache validation for batch RunQueries.
+   * For each query, if cacheStatus is provided, the server checks if the cache is current
+   * using the Query's CacheValidationSQL. If current, returns status='current' with no data.
+   * If stale, returns status='stale' with fresh data.
+   * If the Query doesn't have CacheValidationSQL configured, returns 'no_validation' with data.
+   */
+  @Query(() => RunQueriesWithCacheCheckOutput)
+  async RunQueriesWithCacheCheck(
+    @Arg('input', () => [RunQueryWithCacheCheckInput]) input: RunQueryWithCacheCheckInput[],
+    @Ctx() context: AppContext
+  ): Promise<RunQueriesWithCacheCheckOutput> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+
+      // Cast provider to SQLServerDataProvider to access RunQueriesWithCacheCheck method
+      const sqlProvider = provider as unknown as SQLServerDataProvider;
+      if (!sqlProvider.RunQueriesWithCacheCheck) {
+        throw new Error('Provider does not support RunQueriesWithCacheCheck');
+      }
+
+      // Convert GraphQL input types to core types
+      const coreParams: RunQueryWithCacheCheckParams[] = input.map(item => ({
+        params: {
+          QueryID: item.params.QueryID,
+          QueryName: item.params.QueryName,
+          CategoryID: item.params.CategoryID,
+          CategoryPath: item.params.CategoryPath,
+          Parameters: item.params.Parameters,
+          MaxRows: item.params.MaxRows,
+          StartRow: item.params.StartRow,
+          ForceAuditLog: item.params.ForceAuditLog,
+          AuditLogDescription: item.params.AuditLogDescription,
+        },
+        cacheStatus: item.cacheStatus ? {
+          maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+          rowCount: item.cacheStatus.rowCount,
+        } : undefined,
+      }));
+
+      const response = await sqlProvider.RunQueriesWithCacheCheck(coreParams, context.userPayload.userRecord);
+
+      // Transform results to GraphQL output format
+      const transformedResults: RunQueryWithCacheCheckResultOutput[] = response.results.map(result => ({
+        queryIndex: result.queryIndex,
+        queryId: result.queryId,
+        status: result.status,
+        Results: result.results ? JSON.stringify(result.results) : undefined,
+        maxUpdatedAt: result.maxUpdatedAt,
+        rowCount: result.rowCount,
+        errorMessage: result.errorMessage,
+      }));
+
+      return {
+        success: response.success,
+        results: transformedResults,
+        errorMessage: response.errorMessage,
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      LogError(err);
+      return {
+        success: false,
+        results: [],
+        errorMessage,
+      };
+    }
+  }
+
+  /**
+   * RunQueriesWithCacheCheck with system user privileges
+   */
+  @RequireSystemUser()
+  @Query(() => RunQueriesWithCacheCheckOutput)
+  async RunQueriesWithCacheCheckSystemUser(
+    @Arg('input', () => [RunQueryWithCacheCheckInput]) input: RunQueryWithCacheCheckInput[],
+    @Ctx() context: AppContext
+  ): Promise<RunQueriesWithCacheCheckOutput> {
+    // Same implementation as regular version - RequireSystemUser handles auth
+    return this.RunQueriesWithCacheCheck(input, context);
   }
 }
