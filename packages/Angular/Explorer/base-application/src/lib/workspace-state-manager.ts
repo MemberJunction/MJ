@@ -285,18 +285,10 @@ export class WorkspaceStateManager {
    * Open a tab (new or focus existing)
    */
   OpenTab(request: TabRequest, appColor: string): string {
-    console.log('[WorkspaceStateManager.OpenTab] Opening tab:', {
-      appId: request.ApplicationId,
-      title: request.Title,
-      config: request.Configuration
-    });
-
     const config = this.configuration$.value;
     if (!config) {
       throw new Error('Configuration not initialized');
     }
-
-    console.log('[WorkspaceStateManager.OpenTab] Current tabs:', config.tabs.length);
 
     // Check for existing tab - match by resource type and record ID for resource-based tabs
     const existingTab = config.tabs.find(tab => {
@@ -337,7 +329,6 @@ export class WorkspaceStateManager {
     });
 
     if (existingTab) {
-      console.log('[WorkspaceStateManager.OpenTab] Found existing tab, activating:', existingTab.title);
       // Focus existing tab
       const updatedConfig = {
         ...config,
@@ -347,13 +338,10 @@ export class WorkspaceStateManager {
       return existingTab.id;
     }
 
-    console.log('[WorkspaceStateManager.OpenTab] No existing tab found');
-
     // Find temporary tab (unpinned tab from ANY app) to replace
     const tempTab = config.tabs.find(tab => !tab.isPinned);
 
     if (tempTab) {
-      console.log('[WorkspaceStateManager.OpenTab] Found temp tab to replace:', tempTab.title);
       // Replace temporary tab
       const updatedTabs = config.tabs.map(tab =>
         tab.id === tempTab.id
@@ -373,11 +361,9 @@ export class WorkspaceStateManager {
         tabs: updatedTabs,
         activeTabId: tempTab.id
       });
-      console.log('[WorkspaceStateManager.OpenTab] Replaced temp tab');
+
       return tempTab.id;
     }
-
-    console.log('[WorkspaceStateManager.OpenTab] No temp tab found, creating new tab');
 
     // Create new tab
     const newTab: WorkspaceTab = {
@@ -398,7 +384,6 @@ export class WorkspaceStateManager {
       activeTabId: newTab.id
     });
 
-    console.log('[WorkspaceStateManager.OpenTab] Created new tab:', newTab.title);
     return newTab.id;
   }
 
