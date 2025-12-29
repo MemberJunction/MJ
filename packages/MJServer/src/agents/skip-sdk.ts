@@ -436,7 +436,11 @@ export class SkipSDK {
                 QueryID: e.QueryID,
                 EntityID: e.EntityID,
                 Entity: e.Entity
-            }))
+            })),
+            CacheEnabled: q.CacheEnabled,
+            CacheMaxSize: q.CacheMaxSize,
+            CacheTTLMinutes: q.CacheMaxSize,
+            CacheValidationSQL: q.CacheValidationSQL
         }));
     }
 
