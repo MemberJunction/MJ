@@ -21,7 +21,7 @@ import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
-import { LoadingTheme, getActiveTheme } from './loading-themes';
+import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 
 /**
@@ -63,7 +63,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private activeTheme: LoadingTheme;
   private readonly messageIntervalMs = 2500; // 2.5 seconds per message
   private readonly colorChangeEveryNMessages = 2; // Change color every 2 messages (5 seconds)
-  private readonly animationOptions: ('pulse' | 'spin' | 'pulse-spin')[] = ['pulse', 'spin', 'pulse-spin'];
+  // All available animation types (used for random selection when theme doesn't specify)
+  private readonly allAnimationTypes: LoadingAnimationType[] = ['pulse', 'spin', 'bounce', 'pulse-spin'];
+  // Animation sequencing
+  private animationSequence: AnimationStep[] = [];
+  private currentAnimationIndex = 0;
+  private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
   currentLoadingText: string;
   currentLoadingColor: string;
   currentLoadingTextColor: string;
@@ -121,10 +126,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
 
-    // Randomly select animation type from the start
-    this.currentLoadingAnimation = this.animationOptions[
-      Math.floor(Math.random() * this.animationOptions.length)
-    ];
+    // Initialize animation based on theme configuration
+    this.initializeAnimationFromTheme();
 
     // Set first message
     this.currentLoadingText = this.activeTheme.messages[0];
@@ -882,10 +885,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Initialize display with first message and initial color/gradient
     this.initializeLoadingDisplay();
 
-    // Randomly select an animation type
-    this.currentLoadingAnimation = this.animationOptions[
-      Math.floor(Math.random() * this.animationOptions.length)
-    ];
+    // Initialize animation based on theme configuration
+    this.initializeAnimationFromTheme();
+
+    // Start the animation sequence (if there are multiple steps)
+    this.startAnimationSequence();
 
     // Start cycling every 2.5 seconds
     this.loadingMessageInterval = setInterval(() => {
@@ -901,6 +905,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.loadingMessageInterval) {
       clearInterval(this.loadingMessageInterval);
       this.loadingMessageInterval = null;
+    }
+    // Also clear any animation sequence timeout
+    if (this.animationSequenceTimeout) {
+      clearTimeout(this.animationSequenceTimeout);
+      this.animationSequenceTimeout = null;
     }
   }
 
@@ -998,6 +1007,97 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.currentLoadingColor = colors[randomIndex];
       this.currentLoadingTextColor = colors[randomIndex];
     }
+  }
+
+  /**
+   * Initialize animation configuration from the current theme.
+   * Converts the theme's animation config (string or array) to a normalized sequence.
+   */
+  private initializeAnimationFromTheme(): void {
+    this.currentAnimationIndex = 0;
+
+    const themeAnimations = this.activeTheme.animations;
+
+    if (!themeAnimations) {
+      // No animation config - use random selection for non-standard themes
+      if (this.activeTheme.id === 'standard') {
+        // Standard theme defaults to pulse only
+        this.animationSequence = [{ type: 'pulse' }];
+      } else {
+        // Random selection for themed holidays without explicit config
+        const randomType = this.allAnimationTypes[
+          Math.floor(Math.random() * this.allAnimationTypes.length)
+        ];
+        this.animationSequence = [{ type: randomType }];
+      }
+    } else if (typeof themeAnimations === 'string') {
+      // Single animation type specified
+      this.animationSequence = [{ type: themeAnimations }];
+    } else {
+      // Array of animation steps
+      this.animationSequence = themeAnimations;
+    }
+
+    // Set initial animation
+    if (this.animationSequence.length > 0) {
+      this.currentLoadingAnimation = this.animationSequence[0].type;
+    }
+  }
+
+  /**
+   * Start the animation sequence, scheduling transitions between animation steps.
+   */
+  private startAnimationSequence(): void {
+    // Clear any existing timeout
+    if (this.animationSequenceTimeout) {
+      clearTimeout(this.animationSequenceTimeout);
+      this.animationSequenceTimeout = null;
+    }
+
+    this.currentAnimationIndex = 0;
+    this.scheduleNextAnimationStep();
+  }
+
+  /**
+   * Schedule the transition to the next animation step based on current step's duration.
+   */
+  private scheduleNextAnimationStep(): void {
+    if (this.animationSequence.length <= 1) {
+      // Only one step - no transitions needed
+      return;
+    }
+
+    const currentStep = this.animationSequence[this.currentAnimationIndex];
+    const durationMs = currentStep.durationMs;
+
+    // If no duration specified (or 0), this step runs indefinitely
+    if (!durationMs || durationMs <= 0) {
+      return;
+    }
+
+    // Schedule transition to next step
+    this.animationSequenceTimeout = setTimeout(() => {
+      this.transitionToNextAnimation();
+    }, durationMs);
+  }
+
+  /**
+   * Transition to the next animation in the sequence.
+   */
+  private transitionToNextAnimation(): void {
+    this.currentAnimationIndex++;
+
+    if (this.currentAnimationIndex >= this.animationSequence.length) {
+      // Sequence complete - stay on last animation
+      return;
+    }
+
+    const nextStep = this.animationSequence[this.currentAnimationIndex];
+    this.currentLoadingAnimation = nextStep.type;
+    this.cdr.detectChanges();
+
+    // Schedule the next transition if this step has a duration
+    this.scheduleNextAnimationStep();
   }
 
   ngOnDestroy(): void {
