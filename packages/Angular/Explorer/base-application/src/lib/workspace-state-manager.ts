@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { Metadata, RunView } from '@memberjunction/core';
-import { WorkspaceEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { UserInfoEngine, WorkspaceEntity } from '@memberjunction/core-entities';
 import {
   WorkspaceConfiguration,
   WorkspaceTab,
@@ -115,19 +115,15 @@ export class WorkspaceStateManager {
   }
 
   /**
-   * Load workspace from database
+   * Load workspace from database using UserInfoEngine for centralized, cached access
    */
   private async loadWorkspace(userId: string): Promise<void> {
-    const rv = new RunView();
-    const result = await rv.RunView<WorkspaceEntity>({
-      EntityName: 'Workspaces',
-      ExtraFilter: `UserID='${userId}'`,
-      ResultType: 'entity_object',
-      CacheLocal: true
-    });
+    // Use UserInfoEngine for centralized, cached workspace loading
+    const engine = UserInfoEngine.Instance;
+    const workspaces = engine.Workspaces;
 
-    if (result.Success && result.Results.length > 0) {
-      const workspace = result.Results[0];
+    if (workspaces.length > 0) {
+      const workspace = workspaces[0];
       this.workspace$.next(workspace);
 
       // Parse configuration or create default
@@ -138,7 +134,7 @@ export class WorkspaceStateManager {
         : createDefaultWorkspaceConfiguration();
 
       this.configuration$.next(config);
-    } 
+    }
     else {
       // Create new workspace for user
       const md = new Metadata();

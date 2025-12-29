@@ -20,6 +20,7 @@ export * from './engines/TypeTablesCache';
 export * from './engines/artifacts';
 export * from './engines/dashboards';
 export * from './engines/EncryptionEngineBase';
+export * from './engines/UserInfoEngine';
 
 export * from './artifact-extraction/artifact-extract-rules';
 export * from './artifact-extraction/artifact-extractor';

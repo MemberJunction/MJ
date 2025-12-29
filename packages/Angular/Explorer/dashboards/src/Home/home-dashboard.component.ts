@@ -4,8 +4,8 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseDashboard, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView } from '@memberjunction/core';
-import { ResourceData, UserFavoriteEntity, UserNotificationEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { ResourceData, UserFavoriteEntity, UserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -115,7 +115,6 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
 
         this.isLoading = false;
         this.NotifyLoadComplete();
-        console.log(`Home Dashboard: Notify Load Complete from appManager.Applications.subscribe`)
 
         this.cdr.detectChanges();
       });
@@ -140,7 +139,6 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
 
     // Favorites and recents load asynchronously in the sidebar
     this.NotifyLoadComplete();
-    console.log(`Home Dashboard: Notify Load Complete from main branch of ngAfterViewInit`)
 
     // Load favorites and recents asynchronously (don't block rendering)
     this.loadFavorites();
@@ -209,14 +207,10 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
     this.showConfigDialog = false;
   }
 
-  private _counter = 0;
   /**
    * Get nav items count for an app
    */
   getNavItemsCount(app: BaseApplication): number {
-    if (this._counter++ === 0) {
-      console.log("got first getNavItesCount()")
-    }
     return app.GetNavItems().length;
   }
 
@@ -231,23 +225,14 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
   }
 
   /**
-   * Load user favorites from the database
+   * Load user favorites from UserInfoEngine (cached)
    */
   private async loadFavorites(): Promise<void> {
     try {
       this.favoritesLoading = true;
-      const rv = new RunView();
-      const result = await rv.RunView<UserFavoriteEntity>({
-        EntityName: 'User Favorites',
-        ExtraFilter: `UserID='${this.metadata.CurrentUser.ID}'`,
-        OrderBy: '__mj_CreatedAt DESC',
-        MaxRows: 10,
-        ResultType: 'entity_object'
-      });
 
-      if (result.Success && result.Results) {
-        this.favorites = result.Results;
-      }
+      // Get first 10 favorites (already ordered by __mj_CreatedAt DESC in engine)
+      this.favorites = UserInfoEngine.Instance.UserFavorites.slice(0, 10);
     } catch (error) {
       console.error('Error loading favorites:', error);
     } finally {

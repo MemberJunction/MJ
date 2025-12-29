@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
-import { Subscription, firstValueFrom } from 'rxjs';
+import { Subscription, firstValueFrom, combineLatest } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import {
   ApplicationManager,
@@ -12,7 +12,7 @@ import {
   WorkspaceTab,
   AppAccessResult
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, StartupManager } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
@@ -182,6 +182,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Start the loading animation with cycling messages
     this.startLoadingAnimation();
 
+    await StartupManager.Instance.Startup();          
+
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
 
@@ -244,9 +246,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     );
 
     // Subscribe to applications loading - set app based on URL or default to first
+    // Use combineLatest to wait for loading to complete before deciding there are no apps
     this.subscriptions.push(
-      this.appManager.Applications.subscribe(async apps => {
-        // Handle the case where user has no apps at all
+      combineLatest([this.appManager.Applications, this.appManager.Loading]).subscribe(async ([apps, isLoading]) => {
+        // Don't make decisions while still loading - wait for load to complete
+        if (isLoading) {
+          return;
+        }
+
+        // Handle the case where user has no apps at all (only after loading is complete)
         if (apps.length === 0) {
           await this.handleNoAppsAvailable();
           return;

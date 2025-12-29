@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
-import { Metadata, RunView, ApplicationInfo, LogError, LogStatus } from '@memberjunction/core';
-import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
+import { Metadata, ApplicationInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
 /**
@@ -207,21 +207,10 @@ export class ApplicationManager {
       appMap.set(app.ID, app);
     }
 
-    // Load user's UserApplication records
-    const rv = new RunView();
-    const userAppsResult = await rv.RunView<UserApplicationEntity>({
-      EntityName: 'User Applications',
-      ExtraFilter: `UserID = '${md.CurrentUser.ID}'`,
-      OrderBy: 'Sequence, Application',
-      ResultType: 'entity_object'
-    });
+    // Load user's UserApplication records using UserInfoEngine for caching
+    const engine = UserInfoEngine.Instance;
 
-    let userApps: UserApplicationEntity[] = [];
-    if (userAppsResult.Success) {
-      userApps = userAppsResult.Results;
-    } else {
-      LogError('Failed to load UserApplication records:', undefined, userAppsResult.ErrorMessage);
-    }
+    let userApps: UserApplicationEntity[] = engine.UserApplications;
 
     // Self-healing: If user has no UserApplication records, create from DefaultForNewUser apps
     if (userApps.length === 0) {
@@ -519,18 +508,14 @@ export class ApplicationManager {
    */
   async EnableAppForUser(appId: string): Promise<boolean> {
     const md = new Metadata();
-    const rv = new RunView();
 
     try {
-      // Find the user's UserApplication record
-      const result = await rv.RunView<UserApplicationEntity>({
-        EntityName: 'User Applications',
-        ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND ApplicationID = '${appId}'`,
-        ResultType: 'entity_object'
-      });
+      // Find the user's UserApplication record from cached data
+      const engine = UserInfoEngine.Instance;
 
-      if (result.Success && result.Results.length > 0) {
-        const userApp = result.Results[0];
+      const userApp = engine.UserApplications.find(ua => ua.ApplicationID === appId);
+
+      if (userApp) {
         userApp.IsActive = true;
 
         const saved = await userApp.Save();

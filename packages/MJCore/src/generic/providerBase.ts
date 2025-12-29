@@ -223,13 +223,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        const perfStart = performance.now();
-        const entityName = params.EntityName || params.ViewName || params.ViewID;
-
         // Pre-processing: telemetry, validation, entity status check
-        const preStart = performance.now();
         const preResult = await this.PreRunView(params, contextUser);
-        const preTime = performance.now() - preStart;
 
         // Check for cached result - end telemetry with cache hit info
         if (preResult.cachedResult) {
@@ -238,22 +233,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 cacheStatus: preResult.cacheStatus,
                 resultCount: preResult.cachedResult.Results?.length ?? 0
             });
-            console.log(`[PERF] RunView ${entityName}: ${(performance.now() - perfStart).toFixed(1)}ms (cache hit, pre=${preTime.toFixed(1)}ms)`);
             return preResult.cachedResult as RunViewResult<T>;
         }
 
         // Execute the internal implementation
-        const internalStart = performance.now();
         const result = await this.InternalRunView<T>(params, contextUser);
-        const internalTime = performance.now() - internalStart;
 
         // Post-processing: transformation, cache storage, telemetry end
-        const postStart = performance.now();
         await this.PostRunView(result, params, preResult, contextUser);
-        const postTime = performance.now() - postStart;
-
-        const totalTime = performance.now() - perfStart;
-        console.log(`[PERF] RunView ${entityName}: ${totalTime.toFixed(1)}ms (pre=${preTime.toFixed(1)}ms, internal=${internalTime.toFixed(1)}ms, post=${postTime.toFixed(1)}ms, rows=${result.RowCount})`);
 
         return result;
     }
@@ -266,17 +253,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Array of view results
      */
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-        const perfStart = performance.now();
-        const entityNames = params.map(p => p.EntityName || p.ViewName || p.ViewID).join(', ');
-
         // Pre-processing for batch
-        const preStart = performance.now();
         const preResult = await this.PreRunViews(params, contextUser);
-        const preTime = performance.now() - preStart;
 
         // Check for smart cache check mode
         if (preResult.useSmartCacheCheck && preResult.smartCacheCheckParams) {
-            console.log(`[PERF] RunViews batch (${params.length} entities) using smart cache check, pre=${preTime.toFixed(1)}ms`);
             return this.executeSmartCacheCheck<T>(params, preResult, contextUser);
         }
 
@@ -289,14 +270,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 batchSize: params.length,
                 totalResultCount: totalResults
             });
-            console.log(`[PERF] RunViews batch [${entityNames}]: ${(performance.now() - perfStart).toFixed(1)}ms (all cached, pre=${preTime.toFixed(1)}ms, rows=${totalResults})`);
             return preResult.cachedResults as RunViewResult<T>[];
         }
 
         // Execute the internal implementation for non-cached items
-        const internalStart = performance.now();
         const results = await this.InternalRunViews<T>(preResult.uncachedParams || params, contextUser);
-        const internalTime = performance.now() - internalStart;
 
         // Merge cached and fresh results if needed
         const finalResults = preResult.cachedResults
@@ -304,13 +282,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             : results;
 
         // Post-processing for batch
-        const postStart = performance.now();
         await this.PostRunViews(finalResults, params, preResult, contextUser);
-        const postTime = performance.now() - postStart;
-
-        const totalTime = performance.now() - perfStart;
-        const totalRows = finalResults.reduce((sum, r) => sum + (r.RowCount ?? 0), 0);
-        console.log(`[PERF] RunViews batch [${entityNames}]: ${totalTime.toFixed(1)}ms (pre=${preTime.toFixed(1)}ms, internal=${internalTime.toFixed(1)}ms, post=${postTime.toFixed(1)}ms, rows=${totalRows})`);
 
         return finalResults as RunViewResult<T>[];
     }
@@ -467,7 +439,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Pre-processing result with cache status and optional cached result
      */
     protected async PreRunView(params: RunViewParams, contextUser?: UserInfo): Promise<typeof this._preRunViewResultType> {
+        const preViewStart = performance.now();
+
         // Start telemetry tracking
+        const telemetryStart = performance.now();
         const telemetryEventId = TelemetryManager.Instance.StartEvent(
             'RunView',
             'ProviderBase.RunView',
@@ -485,19 +460,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             },
             contextUser?.ID
         );
+        const telemetryTime = performance.now() - telemetryStart;
 
         // Entity status check
+        const entityCheckStart = performance.now();
         await this.EntityStatusCheck(params, 'PreRunView');
+        const entityCheckTime = performance.now() - entityCheckStart;
 
         // Handle entity_object result type - need all fields
+        const entityLookupStart = performance.now();
         if (params.ResultType === 'entity_object') {
             const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
             if (!entity)
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
             params.Fields = entity.Fields.map(f => f.Name);
         }
+        const entityLookupTime = performance.now() - entityLookupStart;
 
         // Check local cache if enabled
+        const cacheCheckStart = performance.now();
         let cacheStatus: 'hit' | 'miss' | 'disabled' | 'expired' = 'disabled';
         let cachedResult: RunViewResult | undefined;
         let fingerprint: string | undefined;
@@ -520,6 +501,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             } else {
                 cacheStatus = 'miss';
             }
+        }
+        const cacheCheckTime = performance.now() - cacheCheckStart;
+
+        const totalPreTime = performance.now() - preViewStart;
+        if (totalPreTime > 50) {
+            console.log(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
         }
 
         return {
