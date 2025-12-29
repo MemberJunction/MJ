@@ -35,9 +35,7 @@ export class AIAgentNoteEntityExtended extends AIAgentNoteEntity {
             return await super.Save(options);
         } catch (e) {
             LogError('Failed to save AI Agent Note:', e);
-            if (this.LatestResult) {
-                this.LatestResult.Errors.push(e);
-            }
+            // Let the parent class handle LatestResult error propagation
             return false;
         }
     }

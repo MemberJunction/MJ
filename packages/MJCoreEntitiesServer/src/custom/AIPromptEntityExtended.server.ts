@@ -205,7 +205,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
             }
             else {
                 // if we failed to save, throw an error
-                throw new Error("Failed to update linked Template Contents for the AI Prompt: " + tc.LatestResult.Message);
+                throw new Error("Failed to update linked Template Contents for the AI Prompt: " + tc.LatestResult.CompleteMessage);
             }
         }
         catch (e) {

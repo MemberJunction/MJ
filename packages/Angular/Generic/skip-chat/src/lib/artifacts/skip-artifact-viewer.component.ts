@@ -127,7 +127,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       // Load the artifact
       const artifactEntity = await provider.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', provider.CurrentUser);
       if (!await artifactEntity.Load(this.ArtifactID)) {
-        throw new Error(`Failed to load artifact: ${artifactEntity.LatestResult.Message}`);
+        throw new Error(`Failed to load artifact: ${artifactEntity.LatestResult.CompleteMessage}`);
       }
 
       this.artifact = artifactEntity;
@@ -135,7 +135,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       // Load the artifact type
       const artifactTypeEntity = await provider.GetEntityObject<ArtifactTypeEntity>('MJ: Artifact Types', provider.CurrentUser);
       if (!await artifactTypeEntity.Load(this.artifact.ArtifactTypeID)) {
-        throw new Error(`Failed to load artifact type: ${artifactTypeEntity.LatestResult.Message}`);
+        throw new Error(`Failed to load artifact type: ${artifactTypeEntity.LatestResult.CompleteMessage}`);
       }
 
       this.artifactType = artifactTypeEntity;
