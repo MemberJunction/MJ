@@ -160,7 +160,7 @@ class BrowserLocalStorageProvider extends BrowserStorageProviderBase {
 // ============================================================================
 
 const IDB_DB_NAME = 'MJ_Metadata';
-const IDB_DB_VERSION = 2; // Increment version to trigger upgrade for new stores
+const IDB_DB_VERSION = 3; // v3: Remove legacy Metadata_KVPairs store
 
 // Known object store names as a const tuple for type safety
 const KNOWN_OBJECT_STORES = [
@@ -174,7 +174,7 @@ const KNOWN_OBJECT_STORES = [
 // Type for known store names
 type KnownStoreName = typeof KNOWN_OBJECT_STORES[number];
 
-// Legacy store name for backward compatibility
+// Legacy store name - kept for cleanup during upgrade
 const LEGACY_STORE_NAME = 'Metadata_KVPairs';
 
 /**
@@ -182,11 +182,6 @@ const LEGACY_STORE_NAME = 'Metadata_KVPairs';
  * Each category gets its own object store: mj:CategoryName
  */
 export interface MJ_MetadataDB extends DBSchema {
-    // Legacy store for backward compatibility
-    'Metadata_KVPairs': {
-        key: string;
-        value: string;
-    };
     // Default category store
     'mj:default': {
         key: string;
@@ -229,9 +224,10 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
         this.dbPromise = openDB<MJ_MetadataDB>(IDB_DB_NAME, IDB_DB_VERSION, {
             upgrade(db) {
                 try {
-                    // Create legacy store if migrating from v1
-                    if (!db.objectStoreNames.contains(LEGACY_STORE_NAME)) {
-                        db.createObjectStore(LEGACY_STORE_NAME);
+                    // Remove legacy store if it exists (cleanup from v1/v2)
+                    // Cast needed because LEGACY_STORE_NAME is not in current schema (it's being removed)
+                    if (db.objectStoreNames.contains(LEGACY_STORE_NAME as KnownStoreName)) {
+                        db.deleteObjectStore(LEGACY_STORE_NAME as KnownStoreName);
                     }
 
                     // Create known category stores

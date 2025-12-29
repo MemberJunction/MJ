@@ -78,15 +78,17 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             {
                 PropertyName: '_credentials',
                 EntityName: 'MJ: Credentials',
-                Filter: 'IsActive = 1'
+                CacheLocal: true
             },
             {
                 PropertyName: '_credentialTypes',
-                EntityName: 'MJ: Credential Types'
+                EntityName: 'MJ: Credential Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_credentialCategories',
-                EntityName: 'MJ: Credential Categories'
+                EntityName: 'MJ: Credential Categories',
+                CacheLocal: true
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);

@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult } from "./interfaces";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
@@ -649,6 +649,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Executes the smart cache check flow for RunViews.
      * Calls RunViewsWithCacheCheck on the provider (if available) and processes the results,
      * using cached data for 'current' items and fresh data for 'stale' items.
+     *
+     * Optimized to process all results in parallel using Promise.all for cache lookups,
+     * cache updates, and entity transformations.
      */
     private async executeSmartCacheCheck<T>(
         params: RunViewParams[],
@@ -680,100 +683,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }));
         }
 
-        // Process results - for 'current' status, use cached data; for 'stale', use fresh data
-        const finalResults: RunViewResult<T>[] = [];
+        // Process all results in parallel
+        const processingPromises = params.map((param, i) =>
+            this.processSingleSmartCacheResult<T>(param, i, response.results, contextUser)
+        );
+
+        const processedResults = await Promise.all(processingPromises);
+
+        // Aggregate telemetry stats
         let cacheHits = 0;
         let cacheMisses = 0;
-
-        for (let i = 0; i < params.length; i++) {
-            const param = params[i];
-            const checkResult = response.results.find(r => r.viewIndex === i);
-
-            if (!checkResult) {
-                // No result for this index - error
-                finalResults.push({
-                    Success: false,
-                    Results: [],
-                    RowCount: 0,
-                    TotalRowCount: 0,
-                    ExecutionTime: 0,
-                    ErrorMessage: 'No result returned from server',
-                    UserViewRunID: ''
-                });
-                continue;
-            }
-
-            if (checkResult.status === 'current') {
-                // Cache is current - use cached data
-                cacheHits++;
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-                const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
-
-                if (cached) {
-                    const cachedResult: RunViewResult<T> = {
-                        Success: true,
-                        Results: cached.results as T[],
-                        RowCount: cached.rowCount,
-                        TotalRowCount: cached.rowCount,
-                        ExecutionTime: 0,
-                        ErrorMessage: '',
-                        UserViewRunID: ''
-                    };
-                    // Transform to entity objects if needed
-                    await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
-                    finalResults.push(cachedResult);
-                } else {
-                    // Cache miss - shouldn't happen but handle gracefully
-                    finalResults.push({
-                        Success: false,
-                        Results: [],
-                        RowCount: 0,
-                        TotalRowCount: 0,
-                        ExecutionTime: 0,
-                        ErrorMessage: 'Cache marked current but no cached data found',
-                        UserViewRunID: ''
-                    });
-                }
-            } else if (checkResult.status === 'stale') {
-                // Cache is stale - use fresh data and update cache
-                cacheMisses++;
-                const freshResult: RunViewResult<T> = {
-                    Success: true,
-                    Results: checkResult.results || [],
-                    RowCount: checkResult.rowCount || 0,
-                    TotalRowCount: checkResult.rowCount || 0,
-                    ExecutionTime: 0,
-                    ErrorMessage: '',
-                    UserViewRunID: ''
-                };
-
-                // Update the local cache with fresh data
-                if (param.CacheLocal && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-                    await LocalCacheManager.Instance.SetRunViewResult(
-                        fingerprint,
-                        param,
-                        checkResult.results || [],
-                        checkResult.maxUpdatedAt,
-                        checkResult.rowCount
-                    );
-                }
-
-                // Transform to entity objects if needed
-                await this.TransformSimpleObjectToEntityObject(param, freshResult, contextUser);
-                finalResults.push(freshResult);
-            } else {
-                // Error status
-                finalResults.push({
-                    Success: false,
-                    Results: [],
-                    RowCount: 0,
-                    TotalRowCount: 0,
-                    ExecutionTime: 0,
-                    ErrorMessage: checkResult.errorMessage || 'Unknown error',
-                    UserViewRunID: ''
-                });
-            }
+        for (const result of processedResults) {
+            if (result.cacheHit) cacheHits++;
+            if (result.cacheMiss) cacheMisses++;
         }
 
         // End telemetry
@@ -785,7 +707,116 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             batchSize: params.length
         });
 
-        return finalResults;
+        return processedResults.map(r => r.result);
+    }
+
+    /**
+     * Processes a single smart cache check result.
+     * Handles cache lookup for 'current' items and cache update for 'stale' items.
+     */
+    private async processSingleSmartCacheResult<T>(
+        param: RunViewParams,
+        index: number,
+        serverResults: RunViewWithCacheCheckResult<T>[],
+        contextUser?: UserInfo
+    ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean }> {
+        const checkResult = serverResults.find(r => r.viewIndex === index);
+
+        if (!checkResult) {
+            return {
+                result: {
+                    Success: false,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'No result returned from server',
+                    UserViewRunID: ''
+                },
+                cacheHit: false,
+                cacheMiss: false
+            };
+        }
+
+        if (checkResult.status === 'current') {
+            // Cache is current - use cached data
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+            const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+
+            if (cached) {
+                const cachedResult: RunViewResult<T> = {
+                    Success: true,
+                    Results: cached.results as T[],
+                    RowCount: cached.rowCount,
+                    TotalRowCount: cached.rowCount,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    UserViewRunID: ''
+                };
+                // Transform to entity objects if needed
+                await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
+                return { result: cachedResult, cacheHit: true, cacheMiss: false };
+            } else {
+                // Cache miss - shouldn't happen but handle gracefully
+                return {
+                    result: {
+                        Success: false,
+                        Results: [],
+                        RowCount: 0,
+                        TotalRowCount: 0,
+                        ExecutionTime: 0,
+                        ErrorMessage: 'Cache marked current but no cached data found',
+                        UserViewRunID: ''
+                    },
+                    cacheHit: false,
+                    cacheMiss: false
+                };
+            }
+        } else if (checkResult.status === 'stale') {
+            // Cache is stale - use fresh data and update cache
+            const freshResult: RunViewResult<T> = {
+                Success: true,
+                Results: checkResult.results || [],
+                RowCount: checkResult.rowCount || 0,
+                TotalRowCount: checkResult.rowCount || 0,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: ''
+            };
+
+            // Update the local cache with fresh data (don't await - fire and forget for performance)
+            if (param.CacheLocal && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                // Note: We don't await here to avoid blocking the response
+                // Cache update happens in background
+                LocalCacheManager.Instance.SetRunViewResult(
+                    fingerprint,
+                    param,
+                    checkResult.results || [],
+                    checkResult.maxUpdatedAt,
+                    checkResult.rowCount
+                ).catch(e => LogError(`Failed to update cache: ${e}`));
+            }
+
+            // Transform to entity objects if needed
+            await this.TransformSimpleObjectToEntityObject(param, freshResult, contextUser);
+            return { result: freshResult, cacheHit: false, cacheMiss: true };
+        } else {
+            // Error status
+            return {
+                result: {
+                    Success: false,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: checkResult.errorMessage || 'Unknown error',
+                    UserViewRunID: ''
+                },
+                cacheHit: false,
+                cacheMiss: false
+            };
+        }
     }
 
     /**

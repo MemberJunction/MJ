@@ -120,15 +120,18 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 PropertyName: '_encryptionKeys',
-                EntityName: 'MJ: Encryption Keys'
+                EntityName: 'MJ: Encryption Keys',
+                CacheLocal: true
             },
             {
                 PropertyName: '_encryptionAlgorithms',
-                EntityName: 'MJ: Encryption Algorithms'
+                EntityName: 'MJ: Encryption Algorithms',
+                CacheLocal: true
             },
             {
                 PropertyName: '_encryptionKeySources',
-                EntityName: 'MJ: Encryption Key Sources'
+                EntityName: 'MJ: Encryption Key Sources',
+                CacheLocal: true
             }
         ];
 

@@ -1369,19 +1369,115 @@ export class SQLServerDataProvider
    * For each view request, if cacheStatus is provided, first checks if the cache is current
    * by comparing MAX(__mj_UpdatedAt) and COUNT(*) with client's values.
    * Returns 'current' if cache is valid (no data), or 'stale' with fresh data if cache is outdated.
+   *
+   * Optimized to batch all cache status checks into a single SQL call with multiple result sets.
    */
   public async RunViewsWithCacheCheck<T = unknown>(
     params: RunViewWithCacheCheckParams[],
     contextUser?: UserInfo
   ): Promise<RunViewsWithCacheCheckResponse<T>> {
     try {
-      const results: RunViewWithCacheCheckResult<T>[] = await Promise.all(
-        params.map((item, index) => this.runSingleViewWithCacheCheck<T>(item, index, contextUser))
-      );
+      const user = contextUser || this.CurrentUser;
+      if (!user) {
+        return {
+          success: false,
+          results: [],
+          errorMessage: 'No user context available',
+        };
+      }
+
+      // Separate items that need cache check from those that don't
+      const itemsNeedingCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+      const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
+      const errorResults: RunViewWithCacheCheckResult<T>[] = [];
+
+      // Pre-process all items to build WHERE clauses and validate
+      for (let i = 0; i < params.length; i++) {
+        const item = params[i];
+        if (!item.cacheStatus) {
+          // No cache status - will run full query
+          itemsWithoutCacheCheck.push({ index: i, item });
+          continue;
+        }
+
+        // Get entity info
+        const entityInfo = this.Entities.find(
+          (e) => e.Name.trim().toLowerCase() === item.params.EntityName?.trim().toLowerCase()
+        );
+        if (!entityInfo) {
+          errorResults.push({
+            viewIndex: i,
+            status: 'error',
+            errorMessage: `Entity ${item.params.EntityName} not found in metadata`,
+          });
+          continue;
+        }
+
+        try {
+          // Check permissions
+          this.CheckUserReadPermissions(entityInfo.Name, user);
+          // Build WHERE clause
+          const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
+          itemsNeedingCacheCheck.push({ index: i, item, entityInfo, whereSQL });
+        } catch (e) {
+          errorResults.push({
+            viewIndex: i,
+            status: 'error',
+            errorMessage: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      // Execute batched cache status check for all items that need it
+      const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
+
+      // Determine which items are current vs stale
+      const staleItems: Array<{ index: number; params: RunViewParams }> = [];
+      const currentResults: RunViewWithCacheCheckResult<T>[] = [];
+
+      for (const { index, item } of itemsNeedingCacheCheck) {
+        const serverStatus = cacheStatusResults.get(index);
+        if (!serverStatus || !serverStatus.success) {
+          errorResults.push({
+            viewIndex: index,
+            status: 'error',
+            errorMessage: serverStatus?.errorMessage || 'Failed to get cache status',
+          });
+          continue;
+        }
+
+        const isCurrent = this.isCacheCurrent(item.cacheStatus!, serverStatus);
+        if (isCurrent) {
+          currentResults.push({
+            viewIndex: index,
+            status: 'current',
+          });
+        } else {
+          staleItems.push({ index, params: item.params });
+        }
+      }
+
+      // Run full queries in parallel for:
+      // 1. Items without cache status (no fingerprint from client)
+      // 2. Items with stale cache
+      const fullQueryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
+        ...itemsWithoutCacheCheck.map(({ index, item }) =>
+          this.runFullQueryAndReturn<T>(item.params, index, contextUser)
+        ),
+        ...staleItems.map(({ index, params: viewParams }) =>
+          this.runFullQueryAndReturn<T>(viewParams, index, contextUser)
+        ),
+      ];
+
+      const fullQueryResults = await Promise.all(fullQueryPromises);
+
+      // Combine all results and sort by viewIndex
+      const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+      allResults.sort((a, b) => a.viewIndex - b.viewIndex);
 
       return {
         success: true,
-        results,
+        results: allResults,
       };
     } catch (e) {
       LogError(e);
@@ -1394,101 +1490,55 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Processes a single RunView request with optional cache check.
+   * Executes a batched cache status check for multiple views in a single SQL call.
+   * Uses multiple result sets to return status for each view efficiently.
    */
-  protected async runSingleViewWithCacheCheck<T = unknown>(
-    item: RunViewWithCacheCheckParams,
-    viewIndex: number,
+  protected async getBatchedServerCacheStatus(
+    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
     contextUser?: UserInfo
-  ): Promise<RunViewWithCacheCheckResult<T>> {
-    try {
-      const { params, cacheStatus } = item;
+  ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+    const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
 
-      // If no cacheStatus provided, just run the full query
-      if (!cacheStatus) {
-        return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
-      }
-
-      // Perform cache check - get current MAX(__mj_UpdatedAt) and COUNT(*) from server
-      const serverStatus = await this.getServerCacheStatus(params, contextUser);
-      if (!serverStatus.success) {
-        return {
-          viewIndex,
-          status: 'error',
-          errorMessage: serverStatus.errorMessage,
-        };
-      }
-
-      // Compare with client's cached status
-      const isCurrent = this.isCacheCurrent(cacheStatus, serverStatus);
-      if (isCurrent) {
-        return {
-          viewIndex,
-          status: 'current',
-        };
-      }
-
-      // Cache is stale, run the full query
-      return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
-    } catch (e) {
-      return {
-        viewIndex,
-        status: 'error',
-        errorMessage: e instanceof Error ? e.message : String(e),
-      };
+    if (items.length === 0) {
+      return results;
     }
-  }
 
-  /**
-   * Gets the current MAX(__mj_UpdatedAt) and COUNT(*) for the view query from the server.
-   */
-  protected async getServerCacheStatus(
-    params: RunViewParams,
-    contextUser?: UserInfo
-  ): Promise<{ success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }> {
-    try {
-      const user = contextUser || this.CurrentUser;
-      if (!user) {
-        return { success: false, errorMessage: 'No user context available' };
-      }
-
-      // Get entity info
-      const entityInfo = this.Entities.find(
-        (e) => e.Name.trim().toLowerCase() === params.EntityName?.trim().toLowerCase()
-      );
-      if (!entityInfo) {
-        return { success: false, errorMessage: `Entity ${params.EntityName} not found in metadata` };
-      }
-
-      // Check permissions
-      this.CheckUserReadPermissions(entityInfo.Name, user);
-
-      // Build WHERE clause from params (same logic as InternalRunView but simplified for cache check)
-      const whereSQL = await this.buildWhereClauseForCacheCheck(params, entityInfo, user);
-
-      // Build the cache status query
-      const statusSQL = `SELECT
-        COUNT(*) AS RowCount,
-        MAX(__mj_UpdatedAt) AS MaxUpdatedAt
-        FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
-
-      const result = await this.ExecuteSQL(statusSQL, undefined, undefined, contextUser);
-      if (result && result.length > 0) {
-        const row = result[0];
-        return {
-          success: true,
-          rowCount: row.RowCount,
-          maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
-        };
-      }
-
-      return { success: true, rowCount: 0, maxUpdatedAt: undefined };
-    } catch (e) {
-      return {
-        success: false,
-        errorMessage: e instanceof Error ? e.message : String(e),
-      };
+    // Build array of SQL statements for batch execution
+    const sqlStatements: string[] = [];
+    for (const { entityInfo, whereSQL } of items) {
+      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+      sqlStatements.push(statusSQL);
     }
+
+    try {
+      // Execute the batched SQL using existing ExecuteSQLBatch method
+      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+
+      // Process each result set and map to the corresponding item index
+      for (let i = 0; i < items.length; i++) {
+        const { index } = items[i];
+        const resultSet = resultSets[i];
+
+        if (resultSet && resultSet.length > 0) {
+          const row = resultSet[0] as { TotalRows: number; MaxUpdatedAt: Date | string | null };
+          results.set(index, {
+            success: true,
+            rowCount: row.TotalRows,
+            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
+          });
+        } else {
+          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+        }
+      }
+    } catch (e) {
+      // If batch fails, mark all items as failed
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      for (const { index } of items) {
+        results.set(index, { success: false, errorMessage });
+      }
+    }
+
+    return results;
   }
 
   /**
@@ -1599,10 +1649,12 @@ export class SQLServerDataProvider
 
   /**
    * Extracts the maximum __mj_UpdatedAt value from a result set.
+   * @param results - Array of result objects that may contain __mj_UpdatedAt
+   * @returns ISO string of the max timestamp, or current time if none found
    */
-  protected extractMaxUpdatedAt(results: unknown[]): string | undefined {
+  protected extractMaxUpdatedAt(results: unknown[]): string {
     if (!results || results.length === 0) {
-      return undefined;
+      return new Date().toISOString();
     }
 
     let maxDate: Date | null = null;
@@ -1611,13 +1663,13 @@ export class SQLServerDataProvider
       const updatedAt = rowObj['__mj_UpdatedAt'];
       if (updatedAt) {
         const date = new Date(updatedAt as string);
-        if (!maxDate || date > maxDate) {
+        if (!isNaN(date.getTime()) && (!maxDate || date > maxDate)) {
           maxDate = date;
         }
       }
     }
 
-    return maxDate ? maxDate.toISOString() : undefined;
+    return maxDate ? maxDate.toISOString() : new Date().toISOString();
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {

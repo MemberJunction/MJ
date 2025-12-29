@@ -1,4 +1,4 @@
-import { BaseEngine, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { AIActionEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity,
          AIModelActionEntity,
          AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity,
@@ -59,122 +59,152 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentConfigurations: AIAgentConfigurationEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
-        const params = [
+        const params: Array<Partial<BaseEnginePropertyConfig>> = [
             {
                 PropertyName: '_models',
-                EntityName: 'AI Models'
+                EntityName: 'AI Models',
+                CacheLocal: true
+                
             },
             {
                 PropertyName: '_modelTypes',
-                EntityName: 'AI Model Types'
+                EntityName: 'AI Model Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_prompts',
-                EntityName: 'AI Prompts'
+                EntityName: 'AI Prompts',
+                CacheLocal: true
             },
             {
                 PropertyName: '_promptModels',
-                EntityName: 'MJ: AI Prompt Models'
+                EntityName: 'MJ: AI Prompt Models',
+                CacheLocal: true
             },
             {
                 PropertyName: '_promptTypes',
-                EntityName: 'AI Prompt Types'
+                EntityName: 'AI Prompt Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_promptCategories',
-                EntityName: 'AI Prompt Categories'
+                EntityName: 'AI Prompt Categories',
+                CacheLocal: true
             },
             {
                 PropertyName: '_vectorDatabases',
-                EntityName: 'Vector Databases'
+                EntityName: 'Vector Databases',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentActions',
-                EntityName: 'AI Agent Actions'
+                EntityName: 'AI Agent Actions',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentNoteTypes',
-                EntityName: 'AI Agent Note Types'
+                EntityName: 'AI Agent Note Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentNotes',
-                EntityName: 'AI Agent Notes'
+                EntityName: 'AI Agent Notes',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentExamples',
-                EntityName: 'MJ: AI Agent Examples'
+                EntityName: 'MJ: AI Agent Examples',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agents',
-                EntityName: 'AI Agents'
+                EntityName: 'AI Agents',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentRelationships',
-                EntityName: 'MJ: AI Agent Relationships'
+                EntityName: 'MJ: AI Agent Relationships',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentTypes',
-                EntityName: 'MJ: AI Agent Types'
+                EntityName: 'MJ: AI Agent Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_artifactTypes',
-                EntityName: 'MJ: Artifact Types'
+                EntityName: 'MJ: Artifact Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_vendorTypeDefinitions',
-                EntityName: 'MJ: AI Vendor Type Definitions'
+                EntityName: 'MJ: AI Vendor Type Definitions',
+                CacheLocal: true
             }, 
             {
                 PropertyName: '_vendors',
-                EntityName: 'MJ: AI Vendors'
+                EntityName: 'MJ: AI Vendors',
+                CacheLocal: true
             }, 
             {
                 PropertyName: '_modelVendors',
-                EntityName: 'MJ: AI Model Vendors'
+                EntityName: 'MJ: AI Model Vendors',
+                CacheLocal: true
             }, 
             {
                 PropertyName: '_agentPrompts',
-                EntityName: 'MJ: AI Agent Prompts'
+                EntityName: 'MJ: AI Agent Prompts',
+                CacheLocal: true
             },
             {
                 PropertyName: '_modelCosts',
-                EntityName: 'MJ: AI Model Costs'
+                EntityName: 'MJ: AI Model Costs',
+                CacheLocal: true
             },
             {
                 PropertyName: '_modelPriceTypes',
-                EntityName: 'MJ: AI Model Price Types'
+                EntityName: 'MJ: AI Model Price Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_modelPriceUnitTypes',
-                EntityName: 'MJ: AI Model Price Unit Types'
+                EntityName: 'MJ: AI Model Price Unit Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_configurations',
-                EntityName: 'MJ: AI Configurations'
+                EntityName: 'MJ: AI Configurations',
+                CacheLocal: true
             },
             {
                 PropertyName: '_configurationParams',
-                EntityName: 'MJ: AI Configuration Params'
+                EntityName: 'MJ: AI Configuration Params',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentSteps',
-                EntityName: 'MJ: AI Agent Steps'
+                EntityName: 'MJ: AI Agent Steps',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentStepPaths',
-                EntityName: 'MJ: AI Agent Step Paths'
+                EntityName: 'MJ: AI Agent Step Paths',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentPermissions',
-                EntityName: 'MJ: AI Agent Permissions'
+                EntityName: 'MJ: AI Agent Permissions',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentDataSources',
-                EntityName: 'MJ: AI Agent Data Sources'
+                EntityName: 'MJ: AI Agent Data Sources',
+                CacheLocal: true
             },
             {
                 PropertyName: '_agentConfigurations',
-                EntityName: 'MJ: AI Agent Configurations'
+                EntityName: 'MJ: AI Agent Configurations',
+                CacheLocal: true
             }
         ];
 
