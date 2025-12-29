@@ -4,7 +4,7 @@ import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { CompositeKey, TelemetryManager, TelemetryEvent, TelemetryPattern, TelemetryInsight, TelemetryCategory } from '@memberjunction/core';
+import { CompositeKey, TelemetryManager, TelemetryEvent, TelemetryPattern, TelemetryInsight, TelemetryCategory, TelemetryParamsUnion, isSingleRunViewParams, isSingleRunQueryParams, isBatchRunViewParams } from '@memberjunction/core';
 import { ResourceData, UserSettingEntity } from '@memberjunction/core-entities';
 import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -80,7 +80,7 @@ export interface TelemetryPatternDisplay {
     minElapsedMs: number;
     maxElapsedMs: number;
     lastSeen: Date;
-    sampleParams: Record<string, unknown>;
+    sampleParams: TelemetryParamsUnion;
 }
 
 /**
@@ -96,7 +96,7 @@ export interface TelemetryEventDisplay {
     endTime: number | undefined;
     elapsedMs: number | undefined;
     timestamp: Date;
-    params: Record<string, unknown>;
+    params: TelemetryParamsUnion;
 }
 
 /**
@@ -687,13 +687,13 @@ export function LoadSystemDiagnosticsResource() {
                                             </h4>
                                             <div class="slow-queries-list">
                                                 @for (query of slowQueries.slice(0, 10); track query.id) {
-                                                    <div class="slow-query-item clickable" [class.cache-hit]="query.params.cacheHit" (click)="openEventDetailPanel(query)">
+                                                    <div class="slow-query-item clickable" [class.cache-hit]="isCacheHit(query)" (click)="openEventDetailPanel(query)">
                                                         <div class="slow-query-main">
                                                             <span class="category-chip small" [class]="'cat-' + query.category.toLowerCase()">
                                                                 {{ query.category }}
                                                             </span>
                                                             <span class="slow-query-entity">{{ query.entityName || query.operation }}</span>
-                                                            @if (query.params.cacheHit) {
+                                                            @if (isCacheHit(query)) {
                                                                 <span class="cache-hit-badge small" title="Data served from local cache">
                                                                     <i class="fa-solid fa-bolt"></i>
                                                                     CACHED
@@ -771,9 +771,9 @@ export function LoadSystemDiagnosticsResource() {
                                         <div class="timeline-container">
                                             @if (filteredEvents.length > 0) {
                                                 @for (event of filteredEvents.slice(0, 50); track event.id) {
-                                                    <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" [class.cache-hit]="event.params.cacheHit" (click)="openEventDetailPanel(event)">
+                                                    <div class="timeline-item clickable" [class]="'tl-' + event.category.toLowerCase()" [class.cache-hit]="isCacheHit(event)" (click)="openEventDetailPanel(event)">
                                                         <div class="timeline-marker">
-                                                            @if (event.params.cacheHit) {
+                                                            @if (isCacheHit(event)) {
                                                                 <div class="marker-bolt">
                                                                     <i class="fa-solid fa-bolt"></i>
                                                                 </div>
@@ -788,7 +788,7 @@ export function LoadSystemDiagnosticsResource() {
                                                                 <span class="category-chip small" [class]="'cat-' + event.category.toLowerCase()">
                                                                     {{ event.category }}
                                                                 </span>
-                                                                @if (event.params.cacheHit) {
+                                                                @if (isCacheHit(event)) {
                                                                     <span class="cache-hit-badge" title="Data served from local cache">
                                                                         <i class="fa-solid fa-bolt"></i>
                                                                         CACHED
@@ -5043,9 +5043,9 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             fingerprint: p.fingerprint,
             category: p.category,
             operation: p.operation,
-            entityName: (p.sampleParams?.EntityName as string) || (p.sampleParams?.QueryName as string) || null,
-            filter: (p.sampleParams?.ExtraFilter as string) || null,
-            orderBy: (p.sampleParams?.OrderBy as string) || null,
+            entityName: this.getEntityName(p.sampleParams),
+            filter: this.getFilter(p.sampleParams),
+            orderBy: this.getOrderBy(p.sampleParams),
             count: p.count,
             avgElapsedMs: Math.round(p.avgElapsedMs * 100) / 100,
             totalElapsedMs: Math.round(p.totalElapsedMs),
@@ -5079,8 +5079,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             id: e.id,
             category: e.category,
             operation: e.operation,
-            entityName: (e.params?.EntityName as string) || (e.params?.QueryName as string) || null,
-            filter: (e.params?.ExtraFilter as string) || null,
+            entityName: this.getEntityName(e.params),
+            filter: this.getFilter(e.params),
             startTime: e.startTime,
             endTime: e.endTime,
             elapsedMs: e.elapsedMs,
@@ -5185,14 +5185,17 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         const params: Array<{ key: string; value: string }> = [];
         if (!event.params) return params;
 
+        // Cast to record for dynamic iteration - params have been validated by type guards
+        const paramsRecord = event.params as unknown as Record<string, unknown>;
+
         // Show important params first
         const priorityKeys = ['EntityName', 'ViewName', 'ViewID', 'QueryName', 'ExtraFilter', 'OrderBy', 'ResultType', 'MaxRows'];
         const shownKeys = new Set<string>();
 
         // Add priority keys first if they exist
         for (const key of priorityKeys) {
-            if (event.params[key] !== undefined && event.params[key] !== null) {
-                const value = this.formatParamValue(event.params[key]);
+            if (paramsRecord[key] !== undefined && paramsRecord[key] !== null) {
+                const value = this.formatParamValue(paramsRecord[key]);
                 if (value) {
                     params.push({ key, value });
                     shownKeys.add(key);
@@ -5201,7 +5204,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
 
         // Add remaining keys
-        for (const [key, val] of Object.entries(event.params)) {
+        for (const [key, val] of Object.entries(paramsRecord)) {
             if (!shownKeys.has(key) && !key.startsWith('_')) {
                 const value = this.formatParamValue(val);
                 if (value) {
@@ -5241,7 +5244,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * Get entity names for RunViews batch operation (first few for display)
      */
     getRunViewsEntities(event: TelemetryEventDisplay, maxDisplay: number = 3): string[] {
-        const entities = event.params?.['Entities'] as string[] | undefined;
+        if (!event.params || !isBatchRunViewParams(event.params)) return [];
+        const entities = event.params.Entities;
         if (!entities || !Array.isArray(entities)) return [];
         return entities.slice(0, maxDisplay);
     }
@@ -5250,8 +5254,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * Get total entity count for RunViews batch operation
      */
     getRunViewsEntityCount(event: TelemetryEventDisplay): number {
-        const entities = event.params?.['Entities'] as string[] | undefined;
-        return entities?.length || 0;
+        if (!event.params || !isBatchRunViewParams(event.params)) return 0;
+        return event.params.Entities?.length || 0;
     }
 
     /**
@@ -5262,41 +5266,88 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     /**
+     * Check if the event was a cache hit (safe accessor for union type params)
+     */
+    isCacheHit(event: TelemetryEventDisplay | { params: TelemetryParamsUnion }): boolean {
+        if (!event?.params) return false;
+        // Use isSingleRunViewParams or isSingleRunQueryParams to safely access cacheHit
+        if (isSingleRunViewParams(event.params)) {
+            return event.params.cacheHit === true;
+        }
+        if (isSingleRunQueryParams(event.params)) {
+            return event.params.cacheHit === true;
+        }
+        return false;
+    }
+
+    /**
+     * Get entity name from telemetry params (safe accessor for union type)
+     */
+    getEntityName(params: TelemetryParamsUnion | undefined): string | null {
+        if (!params) return null;
+        if (isSingleRunViewParams(params)) {
+            return params.EntityName || null;
+        }
+        if (isSingleRunQueryParams(params)) {
+            return params.QueryName || null;
+        }
+        return null;
+    }
+
+    /**
+     * Get filter from telemetry params (safe accessor for union type)
+     */
+    getFilter(params: TelemetryParamsUnion | undefined): string | null {
+        if (!params) return null;
+        if (isSingleRunViewParams(params)) {
+            return params.ExtraFilter || null;
+        }
+        return null;
+    }
+
+    /**
+     * Get order by from telemetry params (safe accessor for union type)
+     */
+    getOrderBy(params: TelemetryParamsUnion | undefined): string | null {
+        if (!params) return null;
+        if (isSingleRunViewParams(params)) {
+            return params.OrderBy || null;
+        }
+        return null;
+    }
+
+    /**
      * Get RunView parameter pills for display
      */
     getRunViewPills(event: TelemetryEventDisplay): Array<{ label: string; value: string; type: 'filter' | 'order' | 'result' | 'limit' | 'batch' | 'info' }> {
         const pills: Array<{ label: string; value: string; type: 'filter' | 'order' | 'result' | 'limit' | 'batch' | 'info' }> = [];
 
         // For batch operations, show batch size
-        if (this.isRunViewsOperation(event)) {
-            const batchSize = event.params?.['BatchSize'] || event.params?.['batchSize'];
+        if (this.isRunViewsOperation(event) && event.params && isBatchRunViewParams(event.params)) {
+            const batchSize = event.params.BatchSize;
             if (batchSize) {
                 pills.push({ label: 'Batch', value: String(batchSize), type: 'batch' });
-            }
-            const totalResults = event.params?.['totalResultCount'];
-            if (totalResults !== undefined) {
-                pills.push({ label: 'Results', value: String(totalResults), type: 'info' });
             }
         }
 
         // For single RunView, show params
-        if (!this.isRunViewsOperation(event)) {
-            const extraFilter = event.params?.['ExtraFilter'] as string;
+        if (!this.isRunViewsOperation(event) && event.params && isSingleRunViewParams(event.params)) {
+            const extraFilter = event.params.ExtraFilter;
             if (extraFilter) {
                 pills.push({ label: 'Filter', value: this.truncateString(extraFilter, 25), type: 'filter' });
             }
 
-            const orderBy = event.params?.['OrderBy'] as string;
+            const orderBy = event.params.OrderBy;
             if (orderBy) {
                 pills.push({ label: 'Order', value: this.truncateString(orderBy, 20), type: 'order' });
             }
 
-            const resultType = event.params?.['ResultType'] as string;
+            const resultType = event.params.ResultType;
             if (resultType && resultType !== 'simple') {
                 pills.push({ label: 'Type', value: resultType, type: 'result' });
             }
 
-            const maxRows = event.params?.['MaxRows'] as number;
+            const maxRows = event.params.MaxRows;
             if (maxRows && maxRows > 0) {
                 pills.push({ label: 'Limit', value: String(maxRows), type: 'limit' });
             }
@@ -6329,13 +6380,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .attr('font-family', 'monospace');
 
         // Split data into cached and non-cached events
-        const nonCachedData = data.filter(d => !d.params?.['cacheHit']);
-        const cachedData = data.filter(d => d.params?.['cacheHit']);
+        const nonCachedData = data.filter(d => !this.isCacheHit(d));
+        const cachedData = data.filter(d => this.isCacheHit(d));
 
         // Helper to show tooltip
         const showTooltip = (event: MouseEvent, d: TelemetryEventDisplay & { relativeTime: number; duration: number }) => {
             // Update tooltip content
-            const isCached = d.params?.['cacheHit'];
+            const isCached = this.isCacheHit(d);
             const lines = [
                 `${d.category}: ${d.operation}`,
                 d.entityName ? `Entity: ${d.entityName}` : null,

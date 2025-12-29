@@ -8,6 +8,7 @@
  * - Pluggable analyzer system for custom analysis rules
  * - WarningManager integration for debounced console output
  * - Configurable via local storage for per-client settings
+ * - Strongly-typed parameter interfaces for each telemetry category
  *
  * @example
  * ```typescript
@@ -16,10 +17,14 @@
  * // Enable telemetry
  * tm.SetEnabled(true);
  *
- * // Track an operation
- * const eventId = tm.StartEvent('RunView', 'RunView.Execute', { EntityName: 'Users' });
+ * // Track a RunView operation with typed params
+ * const eventId = tm.StartEvent('RunView', 'ProviderBase.RunView', {
+ *     EntityName: 'Users',
+ *     ExtraFilter: 'IsActive = 1',
+ *     ResultType: 'entity_object'
+ * });
  * // ... perform operation
- * tm.EndEvent(eventId);
+ * tm.EndEvent(eventId, { cacheHit: false, resultCount: 50 });
  *
  * // Get patterns for analysis
  * const patterns = tm.GetPatterns({ category: 'RunView', minCount: 2 });
@@ -66,7 +71,222 @@ export type TelemetryCategory =
 export type TelemetryInsightSeverity = 'info' | 'warning' | 'optimization';
 
 // ============================================================================
-// INTERFACES
+// STRONGLY-TYPED PARAMETER INTERFACES
+// ============================================================================
+
+/**
+ * Result type for RunView operations
+ */
+export type RunViewResultType = 'simple' | 'entity_object' | 'count_only';
+
+/**
+ * Telemetry params for a single RunView operation.
+ * Maps to core properties of RunViewParams.
+ */
+export interface TelemetryRunViewParams {
+    /** Entity name being queried */
+    EntityName?: string;
+    /** View ID if running a saved view */
+    ViewID?: string;
+    /** View name if running a saved view */
+    ViewName?: string;
+    /** SQL WHERE clause filter */
+    ExtraFilter?: string;
+    /** SQL ORDER BY clause */
+    OrderBy?: string;
+    /** Type of result to return */
+    ResultType?: RunViewResultType;
+    /** Maximum rows to return */
+    MaxRows?: number;
+    /** Starting row for pagination */
+    StartRow?: number;
+    /** Whether to cache locally */
+    CacheLocal?: boolean;
+    /** Internal marker for engine-initiated calls */
+    _fromEngine?: boolean;
+    /** Whether result was served from cache (set after operation completes) */
+    cacheHit?: boolean;
+}
+
+/**
+ * Telemetry params for batch RunViews operation.
+ * Used when multiple views are executed in a single call.
+ */
+export interface TelemetryRunViewsBatchParams {
+    /** Number of views in the batch */
+    BatchSize: number;
+    /** Entity names being queried in the batch */
+    Entities: string[];
+    /** Internal marker for engine-initiated calls */
+    _fromEngine?: boolean;
+}
+
+/**
+ * Telemetry params for a single RunQuery operation.
+ * Maps to core properties of RunQueryParams.
+ */
+export interface TelemetryRunQueryParams {
+    /** Query ID if running by ID */
+    QueryID?: string;
+    /** Query name if running by name */
+    QueryName?: string;
+    /** Category path for the query */
+    CategoryPath?: string;
+    /** Category ID for the query */
+    CategoryID?: string;
+    /** Maximum rows to return */
+    MaxRows?: number;
+    /** Starting row for pagination */
+    StartRow?: number;
+    /** Whether to cache locally */
+    CacheLocal?: boolean;
+    /** Whether parameters were provided */
+    HasParameters?: boolean;
+    /** Whether result was served from cache (set after operation completes) */
+    cacheHit?: boolean;
+}
+
+/**
+ * Telemetry params for batch RunQueries operation.
+ * Used when multiple queries are executed in a single call.
+ */
+export interface TelemetryRunQueriesBatchParams {
+    /** Number of queries in the batch */
+    BatchSize: number;
+    /** Query names/IDs in the batch */
+    Queries: string[];
+}
+
+/**
+ * Engine operation types
+ */
+export type EngineOperationType = 'Config' | 'Load' | 'AdditionalLoading' | 'Refresh' | 'initial' | 'refresh';
+
+/**
+ * Telemetry params for Engine operations.
+ * Tracks engine lifecycle and loading events.
+ */
+export interface TelemetryEngineParams {
+    /** Name of the engine class */
+    engineClass: string;
+    /** Type of engine operation */
+    operation: EngineOperationType;
+    /** Number of entities loaded (if applicable) */
+    entityCount?: number;
+    /** Number of configs being loaded */
+    configCount?: number;
+    /** Entity names being loaded */
+    entityNames?: string[];
+    /** Dataset names being loaded */
+    datasetNames?: string[];
+}
+
+/**
+ * Telemetry params for AI operations.
+ * Tracks AI model invocations and token usage.
+ */
+export interface TelemetryAIParams {
+    /** AI Model ID */
+    modelID?: string;
+    /** AI Model name */
+    modelName?: string;
+    /** Prompt ID if using a saved prompt */
+    promptID?: string;
+    /** Prompt name if using a saved prompt */
+    promptName?: string;
+    /** Number of input tokens */
+    inputTokens?: number;
+    /** Number of output tokens */
+    outputTokens?: number;
+    /** AI operation type */
+    operationType?: 'chat' | 'embedding' | 'classification' | 'summary';
+}
+
+/**
+ * Cache operation types
+ */
+export type CacheOperationType = 'get' | 'set' | 'invalidate' | 'validate';
+
+/**
+ * Cache status results
+ */
+export type CacheStatusType = 'hit' | 'miss' | 'stale' | 'current';
+
+/**
+ * Telemetry params for Cache operations.
+ * Tracks cache hits, misses, and validation.
+ */
+export interface TelemetryCacheParams {
+    /** Type of cache (local or server) */
+    cacheType: 'local' | 'server';
+    /** Cache operation being performed */
+    operation: CacheOperationType;
+    /** Entity name (if applicable) */
+    entityName?: string;
+    /** Cache fingerprint for identification */
+    fingerprint?: string;
+    /** Result status of the cache operation */
+    status?: CacheStatusType;
+}
+
+/**
+ * Telemetry params for Network operations.
+ * Tracks API calls and network requests.
+ */
+export interface TelemetryNetworkParams {
+    /** HTTP method */
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+    /** Request URL or endpoint */
+    url?: string;
+    /** Response status code */
+    statusCode?: number;
+    /** Request size in bytes */
+    requestSize?: number;
+    /** Response size in bytes */
+    responseSize?: number;
+}
+
+/**
+ * Telemetry params for Custom operations.
+ * Allows arbitrary key-value pairs for custom tracking.
+ */
+export interface TelemetryCustomParams {
+    /** Custom operation name */
+    operationName?: string;
+    /** Any additional custom data */
+    [key: string]: unknown;
+}
+
+/**
+ * Union type of all telemetry param types.
+ * Used for type-safe fingerprint generation and event creation.
+ */
+export type TelemetryParamsUnion =
+    | TelemetryRunViewParams
+    | TelemetryRunViewsBatchParams
+    | TelemetryRunQueryParams
+    | TelemetryRunQueriesBatchParams
+    | TelemetryEngineParams
+    | TelemetryAIParams
+    | TelemetryCacheParams
+    | TelemetryNetworkParams
+    | TelemetryCustomParams;
+
+/**
+ * Map of category to its param type for type inference
+ */
+export interface TelemetryCategoryParamsMap {
+    RunView: TelemetryRunViewParams | TelemetryRunViewsBatchParams;
+    RunQuery: TelemetryRunQueryParams | TelemetryRunQueriesBatchParams;
+    Engine: TelemetryEngineParams;
+    AI: TelemetryAIParams;
+    Cache: TelemetryCacheParams;
+    Network: TelemetryNetworkParams;
+    Custom: TelemetryCustomParams;
+}
+
+// ============================================================================
+// CONFIGURATION INTERFACES
 // ============================================================================
 
 /**
@@ -112,7 +332,7 @@ export interface MemorySnapshot {
 /**
  * A single telemetry event
  */
-export interface TelemetryEvent {
+export interface TelemetryEvent<T extends TelemetryParamsUnion = TelemetryParamsUnion> {
     /** Unique event ID */
     id: string;
     /** Category of operation */
@@ -129,7 +349,7 @@ export interface TelemetryEvent {
 
     // Context
     userId?: string;
-    params: Record<string, unknown>;
+    params: T;
     tags?: string[];
 
     // Optional detailed info (based on level)
@@ -148,7 +368,7 @@ export interface TelemetryPattern {
     fingerprint: string;
     category: TelemetryCategory;
     operation: string;
-    sampleParams: Record<string, unknown>;
+    sampleParams: TelemetryParamsUnion;
 
     // Aggregates
     count: number;
@@ -208,6 +428,88 @@ export interface TelemetryAnalyzer {
 }
 
 // ============================================================================
+// TYPE GUARDS
+// ============================================================================
+
+/**
+ * Type guard to check if params represent a batch RunViews operation
+ */
+export function isBatchRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewsBatchParams {
+    return typeof params === 'object' &&
+           params !== null &&
+           'Entities' in params &&
+           Array.isArray((params as TelemetryRunViewsBatchParams).Entities);
+}
+
+/**
+ * Type guard to check if params represent a single RunView operation
+ */
+export function isSingleRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewParams {
+    return typeof params === 'object' &&
+           params !== null &&
+           !isBatchRunViewParams(params) &&
+           ('EntityName' in params || 'ViewID' in params || 'ViewName' in params);
+}
+
+/**
+ * Type guard to check if params represent a single RunQuery operation
+ */
+export function isSingleRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueryParams {
+    return typeof params === 'object' &&
+           params !== null &&
+           !isBatchRunQueryParams(params) &&
+           ('QueryID' in params || 'QueryName' in params);
+}
+
+/**
+ * Type guard to check if params represent a batch RunQueries operation
+ */
+export function isBatchRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueriesBatchParams {
+    return typeof params === 'object' &&
+           params !== null &&
+           'Queries' in params &&
+           Array.isArray((params as TelemetryRunQueriesBatchParams).Queries);
+}
+
+/**
+ * Type guard to check if params represent an Engine operation
+ */
+export function isEngineParams(params: TelemetryParamsUnion): params is TelemetryEngineParams {
+    return typeof params === 'object' &&
+           params !== null &&
+           'engineClass' in params &&
+           'operation' in params;
+}
+
+/**
+ * Type guard to check if params represent an AI operation
+ */
+export function isAIParams(params: TelemetryParamsUnion): params is TelemetryAIParams {
+    return typeof params === 'object' &&
+           params !== null &&
+           ('modelID' in params || 'modelName' in params || 'promptID' in params);
+}
+
+/**
+ * Type guard to check if params represent a Cache operation
+ */
+export function isCacheParams(params: TelemetryParamsUnion): params is TelemetryCacheParams {
+    return typeof params === 'object' &&
+           params !== null &&
+           'cacheType' in params &&
+           'operation' in params;
+}
+
+/**
+ * Type guard to check if params represent a Network operation
+ */
+export function isNetworkParams(params: TelemetryParamsUnion): params is TelemetryNetworkParams {
+    return typeof params === 'object' &&
+           params !== null &&
+           ('method' in params || 'url' in params || 'statusCode' in params);
+}
+
+// ============================================================================
 // BUILT-IN ANALYZERS
 // ============================================================================
 
@@ -225,11 +527,15 @@ class EngineOverlapAnalyzer implements TelemetryAnalyzer {
     analyze(event: TelemetryEvent, context: TelemetryAnalyzerContext): TelemetryInsight | null {
         if (event.category !== 'RunView') return null;
 
-        // Skip engine-initiated RunView calls to avoid false positives
-        // When an engine loads its entities, it uses RunView internally
-        if (event.params._fromEngine) return null;
+        const params = event.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
 
-        const entityName = event.params.EntityName as string;
+        // Skip engine-initiated RunView calls to avoid false positives
+        if (params._fromEngine) return null;
+
+        // Only check single RunView operations, not batches
+        if (!isSingleRunViewParams(params)) return null;
+
+        const entityName = params.EntityName;
         if (!entityName) return null;
 
         const loadedEntities = context.getEngineLoadedEntities();
@@ -264,13 +570,18 @@ class SameEntityMultipleCallsAnalyzer implements TelemetryAnalyzer {
     analyze(event: TelemetryEvent, context: TelemetryAnalyzerContext): TelemetryInsight | null {
         if (event.category !== 'RunView') return null;
 
-        const entityName = event.params.EntityName as string;
+        const params = event.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
+        if (!isSingleRunViewParams(params)) return null;
+
+        const entityName = params.EntityName;
         if (!entityName) return null;
 
         // Count distinct RunViews for same entity in recent events
-        const entityEvents = context.recentEvents.filter(
-            e => e.category === 'RunView' && e.params.EntityName === entityName
-        );
+        const entityEvents = context.recentEvents.filter(e => {
+            if (e.category !== 'RunView') return false;
+            const p = e.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
+            return isSingleRunViewParams(p) && p.EntityName === entityName;
+        });
 
         // Get unique fingerprints (different filter/orderBy combinations)
         const uniqueFingerprints = new Set(entityEvents.map(e => e.fingerprint));
@@ -321,6 +632,11 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
 
         if (recentSequential.length >= 2) {
             const allEvents = [...recentSequential, event];
+            const entities = allEvents.map(e => {
+                const p = e.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
+                return isSingleRunViewParams(p) ? p.EntityName : 'batch';
+            });
+
             return {
                 id: `parallel-${event.id}`,
                 severity: 'optimization',
@@ -330,9 +646,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
                 message: `${allEvents.length} RunView calls executed sequentially`,
                 suggestion: `Use RunViews (batch) to execute these queries in parallel for better performance`,
                 relatedEventIds: allEvents.map(e => e.id),
-                metadata: {
-                    entities: allEvents.map(e => e.params.EntityName)
-                },
+                metadata: { entities },
                 timestamp: Date.now()
             };
         }
@@ -352,9 +666,14 @@ class DuplicateRunViewAnalyzer implements TelemetryAnalyzer {
 
         const pattern = context.patterns.get(event.fingerprint);
         if (pattern && pattern.count >= 2) {
+            const params = event.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
+
             // Handle both single RunView (EntityName) and batch RunViews (Entities array)
-            const entityName = event.params.EntityName as string ||
-                (Array.isArray(event.params.Entities) ? (event.params.Entities as string[]).join(', ') : 'Unknown');
+            const entityName = isSingleRunViewParams(params)
+                ? params.EntityName || 'Unknown'
+                : isBatchRunViewParams(params)
+                    ? params.Entities.join(', ')
+                    : 'Unknown';
 
             return {
                 id: `duplicate-${event.fingerprint}-${Date.now()}`,
@@ -411,7 +730,7 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
  * Singleton manager for telemetry tracking and analysis.
  *
  * Provides:
- * - Event recording for various operation types
+ * - Event recording for various operation types with strongly-typed parameters
  * - Pattern detection for identifying optimization opportunities
  * - Pluggable analyzer system for custom rules
  * - Integration with WarningManager for console output
@@ -496,15 +815,86 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         return TelemetryLevelValue[level];
     }
 
-    // ========== EVENT RECORDING ==========
+    // ========== EVENT RECORDING WITH STRONG TYPING ==========
+
+    /**
+     * Start tracking a RunView event
+     */
+    public StartEvent(
+        category: 'RunView',
+        operation: string,
+        params: TelemetryRunViewParams | TelemetryRunViewsBatchParams,
+        userId?: string
+    ): string | null;
+
+    /**
+     * Start tracking a RunQuery event
+     */
+    public StartEvent(
+        category: 'RunQuery',
+        operation: string,
+        params: TelemetryRunQueryParams | TelemetryRunQueriesBatchParams,
+        userId?: string
+    ): string | null;
+
+    /**
+     * Start tracking an Engine event
+     */
+    public StartEvent(
+        category: 'Engine',
+        operation: string,
+        params: TelemetryEngineParams,
+        userId?: string
+    ): string | null;
+
+    /**
+     * Start tracking an AI event
+     */
+    public StartEvent(
+        category: 'AI',
+        operation: string,
+        params: TelemetryAIParams,
+        userId?: string
+    ): string | null;
+
+    /**
+     * Start tracking a Cache event
+     */
+    public StartEvent(
+        category: 'Cache',
+        operation: string,
+        params: TelemetryCacheParams,
+        userId?: string
+    ): string | null;
+
+    /**
+     * Start tracking a Network event
+     */
+    public StartEvent(
+        category: 'Network',
+        operation: string,
+        params: TelemetryNetworkParams,
+        userId?: string
+    ): string | null;
+
+    /**
+     * Start tracking a Custom event
+     */
+    public StartEvent(
+        category: 'Custom',
+        operation: string,
+        params: TelemetryCustomParams,
+        userId?: string
+    ): string | null;
 
     /**
      * Start tracking an event. Returns event ID for later completion, or null if disabled.
+     * Uses strongly-typed params based on the category.
      */
-    public StartEvent(
-        category: TelemetryCategory,
+    public StartEvent<C extends TelemetryCategory>(
+        category: C,
         operation: string,
-        params: Record<string, unknown>,
+        params: TelemetryCategoryParamsMap[C],
         userId?: string
     ): string | null {
         if (!this.IsCategoryEnabled(category)) return null;
@@ -516,10 +906,10 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             id: this.generateId(),
             category,
             operation,
-            fingerprint: this.generateFingerprint(category, operation, params),
+            fingerprint: this.generateFingerprint(category, params),
             startTime: this.getTimestamp(),
             userId,
-            params: levelValue >= TelemetryLevelValue['standard'] ? params : {},
+            params: levelValue >= TelemetryLevelValue['standard'] ? params : ({} as TelemetryParamsUnion),
             stackTrace: levelValue >= TelemetryLevelValue['verbose'] ? this.captureStackTrace() : undefined,
             memoryBefore: levelValue >= TelemetryLevelValue['debug'] ? this.captureMemory() : undefined
         };
@@ -544,7 +934,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
         // Merge additional params if provided
         if (additionalParams) {
-            event.params = { ...event.params, ...additionalParams };
+            event.params = { ...event.params, ...additionalParams } as TelemetryParamsUnion;
         }
 
         event.endTime = this.getTimestamp();
@@ -564,12 +954,89 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     }
 
     /**
-     * Convenience method for recording a completed event directly
+     * Record a completed RunView event directly
      */
     public RecordEvent(
-        category: TelemetryCategory,
+        category: 'RunView',
         operation: string,
-        params: Record<string, unknown>,
+        params: TelemetryRunViewParams | TelemetryRunViewsBatchParams,
+        elapsedMs: number,
+        userId?: string
+    ): void;
+
+    /**
+     * Record a completed RunQuery event directly
+     */
+    public RecordEvent(
+        category: 'RunQuery',
+        operation: string,
+        params: TelemetryRunQueryParams | TelemetryRunQueriesBatchParams,
+        elapsedMs: number,
+        userId?: string
+    ): void;
+
+    /**
+     * Record a completed Engine event directly
+     */
+    public RecordEvent(
+        category: 'Engine',
+        operation: string,
+        params: TelemetryEngineParams,
+        elapsedMs: number,
+        userId?: string
+    ): void;
+
+    /**
+     * Record a completed AI event directly
+     */
+    public RecordEvent(
+        category: 'AI',
+        operation: string,
+        params: TelemetryAIParams,
+        elapsedMs: number,
+        userId?: string
+    ): void;
+
+    /**
+     * Record a completed Cache event directly
+     */
+    public RecordEvent(
+        category: 'Cache',
+        operation: string,
+        params: TelemetryCacheParams,
+        elapsedMs: number,
+        userId?: string
+    ): void;
+
+    /**
+     * Record a completed Network event directly
+     */
+    public RecordEvent(
+        category: 'Network',
+        operation: string,
+        params: TelemetryNetworkParams,
+        elapsedMs: number,
+        userId?: string
+    ): void;
+
+    /**
+     * Record a completed Custom event directly
+     */
+    public RecordEvent(
+        category: 'Custom',
+        operation: string,
+        params: TelemetryCustomParams,
+        elapsedMs: number,
+        userId?: string
+    ): void;
+
+    /**
+     * Convenience method for recording a completed event directly with strong typing
+     */
+    public RecordEvent<C extends TelemetryCategory>(
+        category: C,
+        operation: string,
+        params: TelemetryCategoryParamsMap[C],
         elapsedMs: number,
         userId?: string
     ): void {
@@ -583,12 +1050,12 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             id: this.generateId(),
             category,
             operation,
-            fingerprint: this.generateFingerprint(category, operation, params),
+            fingerprint: this.generateFingerprint(category, params),
             startTime: now - elapsedMs,
             endTime: now,
             elapsedMs,
             userId,
-            params: levelValue >= TelemetryLevelValue['standard'] ? params : {},
+            params: levelValue >= TelemetryLevelValue['standard'] ? params : ({} as TelemetryParamsUnion),
             stackTrace: levelValue >= TelemetryLevelValue['verbose'] ? this.captureStackTrace() : undefined
         };
 
@@ -860,65 +1327,147 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         console.info(message);
     }
 
-    // ========== UTILITIES ==========
+    // ========== FINGERPRINT GENERATION WITH TYPE GUARDS ==========
 
     private generateId(): string {
-        return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     }
 
+    /**
+     * Generate a fingerprint for duplicate detection using type guards
+     */
     private generateFingerprint(
         category: TelemetryCategory,
-        operation: string,
-        params: Record<string, unknown>
+        params: TelemetryParamsUnion
     ): string {
-        // Category-specific fingerprinting
         let keyParams: Record<string, unknown>;
 
         switch (category) {
             case 'RunView':
-                // Check if this is a batch operation (has Entities array)
-                if (Array.isArray(params.Entities) && params.Entities.length > 0) {
-                    // Batch operation - create fingerprint from sorted entity list
-                    // Sort to ensure order-independent matching
-                    const sortedEntities = [...(params.Entities as string[])]
-                        .map(e => e?.toLowerCase().trim())
-                        .filter(Boolean)
-                        .sort();
-                    // Use a hash for long entity lists to keep fingerprint manageable
-                    const entityKey = sortedEntities.length > 5
-                        ? this.simpleHash(sortedEntities.join('|'))
-                        : sortedEntities.join('|');
-                    keyParams = {
-                        batch: true,
-                        batchSize: params.BatchSize,
-                        entities: entityKey
-                    };
-                } else {
-                    // Single operation
-                    keyParams = {
-                        entity: (params.EntityName as string)?.toLowerCase().trim(),
-                        filter: (params.ExtraFilter as string)?.toLowerCase().trim(),
-                        orderBy: (params.OrderBy as string)?.toLowerCase().trim(),
-                        resultType: params.ResultType
-                    };
-                }
+                keyParams = this.generateRunViewFingerprint(params as TelemetryRunViewParams | TelemetryRunViewsBatchParams);
                 break;
             case 'RunQuery':
-                keyParams = {
-                    query: (params.SQL as string)?.toLowerCase().trim()
-                };
+                keyParams = this.generateRunQueryFingerprint(params as TelemetryRunQueryParams);
                 break;
             case 'Engine':
-                keyParams = {
-                    engine: params.engineClass,
-                    operation: params.operation
-                };
+                keyParams = this.generateEngineFingerprint(params as TelemetryEngineParams);
+                break;
+            case 'AI':
+                keyParams = this.generateAIFingerprint(params as TelemetryAIParams);
+                break;
+            case 'Cache':
+                keyParams = this.generateCacheFingerprint(params as TelemetryCacheParams);
+                break;
+            case 'Network':
+                keyParams = this.generateNetworkFingerprint(params as TelemetryNetworkParams);
                 break;
             default:
-                keyParams = params;
+                keyParams = params as Record<string, unknown>;
         }
 
-        return `${category}:${operation}:${JSON.stringify(keyParams)}`;
+        return `${category}:${JSON.stringify(keyParams)}`;
+    }
+
+    /**
+     * Generate fingerprint for RunView operations
+     */
+    private generateRunViewFingerprint(params: TelemetryRunViewParams | TelemetryRunViewsBatchParams): Record<string, unknown> {
+        if (isBatchRunViewParams(params)) {
+            // Batch operation - create fingerprint from sorted entity list
+            const sortedEntities = [...params.Entities]
+                .map(e => e?.toLowerCase().trim())
+                .filter(Boolean)
+                .sort();
+            // Use a hash for long entity lists to keep fingerprint manageable
+            const entityKey = sortedEntities.length > 5
+                ? this.simpleHash(sortedEntities.join('|'))
+                : sortedEntities.join('|');
+            return {
+                batch: true,
+                batchSize: params.BatchSize,
+                entities: entityKey
+            };
+        } else {
+            // Single operation
+            return {
+                entity: params.EntityName?.toLowerCase().trim(),
+                filter: params.ExtraFilter?.toLowerCase().trim(),
+                orderBy: params.OrderBy?.toLowerCase().trim(),
+                resultType: params.ResultType
+            };
+        }
+    }
+
+    /**
+     * Generate fingerprint for RunQuery operations
+     */
+    private generateRunQueryFingerprint(params: TelemetryRunQueryParams | TelemetryRunQueriesBatchParams): Record<string, unknown> {
+        if (isBatchRunQueryParams(params)) {
+            // Batch operation - create fingerprint from sorted query list
+            const sortedQueries = [...params.Queries]
+                .map(q => q?.toLowerCase().trim())
+                .filter(Boolean)
+                .sort();
+            const queryKey = sortedQueries.length > 5
+                ? this.simpleHash(sortedQueries.join('|'))
+                : sortedQueries.join('|');
+            return {
+                batch: true,
+                batchSize: params.BatchSize,
+                queries: queryKey
+            };
+        } else {
+            return {
+                queryId: params.QueryID,
+                queryName: params.QueryName?.toLowerCase().trim(),
+                categoryPath: params.CategoryPath?.toLowerCase().trim()
+            };
+        }
+    }
+
+    /**
+     * Generate fingerprint for Engine operations
+     */
+    private generateEngineFingerprint(params: TelemetryEngineParams): Record<string, unknown> {
+        return {
+            engine: params.engineClass,
+            operation: params.operation
+        };
+    }
+
+    /**
+     * Generate fingerprint for AI operations
+     */
+    private generateAIFingerprint(params: TelemetryAIParams): Record<string, unknown> {
+        return {
+            modelId: params.modelID,
+            modelName: params.modelName?.toLowerCase().trim(),
+            promptId: params.promptID,
+            promptName: params.promptName?.toLowerCase().trim(),
+            operationType: params.operationType
+        };
+    }
+
+    /**
+     * Generate fingerprint for Cache operations
+     */
+    private generateCacheFingerprint(params: TelemetryCacheParams): Record<string, unknown> {
+        return {
+            cacheType: params.cacheType,
+            operation: params.operation,
+            entityName: params.entityName?.toLowerCase().trim(),
+            fingerprint: params.fingerprint
+        };
+    }
+
+    /**
+     * Generate fingerprint for Network operations
+     */
+    private generateNetworkFingerprint(params: TelemetryNetworkParams): Record<string, unknown> {
+        return {
+            method: params.method,
+            url: params.url
+        };
     }
 
     /**
