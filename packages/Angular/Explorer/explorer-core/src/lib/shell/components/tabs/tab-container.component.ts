@@ -421,8 +421,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     );
 
     if (cached) {
-      console.log(`♻️ Reusing cached component for single-resource mode: ${driverClass}`);
-
       // Clean up previous single-resource component (if different)
       this.cleanupSingleResourceComponent();
 
@@ -436,12 +434,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Store reference for cleanup
       this.singleResourceComponentRef = cached.componentRef;
 
-      console.log('✅ Single-resource component transferred from cache (instant!)');
       return;
     }
-
-    // **Fallback: Create new component if not in cache**
-    console.log(`📦 Creating new component for single-resource mode: ${driverClass}`);
 
     // Get the component registration
     const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
@@ -596,8 +590,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       );
 
       if (cached) {
-        console.log(`♻️ Reusing cached component for ${resourceData.ResourceType} (driver: ${driverClass})`);
-
         // Reattach the cached wrapper element
         glContainer.element.appendChild(cached.wrapperElement);
 
@@ -620,9 +612,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
         return;
       }
-
-      // No cached component found - create new one
-      console.log(`🆕 Creating new component for ${resourceData.ResourceType} using driver class: ${driverClass}`);
 
       // Get the component registration using the driver class
       const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
