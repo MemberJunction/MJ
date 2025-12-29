@@ -428,7 +428,7 @@ export class SingleListDetailComponent implements OnInit {
         if(!saveResult){
             LogError(`Error adding record ${listRecord.ID} to list ${this.listRecord.ID}`, undefined, listEntity.LatestResult);
             
-            const alreadyExists: boolean = listEntity.LatestResult.Message.includes("already exists in List");
+            const alreadyExists: boolean = listEntity.LatestResult.CompleteMessage.includes("already exists in List");
             if(alreadyExists){
                 this.sharedService.CreateSimpleNotification("Record already exists in this list", 'error', 2500);
                 return;

@@ -348,7 +348,7 @@ export class DashboardResource extends BaseResourceComponent {
                 // save the user state to the dashboard user state entity
                 userStateEntity.UserState = JSON.stringify(userState);
                 if (!await userStateEntity.Save()) {
-                    LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
+                    LogError('Error saving user state', null, userStateEntity.LatestResult?.CompleteMessage);
                 }
             });
 

@@ -651,7 +651,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     const result = await entityObject.Delete({
                         ReplayOnly: true
                     });
-                    return this.FinishRecordChangeRecord(rc, result ? 'success' : 'error', entityObject.LatestResult?.Error);
+                    return this.FinishRecordChangeRecord(rc, result ? 'success' : 'error', entityObject.LatestResult?.CompleteMessage);
                 }
                 else {
                     // for updates and creates we just call Save() with the ReplayOnly option
@@ -659,7 +659,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                         ReplayOnly: true,
                         IgnoreDirtyState: false //not relevant for replay
                     });
-                    return this.FinishRecordChangeRecord(rc, result ? 'success' : 'error', entityObject.LatestResult?.Error);
+                    return this.FinishRecordChangeRecord(rc, result ? 'success' : 'error', entityObject.LatestResult?.CompleteMessage);
                 }
             }
             else {
@@ -753,7 +753,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 return rc;
             }
             else {
-                throw new Error("Failed to save Record Change record: " + rc.LatestResult?.Message);
+                throw new Error("Failed to save Record Change record: " + rc.LatestResult?.CompleteMessage);
             }
         }
         catch (e) {
