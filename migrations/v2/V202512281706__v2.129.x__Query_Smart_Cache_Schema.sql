@@ -123,12 +123,12 @@ GO
 
 
 
--- CODE GEN RUN
+-- CODE GEN RUN 
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '0e95b54a-f020-454b-8bfd-484d174adb12'  OR 
+         WHERE ID = '2df7c600-b13b-4e58-9dcd-173c82f13770'  OR 
                (EntityID = '1B248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CacheValidationSQL')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -162,7 +162,7 @@ GO
          )
          VALUES
          (
-            '0e95b54a-f020-454b-8bfd-484d174adb12',
+            '2df7c600-b13b-4e58-9dcd-173c82f13770',
             '1B248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Queries
             100045,
             'CacheValidationSQL',
@@ -720,6 +720,12 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Integration]
 
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
+            WHERE ID = 'B45717F0-6F36-EF11-86D4-6045BDEE16E6'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
             WHERE ID = '734E17F0-6F36-EF11-86D4-6045BDEE16E6'
             AND AutoUpdateDefaultInView = 1
          
@@ -727,6 +733,12 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Integration]
             UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultInView = 1
             WHERE ID = '744E17F0-6F36-EF11-86D4-6045BDEE16E6'
+            AND AutoUpdateDefaultInView = 1
+         
+
+            UPDATE [${flyway:defaultSchema}].EntityField
+            SET DefaultInView = 1
+            WHERE ID = 'B65717F0-6F36-EF11-86D4-6045BDEE16E6'
             AND AutoUpdateDefaultInView = 1
          
 
@@ -751,12 +763,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Integration]
                UPDATE [${flyway:defaultSchema}].EntityField
                SET IncludeInUserSearchAPI = 1
                WHERE ID = '894317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].EntityField
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '734E17F0-6F36-EF11-86D4-6045BDEE16E6'
                AND AutoUpdateIncludeInUserSearchAPI = 1
             
 
@@ -933,7 +939,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
        DisplayName = 'Cache Validation SQL',
        ExtendedType = 'Code',
        CodeType = 'SQL'
-   WHERE ID = '0E95B54A-F020-454B-8BFD-484D174ADB12'
+   WHERE ID = '2DF7C600-B13B-4E58-9DCD-173C82F13770'
    AND AutoUpdateCategory = 1
 UPDATE [${flyway:defaultSchema}].EntityField
    SET Category = 'AI & Embeddings',
@@ -963,7 +969,7 @@ UPDATE [${flyway:defaultSchema}].EntityField
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].EntitySetting (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
-               VALUES ('ed441b41-8170-44de-a082-9d4546599903', '1B248F34-2837-EF11-86D4-6045BDEE16E6', 'FieldCategoryInfo', '{"Query Definition":{"icon":"fa fa-file-code","description":""},"Performance & Quality":{"icon":"fa fa-chart-line","description":""},"Caching & Execution Settings":{"icon":"fa fa-sliders-h","description":""},"AI & Embeddings":{"icon":"fa fa-brain","description":""},"System Metadata":{"icon":"fa fa-cog","description":""}}', GETUTCDATE(), GETUTCDATE())
+               VALUES ('2f644191-0fc6-4689-9469-ff9397e1f78a', '1B248F34-2837-EF11-86D4-6045BDEE16E6', 'FieldCategoryInfo', '{"Query Definition":{"icon":"fa fa-file-code","description":""},"Performance & Quality":{"icon":"fa fa-chart-line","description":""},"Caching & Execution Settings":{"icon":"fa fa-sliders-h","description":""},"AI & Embeddings":{"icon":"fa fa-brain","description":""},"System Metadata":{"icon":"fa fa-cog","description":""}}', GETUTCDATE(), GETUTCDATE())
             
 
 /* Update FieldCategoryIcons setting for entity (legacy format) */
