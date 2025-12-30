@@ -5277,6 +5277,12 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (isSingleRunQueryParams(event.params)) {
             return event.params.cacheHit === true;
         }
+        // Handle batch RunViews operations - check cacheHits/cacheMisses counts
+        if (isBatchRunViewParams(event.params)) {
+            const p = event.params as { cacheHits?: number; cacheMisses?: number };
+            // Consider it a cache hit if all items were served from cache
+            return (p.cacheHits ?? 0) > 0 && (p.cacheMisses ?? 0) === 0;
+        }
         return false;
     }
 
