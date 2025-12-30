@@ -100,53 +100,53 @@ INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID
 VALUES ('1D529CD2-762D-421E-8B6A-1695E95EE6C5', @Gemini3Pro, @VertexAIVendorID, @ModelDeveloperTypeID, 5, 'Active', NULL, 1);
 
 -- Link all existing Gemini models to Vertex AI as Inference Provider
--- Gemini 1.0 Ultra - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('BA9EF45F-0DB9-4EF5-9D31-624909C8C9F2', @Gemini10Ultra, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+-- Gemini 1.0 Ultra - Inference Provider (Deprecated - no longer available)
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('BA9EF45F-0DB9-4EF5-9D31-624909C8C9F2', @Gemini10Ultra, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Deprecated', 'VertexLLM', 'gemini-ultra', 1, 0, 'Any, JSON');
 
--- Gemini 1.5 Flash - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('A6130168-A4AB-4C09-ABBA-D424333ECB2D', @Gemini15Flash, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+-- Gemini 1.5 Flash - Inference Provider (Retired April 2025)
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('A6130168-A4AB-4C09-ABBA-D424333ECB2D', @Gemini15Flash, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Deprecated', 'VertexLLM', 'gemini-1.5-flash-002', 1, 1, 'Any, JSON');
 
--- Gemini 1.5 Pro - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('736F7D8B-9B99-4928-B844-761DC51134C5', @Gemini15Pro, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+-- Gemini 1.5 Pro - Inference Provider (Retired April 2025)
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('736F7D8B-9B99-4928-B844-761DC51134C5', @Gemini15Pro, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Deprecated', 'VertexLLM', 'gemini-1.5-pro-002', 1, 1, 'Any, JSON');
 
 -- Gemini 2.0 Flash - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('89CDE840-35D6-411F-A35F-49F5DED4D088', @Gemini20Flash, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('89CDE840-35D6-411F-A35F-49F5DED4D088', @Gemini20Flash, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 'gemini-2.0-flash-001', 1, 1, 'Any, JSON');
 
 -- Gemini 2.0 Flash-Lite - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('0F19601A-CD91-4D6D-B136-0C9D6DF0D837', @Gemini20FlashLite, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('0F19601A-CD91-4D6D-B136-0C9D6DF0D837', @Gemini20FlashLite, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 'gemini-2.0-flash-lite-001', 1, 1, 'Any, JSON');
 
 -- Gemini 2.5 Flash - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('E4FC6545-5208-44A0-B972-9E64FE250E71', @Gemini25Flash, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('E4FC6545-5208-44A0-B972-9E64FE250E71', @Gemini25Flash, @VertexAIVendorID, @InferenceProviderTypeID, 1, 'Active', 'VertexLLM', 'gemini-2.5-flash', 1, 1, 'Any, JSON');
 
 -- Gemini 2.5 Flash Preview - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('F9162DA3-D5EE-403E-A4B4-87229808424A', @Gemini25FlashPreview, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('F9162DA3-D5EE-403E-A4B4-87229808424A', @Gemini25FlashPreview, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 'gemini-2.5-flash-preview-04-17', 1, 1, 'Any, JSON');
 
 -- Gemini 2.5 Flash-Lite - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('8480451B-E200-4353-9A4E-773297BC8531', @Gemini25FlashLite, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('8480451B-E200-4353-9A4E-773297BC8531', @Gemini25FlashLite, @VertexAIVendorID, @InferenceProviderTypeID, 2, 'Active', 'VertexLLM', 'gemini-2.5-flash-lite', 1, 1, 'Any, JSON');
 
 -- Gemini 2.5 Pro - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('814B0399-C8A3-4B54-837F-8A0DBD070957', @Gemini25Pro, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('814B0399-C8A3-4B54-837F-8A0DBD070957', @Gemini25Pro, @VertexAIVendorID, @InferenceProviderTypeID, 1, 'Active', 'VertexLLM', 'gemini-2.5-pro', 1, 1, 'Any, JSON');
 
 -- Gemini 2.5 Pro Preview - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('6CACCDA6-8F28-49A2-B2C9-028742685913', @Gemini25ProPreview, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('6CACCDA6-8F28-49A2-B2C9-028742685913', @Gemini25ProPreview, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 'gemini-2.5-pro-preview-05-06', 1, 1, 'Any, JSON');
 
 -- Gemini 3 Flash - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('58E6B771-74BC-46D0-9A02-5CA7FECFA7E0', @Gemini3Flash, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('58E6B771-74BC-46D0-9A02-5CA7FECFA7E0', @Gemini3Flash, @VertexAIVendorID, @InferenceProviderTypeID, 1, 'Active', 'VertexLLM', 'gemini-3-flash-preview', 1, 1, 'Any, JSON');
 
 -- Gemini 3 Pro - Inference Provider
-INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, SupportsStreaming)
-VALUES ('DF5D1273-CFB5-424A-A499-19CAEFD1EC8C', @Gemini3Pro, @VertexAIVendorID, @InferenceProviderTypeID, 5, 'Active', 'VertexLLM', 1);
+INSERT INTO ${flyway:defaultSchema}.AIModelVendor (ID, ModelID, VendorID, TypeID, Priority, Status, DriverClass, APIName, SupportsStreaming, SupportsEffortLevel, SupportedResponseFormats)
+VALUES ('DF5D1273-CFB5-424A-A499-19CAEFD1EC8C', @Gemini3Pro, @VertexAIVendorID, @InferenceProviderTypeID, 1, 'Active', 'VertexLLM', 'gemini-3-pro-preview', 1, 1, 'Any, JSON');
 
 -- Add AI Model Cost records for Vertex AI pricing
 -- Vertex AI pricing is the same as Google Gemini API pricing (both use same Google infrastructure)
