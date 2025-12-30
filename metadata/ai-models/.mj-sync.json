@@ -1,0 +1,60 @@
+{
+  "entity": "AI Models",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".ai-models.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "AIModelTypeID": {
+        "entity": "AI Model Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": {
+        "entity": "MJ: AI Model Vendors",
+        "foreignKey": "ModelID",
+        "lookupFields": {
+          "VendorID": {
+            "entity": "MJ: AI Vendors",
+            "field": "Name"
+          },
+          "TypeID": {
+            "entity": "MJ: AI Vendor Type Definitions",
+            "field": "Name"
+          }
+        }
+      },
+      "MJ: AI Model Costs": {
+        "entity": "MJ: AI Model Costs",
+        "foreignKey": "ModelID",
+        "lookupFields": {
+          "VendorID": {
+            "entity": "MJ: AI Vendors",
+            "field": "Name"
+          },
+          "PriceTypeID": {
+            "entity": "MJ: AI Model Price Types",
+            "field": "Name"
+          },
+          "UnitTypeID": {
+            "entity": "MJ: AI Model Price Unit Types",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}
