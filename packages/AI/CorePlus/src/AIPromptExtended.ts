@@ -1,6 +1,7 @@
-import { BaseEntity, CompositeKey, IRunViewProvider, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
-import { AIPromptEntity, TemplateContentEntity, TemplateParamEntity } from "../generated/entity_subclasses";
+import { BaseEntity, CompositeKey, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
+import { AIPromptEntity, TemplateParamEntity } from "@memberjunction/core-entities";
 import { compareStringsByLine, RegisterClass } from "@memberjunction/global";
+import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 
 @RegisterClass(BaseEntity, "AI Prompts")
 export class AIPromptEntityExtended extends AIPromptEntity {
@@ -87,53 +88,39 @@ export class AIPromptEntityExtended extends AIPromptEntity {
 
     protected async LoadTemplateText() {
         if (this.TemplateID && !this.TemplateText) {
-            // need to get the Template Contents for this AI Prompt
-            const rv = this.RunViewProviderToUse;
-            const templateContentResult = await rv.RunView<TemplateContentEntity>({
-                EntityName: "Template Contents",
-                ExtraFilter: `TemplateID='${this.TemplateID}'`,
-                OrderBy: "__mj_CreatedAt ASC", // first one
-                MaxRows: 1 // should only be one row
-            }, this.ContextCurrentUser);
-            if (templateContentResult && templateContentResult.Success ) {
-                if (templateContentResult.Results.length > 0) {
-                    // we found the Template Contents, set the TemplateText property
-                    this.TemplateText = templateContentResult.Results[0].TemplateText || "";
-                }
+            // Use TemplateEngineBase's cached TemplateContents instead of RunView
+            const tcResult = TemplateEngineBase.Instance.TemplateContents.filter(tc => tc.TemplateID === this.TemplateID);
+            if (tcResult && tcResult.length > 0) {
+                // Sort by __mj_CreatedAt ASC and take first row (oldest)
+                const sorted = tcResult.sort((a, b) => {
+                    const aTime = a.__mj_CreatedAt ? new Date(a.__mj_CreatedAt).getTime() : 0;
+                    const bTime = b.__mj_CreatedAt ? new Date(b.__mj_CreatedAt).getTime() : 0;
+                    return aTime - bTime; // ASC order
+                });
+                const tc = sorted[0];
+                // we found the Template Contents, set the TemplateText property
+                this.TemplateText = tc.TemplateText || "";
                 this._originalTemplateText = this.TemplateText; // store the original text for comparison later
                 return true; // we successfully loaded the Template Contents
             }
-            else {
-                // if we did not find any Template Contents, we can set the TemplateText to an empty string
-                this.TemplateText = "";
-                this._originalTemplateText = ""; // reset original text
-                return false; // should be able to load Template Contents even if not found
-            }
         }
+        // if we did not find any Template Contents, we can set the TemplateText to an empty string
+        this.TemplateText = "";
+        this._originalTemplateText = ""; // reset original text
+        return false; // should be able to load Template Contents even if not found
     }
 
     /**
      * Loads the template parameters for this AI Prompt if it has a TemplateID.
-     * This method populates the _templateParams array.
+     * This method populates the _templateParams array using TemplateEngineBase's cached data.
      */
     protected async LoadTemplateParams(): Promise<boolean> {
         if (this.TemplateID) {
-            const rv = this.RunViewProviderToUse;
-            const templateParamsResult = await rv.RunView<TemplateParamEntity>({
-                EntityName: "Template Params",
-                ExtraFilter: `TemplateID='${this.TemplateID}'`,
-                OrderBy: "Name ASC",
-                ResultType: 'entity_object'
-            }, this.ContextCurrentUser);
-            
-            if (templateParamsResult && templateParamsResult.Success) {
-                this._templateParams = templateParamsResult.Results || [];
-                return true;
-            } else {
-                // If we failed to load, set to empty array
-                this._templateParams = [];
-                return false;
-            }
+            // Use TemplateEngineBase's cached TemplateParams instead of RunView
+            const params = TemplateEngineBase.Instance.TemplateParams.filter(tp => tp.TemplateID === this.TemplateID);
+            // Sort by Name ASC to match original behavior
+            this._templateParams = params.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+            return true;
         } else {
             // No TemplateID, so no params
             this._templateParams = [];
@@ -143,6 +130,7 @@ export class AIPromptEntityExtended extends AIPromptEntity {
 
 
     protected async LoadRelatedEntities(): Promise<void> {
+        await TemplateEngineBase.Instance.Config(false, this.ContextCurrentUser);
         await Promise.all([
             this.LoadTemplateText(),
             this.LoadTemplateParams()
@@ -169,3 +157,6 @@ export class AIPromptEntityExtended extends AIPromptEntity {
         }
     }    
 }
+
+//tree shaking stub
+export function LoadAIPromptEntityExtended() {}

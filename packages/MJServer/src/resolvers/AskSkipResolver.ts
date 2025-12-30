@@ -1,11 +1,10 @@
-import { Arg, Ctx, Field, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
-import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
+import { AppContext, UserPayload } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context';
-import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
-import { LearningCycleScheduler } from '../scheduler/LearningCycleScheduler.js';
+import { LoadDataContextItemsServer } from '@memberjunction/data-context-server'; 
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
 import {
@@ -16,8 +15,7 @@ import {
   SkipAPIDataRequestResponse,
   SkipAPIClarifyingQuestionResponse,
   SkipEntityInfo,
-  SkipQueryInfo,
-  SkipQueryEntityInfo,
+  SkipQueryInfo, 
   SkipAPIRunScriptRequest,
   SkipAPIRequestAPIKey,
   SkipRequestPhase,
@@ -26,13 +24,10 @@ import {
   SkipEntityFieldInfo,
   SkipEntityRelationshipInfo,
   SkipEntityFieldValueInfo,
-  SkipAPILearningCycleRequest,
-  SkipAPILearningCycleResponse,
-  SkipLearningCycleNoteChange,
+  SkipAPILearningCycleRequest, 
   SkipConversation,
   SkipAPIArtifact,
-  SkipAPIAgentRequest,
-  SkipAPIArtifactRequest,
+  SkipAPIAgentRequest, 
   SkipAPIArtifactType,
   SkipAPIArtifactVersion,
 } from '@memberjunction/skip-types';
@@ -50,10 +45,9 @@ import {
   ConversationEntity,
   DataContextEntity,
   DataContextItemEntity,
-  UserNotificationEntity,
-  AIAgentEntityExtended
+  UserNotificationEntity
 } from '@memberjunction/core-entities';
-import { apiKey as callbackAPIKey, AskSkipInfo, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath, mj_core_schema } from '../config.js';
+import { apiKey as callbackAPIKey, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath } from '../config.js';
 import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
@@ -1732,7 +1726,11 @@ export class AskSkipResolver {
         QueryID: e.QueryID,
         EntityID: e.EntityID,
         Entity: e.Entity
-      }))
+      })),
+      CacheEnabled: q.CacheEnabled,
+      CacheMaxSize: q.CacheMaxSize,
+      CacheTTLMinutes: q.CacheMaxSize,
+      CacheValidationSQL: q.CacheValidationSQL
     }));
   }
 

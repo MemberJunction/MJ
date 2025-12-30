@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, LogErrorEx, Metadata } from "@memberjunction/core";
-import { ActionExecutionLogEntity, AIAgentRunStepEntity, AIPromptRunEntity } from "../generated/entity_subclasses";
+import { ActionExecutionLogEntity, AIAgentRunStepEntity, AIPromptRunEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { AIAgentRunEntityExtended } from "./AIAgentRunExtended";
 
@@ -147,3 +147,6 @@ export class AIAgentRunStepEntityExtended extends AIAgentRunStepEntity {
         }
     }
 } 
+
+// tree shaking load stub
+export function LoadAIAgentEntityRunStepExtended() {}

@@ -10,15 +10,17 @@
  * @since 2.50.0
  */
 
-import { AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
-import { AIAgentEntityExtended } from '@memberjunction/core-entities';
+import {  } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
-
+import { AIAgentRunEntityExtended } from './AIAgentRunExtended';
+import { AIAgentEntityExtended } from './AIAgentExtended';
+import { AIPromptEntityExtended } from './AIPromptExtended';
 /**
  * Universal ForEach loop configuration used by all agent types.
  * Flow agents convert AIAgentStep configuration to this format.

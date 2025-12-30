@@ -1,12 +1,12 @@
 import { Component, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { EntityInfo, CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { EntityInfo, CompositeKey, Metadata } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 
 import { ERDCompositeComponent, ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
-import { ResourceData, UserSettingEntity } from '@memberjunction/core-entities';
+import { ResourceData, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 
 /** Settings key for ERD state persistence */
 const ERD_SETTINGS_KEY = 'MJ.Admin.Entity.ERD';
@@ -112,7 +112,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   }
 
   /**
-   * Load ERD state from MJ: User Settings entity
+   * Load ERD state from MJ: User Settings entity using UserInfoEngine for cached access
    */
   private async loadStateFromUserSettings(): Promise<void> {
     try {
@@ -122,15 +122,13 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
         return;
       }
 
-      const rv = new RunView();
-      const result = await rv.RunView<UserSettingEntity>({
-        EntityName: 'MJ: User Settings',
-        ExtraFilter: `UserID='${userId}' AND Setting='${ERD_SETTINGS_KEY}'`,
-        ResultType: 'entity_object'
-      });
+      const engine = UserInfoEngine.Instance;
 
-      if (result.Success && result.Results.length > 0) {
-        this.userSettingEntity = result.Results[0];
+      // Find setting from cached user settings
+      const setting = engine.UserSettings.find(s => s.Setting === ERD_SETTINGS_KEY);
+
+      if (setting) {
+        this.userSettingEntity = setting;
         if (this.userSettingEntity.Value) {
           const savedState = JSON.parse(this.userSettingEntity.Value) as Partial<ERDCompositeState>;
           if (this.erdComposite) {
@@ -147,24 +145,20 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   }
 
   /**
-   * Save ERD state to MJ: User Settings entity
+   * Save ERD state to MJ: User Settings entity using UserInfoEngine for cached lookup
    */
   private async saveStateToUserSettings(state: ERDCompositeState): Promise<void> {
     try {
       const userId = this.metadata.CurrentUser?.ID;
       if (!userId) return;
 
-      // Create setting entity if it doesn't exist
+      // Find existing setting from cached user settings if not already loaded
       if (!this.userSettingEntity) {
-        const rv = new RunView();
-        const result = await rv.RunView<UserSettingEntity>({
-          EntityName: 'MJ: User Settings',
-          ExtraFilter: `UserID='${userId}' AND Setting='${ERD_SETTINGS_KEY}'`,
-          ResultType: 'entity_object'
-        });
+        const engine = UserInfoEngine.Instance;
+        const setting = engine.UserSettings.find(s => s.Setting === ERD_SETTINGS_KEY);
 
-        if (result.Success && result.Results.length > 0) {
-          this.userSettingEntity = result.Results[0];
+        if (setting) {
+          this.userSettingEntity = setting;
         } else {
           this.userSettingEntity = await this.metadata.GetEntityObject<UserSettingEntity>('MJ: User Settings');
           this.userSettingEntity.UserID = userId;

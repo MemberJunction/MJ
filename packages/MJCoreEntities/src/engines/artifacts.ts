@@ -21,7 +21,8 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Artifact Types',
-                PropertyName: "_artifactTypes"
+                PropertyName: "_artifactTypes",
+                CacheLocal: true
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);

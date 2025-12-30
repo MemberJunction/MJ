@@ -59,7 +59,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   @Output() firstResourceLoadComplete = new EventEmitter<void>();
 
+  /**
+   * Emitted when Golden Layout fails to initialize after multiple retries.
+   * The shell can use this to show an error dialog and redirect.
+   */
+  @Output() layoutInitError = new EventEmitter<void>();
+
   private subscriptions: Subscription[] = [];
+  private layoutInitRetryCount = 0;
+  private readonly MAX_LAYOUT_INIT_RETRIES = 5;
   private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
 
@@ -169,10 +177,21 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private initializeGoldenLayout(forceCreateTabs = false): void {
     if (!this.glContainer?.nativeElement) {
-      console.warn('Golden Layout container not available, waiting...');
+      this.layoutInitRetryCount++;
+
+      if (this.layoutInitRetryCount > this.MAX_LAYOUT_INIT_RETRIES) {
+        console.error(`Golden Layout container not available after ${this.MAX_LAYOUT_INIT_RETRIES} retries, emitting error`);
+        this.layoutInitError.emit();
+        return;
+      }
+
+      console.warn(`Golden Layout container not available, retry ${this.layoutInitRetryCount}/${this.MAX_LAYOUT_INIT_RETRIES}...`);
       setTimeout(() => this.initializeGoldenLayout(forceCreateTabs), 50);
       return;
     }
+
+    // Reset retry counter on success
+    this.layoutInitRetryCount = 0;
 
     if (this.layoutInitialized) {
       return; // Already initialized
@@ -287,7 +306,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const shouldUseSingleResourceMode = !tabBarVisible;
 
     if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
-      console.log(`🔄 Switching to ${shouldUseSingleResourceMode ? 'single-resource' : 'multi-tab'} mode`);
       this.useSingleResourceMode = shouldUseSingleResourceMode;
       this.cdr.detectChanges();
 
@@ -298,7 +316,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         setTimeout(() => {
           // First, destroy Golden Layout if it was initialized (prevents stale state)
           if (this.layoutInitialized) {
-            console.log('[TabContainer] Destroying Golden Layout when transitioning to single-resource mode');
             this.layoutManager.Destroy();
             this.layoutInitialized = false;
           }
@@ -404,8 +421,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     );
 
     if (cached) {
-      console.log(`♻️ Reusing cached component for single-resource mode: ${driverClass}`);
-
       // Clean up previous single-resource component (if different)
       this.cleanupSingleResourceComponent();
 
@@ -419,12 +434,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Store reference for cleanup
       this.singleResourceComponentRef = cached.componentRef;
 
-      console.log('✅ Single-resource component transferred from cache (instant!)');
       return;
     }
-
-    // **Fallback: Create new component if not in cache**
-    console.log(`📦 Creating new component for single-resource mode: ${driverClass}`);
 
     // Get the component registration
     const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
@@ -579,8 +590,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       );
 
       if (cached) {
-        console.log(`♻️ Reusing cached component for ${resourceData.ResourceType} (driver: ${driverClass})`);
-
         // Reattach the cached wrapper element
         glContainer.element.appendChild(cached.wrapperElement);
 
@@ -603,9 +612,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
         return;
       }
-
-      // No cached component found - create new one
-      console.log(`🆕 Creating new component for ${resourceData.ResourceType} using driver class: ${driverClass}`);
 
       // Get the component registration using the driver class
       const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(

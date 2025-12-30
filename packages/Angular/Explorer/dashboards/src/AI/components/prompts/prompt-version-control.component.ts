@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { Metadata, CompositeKey, LogError, LogStatus } from '@memberjunction/core';
-import { AIPromptEntityExtended, RecordChangeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { RecordChangeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface PromptVersion {
   id: string;

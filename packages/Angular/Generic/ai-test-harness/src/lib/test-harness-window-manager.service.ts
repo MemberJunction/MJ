@@ -1,5 +1,5 @@
 import { Injectable, ComponentRef, ApplicationRef, Injector, createComponent, ViewContainerRef } from '@angular/core';
-import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { TestHarnessCustomWindowComponent, CustomWindowData } from './test-harness-custom-window.component';
 import { Observable, Subject } from 'rxjs';
 import { TestResult } from './test-harness-window.service';

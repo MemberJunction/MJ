@@ -15,9 +15,7 @@ export class EncryptionAlgorithmFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'algorithmDetails', sectionName: 'Algorithm Details', isExpanded: true },
-            { sectionKey: 'securityParameters', sectionName: 'Security Parameters', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'mJEncryptionKeys', sectionName: 'MJ: Encryption Keys', isExpanded: false }
         ]);
     }

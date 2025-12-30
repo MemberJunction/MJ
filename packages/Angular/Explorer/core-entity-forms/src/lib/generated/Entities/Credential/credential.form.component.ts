@@ -19,9 +19,7 @@ export class CredentialFormComponent extends BaseFormComponent {
             { sectionKey: 'basicInformation', sectionName: 'Basic Information', isExpanded: true },
             { sectionKey: 'accessDetails', sectionName: 'Access Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIModelVendors', sectionName: 'MJ: AI Model Vendors', isExpanded: false },
-            { sectionKey: 'mJAIPromptModels', sectionName: 'MJ: AI Prompt Models', isExpanded: false },
-            { sectionKey: 'mJAIVendors', sectionName: 'MJ: AI Vendors', isExpanded: false }
+            { sectionKey: 'mJAICredentialBindings', sectionName: 'MJ: AI Credential Bindings', isExpanded: false }
         ]);
     }
 }

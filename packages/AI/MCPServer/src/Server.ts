@@ -5,7 +5,7 @@ import * as sql from "mssql";
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -480,7 +480,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
 
             // Load all steps for this run
             const rv = new RunView();
-            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+            const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID = '${props.runId}'`,
                 OrderBy: 'StepNumber',
@@ -543,7 +543,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
         }),
         async execute(props: { runId: string; stepNumber: number; maxChars: number }) {
             const rv = new RunView();
-            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+            const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID = '${props.runId}'`,
                 OrderBy: 'StepNumber',
@@ -602,7 +602,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
         }),
         async execute(props: { runId: string; stepNumber: number; outputFile?: string }) {
             const rv = new RunView();
-            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+            const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID = '${props.runId}'`,
                 OrderBy: 'StepNumber',

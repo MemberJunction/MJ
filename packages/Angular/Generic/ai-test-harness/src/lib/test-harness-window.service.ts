@@ -1,6 +1,6 @@
 import { Injectable, ViewContainerRef, ComponentRef } from '@angular/core';
 import { WindowService, WindowRef, WindowSettings } from '@progress/kendo-angular-dialog';
-import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AITestHarnessWindowComponent, AITestHarnessWindowData } from './ai-test-harness-window.component';
 import { Observable, Subject } from 'rxjs';
 

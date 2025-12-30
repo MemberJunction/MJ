@@ -9,9 +9,11 @@
  * @since 2.50.0
  */
 
-import { AIPromptRunEntity, AIConfigurationEntity, AIModelEntityExtended, AIVendorEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptRunEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
+import { AIPromptEntityExtended } from './AIPromptExtended';
+import { AIModelEntityExtended } from './AIModelExtended';
 
 
 /**

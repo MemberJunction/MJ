@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { Metadata, RunView } from '@memberjunction/core';
-import { WorkspaceEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { UserInfoEngine, WorkspaceEntity } from '@memberjunction/core-entities';
 import {
   WorkspaceConfiguration,
   WorkspaceTab,
@@ -115,58 +115,39 @@ export class WorkspaceStateManager {
   }
 
   /**
-   * Load workspace from database
+   * Load workspace from database using UserInfoEngine for centralized, cached access
    */
   private async loadWorkspace(userId: string): Promise<void> {
-    console.log('[WorkspaceStateManager.loadWorkspace] Loading workspace for user:', userId);
+    // Use UserInfoEngine for centralized, cached workspace loading
+    const engine = UserInfoEngine.Instance;
+    const workspaces = engine.Workspaces;
 
-    const rv = new RunView();
-    const result = await rv.RunView<WorkspaceEntity>({
-      EntityName: 'Workspaces',
-      ExtraFilter: `UserID='${userId}'`,
-      ResultType: 'entity_object'
-    });
-
-    console.log('[WorkspaceStateManager.loadWorkspace] RunView result:', {
-      success: result.Success,
-      count: result.Results?.length || 0,
-      errorMessage: result.ErrorMessage
-    });
-
-    if (result.Success && result.Results.length > 0) {
-      const workspace = result.Results[0];
-      console.log('[WorkspaceStateManager.loadWorkspace] Found existing workspace:', workspace.ID);
+    if (workspaces.length > 0) {
+      const workspace = workspaces[0];
       this.workspace$.next(workspace);
 
       // Parse configuration or create default
       const configJson = workspace.Get('Configuration') as string;
-      console.log('[WorkspaceStateManager.loadWorkspace] Configuration JSON length:', configJson?.length || 0);
 
       const config = configJson
         ? JSON.parse(configJson) as WorkspaceConfiguration
         : createDefaultWorkspaceConfiguration();
 
-      console.log('[WorkspaceStateManager.loadWorkspace] Loaded configuration with', config.tabs?.length || 0, 'tabs');
       this.configuration$.next(config);
-    } else {
+    }
+    else {
       // Create new workspace for user
-      console.log('[WorkspaceStateManager.loadWorkspace] No workspace found, creating new one');
-      console.log('[WorkspaceStateManager.loadWorkspace] RunView error:', result.ErrorMessage);
-
       const md = new Metadata();
       const workspace = await md.GetEntityObject<WorkspaceEntity>('Workspaces');
       workspace.UserID = userId;
       workspace.Name = 'Default';
       workspace.Set('Configuration', JSON.stringify(createDefaultWorkspaceConfiguration()));
 
-      console.log('[WorkspaceStateManager.loadWorkspace] Saving new workspace...');
       const saveResult = await workspace.Save();
-      console.log('[WorkspaceStateManager.loadWorkspace] Save result:', saveResult);
 
       if (saveResult) {
         this.workspace$.next(workspace);
         this.configuration$.next(createDefaultWorkspaceConfiguration());
-        console.log('[WorkspaceStateManager.loadWorkspace] New workspace created successfully');
       } else {
         console.error('[WorkspaceStateManager.loadWorkspace] Failed to save workspace');
         throw new Error('Failed to create default workspace');
@@ -300,18 +281,10 @@ export class WorkspaceStateManager {
    * Open a tab (new or focus existing)
    */
   OpenTab(request: TabRequest, appColor: string): string {
-    console.log('[WorkspaceStateManager.OpenTab] Opening tab:', {
-      appId: request.ApplicationId,
-      title: request.Title,
-      config: request.Configuration
-    });
-
     const config = this.configuration$.value;
     if (!config) {
       throw new Error('Configuration not initialized');
     }
-
-    console.log('[WorkspaceStateManager.OpenTab] Current tabs:', config.tabs.length);
 
     // Check for existing tab - match by resource type and record ID for resource-based tabs
     const existingTab = config.tabs.find(tab => {
@@ -352,7 +325,6 @@ export class WorkspaceStateManager {
     });
 
     if (existingTab) {
-      console.log('[WorkspaceStateManager.OpenTab] Found existing tab, activating:', existingTab.title);
       // Focus existing tab
       const updatedConfig = {
         ...config,
@@ -362,13 +334,10 @@ export class WorkspaceStateManager {
       return existingTab.id;
     }
 
-    console.log('[WorkspaceStateManager.OpenTab] No existing tab found');
-
     // Find temporary tab (unpinned tab from ANY app) to replace
     const tempTab = config.tabs.find(tab => !tab.isPinned);
 
     if (tempTab) {
-      console.log('[WorkspaceStateManager.OpenTab] Found temp tab to replace:', tempTab.title);
       // Replace temporary tab
       const updatedTabs = config.tabs.map(tab =>
         tab.id === tempTab.id
@@ -388,11 +357,9 @@ export class WorkspaceStateManager {
         tabs: updatedTabs,
         activeTabId: tempTab.id
       });
-      console.log('[WorkspaceStateManager.OpenTab] Replaced temp tab');
+
       return tempTab.id;
     }
-
-    console.log('[WorkspaceStateManager.OpenTab] No temp tab found, creating new tab');
 
     // Create new tab
     const newTab: WorkspaceTab = {
@@ -413,7 +380,6 @@ export class WorkspaceStateManager {
       activeTabId: newTab.id
     });
 
-    console.log('[WorkspaceStateManager.OpenTab] Created new tab:', newTab.title);
     return newTab.id;
   }
 

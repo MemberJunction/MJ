@@ -1,12 +1,15 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
-import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData } from '@memberjunction/core-entities';
+import { Metadata, CompositeKey } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass } from '@memberjunction/global';
+import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
   Template: string; // From AIPromptEntityExtended (view field)
@@ -29,11 +32,11 @@ export function LoadAIPromptsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIPromptsResource')
 @Component({
-  selector: 'app-prompt-management-v2',
-  templateUrl: './prompt-management-v2.component.html',
-  styleUrls: ['./prompt-management-v2.component.css']
+  selector: 'app-prompt-management',
+  templateUrl: './prompt-management.component.html',
+  styleUrls: ['./prompt-management.component.css']
 })
-export class PromptManagementV2Component extends BaseResourceComponent implements OnInit, OnDestroy {
+export class PromptManagementComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   // View state
   public viewMode: 'grid' | 'list' | 'priority-matrix' = 'grid';
@@ -53,6 +56,14 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
   public selectedCategory = 'all';
   public selectedType = 'all';
   public selectedStatus = 'all';
+
+  // Detail panel
+  public selectedPrompt: PromptWithTemplate | null = null;
+  public detailPanelVisible = false;
+
+  // Sorting
+  public sortColumn: string = 'Name';
+  public sortDirection: 'asc' | 'desc' = 'asc';
 
   // Loading messages
   public loadingMessages = [
@@ -195,38 +206,20 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
 
   private async loadInitialData(): Promise<void> {
     try {
-      const rv = new RunView();
-      const md = new Metadata();
-
-      // Load all data in parallel using RunViews
-      const [promptResults, categoryResults, typeResults, templateResults, templateContentResults] = await rv.RunViews([
-        {
-          EntityName: 'AI Prompts',
-          OrderBy: 'Name' 
-        },
-        {
-          EntityName: 'AI Prompt Categories',
-          OrderBy: 'Name', 
-        },
-        {
-          EntityName: 'AI Prompt Types',
-          OrderBy: 'Name' 
-        },
-        {
-          EntityName: 'Templates',
-          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)` 
-        },
-        {
-          EntityName: 'Template Contents' 
-        }
+      // Configure both engines in parallel (no-op if already loaded)
+      await Promise.all([
+        AIEngineBase.Instance.Config(false),
+        TemplateEngineBase.Instance.Config(false)
       ]);
 
-      this.categories = categoryResults.Results as AIPromptCategoryEntity[];
-      this.types = typeResults.Results as AIPromptTypeEntity[];
+      // Get cached data from AIEngineBase
+      const prompts = AIEngineBase.Instance.Prompts;
+      this.categories = AIEngineBase.Instance.PromptCategories;
+      this.types = AIEngineBase.Instance.PromptTypes;
 
-      // Combine prompts with their templates
-      const templates = templateResults.Results as TemplateEntity[];
-      const templateContents = templateContentResults.Results as TemplateContentEntity[];
+      // Get cached data from TemplateEngineBase
+      const templates = TemplateEngineBase.Instance.Templates as TemplateEntity[];
+      const templateContents = TemplateEngineBase.Instance.TemplateContents;
       
       // Create lookup maps
       const templateMap = new Map(templates.map(t => [t.ID, t]));
@@ -242,7 +235,7 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
       const typeMap = new Map(this.types.map(t => [t.ID, t.Name]));
 
       // Combine the data - keep the actual entity objects
-      this.prompts = (promptResults.Results as AIPromptEntityExtended[]).map(prompt => {
+      this.prompts = prompts.map(prompt => {
         const template = templateMap.get(prompt.ID);
         
         // Add the extra properties directly to the entity
@@ -331,6 +324,63 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
 
       return true;
     });
+
+    // Apply sorting
+    this.filteredPrompts = this.applySorting(this.filteredPrompts);
+  }
+
+  /**
+   * Sort the prompts by the specified column
+   */
+  public sortBy(column: string): void {
+    if (this.sortColumn === column) {
+      // Toggle direction if same column
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column, default to ascending
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.applyFilters();
+  }
+
+  /**
+   * Apply sorting to the filtered list
+   */
+  private applySorting(prompts: PromptWithTemplate[]): PromptWithTemplate[] {
+    return prompts.sort((a, b) => {
+      let valueA: string | boolean | null | undefined;
+      let valueB: string | boolean | null | undefined;
+
+      switch (this.sortColumn) {
+        case 'Name':
+          valueA = a.Name;
+          valueB = b.Name;
+          break;
+        case 'Category':
+          valueA = a.CategoryName;
+          valueB = b.CategoryName;
+          break;
+        case 'Type':
+          valueA = a.TypeName;
+          valueB = b.TypeName;
+          break;
+        case 'Status':
+          valueA = a.Status;
+          valueB = b.Status;
+          break;
+        default:
+          valueA = a.Name;
+          valueB = b.Name;
+      }
+
+      // Handle null/undefined values
+      const strA = (valueA ?? '').toString().toLowerCase();
+      const strB = (valueB ?? '').toString().toLowerCase();
+
+      let comparison = strA.localeCompare(strB);
+      return this.sortDirection === 'desc' ? -comparison : comparison;
+    });
   }
 
   public onCategoryChange(categoryId: string): void {
@@ -351,6 +401,39 @@ export class PromptManagementV2Component extends BaseResourceComponent implement
   public openPrompt(promptId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: promptId }]);
     this.navigationService.OpenEntityRecord('AI Prompts', compositeKey);
+  }
+
+  /**
+   * Show the detail panel for a prompt
+   */
+  public showPromptDetails(prompt: PromptWithTemplate, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedPrompt = prompt;
+    this.detailPanelVisible = true;
+  }
+
+  /**
+   * Close the detail panel
+   */
+  public closeDetailPanel(): void {
+    this.detailPanelVisible = false;
+    // Delay clearing selectedPrompt for smoother animation
+    setTimeout(() => {
+      if (!this.detailPanelVisible) {
+        this.selectedPrompt = null;
+      }
+    }, 300);
+  }
+
+  /**
+   * Open the full entity record from the detail panel
+   */
+  public openPromptFromPanel(): void {
+    if (this.selectedPrompt) {
+      this.openPrompt(this.selectedPrompt.ID);
+    }
   }
 
   public testPrompt(promptId: string, event?: Event): void {

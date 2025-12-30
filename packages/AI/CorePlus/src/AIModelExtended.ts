@@ -1,6 +1,6 @@
-import { BaseEntity, LogError, Metadata } from "@memberjunction/core";
+import { BaseEntity } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { AIModelEntity, AIModelVendorEntity } from "../generated/entity_subclasses";
+import { AIModelEntity, AIModelVendorEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(BaseEntity, 'AI Models')  
 export class AIModelEntityExtended extends AIModelEntity  {
@@ -20,3 +20,5 @@ export class AIModelEntityExtended extends AIModelEntity  {
         return this._modelVendors;
     }
 }
+// tree shaking load stub
+export function LoadAIModelExtended() {}

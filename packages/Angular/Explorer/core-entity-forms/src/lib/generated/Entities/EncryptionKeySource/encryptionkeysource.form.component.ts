@@ -15,9 +15,7 @@ export class EncryptionKeySourceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'keySourceDefinition', sectionName: 'Key Source Definition', isExpanded: true },
-            { sectionKey: 'driverConfiguration', sectionName: 'Driver Configuration', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'mJEncryptionKeys', sectionName: 'MJ: Encryption Keys', isExpanded: false }
         ]);
     }

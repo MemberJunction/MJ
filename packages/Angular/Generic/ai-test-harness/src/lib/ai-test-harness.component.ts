@@ -3,14 +3,14 @@ import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
-import { AIAgentEntityExtended, AIPromptEntityExtended, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { TemplateParamEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
-import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 

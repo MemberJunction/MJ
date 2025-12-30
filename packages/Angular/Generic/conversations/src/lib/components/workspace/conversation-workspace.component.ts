@@ -9,8 +9,8 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
-import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine, UserSettingEntity } from '@memberjunction/core-entities';
-import { UserInfo, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
@@ -606,7 +606,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Save sidebar state to User Settings entity on server
+   * Save sidebar state to User Settings entity on server using UserInfoEngine for cached lookup
    */
   private async saveSidebarStateToServer(state: { collapsed: boolean; pinned: boolean }): Promise<void> {
     try {
@@ -615,20 +615,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         return;
       }
 
-      const rv = new RunView();
-      const result = await rv.RunView<UserSettingEntity>({
-        EntityName: 'MJ: User Settings',
-        ExtraFilter: `UserID='${userId}' AND Setting='${this.USER_SETTING_SIDEBAR_KEY}'`,
-        ResultType: 'entity_object'
-      });
-
+      const engine = UserInfoEngine.Instance;
       const md = new Metadata();
-      let setting: UserSettingEntity;
 
-      if (result.Success && result.Results && result.Results.length > 0) {
-        // Update existing setting
-        setting = result.Results[0];
-      } else {
+      // Find existing setting from cached user settings
+      let setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
+
+      if (!setting) {
         // Create new setting
         setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
@@ -643,7 +636,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Load sidebar state from User Settings (server), falling back to localStorage
+   * Load sidebar state from User Settings (server) using UserInfoEngine, falling back to localStorage
    * For new users with no saved state, defaults to collapsed with new conversation
    */
   private async loadSidebarState(): Promise<void> {
@@ -652,23 +645,16 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     try {
       const userId = this.currentUser?.ID;
       if (userId) {
-        // Try loading from User Settings first
-        const rv = new RunView();
-        const result = await rv.RunView<UserSettingEntity>({
-          EntityName: 'MJ: User Settings',
-          ExtraFilter: `UserID='${userId}' AND Setting='${this.USER_SETTING_SIDEBAR_KEY}'`,
-          ResultType: 'entity_object'
-        });
+        // Try loading from cached User Settings first
+        const engine = UserInfoEngine.Instance;
+        const setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
 
-        if (result.Success && result.Results && result.Results.length > 0) {
-          const setting = result.Results[0];
-          if (setting.Value) {
-            const state = JSON.parse(setting.Value);
-            this.isSidebarCollapsed = state.collapsed ?? true;
-            this.isSidebarPinned = state.pinned ?? false;
-            this.isLoadingSettings = false;
-            return;
-          }
+        if (setting?.Value) {
+          const state = JSON.parse(setting.Value);
+          this.isSidebarCollapsed = state.collapsed ?? true;
+          this.isSidebarPinned = state.pinned ?? false;
+          this.isLoadingSettings = false;
+          return;
         }
       }
 

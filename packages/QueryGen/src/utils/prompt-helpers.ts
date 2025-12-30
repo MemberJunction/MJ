@@ -5,7 +5,7 @@
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { UserInfo } from '@memberjunction/core';
-import { AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { QueryGenConfig } from '../cli/config';
 

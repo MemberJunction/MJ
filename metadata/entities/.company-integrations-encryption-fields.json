@@ -24,7 +24,7 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=AccessToken"
           },
           "sync": {
-            "lastModified": "2025-12-25T16:54:17.650Z",
+            "lastModified": "2025-12-29T20:56:29.397Z",
             "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
           },
           "__mj_sync_notes": [
@@ -62,7 +62,7 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=RefreshToken"
           },
           "sync": {
-            "lastModified": "2025-12-25T16:54:17.669Z",
+            "lastModified": "2025-12-29T20:56:29.418Z",
             "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
           },
           "__mj_sync_notes": [
@@ -100,7 +100,7 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=APIKey"
           },
           "sync": {
-            "lastModified": "2025-12-25T16:54:17.687Z",
+            "lastModified": "2025-12-29T20:56:29.438Z",
             "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
           },
           "__mj_sync_notes": [
@@ -138,7 +138,7 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=ClientSecret"
           },
           "sync": {
-            "lastModified": "2025-12-25T16:54:17.702Z",
+            "lastModified": "2025-12-29T20:56:29.455Z",
             "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
           },
           "__mj_sync_notes": [

@@ -31,3 +31,5 @@ export type {
     ComponentDependencyTree,
     ComponentSpecWithHash
 } from './GraphQLComponentRegistryClient';
+
+export * from './storage-providers';

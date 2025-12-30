@@ -15,6 +15,13 @@
         "isDefault": true
       },
       {
+        "Label": "Diagnostics",
+        "Icon": "fa-solid fa-stethoscope",
+        "ResourceType": "Custom",
+        "DriverClass": "SystemDiagnosticsResource",
+        "isDefault": false
+      },
+      {
         "Label": "Permissions",
         "Icon": "fa-solid fa-lock",
         "ResourceType": "Dashboards",
@@ -58,7 +65,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-12-04T21:07:42.726Z",
-    "checksum": "6786ab289e64db40e9bb53c5262ecc7e21beab1b92c9ddb240e7b0c860798a9d"
+    "lastModified": "2025-12-29T20:56:28.325Z",
+    "checksum": "0f26cbfe90a401c238d68a24245a99e2e370a589b268dc358dfa971536092da9"
   }
 }

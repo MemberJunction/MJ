@@ -1,11 +1,11 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { DashboardEntityExtended } from "../custom/DashboardEntityExtended";
 import { DashboardCategoryEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity } from "../generated/entity_subclasses";
-
 
 /**
  * Caching of metadata for dashboards and related data
  */
+@RegisterForStartup()
 export class DashboardEngine extends BaseEngine<DashboardEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
@@ -24,22 +24,26 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
             {
                 Type: 'entity',
                 EntityName: 'Dashboards',
-                PropertyName: "_dashboards"
+                PropertyName: "_dashboards",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Dashboard User Preferences',
-                PropertyName: "_dashboardUserPreferences"
+                PropertyName: "_dashboardUserPreferences",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'Dashboard Categories',
-                PropertyName: "_dashboardCategories"
+                PropertyName: "_dashboardCategories",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Dashboard User States',
-                PropertyName: "_dashboardUserStates"
+                PropertyName: "_dashboardUserStates",
+                CacheLocal: true
             } 
         ]
         await this.Load(c, provider, forceRefresh, contextUser);

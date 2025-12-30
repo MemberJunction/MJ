@@ -6,7 +6,8 @@ import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended, ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 

@@ -11,7 +11,8 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity,  TemplateParamEntity, ActionParamEntity, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
+import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';

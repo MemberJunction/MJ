@@ -246,10 +246,10 @@
                           <button
                             type="button"
                             class="action-btn"
-                            (click)="openPrompt(prompt.ID); $event.stopPropagation()"
-                            title="Open Prompt">
-                            <i class="fa-solid fa-external-link-alt"></i>
-                            Open
+                            (click)="showPromptDetails(prompt, $event)"
+                            title="View Details">
+                            <i class="fa-solid fa-eye"></i>
+                            Details
                           </button>
                         }
 
@@ -275,10 +275,38 @@
                   <table class="prompts-table">
                     <thead>
                       <tr>
-                        <th>Name</th>
-                        <th>Category</th>
-                        <th>Type</th>
-                        <th>Status</th>
+                        <th (click)="sortBy('Name')"
+                            [class.sorted]="sortColumn === 'Name'"
+                            [class.desc]="sortColumn === 'Name' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Name
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Category')"
+                            [class.sorted]="sortColumn === 'Category'"
+                            [class.desc]="sortColumn === 'Category' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Category
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Type')"
+                            [class.sorted]="sortColumn === 'Type'"
+                            [class.desc]="sortColumn === 'Type' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Type
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Status')"
+                            [class.sorted]="sortColumn === 'Status'"
+                            [class.desc]="sortColumn === 'Status' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Status
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
                         <th>Template</th>
                         <th>Actions</th>
                       </tr>
@@ -319,9 +347,9 @@
                                 <button
                                   type="button"
                                   class="action-btn-small"
-                                  (click)="openPrompt(prompt.ID)"
-                                  title="Open Prompt">
-                                  <i class="fa-solid fa-external-link-alt"></i>
+                                  (click)="showPromptDetails(prompt)"
+                                  title="View Details">
+                                  <i class="fa-solid fa-eye"></i>
                                 </button>
                               }
                               @if (prompt.Status === 'Active' && UserCanReadPrompts) {
@@ -346,5 +374,135 @@
         </div>
       </kendo-splitter-pane>
     </kendo-splitter>
+  </div>
+
+  <!-- Detail Panel Overlay -->
+  @if (detailPanelVisible) {
+    <div class="detail-panel-overlay" (click)="closeDetailPanel()"></div>
+  }
+
+  <!-- Detail Panel -->
+  <div class="detail-panel" [class.visible]="detailPanelVisible">
+    @if (selectedPrompt) {
+      <!-- Panel Header -->
+      <div class="detail-panel-header">
+        <div class="detail-panel-title">
+          <div class="detail-icon">
+            <i [class]="getPromptIcon(selectedPrompt)"></i>
+          </div>
+          <div class="detail-title-info">
+            <h3>{{ selectedPrompt.Name }}</h3>
+            <span class="detail-subtitle">{{ selectedPrompt.TypeName || 'Prompt' }}</span>
+          </div>
+        </div>
+        <button class="detail-panel-close" (click)="closeDetailPanel()">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Panel Content -->
+      <div class="detail-panel-content">
+        <!-- Status Section -->
+        <div class="detail-section">
+          <div class="detail-badges">
+            <span class="status-badge" [class]="'status-' + (selectedPrompt.Status || 'unknown').toLowerCase()">
+              <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+              {{ selectedPrompt.Status || 'Unknown' }}
+            </span>
+            @if (selectedPrompt.TemplateEntity) {
+              <span class="feature-badge">
+                <i class="fa-solid fa-file-code"></i>
+                Has Template
+              </span>
+            }
+          </div>
+        </div>
+
+        <!-- Description -->
+        @if (selectedPrompt.Description) {
+          <div class="detail-section">
+            <h4 class="detail-section-title">
+              <i class="fa-solid fa-align-left"></i>
+              Description
+            </h4>
+            <p class="detail-description">{{ selectedPrompt.Description }}</p>
+          </div>
+        }
+
+        <!-- Configuration Details -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-cog"></i>
+            Configuration
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Category</span>
+              <span class="detail-value">{{ selectedPrompt.CategoryName || 'Uncategorized' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Type</span>
+              <span class="detail-value">{{ selectedPrompt.TypeName || 'Unknown' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Response Format</span>
+              <span class="detail-value">{{ selectedPrompt.ResponseFormat }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Selection Strategy</span>
+              <span class="detail-value">{{ selectedPrompt.SelectionStrategy }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Power Preference</span>
+              <span class="detail-value">{{ selectedPrompt.PowerPreference }}</span>
+            </div>
+            @if (selectedPrompt.MinPowerRank) {
+              <div class="detail-item">
+                <span class="detail-label">Min Power Rank</span>
+                <span class="detail-value">{{ selectedPrompt.MinPowerRank }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Timestamps -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-clock"></i>
+            Timestamps
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Created</span>
+              <span class="detail-value">{{ selectedPrompt.__mj_CreatedAt | date:'medium' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Updated</span>
+              <span class="detail-value">{{ selectedPrompt.__mj_UpdatedAt | date:'medium' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel Actions -->
+      <div class="detail-panel-actions">
+        @if (selectedPrompt.Status === 'Active') {
+          <button
+            type="button"
+            class="detail-action-btn secondary"
+            (click)="testPrompt(selectedPrompt.ID)">
+            <i class="fa-solid fa-play"></i>
+            Run Prompt
+          </button>
+        }
+        <button
+          type="button"
+          class="detail-action-btn primary"
+          (click)="openPromptFromPanel()">
+          <i class="fa-solid fa-external-link-alt"></i>
+          Open Full Record
+        </button>
+      </div>
+    }
   </div>
 </div>
