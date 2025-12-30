@@ -64,3 +64,4 @@ export * from './lib/components/notification/notification-badge.component';
 export * from './lib/components/notification/activity-indicator.component';
 export * from './lib/components/toast/toast.component';
 export * from './lib/components/global-tasks/global-tasks-panel.component';
+export * from './lib/components/attachment/image-viewer.component';

@@ -690,6 +690,34 @@ The existing provider implementations already handle ChatMessageContentBlock arr
 ### In Progress
 - [ ] **Phase 6**: AI agent execution integration (passing attachments to providers)
 
+### Remaining Integration Work
+
+After running the database migration and CodeGen:
+
+1. **MessageInputComponent Integration** (`message-input.component.ts`):
+   - In `createMessageDetail()` and `createMessageDetailFromText()`:
+     - Get pending attachments from `MessageInputBoxComponent.getPendingAttachments()`
+     - For each attachment:
+       - Create `ConversationDetailAttachment` record (via server)
+       - If inline: store base64 in `InlineData`
+       - If large: upload to MJStorage, store `FileID`
+     - Build message text with `@{attachment:...}` references
+
+2. **Server-side Message Loading** (`ConversationDetailEntity` or service):
+   - When loading conversation history for agent execution:
+     - Load `ConversationDetailAttachment` records for each message
+     - For each attachment:
+       - If `InlineData`: use directly as data URL
+       - If `FileID`: generate pre-authenticated download URL
+     - Use `ConversationUtility.BuildChatMessageContent()` to create multi-modal content
+
+3. **Agent Execution** (already supported):
+   - `BaseAgent` already handles `ChatMessageContent` as content blocks
+   - Providers (Anthropic, OpenAI, Gemini) already format vision content
+   - No changes needed in agent execution flow
+
 ### Pending
-- [ ] Run CodeGen after migration to generate entities
+- [ ] Run CodeGen after migration to generate `ConversationDetailAttachmentEntity`
+- [ ] Implement server-side attachment upload endpoint
+- [ ] Update MessageInputComponent to save attachments
 - [ ] E2E testing of full attachment flow
