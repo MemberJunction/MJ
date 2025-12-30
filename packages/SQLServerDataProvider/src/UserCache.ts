@@ -2,6 +2,8 @@ import { LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import * as sql from 'mssql';
 
+const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
+
 /**
  * Server side cache of users and their roles
  */
@@ -9,6 +11,7 @@ export class UserCache {
     static _instance: UserCache;
     private _globalObjectKey: string = 'MJ.SQLServerDataProvider.UserCache.Instance';
     private _users: UserInfo[];
+
     constructor() {
       if (UserCache._instance) 
           return UserCache._instance;
@@ -32,6 +35,14 @@ export class UserCache {
       }
     }
     
+    public get SYSTEM_USER_ID(): string {
+      return SYSTEM_USER_ID;
+    }
+
+    public GetSystemUser(): UserInfo {
+      return this.Users.find((u) => u.ID.toLowerCase() === UserCache.Instance.SYSTEM_USER_ID.toLowerCase());
+    }
+
     /**
      * This method will refresh the cache with the latest data from the database
      * @param pool - the connection pool to use to refresh the cache

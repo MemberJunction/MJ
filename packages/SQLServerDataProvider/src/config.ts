@@ -5,7 +5,6 @@ import * as sql from 'mssql';
 import { UserCache } from "./UserCache";
 
 
-
 export async function setupSQLServerClient(config: SQLServerProviderConfigData): Promise<SQLServerDataProvider> {
     try {
         // Set the provider for all entities to be SQL Server in this project, can use a different provider in other situations....
@@ -32,7 +31,9 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData):
                 }, config.CheckRefreshIntervalSeconds * 1000)
             }
 
-            await StartupManager.Instance.Startup();
+            const sysUser = UserCache.Instance.GetSystemUser();
+            const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type==='Owner');
+            await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider);
     
             return provider;
         }
