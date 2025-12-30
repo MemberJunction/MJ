@@ -41,10 +41,8 @@ export class AppComponent implements OnInit {
       const wsurl: string = environment.GRAPHQL_WS_URI;
 
       try {
-        console.log('Setting up GraphQL client...');
         const start = Date.now();
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
-          console.log('[GraphQL] Token expired, refreshing...');
           const refresh$ = await this.authBase.refresh();
           const claims = await lastValueFrom(refresh$);
           // Auth0 uses __raw, MSAL uses idToken
@@ -55,7 +53,6 @@ export class AppComponent implements OnInit {
             throw new Error('Failed to refresh authentication token');
           }
 
-          console.log('[GraphQL] Token refreshed successfully');
           return token;
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);

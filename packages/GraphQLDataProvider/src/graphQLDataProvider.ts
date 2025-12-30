@@ -240,13 +240,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
             // Enhanced logging to diagnose token issues
-            const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
-            console.log('[GraphQL] Config called with token:', {
-                tokenPreview,
-                tokenLength: configData.Token?.length,
-                separateConnection,
-                hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
-            });
+            // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+            // console.log('[GraphQL] Config called with token:', {
+            //     tokenPreview,
+            //     tokenLength: configData.Token?.length,
+            //     separateConnection,
+            //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+            // });
 
             // CRITICAL: Always set this instance's _configData first
             // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
@@ -1904,7 +1904,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         catch (e) {
             // Enhanced error logging to diagnose 500 errors
-            console.log('[GraphQL] ExecuteGQL error caught:', {
+            console.error('[GraphQL] ExecuteGQL error caught:', {
                 hasResponse: !!e?.response,
                 hasErrors: !!e?.response?.errors,
                 errorCount: e?.response?.errors?.length,
@@ -1917,7 +1917,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
                 const error = e.response.errors[0];
                 const code = error?.extensions?.code?.toUpperCase().trim()
-                console.log('[GraphQL] Error code detected:', code);
                 if (code === 'JWT_EXPIRED') {
                     if (refreshTokenIfNeeded) {
                         // token expired, so we need to refresh it and try again
@@ -1947,13 +1946,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // If singleton has a refresh in progress, wait for it
         if (isInstanceSingleton && GraphQLDataProvider.Instance._refreshPromise) {
-            console.log('[GraphQL] Token refresh already in progress (singleton), waiting...');
             return GraphQLDataProvider.Instance._refreshPromise;
         }
 
         // If this instance has a refresh in progress, wait for it
         if (this._refreshPromise) {
-            console.log('[GraphQL] Token refresh already in progress (instance), waiting...');
             return this._refreshPromise;
         }
 
@@ -2013,14 +2010,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string): GraphQLClient {
         // Enhanced logging to diagnose token issues
-        const tokenPreview = token ? `${token.substring(0, 20)}...${token.substring(token.length - 10)}` : 'NO TOKEN';
-        console.log('[GraphQL] Creating new client:', {
-            url,
-            tokenPreview,
-            tokenLength: token?.length,
-            sessionId,
-            hasMJAPIKey: !!mjAPIKey
-        });
+        // const tokenPreview = token ? `${token.substring(0, 20)}...${token.substring(token.length - 10)}` : 'NO TOKEN';
+        // console.log('[GraphQL] Creating new client:', {
+        //     url,
+        //     tokenPreview,
+        //     tokenLength: token?.length,
+        //     sessionId,
+        //     hasMJAPIKey: !!mjAPIKey
+        // });
 
         const headers: Record<string, string> = {
             'x-session-id': sessionId,
