@@ -401,7 +401,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
           }, 10000);
         }
         else {
-          throw objToSave.LatestResult.Message;
+          throw objToSave.LatestResult.CompleteMessage;
         }
       } catch (error) {
         LogError('Error rating message:' + error);

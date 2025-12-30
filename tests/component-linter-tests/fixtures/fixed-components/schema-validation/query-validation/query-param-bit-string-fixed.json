@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamBitStringFixed",
+  "type": "generic",
+  "title": "Query Parameter Bit String - Fixed Pattern",
+  "description": "Tests correct usage of bit parameter with boolean value",
+  "code": "function QueryParamBitStringFixed({ utilities }) {\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      // ✅ IsActive is bit type and passing boolean true\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Active Members',\n        CategoryPath: 'Membership/Reports',\n        Parameters: { IsActive: true }\n      });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Active Members</h3>\n      {members.map((m, i) => <div key={i}>{m.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Active Members",
+      "categoryPath": "Membership/Reports",
+      "parameters": [
+        {"name": "IsActive", "type": "bit", "isRequired": true}
+      ]
+    }]
+  }
+}

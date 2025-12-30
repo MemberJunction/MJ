@@ -15,7 +15,21 @@
     "sync": {
       "lastModified": "2025-11-28T02:04:36.807Z",
       "checksum": "94fa21dbe6febbb77961d81b9d55f23108a95b5f81ae1f2c132cadae8c91d0c0"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.EntityID",
+        "expression": "@lookup:Entities.Name=Dashboards",
+        "resolved": "05248F34-2837-EF11-86D4-6045BDEE16E6"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryEntityID",
+        "expression": "@lookup:Entities.Name=Dashboard Categories",
+        "resolved": "26248F34-2837-EF11-86D4-6045BDEE16E6"
+      }
+    ]
   },
   {
     "fields": {
@@ -33,7 +47,21 @@
     "sync": {
       "lastModified": "2025-11-28T02:04:36.820Z",
       "checksum": "9942faa8a2cdf24e23c93d737479659869c86c32c5c70a1ef42c3ff57d902e7c"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.EntityID",
+        "expression": "@lookup:Entities.Name=Queries",
+        "resolved": "1B248F34-2837-EF11-86D4-6045BDEE16E6"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryEntityID",
+        "expression": "@lookup:Entities.Name=Query Categories",
+        "resolved": "1A248F34-2837-EF11-86D4-6045BDEE16E6"
+      }
+    ]
   },
   {
     "fields": {
@@ -69,7 +97,21 @@
     "sync": {
       "lastModified": "2025-11-28T02:04:36.833Z",
       "checksum": "2c9cf215c74cbe2f9ed71d1b520c3b25ef8ae015faf3e0d1b251f5e81c9270d8"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.EntityID",
+        "expression": "@lookup:Entities.Name=Reports",
+        "resolved": "09248F34-2837-EF11-86D4-6045BDEE16E6"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryEntityID",
+        "expression": "@lookup:Entities.Name=Report Categories",
+        "resolved": "27248F34-2837-EF11-86D4-6045BDEE16E6"
+      }
+    ]
   },
   {
     "fields": {
@@ -105,7 +147,21 @@
     "sync": {
       "lastModified": "2025-11-28T02:04:36.845Z",
       "checksum": "e95b3f27625ec20c88c5e4f11ca74c10bcc3664c80c25788713408e4876cd5c1"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.EntityID",
+        "expression": "@lookup:Entities.Name=User Views",
+        "resolved": "E4238F34-2837-EF11-86D4-6045BDEE16E6"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryEntityID",
+        "expression": "@lookup:Entities.Name=User View Categories",
+        "resolved": "25248F34-2837-EF11-86D4-6045BDEE16E6"
+      }
+    ]
   },
   {
     "fields": {
@@ -123,7 +179,21 @@
     "sync": {
       "lastModified": "2025-11-28T02:04:36.855Z",
       "checksum": "a7a3ebb63c6c95054250a3bbd9e6ead96b7c50c33f95c8efcfb3867e5eb6bad6"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.EntityID",
+        "expression": "@lookup:Entities.Name=Lists",
+        "resolved": "EE238F34-2837-EF11-86D4-6045BDEE16E6"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryEntityID",
+        "expression": "@lookup:Entities.Name=List Categories",
+        "resolved": "42248F34-2837-EF11-86D4-6045BDEE16E6"
+      }
+    ]
   },
   {
     "fields": {
@@ -141,7 +211,15 @@
     "sync": {
       "lastModified": "2025-11-28T02:04:36.795Z",
       "checksum": "45a6d96179f323fea7546fb86d21560fb7afb47db9780decc347e8abcde51547"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.EntityID",
+        "expression": "@lookup:Entities.Name=Conversations",
+        "resolved": "13248F34-2837-EF11-86D4-6045BDEE16E6"
+      }
+    ]
   },
   {
     "fields": {
@@ -159,7 +237,15 @@
     "sync": {
       "lastModified": "2025-11-28T02:04:36.743Z",
       "checksum": "26b2b310722df672b13b53e4321bcb0812891a67005bb0eab20e05fc4697d4c3"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.EntityID",
+        "expression": "@lookup:Entities.Name=MJ: Conversation Artifacts",
+        "resolved": "355ECE47-BC5B-45D7-8B52-967446517137"
+      }
+    ]
   },
   {
     "fields": {

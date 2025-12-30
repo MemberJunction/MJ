@@ -34,9 +34,7 @@ export class AIAgentExampleEntityExtended extends AIAgentExampleEntity {
             return await super.Save(options);
         } catch (e) {
             LogError('Failed to save AI Agent Example:', e);
-            if (this.LatestResult) {
-                this.LatestResult.Errors.push(e);
-            }
+            // Let the parent class handle LatestResult error propagation
             return false;
         }
     }

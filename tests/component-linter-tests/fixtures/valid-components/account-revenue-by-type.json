@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-examples/account-revenue-by-type.spec.json",
+  "description": "Valid component demonstrating revenue analysis by account type with comparison metrics"
+}

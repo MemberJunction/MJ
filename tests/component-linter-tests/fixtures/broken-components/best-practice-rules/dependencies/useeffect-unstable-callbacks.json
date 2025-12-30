@@ -1,0 +1,7 @@
+{
+  "name": "DataRefreshComponent",
+  "description": "Component with useEffect that has callbacks object in dependencies, causing infinite loop (violates useeffect-unstable-dependencies rule)",
+  "code": "function DataRefreshComponent({ utilities, callbacks, savedUserSettings, onSaveUserSettings }) {\n  const [refreshCount, setRefreshCount] = useState(0);\n  const [data, setData] = useState([]);\n\n  // ❌ BAD: callbacks object in dependency array causes infinite loop\n  useEffect(() => {\n    const loadData = async () => {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Members',\n        MaxRows: 100\n      });\n      \n      if (result.Success) {\n        setData(result.Results || []);\n        setRefreshCount(prev => prev + 1);\n        \n        // Notify parent of data load\n        if (callbacks?.onDataLoaded) {\n          callbacks.onDataLoaded(result.Results.length);\n        }\n      }\n    };\n    \n    loadData();\n  }, [callbacks]);\n\n  return (\n    <div>\n      <h3>Data Loaded {refreshCount} times</h3>\n      <p>Records: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

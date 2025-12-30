@@ -1,0 +1,56 @@
+[
+  {
+    "fields": {
+      "Name": "AES-256-GCM",
+      "Description": "AES 256-bit encryption with Galois/Counter Mode. Provides authenticated encryption (AEAD) which detects tampering. RECOMMENDED for most use cases. Requires 32-byte key (openssl rand -base64 32).",
+      "NodeCryptoName": "aes-256-gcm",
+      "KeyLengthBits": 256,
+      "IVLengthBytes": 12,
+      "IsAEAD": true,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "B4CEB381-6645-45C5-9AA4-EF013C22D778"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:55:16.870Z",
+      "checksum": "768d8046edc2e80e134672b03e441d56386c8058374518fe569f6776a8203d2c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AES-256-CBC",
+      "Description": "AES 256-bit encryption with Cipher Block Chaining. Does NOT provide authentication - use AES-256-GCM instead for new implementations. Requires 32-byte key.",
+      "NodeCryptoName": "aes-256-cbc",
+      "KeyLengthBits": 256,
+      "IVLengthBytes": 16,
+      "IsAEAD": false,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "21E6FF03-5251-43A3-9E7C-136B810EAC68"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:55:16.884Z",
+      "checksum": "38b73c9ea19af249d3bc2eadf40cdb3afe31fc8a0abcdab7830f9158136bfe65"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AES-128-GCM",
+      "Description": "AES 128-bit encryption with Galois/Counter Mode. Provides authenticated encryption (AEAD). Requires 16-byte key (openssl rand -base64 16). Use AES-256-GCM for higher security.",
+      "NodeCryptoName": "aes-128-gcm",
+      "KeyLengthBits": 128,
+      "IVLengthBytes": 12,
+      "IsAEAD": true,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "B305C501-0D00-499F-869B-D9492A5F1CAC"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:55:16.898Z",
+      "checksum": "008f39626423540ef400da90a01d51ab0115a29d2a9d153ac12b260370aa9d05"
+    }
+  }
+]

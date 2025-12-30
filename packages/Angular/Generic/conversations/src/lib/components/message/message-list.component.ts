@@ -11,14 +11,16 @@ import {
   SimpleChanges,
   ChangeDetectorRef,
   ElementRef,
+  AfterViewInit,
   AfterViewChecked
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
+import { AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Container component for displaying a list of messages
@@ -30,7 +32,7 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
   templateUrl: './message-list.component.html',
   styleUrls: ['./message-list.component.css']
 })
-export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked {
+export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit, AfterViewChecked {
   @Input() public messages: ConversationDetailEntity[] = [];
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
@@ -57,6 +59,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   private _renderedMessages = new Map<string, any>();
   private _shouldScrollToBottom = false;
+  private _previousMessageCount = 0; // Track previous count to detect new messages
 
   public currentDateDisplay: string = 'Today';
   public showDateNav: boolean = false;
@@ -92,13 +95,28 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  // Track whether initial render has happened
+  private _initialRenderComplete = false;
+
   ngOnInit() {
-    // Initial render will happen in AfterViewInit
+    // Initial render will happen in ngAfterViewInit when ViewContainerRef is available
+  }
+
+  ngAfterViewInit() {
+    // ViewContainerRef is now available - perform initial render if we have messages
+    if (this.messages && this.messages.length > 0 && this.messageContainerRef && !this._initialRenderComplete) {
+      this._initialRenderComplete = true;
+      this.updateMessages(this.messages);
+      this.updateDateFilterVisibility();
+    }
   }
 
   ngOnChanges(changes: SimpleChanges) {
     // React to messages array changes
+    // Note: On initial load, messageContainerRef may not be available yet (ngOnChanges runs before ngAfterViewInit)
+    // In that case, ngAfterViewInit will handle the initial render
     if (changes['messages'] && this.messages && this.messageContainerRef) {
+      this._initialRenderComplete = true;
       this.updateMessages(this.messages);
       this.updateDateFilterVisibility();
     }
@@ -287,8 +305,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         }
       });
 
-      // Scroll to bottom if this is a new message
-      if (messages.length > 0) {
+      // Only scroll to bottom if new messages were added (not just updates)
+      // This prevents scrolling when the message list is merely refreshed (e.g., during agent run timer)
+      const previousCount = this._previousMessageCount;
+      this._previousMessageCount = messages.length;
+
+      if (messages.length > previousCount) {
         this._shouldScrollToBottom = true;
       }
     } finally {

@@ -1,0 +1,19 @@
+{
+  "name": "DataGridQueryFieldCaseBroken",
+  "type": "generic",
+  "title": "DataGrid Query Field Case Mismatch - Broken Pattern",
+  "description": "Tests linter detection of case mismatch in DataGrid query field",
+  "code": "function DataGridQueryFieldCaseBroken({ utilities, components }) {\n  const [eventData, setEventData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Event Attendance',\n        CategoryPath: 'Events/Reports'\n      });\n      if (result?.Success) {\n        setEventData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Event Attendance</h3>\n      {/* ❌ Case mismatch: attendeecount should be AttendeeCount */}\n      <DataGrid \n        data={eventData} \n        columns={[\n          {field: 'EventName', title: 'Event'},\n          {field: 'attendeecount', title: 'Attendees'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Event Attendance",
+      "categoryPath": "Events/Reports",
+      "fields": ["EventID", "EventName", "EventDate", "AttendeeCount"]
+    }]
+  }
+}

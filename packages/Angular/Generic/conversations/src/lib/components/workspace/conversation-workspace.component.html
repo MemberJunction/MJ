@@ -4,6 +4,8 @@
     <mj-conversation-navigation
       [activeTab]="activeTab"
       [environmentId]="environmentId"
+      [currentUser]="currentUser"
+      [conversationId]="selectedConversationId"
       (tabChanged)="onTabChanged($event)"
       (sidebarToggled)="toggleSidebar()"
       (searchTriggered)="openSearch()"
@@ -28,19 +30,39 @@
 
     <!-- Left Sidebar (hidden when Collections or Tasks view is active) -->
     <div class="workspace-sidebar"
-         *ngIf="activeTab !== 'collections' && activeTab !== 'tasks'"
+         *ngIf="activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarSettingsLoaded"
          [class.open]="isSidebarVisible"
-         [style.width.px]="sidebarWidth">
+         [class.collapsed]="isSidebarCollapsed"
+         [class.no-transition]="!sidebarTransitionsEnabled"
+         [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
       <mj-conversation-sidebar
         [activeTab]="activeTab"
         [environmentId]="environmentId"
         [currentUser]="currentUser"
-        [renamedConversationId]="renamedConversationId">
+        [selectedConversationId]="selectedConversationId"
+        [renamedConversationId]="renamedConversationId"
+        [isSidebarPinned]="isSidebarPinned"
+        [isMobileView]="isMobileView"
+        (conversationSelected)="onConversationSelected($event)"
+        (newConversationRequested)="startNewConversation()"
+        (pinSidebarRequested)="pinSidebar()"
+        (unpinSidebarRequested)="unpinSidebar()">
       </mj-conversation-sidebar>
     </div>
 
-    <!-- Resize handle for sidebar -->
-    <div class="sidebar-resize-handle" *ngIf="isSidebarVisible && activeTab !== 'collections' && activeTab !== 'tasks'" (mousedown)="onSidebarResizeStart($event)"></div>
+    <!-- Sidebar expand handle (only visible when collapsed and settings loaded) -->
+    @if (activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarCollapsed && isSidebarSettingsLoaded) {
+      <div class="sidebar-expand-handle"
+           (click)="expandSidebar()"
+           title="Expand sidebar">
+        <i class="fas fa-chevron-right"></i>
+      </div>
+    }
+
+    <!-- Resize handle for sidebar (only when expanded and settings loaded) -->
+    <div class="sidebar-resize-handle"
+         *ngIf="isSidebarVisible && !isSidebarCollapsed && activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarSettingsLoaded"
+         (mousedown)="onSidebarResizeStart($event)"></div>
 
     <!-- Collections Full-Panel View -->
     <div class="workspace-main" *ngIf="activeTab === 'collections'">
@@ -67,10 +89,23 @@
       <mj-conversation-chat-area
         [environmentId]="environmentId"
         [currentUser]="currentUser"
+        [conversationId]="selectedConversationId"
+        [conversation]="selectedConversation"
+        [threadId]="selectedThreadId"
+        [isNewConversation]="isNewUnsavedConversation"
+        [pendingMessage]="pendingMessageToSend"
+        [pendingArtifactId]="pendingArtifactId"
+        [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
         (conversationRenamed)="onConversationRenamed($event)"
         (openEntityRecord)="onOpenEntityRecord($event)"
         (taskClicked)="onTaskClicked($event)"
-        (artifactLinkClicked)="onArtifactLinkNavigation($event)">
+        (artifactLinkClicked)="onArtifactLinkNavigation($event)"
+        (conversationCreated)="onConversationCreated($event)"
+        (threadOpened)="onThreadOpened($event)"
+        (threadClosed)="onThreadClosed()"
+        (pendingArtifactConsumed)="pendingArtifactId = null; pendingArtifactVersionNumber = null"
+        (pendingMessageConsumed)="pendingMessageToSend = null"
+        (pendingMessageRequested)="pendingMessageToSend = $event">
       </mj-conversation-chat-area>
     </div>
 

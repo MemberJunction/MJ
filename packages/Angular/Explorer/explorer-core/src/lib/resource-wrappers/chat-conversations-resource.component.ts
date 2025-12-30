@@ -1,16 +1,17 @@
-import { Component, ViewEncapsulation, OnDestroy } from '@angular/core';
+import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, EnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { ConversationStateService, ArtifactStateService } from '@memberjunction/ng-conversations';
-import { Subject, takeUntil, distinctUntilChanged, combineLatest, filter } from 'rxjs';
+import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService } from '@memberjunction/ng-conversations';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { Subject, takeUntil, filter } from 'rxjs';
 
 export function LoadChatConversationsResource() {
   // Force inclusion in production builds (tree shaking workaround)
   // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatConversationsResource(null!, null!, null!, null!);
+  const test = new ChatConversationsResource(null!, null!, null!, null!, null!);
 }
 
 /**
@@ -18,31 +19,76 @@ export function LoadChatConversationsResource() {
  * Extends BaseResourceComponent to work with the resource type system
  * Displays conversation list sidebar + active conversation chat interface
  * Designed to work with the tab system for multi-tab conversation management
+ *
+ * This component manages its own selection state locally, following the encapsulation pattern:
+ * - Services (ConversationDataService) are used for shared DATA (caching, loading, saving)
+ * - Local state variables manage SELECTION state (which conversation is active)
+ * - State flows down to children via @Input, events flow up via @Output
  */
 @RegisterClass(BaseResourceComponent, 'ChatConversationsResource')
 @Component({
   selector: 'mj-chat-conversations-resource',
   template: `
-    <div class="chat-conversations-container">
+    <div class="chat-conversations-container" *ngIf="isReady; else loadingTemplate">
       <!-- Left sidebar: Conversation list -->
-      <div class="conversation-sidebar">
+      <div class="conversation-sidebar"
+           [class.collapsed]="isSidebarCollapsed"
+           [class.no-transition]="!sidebarTransitionsEnabled">
         <mj-conversation-list
+          #conversationList
           *ngIf="currentUser"
           [environmentId]="environmentId"
-          [currentUser]="currentUser">
+          [currentUser]="currentUser"
+          [selectedConversationId]="selectedConversationId"
+          [renamedConversationId]="renamedConversationId"
+          [isSidebarPinned]="isSidebarPinned"
+          [isMobileView]="isMobileView"
+          (conversationSelected)="onConversationSelected($event)"
+          (newConversationRequested)="onNewConversationRequested()"
+          (pinSidebarRequested)="pinSidebar()"
+          (unpinSidebarRequested)="unpinSidebar()">
         </mj-conversation-list>
+      </div>
+
+      <!-- Sidebar expand handle (only visible when collapsed) -->
+      <div class="sidebar-expand-handle"
+           *ngIf="isSidebarCollapsed"
+           (click)="expandSidebar()"
+           title="Expand sidebar">
+        <i class="fas fa-chevron-right"></i>
       </div>
 
       <!-- Main area: Chat interface -->
       <div class="conversation-main">
         <mj-conversation-chat-area
+          #chatArea
           *ngIf="currentUser"
           [environmentId]="environmentId"
           [currentUser]="currentUser"
-          (artifactLinkClicked)="onArtifactLinkClicked($event)">
+          [conversationId]="selectedConversationId"
+          [conversation]="selectedConversation"
+          [threadId]="selectedThreadId"
+          [isNewConversation]="isNewUnsavedConversation"
+          [pendingMessage]="pendingMessageToSend"
+          [pendingArtifactId]="pendingArtifactId"
+          [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
+          (conversationRenamed)="onConversationRenamed($event)"
+          (conversationCreated)="onConversationCreated($event)"
+          (threadOpened)="onThreadOpened($event)"
+          (threadClosed)="onThreadClosed()"
+          (pendingArtifactConsumed)="onPendingArtifactConsumed()"
+          (pendingMessageConsumed)="onPendingMessageConsumed()"
+          (pendingMessageRequested)="onPendingMessageRequested($event)"
+          (artifactLinkClicked)="onArtifactLinkClicked($event)"
+          (openEntityRecord)="onOpenEntityRecord($event)">
         </mj-conversation-chat-area>
       </div>
     </div>
+    <ng-template #loadingTemplate>
+      <div class="initializing-container">
+        <mj-loading text="Initializing..." size="large"></mj-loading>
+      </div>
+    </ng-template>
   `,
   styles: [`
     :host {
@@ -58,6 +104,7 @@ export function LoadChatConversationsResource() {
       height: 100%;
       flex: 1;
       overflow: hidden;
+      position: relative;
     }
 
     .conversation-sidebar {
@@ -66,6 +113,44 @@ export function LoadChatConversationsResource() {
       border-right: 1px solid #e0e0e0;
       overflow-y: auto;
       background: #f5f5f5;
+      transition: width 0.3s ease;
+    }
+
+    /* Disable transitions during initial load to prevent jarring animation */
+    .conversation-sidebar.no-transition {
+      transition: none !important;
+    }
+
+    .conversation-sidebar.collapsed {
+      width: 0;
+      min-width: 0;
+      border-right: none;
+      overflow: hidden;
+    }
+
+    .sidebar-expand-handle {
+      flex-shrink: 0;
+      width: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: #092340;
+      border-right: 1px solid rgba(255, 255, 255, 0.15);
+      transition: background 0.15s ease;
+    }
+
+    .sidebar-expand-handle:hover {
+      background: #1a3a5c;
+    }
+
+    .sidebar-expand-handle i {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 11px;
+    }
+
+    .sidebar-expand-handle:hover i {
+      color: white;
     }
 
     .conversation-main {
@@ -74,39 +159,108 @@ export function LoadChatConversationsResource() {
       display: flex;
       flex-direction: column;
     }
+
+    .initializing-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      flex: 1;
+    }
   `],
   encapsulation: ViewEncapsulation.None
 })
 export class ChatConversationsResource extends BaseResourceComponent implements OnDestroy {
+  @ViewChild('conversationList') conversationList?: ConversationListComponent;
+  @ViewChild('chatArea') chatArea?: ConversationChatAreaComponent;
+
   public currentUser: any = null;
   private destroy$ = new Subject<void>();
   private skipUrlUpdate = true; // Skip URL updates during initialization
   private lastNavigatedUrl: string = ''; // Track URL to avoid reacting to our own navigation
 
+  // Ready flag - blocks child rendering until AIEngine is initialized
+  public isReady: boolean = false;
+
+  // LOCAL SELECTION STATE - each wrapper instance manages its own selection
+  public selectedConversationId: string | null = null;
+  public selectedConversation: ConversationEntity | null = null;
+  public selectedThreadId: string | null = null;
+  public isNewUnsavedConversation: boolean = false;
+  public renamedConversationId: string | null = null;
+  public isSidebarCollapsed: boolean = false;
+  public isSidebarPinned: boolean = true; // Whether sidebar stays open after selection
+  public isMobileView: boolean = false;
+  public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
+
+  // Pending navigation state
+  public pendingArtifactId: string | null = null;
+  public pendingArtifactVersionNumber: number | null = null;
+  public pendingMessageToSend: string | null = null;
+
+  // User Settings persistence
+  private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
+  private readonly SIDEBAR_COLLAPSED_KEY = 'mj-conversations-sidebar-collapsed';
+  private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     private navigationService: NavigationService,
-    private conversationState: ConversationStateService,
-    private artifactState: ArtifactStateService,
-    private router: Router
+    private conversationData: ConversationDataService,
+    private router: Router,
+    private mentionAutocompleteService: MentionAutocompleteService,
+    private cdr: ChangeDetectorRef
   ) {
     super();
   }
 
-  ngOnInit() {
+  async ngOnInit() {
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
 
-    // Parse URL first and apply state
-    const urlState = this.parseUrlState();
-    if (urlState) {
-      this.applyUrlState(urlState);
+    // Check initial mobile state and set default collapsed
+    this.checkMobileView();
+    if (this.isMobileView) {
+      this.isSidebarCollapsed = true;
+      // Enable transitions after a brief delay to ensure initial state is applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
     } else {
-      // Check if we have navigation params from config (e.g., from Collections linking here)
-      this.applyNavigationParams();
+      // Load sidebar state from User Settings (non-blocking)
+      this.loadSidebarState().then(() => {
+        this.cdr.detectChanges();
+        // Enable transitions after state is loaded and applied
+        setTimeout(() => {
+          this.sidebarTransitionsEnabled = true;
+        }, 50);
+      });
     }
 
-    // Subscribe to state changes to update URL
-    this.subscribeToStateChanges();
+    // CRITICAL: Initialize AIEngine and mention service BEFORE children render
+    // This prevents the slow first-load issue where each child would trigger initialization
+    await this.initializeEngines();
+
+    // CRITICAL: Set selectedConversationId SYNCHRONOUSLY before child components initialize
+    // Parse URL first and apply state synchronously for the ID
+    const urlState = this.parseUrlState();
+
+    if (urlState) {
+      // Set conversationId synchronously so child components see it immediately
+      if (urlState.conversationId) {
+        this.selectedConversationId = urlState.conversationId;
+        this.isNewUnsavedConversation = false;
+      }
+      if (urlState.artifactId) {
+        this.pendingArtifactId = urlState.artifactId;
+        this.pendingArtifactVersionNumber = urlState.versionNumber || null;
+      }
+      // Load the conversation entity asynchronously (non-blocking)
+      this.loadConversationEntity(urlState.conversationId);
+    } else {
+      // Check if we have navigation params from config (e.g., from Collections linking here)
+      this.applyConfigurationParams();
+    }
 
     // Subscribe to router NavigationEnd events for back/forward button support
     this.router.events
@@ -136,6 +290,35 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+
+    // Clear any pending save timeout
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+  }
+
+  /**
+   * Initialize AI Engine and mention autocomplete service BEFORE child components render.
+   * This prevents the slow first-load issue where initialization would block conversation loading.
+   * The `false` parameter means "don't force refresh if already initialized".
+   */
+  private async initializeEngines(): Promise<void> {
+    try {
+      // Initialize AIEngine first - this is the heavy operation that loads all agents
+      await AIEngineBase.Instance.Config(false);
+
+      // Then initialize mention autocomplete service which uses the loaded agents
+      await this.mentionAutocompleteService.initialize(this.currentUser);
+
+      // Mark as ready - child components can now render
+      this.isReady = true;
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Failed to initialize AI engines:', error);
+      // Still mark as ready so UI isn't blocked forever
+      this.isReady = true;
+      this.cdr.detectChanges();
+    }
   }
 
   /**
@@ -163,57 +346,82 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Apply URL state to conversation services.
+   * Load the conversation entity asynchronously (non-blocking).
+   * The conversationId is already set synchronously, this just loads the full entity.
    */
-  private applyUrlState(state: { conversationId?: string; artifactId?: string; versionNumber?: number }): void {
-    // Set pending artifact if provided (must be set before activating conversation)
-    if (state.artifactId) {
-      this.conversationState.pendingArtifactId = state.artifactId;
-      this.conversationState.pendingArtifactVersionNumber = state.versionNumber || null;
-    }
+  private async loadConversationEntity(conversationId: string | undefined): Promise<void> {
+    if (!conversationId) return;
 
-    // Activate the target conversation if specified
-    if (state.conversationId) {
-      this.conversationState.setActiveConversation(state.conversationId);
+    // Try to get from cache first
+    const conversation = this.conversationData.getConversationById(conversationId);
+    if (conversation) {
+      this.selectedConversation = conversation;
     }
+    // If not in cache, the chat area component will handle loading it
   }
 
   /**
-   * Apply navigation parameters from configuration.
-   * This handles deep-linking from other resources (e.g., clicking a link in Collections).
+   * Apply configuration params from resource data (e.g., from deep-linking via Collections).
+   * Sets state synchronously so child components see values immediately.
    */
-  private applyNavigationParams(): void {
+  private applyConfigurationParams(): void {
     const config = this.Data?.Configuration;
     if (!config) return;
 
-    // Set pending artifact if provided (must be set before activating conversation)
+    // Set pending artifact if provided
     if (config.artifactId) {
-      this.conversationState.pendingArtifactId = config.artifactId as string;
-      this.conversationState.pendingArtifactVersionNumber = (config.versionNumber as number) || null;
+      this.pendingArtifactId = config.artifactId as string;
+      this.pendingArtifactVersionNumber = (config.versionNumber as number) || null;
     }
 
-    // Activate the target conversation if specified
+    // Set conversationId synchronously so child components see it immediately
     if (config.conversationId) {
-      this.conversationState.setActiveConversation(config.conversationId as string);
+      this.selectedConversationId = config.conversationId as string;
+      this.isNewUnsavedConversation = false;
+      // Load entity asynchronously
+      this.loadConversationEntity(config.conversationId as string);
     }
   }
 
   /**
-   * Subscribe to state changes from services to update URL.
+   * Apply navigation state to local selection state.
+   * Sets state synchronously so child components see values immediately.
    */
-  private subscribeToStateChanges(): void {
-    // Combine conversation and artifact state changes
-    combineLatest([
-      this.conversationState.activeConversationId$.pipe(distinctUntilChanged()),
-      this.artifactState.activeArtifactId$.pipe(distinctUntilChanged()),
-      this.artifactState.activeVersionNumber$.pipe(distinctUntilChanged())
-    ])
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        if (!this.skipUrlUpdate) {
-          this.updateUrl();
-        }
-      });
+  private applyNavigationState(state: { conversationId?: string; artifactId?: string; versionNumber?: number }): void {
+    // Set pending artifact if provided (will be consumed by chat area after loading)
+    if (state.artifactId) {
+      this.pendingArtifactId = state.artifactId;
+      this.pendingArtifactVersionNumber = state.versionNumber || null;
+    }
+
+    // Set the conversation synchronously
+    if (state.conversationId) {
+      this.selectedConversationId = state.conversationId;
+      this.isNewUnsavedConversation = false;
+      this.loadConversationEntity(state.conversationId);
+    }
+  }
+
+  /**
+   * Select a conversation by ID - loads the entity and updates local state
+   */
+  private async selectConversation(conversationId: string): Promise<void> {
+    this.selectedConversationId = conversationId;
+    this.isNewUnsavedConversation = false;
+
+    // Load the conversation entity from data service
+    const conversation = this.conversationData.getConversationById(conversationId);
+    if (conversation) {
+      this.selectedConversation = conversation;
+    } else {
+      // Conversation might not be loaded yet - the chat area will handle loading
+      this.selectedConversation = null;
+    }
+
+    // Update URL if not skipping
+    if (!this.skipUrlUpdate) {
+      this.updateUrl();
+    }
   }
 
   /**
@@ -224,18 +432,15 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     const params = new URLSearchParams();
 
     // Add conversation ID
-    const conversationId = this.conversationState.activeConversationId;
-    if (conversationId) {
-      params.set('conversationId', conversationId);
+    if (this.selectedConversationId) {
+      params.set('conversationId', this.selectedConversationId);
     }
 
-    // Add artifact ID if panel is open
-    const artifactId = this.artifactState['_activeArtifactId$']?.value;
-    if (artifactId) {
-      params.set('artifactId', artifactId);
-      const versionNumber = this.artifactState['_activeVersionNumber$']?.value;
-      if (versionNumber) {
-        params.set('versionNumber', versionNumber.toString());
+    // Add artifact ID if we have a pending artifact (will be cleared once opened)
+    if (this.pendingArtifactId) {
+      params.set('artifactId', this.pendingArtifactId);
+      if (this.pendingArtifactVersionNumber) {
+        params.set('versionNumber', this.pendingArtifactVersionNumber.toString());
       }
     }
 
@@ -272,11 +477,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Apply the state without triggering URL updates
     this.skipUrlUpdate = true;
     if (urlState) {
-      this.applyUrlState(urlState);
+      this.applyNavigationState(urlState);
     } else {
       // No params means clear state
-      this.conversationState.setActiveConversation(null as unknown as string);
-      this.artifactState.closeArtifact();
+      this.selectedConversationId = null;
+      this.selectedConversation = null;
+      this.selectedThreadId = null;
+      this.pendingArtifactId = null;
+      this.pendingArtifactVersionNumber = null;
     }
     this.skipUrlUpdate = false;
 
@@ -314,20 +522,13 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Get the active conversation ID from configuration (if specified)
-   */
-  get activeConversationId(): string | undefined {
-    return this.Data?.Configuration?.conversationId;
-  }
-
-  /**
    * Get the display name for chat conversations
    */
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     // If we have a specific conversation ID, we could load the conversation name
     // For now, just return a generic name
     if (data.Configuration?.conversationId) {
-      return `Conversation: ${data.Configuration.conversationId.substring(0, 8)}...`;
+      return `Conversation: ${(data.Configuration.conversationId as string).substring(0, 8)}...`;
     }
     return 'Conversations';
   }
@@ -337,6 +538,280 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   async GetResourceIconClass(data: ResourceData): Promise<string> {
     return 'fa-solid fa-comments';
+  }
+
+  // ============================================
+  // EVENT HANDLERS FROM CHILD COMPONENTS
+  // ============================================
+
+  /**
+   * Handle conversation selection from the list
+   */
+  async onConversationSelected(conversationId: string): Promise<void> {
+    await this.selectConversation(conversationId);
+    this.selectedThreadId = null; // Clear thread when switching conversations
+    this.isNewUnsavedConversation = false;
+    this.updateUrl();
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.checkMobileView();
+  }
+
+  /**
+   * Handle clicks outside the sidebar to auto-collapse when unpinned
+   */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    // Only handle when sidebar is expanded but unpinned
+    if (this.isSidebarCollapsed || this.isSidebarPinned) {
+      return;
+    }
+
+    // Check if click is outside the sidebar
+    const target = event.target as HTMLElement;
+    const sidebarElement = target.closest('.conversation-sidebar');
+    const expandHandle = target.closest('.sidebar-expand-handle');
+
+    // If click is outside sidebar and expand handle, collapse it
+    if (!sidebarElement && !expandHandle) {
+      this.collapseSidebar();
+    }
+  }
+
+  /**
+   * Check if we're in mobile view and handle state accordingly
+   */
+  private checkMobileView(): void {
+    const wasMobile = this.isMobileView;
+    this.isMobileView = window.innerWidth < 768;
+
+    if (this.isMobileView && !wasMobile) {
+      // Switched to mobile - default to collapsed
+      this.isSidebarCollapsed = true;
+    }
+  }
+
+  /**
+   * Collapse sidebar
+   */
+  collapseSidebar(): void {
+    this.isSidebarCollapsed = true;
+  }
+
+  /**
+   * Expand sidebar (unpinned - will auto-collapse on selection)
+   */
+  expandSidebar(): void {
+    this.isSidebarCollapsed = false;
+    this.isSidebarPinned = false;
+  }
+
+  /**
+   * Pin sidebar - keep it open after selection
+   */
+  pinSidebar(): void {
+    this.isSidebarPinned = true;
+    this.saveSidebarState();
+  }
+
+  /**
+   * Unpin sidebar - will auto-collapse on next selection
+   */
+  unpinSidebar(): void {
+    this.isSidebarPinned = false;
+    this.collapseSidebar();
+    this.saveSidebarState();
+  }
+
+  /**
+   * Save sidebar state to User Settings (server) and localStorage (fallback)
+   * Uses debouncing to avoid excessive database writes
+   */
+  private saveSidebarState(): void {
+    const stateToSave = {
+      collapsed: this.isSidebarCollapsed,
+      pinned: this.isSidebarPinned
+    };
+
+    // Save to localStorage immediately as backup
+    try {
+      localStorage.setItem(this.SIDEBAR_COLLAPSED_KEY, JSON.stringify(stateToSave));
+    } catch (error) {
+      console.warn('Failed to save sidebar state to localStorage:', error);
+    }
+
+    // Debounce the server save to avoid excessive writes
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+    this.saveSettingsTimeout = setTimeout(() => {
+      this.saveSidebarStateToServer(stateToSave);
+    }, 1000); // 1 second debounce
+  }
+
+  /**
+   * Save sidebar state to User Settings entity on server using UserInfoEngine for cached lookup
+   */
+  private async saveSidebarStateToServer(state: { collapsed: boolean; pinned: boolean }): Promise<void> {
+    try {
+      const userId = this.currentUser?.ID;
+      if (!userId) {
+        return;
+      }
+
+      const engine = UserInfoEngine.Instance;
+      const md = new Metadata();
+
+      // Find existing setting from cached user settings
+      let setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
+
+      if (!setting) {
+        // Create new setting
+        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting.UserID = userId;
+        setting.Setting = this.USER_SETTING_SIDEBAR_KEY;
+      }
+
+      setting.Value = JSON.stringify(state);
+      await setting.Save();
+    } catch (error) {
+      console.warn('Failed to save sidebar state to User Settings:', error);
+    }
+  }
+
+  /**
+   * Load sidebar state from User Settings (server) using UserInfoEngine, falling back to localStorage
+   * For new users with no saved state, defaults to collapsed with new conversation
+   */
+  private async loadSidebarState(): Promise<void> {
+    try {
+      const userId = this.currentUser?.ID;
+      if (userId) {
+        // Try loading from cached User Settings first
+        const engine = UserInfoEngine.Instance;
+        const setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
+
+        if (setting?.Value) {
+          const state = JSON.parse(setting.Value);
+          this.isSidebarCollapsed = state.collapsed ?? true;
+          this.isSidebarPinned = state.pinned ?? false;
+          return;
+        }
+      }
+
+      // Fall back to localStorage
+      const saved = localStorage.getItem(this.SIDEBAR_COLLAPSED_KEY);
+      if (saved) {
+        try {
+          const state = JSON.parse(saved);
+          if (typeof state === 'object' && state !== null) {
+            this.isSidebarCollapsed = state.collapsed ?? true;
+            this.isSidebarPinned = state.pinned ?? false;
+            return;
+          }
+        } catch {
+          // Fall back to old boolean format
+          this.isSidebarCollapsed = saved === 'true';
+          this.isSidebarPinned = !this.isSidebarCollapsed;
+          return;
+        }
+      }
+
+      // No saved state found - NEW USER DEFAULT:
+      // Start with sidebar collapsed and show new conversation screen
+      this.isSidebarCollapsed = true;
+      this.isSidebarPinned = false;
+      this.isNewUnsavedConversation = true;
+    } catch (error) {
+      console.warn('Failed to load sidebar state:', error);
+      // Default to collapsed for new users on error
+      this.isSidebarCollapsed = true;
+      this.isSidebarPinned = false;
+    }
+  }
+
+  /**
+   * Handle new conversation request from the list
+   */
+  onNewConversationRequested(): void {
+    this.selectedConversationId = null;
+    this.selectedConversation = null;
+    this.selectedThreadId = null;
+    this.isNewUnsavedConversation = true;
+    this.updateUrl();
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
+  }
+
+  /**
+   * Handle conversation created from chat area (after first message in new conversation)
+   */
+  async onConversationCreated(conversation: ConversationEntity): Promise<void> {
+    this.selectedConversationId = conversation.ID;
+    this.selectedConversation = conversation;
+    this.isNewUnsavedConversation = false;
+    this.updateUrl();
+  }
+
+  /**
+   * Handle conversation rename event
+   */
+  onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
+    // Trigger rename animation in the list
+    this.renamedConversationId = event.conversationId;
+
+    // Clear the animation trigger after it completes
+    setTimeout(() => {
+      this.renamedConversationId = null;
+    }, 1500);
+  }
+
+  /**
+   * Handle thread opened event
+   */
+  onThreadOpened(threadId: string): void {
+    this.selectedThreadId = threadId;
+  }
+
+  /**
+   * Handle thread closed event
+   */
+  onThreadClosed(): void {
+    this.selectedThreadId = null;
+  }
+
+  /**
+   * Handle pending artifact consumed event
+   */
+  onPendingArtifactConsumed(): void {
+    this.pendingArtifactId = null;
+    this.pendingArtifactVersionNumber = null;
+    // Update URL to remove artifact params
+    this.updateUrl();
+  }
+
+  /**
+   * Handle pending message consumed event
+   */
+  onPendingMessageConsumed(): void {
+    this.pendingMessageToSend = null;
+  }
+
+  /**
+   * Handle pending message requested event (from empty state creating conversation)
+   */
+  onPendingMessageRequested(message: string): void {
+    this.pendingMessageToSend = message;
   }
 
   /**
@@ -370,5 +845,13 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Navigate using the generic nav item method
     this.navigationService.OpenNavItemByName(navItemName, params);
+  }
+
+  /**
+   * Handle entity record open request from chat area (from React component grids).
+   * Uses NavigationService to open the record in a new tab.
+   */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 }

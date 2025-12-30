@@ -1,0 +1,508 @@
+<div class="prompt-management-container">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-info">
+      <h2 class="dashboard-title">
+        <i class="fa-solid fa-message"></i>
+        AI Prompts
+      </h2>
+      <button
+        type="button"
+        class="filter-toggle-btn"
+        (click)="toggleFilters()"
+        title="Toggle Filters">
+        <i class="fa-solid fa-filter"></i>
+        @if (showFilters) {
+          Hide Filters
+        } @else {
+          Show Filters
+        }
+      </button>
+      <span class="item-count">{{ filteredPrompts.length }} prompts</span>
+    </div>
+
+    <div class="header-controls">
+      <div class="view-toggle">
+        <button
+          type="button"
+          class="view-btn"
+          [class.active]="viewMode === 'grid'"
+          (click)="setViewMode('grid')"
+          title="Grid View">
+          <i class="fa-solid fa-grip"></i>
+        </button>
+        <button
+          type="button"
+          class="view-btn"
+          [class.active]="viewMode === 'list'"
+          (click)="setViewMode('list')"
+          title="List View">
+          <i class="fa-solid fa-list"></i>
+        </button>
+      </div>
+
+      @if (UserCanCreatePrompts) {
+        <button
+          type="button"
+          class="control-btn primary"
+          (click)="createNewPrompt()"
+          title="Create New Prompt">
+          <i class="fa-solid fa-plus"></i>
+          New Prompt
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Main Content with Splitter -->
+  <div class="main-content">
+    <kendo-splitter
+      class="main-splitter"
+      orientation="horizontal">
+
+      <!-- Filter Panel (Left) -->
+      <kendo-splitter-pane
+        [size]="showFilters ? '320px' : '0px'"
+        [collapsible]="false"
+        [resizable]="showFilters"
+        [scrollable]="false"
+        [hidden]="!showFilters">
+        <div class="filter-panel">
+          <div class="filter-panel-header">
+            <h3>Prompt Filters</h3>
+            <div class="filter-summary-inline">
+              <span class="summary-value">{{ filteredPrompts.length }}</span>
+              <span class="summary-label">of {{ prompts.length }}</span>
+            </div>
+            <button class="close-btn" (click)="toggleFilterPanel()">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+
+          <div class="filter-content">
+            <!-- Search Filter -->
+            <div class="filter-group">
+              <label class="filter-label">
+                <i class="fa-solid fa-search"></i>
+                Name
+              </label>
+              <input
+                type="text"
+                class="filter-input"
+                placeholder="Search prompts..."
+                [value]="searchTerm"
+                (input)="onSearchChange($any($event.target).value)"
+              />
+            </div>
+
+            <!-- Category Filter -->
+            <div class="filter-group">
+              <label class="filter-label">
+                <i class="fa-solid fa-folder"></i>
+                Category
+              </label>
+              <select class="filter-select" [value]="selectedCategory" (change)="onCategoryChange($any($event.target).value)">
+                <option value="all">All Categories</option>
+                @for (category of categories; track category.ID) {
+                  <option [value]="category.ID">{{ category.Name }}</option>
+                }
+              </select>
+            </div>
+
+            <!-- Type Filter -->
+            <div class="filter-group">
+              <label class="filter-label">
+                <i class="fa-solid fa-tag"></i>
+                Type
+              </label>
+              <select class="filter-select" [value]="selectedType" (change)="onTypeChange($any($event.target).value)">
+                <option value="all">All Types</option>
+                @for (type of types; track type.ID) {
+                  <option [value]="type.ID">{{ type.Name }}</option>
+                }
+              </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="filter-group">
+              <label class="filter-label">
+                <i class="fa-solid fa-toggle-on"></i>
+                Status
+              </label>
+              <select class="filter-select" [value]="selectedStatus" (change)="onStatusChange($any($event.target).value)">
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            <!-- Reset Button -->
+            <div class="filter-actions">
+              <button class="reset-btn" (click)="clearFilters()" title="Reset all filters">
+                <i class="fa-solid fa-undo"></i>
+                Reset Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      </kendo-splitter-pane>
+
+      <!-- Prompts List Panel -->
+      <kendo-splitter-pane
+        [resizable]="true"
+        [scrollable]="true">
+        <div class="prompts-content">
+          <!-- Loading State -->
+          @if (isLoading) {
+            <div class="loading-container">
+              <mj-loading [text]="currentLoadingMessage" size="large"></mj-loading>
+            </div>
+          }
+
+          <!-- Prompts Display -->
+          @if (!isLoading) {
+            @if (filteredPrompts.length === 0) {
+              <div class="empty-state">
+                <i class="fa-solid fa-message"></i>
+                <h3>No prompts found</h3>
+                <p>{{ hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI prompt to get started' }}</p>
+                @if (!hasActiveFilters && UserCanCreatePrompts) {
+                  <button
+                    type="button"
+                    class="empty-state-btn"
+                    (click)="createNewPrompt()">
+                    <i class="fa-solid fa-plus"></i>
+                    Create New Prompt
+                  </button>
+                }
+              </div>
+            } @else {
+              <!-- Grid View -->
+              @if (viewMode === 'grid') {
+                <div class="prompts-grid">
+                  @for (prompt of filteredPrompts; track prompt.ID) {
+                    <div class="prompt-card" [class.expanded]="expandedPromptId === prompt.ID">
+                      <!-- Card Header -->
+                      <div class="card-header" (click)="togglePromptExpansion(prompt.ID)">
+                        <div class="prompt-info">
+                          <div class="prompt-icon">
+                            <i [class]="getPromptIcon(prompt)"></i>
+                          </div>
+                          <div class="prompt-details">
+                            <h4 class="prompt-name">{{ prompt.Name }}</h4>
+                            <div class="prompt-meta">
+                              <span class="meta-item">
+                                <i class="fa-solid fa-folder"></i>
+                                {{ prompt.CategoryName }}
+                              </span>
+                              @if (prompt.Status) {
+                                <span class="meta-item" [class]="'status-' + prompt.Status.toLowerCase()">
+                                  <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+                                  {{ prompt.Status }}
+                                </span>
+                              }
+                            </div>
+                          </div>
+                        </div>
+
+                        <i class="fa-solid fa-chevron-down expand-icon"
+                           [class.rotated]="expandedPromptId === prompt.ID"></i>
+                      </div>
+
+                      <!-- Card Body -->
+                      <div class="card-body">
+                        @if (prompt.Description) {
+                          <p class="prompt-description">{{ prompt.Description }}</p>
+                        } @else {
+                          <p class="prompt-description text-muted">No description provided</p>
+                        }
+
+                        <!-- Expandable Content -->
+                        @if (expandedPromptId === prompt.ID) {
+                          <div class="expanded-content">
+                            <div class="prompt-stats">
+                              <div class="stat-item">
+                                <span class="stat-label">Type</span>
+                                <span class="stat-value">{{ prompt.TypeName }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <span class="stat-label">Template</span>
+                                <span class="stat-value">
+                                  @if (prompt.TemplateEntity) {
+                                    <i class="fa-solid fa-check" style="color: #28a745;"></i> Yes
+                                  } @else {
+                                    <i class="fa-solid fa-times" style="color: #dc3545;"></i> No
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+
+                      <!-- Card Actions -->
+                      <div class="card-actions">
+                        @if (UserCanReadPrompts) {
+                          <button
+                            type="button"
+                            class="action-btn"
+                            (click)="showPromptDetails(prompt, $event)"
+                            title="View Details">
+                            <i class="fa-solid fa-eye"></i>
+                            Details
+                          </button>
+                        }
+
+                        @if (prompt.Status === 'Active' && UserCanReadPrompts) {
+                          <button
+                            type="button"
+                            class="action-btn action-btn-primary"
+                            (click)="testPrompt(prompt.ID, $event)"
+                            title="Run Prompt">
+                            <i class="fa-solid fa-play"></i>
+                            Run
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- List View -->
+              @if (viewMode === 'list') {
+                <div class="prompts-list">
+                  <table class="prompts-table">
+                    <thead>
+                      <tr>
+                        <th (click)="sortBy('Name')"
+                            [class.sorted]="sortColumn === 'Name'"
+                            [class.desc]="sortColumn === 'Name' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Name
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Category')"
+                            [class.sorted]="sortColumn === 'Category'"
+                            [class.desc]="sortColumn === 'Category' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Category
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Type')"
+                            [class.sorted]="sortColumn === 'Type'"
+                            [class.desc]="sortColumn === 'Type' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Type
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th (click)="sortBy('Status')"
+                            [class.sorted]="sortColumn === 'Status'"
+                            [class.desc]="sortColumn === 'Status' && sortDirection === 'desc'">
+                          <span class="sort-header">
+                            Status
+                            <i class="fa-solid fa-chevron-up sort-icon"></i>
+                          </span>
+                        </th>
+                        <th>Template</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (prompt of filteredPrompts; track prompt.ID) {
+                        <tr>
+                          <td>
+                            <div class="prompt-name-cell">
+                              <div class="prompt-icon-small">
+                                <i [class]="getPromptIcon(prompt)"></i>
+                              </div>
+                              <div>
+                                <div class="prompt-name">{{ prompt.Name }}</div>
+                                @if (prompt.Description) {
+                                  <div class="prompt-description-small">{{ prompt.Description }}</div>
+                                }
+                              </div>
+                            </div>
+                          </td>
+                          <td>{{ prompt.CategoryName }}</td>
+                          <td>{{ prompt.TypeName }}</td>
+                          <td>
+                            <span class="status-badge" [class]="'status-' + (prompt.Status || 'unknown').toLowerCase()">
+                              {{ prompt.Status || 'Unknown' }}
+                            </span>
+                          </td>
+                          <td>
+                            @if (prompt.TemplateEntity) {
+                              <i class="fa-solid fa-check-circle" style="color: #28a745;"></i>
+                            } @else {
+                              <i class="fa-solid fa-times-circle" style="color: #6c757d;"></i>
+                            }
+                          </td>
+                          <td>
+                            <div class="table-actions">
+                              @if (UserCanReadPrompts) {
+                                <button
+                                  type="button"
+                                  class="action-btn-small"
+                                  (click)="showPromptDetails(prompt)"
+                                  title="View Details">
+                                  <i class="fa-solid fa-eye"></i>
+                                </button>
+                              }
+                              @if (prompt.Status === 'Active' && UserCanReadPrompts) {
+                                <button
+                                  type="button"
+                                  class="action-btn-small primary"
+                                  (click)="testPrompt(prompt.ID, $event)"
+                                  title="Run Prompt">
+                                  <i class="fa-solid fa-play"></i>
+                                </button>
+                              }
+                            </div>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            }
+          }
+        </div>
+      </kendo-splitter-pane>
+    </kendo-splitter>
+  </div>
+
+  <!-- Detail Panel Overlay -->
+  @if (detailPanelVisible) {
+    <div class="detail-panel-overlay" (click)="closeDetailPanel()"></div>
+  }
+
+  <!-- Detail Panel -->
+  <div class="detail-panel" [class.visible]="detailPanelVisible">
+    @if (selectedPrompt) {
+      <!-- Panel Header -->
+      <div class="detail-panel-header">
+        <div class="detail-panel-title">
+          <div class="detail-icon">
+            <i [class]="getPromptIcon(selectedPrompt)"></i>
+          </div>
+          <div class="detail-title-info">
+            <h3>{{ selectedPrompt.Name }}</h3>
+            <span class="detail-subtitle">{{ selectedPrompt.TypeName || 'Prompt' }}</span>
+          </div>
+        </div>
+        <button class="detail-panel-close" (click)="closeDetailPanel()">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Panel Content -->
+      <div class="detail-panel-content">
+        <!-- Status Section -->
+        <div class="detail-section">
+          <div class="detail-badges">
+            <span class="status-badge" [class]="'status-' + (selectedPrompt.Status || 'unknown').toLowerCase()">
+              <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
+              {{ selectedPrompt.Status || 'Unknown' }}
+            </span>
+            @if (selectedPrompt.TemplateEntity) {
+              <span class="feature-badge">
+                <i class="fa-solid fa-file-code"></i>
+                Has Template
+              </span>
+            }
+          </div>
+        </div>
+
+        <!-- Description -->
+        @if (selectedPrompt.Description) {
+          <div class="detail-section">
+            <h4 class="detail-section-title">
+              <i class="fa-solid fa-align-left"></i>
+              Description
+            </h4>
+            <p class="detail-description">{{ selectedPrompt.Description }}</p>
+          </div>
+        }
+
+        <!-- Configuration Details -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-cog"></i>
+            Configuration
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Category</span>
+              <span class="detail-value">{{ selectedPrompt.CategoryName || 'Uncategorized' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Type</span>
+              <span class="detail-value">{{ selectedPrompt.TypeName || 'Unknown' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Response Format</span>
+              <span class="detail-value">{{ selectedPrompt.ResponseFormat }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Selection Strategy</span>
+              <span class="detail-value">{{ selectedPrompt.SelectionStrategy }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Power Preference</span>
+              <span class="detail-value">{{ selectedPrompt.PowerPreference }}</span>
+            </div>
+            @if (selectedPrompt.MinPowerRank) {
+              <div class="detail-item">
+                <span class="detail-label">Min Power Rank</span>
+                <span class="detail-value">{{ selectedPrompt.MinPowerRank }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Timestamps -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">
+            <i class="fa-solid fa-clock"></i>
+            Timestamps
+          </h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Created</span>
+              <span class="detail-value">{{ selectedPrompt.__mj_CreatedAt | date:'medium' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Updated</span>
+              <span class="detail-value">{{ selectedPrompt.__mj_UpdatedAt | date:'medium' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel Actions -->
+      <div class="detail-panel-actions">
+        @if (selectedPrompt.Status === 'Active') {
+          <button
+            type="button"
+            class="detail-action-btn secondary"
+            (click)="testPrompt(selectedPrompt.ID)">
+            <i class="fa-solid fa-play"></i>
+            Run Prompt
+          </button>
+        }
+        <button
+          type="button"
+          class="detail-action-btn primary"
+          (click)="openPromptFromPanel()">
+          <i class="fa-solid fa-external-link-alt"></i>
+          Open Full Record
+        </button>
+      </div>
+    }
+  </div>
+</div>

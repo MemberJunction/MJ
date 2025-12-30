@@ -12,11 +12,17 @@
       {
         "name": "Invoices",
         "description": "Invoice records for status summary",
-        "displayFields": ["ID", "Status", "TotalAmount"],
+        "displayFields": [
+          "ID",
+          "Status",
+          "TotalAmount"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Status aggregation data"
       }
     ],
@@ -33,5 +39,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Overview cards showing invoice status summary"
 }

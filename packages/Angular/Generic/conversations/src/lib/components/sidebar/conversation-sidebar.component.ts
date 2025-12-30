@@ -1,8 +1,6 @@
-import { Component, Input, OnInit } from '@angular/core';
-import { UserInfo, RunView } from '@memberjunction/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { UserInfo } from '@memberjunction/core';
 import { NavigationTab } from '../../models/conversation-state.model';
-import { ConversationStateService } from '../../services/conversation-state.service';
 
 @Component({
   selector: 'mj-conversation-sidebar',
@@ -12,7 +10,14 @@ import { ConversationStateService } from '../../services/conversation-state.serv
         <mj-conversation-list
           [environmentId]="environmentId"
           [currentUser]="currentUser"
-          [renamedConversationId]="renamedConversationId">
+          [selectedConversationId]="selectedConversationId"
+          [renamedConversationId]="renamedConversationId"
+          [isSidebarPinned]="isSidebarPinned"
+          [isMobileView]="isMobileView"
+          (conversationSelected)="conversationSelected.emit($event)"
+          (newConversationRequested)="newConversationRequested.emit()"
+          (pinSidebarRequested)="onPinSidebarRequested()"
+          (unpinSidebarRequested)="onUnpinSidebarRequested()">
         </mj-conversation-list>
       </div>
       <div *ngIf="activeTab === 'collections'" class="sidebar-content">
@@ -49,19 +54,25 @@ import { ConversationStateService } from '../../services/conversation-state.serv
     }
   `]
 })
-export class ConversationSidebarComponent implements OnInit {
+export class ConversationSidebarComponent {
   @Input() activeTab: NavigationTab = 'conversations';
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  @Input() selectedConversationId: string | null = null;
   @Input() renamedConversationId: string | null = null;
+  @Input() isSidebarPinned: boolean = true;
+  @Input() isMobileView: boolean = false;
 
-  public activeConversationId: string | null = null;
+  @Output() conversationSelected = new EventEmitter<string>();
+  @Output() newConversationRequested = new EventEmitter<void>();
+  @Output() pinSidebarRequested = new EventEmitter<void>();
+  @Output() unpinSidebarRequested = new EventEmitter<void>();
 
-  constructor(private conversationState: ConversationStateService) {}
+  onPinSidebarRequested(): void {
+    this.pinSidebarRequested.emit();
+  }
 
-  ngOnInit() {
-    // Conversations are loaded by the conversation-list component
-    // No need to load here or subscribe to active conversation
-    // The conversation-list component handles its own state
+  onUnpinSidebarRequested(): void {
+    this.unpinSidebarRequested.emit();
   }
 }

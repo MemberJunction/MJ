@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamTypeArrayToScalarBroken",
+  "type": "generic",
+  "title": "Query Parameter Type Array to Scalar - Broken Pattern",
+  "description": "Tests linter detection of passing array to scalar parameter",
+  "code": "function QueryParamTypeArrayToScalarBroken({ utilities }) {\n  const [members, setMembers] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      // ❌ MembershipType expects string, but passing array\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Members By Type',\n        CategoryPath: 'Membership/Reports',\n        Parameters: { MembershipType: ['Gold', 'Silver'] }\n      });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {members.map((m, i) => <div key={i}>{m.Name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Members By Type",
+      "categoryPath": "Membership/Reports",
+      "parameters": [
+        {"name": "MembershipType", "type": "nvarchar", "isRequired": true}
+      ]
+    }]
+  }
+}

@@ -9,21 +9,23 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          EntityInfo, EntityFieldInfo, EntityFieldTSType,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError,
-         TransactionGroupBase, TransactionItem, TransactionResult, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
+         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
-         IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
+         RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, BaseEntityResult,
-         KeyValuePair } from "@memberjunction/core";
+         RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
+         RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
+         KeyValuePair, getGraphQLTypeNameBase } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
-import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
+import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -105,7 +107,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
  * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider interfaces and connects to the
  * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
  */
-export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider {
+export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
     private static _instance: GraphQLDataProvider;
     public static get Instance(): GraphQLDataProvider {
         return GraphQLDataProvider._instance;
@@ -121,74 +123,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _configData: GraphQLProviderConfigData;
     private _sessionId: string;
     private _aiClient: GraphQLAIClient;
+    private _refreshPromise: Promise<void> | null = null;
 
     public get ConfigData(): GraphQLProviderConfigData {
         return this._configData;
     }
 
-    /**
-     * The core schema name constant. This should match the mjCoreSchema config value.
-     * TODO: Move this to @memberjunction/core once npm registration issues are resolved
-     * @see https://github.com/MemberJunction/MJ/issues/1452
-     */
-    protected static readonly MJ_CORE_SCHEMA = '__mj';
-
-    /**
-     * Sanitizes a string to be a valid GraphQL name component, preserving original capitalization.
-     * GraphQL names must match the pattern [_A-Za-z][_0-9A-Za-z]* and cannot start with double underscore
-     *
-     * TODO: Move this to @memberjunction/core once npm registration issues are resolved
-     * @see https://github.com/MemberJunction/MJ/issues/1452
-     *
-     * Copied from @memberjunction/codegen-lib GraphQLServerGeneratorBase.sanitizeGraphQLName()
-     */
-    protected sanitizeGraphQLName(input: string): string {
-        if (!input || input.length === 0) {
-            return '';
-        }
-
-        // Replace any non-alphanumeric characters (except underscore) with nothing to preserve capitalization
-        let sanitized = input.replace(/[^A-Za-z0-9_]/g, '');
-
-        // If the name starts with two underscores, remove them
-        // (double underscore is reserved for GraphQL introspection)
-        if (sanitized.startsWith('__')) {
-            sanitized = sanitized.substring(2);
-        }
-
-        // Remove any remaining underscores
-        sanitized = sanitized.replace(/_/g, '');
-
-        // If the result starts with a digit or is empty, prepend an underscore
-        if (sanitized.length === 0 || /^[0-9]/.test(sanitized)) {
-            return '_' + sanitized;
-        }
-
-        return sanitized;
-    }
-
-    /**
-     * Generates the base GraphQL type name for an entity using SchemaBaseTable pattern.
-     * Preserves original capitalization. Special case: MJ core schema uses "MJ" prefix.
-     * This ensures unique type names across different schemas.
-     *
-     * TODO: Move this to @memberjunction/core once npm registration issues are resolved
-     * @see https://github.com/MemberJunction/MJ/issues/1452
-     *
-     * Copied from @memberjunction/codegen-lib GraphQLServerGeneratorBase.getServerGraphQLTypeNameBase()
-     *
-     * @param entity - The entity to generate the type name for
-     * @returns The base GraphQL type name (without suffix like ViewByID, DynamicView, etc.)
-     */
-    protected getGraphQLTypeNameBase(entity: EntityInfo): string {
-        // Special case for MJ core schema - use "MJ" instead of the schema name
-        const schemaPrefix = entity.SchemaName.trim().toLowerCase() === GraphQLDataProvider.MJ_CORE_SCHEMA.trim().toLowerCase()
-            ? 'MJ'
-            : this.sanitizeGraphQLName(entity.SchemaName);
-
-        const sanitizedBaseTable = this.sanitizeGraphQLName(entity.BaseTable);
-        return `${schemaPrefix}${sanitizedBaseTable}`;
-    }
 
     /**
      * Gets the AI client for executing AI operations through GraphQL.
@@ -299,8 +239,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
+            // Enhanced logging to diagnose token issues
+            // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+            // console.log('[GraphQL] Config called with token:', {
+            //     tokenPreview,
+            //     tokenLength: configData.Token?.length,
+            //     separateConnection,
+            //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+            // });
+
+            // CRITICAL: Always set this instance's _configData first
+            // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
+            this._configData = configData;
+
             if (separateConnection) {
-                this._configData = configData;
                 // Get UUID after setting the configData, so that it can be used to get any stored session ID
                 this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
 
@@ -309,18 +261,24 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 await this.SaveStoredSessionID(this._sessionId);
             }
             else {
+                // Update the singleton instance
                 GraphQLDataProvider.Instance._configData = configData;
 
                 if (GraphQLDataProvider.Instance._sessionId === undefined) {
                     GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
                 }
-    
+
                 // now create the new client, if it isn't already created
                 if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey);    
-                
+                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey);
+
                 // Store the session ID for the global instance
                 await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+
+                // CRITICAL: Sync this instance with the singleton
+                // This ensures ExecuteGQL() can use this._client.request()
+                this._sessionId = GraphQLDataProvider.Instance._sessionId;
+                this._client = GraphQLDataProvider.Instance._client;
             }
             return super.Config(configData); // now parent class can do it's config
         }
@@ -383,7 +341,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     // START ---- IRunQueryProvider
     /**************************************************************************/
-    public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+    protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
@@ -393,6 +352,38 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         else {
             throw new Error("No QueryID or QueryName provided to RunQuery");
         }
+    }
+
+    protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
+        // Make a single batch GraphQL call for efficiency (single network roundtrip)
+        const query = gql`
+            query RunQueriesBatch($input: [RunQueryInput!]!) {
+                RunQueries(input: $input) {
+                    ${this.QueryReturnFieldList}
+                }
+            }
+        `;
+
+        // Convert params to the input format expected by the GraphQL resolver
+        const input = params.map(p => ({
+            QueryID: p.QueryID,
+            QueryName: p.QueryName,
+            CategoryID: p.CategoryID,
+            CategoryPath: p.CategoryPath,
+            Parameters: p.Parameters,
+            MaxRows: p.MaxRows,
+            StartRow: p.StartRow,
+            ForceAuditLog: p.ForceAuditLog,
+            AuditLogDescription: p.AuditLogDescription
+        }));
+
+        const result = await this.ExecuteGQL(query, { input });
+        if (result && result.RunQueries) {
+            // Transform each result in the batch
+            return result.RunQueries.map((r: unknown) => this.TransformQueryPayload(r));
+        }
+        return [];
     }
 
     public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
@@ -493,8 +484,125 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * RunQueriesWithCacheCheck - Smart cache validation for batch RunQueries.
+     * For each query, if cacheStatus is provided, the server checks if the cache is current
+     * using the Query's CacheValidationSQL. If current, returns status='current' with no data.
+     * If stale, returns status='stale' with fresh data.
+     *
+     * @param params - Array of RunQuery requests with optional cache status
+     * @param contextUser - Optional user context
+     * @returns Response containing results for each query in the batch
+     */
+    public async RunQueriesWithCacheCheck<T = unknown>(
+        params: RunQueryWithCacheCheckParams[],
+        contextUser?: UserInfo
+    ): Promise<RunQueriesWithCacheCheckResponse<T>> {
+        try {
+            // Build the GraphQL input
+            const input = params.map(item => ({
+                params: {
+                    QueryID: item.params.QueryID || null,
+                    QueryName: item.params.QueryName || null,
+                    CategoryID: item.params.CategoryID || null,
+                    CategoryPath: item.params.CategoryPath || null,
+                    Parameters: item.params.Parameters || null,
+                    MaxRows: item.params.MaxRows ?? null,
+                    StartRow: item.params.StartRow ?? null,
+                    ForceAuditLog: item.params.ForceAuditLog || false,
+                    AuditLogDescription: item.params.AuditLogDescription || null,
+                },
+                cacheStatus: item.cacheStatus ? {
+                    maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+                    rowCount: item.cacheStatus.rowCount,
+                } : null,
+            }));
+
+            const query = gql`
+                query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
+                    RunQueriesWithCacheCheck(input: $input) {
+                        success
+                        errorMessage
+                        results {
+                            queryIndex
+                            queryId
+                            status
+                            Results
+                            maxUpdatedAt
+                            rowCount
+                            errorMessage
+                        }
+                    }
+                }
+            `;
+
+            const responseData = await this.ExecuteGQL(query, { input });
+            const response = responseData?.['RunQueriesWithCacheCheck'] as {
+                success: boolean;
+                errorMessage?: string;
+                results: Array<{
+                    queryIndex: number;
+                    queryId: string;
+                    status: string;
+                    Results?: string;
+                    maxUpdatedAt?: string;
+                    rowCount?: number;
+                    errorMessage?: string;
+                }>;
+            };
+
+            if (!response) {
+                return {
+                    success: false,
+                    results: [],
+                    errorMessage: 'No response from server',
+                };
+            }
+
+            // Transform results - deserialize Results for stale/no_validation results
+            const transformedResults: RunQueryWithCacheCheckResult<T>[] = response.results.map(result => {
+                if ((result.status === 'stale' || result.status === 'no_validation') && result.Results) {
+                    // Deserialize the Results JSON string
+                    const deserializedResults: T[] = JSON.parse(result.Results);
+
+                    return {
+                        queryIndex: result.queryIndex,
+                        queryId: result.queryId,
+                        status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
+                        results: deserializedResults,
+                        maxUpdatedAt: result.maxUpdatedAt,
+                        rowCount: result.rowCount,
+                        errorMessage: result.errorMessage,
+                    };
+                }
+
+                return {
+                    queryIndex: result.queryIndex,
+                    queryId: result.queryId,
+                    status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
+                    maxUpdatedAt: result.maxUpdatedAt,
+                    rowCount: result.rowCount,
+                    errorMessage: result.errorMessage,
+                };
+            });
+
+            return {
+                success: response.success,
+                results: transformedResults,
+                errorMessage: response.errorMessage,
+            };
+        } catch (e) {
+            LogError(`Error in RunQueriesWithCacheCheck: ${e}`);
+            return {
+                success: false,
+                results: [],
+                errorMessage: e instanceof Error ? e.message : String(e),
+            };
+        }
+    }
+
     /**************************************************************************/
-    // END ---- IRunReportProvider
+    // END ---- IRunQueryProvider
     /**************************************************************************/
 
 
@@ -502,10 +610,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     // START ---- IRunViewProvider
     /**************************************************************************/
-    public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        // pre-process via the base-class 
-        await this.PreProcessRunView(params, contextUser);
-
+    protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
         try {
             let qName: string = ''
             let paramType: string = ''
@@ -528,7 +634,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     throw new Error(`Entity ${entity} not found in metadata`);
 
                 let dynamicView = false;
-                const graphQLTypeName = this.getGraphQLTypeNameBase(e);
+                const graphQLTypeName = getGraphQLTypeNameBase(e);
 
                 if (params.ViewID) {
                     qName = `Run${graphQLTypeName}ViewByID`;
@@ -601,9 +707,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
                     const result = viewData[qName];
 
-                    // post-process via the base class
-                    await this.PostProcessRunView(result, params, contextUser);
-
                     return result;
                 }
             }
@@ -618,9 +721,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-        // pre-process via the base class
-        await this.PreProcessRunViews(params, contextUser);
+    protected async InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
 
         try {
             let innerParams: any[] = [];
@@ -651,7 +752,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                     entityInfos.push(e);
                     let dynamicView: boolean = false;
-                    const graphQLTypeName = this.getGraphQLTypeNameBase(e);
+                    const graphQLTypeName = getGraphQLTypeNameBase(e);
 
                     if (param.ViewID) {
                         qName = `Run${graphQLTypeName}ViewByID`;
@@ -738,9 +839,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     });
                 }
 
-                // post-process via the base class
-                await this.PostProcessRunViews(results, params, contextUser);
-                
                 return results;
             }
 
@@ -750,6 +848,138 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         catch (e) {
             LogError(e);
             throw (e);
+        }
+    }
+
+    /**
+     * RunViewsWithCacheCheck - Smart cache validation for batch RunViews.
+     * For each view, if cacheStatus is provided, the server checks if the cache is current.
+     * If current, returns status='current' with no data. If stale, returns status='stale' with fresh data.
+     *
+     * @param params - Array of RunView requests with optional cache status
+     * @param contextUser - Optional user context
+     * @returns Response containing results for each view in the batch
+     */
+    public async RunViewsWithCacheCheck<T = unknown>(
+        params: RunViewWithCacheCheckParams[],
+        contextUser?: UserInfo
+    ): Promise<RunViewsWithCacheCheckResponse<T>> {
+        try {
+            // Build the GraphQL input
+            const input = params.map(item => ({
+                params: {
+                    EntityName: item.params.EntityName || '',
+                    ExtraFilter: item.params.ExtraFilter || '',
+                    OrderBy: item.params.OrderBy || '',
+                    Fields: item.params.Fields,
+                    UserSearchString: item.params.UserSearchString || '',
+                    IgnoreMaxRows: item.params.IgnoreMaxRows || false,
+                    MaxRows: item.params.MaxRows,
+                    StartRow: item.params.StartRow,
+                    ForceAuditLog: item.params.ForceAuditLog || false,
+                    AuditLogDescription: item.params.AuditLogDescription || '',
+                    ResultType: item.params.ResultType || 'simple',
+                },
+                cacheStatus: item.cacheStatus ? {
+                    maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+                    rowCount: item.cacheStatus.rowCount,
+                } : null,
+            }));
+
+            const query = gql`
+                query RunViewsWithCacheCheckQuery($input: [RunViewWithCacheCheckInput!]!) {
+                    RunViewsWithCacheCheck(input: $input) {
+                        success
+                        errorMessage
+                        results {
+                            viewIndex
+                            status
+                            maxUpdatedAt
+                            rowCount
+                            errorMessage
+                            Results {
+                                PrimaryKey {
+                                    FieldName
+                                    Value
+                                }
+                                EntityID
+                                Data
+                            }
+                        }
+                    }
+                }
+            `;
+
+            const responseData = await this.ExecuteGQL(query, { input });
+            const response = responseData?.['RunViewsWithCacheCheck'] as {
+                success: boolean;
+                errorMessage?: string;
+                results: Array<{
+                    viewIndex: number;
+                    status: string;
+                    maxUpdatedAt?: string;
+                    rowCount?: number;
+                    errorMessage?: string;
+                    Results?: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
+                }>;
+            };
+
+            if (!response) {
+                return {
+                    success: false,
+                    results: [],
+                    errorMessage: 'No response from server',
+                };
+            }
+
+            // Transform results - deserialize Data fields for stale results
+            const transformedResults: RunViewWithCacheCheckResult<T>[] = response.results.map((result, index) => {
+                const inputItem = params[index];
+
+                if (result.status === 'stale' && result.Results) {
+                    // Get entity info for field conversion
+                    const entityName = inputItem.params.EntityName;
+                    const entityInfo = this.Entities.find(e => e.Name === entityName);
+
+                    // Deserialize the Data field and convert back MJ fields
+                    const deserializedResults: T[] = result.Results.map(r => {
+                        const data = JSON.parse(r.Data);
+                        this.ConvertBackToMJFields(data);
+                        return data as T;
+                    });
+
+                    return {
+                        viewIndex: result.viewIndex,
+                        status: result.status as 'current' | 'stale' | 'error',
+                        results: deserializedResults,
+                        maxUpdatedAt: result.maxUpdatedAt,
+                        rowCount: result.rowCount,
+                        errorMessage: result.errorMessage,
+                    };
+                }
+
+                return {
+                    viewIndex: result.viewIndex,
+                    status: result.status as 'current' | 'stale' | 'error',
+                    results: undefined,
+                    maxUpdatedAt: result.maxUpdatedAt,
+                    rowCount: result.rowCount,
+                    errorMessage: result.errorMessage,
+                };
+            });
+
+            return {
+                success: response.success,
+                results: transformedResults,
+                errorMessage: response.errorMessage,
+            };
+        } catch (e) {
+            LogError(e);
+            return {
+                success: false,
+                results: [],
+                errorMessage: e instanceof Error ? e.message : String(e),
+            };
         }
     }
 
@@ -1034,7 +1264,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // values for the entity and we need to have those values to update the entity after the
             // save
 
-            const graphQLTypeName = this.getGraphQLTypeNameBase(entity.EntityInfo);
+            const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const mutationName = `${type}${graphQLTypeName}`
 
             // only pass along writable fields, AND the PKEY value if this is an update
@@ -1204,7 +1434,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
-            const graphQLTypeName = this.getGraphQLTypeNameBase(entity.EntityInfo);
+            const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const mapper = new FieldMapper();
             const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
@@ -1306,7 +1536,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop
             vars["options___"] = options ? options : {SkipEntityAIActions: false, SkipEntityActions: false};
 
-            const graphQLTypeName = this.getGraphQLTypeNameBase(entity.EntityInfo);
+            const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const queryName: string = 'Delete' + graphQLTypeName;
             const inner = gql`${queryName}(${pkeyInnerParamString}, options___: $options___) {
                 ${returnValues}
@@ -1673,6 +1903,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data;
         }
         catch (e) {
+            // Enhanced error logging to diagnose 500 errors
+            console.error('[GraphQL] ExecuteGQL error caught:', {
+                hasResponse: !!e?.response,
+                hasErrors: !!e?.response?.errors,
+                errorCount: e?.response?.errors?.length,
+                firstError: e?.response?.errors?.[0],
+                errorCode: e?.response?.errors?.[0]?.extensions?.code,
+                errorMessage: e?.response?.errors?.[0]?.message,
+                fullError: e
+            });
+
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
                 const error = e.response.errors[0];
                 const code = error?.extensions?.code?.toUpperCase().trim()
@@ -1699,14 +1940,60 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async RefreshToken(): Promise<void> {
+        // Check if we're in singleton mode
+        const isInstanceSingleton = GraphQLDataProvider.Instance &&
+                                    GraphQLDataProvider.Instance._configData === this._configData;
+
+        // If singleton has a refresh in progress, wait for it
+        if (isInstanceSingleton && GraphQLDataProvider.Instance._refreshPromise) {
+            return GraphQLDataProvider.Instance._refreshPromise;
+        }
+
+        // If this instance has a refresh in progress, wait for it
+        if (this._refreshPromise) {
+            return this._refreshPromise;
+        }
+
+        // Start a new refresh
+        console.log('[GraphQL] Starting token refresh...');
+        this._refreshPromise = this.performTokenRefresh();
+
+        // Also store on singleton if in singleton mode
+        if (isInstanceSingleton) {
+            GraphQLDataProvider.Instance._refreshPromise = this._refreshPromise;
+        }
+
+        try {
+            await this._refreshPromise;
+            console.log('[GraphQL] Token refresh completed successfully');
+        } finally {
+            // Clear the promise when done
+            this._refreshPromise = null;
+            if (isInstanceSingleton && GraphQLDataProvider.Instance) {
+                GraphQLDataProvider.Instance._refreshPromise = null;
+            }
+        }
+    }
+
+    private async performTokenRefresh(): Promise<void> {
         if (this._configData.Data.RefreshTokenFunction) {
             const newToken = await this._configData.Data.RefreshTokenFunction();
             if (newToken) {
                 this._configData.Token = newToken; // update the token
-                this._client = this.CreateNewGraphQLClient(this._configData.URL,
-                                                           this._configData.Token,
-                                                           this._sessionId,
-                                                           this._configData.MJAPIKey);  
+                const newClient = this.CreateNewGraphQLClient(this._configData.URL,
+                                                              this._configData.Token,
+                                                              this._sessionId,
+                                                              this._configData.MJAPIKey);
+
+                // Update this instance's client
+                this._client = newClient;
+
+                // CRITICAL: Also update the singleton's client if we're in singleton mode
+                // Check if this._configData is the same reference as Instance._configData
+                if (GraphQLDataProvider.Instance &&
+                    GraphQLDataProvider.Instance._configData === this._configData) {
+                    GraphQLDataProvider.Instance._client = newClient;
+                }
             }
             else {
                 throw new Error('Refresh token function returned null or undefined token');
@@ -1722,7 +2009,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string): GraphQLClient {
-        const headers: Record<string, string> = { 
+        // Enhanced logging to diagnose token issues
+        // const tokenPreview = token ? `${token.substring(0, 20)}...${token.substring(token.length - 10)}` : 'NO TOKEN';
+        // console.log('[GraphQL] Creating new client:', {
+        //     url,
+        //     tokenPreview,
+        //     tokenLength: token?.length,
+        //     sessionId,
+        //     hasMJAPIKey: !!mjAPIKey
+        // });
+
+        const headers: Record<string, string> = {
             'x-session-id': sessionId,
         };
         if (token)
@@ -1969,8 +2266,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     next: (data) => {
                         observer.next(data.data);
                     },
-                    error: (error) => {
-                        observer.error(error);
+                    error: async (error: unknown) => {
+                        // Check if error is JWT_EXPIRED
+                        const errorObj = error as { extensions?: { code?: string }, message?: string };
+                        const isTokenExpired =
+                            errorObj?.extensions?.code === 'JWT_EXPIRED' ||
+                            errorObj?.message?.includes('token has expired') ||
+                            errorObj?.message?.includes('JWT_EXPIRED');
+
+                        if (isTokenExpired) {
+                            console.log('[GraphQLDataProvider] WebSocket JWT token expired, refreshing and reconnecting...');
+                            try {
+                                // Refresh the token
+                                await this.RefreshToken();
+
+                                // Dispose old WebSocket client
+                                this.disposeWSClient();
+
+                                // Observer will be completed, and caller should re-subscribe
+                                // which will create a new WebSocket connection with the new token
+                                observer.complete();
+                            } catch (refreshError) {
+                                console.error('[GraphQLDataProvider] Failed to refresh token for WebSocket:', refreshError);
+                                observer.error(refreshError);
+                            }
+                        } else {
+                            observer.error(error);
+                        }
                     },
                     complete: () => {
                         observer.complete();
@@ -2046,8 +2368,32 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             // Extract the message and emit to subject
                             observer.next(data.data.statusUpdates.message);
                         },
-                        error: (error) => {
-                            observer.error(error);
+                        error: async (error: unknown) => {
+                            // Check if error is JWT_EXPIRED
+                            const errorObj = error as { extensions?: { code?: string }, message?: string };
+                            const isTokenExpired =
+                                errorObj?.extensions?.code === 'JWT_EXPIRED' ||
+                                errorObj?.message?.includes('token has expired') ||
+                                errorObj?.message?.includes('JWT_EXPIRED');
+
+                            if (isTokenExpired) {
+                                console.log('[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...');
+                                try {
+                                    // Refresh the token
+                                    await this.RefreshToken();
+
+                                    // Dispose old WebSocket client
+                                    this.disposeWSClient();
+
+                                    // Complete the subscription - components will auto-reconnect via RxJS retry logic
+                                    observer.complete();
+                                } catch (refreshError) {
+                                    console.error('[GraphQLDataProvider] Failed to refresh token for PushStatusUpdates:', refreshError);
+                                    observer.error(refreshError);
+                                }
+                            } else {
+                                observer.error(error);
+                            }
                         },
                         complete: () => {
                             observer.complete();
@@ -2131,107 +2477,3 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 }
 
-
-// this class implements a simple in-memory only storage as a fallback if the browser doesn't support local storage
-class BrowserStorageProviderBase implements ILocalStorageProvider {
-    private _localStorage: { [key: string]: string } = {};
-
-    public async GetItem(key: string): Promise<string | null> {
-        return new Promise((resolve) => {
-            if (this._localStorage.hasOwnProperty(key))
-                resolve(this._localStorage[key]);
-            else
-                resolve(null);
-        });
-    }
-
-    public async SetItem(key: string, value: string): Promise<void> {
-        return new Promise((resolve) => {
-            this._localStorage[key] = value;
-            resolve();
-        });
-    }
-
-    public async Remove(key: string): Promise<void> {
-        return new Promise((resolve) => {
-            if (this._localStorage.hasOwnProperty(key)) {
-                delete this._localStorage[key];
-            }
-            resolve();
-        });
-    }
-}
-
-
-// This implementation just wraps the browser local storage and if for some reason the browser doesn't
-// have a localStorage object, we just use a simple object to store the data in memory.
-class BrowserLocalStorageProvider extends BrowserStorageProviderBase  {
-    public async getItem(key: string): Promise<string | null> {
-        if (localStorage)
-            return localStorage.getItem(key);
-        else
-            return await super.GetItem(key)
-    }
-
-    public async setItem(key: string, value: string): Promise<void> {
-        if (localStorage)
-            localStorage.setItem(key, value);
-        else
-            await super.SetItem(key, value)
-    }
-
-    public async remove(key: string): Promise<void> {
-        if (localStorage)
-            localStorage.removeItem(key);
-        else
-            await super.Remove(key)
-    }
-}
-
-
-
-const IDB_DB_NAME = 'MJ_Metadata';
-const IDB_DB_ObjectStoreName = 'Metadata_KVPairs';
-
-interface MJ_MetadataDB extends DBSchema {
-    'Metadata_KVPairs': {
-        key: string;
-        value: any;
-    };
-}
-
-class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
-    private dbPromise: Promise<IDBPDatabase<MJ_MetadataDB>>;
-
-    constructor() {
-        super();
-
-        this.dbPromise = openDB<MJ_MetadataDB>(IDB_DB_NAME, 1, {
-            upgrade(db) {
-                if (!db.objectStoreNames.contains(IDB_DB_ObjectStoreName)) {
-                    db.createObjectStore(IDB_DB_ObjectStoreName);
-                }
-            },
-        });
-    }
-
-    async setItem(key: string, value: any): Promise<void> {
-        const db = await this.dbPromise;
-        const tx = db.transaction(IDB_DB_ObjectStoreName, 'readwrite');
-        await tx.objectStore(IDB_DB_ObjectStoreName).put(value, key);
-        await tx.done;
-    }
-
-    async getItem(key: string): Promise<any> {
-        const db = await this.dbPromise;
-        const value = await db.transaction(IDB_DB_ObjectStoreName).objectStore(IDB_DB_ObjectStoreName).get(key);
-        return value;
-    }
-
-    async remove(key: string): Promise<void> {
-        const db = await this.dbPromise;
-        const tx = db.transaction(IDB_DB_ObjectStoreName, 'readwrite');
-        await tx.objectStore(IDB_DB_ObjectStoreName).delete(key);
-        await tx.done;
-    }
-}

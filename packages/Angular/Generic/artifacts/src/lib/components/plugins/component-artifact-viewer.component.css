@@ -58,3 +58,29 @@
   color: #495057;
   margin: 0;
 }
+
+/* State for component spec without executable code */
+.no-code-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  color: #6c757d;
+  flex: 1;
+}
+.no-code-state i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  color: #5B4FE9;
+}
+.no-code-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  color: #495057;
+}
+.no-code-state p {
+  margin: 0 0 8px 0;
+  color: #6c757d;
+}

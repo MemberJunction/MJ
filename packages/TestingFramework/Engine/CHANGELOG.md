@@ -1,5 +1,158 @@
 # @memberjunction/testing-engine
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/ai-prompts@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ai-agents@2.128.0
+  - @memberjunction/ai-core-plus@2.128.0
+  - @memberjunction/aiengine@2.128.0
+  - @memberjunction/testing-engine-base@2.128.0
+  - @memberjunction/ai@2.128.0
+  - @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [0e56e97]
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/ai-agents@2.127.0
+  - @memberjunction/ai-core-plus@2.127.0
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/aiengine@2.127.0
+  - @memberjunction/ai-prompts@2.127.0
+  - @memberjunction/testing-engine-base@2.127.0
+  - @memberjunction/ai@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.126.1
+- @memberjunction/ai@2.126.1
+- @memberjunction/ai-core-plus@2.126.1
+- @memberjunction/aiengine@2.126.1
+- @memberjunction/ai-prompts@2.126.1
+- @memberjunction/core@2.126.1
+- @memberjunction/core-entities@2.126.1
+- @memberjunction/global@2.126.1
+- @memberjunction/testing-engine-base@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [d424fce]
+- Updated dependencies [703221e]
+  - @memberjunction/ai-agents@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-core-plus@2.126.0
+  - @memberjunction/aiengine@2.126.0
+  - @memberjunction/ai-prompts@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/testing-engine-base@2.126.0
+  - @memberjunction/ai@2.126.0
+  - @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ai-agents@2.125.0
+  - @memberjunction/ai-core-plus@2.125.0
+  - @memberjunction/aiengine@2.125.0
+  - @memberjunction/ai-prompts@2.125.0
+  - @memberjunction/testing-engine-base@2.125.0
+  - @memberjunction/ai@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+- Updated dependencies [4b2181d]
+- Updated dependencies [cabe329]
+- Updated dependencies [629cf5a]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ai-agents@2.124.0
+  - @memberjunction/ai-core-plus@2.124.0
+  - @memberjunction/ai-prompts@2.124.0
+  - @memberjunction/aiengine@2.124.0
+  - @memberjunction/testing-engine-base@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.123.1
+- @memberjunction/ai@2.123.1
+- @memberjunction/ai-core-plus@2.123.1
+- @memberjunction/aiengine@2.123.1
+- @memberjunction/ai-prompts@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+- @memberjunction/testing-engine-base@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- Updated dependencies [0944f59]
+  - @memberjunction/ai-agents@2.123.0
+  - @memberjunction/ai-core-plus@2.123.0
+  - @memberjunction/aiengine@2.123.0
+  - @memberjunction/ai-prompts@2.123.0
+  - @memberjunction/ai@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+  - @memberjunction/testing-engine-base@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [81f0c44]
+  - @memberjunction/ai-agents@2.122.2
+  - @memberjunction/ai-prompts@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/aiengine@2.122.2
+  - @memberjunction/testing-engine-base@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.122.1
+- @memberjunction/ai-core-plus@2.122.1
+- @memberjunction/aiengine@2.122.1
+- @memberjunction/ai-prompts@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/core-entities@2.122.1
+- @memberjunction/global@2.122.1
+- @memberjunction/testing-engine-base@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

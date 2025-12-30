@@ -250,7 +250,9 @@
 
 /* Open in Tab Button */
 .open-in-tab-button,
-.configure-view-button {
+.configure-view-button,
+.create-record-button,
+.export-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -265,15 +267,24 @@
 }
 
 .open-in-tab-button:hover,
-.configure-view-button:hover {
+.configure-view-button:hover,
+.create-record-button:hover,
+.export-button:hover {
   background: var(--background-hover, #e8e8e8);
   border-color: var(--border-color-hover, #ccc);
   color: var(--primary-color, #007bff);
 }
 
 .open-in-tab-button i,
-.configure-view-button i {
+.configure-view-button i,
+.create-record-button i,
+.export-button i {
   font-size: 12px;
+}
+
+/* Excel export button special color on hover */
+.export-button:hover {
+  color: #217346; /* Excel green */
 }
 
 /* Responsive Adjustments */

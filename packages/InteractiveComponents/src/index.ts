@@ -3,6 +3,7 @@ export * from './component-option';
 export * from './runtime-types';
 export * from './shared';
 export * from './component-props-events';
+export * from './component-constraints';
 export * from './util';
 export * from './component-spec';
 export * from './component-spec-runtime';

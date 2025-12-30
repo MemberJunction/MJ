@@ -1,7 +1,7 @@
 import * as parser from '@babel/parser';
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentQueryDataRequirement, SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
 import type { EntityFieldInfo, EntityInfo, RunQueryResult, RunViewResult } from '@memberjunction/core';
 import { Metadata } from '@memberjunction/core';
 import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
@@ -12,6 +12,10 @@ import { StylesTypeAnalyzer } from './styles-type-analyzer';
 import { TypeContext, mapSQLTypeToJSType, FieldTypeInfo, StandardTypes } from './type-context';
 import { TypeInferenceEngine } from './type-inference-engine';
 import { ControlFlowAnalyzer } from './control-flow-analyzer';
+import { ValidationContext, BaseConstraintValidator } from './constraint-validators';
+import { PropValueExtractor } from './prop-value-extractor';
+import type { PropertyConstraint, ConstraintViolation } from '@memberjunction/interactive-component-types';
+import { MJGlobal } from '@memberjunction/global';
 
 export interface LintResult {
   success: boolean;
@@ -1986,6 +1990,210 @@ export class ComponentLinter {
     },
 
     {
+      name: 'useeffect-unstable-dependencies',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Known prop names that are always objects/functions and unstable
+        const unstablePropNames = new Set([
+          'utilities',
+          'components',
+          'callbacks',
+          'styles',
+          'savedUserSettings', // Can be unstable if not memoized by parent
+        ]);
+
+        // Helper to find the component function and extract parameters with object defaults
+        const findComponentParams = (useEffectPath: NodePath<t.CallExpression>): Map<string, t.ObjectExpression | t.ArrayExpression> => {
+          const paramsWithObjectDefaults = new Map<string, t.ObjectExpression | t.ArrayExpression>();
+
+          let current: NodePath | null = useEffectPath.parentPath;
+          while (current) {
+            // Look for FunctionDeclaration or ArrowFunctionExpression/FunctionExpression
+            if (
+              t.isFunctionDeclaration(current.node) ||
+              t.isArrowFunctionExpression(current.node) ||
+              t.isFunctionExpression(current.node)
+            ) {
+              const func = current.node as t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression;
+
+              // Check if this looks like a component (starts with uppercase)
+              let isComponent = false;
+              if (t.isFunctionDeclaration(func) && func.id && /^[A-Z]/.test(func.id.name)) {
+                isComponent = true;
+              }
+
+              // For arrow functions, check the variable declarator name
+              if ((t.isArrowFunctionExpression(func) || t.isFunctionExpression(func)) && current.parentPath) {
+                const parent = current.parentPath.node;
+                if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id) && /^[A-Z]/.test(parent.id.name)) {
+                  isComponent = true;
+                }
+              }
+
+              if (isComponent) {
+                // Extract parameters with object literal defaults
+                for (const param of func.params) {
+                  // Case 1: ObjectPattern (destructured props): { foo = {}, bar = [] }
+                  if (t.isObjectPattern(param)) {
+                    for (const prop of param.properties) {
+                      if (t.isObjectProperty(prop)) {
+                        const value = prop.value;
+                        // Check if this destructured property has a default: queryParameters = {}
+                        if (t.isAssignmentPattern(value) && t.isIdentifier(value.left)) {
+                          const defaultVal = value.right;
+                          if (t.isObjectExpression(defaultVal) || t.isArrayExpression(defaultVal)) {
+                            paramsWithObjectDefaults.set(value.left.name, defaultVal);
+                          }
+                        }
+                      }
+                    }
+                  }
+                  // Case 2: AssignmentPattern (param with default): queryParameters = {}
+                  else if (t.isAssignmentPattern(param)) {
+                    const left = param.left;
+                    const right = param.right;
+
+                    // Simple param with object default: queryParameters = {}
+                    if (t.isIdentifier(left) && (t.isObjectExpression(right) || t.isArrayExpression(right))) {
+                      paramsWithObjectDefaults.set(left.name, right);
+                    }
+                    // ObjectPattern with object default: { foo, bar } = {}
+                    else if (t.isObjectPattern(left) && (t.isObjectExpression(right) || t.isArrayExpression(right))) {
+                      // The whole destructured object gets a default - mark all properties
+                      for (const prop of left.properties) {
+                        if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                          paramsWithObjectDefaults.set(prop.key.name, right);
+                        }
+                      }
+                    }
+                  }
+                }
+                break; // Found the component, stop traversing up
+              }
+            }
+            current = current.parentPath;
+          }
+
+          return paramsWithObjectDefaults;
+        };
+
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for useEffect calls
+            if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useEffect') {
+              // Get the dependency array (second argument)
+              const depsArg = path.node.arguments[1];
+
+              if (!depsArg || !t.isArrayExpression(depsArg)) {
+                return; // No deps array or empty deps []
+              }
+
+              // Find component parameters with object defaults
+              const paramsWithObjectDefaults = findComponentParams(path);
+
+              // Check each dependency
+              for (const dep of depsArg.elements) {
+                if (!dep) continue;
+
+                let unstableDep: string | null = null;
+                let severity: 'critical' | 'high' = 'high';
+                let message = '';
+                let suggestionText = '';
+
+                // Case 1: Member expression (utilities.rq.RunQuery, callbacks?.onSelect)
+                if (t.isMemberExpression(dep) || t.isOptionalMemberExpression(dep)) {
+                  const memberExpr = dep as t.MemberExpression;
+
+                  // Get the root object (e.g., 'utilities' from 'utilities.rq.RunQuery')
+                  let rootObj: t.Expression = memberExpr.object;
+                  while ((t.isMemberExpression(rootObj) || t.isOptionalMemberExpression(rootObj)) && 'object' in rootObj) {
+                    rootObj = rootObj.object;
+                  }
+
+                  if (t.isIdentifier(rootObj) && unstablePropNames.has(rootObj.name)) {
+                    unstableDep = `${rootObj.name}.${t.isIdentifier(memberExpr.property) ? memberExpr.property.name : '...'}`;
+                    severity = 'high';
+                    message = `useEffect has unstable dependency '${unstableDep}' that may cause infinite render loops. Object/function references from props typically change on every render. This works if the parent provides stable references (via useMemo), but is fragile and should be avoided.`;
+                    suggestionText = `Remove '${unstableDep}' from dependency array. These utilities/services are typically stable and don't need to be tracked.`;
+                  }
+                }
+                // Case 2: Direct identifier (utilities, components, etc.)
+                else if (t.isIdentifier(dep)) {
+                  // Check if it's a known unstable prop name
+                  if (unstablePropNames.has(dep.name)) {
+                    unstableDep = dep.name;
+                    severity = 'high';
+                    message = `useEffect has unstable dependency '${unstableDep}' that may cause infinite render loops. Object/function references from props typically change on every render. This works if the parent provides stable references (via useMemo), but is fragile and should be avoided.`;
+                    suggestionText = `Remove '${unstableDep}' from dependency array. These utilities/services are typically stable and don't need to be tracked.`;
+                  }
+                  // Check if it's a param with object literal default
+                  else if (paramsWithObjectDefaults.has(dep.name)) {
+                    unstableDep = dep.name;
+                    severity = 'critical';
+                    const defaultValue = paramsWithObjectDefaults.get(dep.name);
+                    const defaultStr = t.isObjectExpression(defaultValue) ? '{}' : '[]';
+                    message = `useEffect has CRITICAL unstable dependency '${unstableDep}' with object literal default (${dep.name} = ${defaultStr}). This creates a NEW object on EVERY render, causing infinite loops. This is ALWAYS broken.`;
+                    suggestionText = `Remove '${unstableDep}' from dependency array. Props with object literal defaults (${dep.name} = ${defaultStr}) create new references every render.`;
+                  }
+                }
+
+                // Report violation if we found an unstable dependency
+                if (unstableDep) {
+                  let fixedDeps = depsArg.elements
+                    .filter((e) => e !== dep)
+                    .map((e) => {
+                      if (!e) return '';
+                      if (t.isIdentifier(e)) return e.name;
+                      if (t.isMemberExpression(e) || t.isOptionalMemberExpression(e)) {
+                        // Try to extract the full path
+                        const parts: string[] = [];
+                        let current: t.Expression | t.PrivateName = e;
+                        while (t.isMemberExpression(current) || t.isOptionalMemberExpression(current)) {
+                          if ('property' in current && t.isIdentifier(current.property)) {
+                            parts.unshift(current.property.name);
+                          }
+                          if ('object' in current) {
+                            current = current.object;
+                          } else {
+                            break;
+                          }
+                        }
+                        if (t.isIdentifier(current)) {
+                          parts.unshift(current.name);
+                        }
+                        return parts.join('.');
+                      }
+                      return '...';
+                    })
+                    .filter(Boolean);
+
+                  violations.push({
+                    rule: 'useeffect-unstable-dependencies',
+                    severity: severity,
+                    line: dep.loc?.start.line || path.node.loc?.start.line || 0,
+                    column: dep.loc?.start.column || path.node.loc?.start.column || 0,
+                    message: message,
+                    code: `}, [${fixedDeps.join(', ')}${fixedDeps.length > 0 ? ', ' : ''}${unstableDep}]);  // ${severity === 'critical' ? '🚨' : '⚠️'} Remove '${unstableDep}'`,
+                    suggestion: {
+                      text: suggestionText,
+                      example: fixedDeps.length > 0
+                        ? `}, [${fixedDeps.join(', ')}]);  // ✅ Removed unstable '${unstableDep}'`
+                        : `}, []);  // ✅ Run once on mount - dependencies are stable`
+                    }
+                  });
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
+
+    {
       name: 'server-reload-on-client-operation',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -2899,11 +3107,20 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                 }
 
+                // Filter to only required parameters for validation
+                const requiredParams = specQuery.parameters.filter((p) => {
+                  const hasRequiredFlag = (p as any).isRequired === true || (p as any).isRequired === '1';
+                  const isRuntimeParam = p.value === '@runtime';
+                  return hasRequiredFlag || isRuntimeParam;
+                });
+
                 const specParamNames = specQuery.parameters.map((p) => p.name);
                 const specParamNamesLower = specParamNames.map((n) => n.toLowerCase());
 
-                // Find missing parameters (case-insensitive)
-                const missing = specParamNames.filter((n) => !providedParamsMap.has(n.toLowerCase()));
+                // Find missing REQUIRED parameters only (case-insensitive)
+                const missing = requiredParams
+                  .map((p) => p.name)
+                  .filter((n) => !providedParamsMap.has(n.toLowerCase()));
 
                 // Find extra parameters (not matching any spec param case-insensitively)
                 const extra = Array.from(providedParamsMap.values()).filter((providedName) => !specParamNamesLower.includes(providedName.toLowerCase()));
@@ -2951,8 +3168,15 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   });
                 }
               }
-              // Case 3: Parameters is neither array nor object
-              else if (!t.isObjectExpression(paramValue)) {
+              // Case 3: Parameters is a valid format we can't or don't need to validate further
+              // - Variable reference (e.g., Parameters: statusParams) - can't validate without scope tracking
+              // - Object expression without spec query params - nothing to validate against
+              else if (t.isIdentifier(paramValue) || t.isObjectExpression(paramValue)) {
+                // Valid format - skip further validation
+                // Either a variable reference or an object when we have no spec to validate against
+              }
+              // Case 4: Parameters is neither array, object, nor variable reference
+              else {
                 let fixCode: string;
                 let message: string;
 
@@ -3136,11 +3360,50 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       code: suggestion || `${paramName}: <${expectedType} value>`,
                     });
                   }
+
+                  // NOTE: Date parameter validation has been moved to TypeInferenceEngine
+                  // and is surfaced via the 'type-inference-errors' rule
                 }
               }
             }
           },
         });
+
+        return violations;
+      },
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+    // TYPE INFERENCE ERRORS RULE
+    // Surfaces errors found by TypeInferenceEngine (e.g., date parameter validation)
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+    {
+      name: 'type-inference-errors',
+      appliesTo: 'all',
+      test: (ast: t.File, _componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Create type inference engine
+        const typeEngine = new TypeInferenceEngine(componentSpec);
+
+        // Run analysis synchronously (validateQueryParameters is called during traversal)
+        // The async part of analyze() is not needed for date validation
+        typeEngine.analyze(ast);
+
+        // Get errors collected during analysis
+        const errors = typeEngine.getErrors();
+
+        // Convert type inference errors to violations
+        for (const error of errors) {
+          violations.push({
+            rule: 'type-inference-errors',
+            severity: error.type === 'error' ? 'high' : 'medium',
+            line: error.line,
+            column: error.column,
+            message: error.message,
+            code: error.code || ''
+          });
+        }
 
         return violations;
       },
@@ -7911,6 +8174,231 @@ const result = await utilities.rq.RunQuery({
         return violations;
       },
     },
+
+    {
+      name: 'validate-component-props',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Only validate if component spec exists
+        if (!componentSpec || !componentSpec.dependencies || componentSpec.dependencies.length === 0) {
+          return violations;
+        }
+
+        // Build a map of dependency components to their full specs
+        // Pattern from dependency-prop-validation rule
+        const dependencySpecs = new Map<string, ComponentSpec>();
+
+        for (const dep of componentSpec.dependencies) {
+          if (dep && typeof dep === 'object' && dep.name) {
+            if (dep.location === 'registry') {
+              let match;
+              if (dep.registry) {
+                match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace, dep.registry);
+              } else {
+                match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace);
+              }
+
+              if (match) {
+                dependencySpecs.set(dep.name, match.spec);
+              }
+            } else {
+              // Embedded dependencies have their spec inline
+              dependencySpecs.set(dep.name, dep);
+            }
+          }
+        }
+
+        // Build validation context helpers from parent spec's dataRequirements
+        const getEntityFields = (entityName: string) => {
+          if (!componentSpec.dataRequirements?.entities) return [];
+          const entity = componentSpec.dataRequirements.entities.find(e => e.name === entityName);
+          if (!entity) return [];
+
+          // Prefer fieldMetadata if available (provides type info, allowsNull, isPrimaryKey, etc.)
+          if (entity.fieldMetadata && Array.isArray(entity.fieldMetadata) && entity.fieldMetadata.length > 0) {
+            return entity.fieldMetadata.map((f: any) => ({
+              name: f.name,
+              type: f.type || 'string',
+              required: !f.allowsNull,
+              allowedValues: f.possibleValues || undefined,
+              isPrimaryKey: f.isPrimaryKey || false,
+            }));
+          }
+
+          // Fallback: Collect all field names from display/filter/sort arrays
+          const allFieldNames = new Set<string>();
+          if (entity.displayFields) entity.displayFields.forEach((f: string) => allFieldNames.add(f));
+          if (entity.filterFields) entity.filterFields.forEach((f: string) => allFieldNames.add(f));
+          if (entity.sortFields) entity.sortFields.forEach((f: string) => allFieldNames.add(f));
+
+          // Convert to EntityFieldInfo format (we don't have type info from field name lists)
+          return Array.from(allFieldNames).map(name => ({
+            name,
+            type: 'string', // Unknown type from field name lists
+            required: false,
+            allowedValues: undefined,
+          }));
+        };
+
+        const getEntityFieldType = (entityName: string, fieldName: string) => {
+          const fields = getEntityFields(entityName);
+          const field = fields.find((f: any) => f.name === fieldName);
+          return field?.type || null;
+        };
+
+        const hasEntity = (entityName: string) => {
+          if (!componentSpec.dataRequirements?.entities) return false;
+          return componentSpec.dataRequirements.entities.some(e => e.name === entityName);
+        };
+
+        // GENERIC validation for ALL components with constraints
+        traverse(ast, {
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            let elementName = '';
+
+            if (t.isJSXIdentifier(openingElement.name)) {
+              elementName = openingElement.name.name;
+            } else if (t.isJSXMemberExpression(openingElement.name)) {
+              // Handle cases like <components.EntityDataGrid> - skip for now
+              return;
+            }
+
+            // Get the spec for this dependency component
+            const depSpec = dependencySpecs.get(elementName);
+            if (!depSpec || !depSpec.properties) return;
+
+            // Check if this component has any properties with constraints
+            const hasConstraints = depSpec.properties.some(p => p.constraints && p.constraints.length > 0);
+            if (!hasConstraints) return;
+
+            // Extract all props into a map for sibling prop lookups
+            const siblingProps = new Map<string, any>();
+            for (const attr of openingElement.attributes) {
+              if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
+                const extractedValue = PropValueExtractor.extract(attr);
+                siblingProps.set(attr.name.name, extractedValue);
+              }
+            }
+
+            // GENERIC: Iterate through all properties with constraints
+            for (const property of depSpec.properties) {
+              if (!property.constraints || property.constraints.length === 0) {
+                continue;
+              }
+
+              // Find the JSX attribute for this property
+              const propAttr = openingElement.attributes.find(
+                (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === property.name
+              );
+
+              if (!propAttr || !t.isJSXAttribute(propAttr)) {
+                continue;
+              }
+
+              // Extract the property value
+              const propValue = PropValueExtractor.extract(propAttr);
+
+              // Skip dynamic values
+              if (PropValueExtractor.isDynamicValue(propValue)) {
+                continue;
+              }
+
+              // Run all validators for this property's constraints
+              for (const constraint of property.constraints) {
+                // Use ClassFactory to instantiate validator by constraint type
+                const validator = MJGlobal.Instance.ClassFactory.CreateInstance<BaseConstraintValidator>(
+                  BaseConstraintValidator,
+                  constraint.type
+                );
+
+                if (!validator) {
+                  // Validator not registered for this constraint type
+                  console.warn(`No validator registered for constraint type: ${constraint.type}`);
+                  continue;
+                }
+
+                // Build ValidationContext
+                const context: ValidationContext = {
+                  node: propAttr,
+                  path: path as any,
+                  componentName: elementName,
+                  componentSpec: depSpec,
+                  propertyName: property.name,
+                  propertyValue: propValue,
+                  siblingProps,
+                  entities: new Map(),
+                  queries: new Map(),
+                  typeEngine: null as any,
+
+                  getEntityFields,
+                  getEntityFieldType,
+                  findSimilarFieldNames: (fieldName: string, entityName: string, maxResults?: number) => {
+                    const fields = getEntityFields(entityName);
+                    const fieldNames = fields.map((f: any) => f.name);
+                    const similar: Array<{ name: string; distance: number }> = [];
+
+                    // Simple Levenshtein distance calculation
+                    const levenshtein = (a: string, b: string): number => {
+                      const matrix: number[][] = [];
+                      for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+                      for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+                      for (let i = 1; i <= b.length; i++) {
+                        for (let j = 1; j <= a.length; j++) {
+                          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                            matrix[i][j] = matrix[i - 1][j - 1];
+                          } else {
+                            matrix[i][j] = Math.min(
+                              matrix[i - 1][j - 1] + 1,
+                              matrix[i][j - 1] + 1,
+                              matrix[i - 1][j] + 1
+                            );
+                          }
+                        }
+                      }
+                      return matrix[b.length][a.length];
+                    };
+
+                    for (const fn of fieldNames) {
+                      const distance = levenshtein(fieldName.toLowerCase(), fn.toLowerCase());
+                      if (distance <= 3) {
+                        similar.push({ name: fn, distance });
+                      }
+                    }
+                    similar.sort((a, b) => a.distance - b.distance);
+                    return similar.slice(0, maxResults || 3).map(s => s.name);
+                  },
+                  getQueryParameters: () => [],
+                  hasQuery: () => false,
+                  hasEntity,
+                };
+
+                // Run the validator
+                try {
+                  const constraintViolations = validator.validate(context, constraint);
+                  for (const cv of constraintViolations) {
+                    violations.push({
+                      rule: 'validate-component-props',
+                      severity: cv.severity,
+                      line: propAttr.loc?.start.line || 0,
+                      column: propAttr.loc?.start.column || 0,
+                      message: cv.message,
+                      code: cv.suggestion || '',
+                    });
+                  }
+                } catch (error) {
+                  console.error(`Error validating ${property.name} constraint (${constraint.type}):`, error);
+                }
+              }
+            }
+          },
+        });
+
+        return violations;
+      },
+    },
   ];
 
   public static async validateComponentSyntax(code: string, componentName: string): Promise<{ valid: boolean; errors: string[] }> {
@@ -8040,7 +8528,7 @@ const result = await utilities.rq.RunQuery({
       // Add data requirements validation if componentSpec is provided
       if (componentSpec?.dataRequirements?.entities) {
         try {
-          const dataViolations = this.validateDataRequirements(ast, componentSpec);
+          const dataViolations = this.validateDataRequirements(ast, componentSpec, options);
           violations.push(...dataViolations);
         } catch (error) {
           console.warn('Data requirements validation failed:', error instanceof Error ? error.message : error);
@@ -8108,6 +8596,10 @@ const result = await utilities.rq.RunQuery({
       };
     } catch (error) {
       // If parsing fails, return a parse error
+      // Log stack trace for debugging
+      if (error instanceof Error && error.stack) {
+        console.error('Parse error stack trace:', error.stack);
+      }
       return {
         success: false,
         violations: [
@@ -8124,7 +8616,7 @@ const result = await utilities.rq.RunQuery({
     }
   }
 
-  private static validateDataRequirements(ast: t.File, componentSpec: ComponentSpec): Violation[] {
+  private static validateDataRequirements(ast: t.File, componentSpec: ComponentSpec, options?: ComponentExecutionOptions): Violation[] {
     const violations: Violation[] = [];
 
     // Extract entity names from dataRequirements
@@ -8134,7 +8626,7 @@ const result = await utilities.rq.RunQuery({
     // Map to store full query definitions for parameter validation
     const queryDefinitionsMap = new Map<string, ComponentQueryDataRequirement>();
 
-    // Map to track allowed fields per entity
+    // Map to track allowed fields per entity (from dataRequirements display/filter/sort arrays)
     const entityFieldsMap = new Map<
       string,
       {
@@ -8143,6 +8635,21 @@ const result = await utilities.rq.RunQuery({
         sortFields: Set<string>;
       }
     >();
+
+    // Map to track ALL fields that exist in the entity
+    // Used to distinguish "field not in requirements" (medium) from "field doesn't exist" (critical)
+    const entityAllFieldsMap = new Map<string, Set<string>>();
+
+    // FIRST: Populate entityAllFieldsMap from options.entityMetadata if provided
+    // This gives us the complete list of fields that actually exist in each entity
+    if (options?.entityMetadata && Array.isArray(options.entityMetadata)) {
+      for (const entity of options.entityMetadata) {
+        if (entity.name && entity.fields) {
+          const fieldNames = new Set<string>(entity.fields.map((f: SimpleEntityFieldInfo) => f.name));
+          entityAllFieldsMap.set(entity.name, fieldNames);
+        }
+      }
+    }
 
     if (componentSpec.dataRequirements?.entities) {
       for (const entity of componentSpec.dataRequirements.entities) {
@@ -8153,6 +8660,18 @@ const result = await utilities.rq.RunQuery({
             filterFields: new Set(entity.filterFields || []),
             sortFields: new Set(entity.sortFields || []),
           });
+
+          // Build set of ALL fields from fieldMetadata if available
+          // Only use fieldMetadata as fallback if entityMetadata wasn't provided for this entity
+          if (!entityAllFieldsMap.has(entity.name) && entity.fieldMetadata && Array.isArray(entity.fieldMetadata)) {
+            const allFields = new Set<string>();
+            for (const field of entity.fieldMetadata) {
+              if (field.name) {
+                allFields.add(field.name);
+              }
+            }
+            entityAllFieldsMap.set(entity.name, allFields);
+          }
         }
       }
     }
@@ -8185,6 +8704,18 @@ const result = await utilities.rq.RunQuery({
                   filterFields: new Set(entity.filterFields || []),
                   sortFields: new Set(entity.sortFields || []),
                 });
+              }
+
+              // Merge fieldMetadata into allFields map only if entityMetadata wasn't provided
+              // If entityMetadata was provided, it already has the complete field list
+              if (!entityAllFieldsMap.has(entity.name) && entity.fieldMetadata && Array.isArray(entity.fieldMetadata)) {
+                const existingAll = new Set<string>();
+                for (const field of entity.fieldMetadata) {
+                  if (field.name) {
+                    existingAll.add(field.name);
+                  }
+                }
+                entityAllFieldsMap.set(entity.name, existingAll);
               }
             }
           }
@@ -8300,18 +8831,35 @@ const result = await utilities.rq.RunQuery({
                                 entityFields.displayFields.has(fieldName) || entityFields.filterFields.has(fieldName) || entityFields.sortFields.has(fieldName);
 
                               if (!isAllowed) {
-                                violations.push({
-                                  rule: 'field-not-in-requirements',
-                                  severity: 'critical',
-                                  line: fieldElement.loc?.start.line || 0,
-                                  column: fieldElement.loc?.start.column || 0,
-                                  message: `Field "${fieldName}" not found in dataRequirements for entity "${usedEntity}". Available fields: ${[
-                                    ...entityFields.displayFields,
-                                    ...entityFields.filterFields,
-                                    ...entityFields.sortFields,
-                                  ].join(', ')}`,
-                                  code: fieldName,
-                                });
+                                // Check if field exists in entity metadata (two-tier severity)
+                                const allFields = entityAllFieldsMap.get(usedEntity);
+                                const existsInEntity = allFields ? allFields.has(fieldName) : false;
+
+                                if (existsInEntity) {
+                                  // Field exists but not in dataRequirements - medium severity (works but suboptimal)
+                                  violations.push({
+                                    rule: 'field-not-in-requirements',
+                                    severity: 'medium',
+                                    line: fieldElement.loc?.start.line || 0,
+                                    column: fieldElement.loc?.start.column || 0,
+                                    message: `Field "${fieldName}" exists in entity "${usedEntity}" but not declared in dataRequirements. Consider adding to displayFields, filterFields, or sortFields.`,
+                                    code: fieldName,
+                                  });
+                                } else {
+                                  // Field doesn't exist in entity - critical severity (will fail at runtime)
+                                  violations.push({
+                                    rule: 'field-not-in-requirements',
+                                    severity: 'critical',
+                                    line: fieldElement.loc?.start.line || 0,
+                                    column: fieldElement.loc?.start.column || 0,
+                                    message: `Field "${fieldName}" does not exist in entity "${usedEntity}". Available fields: ${[
+                                      ...entityFields.displayFields,
+                                      ...entityFields.filterFields,
+                                      ...entityFields.sortFields,
+                                    ].join(', ')}`,
+                                    code: fieldName,
+                                  });
+                                }
                               }
                             }
                           }
@@ -8327,16 +8875,33 @@ const result = await utilities.rq.RunQuery({
                         const orderByField = orderByValue.split(/\s+/)[0];
 
                         if (!entityFields.sortFields.has(orderByField)) {
-                          violations.push({
-                            rule: 'orderby-field-not-sortable',
-                            severity: 'critical',
-                            line: orderByProperty.value.loc?.start.line || 0,
-                            column: orderByProperty.value.loc?.start.column || 0,
-                            message: `OrderBy field "${orderByField}" not in sortFields for entity "${usedEntity}". Available sort fields: ${[
-                              ...entityFields.sortFields,
-                            ].join(', ')}`,
-                            code: orderByValue,
-                          });
+                          // Check if field exists in entity metadata (two-tier severity)
+                          const allFields = entityAllFieldsMap.get(usedEntity);
+                          const existsInEntity = allFields ? allFields.has(orderByField) : false;
+
+                          if (existsInEntity) {
+                            // Field exists but not in sortFields - medium severity (works but suboptimal)
+                            violations.push({
+                              rule: 'orderby-field-not-sortable',
+                              severity: 'medium',
+                              line: orderByProperty.value.loc?.start.line || 0,
+                              column: orderByProperty.value.loc?.start.column || 0,
+                              message: `OrderBy field "${orderByField}" exists in entity "${usedEntity}" but not declared in sortFields. Consider adding for optimization.`,
+                              code: orderByValue,
+                            });
+                          } else {
+                            // Field doesn't exist in entity - critical severity (will fail at runtime)
+                            violations.push({
+                              rule: 'orderby-field-not-sortable',
+                              severity: 'critical',
+                              line: orderByProperty.value.loc?.start.line || 0,
+                              column: orderByProperty.value.loc?.start.column || 0,
+                              message: `OrderBy field "${orderByField}" does not exist in entity "${usedEntity}". Available sort fields: ${[
+                                ...entityFields.sortFields,
+                              ].join(', ')}`,
+                              code: orderByValue,
+                            });
+                          }
                         }
                       }
                     }
@@ -8460,7 +9025,7 @@ const result = await utilities.rq.RunQuery({
                     }
 
                     // If query has parameters but no Parameters property was found in the call
-                    if (paramsInCall.size === 0 && queryDef.parameters.length > 0) {
+                    if (paramsInCall.size === 0 && queryDef?.parameters && queryDef.parameters.length > 0) {
                       violations.push({
                         rule: 'missing-parameters-object',
                         severity: 'critical',

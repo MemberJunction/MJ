@@ -17,7 +17,25 @@ export function LoadDashboardResource() {
 @RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
     selector: 'mj-dashboard-resource',
-    template: `<div #container class="dashboard-resource-container"></div>`,
+    template: `
+        <div #container class="dashboard-resource-container">
+            @if (errorMessage) {
+                <div class="error-state">
+                    <div class="error-icon">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <h2 class="error-title">Unable to Load Dashboard</h2>
+                    <p class="error-message">{{ errorMessage }}</p>
+                    @if (errorDetails) {
+                        <details class="error-details">
+                            <summary>Technical Details</summary>
+                            <pre>{{ errorDetails }}</pre>
+                        </details>
+                    }
+                </div>
+            }
+        </div>
+    `,
     styles: [`
         :host {
             display: block;
@@ -34,12 +52,91 @@ export function LoadDashboardResource() {
             bottom: 0;
             overflow: auto;
         }
+        .error-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 40px;
+            text-align: center;
+            color: #424242;
+        }
+        .error-icon {
+            font-size: 64px;
+            color: #f44336;
+            margin-bottom: 24px;
+            opacity: 0.8;
+        }
+        .error-title {
+            font-size: 24px;
+            font-weight: 500;
+            margin: 0 0 12px 0;
+            color: #212121;
+        }
+        .error-message {
+            font-size: 16px;
+            color: #616161;
+            margin: 0 0 24px 0;
+            max-width: 500px;
+            line-height: 1.5;
+        }
+        .error-details {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 12px 16px;
+            max-width: 600px;
+            text-align: left;
+            font-size: 13px;
+        }
+        .error-details summary {
+            cursor: pointer;
+            font-weight: 500;
+            color: #757575;
+            margin-bottom: 8px;
+        }
+        .error-details pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #d32f2f;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+        }
     `]
 })
 export class DashboardResource extends BaseResourceComponent {
     private componentRef: ComponentRef<unknown> | null = null;
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
+
+    /** Error message to display when dashboard fails to load */
+    public errorMessage: string | null = null;
+    /** Technical error details (shown in expandable section) */
+    public errorDetails: string | null = null;
+
+    /**
+     * Sets the error state with a user-friendly message and optional technical details
+     */
+    private setError(message: string, error?: unknown): void {
+        this.errorMessage = message;
+        if (error instanceof Error) {
+            this.errorDetails = error.message;
+            if (error.stack) {
+                this.errorDetails += '\n\nStack trace:\n' + error.stack;
+            }
+        } else if (error) {
+            this.errorDetails = String(error);
+        }
+    }
+
+    /**
+     * Clears any previous error state
+     */
+    private clearError(): void {
+        this.errorMessage = null;
+        this.errorDetails = null;
+    }
 
     constructor(
         private viewContainer: ViewContainerRef,
@@ -72,11 +169,12 @@ export class DashboardResource extends BaseResourceComponent {
      * Routes between code-based dashboards (registered classes) and config-based dashboards
      */
     private async loadDashboard(): Promise<void> {
+        // Clear any previous error state
+        this.clearError();
+
         const data = this.Data;
-        console.log('[DashboardResource] loadDashboard called with:', data);
 
         if (!data?.ResourceRecordID) {
-            console.log('[DashboardResource] No ResourceRecordID, exiting');
             this.NotifyLoadStarted();
             this.NotifyLoadComplete();
             return;
@@ -87,10 +185,8 @@ export class DashboardResource extends BaseResourceComponent {
         try {
             // Check if this is a special dashboard type (not a database record)
             const config = data.Configuration || {};
-            console.log('[DashboardResource] Config:', config, 'ResourceRecordID:', data.ResourceRecordID);
 
             if (config['dashboardType'] === 'DataExplorer' || data.ResourceRecordID === 'DataExplorer') {
-                console.log('[DashboardResource] Loading DataExplorer with filter:', config['entityFilter']);
                 // Special case: Data Explorer dashboard with optional entity filter
                 await this.loadDataExplorer(
                     config['entityFilter'],
@@ -116,6 +212,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
         } catch (error) {
             console.error('Error loading dashboard:', error);
+            this.setError('The dashboard could not be loaded. This may be due to a missing component or configuration issue.', error);
             this.NotifyLoadComplete();
         }
     }
@@ -164,6 +261,12 @@ export class DashboardResource extends BaseResourceComponent {
                 }
             });
 
+            // Setup LoadCompleteEvent to know when the dashboard is ready
+            instance.LoadCompleteEvent = () => {
+                this.NotifyLoadComplete();
+            };
+
+
             // Initialize dashboard (no database config needed for DataExplorer)
             const config: DashboardConfig = {
                 dashboard: null as unknown as DashboardEntity, // No database record
@@ -174,10 +277,9 @@ export class DashboardResource extends BaseResourceComponent {
 
             // Trigger change detection to ensure the component updates
             componentRef.changeDetectorRef.detectChanges();
-
-            this.NotifyLoadComplete();
         } catch (error) {
             console.error('Error loading Data Explorer:', error);
+            this.setError('The Data Explorer could not be loaded.', error);
             this.NotifyLoadComplete();
         }
     }
@@ -206,30 +308,35 @@ export class DashboardResource extends BaseResourceComponent {
             this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
             const instance = this.componentRef.instance as BaseDashboard;
 
-            // Manually append the component's native element inside the div
-            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
-            nativeElement.style.width = '100%';
-            nativeElement.style.height = '100%';
-            this.containerElement.nativeElement.appendChild(nativeElement);
+
+            // Setup LoadCompleteEvent() to know when the dashboard is ready
+            instance.LoadCompleteEvent = () => {
+                this.NotifyLoadComplete();
+            };
 
             // Initialize with dashboard data
-            const baseData = this.Data;
             const userStateEntity = await this.loadDashboardUserState(dashboard.ID);
             const config: DashboardConfig = {
                 dashboard,
                 userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
             };
 
+            instance.Config = config;
+
+            // Manually append the component's native element inside the div
+            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
+            nativeElement.style.width = '100%';
+            nativeElement.style.height = '100%';
+            this.containerElement.nativeElement.appendChild(nativeElement);
+
             // handle open entity record events in MJ Explorer with routing
             instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
-                console.log('DashboardResource OpenEntityRecord event received:', data);
                 // check to see if the data has entityname/pkey
                 if (data && data.EntityName && data.RecordPKey) {
-                    console.log('DashboardResource calling NavigationService.OpenEntityRecord:', data.EntityName, data.RecordPKey);
                     // Use NavigationService to open entity record in new tab
                     this.navigationService.OpenEntityRecord(data.EntityName, data.RecordPKey);
                 } else {
-                    console.log('DashboardResource - invalid data, missing EntityName or RecordPKey:', data);
+                    console.warn('DashboardResource - invalid data, missing EntityName or RecordPKey:', data);
                 }
             });
 
@@ -241,17 +348,14 @@ export class DashboardResource extends BaseResourceComponent {
                 // save the user state to the dashboard user state entity
                 userStateEntity.UserState = JSON.stringify(userState);
                 if (!await userStateEntity.Save()) {
-                    LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
+                    LogError('Error saving user state', null, userStateEntity.LatestResult?.CompleteMessage);
                 }
             });
-            
 
-            instance.Config = config;
             instance.Refresh();
-
-            this.NotifyLoadComplete();
         } catch (error) {
             console.error('Error loading code-based dashboard:', error);
+            this.setError(`The dashboard "${dashboard.Name}" could not be loaded. The dashboard class may not be registered or may have failed to initialize.`, error);
             this.NotifyLoadComplete();
         }
     }
@@ -260,16 +364,11 @@ export class DashboardResource extends BaseResourceComponent {
 
     protected async loadDashboardUserState(dashboardId: string): Promise<DashboardUserStateEntity> {
         // handle user state changes for the dashboard
-        const rv = new RunView();
         const md = new Metadata();
-        const stateResult = await rv.RunView({
-            EntityName: 'MJ: Dashboard User States',
-            ExtraFilter: `DashboardID='${dashboardId}' AND UserID='${md.CurrentUser.ID}'`,
-            ResultType: 'entity_object',
-        });
+        const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => dus.DashboardID === dashboardId && dus.UserID === md.CurrentUser.ID)
         let stateObject: DashboardUserStateEntity;
-        if (stateResult && stateResult.Success && stateResult.Results.length > 0) {
-            stateObject = stateResult.Results[0];
+        if (stateResult && stateResult.length > 0) {
+            stateObject = stateResult[0];
         }
         else {
             stateObject = await md.GetEntityObject<DashboardUserStateEntity>('MJ: Dashboard User States');
@@ -321,6 +420,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
         } catch (error) {
             console.error('Error loading config-based dashboard:', error);
+            this.setError(`The dashboard "${dashboard.Name}" could not be loaded. There may be an issue with the dashboard configuration.`, error);
             this.NotifyLoadComplete();
         }
     }

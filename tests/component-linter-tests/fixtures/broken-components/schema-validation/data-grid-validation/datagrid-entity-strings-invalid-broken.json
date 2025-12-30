@@ -1,0 +1,18 @@
+{
+  "name": "DataGridEntityStringsInvalidBroken",
+  "type": "generic",
+  "title": "DataGrid Entity String Array Invalid - Broken Pattern",
+  "description": "Tests linter detection of invalid field in string array columns",
+  "code": "function DataGridEntityStringsInvalidBroken({ utilities, components }) {\n  const { EntityGrid } = components;\n\n  return (\n    <div>\n      <h3>Invoices</h3>\n      {/* ❌ Using simple string array with invalid field */}\n      <EntityGrid \n        entityName=\"Invoices\" \n        fields={['InvoiceNumber', 'InvoiceTotal', 'PaymentStatus', 'DueDate']} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Invoices",
+      "fields": ["ID", "InvoiceNumber", "TotalAmount", "Status", "DueDate"]
+    }]
+  }
+}

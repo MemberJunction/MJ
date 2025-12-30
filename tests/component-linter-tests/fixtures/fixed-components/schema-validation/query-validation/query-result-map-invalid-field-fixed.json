@@ -1,0 +1,19 @@
+{
+  "name": "QueryResultMapInvalidFieldFixed",
+  "type": "generic",
+  "title": "Query Result Map Invalid Field - Fixed Pattern",
+  "description": "Tests correct mapping of query results with valid field",
+  "code": "function QueryResultMapInvalidFieldFixed({ utilities }) {\n  const [customerNames, setCustomerNames] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Customer List',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        // ✅ Mapping to CustomerName field that exists\n        const names = result.Results.map(c => c.CustomerName);\n        setCustomerNames(names);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Customers</h3>\n      {customerNames.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Customer List",
+      "categoryPath": "Sales/Reports",
+      "fields": ["CustomerID", "CustomerName", "Email", "TotalOrders", "TotalSpent"]
+    }]
+  }
+}

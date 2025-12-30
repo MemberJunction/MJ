@@ -968,6 +968,39 @@ function recursiveReplaceKey(value: any, options: Required<ParseJSONOptions>, de
   }
 }
 
+/**
+ * Checks if two dates differ only by a timezone-like shift.
+ * Returns true if the difference is EXACTLY a whole number of hours
+ * (no variance in minutes/seconds/milliseconds) and within 23 hours.
+ * This helps detect timezone interpretation issues with datetime/datetime2 fields
+ * that don't store timezone information.
+ *
+ * @param date1 - The first date to compare
+ * @param date2 - The second date to compare
+ * @returns true if the dates differ only by a whole-hour timezone shift (1-23 hours)
+ *
+ * @example
+ * // 6-hour timezone shift - returns true
+ * IsOnlyTimezoneShift(new Date('2025-12-25T10:30:45.123Z'), new Date('2025-12-25T16:30:45.123Z'));
+ *
+ * @example
+ * // Different by 1ms - returns false (real change)
+ * IsOnlyTimezoneShift(new Date('2025-12-25T10:30:45.123Z'), new Date('2025-12-25T16:30:45.124Z'));
+ */
+export function IsOnlyTimezoneShift(date1: Date, date2: Date): boolean {
+  const diffMs = Math.abs(date1.getTime() - date2.getTime());
+
+  // Check if difference is exactly a whole number of hours
+  const msPerHour = 1000 * 60 * 60;
+  const isExactHours = diffMs % msPerHour === 0;
+
+  if (!isExactHours) return false;
+
+  // Check if within reasonable timezone range (1-23 hours)
+  const hoursDiff = diffMs / msPerHour;
+  return hoursDiff >= 1 && hoursDiff <= 23;
+}
+
 function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>, depth: number, path: string): any {
   if (options.debug) {
     console.log(`[ParseJSONRecursive] String preview: ${str.substring(0, 100)}${str.length > 100 ? '...' : ''}`);

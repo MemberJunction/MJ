@@ -22,6 +22,7 @@ import type { SkipColumnInfo } from './entity-metadata-types';
 import type { SkipDataRequest } from './query-types';
 import type { SkipAPIArtifactRequest } from './artifact-types';
 import { ComponentOption, SimpleDataContext } from '@memberjunction/interactive-component-types';
+import { AgentResponseForm } from '@memberjunction/ai-core-plus';
 
 /**
  * Defines an individual filter that will be used to filter the data in the view to the specific row or rows that the user clicked on for a drill down
@@ -137,10 +138,18 @@ export class SkipAPIClarifyingQuestionResponse extends SkipAPIResponse {
      * The question to display to the user from the AI model after a request is made to the AI when the AI needs more information to process the request
      */
     clarifyingQuestion: string;
+
     /**
-     * Zero or more suggested answers that the AI model suggests might be good responses to the clarifying question
+     * Optional, zero or more suggested answers that the AI model suggests might be good responses to the clarifying question. If responseForm is provided, this property is ignored.
+     * @deprecated Use responseForm instead, it is a much richer way to collect the user's response to the clarifying question.
+     */    
+    suggestedAnswers?: string[];
+
+    /**
+     * Optional, richer response form that can be used to collect the user's response to the clarifying question. When this is provided we **ignore** the suggestedAnswers property
+     * and instead use the responseForm to collect the user's response.
      */
-    suggestedAnswers: string[];
+    responseForm?: AgentResponseForm;
 }
 
 /**

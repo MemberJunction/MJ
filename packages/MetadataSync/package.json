@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/metadata-sync",
-  "version": "2.122.0",
+  "version": "2.128.0",
   "description": "MemberJunction metadata synchronization CLI tool",
   "keywords": [
     "metadata",
@@ -26,23 +26,24 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@memberjunction/core": "2.122.0",
-    "@memberjunction/core-entities": "2.122.0",
-    "@memberjunction/core-entities-server": "2.122.0",
-    "@memberjunction/global": "2.122.0",
-    "@memberjunction/sqlserver-dataprovider": "2.122.0",
-    "@memberjunction/graphql-dataprovider": "2.122.0",
+    "@memberjunction/core": "2.128.0",
+    "@memberjunction/core-entities": "2.128.0",
+    "@memberjunction/core-entities-server": "2.128.0",
+    "@memberjunction/global": "2.128.0",
+    "@memberjunction/graphql-dataprovider": "2.128.0",
+    "@memberjunction/sqlserver-dataprovider": "2.128.0",
+    "axios": "^1.6.8",
+    "chalk": "^4.1.2",
     "chokidar": "^3.6.0",
     "cosmiconfig": "9.0.0",
+    "crypto": "^1.0.1",
     "dotenv": "16.4.5",
     "fast-glob": "^3.3.2",
     "fs-extra": "^11.2.0",
-    "zod": "^3.23.4",
-    "crypto": "^1.0.1",
-    "axios": "^1.6.8",
+    "minimatch": "^9.0.3",
     "mssql": "^11.0.1",
     "uuid": "^10.0.0",
-    "minimatch": "^9.0.3"
+    "zod": "^3.23.4"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

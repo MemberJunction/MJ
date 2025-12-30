@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "tenantId": {
+      "type": "string",
+      "title": "Tenant ID",
+      "description": "Azure AD tenant ID (GUID)",
+      "pattern": "^[a-fA-F0-9-]{36}$",
+      "isSecret": false,
+      "order": 0
+    },
+    "clientId": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "Application (client) ID (GUID)",
+      "pattern": "^[a-fA-F0-9-]{36}$",
+      "isSecret": false,
+      "order": 1
+    },
+    "clientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "Client secret value",
+      "isSecret": true,
+      "order": 2
+    }
+  },
+  "required": ["tenantId", "clientId", "clientSecret"]
+}

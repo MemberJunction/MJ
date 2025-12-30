@@ -177,6 +177,31 @@ Available sync commands:
 
 **📚 For detailed documentation:** See the [MetadataSync README](../MetadataSync/README.md)
 
+#### Adding Comments to JSON Metadata Files
+
+Since JSON doesn't support comments natively, you can add documentation to your metadata files using custom keys with an underscore prefix. These keys are preserved but ignored during sync operations:
+
+```json
+{
+  "_comments": [
+    "This file configures encryption for sensitive fields",
+    "See /metadata/encryption-keys/ for key configuration"
+  ],
+  "fields": {
+    "Name": "My Entity",
+    "Encrypt": true
+  },
+  "_note": "Comments can appear anywhere in the record"
+}
+```
+
+**Key points:**
+- Use underscore prefix (`_comments`, `_note`, etc.) by convention
+- Comments are preserved in their original position after sync operations
+- Reserved keys: `fields`, `relatedEntities`, `primaryKey`, `sync`, `deleteRecord`
+
+See the [MetadataSync README](../MetadataSync/README.md#adding-comments-to-json-metadata-files) for complete documentation.
+
 #### Quick Examples:
 ```bash
 # Validate all metadata files
@@ -689,6 +714,106 @@ mj sync push ./metadata/queries/
 
 ---
 
+### `mj querygen` - AI-Powered SQL Query Generation
+
+Generate domain-specific SQL query templates using artificial intelligence. QueryGen analyzes your database schema, generates business questions, creates SQL queries with Nunjucks templates, tests them, and exports to metadata format.
+
+```bash
+mj querygen [COMMAND] [OPTIONS]
+```
+
+Available querygen commands:
+- `generate` - Generate SQL query templates for entities using AI
+- `validate` - Validate existing query templates
+- `export` - Export queries from database to metadata files
+
+**📚 For detailed documentation:** See the [QueryGen README](../QueryGen/README.md)
+
+#### Quick Examples:
+
+```bash
+# Generate queries for all entities
+mj querygen generate
+
+# Generate for specific entities with verbose output
+mj querygen generate --entities "Customers,Orders" --verbose
+
+# Control entity grouping and refinement
+mj querygen generate --max-entities 2 --max-refinements 3
+
+# Export to specific directory
+mj querygen generate --output ./metadata/queries
+
+# Choose output mode
+mj querygen generate --mode database  # Write directly to database
+mj querygen generate --mode both      # Both metadata and database
+
+# Validate existing queries
+mj querygen validate
+
+# Validate specific directory
+mj querygen validate --path ./metadata/queries --verbose
+
+# Export queries from database to metadata
+mj querygen export
+
+# Export to custom location
+mj querygen export --output ./exported-queries --verbose
+```
+
+#### QueryGen Command Options:
+
+**Generate Command:**
+- `-e, --entities <value>`: Specific entities to generate queries for (comma-separated)
+- `-x, --exclude-entities <value>`: Entities to exclude (comma-separated)
+- `-s, --exclude-schemas <value>`: Schemas to exclude (comma-separated)
+- `-m, --max-entities <value>`: Max entities per group (default: 3)
+- `-r, --max-refinements <value>`: Max refinement iterations (default: 3)
+- `-f, --max-fixes <value>`: Max error-fixing attempts (default: 5)
+- `--model <value>`: Preferred AI model
+- `--vendor <value>`: Preferred AI vendor
+- `-o, --output <value>`: Output directory (default: ./metadata/queries)
+- `--mode <option>`: Output mode: metadata|database|both (default: metadata)
+- `-v, --verbose`: Verbose output
+
+**Validate Command:**
+- `-p, --path <value>`: Path to queries metadata file or directory (default: ./metadata/queries)
+- `-v, --verbose`: Verbose output
+
+**Export Command:**
+- `-o, --output <value>`: Output directory (default: ./metadata/queries)
+- `-v, --verbose`: Verbose output
+
+#### QueryGen Features:
+
+**11-Phase Pipeline:**
+1. Entity Analysis - Analyzes database schema and relationships
+2. Entity Grouping - Creates logical groups of related entities
+3. Business Question Generation - Uses AI to generate domain questions
+4. Vector Similarity Search - Finds similar examples for few-shot learning
+5. SQL Generation - Creates Nunjucks SQL templates with AI
+6. Query Testing - Executes and validates queries
+7. Error Fixing - Automatically fixes SQL errors using AI
+8. Query Evaluation - Assesses query quality
+9. Query Refinement - Iteratively improves queries
+10. Testing & Validation - Comprehensive validation workflow
+11. Metadata Export - Exports to MJ metadata or database
+
+**AI-Powered Features:**
+- Generates realistic business questions for your domain
+- Creates SQL queries with proper Nunjucks templating
+- Automatically tests and fixes SQL errors
+- Refines queries based on evaluation feedback
+- Uses few-shot learning with golden query examples
+
+**Integration:**
+- Outputs to MemberJunction metadata format
+- Compatible with `mj sync push` for database synchronization
+- Supports both metadata files and direct database writes
+- Uses MJ's Query entity with automatic field/parameter extraction
+
+---
+
 ### Utility Commands
 
 #### `mj help`
@@ -721,6 +846,7 @@ The CLI integrates seamlessly with other MemberJunction packages:
 
 - **[@memberjunction/codegen-lib](../CodeGenLib)**: Powers the code generation functionality
 - **[@memberjunction/metadata-sync](../MetadataSync)**: Provides metadata synchronization capabilities ([README](../MetadataSync/README.md))
+- **[@memberjunction/query-gen](../QueryGen)**: AI-powered SQL query template generation ([README](../QueryGen/README.md))
 - **[@memberjunction/ai-cli](../AI/AICLI)**: Enables AI agent and action execution ([README](../AI/AICLI/README.md))
 - **[@memberjunction/testing-cli](../TestingFramework/CLI)**: Testing framework for database-driven tests ([README](../TestingFramework/CLI/README.md))
 - **[@memberjunction/db-auto-doc](../DBAutoDoc)**: AI-powered database documentation generator ([README](../DBAutoDoc/README.md))

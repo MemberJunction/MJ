@@ -43,7 +43,6 @@ All plugin components need these changes:
 
 #### 2. Fix Module Issues
 - Remove `BaseArtifactViewerPluginComponent` from declarations (it's abstract)
-- Remove `ngx-markdown` import (not in dependencies - need to add or remove Markdown plugin)
 - Remove `ReactComponentsModule` import (doesn't exist - should be from `@memberjunction/ng-react`)
 
 #### 3. Fix MJGlobal Import

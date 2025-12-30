@@ -9,10 +9,10 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
-import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ConversationStateService } from '../../services/conversation-state.service';
+import { ConversationDataService } from '../../services/conversation-data.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
@@ -52,10 +52,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   @Input() set activeConversationInput(value: string | undefined) {
-    if (value && value !== this.conversationState.activeConversationId) {
+    if (value && value !== this.selectedConversationId) {
       console.log('🔗 Deep link to conversation:', value);
       this.activeTab = 'conversations';
-      this.conversationState.setActiveConversation(value);
+      this.setActiveConversation(value);
     }
   }
 
@@ -112,6 +112,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public activeVersionNumber: number | null = null;
   public activeVersionId: string | null = null;
   public isMobileView: boolean = false;
+  public isSidebarPinned: boolean = false; // Default unpinned until settings load (prevents flicker)
 
   // Artifact permissions
   public canShareActiveArtifact: boolean = false;
@@ -123,6 +124,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
+  public isSidebarCollapsed: boolean = true; // Default collapsed until settings load (prevents flicker)
+  public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
+  public isSidebarSettingsLoaded: boolean = false; // Tracks whether settings have been loaded (prevents render before state is known)
   private isSidebarResizing: boolean = false;
   private sidebarResizeStartX: number = 0;
   private sidebarResizeStartWidth: number = 0;
@@ -141,15 +145,31 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private previousIsNewConversation: boolean = false; // Track new conversation state changes
   private destroy$ = new Subject<void>();
 
-  // LocalStorage keys
+  // LocalStorage keys (fallback for User Settings)
   private readonly SIDEBAR_WIDTH_KEY = 'mj-conversations-sidebar-width';
+  private readonly SIDEBAR_COLLAPSED_KEY = 'mj-conversations-sidebar-collapsed';
   private readonly ARTIFACT_PANEL_WIDTH_KEY = 'mj-artifact-panel-width';
+
+  // User Settings key for server-side persistence
+  private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
+  private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
+  private isLoadingSettings: boolean = false;
 
   // Task filter for conversation-specific filtering
   public tasksFilter: string = '1=1';
 
+  // LOCAL CONVERSATION STATE - enables multiple workspace instances
+  // Each workspace manages its own selection state independently
+  public selectedConversationId: string | null = null;
+  public selectedConversation: ConversationEntity | null = null;
+  public selectedThreadId: string | null = null;
+  public isNewUnsavedConversation: boolean = false;
+  public pendingMessageToSend: string | null = null;
+  public pendingArtifactId: string | null = null;
+  public pendingArtifactVersionNumber: number | null = null;
+
   constructor(
-    public conversationState: ConversationStateService,
+    public conversationData: ConversationDataService,
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
@@ -160,6 +180,101 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     private cdr: ChangeDetectorRef
   ) {
     super();
+  }
+
+  // =========================================================================
+  // LOCAL CONVERSATION STATE MANAGEMENT
+  // These methods manage the workspace's local selection state
+  // =========================================================================
+
+  /**
+   * Sets the active conversation for this workspace instance
+   * @param id The conversation ID to activate (or null to clear)
+   */
+  setActiveConversation(id: string | null): void {
+    console.log('🎯 Setting active conversation:', id);
+    this.selectedConversationId = id;
+    this.selectedConversation = id ? this.conversationData.getConversationById(id) : null;
+    // Clear unsaved state when switching to an existing conversation
+    if (id) {
+      this.isNewUnsavedConversation = false;
+    }
+  }
+
+  /**
+   * Initiates a new unsaved conversation (doesn't create DB record yet)
+   * This shows the welcome screen and delays DB creation until first message
+   */
+  startNewConversation(): void {
+    console.log('✨ Starting new unsaved conversation');
+    this.selectedConversationId = null;
+    this.selectedConversation = null;
+    this.isNewUnsavedConversation = true;
+    this.pendingMessageToSend = null;
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
+  }
+
+  /**
+   * Clears the new unsaved conversation state
+   * Called when the conversation is actually created or cancelled
+   */
+  clearNewConversationState(): void {
+    this.isNewUnsavedConversation = false;
+  }
+
+  /**
+   * Opens a thread panel for a specific message
+   * @param messageId The parent message ID
+   */
+  openThread(messageId: string): void {
+    this.selectedThreadId = messageId;
+  }
+
+  /**
+   * Closes the currently open thread panel
+   */
+  closeThread(): void {
+    this.selectedThreadId = null;
+  }
+
+  /**
+   * Handler for conversation selection from sidebar/list
+   */
+  onConversationSelected(conversationId: string): void {
+    this.setActiveConversation(conversationId);
+
+    // Auto-collapse if mobile OR if sidebar is not pinned
+    if (this.isMobileView || !this.isSidebarPinned) {
+      this.collapseSidebar();
+    }
+  }
+
+  /**
+   * Handler for new conversation creation from chat area
+   */
+  onConversationCreated(conversation: ConversationEntity): void {
+    this.selectedConversationId = conversation.ID;
+    this.selectedConversation = conversation;
+    this.isNewUnsavedConversation = false;
+    // The conversation is already added to conversationData by the chat area
+  }
+
+  /**
+   * Handler for thread opened from chat area
+   */
+  onThreadOpened(threadId: string): void {
+    this.selectedThreadId = threadId;
+  }
+
+  /**
+   * Handler for thread closed from chat area
+   */
+  onThreadClosed(): void {
+    this.selectedThreadId = null;
   }
 
   async ngOnInit() {
@@ -182,12 +297,31 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         this.onAutomaticCommand(command);
       });
 
-    // Check initial mobile state
+    // Check initial mobile state FIRST
     this.checkMobileView();
 
     // Load saved widths from localStorage
     this.loadSidebarWidth();
     this.loadArtifactPanelWidth();
+
+    // Load sidebar state - but on mobile, always default to collapsed
+    if (this.isMobileView) {
+      this.isSidebarCollapsed = true;
+      this.isSidebarVisible = false;
+      this.isSidebarSettingsLoaded = true; // Mobile doesn't need to load settings
+      // Enable transitions after a brief delay to ensure initial state is applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
+    } else {
+      // Load from User Settings (async) - await before continuing to prevent flicker
+      await this.loadSidebarState();
+      this.cdr.detectChanges();
+      // Enable transitions after state is loaded and applied
+      setTimeout(() => {
+        this.sidebarTransitionsEnabled = true;
+      }, 50);
+    }
 
     // Setup resize listeners
     window.addEventListener('mousemove', this.onResizeMove.bind(this));
@@ -220,7 +354,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // Mark workspace as ready - this allows UI to render
       this.isWorkspaceReady = true;
       this.cdr.detectChanges();
-      console.log('✅ Workspace ready - UI can now render');
     } catch (error) {
       console.error('❌ Failed to initialize engines:', error);
       // Still mark as ready so UI isn't blocked forever
@@ -232,7 +365,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.isPanelOpen$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isOpen => {
-        console.log('📡 Workspace received isPanelOpen$:', isOpen);
         this.isArtifactPanelOpen = isOpen;
       });
 
@@ -240,7 +372,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.activeArtifactId$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async id => {
-        console.log('📡 Workspace received activeArtifactId$:', id);
         this.activeArtifactId = id;
         // Load permissions when artifact changes
         if (id) {
@@ -255,13 +386,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.artifactState.activeVersionNumber$
       .pipe(takeUntil(this.destroy$))
       .subscribe(versionNumber => {
-        console.log('📡 Workspace received activeVersionNumber$:', versionNumber);
         this.activeVersionNumber = versionNumber;
       });
 
     // Set initial conversation if provided
     if (this.initialConversationId) {
-      this.conversationState.setActiveConversation(this.initialConversationId);
+      this.setActiveConversation(this.initialConversationId);
     }
 
     // Handle context-based navigation
@@ -302,7 +432,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   ngDoCheck() {
     // Detect new unsaved conversation state changes
-    const currentIsNewConversation = this.conversationState.isNewUnsavedConversation;
+    const currentIsNewConversation = this.isNewUnsavedConversation;
     if (currentIsNewConversation !== this.previousIsNewConversation) {
       this.previousIsNewConversation = currentIsNewConversation;
       if (currentIsNewConversation) {
@@ -314,10 +444,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Detect conversation changes and emit event
-    const currentId = this.conversationState.activeConversationId;
+    const currentId = this.selectedConversationId;
     if (currentId !== this.previousConversationId) {
       this.previousConversationId = currentId;
-      const conversation = this.conversationState.activeConversation;
+      const conversation = this.selectedConversation;
       if (conversation) {
         this.conversationChanged.emit(conversation);
 
@@ -359,6 +489,11 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.destroy$.next();
     this.destroy$.complete();
 
+    // Clear any pending save timeout
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
     window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
@@ -371,14 +506,191 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.checkMobileView();
   }
 
+  /**
+   * Handle clicks outside the sidebar to auto-collapse when unpinned
+   */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    // Only handle when sidebar is expanded but unpinned
+    if (this.isSidebarCollapsed || this.isSidebarPinned) {
+      return;
+    }
+
+    // Check if click is outside the sidebar
+    const target = event.target as HTMLElement;
+    const sidebarElement = target.closest('.workspace-sidebar');
+    const expandHandle = target.closest('.sidebar-expand-handle');
+
+    // If click is outside sidebar and expand handle, collapse it
+    if (!sidebarElement && !expandHandle) {
+      this.collapseSidebar();
+    }
+  }
+
   private checkMobileView(): void {
     const wasMobile = this.isMobileView;
     this.isMobileView = window.innerWidth < 768;
 
     if (this.isMobileView && !wasMobile) {
+      // Switched to mobile - hide sidebar and default to collapsed
       this.isSidebarVisible = false;
+      this.isSidebarCollapsed = true;
     } else if (!this.isMobileView && wasMobile) {
+      // Switched to desktop - show sidebar, restore state from User Settings
       this.isSidebarVisible = true;
+      this.loadSidebarState().then(() => {
+        this.cdr.detectChanges();
+      });
+    }
+  }
+
+  /**
+   * Collapse sidebar
+   */
+  collapseSidebar(): void {
+    this.isSidebarCollapsed = true;
+    if (this.isMobileView) {
+      this.isSidebarVisible = false;
+    }
+  }
+
+  /**
+   * Expand sidebar (unpinned - will auto-collapse on selection)
+   */
+  expandSidebar(): void {
+    this.isSidebarCollapsed = false;
+    this.isSidebarPinned = false;
+  }
+
+  /**
+   * Pin sidebar - keep it open after selection
+   */
+  pinSidebar(): void {
+    this.isSidebarPinned = true;
+    this.saveSidebarState();
+  }
+
+  /**
+   * Unpin sidebar - will auto-collapse on next selection
+   */
+  unpinSidebar(): void {
+    this.isSidebarPinned = false;
+    this.collapseSidebar();
+    this.saveSidebarState();
+  }
+
+  /**
+   * Save sidebar state to User Settings (server) and localStorage (fallback)
+   * Uses debouncing to avoid excessive database writes
+   */
+  private saveSidebarState(): void {
+    const stateToSave = {
+      collapsed: this.isSidebarCollapsed,
+      pinned: this.isSidebarPinned
+    };
+
+    // Save to localStorage immediately as backup
+    try {
+      localStorage.setItem(this.SIDEBAR_COLLAPSED_KEY, JSON.stringify(stateToSave));
+    } catch (error) {
+      console.warn('Failed to save sidebar state to localStorage:', error);
+    }
+
+    // Debounce the server save to avoid excessive writes
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+    this.saveSettingsTimeout = setTimeout(() => {
+      this.saveSidebarStateToServer(stateToSave);
+    }, 1000); // 1 second debounce
+  }
+
+  /**
+   * Save sidebar state to User Settings entity on server using UserInfoEngine for cached lookup
+   */
+  private async saveSidebarStateToServer(state: { collapsed: boolean; pinned: boolean }): Promise<void> {
+    try {
+      const userId = this.currentUser?.ID;
+      if (!userId) {
+        return;
+      }
+
+      const engine = UserInfoEngine.Instance;
+      const md = new Metadata();
+
+      // Find existing setting from cached user settings
+      let setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
+
+      if (!setting) {
+        // Create new setting
+        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting.UserID = userId;
+        setting.Setting = this.USER_SETTING_SIDEBAR_KEY;
+      }
+
+      setting.Value = JSON.stringify(state);
+      await setting.Save();
+    } catch (error) {
+      console.warn('Failed to save sidebar state to User Settings:', error);
+    }
+  }
+
+  /**
+   * Load sidebar state from User Settings (server) using UserInfoEngine, falling back to localStorage
+   * For new users with no saved state, defaults to collapsed with new conversation
+   */
+  private async loadSidebarState(): Promise<void> {
+    this.isLoadingSettings = true;
+
+    try {
+      const userId = this.currentUser?.ID;
+      if (userId) {
+        // Try loading from cached User Settings first
+        const engine = UserInfoEngine.Instance;
+        const setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
+
+        if (setting?.Value) {
+          const state = JSON.parse(setting.Value);
+          this.isSidebarCollapsed = state.collapsed ?? true;
+          this.isSidebarPinned = state.pinned ?? false;
+          this.isLoadingSettings = false;
+          return;
+        }
+      }
+
+      // Fall back to localStorage
+      const saved = localStorage.getItem(this.SIDEBAR_COLLAPSED_KEY);
+      if (saved) {
+        try {
+          const state = JSON.parse(saved);
+          if (typeof state === 'object' && state !== null) {
+            this.isSidebarCollapsed = state.collapsed ?? true;
+            this.isSidebarPinned = state.pinned ?? false;
+            this.isLoadingSettings = false;
+            return;
+          }
+        } catch {
+          // Fall back to old boolean format
+          this.isSidebarCollapsed = saved === 'true';
+          this.isSidebarPinned = !this.isSidebarCollapsed;
+          this.isLoadingSettings = false;
+          return;
+        }
+      }
+
+      // No saved state found - NEW USER DEFAULT:
+      // Start with sidebar collapsed and show new conversation screen
+      this.isSidebarCollapsed = true;
+      this.isSidebarPinned = false;
+      this.isNewUnsavedConversation = true;
+    } catch (error) {
+      console.warn('Failed to load sidebar state:', error);
+      // Default to collapsed for new users on error
+      this.isSidebarCollapsed = true;
+      this.isSidebarPinned = false;
+    } finally {
+      this.isLoadingSettings = false;
+      this.isSidebarSettingsLoaded = true;
     }
   }
 
@@ -392,7 +704,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     };
 
     if (tab === 'conversations') {
-      navEvent.conversationId = this.conversationState.activeConversationId || undefined;
+      navEvent.conversationId = this.selectedConversationId || undefined;
     } else if (tab === 'collections') {
       // If switching TO collections tab from another tab, clear to root level
       if (wasOnDifferentTab) {
@@ -465,7 +777,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       case 'conversation':
         // Switch to conversations tab and select conversation
         this.activeTab = 'conversations';
-        this.conversationState.setActiveConversation(result.id);
+        this.setActiveConversation(result.id);
         this.navigationChanged.emit({
           tab: 'conversations',
           conversationId: result.id
@@ -476,7 +788,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         // Switch to conversations tab, open conversation, and scroll to message (future enhancement)
         this.activeTab = 'conversations';
         if (result.conversationId) {
-          this.conversationState.setActiveConversation(result.conversationId);
+          this.setActiveConversation(result.conversationId);
           this.navigationChanged.emit({
             tab: 'conversations',
             conversationId: result.conversationId
@@ -802,12 +1114,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       // Store pending artifact info so chat area can show it and scroll to message
       if (event.artifactId) {
-        this.conversationState.pendingArtifactId = event.artifactId;
-        this.conversationState.pendingArtifactVersionNumber = event.versionNumber || null;
+        this.pendingArtifactId = event.artifactId;
+        this.pendingArtifactVersionNumber = event.versionNumber || null;
         console.log('📦 Pending artifact set:', event.artifactId, 'v' + event.versionNumber);
       }
 
-      this.conversationState.setActiveConversation(event.id);
+      this.setActiveConversation(event.id);
 
       this.navigationChanged.emit({
         tab: 'conversations',

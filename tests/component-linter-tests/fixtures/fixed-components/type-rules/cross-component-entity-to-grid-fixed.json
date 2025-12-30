@@ -1,0 +1,18 @@
+{
+  "name": "CrossComponentEntityToGridFixed",
+  "type": "generic",
+  "title": "Cross-Component Entity to Grid - Fixed Pattern",
+  "description": "Tests correct entity data passed to grid with valid field reference",
+  "code": "function CrossComponentEntityToGridFixed({ utilities, components }) {\n  const [members, setMembers] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* ✅ Grid references Status field that exists on entity */}\n      <DataGrid \n        data={members} \n        columns={[\n          {field: 'FirstName', title: 'Name'},\n          {field: 'Status', title: 'Status'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "entities": [{
+      "name": "Members",
+      "fields": ["ID", "FirstName", "LastName", "Email", "Status"]
+    }]
+  }
+}

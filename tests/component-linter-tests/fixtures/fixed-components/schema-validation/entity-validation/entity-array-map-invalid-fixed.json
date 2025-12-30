@@ -1,0 +1,12 @@
+{
+  "name": "EntityArrayMapValidFixed",
+  "type": "generic",
+  "title": "Entity Array Map Valid Fields - Fixed Pattern",
+  "description": "Corrected version composing name from existing fields",
+  "code": "function EntityArrayMapValidFixed({ utilities }) {\n  const [fullNames, setFullNames] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ✅ Composing from existing fields: FirstName and LastName\n        const names = result.Results.map(m => `${m.FirstName} ${m.LastName}`);\n        setFullNames(names);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Names</h3>\n      {fullNames.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active"
+}

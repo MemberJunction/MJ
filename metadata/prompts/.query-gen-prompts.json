@@ -1,0 +1,1538 @@
+[
+  {
+    "fields": {
+      "Name": "Business Question Generator",
+      "Description": "Generates domain-specific business questions for entity groups",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/query-gen/business-question-generator.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "{\"questions\":[{\"userQuestion\":\"What are the top 10 customers by total revenue?\",\"description\":\"Identifies the customers who have generated the most revenue across all their orders\",\"technicalDescription\":\"Aggregates order totals by customer, sorts descending by revenue, limits to top 10 results\",\"complexity\":\"simple\",\"requiresAggregation\":true,\"requiresJoins\":true,\"entities\":[\"Customers\",\"Orders\"]}]}",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "FailoverMaxAttempts": 5,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 6
+          },
+          "primaryKey": {
+            "ID": "C4A837ED-A797-47C8-8D0A-FEFC2F48592A"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:19:58.759Z",
+            "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "D006C7CD-22FB-47FB-A5E1-96E1AF910BB9"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:19:58.759Z",
+            "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "AC5FC85E-F004-4D28-BF04-306BFFDC968D"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:19:58.759Z",
+            "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "8A9D561A-23D0-49A9-B4FB-3BBDF2BD1FFF"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:02.902Z",
+            "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "35D9A9F9-2587-4DBC-8FC6-8C5097C8B3C2"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:02.914Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "5E30BF4E-D9A6-498C-A5AC-D286F2CF086F"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:02.926Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
+    },
+    "sync": {
+      "lastModified": "2025-12-17T22:36:21.837Z",
+      "checksum": "e44bd2c64830cfb748869674267c9d27ce5e80f889832d42fd137c732c4f94e7"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "SQL Query Writer",
+      "Description": "Generates Nunjucks SQL query templates from business questions using few-shot learning",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/query-gen/sql-query-writer.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "{\"queryName\":\"Customer Revenue By Date Range\",\"sql\":\"SELECT c.Name AS CustomerName, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name ORDER BY TotalRevenue DESC\",\"parameters\":[{\"name\":\"startDate\",\"type\":\"date\",\"isRequired\":true,\"description\":\"Start date for order filtering\",\"usage\":[\"WHERE clause filter on OrderDate\"],\"defaultValue\":null,\"sampleValue\":\"2024-01-01\"}]}",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "FailoverMaxAttempts": 5,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 6
+          },
+          "primaryKey": {
+            "ID": "651F8B2E-98C9-4C24-9E84-CA02DEC95FAA"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:19:58.762Z",
+            "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "AE827650-26B6-4A34-8D68-00632F3F62DF"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:19:58.763Z",
+            "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "8070A33D-401B-4F21-9D36-5B499D1D9800"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:19:58.763Z",
+            "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "D2B55952-D97C-4DC1-884D-4D3C3F219C33"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:02.935Z",
+            "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "7F8504A4-05DB-4724-A967-7098B97C7AA2"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.093Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "BEA2A057-6392-4A96-821B-EF94050B1E26"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.104Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FA000A4D-09F5-4557-858F-AC01E19D8238"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:56:13.699Z",
+      "checksum": "4c629a0d84f45bae44391dd5a85d42bb68196203b8ef7f48c6426a11b5274287"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "SQL Query Fixer",
+      "Description": "Fixes SQL syntax and logic errors in generated queries",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/query-gen/sql-query-fixer.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "{\"newSQL\":\"SELECT c.Name AS CustomerName, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name ORDER BY TotalRevenue DESC\",\"reasoning\":\"Fixed missing GROUP BY clause and corrected JOIN syntax. Added 'GROUP BY c.Name' to properly aggregate results. Changed INNER JOIN to LEFT JOIN to include customers with no orders.\"}",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "FailoverMaxAttempts": 5,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 6
+          },
+          "primaryKey": {
+            "ID": "1B72113B-AD58-4E14-8351-9CB1DE958086"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.077Z",
+            "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "F8842C6D-3E48-4F9E-8C33-247643C034BF"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.078Z",
+            "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "277CBCE0-6C76-4B90-8B85-F2D698945DA3"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.078Z",
+            "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "854C0597-E431-4E27-8BC4-CFFE56994115"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.113Z",
+            "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "9BA0A0E2-5D70-4F7B-9FC1-EB8A20EC2054"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.123Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "A0DE32CC-1837-4688-B383-132EAC9F7F5B"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.131Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:56:13.533Z",
+      "checksum": "83951cf4127d501bf9e9f33c13c47801d55cc85487e6ce5c4c711a0b0be904d2"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Query Result Evaluator",
+      "Description": "Evaluates if a query correctly answers the business question",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/query-gen/query-evaluator.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "{\"answersQuestion\":true,\"confidence\":0.95,\"reasoning\":\"The query correctly aggregates order totals by customer and returns the top 10 results sorted by revenue in descending order, which directly answers the business question.\",\"suggestions\":[],\"needsRefinement\":false}",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "FailoverMaxAttempts": 5,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 6
+          },
+          "primaryKey": {
+            "ID": "97D7D639-63A5-479C-97F6-3D07D4314EA1"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.080Z",
+            "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "A41CF2A5-0C5C-4392-AAA5-33FFB54A39EF"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.082Z",
+            "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "635A111F-0F07-4F05-A585-5C67F379477D"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.257Z",
+            "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "B05F569F-77F9-4305-B0E2-A13734899ABE"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.275Z",
+            "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "12416ADB-3670-42AD-9B8E-C36E327FA7C8"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.285Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "D95C635B-D49A-4CF3-BED8-81A69EABB51F"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.296Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:56:13.766Z",
+      "checksum": "f0c32ff05e7032292690551d6a90593ef861bae39c5244a0c4c1f55c718be201"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Query Refiner",
+      "Description": "Refines queries based on evaluation feedback",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/query-gen/query-refiner.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "{\"queryName\":\"Top Customer Revenue By Region\",\"sql\":\"SELECT c.Name AS CustomerName, c.Region, SUM(o.Total) AS TotalRevenue FROM [__mj].[vwCustomers] c LEFT JOIN [__mj].[vwOrders] o ON o.CustomerID = c.ID WHERE o.OrderDate >= {{ startDate | sqlDate }} GROUP BY c.Name, c.Region ORDER BY TotalRevenue DESC LIMIT 10\",\"parameters\":[{\"name\":\"startDate\",\"type\":\"date\",\"isRequired\":true,\"description\":\"Start date for order filtering\",\"usage\":[\"WHERE clause filter on OrderDate\"],\"defaultValue\":null,\"sampleValue\":\"2024-01-01\"}],\"improvementsSummary\":\"Added Region field and LIMIT clause\"}",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "FailoverMaxAttempts": 5,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 6
+          },
+          "primaryKey": {
+            "ID": "34445321-9AD8-4940-B241-57429A9AD7EF"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.260Z",
+            "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "9651D2F1-180F-4C00-AB24-E0C75CBFFFCB"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.260Z",
+            "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "534C700C-3391-41C7-9F4C-CF6434C43BD8"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.261Z",
+            "checksum": "b0dafc264dd584e9beebc6109701f9b60096b0388dd07f4f3ff0043f2813c4d0"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "44D0BABE-2AFF-4E53-8CB8-A254DD6FCE4C"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.306Z",
+            "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "554BB029-DF54-44B8-86F2-D06B0090BA27"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.315Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "F800D66D-F437-4A82-8B68-432A62F52AF6"
+          },
+          "sync": {
+            "lastModified": "2025-12-13T02:20:03.324Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:56:13.191Z",
+      "checksum": "d3d637cfd55a4e93102cb751e671c8f7852b54acd6eb16020ff3e7b7fc93fc7c"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Entity Group Generator",
+      "Description": "Analyzes database schema to generate semantically meaningful entity groupings for business query generation",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/query-gen/entity-group-generator.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "{\"groups\":[{\"entities\":[\"Customers\"],\"primaryEntity\":\"Customers\",\"businessDomain\":\"Customer Master Data\",\"businessRationale\":\"Core customer information and demographics for segmentation and analysis\",\"relationshipType\":\"single\",\"expectedQuestionTypes\":[\"segmentation\",\"demographics\"]},{\"entities\":[\"Customers\",\"Orders\"],\"primaryEntity\":\"Customers\",\"businessDomain\":\"Customer Purchasing Behavior\",\"businessRationale\":\"Links customers to their purchase history for lifetime value analysis\",\"relationshipType\":\"parent-child\",\"expectedQuestionTypes\":[\"lifetime_value\",\"repeat_purchase\"]}]}",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "FailoverMaxAttempts": 5,
+      "PromptRole": "User",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Query Generation"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 6
+          },
+          "primaryKey": {
+            "ID": "D59D6DD3-D013-4CD7-8F43-3CB2DE11E485"
+          },
+          "sync": {
+            "lastModified": "2025-12-15T01:54:39.792Z",
+            "checksum": "dc2b64bec958666a7800f66843cf6c98d74b898804780942ebbf34939f33109b"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
+              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "3A991D72-53DD-4788-AB09-42F5835CB54C"
+          },
+          "sync": {
+            "lastModified": "2025-12-15T01:54:39.803Z",
+            "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Kimi K2",
+              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "C7F75516-8090-42E7-8D06-7E18EE5064BC"
+          },
+          "sync": {
+            "lastModified": "2025-12-15T01:54:39.814Z",
+            "checksum": "b8e416981a5c79b71c1af2bea70d02c9597f583d720444a11ce596d9d3c26045"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "5452808B-D7DD-4BFB-91EC-77985245F60F"
+          },
+          "sync": {
+            "lastModified": "2025-12-15T01:54:39.828Z",
+            "checksum": "89ba68ff2362557a09539a7a5cf09846b40787e0f86a9753756842a226626316"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
+              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Google",
+              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Llama 3.3 70B Versatile",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "F1EECB43-0203-48B9-A995-ED774B583BF9"
+          },
+          "sync": {
+            "lastModified": "2025-12-15T01:54:39.839Z",
+            "checksum": "c2acfe66d1a6e3414b1734691aa9aac06274300212ab0218fad0dfd145360f15"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Llama 3.3 70B Versatile",
+              "resolved": "853E890E-F2E3-EF11-B015-286B35C04427"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "C503FA2B-691F-41DA-892D-DF0901DCA729"
+          },
+          "sync": {
+            "lastModified": "2025-12-15T01:54:39.849Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT 5-nano",
+              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
+              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            }
+          ]
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
+    },
+    "sync": {
+      "lastModified": "2025-12-17T23:34:52.081Z",
+      "checksum": "571be0baabaf6b1cfecb0aeeaf707947f7c3c96e88605692740ef0f2c92915d0"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:AI Prompt Types.Name=Chat",
+        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
+      },
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:AI Prompt Categories.Name=Query Generation",
+        "resolved": "FE112721-A511-4DC3-A75A-50E5E931E940"
+      }
+    ]
+  }
+]

@@ -56,6 +56,10 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     
   }
 
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Dashboard"
+  }
+
   constructor(private route: ActivatedRoute, public sharedService: SharedService) {
     super();
     this.recentAccessService = new RecentAccessService();
@@ -130,6 +134,8 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
         this.items.push(dashboardItem);
       }
     }
+
+    this.NotifyLoadComplete();
   }
 
   protected CreateDashboardItem(item: any): DashboardItem {

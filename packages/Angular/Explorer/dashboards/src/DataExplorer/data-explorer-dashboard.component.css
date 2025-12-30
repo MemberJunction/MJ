@@ -215,6 +215,145 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+/* Timeline Date Field Selector - Styled Dropdown */
+.date-field-selector-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.date-field-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  background: transparent;
+}
+
+.date-field-selector-wrapper {
+  position: relative;
+}
+
+.date-field-selector-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--background-alt, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary, #333);
+  transition: all 0.15s ease;
+  min-width: 120px;
+  max-width: 200px;
+}
+
+.date-field-selector-button:hover:not(:disabled) {
+  background: var(--background-hover, #e8e8e8);
+  border-color: var(--border-color-hover, #ccc);
+}
+
+.date-field-selector-button:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.date-field-selector-button.open {
+  background: var(--background-active, #e0e0e0);
+  border-color: var(--primary-color, #007bff);
+}
+
+.date-field-icon {
+  color: var(--text-secondary, #666);
+  font-size: 12px;
+}
+
+.date-field-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.date-field-arrow {
+  color: var(--text-secondary, #666);
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.date-field-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.date-field-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 180px;
+  max-width: 280px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--background-panel, #fff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+}
+
+.date-field-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  font-size: 13px;
+}
+
+.date-field-dropdown-item:hover {
+  background: var(--background-hover, #f5f5f5);
+}
+
+.date-field-dropdown-item.selected {
+  background: var(--primary-light, #e6f0ff);
+}
+
+.date-field-dropdown-item.selected:hover {
+  background: var(--primary-light-hover, #d6e4f9);
+}
+
+.date-field-dropdown-item .item-icon {
+  color: var(--text-secondary, #666);
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+}
+
+.date-field-dropdown-item .item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date-field-dropdown-item .selected-check {
+  color: var(--primary-color, #007bff);
+  font-size: 12px;
+}
+
+/* Timeline Orientation Toggle */
+.timeline-orientation-toggle {
+  display: flex;
+  background: #f0f0f0;
+  border-radius: 8px;
+  padding: 3px;
+}
+
 .content-body {
   flex: 1;
   overflow: hidden;
@@ -472,6 +611,11 @@
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   margin-bottom: 28px;
+}
+
+/* When only one column has content, let it take full width */
+.home-two-column-layout.single-column {
+  grid-template-columns: 1fr;
 }
 
 .home-column {

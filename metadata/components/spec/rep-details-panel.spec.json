@@ -12,21 +12,35 @@
       {
         "name": "Users",
         "description": "Sales representative user information",
-        "displayFields": ["ID", "Name", "Email", "Title"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Email",
+          "Title"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Sales rep profile information"
       },
       {
         "name": "Deals",
         "description": "Deals owned by the rep for performance metrics",
-        "displayFields": ["OwnerID", "Amount", "Stage", "CloseDate"],
+        "displayFields": [
+          "OwnerID",
+          "Amount",
+          "Stage",
+          "CloseDate"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Performance metrics calculation"
       }
     ],
@@ -62,5 +76,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "Slide-out panel showing detailed sales rep performance metrics"
 }

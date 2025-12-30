@@ -222,35 +222,39 @@ export class GoldenLayoutManager {
     // This MUST be done before adding any components
     this.layout.loadLayout(config);
 
+    // Configure debounce settings for faster resize response
+    // Default resizeDebounceInterval is 100ms, reduce to 50ms for snappier feel
+    (this.layout as unknown as { resizeDebounceInterval: number }).resizeDebounceInterval = 50;
+    // Disable extended debounce - we want layout to resize during drag, not just after
+    (this.layout as unknown as { resizeDebounceExtendedWhenPossible: boolean }).resizeDebounceExtendedWhenPossible = false;
+
     // CRITICAL: Set the size of Golden Layout to match the container
     // Without this, all internal elements will have height: 0
     const rect = this.containerElement.getBoundingClientRect();
     this.layout.setSize(rect.width, rect.height);
 
-    // // Retry setSize after delays to handle timing issues with flexbox layout
-    // // Initial page load can take time for container to have final dimensions
-    // setTimeout(() => {
-    //   this.updateSize();
-    // }, 100);
-
-    // // Additional delayed resize for slower initial page loads
-    // setTimeout(() => {
-    //   this.updateSize();
-    // }, 300);
+    // Retry setSize after delays to handle timing issues with flexbox layout
+    // Initial page load can take time for container to have final dimensions
+    // Use increasing delays to catch both fast and slow layout calculations
+    setTimeout(() => this.updateSize(), 50);
+    setTimeout(() => this.updateSize(), 150);
+    setTimeout(() => this.updateSize(), 300);
   }
 
-  // /**
-  //  * Update layout size to match container
-  //  * Call this if the layout appears incorrectly sized
-  //  */
-  // updateSize(): void {
-  //   if (this.layout && this.containerElement) {
-  //     const rect = this.containerElement.getBoundingClientRect();
-  //     if (rect.width > 0 && rect.height > 0) {
-  //       this.layout.setSize(rect.width, rect.height);
-  //     }
-  //   }
-  // }
+  /**
+   * Update layout size to match container.
+   * Call this if the layout appears incorrectly sized.
+   * This is useful for handling flexbox timing issues on page load
+   * or when the container size changes due to external factors.
+   */
+  updateSize(): void {
+    if (this.layout && this.containerElement) {
+      const rect = this.containerElement.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        this.layout.setSize(rect.width, rect.height);
+      }
+    }
+  }
 
   /**
    * Destroy the Golden Layout instance
@@ -342,23 +346,26 @@ export class GoldenLayoutManager {
 
   /**
    * Load layout from configuration
+   * @returns true if layout was loaded successfully, false if it failed
    */
-  LoadLayout(config: WorkspaceLayoutConfig): void {
+  LoadLayout(config: WorkspaceLayoutConfig): boolean {
     if (!this.layout) {
       LogError('GoldenLayoutManager: Layout not initialized');
-      return;
+      return false;
     }
 
     // Don't load empty or invalid layouts - Golden Layout doesn't handle them well
     if (!config || !config.root || !config.root.content || config.root.content.length === 0) {
-      return;
+      return false;
     }
 
     try {
       const glConfig = this.convertToGoldenLayoutConfig(config);
       this.layout.loadLayout(glConfig);
+      return true;
     } catch (error) {
       LogError('GoldenLayoutManager: Failed to load layout - ' + (error as Error).message);
+      return false;
     }
   }
 

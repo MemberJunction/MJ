@@ -4,6 +4,7 @@ import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity } 
 import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { SafeJSONParse } from '@memberjunction/global';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
   selector: 'app-user-notifications',
@@ -189,18 +190,19 @@ export class UserNotificationsComponent implements AfterViewInit {
       // part of a transaction group, if so, add it as that will defer the actual network traffic/save
       if (transGroup) {
         notificationEntity.TransactionGroup = transGroup;
-        await notificationEntity.Save()  
+        await notificationEntity.Save()
         return true;
       }
       else {
         if (await notificationEntity.Save()) {
-          //SharedService.RefreshUserNotifications(); don't need to save because angular binding already updtes the UI from the objects
+          // Update the observables so badge count refreshes immediately
+          MJNotificationService.UpdateNotificationObservables();
           return true;
         }
         else  {
           this.sharedService.CreateSimpleNotification('Unable to mark notification as read', 'error', 5000);
           return false; // let caller do notifications
-        }  
+        }
       }
     }
     else {

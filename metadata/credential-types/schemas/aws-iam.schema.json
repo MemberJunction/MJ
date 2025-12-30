@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "accessKeyId": {
+      "type": "string",
+      "title": "Access Key ID",
+      "description": "AWS access key ID",
+      "isSecret": false,
+      "order": 0
+    },
+    "secretAccessKey": {
+      "type": "string",
+      "title": "Secret Access Key",
+      "description": "AWS secret access key",
+      "isSecret": true,
+      "order": 1
+    },
+    "region": {
+      "type": "string",
+      "title": "Region",
+      "description": "AWS region (e.g., us-east-1)",
+      "isSecret": false,
+      "order": 2
+    }
+  },
+  "required": ["accessKeyId", "secretAccessKey", "region"]
+}

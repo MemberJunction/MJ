@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/query-examples/invoice-aging-analysis.spec.json",
+  "description": "Valid component demonstrating accounts receivable aging with collection insights"
+}

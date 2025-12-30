@@ -41,34 +41,25 @@ export class AppComponent implements OnInit {
       const wsurl: string = environment.GRAPHQL_WS_URI;
 
       try {
-        console.log('Setting up GraphQL client...');
         const start = Date.now();
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
           const refresh$ = await this.authBase.refresh();
           const claims = await lastValueFrom(refresh$);
-          const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
+          // Auth0 uses __raw, MSAL uses idToken
+          const token = claims?.__raw || claims?.idToken;
+
+          if (!token) {
+            console.error('[GraphQL] Token refresh failed - no token returned');
+            throw new Error('Failed to refresh authentication token');
+          }
+
           return token;
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
         const end = Date.now();
-        console.log(`GraphQL Client Setup took ${end - start}ms`);
+        console.log(`Client Setup Complete:  ${end - start}ms`);
 
-        // const testUrl = 'http://localhost:4050/'
-        // const testwSUrl = 'ws://localhost:4050/'
-        // const c2 = new GraphQLProviderConfigData(token, testUrl, testwSUrl, async () => {
-        //   const refresh$ = await this.authBase.refresh();
-        //   const claims = await lastValueFrom(refresh$);
-        //   const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
-        //   return token;
-        // }, environment.MJ_CORE_SCHEMA_NAME);
-        // const g2 = new GraphQLDataProvider();
-        // await g2.Config(c2, true);
-        // console.log(g2.Entities);
-
-        const refreshStart = Date.now();
         await SharedService.RefreshData(true);
-        const refreshEnd = Date.now();
-        console.log(`GetAllMetadata() took ${refreshEnd - refreshStart}ms`);
 
         // Check to see if the user has access... 
         const md = new Metadata();
@@ -141,18 +132,20 @@ export class AppComponent implements OnInit {
   }
 
   async setupAuth() {
-    
+    // Auth provider already initialized by APP_INITIALIZER
+
     // Don't await here - let it run asynchronously to avoid blocking app startup
     this.authBase.getUserClaims().then(claims => {
-      
       claims.subscribe((claims: any) => {
       if (claims) {
-        const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
-        const result = claims.idTokenClaims ? 
+        // Extract ID token - for Auth0, it's in __raw; for MSAL, it's in idToken
+        // This matches pre-refactor behavior
+        const token = claims?.__raw || claims?.idToken;
+        const result = claims.idTokenClaims ?
                         {...claims, ...claims.idTokenClaims} : // combine the values from the two claims objects because in auth0 and MSAL they have different structures, this pushes them all together into one
                         claims; // or if idTokenClaims doesn't exist, just use the claims object as is
 
-        this.handleLogin(token, result); 
+        this.handleLogin(token, result);
       }
     }, (err: any) => {
       LogError('Error Logging In: ' + err);
@@ -163,7 +156,7 @@ export class AppComponent implements OnInit {
           this.subHeaderText = "Welcome back! Please log in to your account.";
         }
         else if(err.name === 'InteractionRequiredAuthError'){
-          //if we're using MSAL, then its likely the user has previously 
+          //if we're using MSAL, then its likely the user has previously
           //signed in, but the auth token/session has expired
           this.subHeaderText = "Your session has expired. Please log in to your account.";
         }

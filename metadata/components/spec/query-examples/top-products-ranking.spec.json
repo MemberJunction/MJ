@@ -1,0 +1,240 @@
+{
+  "name": "TopProductsRanking",
+  "title": "Top Products Ranking",
+  "type": "table",
+  "namespace": "CRM/Sales",
+  "userExplanation": "Displays top-performing products in a table with click-to-drill-down functionality. When you click a product row, it loads all invoice line items for that product, demonstrating manual drill-down control using RunView and DataGrid (not EntityDataGrid).",
+  "functionalRequirements": "## Business Objectives\n- Identify top-performing products by revenue, units sold, or profit margin\n- Support flexible filtering by product category and time period\n- Enable drill-down to see individual invoice line items for any product\n- Demonstrate manual RunView drill-down pattern with standard DataGrid\n\n## Functional Requirements\n- **Product Ranking Display**: Show top N products (configurable, default 10) in a table format\n- **Ranking Metrics**: Display product name, category, total revenue, units sold, and number of invoices\n- **Click-to-Drill-Down**: When user clicks a product row, load all invoice line items for that product using RunView\n- **Detail View**: Display invoice line items in standard DataGrid (not EntityDataGrid) with invoice date, quantity, unit price, total, and account name\n- **Back Navigation**: Provide clear way to return to product ranking view\n- **Flexible Filtering**: Support filtering by product category and date range\n- **Custom Data Transformation**: Demonstrate calculating additional metrics (like margin) on drill-down data\n- **Loading States**: Show loading indicators during data fetch\n- **Empty States**: Handle cases where no products or no line items exist",
+  "description": "Displays top-performing products ranked by revenue, units sold, or profit margin with flexible filtering and drill-down capabilities.",
+  "dataRequirements": {
+    "mode": "hybrid",
+    "description": "Uses RunQuery for aggregated product rankings and RunView for drill-down to invoice line item details when user clicks a product",
+    "queries": [
+      {
+        "name": "Product Ranking",
+        "categoryPath": "Demo",
+        "description": "Unified product ranking query that ranks products by revenue with optional category filtering. Replaces both top-products-ranking.sql and category-top-products.sql. When Category parameter omitted, ranks across all categories. When Category provided, ranks within that category. Returns TOP N products (default 10) with revenue, quantity, invoice count, and average price metrics. General-purpose query for product performance analysis. **Result Order: TotalRevenue DESC** - Highest revenue products first for performance ranking.",
+        "entityNames": [
+          "Invoice Line Items",
+          "Products",
+          "Invoices"
+        ],
+        "fields": [
+          {
+            "name": "ProductID",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Product ID for drill-down filtering"
+          },
+          {
+            "name": "ProductName",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Name of the product"
+          },
+          {
+            "name": "Category",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar(255)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Product category"
+          },
+          {
+            "name": "TotalRevenue",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total revenue from all invoice line items for this product"
+          },
+          {
+            "name": "TotalQuantity",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Total units sold across all invoices"
+          },
+          {
+            "name": "InvoiceCount",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Number of distinct invoices containing this product"
+          },
+          {
+            "name": "AvgPrice",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "decimal(18,2)",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Average unit price across all sales"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "TopN",
+            "isRequired": false,
+            "type": "number",
+            "sampleValue": "10",
+            "description": "Number of top products to return (default: 10)"
+          },
+          {
+            "name": "Category",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "Software",
+            "description": "Optional filter by product category"
+          },
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-01-01",
+            "description": "Optional start date filter in YYYY-MM-DD format"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "string",
+            "sampleValue": "2024-12-31",
+            "description": "Optional end date filter in YYYY-MM-DD format"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Product records shown in the main ranking query results. The query aggregates sales data by ProductID.",
+        "displayFields": [
+          "Name",
+          "Category"
+        ],
+        "filterFields": [
+          "Category",
+          "ID"
+        ],
+        "sortFields": [
+          "Name"
+        ],
+        "usageContext": "Main entity displayed in DataGrid ranking table, grouped and aggregated in the Top Products Ranking query"
+      },
+      {
+        "name": "Invoice Line Items",
+        "description": "Detail records shown when drilling down into a specific product. Loaded via RunView (not EntityDataGrid) to demonstrate manual data transformation.",
+        "displayFields": [
+          "ID",
+          "InvoiceID",
+          "Product",
+          "Description",
+          "InvoiceDate",
+          "InvoiceName",
+          "Quantity",
+          "UnitPrice",
+          "Discount",
+          "TotalPrice",
+          "Total",
+          "AccountName"
+        ],
+        "filterFields": [
+          "ProductID",
+          "InvoiceDate"
+        ],
+        "sortFields": [
+          "ID",
+          "InvoiceDate",
+          "Total"
+        ],
+        "usageContext": "Loaded via RunView when user clicks on a product row. Filter: ProductID='{selectedProductID}', OrderBy: 'InvoiceDate DESC', MaxRows: 100"
+      },
+      {
+        "name": "Invoices",
+        "description": "Invoice records referenced in the query to provide invoice-level details (date, account name) for line items.",
+        "displayFields": [
+          "InvoiceNumber",
+          "InvoiceDate",
+          "AccountName"
+        ],
+        "filterFields": [
+          "ID"
+        ],
+        "sortFields": [
+          "InvoiceDate"
+        ],
+        "usageContext": "Joined in query to provide InvoiceDate and AccountName view fields for Invoice Line Items"
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "topN",
+      "type": "number",
+      "required": false,
+      "defaultValue": 10,
+      "description": "Number of top products to display"
+    },
+    {
+      "name": "category",
+      "type": "string",
+      "required": false,
+      "defaultValue": null,
+      "description": "Optional filter by product category"
+    },
+    {
+      "name": "startDate",
+      "type": "string",
+      "required": false,
+      "defaultValue": null,
+      "description": "Optional start date filter in YYYY-MM-DD format"
+    },
+    {
+      "name": "endDate",
+      "type": "string",
+      "required": false,
+      "defaultValue": null,
+      "description": "Optional end date filter in YYYY-MM-DD format"
+    }
+  ],
+  "events": [
+    {
+      "name": "onProductClick",
+      "description": "Fired internally when user clicks a product row in the DataGrid. Triggers drill-down to show invoice line items for the selected product.",
+      "payload": {
+        "ProductID": "string - UUID of the clicked product",
+        "ProductName": "string - Name of the product",
+        "Category": "string - Product category",
+        "TotalRevenue": "number - Total revenue for this product",
+        "TotalQuantity": "number - Total units sold",
+        "InvoiceCount": "number - Number of invoices containing this product",
+        "AvgPrice": "number - Average price per unit"
+      },
+      "example": "{ ProductID: 'abc-123', ProductName: 'Premium Widget', Category: 'Hardware', TotalRevenue: 125000.00, TotalQuantity: 500, InvoiceCount: 45, AvgPrice: 250.00 }"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
+  "location": "embedded",
+  "technicalDesign": "## Component Architecture\n\n### Data Flow\n1. **Initial Load**: RunQuery executes 'Top Products Ranking' with optional filters (topN, category, startDate, endDate)\n2. **Table Rendering**: DataGrid displays aggregated product ranking data with click handlers\n3. **User Interaction**: User clicks product row in DataGrid\n4. **Manual Drill-Down**: Component executes RunView to load Invoice Line Items filtered by ProductID\n5. **Detail View**: Standard DataGrid (not EntityDataGrid) displays line items with manual state management\n6. **Back Navigation**: User clicks back button to return to ranking view\n\n### State Management\n- `data`: Array of query results (product rankings)\n- `loading`: Boolean for initial data load\n- `error`: String for query error messages\n- `selectedProduct`: Object containing clicked product details (null = ranking view, object = detail view)\n- `detailData`: Array of invoice line items for selected product\n- `detailLoading`: Boolean for detail data loading state\n- `detailError`: String for detail loading error messages\n\n### Manual Drill-Down Pattern\nUnlike EntityDataGrid pattern (chart + grid), this component uses:\n- **View Switching**: Hides ranking table when product is selected\n- **Manual RunView**: Explicit call to `utilities.rv.RunView` with ProductID filter\n- **Standard DataGrid**: Uses basic DataGrid (not EntityDataGrid) for detail view\n- **Custom Layout**: Detail view includes product metrics cards + line items table\n\n### DataGrid Configuration\n**Main Ranking Table**:\n- Displays query results directly (no entity-based loading)\n- Includes sorting, filtering, pagination controls\n- onRowClick handler triggers drill-down\n- OrderBy: 'TotalRevenue DESC' (highest revenue first)\n\n**Detail Line Items Table**:\n- Basic DataGrid with static data prop\n- No server-side features (already filtered by RunView)\n- Displays: InvoiceDate, InvoiceName, Quantity, UnitPrice, Total, AccountName\n\n### Educational Value\nDemonstrates:\n1. **Manual Drill-Down Control**: Component manages drill-down logic explicitly\n2. **View Switching**: Toggles between ranking and detail views\n3. **RunView Direct Usage**: Shows how to call RunView with filters\n4. **Basic DataGrid**: Uses simpler DataGrid for pre-loaded data\n5. **Custom Detail Layout**: Product metrics + detail grid pattern\n6. **State-Based Rendering**: Conditional rendering based on selection state",
+  "code": "@file:../../code/query-examples/top-products-ranking.js",
+  "exampleUsage": "// Basic usage (show top 10 products)\n<TopProductsRanking\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// Show top 20 products\n<TopProductsRanking\n  topN={20}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// Filter by product category\n<TopProductsRanking\n  topN={10}\n  category=\"Software\"\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>\n\n// Filter by date range and category\n<TopProductsRanking\n  topN={15}\n  category=\"Hardware\"\n  startDate=\"2024-01-01\"\n  endDate=\"2024-12-31\"\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>"
+}

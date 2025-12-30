@@ -1,6 +1,8 @@
 import { ElementRef, Injectable, Injector } from '@angular/core';
-import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
-import { ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
+import { CompositeKey, LocalCacheManager, LogError, Metadata, StartupManager } from '@memberjunction/core';
+import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
@@ -37,17 +39,54 @@ export class SharedService {
       switch (event.event) {
         case MJEventType.LoggedIn:
           if (SharedService._loaded === false)  {
-            const p1 = SharedService.RefreshData(false);
-            const p2 = ResourcePermissionEngine.Instance.Config(); // make sure that we get resource permissions configured
-            await Promise.all([p1, p2]);
+            // Handle app startup
+            await StartupManager.Instance.Startup();          
+
+            await SharedService.RefreshData(false);
+
+            // Pre-warm other engines in the background (fire and forget)
+            // These are not needed immediately but will be ready when user navigates to
+            // Conversations, Dashboards, or Artifacts. The BaseEngine pattern ensures
+            // subsequent callers will wait for the existing load rather than starting a new one.
+            SharedService.preWarmEngines();
           }
-          break;
-      }      
+        break;
+      }
     });    
   }
 
   public static get Instance(): SharedService {
     return SharedService._instance;
+  }
+
+  /**
+   * Pre-warms commonly used engines in the background after login.
+   * This reduces perceived latency when users navigate to features like
+   * Conversations, Dashboards, or Artifacts. Fire-and-forget pattern -
+   * errors are logged but don't block the UI.
+   */
+  private static preWarmEngines(): void {
+    // AIEngineBase is the slowest - loads agents, models, prompts, etc.
+    // Critical for Conversations feature
+    AIEngineBase.Instance.Config(false).catch(err =>
+      LogError(`Failed to pre-warm AIEngineBase: ${err}`)
+    );
+
+    // ArtifactMetadataEngine is lightweight (just artifact types)
+    // Used by Conversations and Artifact viewer
+    ArtifactMetadataEngine.Instance.Config(false).catch(err =>
+      LogError(`Failed to pre-warm ArtifactMetadataEngine: ${err}`)
+    );
+
+    // DashboardEngine loads dashboard metadata
+    // Used when viewing dashboards
+    DashboardEngine.Instance.Config(false).catch(err =>
+      LogError(`Failed to pre-warm DashboardEngine: ${err}`)
+    );
+
+    EntityCommunicationsEngineBase.Instance.Config(false).catch(err =>
+      LogError(`Failed to pre-warm DashboardEngine: ${err}`)
+    );
   }
 
   /**
@@ -138,7 +177,9 @@ export class SharedService {
   private static async handleDataLoading() {
     const md = new Metadata();
 
-    await ResourcePermissionEngine.Instance.Config(); // don't reload if already loaded
+    // make sure startup is done
+    await StartupManager.Instance.Startup();          
+
     this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
     await SharedService.RefreshUserNotifications();  

@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component using useReducer instead of useState (violates no-use-reducer rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const reducer = (state, action) => {\n    switch (action.type) {\n      case 'ADD':\n        return [...state, action.payload];\n      default:\n        return state;\n    }\n  };\n  \n  const [state, dispatch] = useReducer(reducer, []);\n  \n  return (\n    <div>\n      <h1>Test Component</h1>\n      <p>Items: {state.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

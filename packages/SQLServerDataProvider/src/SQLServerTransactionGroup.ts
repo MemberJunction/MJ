@@ -28,10 +28,11 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                             const numValueSet = this.SetEntityValuesFromVariables(item.BaseEntity); // set the variables that this item needs
                             if (numValueSet > 0 && item.OperationType !== 'Delete') {
                                 // for creates/updates where we set 1+ variable into the entity, we need to update the instruction
+                                // GetSaveSQL is async because it may need to encrypt field values
                                 const bCreate = item.OperationType === 'Create';
                                 const spName = sqlProvider.GetCreateUpdateSPName(item.BaseEntity, bCreate);
-                                const newInstruction = sqlProvider.GetSaveSQL(item.BaseEntity, bCreate, spName, item.BaseEntity.ContextCurrentUser);
-                                item.Instruction = newInstruction; // update the instruction with the new values    
+                                const newInstruction = await sqlProvider.GetSaveSQL(item.BaseEntity, bCreate, spName, item.BaseEntity.ContextCurrentUser);
+                                item.Instruction = newInstruction; // update the instruction with the new values
                             }
                             
                             // Create a request for this transaction
@@ -61,8 +62,8 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                             const rawResult = queryResult.recordset;
                             
                             if (rawResult && rawResult.length > 0) {
-                                // Process the result to handle timezone conversions
-                                result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                // Process the result to handle timezone conversions and decryption
+                                result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
                                 this.SetVariableValuesFromEntity(item.BaseEntity, result[0]); // set the variables that this item defines after the save is done
                             }
                             bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
@@ -119,10 +120,10 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 
                                 const queryResult = await request.query(modifiedInstruction);
                                 const rawResult = queryResult.recordset;
-                                
+
                                 if (rawResult && rawResult.length > 0) {
-                                    // Process the result to handle timezone conversions
-                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                    // Process the result to handle timezone conversions and decryption
+                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
                                 }
                             } else {
                                 // Log the SQL statement before execution
@@ -134,13 +135,13 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                     true, // isMutation
                                     item.ExtraData?.simpleSQLFallback
                                 );
-                                
+
                                 const queryResult = await request.query(item.Instruction);
                                 const rawResult = queryResult.recordset;
-                                
+
                                 if (rawResult && rawResult.length > 0) {
-                                    // Process the result to handle timezone conversions
-                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo);
+                                    // Process the result to handle timezone conversions and decryption
+                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
                                 }
                             }
                             bSuccess = (result && result.length > 0); // success if we have a result and it has rows 

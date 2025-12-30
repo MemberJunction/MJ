@@ -24,6 +24,36 @@
     "sync": {
       "lastModified": "2025-08-12T19:54:42.164Z",
       "checksum": "f3e3218c21f49003943cd36c7672927d3868747659f77fd534a5ce32f4d6ea11"
-    }
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.ParentID",
+        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
+        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Query Generation",
+      "ParentID": "@lookup:AI Prompt Categories.Name=MJ: System",
+      "Description": "Prompts for QueryGen system - AI-powered generation of domain-specific SQL query templates"
+    },
+    "primaryKey": {
+      "ID": "FE112721-A511-4DC3-A75A-50E5E931E940"
+    },
+    "sync": {
+      "lastModified": "2025-12-13T02:08:36.764Z",
+      "checksum": "437f12b689446fbc59739e0ea3bd3feebc14840c9143bb307460c190049069b2"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.ParentID",
+        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
+        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
+      }
+    ]
   }
 ]

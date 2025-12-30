@@ -850,6 +850,12 @@ AI_VENDOR_API_KEY__ANTHROPIC=your-api-key
 AI_VENDOR_API_KEY__MISTRAL=your-api-key
 ```
 
+> **Advanced Authentication**: When using the full MemberJunction framework with `@memberjunction/ai-prompts`, you can leverage the Credentials system for encrypted, audited credential management with hierarchical resolution. See the [AI Authentication Guide](../Prompts/AI-AUTHENTICATION.md) for details on:
+> - Credential resolution hierarchy (vendor → model → prompt → request)
+> - Integration with the encrypted Credentials system
+> - Support for complex authentication schemes (Azure, AWS, OAuth)
+> - Migration path from environment variables
+
 #### Custom API Key Management
 
 You can extend the `AIAPIKeys` class to implement custom API key retrieval logic:

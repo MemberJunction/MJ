@@ -1108,13 +1108,23 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.loadData();
-
-    // Subscribe to collection state changes for deep linking
+    // Subscribe to collection state changes for deep linking FIRST
+    // This ensures that if there's a URL with collectionId, we set it before loading data
     this.subscribeToCollectionState();
 
     // Subscribe to artifact state changes to track active artifact
     this.subscribeToArtifactState();
+
+    // Check if there's an active collection from URL params (set by parent component)
+    const activeCollectionId = this.collectionState.activeCollectionId;
+    if (activeCollectionId) {
+      // If there's an active collection, navigate to it (which will call loadData)
+      console.log('📁 Initial load with active collection:', activeCollectionId);
+      this.navigateToCollectionById(activeCollectionId);
+    } else {
+      // Otherwise, just load the root level
+      this.loadData();
+    }
   }
 
   ngOnDestroy() {
@@ -1136,12 +1146,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         }
 
         // Only navigate if the state is different from our current state
+        // This prevents double-loading during initialization
         if (collectionId !== this.currentCollectionId) {
           if (collectionId) {
-            console.log('📁 Collection state changed, navigating to:', collectionId);
+            console.log('📁 Collection state changed externally, navigating to:', collectionId);
             this.navigateToCollectionById(collectionId);
           } else {
-            console.log('📁 Collection state cleared, navigating to root');
+            console.log('📁 Collection state cleared externally, navigating to root');
             this.navigateToRoot();
           }
         }
@@ -1161,7 +1172,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   async loadData(): Promise<void> {
-    this.isLoading = true;
+    // Only show loading spinner if we don't have data yet
+    // This prevents flash of loading when navigating between collections
+    const hasData = this.collections.length > 0 || this.unifiedItems.length > 0;
+    if (!hasData) {
+      this.isLoading = true;
+    }
+
     try {
       // Load saved view preferences from localStorage
       const savedMode = localStorage.getItem('collections-view-mode');

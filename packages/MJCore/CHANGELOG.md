@@ -1,5 +1,84 @@
 # Change Log - @memberjunction/core
 
+## 2.128.0
+
+### Minor Changes
+
+- f407abe: Add EffortLevel support to AIPromptModel with priority hierarchy and fix GPT 5.2 naming convention to align with standards
+
+### Patch Changes
+
+- @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Minor Changes
+
+- c7c3378: Fix memory leaks and improve conversation naming performance
+- b748848: Add Gemini 3 Flash and GPT-5.2 AI models, enhance QueryGen with graph-based entity targeting, AI-powered semantic query naming, and optional external SQL file generation
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+  - @memberjunction/global@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/global@2.126.1
+
+## 2.126.0
+
+### Minor Changes
+
+- 703221e: Migration
+
+### Patch Changes
+
+- @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Minor Changes
+
+- bd4aa3d: Migration file
+
+### Patch Changes
+
+- @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- 75058a9: Fix metadata provider race conditions, add EntityDataGrid component validation, and enforce Component entity Specification field as single source of truth
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Minor Changes

@@ -5,10 +5,13 @@ Create a changeset file for the current branch's changes following MemberJunctio
 ## Instructions
 
 1. **Check for new migration files:**
-   - Compare `migrations/v2/` directory between `main` branch and current branch
-   - Run: `git diff main...HEAD --name-only | grep "^migrations/v2/.*\.sql$"`
-   - If there are new `.sql` migration files, this triggers a `minor` version bump
-   - If migrations exist, add `"@memberjunction/core": minor` to the changeset
+   - **CRITICAL**: Only check for migrations that were ADDED IN THIS BRANCH
+   - Compare `migrations/v2/` directory to find NEW files added in current branch commits
+   - Run: `git diff next...HEAD --name-only | grep "^migrations/v2/.*\.sql$"`
+   - **IMPORTANT**: Use `next` branch as baseline (NOT `main`) to avoid counting migrations from other merged branches
+   - If the command returns any files, these are NEW migrations added in this branch
+   - Only if NEW migrations exist in THIS BRANCH, add `"@memberjunction/core": minor` to the changeset
+   - If the command returns empty (no new migration files), do NOT include core in the changeset
 
 2. **Find modified packages:**
    - Compare against `next` branch for TypeScript changes
@@ -43,7 +46,10 @@ Summary of changes based on commit messages
 
 ## Versioning Rules
 
-- **Minor bump**: ONLY when new migration files exist in `migrations/v2/` (applied to `@memberjunction/core`)
+- **Minor bump**: ONLY when NEW migration files were ADDED IN THIS BRANCH in `migrations/v2/` (applied to `@memberjunction/core` only)
+  - Check: `git diff next...HEAD --name-only | grep "^migrations/v2/.*\.sql$"`
+  - If this returns any files → include `"@memberjunction/core": minor`
+  - If this returns nothing → do NOT include core in changeset
 - **Patch bump**: All TypeScript code changes, bug fixes, documentation updates
 - **Major bump**: NEVER use without explicit user approval (breaking changes)
 
@@ -53,8 +59,8 @@ Summary of changes based on commit messages
 - Always create changeset files manually
 - Package names must match exactly what's in each package's `package.json` (e.g., `DBAutoDoc` → `@memberjunction/db-auto-doc`)
 - If no migrations AND no package changes, ask the user what changed
-- Use `main` branch for migration file comparisons (latest built version)
-- Use `next` branch for TypeScript package comparisons (current development baseline)
+- **ALWAYS use `next` branch as baseline** for BOTH migration and package comparisons
+- This ensures you only count changes added in the current branch, not changes from other branches
 
 ## Example Output
 

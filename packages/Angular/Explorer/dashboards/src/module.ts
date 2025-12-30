@@ -8,12 +8,11 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { LayoutModule, TabStripModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
-import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
-import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
-import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
-import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
-import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
-import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
+// ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent are now in
+// @memberjunction/ng-entity-relationship-diagram and imported via EntityRelationshipDiagramModule
+import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
+import { ModelManagementComponent } from './AI/components/models/model-management.component';
+import { PromptManagementComponent } from './AI/components/prompts/prompt-management.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
 import { AgentConfigurationComponent } from './AI/components/agents/agent-configuration.component';
 import { AgentFilterPanelComponent } from './AI/components/agents/agent-filter-panel.component';
@@ -53,6 +52,7 @@ import { TextImportDialogComponent } from './ComponentStudio/components/text-imp
 import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/artifact-selection-dialog.component';
 import { ArtifactLoadDialogComponent } from './ComponentStudio/components/artifact-load-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
+import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SplitterModule } from '@progress/kendo-angular-layout';
 // Scheduling Dashboard Components
@@ -92,20 +92,40 @@ import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-das
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
 import { ViewSelectorComponent } from './DataExplorer/components/view-selector/view-selector.component';
 import { ViewConfigPanelComponent } from './DataExplorer/components/view-config-panel/view-config-panel.component';
+import { FilterDialogComponent } from './DataExplorer/components/filter-dialog/filter-dialog.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
 // Home Dashboard Components
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
+import { CommunicationDashboardComponent } from './Communication/communication-dashboard.component';
+import { CommunicationMonitorResourceComponent } from './Communication/communication-monitor-resource.component';
+import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
+import { CommunicationProvidersResourceComponent } from './Communication/communication-providers-resource.component';
+import { CommunicationRunsResourceComponent } from './Communication/communication-runs-resource.component';
+// Credentials Dashboard Components
+import { CredentialsDashboardComponent } from './Credentials/credentials-dashboard.component';
+import { CredentialsOverviewResourceComponent } from './Credentials/components/credentials-overview-resource.component';
+import { CredentialsListResourceComponent } from './Credentials/components/credentials-list-resource.component';
+import { CredentialsTypesResourceComponent } from './Credentials/components/credentials-types-resource.component';
+import { CredentialsCategoriesResourceComponent } from './Credentials/components/credentials-categories-resource.component';
+import { CredentialsAuditResourceComponent } from './Credentials/components/credentials-audit-resource.component';
+import { CredentialEditPanelComponent } from './Credentials/components/credential-edit-panel.component';
+import { CredentialTypeEditPanelComponent } from './Credentials/components/credential-type-edit-panel.component';
+import { CredentialCategoryEditPanelComponent } from './Credentials/components/credential-category-edit-panel.component';
+import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
+// System Diagnostics Components
+import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+
+
+
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
-    ERDCompositeComponent,
-    EntityFilterPanelComponent,
-    EntityDetailsComponent,
-    ERDDiagramComponent,
-    ModelManagementV2Component,
-    PromptManagementV2Component,
+    // ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent now in Generic package
+    ModelManagementComponent,
+    PromptManagementComponent,
     PromptFilterPanelComponent,
     AgentConfigurationComponent,
     AgentFilterPanelComponent,
@@ -167,8 +187,28 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     ExplorerNavigationPanelComponent,
     ViewSelectorComponent,
     ViewConfigPanelComponent,
+    FilterDialogComponent,
     // Home Dashboard Components
-    HomeDashboardComponent
+    HomeDashboardComponent,
+    // Communication Dashboard Components
+    CommunicationDashboardComponent,
+    CommunicationMonitorResourceComponent,
+    CommunicationLogsResourceComponent,
+    CommunicationProvidersResourceComponent,
+    CommunicationRunsResourceComponent,
+    // Credentials Dashboard Components
+    CredentialsDashboardComponent,
+    CredentialsOverviewResourceComponent,
+    CredentialsListResourceComponent,
+    CredentialsTypesResourceComponent,
+    CredentialsCategoriesResourceComponent,
+    CredentialsAuditResourceComponent,
+    CredentialEditPanelComponent,
+    CredentialTypeEditPanelComponent,
+    CredentialCategoryEditPanelComponent,
+    GroupByPipe,
+    // System Diagnostics Components
+    SystemDiagnosticsComponent
   ],
   imports: [
     CommonModule,
@@ -189,6 +229,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     AITestHarnessModule,
     MemberJunctionCoreEntityFormsModule,
     GridModule,
+    ExcelExportModule,
     MJReactModule,
     SplitterModule,
     TabStripModule,
@@ -198,7 +239,9 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     UserViewGridModule,
     EntityViewerModule,
     ExplorerSettingsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    FilterBuilderModule,
+    EntityRelationshipDiagramModule
   ],
   providers: [
     AIInstrumentationService,
@@ -213,9 +256,9 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     TestingDashboardComponent,
     // Export AI components (now BaseResourceComponent-based)
     ExecutionMonitoringComponent,
-    PromptManagementV2Component,
+    PromptManagementComponent,
     AgentConfigurationComponent,
-    ModelManagementV2Component,
+    ModelManagementComponent,
     SystemConfigurationComponent,
     // Export Actions components (now BaseResourceComponent-based)
     ActionsOverviewComponent,
@@ -239,7 +282,26 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     // Export Data Explorer Dashboard
     DataExplorerDashboardComponent,
     // Export Home Dashboard
-    HomeDashboardComponent
+    HomeDashboardComponent,
+    // Export Communication Dashboard
+    CommunicationDashboardComponent,
+    CommunicationMonitorResourceComponent,
+    CommunicationLogsResourceComponent,
+    CommunicationProvidersResourceComponent,
+    CommunicationRunsResourceComponent,
+    // Export Credentials Dashboard
+    CredentialsDashboardComponent,
+    CredentialsOverviewResourceComponent,
+    CredentialsListResourceComponent,
+    CredentialsTypesResourceComponent,
+    CredentialsCategoriesResourceComponent,
+    CredentialsAuditResourceComponent,
+    CredentialEditPanelComponent,
+    CredentialTypeEditPanelComponent,
+    CredentialCategoryEditPanelComponent,
+    GroupByPipe,
+    // System Diagnostics Components
+    SystemDiagnosticsComponent
   ]
 })
 export class DashboardsModule { }

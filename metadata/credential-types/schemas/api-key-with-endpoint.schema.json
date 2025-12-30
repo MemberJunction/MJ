@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "apiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "The API key for authentication",
+      "isSecret": true,
+      "order": 0
+    },
+    "endpoint": {
+      "type": "string",
+      "title": "Endpoint URL",
+      "description": "The API endpoint URL",
+      "format": "uri",
+      "isSecret": false,
+      "order": 1
+    }
+  },
+  "required": ["apiKey", "endpoint"]
+}

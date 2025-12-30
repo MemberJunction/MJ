@@ -53,7 +53,7 @@
       "request": "launch",
       "preLaunchTask": "start MJExplorer",
       "name": "MJExplorer",
-      "url": "http://localhost:4200",
+      "url": "http://localhost:4201",
       "cwd": "${workspaceFolder}/packages/MJExplorer",
       "sourceMaps": true,
       "webRoot": "${workspaceFolder}/packages",
@@ -107,9 +107,9 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "MetadataSync CLI - Push (with exclude)",
+      "name": "MetadataSync CLI - Push (with include)",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
-      "args": ["sync", "push", "--dir", "${input:metadataSyncDirectory}", "--exclude", "${input:metadataSyncExclude}"],
+      "args": ["sync", "push", "--dir", "${input:metadataSyncDirectory}", "--include", "${input:metadataSyncInclude}"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
@@ -293,6 +293,99 @@
       "sourceMapPathOverrides": {
         "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
       }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "QueryGen - Generate",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "querygen",
+        "generate"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build QueryGen",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "QueryGen - Generate (with entities)",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "querygen",
+        "generate",
+        "--entities",
+        "${input:queryGenEntities}",
+        "--verbose"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build QueryGen",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "QueryGen - Export",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "querygen",
+        "export"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build QueryGen",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
     }
   ],
   "inputs": [
@@ -359,10 +452,10 @@
       "default": "metadata"
     },
     {
-      "id": "metadataSyncExclude",
+      "id": "metadataSyncInclude",
       "type": "promptString",
-      "description": "Directories to exclude (comma-separated, blank to exclude none)",
-      "default": "actions"
+      "description": "Directories to include (comma-separated, blank to include all)",
+      "default": "components"
     },
     {
       "id": "metadataSyncPullDirectory",
@@ -449,6 +542,12 @@
       "type": "promptString",
       "description": "Enter SQL filter condition",
       "default": "IsActive = 1"
+    },
+    {
+      "id": "queryGenEntities",
+      "type": "promptString",
+      "description": "Enter entity names to generate queries for (comma-separated)",
+      "default": "Customers,Orders"
     }
   ]
 }

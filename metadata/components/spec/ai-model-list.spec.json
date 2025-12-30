@@ -4,7 +4,7 @@
   "description": "Displays AI models in grid or list view with vendor information and sorting",
   "type": "table",
   "functionalRequirements": "Display models with vendor counts, support grid and list views, handle sorting and selection",
-  "technicalDesign": "",
+  "technicalDesign": "## Technical Design\n\n### Component Structure\n- Display component for AI models in grid or list view\n- Receives model data and vendor associations via props\n- Handles selection and sorting through event callbacks\n\n### Props\n- models: Array of AI model objects\n- modelVendors: Array of vendor associations (grouped by model)\n- viewMode: 'grid' | 'list'\n- selectedModelId: Currently selected model ID\n- sortBy: Field name for sorting\n- sortDirection: 'asc' | 'desc'\n\n### Rendering\n- Grid mode: Compact card layout with key model info\n- List mode: Table view with sortable columns\n- Display vendor count badges for each model\n- Highlight selected model\n- Show sort indicators on column headers\n\n### Event Handling\n- onSelectModel: Emits modelId when user clicks a model\n- onSortChange: Emits sortBy and sortDirection when sort changes",
   "dataRequirements": {
     "mode": "views",
     "entities": [
@@ -82,7 +82,7 @@
             "isPrimaryKey": false,
             "description": "Relative cost ranking (1-5)"
           }
-        ], 
+        ],
         "usageContext": "Main list of AI models"
       },
       {
@@ -142,7 +142,7 @@
             "isPrimaryKey": false,
             "description": "Vendor type (Model Developer or Inference Provider)"
           }
-        ], 
+        ],
         "usageContext": "Vendor associations for models"
       },
       {
@@ -156,7 +156,7 @@
         "filterFields": [],
         "sortFields": [
           "Name"
-        ], 
+        ],
         "usageContext": "Filter dropdown for model types"
       },
       {
@@ -183,7 +183,7 @@
         "sortFields": [
           "StartTime",
           "TotalExecutionTime"
-        ], 
+        ],
         "usageContext": "Analytics and usage history"
       },
       {
@@ -198,7 +198,7 @@
         "filterFields": [],
         "sortFields": [
           "Name"
-        ], 
+        ],
         "usageContext": "Enrich prompt runs with names"
       }
     ]

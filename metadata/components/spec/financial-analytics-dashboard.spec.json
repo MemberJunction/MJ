@@ -9,20 +9,45 @@
     "entities": [
       {
         "name": "Invoices",
-        "displayFields": ["InvoiceDate", "TotalAmount", "Status"],
-        "filterFields": ["InvoiceDate", "Status"],
-        "sortFields": ["InvoiceDate"] 
+        "displayFields": [
+          "InvoiceDate",
+          "TotalAmount",
+          "Status"
+        ],
+        "filterFields": [
+          "InvoiceDate",
+          "Status"
+        ],
+        "sortFields": [
+          "InvoiceDate"
+        ]
       },
       {
         "name": "Deals",
-        "displayFields": ["CloseDate", "Amount", "Stage", "Probability"],
-        "filterFields": ["CloseDate", "Stage"],
-        "sortFields": ["CloseDate"] 
+        "displayFields": [
+          "CloseDate",
+          "Amount",
+          "Stage",
+          "Probability"
+        ],
+        "filterFields": [
+          "CloseDate",
+          "Stage"
+        ],
+        "sortFields": [
+          "CloseDate"
+        ]
       },
       {
         "name": "Products",
-        "displayFields": ["Name", "Price", "Cost"],
-        "sortFields": ["Name"]
+        "displayFields": [
+          "Name",
+          "Price",
+          "Cost"
+        ],
+        "sortFields": [
+          "Name"
+        ]
       }
     ]
   },
@@ -47,13 +72,32 @@
       "location": "registry",
       "namespace": "Generic/UI/Export",
       "version": "^1.0.0"
+    },
+    {
+      "name": "KPIGauges",
+      "location": "registry",
+      "namespace": "CRM/Finance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "RevenueTrendChart",
+      "location": "registry",
+      "namespace": "CRM/Finance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "CashFlowChart",
+      "location": "registry",
+      "namespace": "CRM/Finance",
+      "version": "^1.0.0"
+    },
+    {
+      "name": "ForecastModel",
+      "location": "registry",
+      "namespace": "CRM/Finance",
+      "version": "^1.0.0"
     }
   ],
-  "libraries": [
-    {
-      "name": "ApexCharts",
-      "version": "^3.45.1",
-      "globalVariable": "ApexCharts"
-    }
-  ]
+  "libraries": [],
+  "description": "Comprehensive financial overview with revenue trends, forecasting, and profitability analysis with export capabilities"
 }

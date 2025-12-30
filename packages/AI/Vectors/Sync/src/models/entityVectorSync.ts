@@ -410,7 +410,7 @@ export class EntityVectorSyncer extends VectorBase {
     const templateEntitySaveResult = await super.SaveEntity(templateEntity);
     if(!templateEntitySaveResult){
       LogError('Error saving Template Entity', undefined, templateEntity.LatestResult);
-      throw new Error(templateEntity.LatestResult.Message);
+      throw new Error(templateEntity.LatestResult.CompleteMessage);
     }
     LogStatus(`Successfully created new Template Entity ${templateEntity.ID}`);
 
@@ -434,7 +434,7 @@ export class EntityVectorSyncer extends VectorBase {
     const templateContentsEntitySaveResult = await super.SaveEntity(templateContentsEntity);
     if(!templateContentsEntitySaveResult){
       LogError('Error saving Template Entity', undefined, templateContentsEntity.LatestResult);
-      throw new Error(templateContentsEntity.LatestResult.Message);
+      throw new Error(templateContentsEntity.LatestResult.CompleteMessage);
     }
     LogStatus(`Successfully created new Template Content Entity ${templateContentsEntity.ID}`);
 
@@ -456,7 +456,7 @@ export class EntityVectorSyncer extends VectorBase {
     const templateParamsEntitySaveResult = await super.SaveEntity(templateParamsEntity);
     if(!templateParamsEntitySaveResult){
       LogError('Error saving Template Entity', undefined, templateParamsEntity.LatestResult);
-      throw new Error(templateParamsEntity.LatestResult.Message);
+      throw new Error(templateParamsEntity.LatestResult.CompleteMessage);
     }
     LogStatus(`Successfully created new Template Param Entity ${templateParamsEntity.ID}`);
     

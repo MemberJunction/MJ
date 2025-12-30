@@ -61,7 +61,7 @@
     <div class="message-body">
       @if (!isEditing) {
         <div class="message-text">
-          <markdown [data]="displayMessage"></markdown>
+          <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true"></mj-markdown>
           @if (isMessageEdited) {
             <span class="edited-badge">(edited)</span>
           }

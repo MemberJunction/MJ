@@ -21,19 +21,42 @@
     <!-- Form Description -->
     <p *ngIf="responseForm.description" class="form-description">{{ responseForm.description }}</p>
 
-    <!-- Questions -->
-    <div class="form-questions">
+    <!-- Questions (excludes footer choice question) -->
+    <div class="form-questions" *ngIf="mainQuestions.length > 0">
       <mj-form-question
-        *ngFor="let question of responseForm.questions; trackBy: trackByQuestionId"
+        *ngFor="let question of mainQuestions; trackBy: trackByQuestionId"
         [question]="question"
         [control]="getControl(question.id)"
         [formControlName]="question.id"
       ></mj-form-question>
     </div>
 
-    <!-- Submit Button -->
+    <!-- Footer Actions -->
     <div class="form-actions">
+      <!-- Footer Choice Buttons (replaces Submit when present) -->
+      <ng-container *ngIf="footerChoiceQuestion">
+        <button
+          *ngFor="let option of getOptions(footerChoiceQuestion); trackBy: trackByValue"
+          kendoButton
+          type="button"
+          [themeColor]="'primary'"
+          [disabled]="disabled || isSubmitting"
+          (click)="onFooterChoiceClick(option.value)"
+          class="footer-choice-button"
+        >
+          <span *ngIf="!isSubmitting">
+            <i *ngIf="hasIcon(option)" class="fa {{ option.icon }}" aria-hidden="true"></i>
+            {{ option.label }}
+          </span>
+          <span *ngIf="isSubmitting">
+            <span class="k-icon k-i-loading"></span>
+          </span>
+        </button>
+      </ng-container>
+
+      <!-- Standard Submit Button (when no footer choice) -->
       <button
+        *ngIf="showSubmitButton"
         kendoButton
         type="submit"
         [themeColor]="'primary'"

@@ -69,6 +69,8 @@ LoadSendGridProvider();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
+import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
+import { getSystemUser } from './auth/index.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -110,6 +112,7 @@ export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
 export * from './resolvers/CreateQueryResolver.js';
+export * from './resolvers/TelemetryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -152,6 +155,19 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   const md = new Metadata();
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
+  // Initialize server telemetry based on config
+  const tm = TelemetryManager.Instance;
+  if (configInfo.telemetry?.enabled) {
+    tm.SetEnabled(true);
+    if (configInfo.telemetry?.level) {
+      tm.UpdateSettings({ level: configInfo.telemetry.level as TelemetryLevel });
+    }
+    console.log(`Server telemetry enabled with level: ${configInfo.telemetry.level || 'standard'}`);
+  } else {
+    tm.SetEnabled(false);
+    console.log('Server telemetry disabled');
+  }
+
   const dataSources = [new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
   
   // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
@@ -169,6 +185,15 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
     console.log('Read-only Connection Pool has been initialized.');
   }
+
+  // Load all classes registered with @RegisterForStartup decorator
+  const systemUser = await getSystemUser(pool);
+  await StartupManager.Instance.Startup(false, systemUser, Metadata.Provider);
+  console.log('Startup classes loaded');
+
+  // Initialize LocalCacheManager with the server-side storage provider (in-memory)
+  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
+  console.log('LocalCacheManager initialized');
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
@@ -226,6 +251,21 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
       context: async ({ connectionParams }) => {
         const userPayload = await getUserPayload(String(connectionParams?.Authorization), undefined, dataSources);
         return { userPayload };
+      },
+      onError: (ctx, message, errors) => {
+        // Check if error is token expiration (expected behavior)
+        const isTokenExpired = errors.some(err =>
+          err.extensions?.code === 'JWT_EXPIRED' ||
+          err.message?.includes('token has expired')
+        );
+
+        if (isTokenExpired) {
+          // Log at warn level - this is expected from long-lived browser sessions
+          console.warn('WebSocket connection token expired - client should reconnect with refreshed token');
+        } else {
+          // Log actual errors at error level
+          console.error('WebSocket error:', errors);
+        }
       },
     },
     webSocketServer

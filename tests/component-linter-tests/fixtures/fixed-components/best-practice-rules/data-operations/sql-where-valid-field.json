@@ -1,0 +1,50 @@
+{
+  "name": "SqlWhereValidField",
+  "description": "EntityDataGrid with valid WHERE clause - FIXED version of sql-where-invalid-field",
+  "code": "function SqlWhereValidField({ components, utilities }) {\n  const { EntityDataGrid } = components;\n  \n  return (\n    <div>\n      <h1>Active Products</h1>\n      <EntityDataGrid\n        entityName=\"Products\"\n        fields={['Name', 'Status', 'CreatedAt']}\n        extraFilter=\"Status='Active' AND CreatedAt > '2024-01-01'\"\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Products",
+        "type": "view",
+        "maxRows": 100,
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "description": "Primary key"
+          },
+          {
+            "name": "Name",
+            "type": "nvarchar",
+            "description": "Product name"
+          },
+          {
+            "name": "Status",
+            "type": "nvarchar",
+            "description": "Product status"
+          },
+          {
+            "name": "CreatedAt",
+            "type": "datetime",
+            "description": "Creation date"
+          },
+          {
+            "name": "Price",
+            "type": "decimal",
+            "description": "Product price"
+          }
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "EntityDataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry"
+    }
+  ]
+}

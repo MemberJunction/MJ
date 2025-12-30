@@ -1,12 +1,10 @@
-import { Arg, Ctx, Field, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
-import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
+import { AppContext, UserPayload } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
-import { take } from 'rxjs/operators';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context';
-import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
-import { LearningCycleScheduler } from '../scheduler/LearningCycleScheduler.js';
+import { LoadDataContextItemsServer } from '@memberjunction/data-context-server'; 
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
 import {
@@ -17,8 +15,7 @@ import {
   SkipAPIDataRequestResponse,
   SkipAPIClarifyingQuestionResponse,
   SkipEntityInfo,
-  SkipQueryInfo,
-  SkipQueryEntityInfo,
+  SkipQueryInfo, 
   SkipAPIRunScriptRequest,
   SkipAPIRequestAPIKey,
   SkipRequestPhase,
@@ -27,13 +24,10 @@ import {
   SkipEntityFieldInfo,
   SkipEntityRelationshipInfo,
   SkipEntityFieldValueInfo,
-  SkipAPILearningCycleRequest,
-  SkipAPILearningCycleResponse,
-  SkipLearningCycleNoteChange,
+  SkipAPILearningCycleRequest, 
   SkipConversation,
   SkipAPIArtifact,
-  SkipAPIAgentRequest,
-  SkipAPIArtifactRequest,
+  SkipAPIAgentRequest, 
   SkipAPIArtifactType,
   SkipAPIArtifactVersion,
 } from '@memberjunction/skip-types';
@@ -51,10 +45,9 @@ import {
   ConversationEntity,
   DataContextEntity,
   DataContextItemEntity,
-  UserNotificationEntity,
-  AIAgentEntityExtended
+  UserNotificationEntity
 } from '@memberjunction/core-entities';
-import { apiKey as callbackAPIKey, AskSkipInfo, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath, mj_core_schema } from '../config.js';
+import { apiKey as callbackAPIKey, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath } from '../config.js';
 import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
@@ -69,6 +62,7 @@ import e from 'express';
 /**
  * Skip API Endpoints Configuration
  * Defines all available endpoints for the Skip API
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 const SKIP_API_ENDPOINTS = {
   CHAT: '/chat',
@@ -81,6 +75,7 @@ const SKIP_API_ENDPOINTS = {
 /**
  * Store for active conversation streams
  * Maps conversationID to the last status message received
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 class ActiveConversationStreams {
   private static instance: ActiveConversationStreams;
@@ -208,6 +203,7 @@ class ReattachConversationResponse {
 /**
  * Enumeration representing the different phases of a Skip response
  * Corresponds to the lifecycle of a Skip AI interaction
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 enum SkipResponsePhase {
   /** Skip is asking for clarification before proceeding */
@@ -227,6 +223,7 @@ registerEnumType(SkipResponsePhase, {
  * Result type for Skip AI interactions
  * Contains the status of the request, the response phase, the result payload,
  * and references to the conversation and message IDs
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 @ObjectType()
 export class AskSkipResultType {
@@ -436,6 +433,7 @@ export class StopLearningCycleResultType {
 /**
  * Base type for Skip API requests containing common fields
  * Used as the foundation for both chat and learning cycle requests
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 type BaseSkipRequest = {
   /** Entity metadata to send to Skip */
@@ -469,6 +467,7 @@ type BaseSkipRequest = {
  * Resolver for Skip AI interactions
  * Handles conversations with Skip, learning cycles, and related operations.
  * Skip is an AI agent that can analyze data, answer questions, and learn from interactions.
+ * @deprecated AskSkipResolver and related are not in use anymore, the @see SkipProxyAgent is used instead
  */
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
@@ -651,7 +650,7 @@ export class AskSkipResolver {
   //     learningCycleEntity.StartedAt = startTime;
 
   //     if (!(await learningCycleEntity.Save())) {
-  //       throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //       throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //     }
 
   //     const learningCycleId = learningCycleEntity.ID;
@@ -671,7 +670,7 @@ export class AskSkipResolver {
   //         learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
   //         learningCycleEntity.EndedAt = new Date();
   //         if (!(await learningCycleEntity.Save())) {
-  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //         }
   //         const result: SkipAPILearningCycleResponse = {
   //           success: true,
@@ -697,7 +696,7 @@ export class AskSkipResolver {
   //         learningCycleEntity.EndedAt = endTime;
 
   //         if (!(await learningCycleEntity.Save())) {
-  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //         }
           
   //         return response;
@@ -940,7 +939,7 @@ export class AskSkipResolver {
 
 //       // Save the note
 //       if (!(await noteEntity.Save())) {
-//         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
+//         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.CompleteMessage}`);
 //         return false;
 //       }
 
@@ -981,7 +980,7 @@ export class AskSkipResolver {
 
 //     // Proceed with deletion
 //     if (!(await noteEntity.Delete())) {
-//       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
+//       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.CompleteMessage}`);
 //       return false;
 //     }
 
@@ -1727,7 +1726,11 @@ export class AskSkipResolver {
         QueryID: e.QueryID,
         EntityID: e.EntityID,
         Entity: e.Entity
-      }))
+      })),
+      CacheEnabled: q.CacheEnabled,
+      CacheMaxSize: q.CacheMaxSize,
+      CacheTTLMinutes: q.CacheMaxSize,
+      CacheValidationSQL: q.CacheValidationSQL
     }));
   }
 
@@ -1935,8 +1938,9 @@ export class AskSkipResolver {
 
   // SKIP ENTITIES CACHING
   // Static variables shared across all instances
-  private static __skipEntitiesCache$: BehaviorSubject<Promise<SkipEntityInfo[]> | null> = new BehaviorSubject<Promise<SkipEntityInfo[]> | null>(null);
+  private static __skipEntitiesCache$: BehaviorSubject<SkipEntityInfo[] | null> = new BehaviorSubject<SkipEntityInfo[] | null>(null);
   private static __lastRefreshTime: number = 0;
+  private static __refreshInProgress: Promise<SkipEntityInfo[]> | null = null;
 
   /**
    * Refreshes the Skip entities cache
@@ -1948,9 +1952,15 @@ export class AskSkipResolver {
   private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo[]> {
     try {
       const md = new Metadata();
+
+      // Diagnostic logging
+      console.log(`[refreshSkipEntities] Total entities in metadata: ${md.Entities.length}`);
+      console.log(`[refreshSkipEntities] Config excludeSchemas: ${JSON.stringify(configInfo.askSkip?.entitiesToSend?.excludeSchemas)}`);
+      console.log(`[refreshSkipEntities] Config includeEntitiesFromExcludedSchemas: ${JSON.stringify(configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas)}`);
+
       const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? [])
         .map((e) => e.trim().toLowerCase());
-  
+
       // get the list of entities
       const entities = md.Entities.filter((e) => {
         if (!configInfo.askSkip.entitiesToSend.excludeSchemas.includes(e.SchemaName) ||
@@ -1966,12 +1976,19 @@ export class AskSkipResolver {
         }
         return false;
       });
-  
+
+      console.log(`[refreshSkipEntities] Filtered entities count: ${entities.length}`);
+      if (entities.length === 0) {
+        console.warn(`[refreshSkipEntities] WARNING: No entities passed filtering! This will result in empty Skip entities list.`);
+      }
+
       // now we have our list of entities, pack em up
       const result = await Promise.all(entities.map((e) => this.PackSingleSkipEntityInfo(e, dataSource)));
-  
+
+      console.log(`[refreshSkipEntities] Successfully packed ${result.length} entities for Skip`);
+
       AskSkipResolver.__lastRefreshTime = Date.now(); // Update last refresh time
-      return result;        
+      return result;
     }
     catch (e) {
       LogError(`AskSkipResolver::refreshSkipEntities: ${e}`);
@@ -1981,8 +1998,9 @@ export class AskSkipResolver {
 
   /**
    * Builds or retrieves Skip entities from cache
-   * Uses caching to avoid expensive rebuilding of entity information
-   * 
+   * Uses caching with request deduplication to avoid expensive rebuilding of entity information
+   * Multiple concurrent calls will share the same refresh operation
+   *
    * @param dataSource Database connection
    * @param forceRefresh Whether to force a refresh regardless of cache state
    * @param refreshIntervalMinutes Minutes before cache expires
@@ -1992,15 +2010,37 @@ export class AskSkipResolver {
     try {
       const now = Date.now();
       const cacheExpired = (now - AskSkipResolver.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
-  
+      const cacheIsEmpty = AskSkipResolver.__skipEntitiesCache$.value === null;
+
+      console.log(`[BuildSkipEntities] forceRefresh: ${forceRefresh}, cacheExpired: ${cacheExpired}, cacheIsEmpty: ${cacheIsEmpty}`);
+
       // If force refresh is requested OR cache expired OR cache is empty, refresh
-      if (forceRefresh || cacheExpired || AskSkipResolver.__skipEntitiesCache$.value === null) {
-        console.log(`Forcing Skip Entities refresh: ${forceRefresh}, Cache Expired: ${cacheExpired}`);
-        const newData = this.refreshSkipEntities(dataSource);
-        AskSkipResolver.__skipEntitiesCache$.next(newData);
+      if (forceRefresh || cacheExpired || cacheIsEmpty) {
+        // Check if a refresh is already in progress - deduplicate concurrent requests
+        if (AskSkipResolver.__refreshInProgress) {
+          console.log(`[BuildSkipEntities] Refresh already in progress, waiting for it to complete...`);
+          return await AskSkipResolver.__refreshInProgress;
+        }
+
+        console.log(`[BuildSkipEntities] Starting new refresh operation...`);
+
+        // Start the refresh and store the Promise for request deduplication
+        AskSkipResolver.__refreshInProgress = this.refreshSkipEntities(dataSource);
+
+        try {
+          const newData = await AskSkipResolver.__refreshInProgress;
+          AskSkipResolver.__skipEntitiesCache$.next(newData);
+          console.log(`[BuildSkipEntities] Refresh complete, cached ${newData.length} entities`);
+          return newData;
+        } finally {
+          // Clear the in-progress marker so future requests can trigger new refreshes
+          AskSkipResolver.__refreshInProgress = null;
+        }
       }
-  
-      return AskSkipResolver.__skipEntitiesCache$.pipe(take(1)).toPromise();  
+
+      const result = AskSkipResolver.__skipEntitiesCache$.value || [];
+      console.log(`[BuildSkipEntities] Returning ${result.length} entities from cache`);
+      return result;
     }
     catch (e) {
       LogError(`AskSkipResolver::BuildSkipEntities: ${e}`);

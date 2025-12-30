@@ -27,7 +27,21 @@
         "sync": {
           "lastModified": "2025-11-28T02:04:46.687Z",
           "checksum": "fefaae3a4bbd1a142369738cbd0593337ba4efeac1102c6c52cbb92a4b8c8036"
-        }
+        },
+        "__mj_sync_notes": [
+          {
+            "type": "parent",
+            "field": "fields.DashboardID",
+            "expression": "@parent:ID",
+            "resolved": "362A0BE3-2745-4C91-B648-98232B3DD049"
+          },
+          {
+            "type": "lookup",
+            "field": "fields.ApplicationID",
+            "expression": "@lookup:Applications.Name=Testing",
+            "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
+          }
+        ]
       }
     ]
   },
@@ -37,5 +51,25 @@
   "sync": {
     "lastModified": "2025-11-28T02:04:46.660Z",
     "checksum": "9939b94e85071587a5981adc6d4bb5f2cb5fd31ae879454280bbe08301cf2926"
-  }
+  },
+  "__mj_sync_notes": [
+    {
+      "type": "lookup",
+      "field": "fields.UserID",
+      "expression": "@lookup:Users.Name=System",
+      "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    {
+      "type": "lookup",
+      "field": "fields.ApplicationID",
+      "expression": "@lookup:Applications.Name=Testing",
+      "resolved": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
+    },
+    {
+      "type": "lookup",
+      "field": "fields.EnvironmentID",
+      "expression": "@lookup:MJ: Environments.Name=Default",
+      "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
+    }
+  ]
 }

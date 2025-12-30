@@ -1,0 +1,22 @@
+{
+  "name": "QueryParamTypeInvalidComponent",
+  "description": "Component passing wrong parameter types to RunQuery (violates query-parameter-type-validation rule)",
+  "code": "function QueryParamTypeInvalidComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      try {\n        const result = await utilities.rq.RunQuery({\n          QueryName: 'SalesReport',\n          CategoryPath: 'Reports/Sales',\n          Parameters: {\n            // VIOLATION: Year should be a number, not a string\n            Year: '2024',\n            // VIOLATION: Month should be a number, not a string\n            Month: '12',\n            // VIOLATION: MaxRecords should be a number, not a string\n            MaxRecords: '100',\n            // VIOLATION: IncludeReturns should be a boolean, not a string\n            IncludeReturns: 'true',\n            // This one is correct - Region is a string\n            Region: 'North'\n          }\n        });\n\n        if (result.Success) {\n          setData(result.Results);\n        }\n      } catch (err) {\n        console.error(err);\n      } finally {\n        setLoading(false);\n      }\n    }\n    loadData();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Sales Report</h1>\n      <p>Records: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "SalesReport",
+        "categoryPath": "Reports/Sales",
+        "parameters": [
+          { "name": "Year", "type": "int", "isRequired": true },
+          { "name": "Month", "type": "int", "isRequired": true },
+          { "name": "MaxRecords", "type": "int", "isRequired": false },
+          { "name": "IncludeReturns", "type": "bit", "isRequired": false },
+          { "name": "Region", "type": "nvarchar", "isRequired": false }
+        ]
+      }
+    ]
+  }
+}

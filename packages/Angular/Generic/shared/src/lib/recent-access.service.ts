@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, CompositeKey, LogError } from '@memberjunction/core';
-import { UserRecordLogEntity } from '@memberjunction/core-entities';
+import { UserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 /**
@@ -138,7 +138,7 @@ export class RecentAccessService {
   }
 
   /**
-   * Loads recent access items for the current user.
+   * Loads recent access items for the current user using UserInfoEngine (cached).
    * @param maxItems - Maximum number of items to return (default 15)
    * @param forceRefresh - Force refresh even if already loaded
    */
@@ -151,24 +151,13 @@ export class RecentAccessService {
       this._isLoading$.next(true);
 
       const md = new Metadata();
-      const rv = new RunView();
 
-      const result = await rv.RunView<UserRecordLogEntity>({
-        EntityName: 'User Record Logs',
-        ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
-        OrderBy: 'LatestAt DESC',
-        MaxRows: maxItems,
-        ResultType: 'entity_object'
-      });
-
-      if (!result.Success) {
-        console.error('RecentAccessService: Failed to load recent items', result.ErrorMessage);
-        return [];
-      }
+      // Get recent records, limited to maxItems (already ordered by LatestAt DESC in engine)
+      const userRecordLogs = UserInfoEngine.Instance.UserRecordLogs.slice(0, maxItems);
 
       const items: RecentAccessItem[] = [];
 
-      for (const log of result.Results || []) {
+      for (const log of userRecordLogs) {
         const entityInfo = md.Entities.find(e => e.ID === log.EntityID);
         if (!entityInfo) continue;
 

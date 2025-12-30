@@ -1,0 +1,19 @@
+{
+  "name": "QueryResultFilterInvalidFieldFixed",
+  "type": "generic",
+  "title": "Query Result Filter Invalid Field - Fixed Pattern",
+  "description": "Tests correct filtering of query results by valid field",
+  "code": "function QueryResultFilterInvalidFieldFixed({ utilities }) {\n  const [inStockProducts, setInStockProducts] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Product Catalog',\n        CategoryPath: 'Products/Reports'\n      });\n      if (result?.Success) {\n        // ✅ Filtering by StockLevel field that exists in query\n        const inStock = result.Results.filter(p => p.StockLevel > 0);\n        setInStockProducts(inStock);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>In Stock Products</h3>\n      {inStockProducts.map((p, i) => (\n        <div key={i}>{p.ProductName} - ${p.Price}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Product Catalog",
+      "categoryPath": "Products/Reports",
+      "fields": ["ProductID", "ProductName", "Price", "Category", "StockLevel"]
+    }]
+  }
+}

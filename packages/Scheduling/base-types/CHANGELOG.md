@@ -1,5 +1,66 @@
 # @memberjunction/scheduling-base-types
 
+## 2.128.0
+
+### Patch Changes
+
+- @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+  - @memberjunction/global@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/global@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

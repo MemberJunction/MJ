@@ -1,0 +1,21 @@
+{
+  "name": "FunctionScopeTypeInferenceBroken",
+  "description": "Component that would trigger false positives without proper function scope tracking - calling array methods on variables initialized within nested functions",
+  "code": "function FunctionScopeTypeInferenceBroken({ utilities, components }) {\n  const [data, setData] = useState([]);\n  const { DataGrid } = components;\n\n  // Helper function that builds an array internally\n  const processData = (rawData) => {\n    const result = []; // Array initialized in nested scope\n    \n    for (const item of rawData) {\n      result.push({ // Should NOT flag - result is clearly an array\n        id: item.ID,\n        name: item.Name,\n        value: item.Value\n      });\n    }\n    \n    return result;\n  };\n\n  // Arrow function that builds an object internally\n  const buildLookup = (items) => {\n    const lookup = {}; // Object initialized in nested scope\n    \n    items.forEach(item => {\n      lookup[item.ID] = item; // Should NOT flag - lookup is clearly an object\n    });\n    \n    return lookup;\n  };\n\n  // Nested arrow function with array operations\n  const filterAndSort = (data, minValue) => {\n    const filtered = []; // Array initialized in nested scope\n    const sorted = []; // Another array in same scope\n    \n    // Filter items\n    data.forEach(item => {\n      if (item.Value >= minValue) {\n        filtered.push(item); // Should NOT flag\n      }\n    });\n    \n    // Sort by value\n    const sortedData = filtered.sort((a, b) => b.Value - a.Value);\n    sortedData.forEach(item => sorted.push(item)); // Should NOT flag\n    \n    return sorted;\n  };\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sample Data',\n        CategoryPath: 'Test'\n      });\n\n      if (result.Success) {\n        const processed = processData(result.Results);\n        const lookup = buildLookup(processed);\n        const filtered = filterAndSort(processed, 100);\n        setData(filtered);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h1>Function Scope Type Inference Test</h1>\n      <DataGrid\n        data={data}\n        columns={['name', 'value']}\n        utilities={utilities}\n      />\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "Sample Data",
+        "categoryPath": "Test",
+        "parameters": [],
+        "fields": [
+          { "name": "ID", "type": "uniqueidentifier" },
+          { "name": "Name", "type": "nvarchar" },
+          { "name": "Value", "type": "decimal" }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "EntityFieldNonexistentBroken",
+  "type": "generic",
+  "title": "Entity Field Nonexistent - Broken Pattern",
+  "description": "Tests linter detection of accessing non-existent field on entity",
+  "code": "function EntityFieldNonexistentBroken({ utilities }) {\n  const [salaries, setSalaries] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Field doesn't exist: Members entity has no Salary field\n        const data = result.Results.map(m => ({\n          name: m.FirstName,\n          salary: m.Salary\n        }));\n        setSalaries(data);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      {salaries.map((item, i) => (\n        <div key={i}>{item.name}: ${item.salary}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "requirements": {
+    "entity": "Members",
+    "expectedFields": ["FirstName", "LastName", "Email", "MembershipType"]
+  }
+}

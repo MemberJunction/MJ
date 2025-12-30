@@ -1,5 +1,107 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/ai-core-plus@2.128.0
+  - @memberjunction/interactive-component-types@2.128.0
+  - @memberjunction/data-context@2.128.0
+
+## 2.127.0
+
+### Minor Changes
+
+- 65318c4: migration
+
+### Patch Changes
+
+- Updated dependencies [65318c4]
+- Updated dependencies [0e56e97]
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/interactive-component-types@2.127.0
+  - @memberjunction/ai-core-plus@2.127.0
+  - @memberjunction/core@2.127.0
+  - @memberjunction/data-context@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.126.1
+- @memberjunction/interactive-component-types@2.126.1
+- @memberjunction/core@2.126.1
+- @memberjunction/data-context@2.126.1
+
+## 2.126.0
+
+### Minor Changes
+
+- d424fce: migration for metadata for Sage change
+- 389183e: migration
+
+### Patch Changes
+
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-core-plus@2.126.0
+  - @memberjunction/interactive-component-types@2.126.0
+  - @memberjunction/data-context@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [1115143]
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/interactive-component-types@2.125.0
+  - @memberjunction/core@2.125.0
+  - @memberjunction/data-context@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/interactive-component-types@2.124.0
+  - @memberjunction/data-context@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/data-context@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.123.0
+- @memberjunction/core@2.123.0
+- @memberjunction/data-context@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- @memberjunction/data-context@2.122.2
+- @memberjunction/interactive-component-types@2.122.2
+- @memberjunction/core@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.122.1
+- @memberjunction/core@2.122.1
+- @memberjunction/data-context@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

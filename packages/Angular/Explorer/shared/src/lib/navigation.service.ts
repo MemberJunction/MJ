@@ -96,37 +96,21 @@ export class NavigationService implements OnDestroy {
     }
 
     const config = this.workspaceManager.GetConfiguration();
-    console.log('[NavigationService.handleSingleResourceModeTransition] Current config:', {
-      tabCount: config?.tabs?.length || 0,
-      activeTabId: config?.activeTabId,
-      tabs: config?.tabs?.map(t => ({ id: t.id, title: t.title, isPinned: t.isPinned }))
-    });
 
     if (!config || !config.tabs || config.tabs.length === 0) {
-      console.log('[NavigationService.handleSingleResourceModeTransition] No tabs to preserve');
       return; // No tabs to preserve
     }
 
     // Find the currently active tab
     const activeTab = config.tabs.find(tab => tab.id === config.activeTabId);
     if (!activeTab) {
-      console.log('[NavigationService.handleSingleResourceModeTransition] No active tab found');
       return; // No active tab
     }
-
-    console.log('[NavigationService.handleSingleResourceModeTransition] Active tab:', {
-      id: activeTab.id,
-      title: activeTab.title,
-      isPinned: activeTab.isPinned
-    });
 
     // If the active tab is NOT pinned (i.e., it's temporary), pin it to preserve it
     // This maintains the "only one temporary tab" rule
     if (!activeTab.isPinned) {
-      console.log('[NavigationService.handleSingleResourceModeTransition] Pinning current temporary tab before creating new tab');
       this.workspaceManager.TogglePin(activeTab.id);
-    } else {
-      console.log('[NavigationService.handleSingleResourceModeTransition] Active tab already pinned, no action needed');
     }
   }
 
@@ -161,26 +145,16 @@ export class NavigationService implements OnDestroy {
    * Open a navigation item within an app
    */
   public OpenNavItem(appId: string, navItem: NavItem, appColor: string, options?: NavigationOptions): string {
-    console.log('[NavigationService.OpenNavItem] Called with:', {
-      appId,
-      navItemLabel: navItem.Label,
-      navItemResourceType: navItem.ResourceType,
-      navItemDriverClass: navItem.DriverClass,
-      appColor,
-      options
-    });
-
     const forceNew = this.shouldForceNewTab(options);
-    console.log('[NavigationService.OpenNavItem] forceNew:', forceNew);
 
     // Get the app to find its name
     const app = this.appManager.GetAppById(appId);
     const appName = app?.Name || '';
-    console.log('[NavigationService.OpenNavItem] App name:', appName);
 
     const request: TabRequest = {
       ApplicationId: appId,
       Title: navItem.Label,
+      ResourceRecordId: navItem.RecordID || '',  // Also store at top level for consistent tab matching
       Configuration: {
         route: navItem.Route,
         resourceType: navItem.ResourceType,
@@ -194,22 +168,16 @@ export class NavigationService implements OnDestroy {
       IsPinned: options?.pinTab || false
     };
 
-    console.log('[NavigationService.OpenNavItem] Tab request:', request);
-
     // Handle transition from single-resource mode
     this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       // Always create a new tab
-      console.log('[NavigationService.OpenNavItem] Opening forced new tab');
       const tabId = this.workspaceManager.OpenTabForced(request, appColor);
-      console.log('[NavigationService.OpenNavItem] Created tab:', tabId);
       return tabId;
     } else {
       // Use existing OpenTab logic (may replace temporary tab)
-      console.log('[NavigationService.OpenNavItem] Opening tab (may replace)');
       const tabId = this.workspaceManager.OpenTab(request, appColor);
-      console.log('[NavigationService.OpenNavItem] Opened tab:', tabId);
       return tabId;
     }
   }
@@ -529,13 +497,11 @@ export class NavigationService implements OnDestroy {
     // Get app (use provided or current active)
     const targetAppId = appId || this.appManager.GetActiveApp()?.ID;
     if (!targetAppId) {
-      console.warn('[NavigationService.OpenNavItemByName] No app ID provided and no active app');
       return null;
     }
 
     const app = this.appManager.GetAppById(targetAppId);
     if (!app) {
-      console.warn('[NavigationService.OpenNavItemByName] App not found:', targetAppId);
       return null;
     }
 
@@ -543,7 +509,6 @@ export class NavigationService implements OnDestroy {
     const navItems = app.GetNavItems();
     const navItem = navItems.find(item => item.Label === navItemName);
     if (!navItem) {
-      console.warn('[NavigationService.OpenNavItemByName] Nav item not found:', navItemName, 'in app:', targetAppId);
       return null;
     }
 

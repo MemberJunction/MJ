@@ -6,6 +6,7 @@ Base classes and components for creating entity forms in MemberJunction Angular 
 
 - Abstract base classes for forms, form sections, and record components
 - Automatic field rendering components with type detection
+- **Encrypted field support** with configurable visibility and blind edit modes
 - Support for edit mode and validation
 - Transaction management for saving related records
 - Integration with MemberJunction metadata and entity framework
@@ -65,6 +66,46 @@ export class MyComponent {
 - `ShowLabel` (boolean): Whether to show the field label (default: true)
 - `DisplayName` (string): Override the default display name
 - `PossibleValues` (string[]): Custom values for dropdown/combobox fields
+- `formContext` (BaseFormContext): Form context for field filtering and state
+- `hideWhenEmptyInReadOnlyMode` (boolean): Hide field when empty in read-only mode (default: true)
+
+#### Encrypted Field Support
+
+MJFormField automatically handles fields configured for encryption in the entity metadata. The component provides appropriate UI based on the field's encryption settings:
+
+**Read-Only Mode:**
+- **AllowDecryptInAPI=true**: Displays a masked value (••••••••) with a lock icon by default. Users can click the eye toggle button to reveal the actual decrypted value.
+- **AllowDecryptInAPI=false**: Displays only the masked value with a lock icon. The value cannot be revealed as it's protected.
+- **Empty value**: Displays nothing (no mask or icon).
+
+**Edit Mode:**
+- **AllowDecryptInAPI=true**: Shows a password-style text input with an eye toggle to show/hide the value being edited.
+- **AllowDecryptInAPI=false ("Blind Edit")**: Shows the current value as locked/masked (cannot be viewed), with a separate empty text input for entering a new value. Users can use the eye toggle to verify what they're typing before submitting.
+
+```typescript
+// Entity field metadata configuration for encryption
+// (Set via database or entity metadata, not in Angular component)
+// - Encrypt: true              // Field value is encrypted at rest
+// - AllowDecryptInAPI: true    // Decrypted value can be sent to API clients
+// - SendEncryptedValue: false  // Whether to send encrypted ciphertext when AllowDecryptInAPI=false
+```
+
+**Example usage with encrypted field:**
+```html
+<!-- The component automatically detects encryption from entity metadata -->
+<mj-form-field
+  [record]="userRecord"
+  [EditMode]="isEditing"
+  FieldName="SSN"
+  Type="textbox"
+></mj-form-field>
+```
+
+The encrypted field UI includes:
+- Lock icon (fa-lock) indicating the field is encrypted
+- Eye toggle buttons (fa-eye / fa-eye-slash) for showing/hiding values
+- Hint text for blind edit mode explaining the behavior
+- Password-style masking for sensitive data entry
 
 ### MJLinkField
 
@@ -369,7 +410,7 @@ export class YourModule { }
 - **@memberjunction/ng-record-changes**: Change tracking
 - **@memberjunction/ng-code-editor**: Code editing support
 - **@progress/kendo-angular-\***: UI components
-- **ngx-markdown**: Markdown rendering
+- **@memberjunction/ng-markdown**: Markdown rendering
 - **rxjs**: Reactive programming
 
 ## Integration with MemberJunction

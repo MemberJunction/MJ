@@ -52,6 +52,7 @@ Deterministic workflow agent type that:
   - Conditional loops with While steps
   - Self-contained loop configuration
   - Support for Action, Sub-Agent, and Prompt loop bodies
+- **Execution customization** (v2.127+) - Start at specific steps or skip steps
 
 ### AgentRunner
 Orchestrator that provides multiple execution modes:
@@ -802,6 +803,155 @@ The `AIAgentDataSource` table includes:
 **Unique Constraint**: `AgentID + Name + DestinationType + DestinationPath`
 - Allows same Name across different destinations/paths
 - Example: "ENTITIES" can exist in both Data and Payload destinations
+
+### Runtime Action Changes (v2.123.0)
+
+The framework supports dynamic customization of which actions are available to agents at runtime, without modifying database configuration. This is particularly useful for:
+
+- **Multi-tenant scenarios** where different executions need different integrations
+- **Security restrictions** where sub-agents should have limited action access
+- **Testing scenarios** with controlled action availability
+
+#### ActionChange Interface
+
+```typescript
+interface ActionChange {
+  scope: ActionChangeScope;  // Which agents to apply to
+  mode: ActionChangeMode;    // 'add' or 'remove'
+  actionIds: string[];       // Action entity IDs to add/remove
+  agentIds?: string[];       // Required when scope is 'specific'
+}
+
+type ActionChangeScope = 'global' | 'root' | 'all-subagents' | 'specific';
+type ActionChangeMode = 'add' | 'remove';
+```
+
+#### Scope Options
+
+- **`global`**: Applies to all agents in the hierarchy (root + all sub-agents)
+- **`root`**: Applies only to the root agent
+- **`all-subagents`**: Applies to all sub-agents but NOT the root agent
+- **`specific`**: Applies only to agents listed in `agentIds`
+
+#### Usage Examples
+
+```typescript
+// Example 1: Tenant A context - add LMS and CRM integrations to all agents
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        {
+            scope: 'global',
+            mode: 'add',
+            actionIds: ['lms-query-action-id', 'crm-search-action-id']
+        }
+    ]
+});
+
+// Example 2: Tenant B context - different integrations
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        {
+            scope: 'global',
+            mode: 'add',
+            actionIds: ['membership-action-id', 'events-action-id']
+        }
+    ]
+});
+
+// Example 3: Remove dangerous actions from sub-agents only
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        {
+            scope: 'all-subagents',
+            mode: 'remove',
+            actionIds: ['delete-record-action-id', 'execute-sql-action-id']
+        }
+    ]
+});
+
+// Example 4: Add special actions to a specific sub-agent
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        { scope: 'global', mode: 'add', actionIds: ['common-action-id'] },
+        {
+            scope: 'specific',
+            mode: 'add',
+            actionIds: ['special-data-action-id'],
+            agentIds: ['data-gatherer-sub-agent-id']
+        }
+    ]
+});
+
+// Example 5: Replace actions (remove then add)
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    actionChanges: [
+        // First remove the default integrations
+        {
+            scope: 'global',
+            mode: 'remove',
+            actionIds: ['default-crm-action-id']
+        },
+        // Then add the tenant-specific ones
+        {
+            scope: 'global',
+            mode: 'add',
+            actionIds: ['tenant-specific-crm-action-id']
+        }
+    ]
+});
+```
+
+#### Propagation Rules
+
+When sub-agents are executed, action changes are propagated based on scope:
+
+| Original Scope | Propagated As | Behavior |
+|---------------|---------------|----------|
+| `global` | `global` | Propagated as-is to all sub-agents |
+| `root` | (not propagated) | Only applied to root agent |
+| `all-subagents` | `global` | Becomes global for sub-agent's perspective |
+| `specific` | `specific` | Propagated as-is; each agent checks if it's in agentIds |
+
+#### How It Works
+
+1. **During prompt preparation** (`gatherPromptTemplateData`):
+   - Base actions are loaded from database configuration (`AIAgentAction` table)
+   - Runtime action changes are applied based on scope
+   - The modified action list is injected into the prompt template
+   - LLM sees only the effective actions
+
+2. **During action execution** (`executeActionsStep`):
+   - When LLM requests an action, it's validated against the effective action list
+   - Actions not in the effective list are rejected with a clear error message
+
+3. **During sub-agent execution** (`ExecuteSubAgent`):
+   - Action changes are filtered and transformed for propagation
+   - Sub-agents receive only applicable changes
+
+#### Key Benefits
+
+- **No database changes required** - Actions are modified at runtime
+- **Tenant isolation** - Same agent, different action sets per tenant
+- **Security** - Restrict sub-agents from dangerous operations
+- **Flexibility** - Combine add/remove operations for complex scenarios
+- **Type-safe** - Full TypeScript typing with ActionChange interface
+
+**See:** [@memberjunction/ai-core-plus README](../CorePlus/README.md) for type definitions.
 
 ### Payload Scoping for Sub-Agents
 
@@ -1734,6 +1884,123 @@ Flow agents are ideal for:
 - **Data pipelines** with validation and transformation steps
 - **Hybrid workflows** combining deterministic logic with AI prompts
 - **Multi-step processes** where you need guaranteed execution order
+
+### Flow Agent Execution Parameters
+
+Flow agents support specialized execution parameters via `FlowAgentExecuteParams` (v2.127+) that allow runtime customization of how the flow executes:
+
+```typescript
+import { FlowAgentExecuteParams } from '@memberjunction/ai-agents';
+import { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/ai-engine-base';
+
+// Get the steps you want to work with
+const agentSteps = AIEngine.Instance.GetAgentSteps(myFlowAgent.ID);
+const approvalStep = agentSteps.find(s => s.Name === 'Approval Review');
+const notificationStep = agentSteps.find(s => s.Name === 'Send Notification');
+
+// Execute with Flow Agent-specific parameters
+const params: ExecuteAgentParams<unknown, unknown, FlowAgentExecuteParams> = {
+    agent: myFlowAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    agentTypeParams: {
+        // Start at a specific step instead of the configured entry point
+        startAtStep: approvalStep,
+
+        // Skip these steps during execution
+        skipSteps: [notificationStep]
+    }
+};
+
+const result = await runner.RunAgent(params);
+```
+
+#### FlowAgentExecuteParams Interface
+
+```typescript
+interface FlowAgentExecuteParams {
+    /**
+     * Start execution at a specific step instead of the flow's entry point.
+     *
+     * When provided, the flow agent will begin execution at this step,
+     * skipping all steps that would normally precede it. Useful for:
+     * - Resuming a flow from a specific point
+     * - Testing specific branches of a flow
+     * - Re-running a portion of a flow after a failure
+     *
+     * The step must belong to the agent being executed.
+     */
+    startAtStep?: AIAgentStepEntity;
+
+    /**
+     * Steps to skip during execution.
+     *
+     * When the flow would normally execute one of these steps, it will
+     * instead immediately evaluate the step's outgoing paths and continue
+     * to the next valid step. Useful for:
+     * - Bypassing steps that have already been completed externally
+     * - Testing flows without certain side effects
+     * - Conditional step execution based on runtime state
+     *
+     * Skipped steps are recorded in the execution path but marked as skipped.
+     * The step's output mapping is not applied when skipped.
+     */
+    skipSteps?: AIAgentStepEntity[];
+}
+```
+
+#### Use Cases
+
+**Resume Flow After Failure:**
+```typescript
+// User's approval was rejected, they fixed issues and want to resume
+const reviewStep = agentSteps.find(s => s.Name === 'Manager Review');
+
+await runner.RunAgent({
+    agent: approvalFlowAgent,
+    agentTypeParams: {
+        startAtStep: reviewStep  // Skip validation, go straight to review
+    },
+    payload: fixedPayload
+});
+```
+
+**Skip Steps Based on External State:**
+```typescript
+// Notification was already sent via another system
+const notifyStep = agentSteps.find(s => s.Name === 'Send Notification');
+const auditStep = agentSteps.find(s => s.Name === 'Create Audit Log');
+
+await runner.RunAgent({
+    agent: workflowAgent,
+    agentTypeParams: {
+        skipSteps: [notifyStep, auditStep]  // Skip these, they're handled externally
+    }
+});
+```
+
+**Testing Specific Flow Branches:**
+```typescript
+// Test only the rejection path
+const rejectionStep = agentSteps.find(s => s.Name === 'Handle Rejection');
+
+await runner.RunAgent({
+    agent: approvalFlowAgent,
+    agentTypeParams: {
+        startAtStep: rejectionStep
+    },
+    payload: { decision: { approved: false, reason: 'Budget exceeded' } }
+});
+```
+
+#### Behavior Notes
+
+- **startAtStep validation**: The step must belong to the agent being executed. If invalid, execution fails with a descriptive error.
+- **skipSteps behavior**: Skipped steps are marked as completed in the flow state with `{ skipped: true, stepName: '...' }` as the result.
+- **Path evaluation**: When a step is skipped, its outgoing paths are still evaluated to determine the next step.
+- **Recursive skipping**: If the next step after a skipped step is also in `skipSteps`, it will also be skipped until a non-skipped step is reached.
+- **Output mapping**: Skipped steps do not apply their `ActionOutputMapping` since no action is executed.
 
 ### Core Concepts
 

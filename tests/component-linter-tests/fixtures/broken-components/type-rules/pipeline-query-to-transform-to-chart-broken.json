@@ -1,0 +1,19 @@
+{
+  "name": "PipelineQueryToTransformToChartBroken",
+  "type": "generic",
+  "title": "Pipeline Query Transform Chart - Broken Pattern",
+  "description": "Tests complex data pipeline with field loss between stages (may fail until linter refactor)",
+  "code": "function PipelineQueryToTransformToChartBroken({ utilities, components }) {\n  const [chartData, setChartData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      // Stage 1: Load from query\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales Analytics',\n        CategoryPath: 'Sales/Reports'\n      });\n      \n      if (result?.Success) {\n        // Stage 2: Transform and aggregate\n        const byMonth = result.Results.reduce((acc, sale) => {\n          const month = sale.SaleDate?.substring(0, 7);\n          if (!acc[month]) {\n            acc[month] = {Month: month, Count: 0}; // ❌ Missing Revenue field\n          }\n          acc[month].Count++;\n          return acc;\n        }, {});\n        \n        // Stage 3: Convert to array for chart\n        const chartArray = Object.values(byMonth);\n        setChartData(chartArray);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Monthly Sales</h3>\n      {/* ❌ Chart expects Revenue but transformation only kept Count */}\n      <SimpleChart data={chartData} groupBy=\"Month\" valueField=\"Revenue\" />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Sales Analytics",
+      "categoryPath": "Sales/Reports",
+      "fields": ["SaleID", "SaleDate", "Revenue", "ProductID"]
+    }]
+  }
+}

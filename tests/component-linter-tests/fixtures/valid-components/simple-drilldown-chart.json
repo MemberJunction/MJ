@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/simple-drilldown-chart.spec.json",
+  "description": "Valid shared component for chart with drill-down capability"
+}

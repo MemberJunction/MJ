@@ -2,7 +2,7 @@ import { Component, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { ApplicationEntity, ApplicationEntityEntity } from '@memberjunction/core-entities';
+import { ApplicationEntity, ApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { ApplicationDialogData, ApplicationDialogResult } from './application-dialog/application-dialog.component';
@@ -61,6 +61,10 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
 
   constructor() {
     super();
+  }
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Application Management"
   }
 
   protected initDashboard(): void {

@@ -12,11 +12,22 @@
       {
         "name": "Accounts",
         "description": "Customer/account entity for header display",
-        "displayFields": ["ID", "AccountName", "Industry", "Type", "Status", "Website", "Phone", "Email"],
+        "displayFields": [
+          "ID",
+          "AccountName",
+          "Industry",
+          "Type",
+          "Status",
+          "Website",
+          "Phone",
+          "Email"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Customer information displayed in header section"
       }
     ],
@@ -39,5 +50,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Header section with customer summary information"
 }

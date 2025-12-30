@@ -42,5 +42,6 @@
       "version": "^7.8.3",
       "globalVariable": "ss"
     }
-  ]
+  ],
+  "description": "Displays statistical distribution of deal velocities using box plots"
 }

@@ -12,11 +12,21 @@
       {
         "name": "Deals",
         "description": "Deal records for stage details",
-        "displayFields": ["ID", "Name", "Amount", "Probability", "Stage", "CloseDate", "Account"],
+        "displayFields": [
+          "ID",
+          "Name",
+          "Amount",
+          "Probability",
+          "Stage",
+          "CloseDate",
+          "Account"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Stage-filtered deal display"
       }
     ],
@@ -64,5 +74,6 @@
       "version": "^1.0.0"
     }
   ],
-  "libraries": []
+  "libraries": [],
+  "description": "Slide-out panel showing detailed information for a selected sales funnel stage"
 }

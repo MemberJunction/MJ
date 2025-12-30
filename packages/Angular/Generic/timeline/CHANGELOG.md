@@ -1,5 +1,109 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+  - @memberjunction/core@2.128.0
+
+## 2.127.0
+
+### Patch Changes
+
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/core@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- @memberjunction/core@2.126.1
+
+## 2.126.0
+
+### Patch Changes
+
+- Updated dependencies [703221e]
+  - @memberjunction/core@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+  - @memberjunction/core@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/core@2.123.1
+
+## 2.123.0
+
+### Minor Changes
+
+- 0944f59: migrations
+
+### Patch Changes
+
+- @memberjunction/core@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+  - @memberjunction/core@2.122.2
+
+## 3.0.0 (UNRELEASED)
+
+### Breaking Changes
+
+- **Complete rewrite**: Removed Kendo UI dependency, now pure HTML/CSS implementation
+- **API changes**: Property names changed from PascalCase to camelCase (`Groups` -> `groups`, `DisplayOrientation` -> `orientation`)
+- **Event system**: New BeforeX/AfterX event pattern replaces Kendo events
+- **Removed dependencies**: No longer requires `@progress/kendo-*` packages
+- **Optional MJ dependency**: `@memberjunction/core` is now optional - works with plain JS objects
+
+### New Features
+
+- **Universal compatibility**: Works with MemberJunction BaseEntity objects OR plain JavaScript objects
+- **Time segment grouping**: Group events by day/week/month/quarter/year with collapsible sections
+- **Virtual scrolling**: Built-in support for large datasets with dynamic loading
+- **Rich card configuration**: Configurable fields, images, actions, and custom templates
+- **BeforeX/AfterX events**: Full control from container components with cancel capability
+- **Keyboard navigation**: Full accessibility with ARIA support
+- **Responsive design**: Mobile-first approach with automatic layout adaptation
+- **Theming**: CSS variables for easy customization including dark mode
+- **Alternating layout**: Cards can alternate left/right of timeline axis
+- **Custom templates**: Override any part of card rendering
+
+### Migration Guide
+
+See README.md for detailed migration instructions from v2.x.
+
+## 2.122.1
+
+### Patch Changes
+
+- Updated dependencies [699a480]
+  - @memberjunction/ng-shared@2.122.1
+  - @memberjunction/ng-entity-form-dialog@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

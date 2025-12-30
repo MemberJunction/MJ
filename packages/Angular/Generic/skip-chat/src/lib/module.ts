@@ -18,7 +18,7 @@ import { LayoutModule } from '@progress/kendo-angular-layout';
 
 /*********************************************/
 // Markdown
-import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -74,7 +74,7 @@ import { SkipComponentFeedbackPanelComponent } from './artifacts/skip-component-
     CodeEditorModule,
     MJReactModule,
     SharedGenericModule,
-    MarkdownModule.forRoot(),
+    MarkdownModule,
   ],
   exports: [
     SkipChatComponent,

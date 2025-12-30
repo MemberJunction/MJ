@@ -1,7 +1,7 @@
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
-import { AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import {
   ExecutionTask,
   ExecutionTaskResult,
@@ -13,6 +13,7 @@ import {
   TokenUsageUpdate,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
 /**
  * Interface for progress callbacks to avoid circular dependency issues
@@ -164,6 +165,7 @@ export class ParallelExecutionCoordinator {
    * @returns Promise<ParallelExecutionResult> - Aggregated results from all executions
    */
   public async executeTasksInParallel(
+    params: AIPromptParams,
     tasks: ExecutionTask[],
     config?: Partial<ParallelExecutionConfig>,
     parentPromptRunId?: string,
@@ -209,7 +211,7 @@ export class ParallelExecutionCoordinator {
       const progressTracker = new ParallelProgressTracker(tasks.length, executionGroups.length, progressCallbacks);
 
       // Execute groups sequentially, tasks within groups in parallel
-      const allResults = await this.executeGroupsSequentially(executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
+      const allResults = await this.executeGroupsSequentially(params, executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
 
       // Aggregate results and calculate metrics
       const result = this.aggregateResults(allResults, startTime, new Date());
@@ -333,6 +335,7 @@ export class ParallelExecutionCoordinator {
    * @returns Promise<ExecutionTaskResult[]> - All task results from all groups
    */
   private async executeGroupsSequentially(
+    params: AIPromptParams,
     groups: ExecutionGroup[],
     config: ParallelExecutionConfig,
     parentPromptRunId?: string,
@@ -365,7 +368,7 @@ export class ParallelExecutionCoordinator {
       // Update progress tracker for current group
       progressTracker?.updateProgress(group.groupNumber);
 
-      const groupResults = await this.executeGroupInParallel(group, config, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
+      const groupResults = await this.executeGroupInParallel(params, group, config, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
       allResults.push(...groupResults);
 
       // Check if we should fail fast
@@ -391,6 +394,7 @@ export class ParallelExecutionCoordinator {
    * @returns Promise<ExecutionTaskResult[]> - Results from all tasks in the group
    */
   private async executeGroupInParallel(
+    params: AIPromptParams,
     group: ExecutionGroup,
     config: ParallelExecutionConfig,
     parentPromptRunId?: string,
@@ -430,7 +434,7 @@ export class ParallelExecutionCoordinator {
       while (executing.length < maxConcurrent && taskIndex < group.tasks.length) {
         const task = group.tasks[taskIndex++];
         progressTracker?.addActiveTask(task.taskId);
-        const execution = this.executeTask(task, config, parentPromptRunId, executionOrder++, agentRunId);
+        const execution = this.executeTask(params, task, config, parentPromptRunId, executionOrder++, agentRunId);
         executing.push(execution);
       }
 
@@ -467,6 +471,7 @@ export class ParallelExecutionCoordinator {
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
   private async executeTask(
+    params: AIPromptParams,
     task: ExecutionTask,
     config: ParallelExecutionConfig,
     parentPromptRunId?: string,
@@ -500,7 +505,7 @@ export class ParallelExecutionCoordinator {
           LogStatus(`Retrying task ${task.taskId}, attempt ${attempt + 1}/${config.maxRetries + 1}`);
         }
 
-        const result = await this.executeSingleTask(task, config.taskTimeoutMS, parentPromptRunId, executionOrder, agentRunId);
+        const result = await this.executeSingleTask(params, task, config.taskTimeoutMS, parentPromptRunId, executionOrder, agentRunId);
         result.startTime = startTime;
         result.endTime = new Date();
 
@@ -538,7 +543,7 @@ export class ParallelExecutionCoordinator {
    * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
-  private async executeSingleTask(task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number, agentRunId?: string): Promise<ExecutionTaskResult> {
+  private async executeSingleTask(params: AIPromptParams, task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number, agentRunId?: string): Promise<ExecutionTaskResult> {
     // TODO: This will need to integrate with AIPromptRunner's execution logic
     // For now, implementing a simplified version
 
@@ -558,18 +563,18 @@ export class ParallelExecutionCoordinator {
         throw new Error(`No driver class available for model ${task.model.Name}. Vendor selection may have failed.`);
       }
       
-      const apiKey = GetAIAPIKey(driverClass);
+      const apiKey = GetAIAPIKey(driverClass, params.apiKeys, params.verbose);
       const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
-      const params = new ChatParams();
-      params.model = apiName;
-      params.cancellationToken = task.cancellationToken;
+      const innerParams = new ChatParams();
+      innerParams.model = apiName;
+      innerParams.cancellationToken = task.cancellationToken;
 
       // Configure streaming if enabled in task
       if (task.streamingConfig?.enabled && task.streamingConfig.callbacks?.OnContent) {
-        params.streaming = true;
-        params.streamingCallbacks = {
+        innerParams.streaming = true;
+        innerParams.streamingCallbacks = {
           OnContent: task.streamingConfig.callbacks.OnContent,
           OnComplete: task.streamingConfig.callbacks.OnComplete,
           OnError: task.streamingConfig.callbacks.OnError,
@@ -577,7 +582,7 @@ export class ParallelExecutionCoordinator {
       }
 
       // Build message array with rendered prompt and conversation messages
-      params.messages = this.buildMessageArray(task.renderedPrompt, task.conversationMessages, task.templateMessageRole || 'system');
+      innerParams.messages = this.buildMessageArray(task.renderedPrompt, task.conversationMessages, task.templateMessageRole || 'system');
 
       // Apply model-specific parameters if available
       if (task.modelParameters) {
@@ -585,7 +590,7 @@ export class ParallelExecutionCoordinator {
       }
 
       // Execute with timeout and cancellation support
-      const racePromises: Promise<ChatResult | never>[] = [llm.ChatCompletion(params)];
+      const racePromises: Promise<ChatResult | never>[] = [llm.ChatCompletion(innerParams)];
 
       // Add timeout promise
       racePromises.push(new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Task execution timeout')), timeoutMS)));

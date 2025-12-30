@@ -1,0 +1,16 @@
+{
+  "name": "EntityFieldCaseBroken",
+  "type": "generic",
+  "title": "Entity Field Case Mismatch - Broken Pattern",
+  "description": "Tests linter detection of wrong case in entity field name (camelCase vs PascalCase)",
+  "code": "function EntityFieldCaseBroken({ utilities }) {\n  const [emails, setEmails] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ Case mismatch: email should be Email (PascalCase)\n        const emailList = result.Results\n          .filter(m => m.email)\n          .map(m => m.email);\n        setEmails(emailList);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Emails</h3>\n      {emails.map((email, i) => <div key={i}>{email}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "requirements": {
+    "entity": "Members",
+    "expectedFields": ["FirstName", "LastName", "Email", "MembershipType"]
+  }
+}

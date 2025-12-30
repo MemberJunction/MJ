@@ -29,27 +29,32 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
             {
                 Type: 'entity',
                 EntityName: 'MJ: Components',
-                PropertyName: "_components"
+                PropertyName: "_components",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Component Libraries',
-                PropertyName: "_componentLibraries"
+                PropertyName: "_componentLibraries",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Component Library Links',
-                PropertyName: "_componentLibraryLinks"
+                PropertyName: "_componentLibraryLinks",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Component Registries',
-                PropertyName: "_componentRegistries"
+                PropertyName: "_componentRegistries",
+                CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Component Dependencies',
-                PropertyName: "_componentDependencies"
+                PropertyName: "_componentDependencies",
+                CacheLocal: true
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);

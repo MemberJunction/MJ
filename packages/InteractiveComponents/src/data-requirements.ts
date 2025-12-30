@@ -1,3 +1,5 @@
+import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
+
 export interface ComponentDataRequirements {
     /**
      * How the component gets its data
@@ -165,11 +167,12 @@ export type ComponentEntityDataRequirement = {
 
 export type ComponentEntitySimplePermission = 'read' | 'create' | 'update' | 'delete';
 
-/** 
- * Simple type to share more information about the relevant fields 
- * in an entity that are to be used in a component 
+/**
+ * Lightweight class to share field metadata for component validation and linting.
+ * This is a simplified version of EntityFieldInfo from @memberjunction/core,
+ * designed for contexts where full field metadata isn't needed.
  **/
-export type SimpleEntityFieldInfo = {
+export class SimpleEntityFieldInfo {
     /**
      * Name of the field
      */
@@ -177,19 +180,19 @@ export type SimpleEntityFieldInfo = {
     /**
      * Display sequence usually used for this field
      */
-    sequence: number;  
+    sequence: number;
     /**
      * Whether this field is usually displayed in a user-facing view
      */
-    defaultInView: boolean;  
+    defaultInView: boolean;
     /**
      * SQL Server type of the field, e.g., 'varchar', 'int', etc.
      */
-    type: string; 
+    type: string;
     /**
      * Whether the field allows null values
      */
-    allowsNull: boolean; 
+    allowsNull: boolean;
     /**
      * Whether the field is part of the primary key
      */
@@ -197,9 +200,147 @@ export type SimpleEntityFieldInfo = {
     /**
      * Possible values for the field, if applicable
      */
-    possibleValues?: string[]; 
+    possibleValues?: string[];
     /**
      * Description of the field
      */
     description?: string;
+
+    constructor(init?: Partial<SimpleEntityFieldInfo>) {
+        if (init) {
+            Object.assign(this, init);
+        }
+    }
+
+    /**
+     * Creates a SimpleEntityFieldInfo from a full EntityFieldInfo object
+     * @param fieldInfo The EntityFieldInfo from @memberjunction/core
+     * @returns A new SimpleEntityFieldInfo instance
+     */
+    static FromEntityFieldInfo(fieldInfo: EntityFieldInfo): SimpleEntityFieldInfo {
+        return new SimpleEntityFieldInfo({
+            name: fieldInfo.Name,
+            sequence: fieldInfo.Sequence,
+            defaultInView: fieldInfo.DefaultInView,
+            type: fieldInfo.Type,
+            allowsNull: fieldInfo.AllowsNull,
+            isPrimaryKey: fieldInfo.IsPrimaryKey,
+            possibleValues: fieldInfo.EntityFieldValues?.map(v => v.Value),
+            description: fieldInfo.Description
+        });
+    }
+
+    /**
+     * Converts this SimpleEntityFieldInfo to a partial EntityFieldInfo object.
+     * Note: This creates a plain object with EntityFieldInfo-compatible properties,
+     * not a full EntityFieldInfo instance (which requires database context).
+     * @returns A partial EntityFieldInfo-compatible object
+     */
+    ToEntityFieldInfo(): Partial<EntityFieldInfo> {
+        return {
+            Name: this.name,
+            Sequence: this.sequence,
+            DefaultInView: this.defaultInView,
+            Type: this.type,
+            AllowsNull: this.allowsNull,
+            IsPrimaryKey: this.isPrimaryKey,
+            Description: this.description
+            // Note: possibleValues cannot be directly mapped back as EntityFieldValues
+            // requires EntityFieldValueInfo objects with additional metadata
+        };
+    }
+}
+
+/**
+ * Lightweight class to share entity metadata for component validation and linting.
+ * Contains the entity name and complete list of all fields in the entity.
+ * This is a simplified version of EntityInfo from @memberjunction/core,
+ * designed for contexts where full entity metadata isn't needed.
+ */
+export class SimpleEntityInfo {
+    /**
+     * Name of the entity (unique system-wide, e.g., "Certifications")
+     */
+    name: string;
+
+    /**
+     * Optional description of the entity
+     */
+    description?: string;
+
+    /**
+     * Complete list of ALL fields in this entity.
+     * Used by linter to validate field access with proper severity levels.
+     */
+    fields: SimpleEntityFieldInfo[];
+
+    constructor(init?: Partial<SimpleEntityInfo>) {
+        this.fields = [];
+        if (init) {
+            Object.assign(this, init);
+        }
+    }
+
+    /**
+     * Creates a SimpleEntityInfo from a full EntityInfo object
+     * @param entityInfo The EntityInfo from @memberjunction/core
+     * @returns A new SimpleEntityInfo instance with all fields mapped
+     */
+    static FromEntityInfo(entityInfo: EntityInfo): SimpleEntityInfo {
+        return new SimpleEntityInfo({
+            name: entityInfo.Name,
+            description: entityInfo.Description,
+            fields: entityInfo.Fields.map(f => SimpleEntityFieldInfo.FromEntityFieldInfo(f))
+        });
+    }
+
+    /**
+     * Creates an array of SimpleEntityInfo from an array of EntityInfo objects
+     * @param entities Array of EntityInfo from @memberjunction/core
+     * @returns Array of SimpleEntityInfo instances
+     */
+    static FromEntityInfoArray(entities: EntityInfo[]): SimpleEntityInfo[] {
+        return entities.map(e => SimpleEntityInfo.FromEntityInfo(e));
+    }
+
+    /**
+     * Converts this SimpleEntityInfo to a partial EntityInfo object.
+     * Note: This creates a plain object with EntityInfo-compatible properties,
+     * not a full EntityInfo instance (which requires database context).
+     * @returns A partial EntityInfo-compatible object
+     */
+    ToEntityInfo(): Partial<EntityInfo> {
+        return {
+            Name: this.name,
+            Description: this.description
+            // Note: Fields cannot be directly mapped back as EntityInfo.Fields
+            // requires EntityFieldInfo objects with additional metadata and context
+        };
+    }
+
+    /**
+     * Helper method to check if a field exists in this entity
+     * @param fieldName The field name to check
+     * @returns True if the field exists, false otherwise
+     */
+    hasField(fieldName: string): boolean {
+        return this.fields.some(f => f.name === fieldName);
+    }
+
+    /**
+     * Helper method to get a field by name
+     * @param fieldName The field name to find
+     * @returns The SimpleEntityFieldInfo if found, undefined otherwise
+     */
+    getField(fieldName: string): SimpleEntityFieldInfo | undefined {
+        return this.fields.find(f => f.name === fieldName);
+    }
+
+    /**
+     * Helper method to get all field names as a Set for efficient lookup
+     * @returns Set of all field names in this entity
+     */
+    getFieldNameSet(): Set<string> {
+        return new Set(this.fields.map(f => f.name));
+    }
 }

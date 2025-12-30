@@ -1,5 +1,244 @@
 # @memberjunction/ng-conversations
 
+## 2.128.0
+
+### Patch Changes
+
+- Updated dependencies [f407abe]
+- Updated dependencies [3dde14d]
+- Updated dependencies [0863f85]
+- Updated dependencies [e41becd]
+  - @memberjunction/core@2.128.0
+  - @memberjunction/core-entities@2.128.0
+  - @memberjunction/ng-notifications@2.128.0
+  - @memberjunction/ng-markdown@2.128.0
+  - @memberjunction/ng-artifacts@2.128.0
+  - @memberjunction/ai-engine-base@2.128.0
+  - @memberjunction/ai-core-plus@2.128.0
+  - @memberjunction/ng-testing@2.128.0
+  - @memberjunction/ng-base-types@2.128.0
+  - @memberjunction/ng-code-editor@2.128.0
+  - @memberjunction/ng-container-directives@2.128.0
+  - @memberjunction/ng-shared-generic@2.128.0
+  - @memberjunction/ng-tasks@2.128.0
+  - @memberjunction/graphql-dataprovider@2.128.0
+  - @memberjunction/ai@2.128.0
+  - @memberjunction/global@2.128.0
+
+## 2.127.0
+
+### Minor Changes
+
+- 65318c4: migration
+
+### Patch Changes
+
+- c7c3378: Fix memory leaks and improve conversation naming performance
+- Updated dependencies [65318c4]
+- Updated dependencies [0e56e97]
+- Updated dependencies [c7c3378]
+- Updated dependencies [b748848]
+  - @memberjunction/ng-artifacts@2.127.0
+  - @memberjunction/ai-core-plus@2.127.0
+  - @memberjunction/core@2.127.0
+  - @memberjunction/global@2.127.0
+  - @memberjunction/graphql-dataprovider@2.127.0
+  - @memberjunction/core-entities@2.127.0
+  - @memberjunction/ai-engine-base@2.127.0
+  - @memberjunction/ng-testing@2.127.0
+  - @memberjunction/ng-base-types@2.127.0
+  - @memberjunction/ng-code-editor@2.127.0
+  - @memberjunction/ng-container-directives@2.127.0
+  - @memberjunction/ng-notifications@2.127.0
+  - @memberjunction/ng-shared-generic@2.127.0
+  - @memberjunction/ng-tasks@2.127.0
+  - @memberjunction/ai@2.127.0
+  - @memberjunction/ng-markdown@2.127.0
+
+## 2.126.1
+
+### Patch Changes
+
+- Updated dependencies [d6ae2a0]
+- Updated dependencies [8fa1aa2]
+  - @memberjunction/graphql-dataprovider@2.126.1
+  - @memberjunction/ng-artifacts@2.126.1
+  - @memberjunction/ng-testing@2.126.1
+  - @memberjunction/ng-notifications@2.126.1
+  - @memberjunction/ai-engine-base@2.126.1
+  - @memberjunction/ai@2.126.1
+  - @memberjunction/ai-core-plus@2.126.1
+  - @memberjunction/ng-base-types@2.126.1
+  - @memberjunction/ng-code-editor@2.126.1
+  - @memberjunction/ng-container-directives@2.126.1
+  - @memberjunction/ng-markdown@2.126.1
+  - @memberjunction/ng-shared-generic@2.126.1
+  - @memberjunction/ng-tasks@2.126.1
+  - @memberjunction/core@2.126.1
+  - @memberjunction/core-entities@2.126.1
+  - @memberjunction/global@2.126.1
+
+## 2.126.0
+
+### Minor Changes
+
+- d424fce: migration for metadata for Sage change
+- 389183e: migration
+
+### Patch Changes
+
+- eae1a1f: Add Phase B component linter fixtures, reorganize test structure, refactor financial analytics components, and fix OpenEntityRecord event propagation in artifacts and collections
+- Updated dependencies [eae1a1f]
+- Updated dependencies [389183e]
+- Updated dependencies [703221e]
+  - @memberjunction/ng-artifacts@2.126.0
+  - @memberjunction/ng-markdown@2.126.0
+  - @memberjunction/core@2.126.0
+  - @memberjunction/ai-engine-base@2.126.0
+  - @memberjunction/ai-core-plus@2.126.0
+  - @memberjunction/ng-testing@2.126.0
+  - @memberjunction/ng-base-types@2.126.0
+  - @memberjunction/ng-code-editor@2.126.0
+  - @memberjunction/ng-container-directives@2.126.0
+  - @memberjunction/ng-notifications@2.126.0
+  - @memberjunction/ng-shared-generic@2.126.0
+  - @memberjunction/ng-tasks@2.126.0
+  - @memberjunction/graphql-dataprovider@2.126.0
+  - @memberjunction/core-entities@2.126.0
+  - @memberjunction/ai@2.126.0
+  - @memberjunction/global@2.126.0
+
+## 2.125.0
+
+### Patch Changes
+
+- Updated dependencies [bd4aa3d]
+  - @memberjunction/core@2.125.0
+  - @memberjunction/ng-artifacts@2.125.0
+  - @memberjunction/graphql-dataprovider@2.125.0
+  - @memberjunction/core-entities@2.125.0
+  - @memberjunction/ai-engine-base@2.125.0
+  - @memberjunction/ai-core-plus@2.125.0
+  - @memberjunction/ng-testing@2.125.0
+  - @memberjunction/ng-base-types@2.125.0
+  - @memberjunction/ng-code-editor@2.125.0
+  - @memberjunction/ng-container-directives@2.125.0
+  - @memberjunction/ng-notifications@2.125.0
+  - @memberjunction/ng-shared-generic@2.125.0
+  - @memberjunction/ng-tasks@2.125.0
+  - @memberjunction/ai@2.125.0
+  - @memberjunction/global@2.125.0
+
+## 2.124.0
+
+### Patch Changes
+
+- Updated dependencies [75058a9]
+- Updated dependencies [cabe329]
+  - @memberjunction/core@2.124.0
+  - @memberjunction/core-entities@2.124.0
+  - @memberjunction/ai-core-plus@2.124.0
+  - @memberjunction/ai-engine-base@2.124.0
+  - @memberjunction/ng-testing@2.124.0
+  - @memberjunction/ng-artifacts@2.124.0
+  - @memberjunction/ng-base-types@2.124.0
+  - @memberjunction/ng-code-editor@2.124.0
+  - @memberjunction/ng-container-directives@2.124.0
+  - @memberjunction/ng-notifications@2.124.0
+  - @memberjunction/ng-shared-generic@2.124.0
+  - @memberjunction/ng-tasks@2.124.0
+  - @memberjunction/graphql-dataprovider@2.124.0
+  - @memberjunction/ai@2.124.0
+  - @memberjunction/global@2.124.0
+
+## 2.123.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.123.1
+- @memberjunction/ai@2.123.1
+- @memberjunction/ai-core-plus@2.123.1
+- @memberjunction/ng-testing@2.123.1
+- @memberjunction/ng-artifacts@2.123.1
+- @memberjunction/ng-base-types@2.123.1
+- @memberjunction/ng-code-editor@2.123.1
+- @memberjunction/ng-container-directives@2.123.1
+- @memberjunction/ng-notifications@2.123.1
+- @memberjunction/ng-shared-generic@2.123.1
+- @memberjunction/ng-tasks@2.123.1
+- @memberjunction/graphql-dataprovider@2.123.1
+- @memberjunction/core@2.123.1
+- @memberjunction/core-entities@2.123.1
+- @memberjunction/global@2.123.1
+
+## 2.123.0
+
+### Patch Changes
+
+- 52cf482: Fix conversation state reference after service refactor, improve component linter test structure, and fix chart ordering
+- Updated dependencies [0944f59]
+  - @memberjunction/ai-core-plus@2.123.0
+  - @memberjunction/graphql-dataprovider@2.123.0
+  - @memberjunction/ng-testing@2.123.0
+  - @memberjunction/ng-notifications@2.123.0
+  - @memberjunction/ng-artifacts@2.123.0
+  - @memberjunction/ai-engine-base@2.123.0
+  - @memberjunction/ai@2.123.0
+  - @memberjunction/ng-shared-generic@2.123.0
+  - @memberjunction/ng-base-types@2.123.0
+  - @memberjunction/ng-code-editor@2.123.0
+  - @memberjunction/ng-container-directives@2.123.0
+  - @memberjunction/ng-tasks@2.123.0
+  - @memberjunction/core@2.123.0
+  - @memberjunction/core-entities@2.123.0
+  - @memberjunction/global@2.123.0
+
+## 2.122.2
+
+### Patch Changes
+
+- 3d763e9: Fix MJExplorer UI rendering issues including conversation messages not displaying, collections page showing duplicate items on reload, dialog containers for deletions, loading spinner flashes during navigation, and improve JWT token handling for WebSocket connections
+- 81f0c44: Add comprehensive dependency management system with automated detection and fixes, optimize migration validation workflow to only trigger on migration file changes
+- Updated dependencies [3d763e9]
+- Updated dependencies [81f0c44]
+  - @memberjunction/graphql-dataprovider@2.122.2
+  - @memberjunction/core-entities@2.122.2
+  - @memberjunction/ng-artifacts@2.122.2
+  - @memberjunction/ng-code-editor@2.122.2
+  - @memberjunction/ng-container-directives@2.122.2
+  - @memberjunction/ng-testing@2.122.2
+  - @memberjunction/ng-notifications@2.122.2
+  - @memberjunction/ai-engine-base@2.122.2
+  - @memberjunction/ai-core-plus@2.122.2
+  - @memberjunction/ng-base-types@2.122.2
+  - @memberjunction/ng-shared-generic@2.122.2
+  - @memberjunction/ng-tasks@2.122.2
+  - @memberjunction/ai@2.122.2
+  - @memberjunction/core@2.122.2
+  - @memberjunction/global@2.122.2
+
+## 2.122.1
+
+### Patch Changes
+
+- 699a480: Fix missing @memberjunction dependencies in 24 Angular packages
+- Updated dependencies [699a480]
+  - @memberjunction/ng-artifacts@2.122.1
+  - @memberjunction/ng-testing@2.122.1
+  - @memberjunction/ai-engine-base@2.122.1
+  - @memberjunction/ai@2.122.1
+  - @memberjunction/ai-core-plus@2.122.1
+  - @memberjunction/ng-base-types@2.122.1
+  - @memberjunction/ng-code-editor@2.122.1
+  - @memberjunction/ng-container-directives@2.122.1
+  - @memberjunction/ng-notifications@2.122.1
+  - @memberjunction/ng-shared-generic@2.122.1
+  - @memberjunction/ng-tasks@2.122.1
+  - @memberjunction/graphql-dataprovider@2.122.1
+  - @memberjunction/core@2.122.1
+  - @memberjunction/core-entities@2.122.1
+  - @memberjunction/global@2.122.1
+
 ## 2.122.0
 
 ### Patch Changes

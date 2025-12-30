@@ -1,0 +1,4 @@
+{
+  "$ref": "metadata/components/spec/deal-pipeline-dashboard.spec.json",
+  "description": "Valid component demonstrating deal pipeline dashboard"
+}

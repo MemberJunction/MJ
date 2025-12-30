@@ -1,9 +1,10 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
+import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
-import { RunView, Metadata } from '@memberjunction/core';
-import { AIAgentEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { RunView } from '@memberjunction/core';
+import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 
 export interface SubAgentSelectorResult {
   selectedAgents: AIAgentEntityExtended[];

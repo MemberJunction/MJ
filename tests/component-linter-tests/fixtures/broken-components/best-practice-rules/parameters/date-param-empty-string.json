@@ -1,0 +1,44 @@
+{
+  "name": "SalesReportByDate",
+  "type": "report",
+  "description": "Sales report filtered by date range - BROKEN: uses empty strings for date parameters",
+  "namespace": "reports/sales",
+  "version": "1.0.0",
+  "registry": "Test",
+  "dataRequirements": {
+    "queries": [
+      {
+        "name": "Sales By Date Range",
+        "categoryPath": "Reports/Sales",
+        "description": "Returns sales data filtered by date range",
+        "parameters": [
+          {
+            "name": "StartDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-01-01",
+            "description": "Start date for the report range"
+          },
+          {
+            "name": "EndDate",
+            "isRequired": false,
+            "type": "date",
+            "sampleValue": "2024-12-31",
+            "description": "End date for the report range"
+          }
+        ],
+        "fields": [
+          {
+            "name": "SaleDate",
+            "type": "date"
+          },
+          {
+            "name": "TotalAmount",
+            "type": "decimal"
+          }
+        ]
+      }
+    ]
+  },
+  "code": "function SalesReportByDate({ utilities }) {\n  const [data, setData] = React.useState([]);\n\n  React.useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales By Date Range',\n        CategoryPath: 'Reports/Sales',\n        Parameters: {\n          StartDate: '',\n          EndDate: ''\n        }\n      });\n      if (result?.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h1>Sales Report</h1>\n      <div>Total Records: {data.length}</div>\n    </div>\n  );\n}"
+}

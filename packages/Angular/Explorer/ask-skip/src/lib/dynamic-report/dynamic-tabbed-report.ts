@@ -3,8 +3,7 @@ import { Router } from '@angular/router';
 import { SharedService } from '@memberjunction/ng-shared';
 import { DynamicReportDrillDownComponent } from './dynamic-drill-down';
 import { TabEvent } from '@memberjunction/ng-tabstrip';
-import { DrillDownInfo } from '@memberjunction/ng-skip-chat';
-import { SkipDynamicReportBase } from '@memberjunction/ng-skip-chat/dist/lib/dynamic-report/base-report';
+import { DrillDownInfo, SkipDynamicReportBase } from '@memberjunction/ng-skip-chat';
 import { BaseEntity, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 
 // This component is used for dynamically rendering report data, it is wrapped by app-single-report which gets

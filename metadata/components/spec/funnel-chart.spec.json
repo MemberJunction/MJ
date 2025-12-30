@@ -12,11 +12,17 @@
       {
         "name": "Deals",
         "description": "Source data for funnel visualization",
-        "displayFields": ["Stage", "Amount", "CloseDate"],
+        "displayFields": [
+          "Stage",
+          "Amount",
+          "CloseDate"
+        ],
         "filterFields": [],
         "sortFields": [],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
+        "permissionLevelNeeded": [
+          "read"
+        ],
         "usageContext": "Data is pre-aggregated by stage and passed via props for funnel visualization"
       }
     ],
@@ -51,5 +57,6 @@
   ],
   "events": [],
   "dependencies": [],
-  "libraries": []
+  "libraries": [],
+  "description": "Sub-component of SalesFunnelVisualization that renders the funnel visualization"
 }

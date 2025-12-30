@@ -1,0 +1,74 @@
+[
+  {
+    "fields": {
+      "Name": "Environment Variable",
+      "Description": "Retrieves encryption keys from environment variables. Keys should be base64-encoded. For AES-256, generate with: openssl rand -base64 32",
+      "DriverClass": "EnvVarKeySource",
+      "DriverImportPath": "@memberjunction/encryption",
+      "ConfigTemplate": "{\"envVarName\": \"string - The name of the environment variable containing the base64-encoded key\"}",
+      "IsActive": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F7A959B7-CCD0-447E-9953-6213EA7CFF17"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:55:16.812Z",
+      "checksum": "ec76ef7db7d849c029a0a3b50deb6960d26e374949d5d6b9fba964d37e1cd21e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Configuration File",
+      "Description": "Retrieves encryption keys from the mj.config.cjs encryptionKeys section. Keys should be base64-encoded. Not recommended for production - use environment variables or a secrets manager instead.",
+      "DriverClass": "ConfigFileKeySource",
+      "DriverImportPath": "@memberjunction/encryption",
+      "ConfigTemplate": "{\"keyName\": \"string - The key name in the encryptionKeys section of mj.config.cjs\"}",
+      "IsActive": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3B6EA4FC-41F5-45FF-B4A8-F41D14A0E3D0"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:55:16.815Z",
+      "checksum": "5b1b463310931df4f7b62a39cebaa6fc76ad4c4a66c4fce110676dfcec4b9dbc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AWS KMS",
+      "Description": "Retrieves encryption keys from AWS Key Management Service (KMS). Uses envelope encryption - store the base64-encoded CiphertextBlob from GenerateDataKey as the lookup value. Requires @aws-sdk/client-kms package and AWS credentials.",
+      "DriverClass": "AWSKMSKeySource",
+      "DriverImportPath": "@memberjunction/encryption",
+      "ConfigTemplate": "{\"lookupValue\": \"string - Base64-encoded encrypted data key (CiphertextBlob from KMS GenerateDataKey)\"}",
+      "IsActive": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3F60F41A-B58C-4B05-B9FD-A4604D619FAB"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:55:16.818Z",
+      "checksum": "74e4dbe57a73830f43c4a3e8887347a71a07c7577c16494a181dd5b495f801e0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Azure Key Vault",
+      "Description": "Retrieves encryption keys from Azure Key Vault secrets. Store the base64-encoded key as a secret value. Requires @azure/keyvault-secrets and @azure/identity packages and Azure credentials.",
+      "DriverClass": "AzureKeyVaultKeySource",
+      "DriverImportPath": "@memberjunction/encryption",
+      "ConfigTemplate": "{\"lookupValue\": \"string - Full secret URL (https://vault.vault.azure.net/secrets/name) or secret name if AZURE_KEYVAULT_URL is set\"}",
+      "IsActive": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "66175CF8-9376-47BA-AF69-5CDBF29CF5AF"
+    },
+    "sync": {
+      "lastModified": "2025-12-29T20:55:16.822Z",
+      "checksum": "46ae1c515ee6dbc6b2065f7c173b923728f755409a72991639435ace5579731e"
+    }
+  }
+]

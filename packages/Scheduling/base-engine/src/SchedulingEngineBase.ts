@@ -21,7 +21,7 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
     private _scheduledJobTypes: ScheduledJobTypeEntity[] = [];
     private _scheduledJobs: ScheduledJobEntity[] = [];
     private _scheduledJobRuns: ScheduledJobRunEntity[] = [];
-    private _activePollingInterval: number | null = 60000; // Default 1 minute, null when no jobs
+    private _activePollingInterval: number | null = 10000; // Default 10 seconds, null when no jobs
 
     /**
      * Configure the engine by loading metadata
@@ -42,11 +42,13 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'MJ: Scheduled Job Types',
-                PropertyName: '_scheduledJobTypes'
+                PropertyName: '_scheduledJobTypes',
+                CacheLocal: true
             },
             {
                 EntityName: 'MJ: Scheduled Jobs',
-                PropertyName: '_scheduledJobs'
+                PropertyName: '_scheduledJobs',
+                CacheLocal: true
             }
         ];
 
@@ -159,12 +161,12 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
         }
 
         // Set polling interval to half the minimum interval, with bounds
-        // Min: 1 minute (60000ms), Max: 1 week (604800000ms)
+        // Min: 10 seconds (10000ms), Max: 1 week (604800000ms)
         if (minInterval === Number.MAX_SAFE_INTEGER) {
-            this._activePollingInterval = 60000; // Default 1 minute
+            this._activePollingInterval = 10000; // Default 10 seconds
         } else {
             const halfInterval = Math.floor(minInterval / 2);
-            this._activePollingInterval = Math.max(60000, Math.min(604800000, halfInterval));
+            this._activePollingInterval = Math.max(10000, Math.min(604800000, halfInterval));
         }
     }
 

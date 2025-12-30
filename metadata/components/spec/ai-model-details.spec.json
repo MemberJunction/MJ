@@ -4,7 +4,7 @@
   "description": "Sliding details panel showing comprehensive model information, vendors, and usage statistics",
   "type": "detail",
   "functionalRequirements": "Show model specs, vendor associations grouped by type, usage statistics, and open record button",
-  "technicalDesign": "",
+  "technicalDesign": "## Technical Design\n\n### Component Structure\n- Sliding panel component that displays from the right\n- Shows comprehensive model specifications and vendor information\n- Supports closing via close button or escape key\n\n### Props\n- model: Selected AI model object with full specifications\n- vendors: Array of vendor associations for this model (grouped by type)\n- isOpen: Boolean controlling panel visibility\n- onClose: Callback to close the panel\n- onOpenRecord: Callback to open full model editor\n\n### Layout Sections\n1. **Header**: Model name and close button\n2. **Specifications**: Token limits, context window, rankings\n3. **Vendors**: Grouped by type (Model Developer vs Inference Provider)\n4. **Actions**: Open button to trigger full record view\n\n### Animation\n- Slide in from right with transform transition\n- Backdrop overlay with fade effect\n- Smooth open/close animations",
   "dataRequirements": {
     "mode": "views",
     "entities": [
@@ -82,7 +82,7 @@
             "isPrimaryKey": false,
             "description": "Relative cost ranking (1-5)"
           }
-        ], 
+        ],
         "usageContext": "Main list of AI models"
       }
     ]

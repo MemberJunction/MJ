@@ -1,0 +1,7 @@
+{
+  "name": "TestComponent",
+  "description": "Component using SQL functions incorrectly in RunView (violates runview-sql-function rule)",
+  "code": "function TestComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  \n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Orders',\n        // Wrong: using raw SQL functions in ExtraFilter\n        ExtraFilter: \"GETDATE() - CreatedAt < 30\",\n        MaxRows: 100\n      });\n      \n      const result2 = await utilities.rv.RunView({\n        EntityName: 'Products',\n        // Wrong: SQL injection risk with dynamic SQL\n        ExtraFilter: `Name LIKE '%' + '${savedUserSettings.searchTerm}' + '%'`,\n        MaxRows: 100\n      });\n      \n      const result3 = await utilities.rv.RunView({\n        EntityName: 'Invoices',\n        // Wrong: using database-specific functions\n        ExtraFilter: \"DATEDIFF(day, DueDate, GETDATE()) > 0\",\n        MaxRows: 100\n      });\n      \n      if (result.Success) {\n        setData(result.Results || []);\n      }\n    }\n    loadData();\n  }, [savedUserSettings.searchTerm]);\n  \n  return (\n    <div>\n      <h1>Orders</h1>\n      <p>Count: {data.length}</p>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": []
+}

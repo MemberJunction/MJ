@@ -73,7 +73,9 @@
             (saveViewRequested)="onSaveViewRequested($event)"
             (manageViewsRequested)="onManageViewsRequested()"
             (openInTabRequested)="onOpenInTabRequested($event)"
-            (configureViewRequested)="onConfigureViewRequested()">
+            (configureViewRequested)="onConfigureViewRequested()"
+            (createNewRecordRequested)="onCreateNewRecord()"
+            (exportRequested)="onExport()">
           </mj-view-selector>
         } @else {
           @if (displayIcon) {
@@ -140,7 +142,78 @@
               title="Cards View">
               <i class="fa-solid fa-grip"></i>
             </button>
+            @if (entityHasDateFields) {
+              <button
+                class="toggle-btn"
+                [class.active]="state.viewMode === 'timeline'"
+                (click)="onViewModeChanged('timeline')"
+                title="Timeline View">
+                <i class="fa-solid fa-timeline"></i>
+              </button>
+            }
           </div>
+
+          <!-- Timeline Controls (only shown when timeline view is active) -->
+          @if (state.viewMode === 'timeline' && entityHasDateFields) {
+            <!-- Date Field Selector -->
+            <div class="date-field-selector-container">
+              <!-- Backdrop for closing dropdown -->
+              @if (isDateFieldDropdownOpen) {
+                <div class="date-field-backdrop" (click)="closeDateFieldDropdown()"></div>
+              }
+
+              <div class="date-field-selector-wrapper">
+                <button
+                  class="date-field-selector-button"
+                  [class.open]="isDateFieldDropdownOpen"
+                  [disabled]="availableDateFields.length <= 1"
+                  (click)="toggleDateFieldDropdown()">
+                  <i class="fa-solid fa-calendar-days date-field-icon"></i>
+                  <span class="date-field-name">{{ effectiveTimelineDateFieldDisplayName }}</span>
+                  @if (availableDateFields.length > 1) {
+                    <i class="fa-solid fa-chevron-down date-field-arrow" [class.rotated]="isDateFieldDropdownOpen"></i>
+                  }
+                </button>
+
+                @if (isDateFieldDropdownOpen && availableDateFields.length > 1) {
+                  <div class="date-field-dropdown-panel">
+                    @for (field of availableDateFields; track field.name) {
+                      <div
+                        class="date-field-dropdown-item"
+                        [class.selected]="field.name === effectiveTimelineDateField"
+                        (click)="setTimelineDateField(field.name)">
+                        <i class="fa-regular fa-calendar item-icon"></i>
+                        <span class="item-name">{{ field.displayName }}</span>
+                        @if (field.name === effectiveTimelineDateField) {
+                          <i class="fa-solid fa-check selected-check"></i>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Orientation Toggle -->
+            <div class="timeline-orientation-toggle">
+              <button
+                class="toggle-btn"
+                (click)="toggleTimelineOrientation()"
+                [title]="state.timelineOrientation === 'vertical' ? 'Switch to Horizontal' : 'Switch to Vertical'">
+                <i [class]="state.timelineOrientation === 'vertical' ? 'fa-solid fa-ellipsis-vertical' : 'fa-solid fa-ellipsis'"></i>
+              </button>
+            </div>
+
+            <!-- Sort Order Toggle -->
+            <div class="timeline-sort-toggle">
+              <button
+                class="toggle-btn"
+                (click)="toggleTimelineSortOrder()"
+                [title]="state.timelineSortOrder === 'desc' ? 'Showing Newest First (click for Oldest First)' : 'Showing Oldest First (click for Newest First)'">
+                <i [class]="state.timelineSortOrder === 'desc' ? 'fa-solid fa-arrow-down-wide-short' : 'fa-solid fa-arrow-up-wide-short'"></i>
+              </button>
+            </div>
+          }
         }
         <!-- Common/All toggle moved to inline with All Entities section header -->
       </div>
@@ -158,8 +231,9 @@
           } @else {
             <!-- Two-Column Layout: Records (left) | Entities (right) -->
             @if (hasTopSectionContent) {
-              <div class="home-two-column-layout">
+              <div class="home-two-column-layout" [class.single-column]="!hasRecordsColumnContent || !hasEntitiesColumnContent">
                 <!-- Left Column: Recent & Favorite Records (most actionable) -->
+                @if (hasRecordsColumnContent) {
                 <div class="home-column">
                   <!-- Recent Records Section -->
                   @if (recentRecords.length > 0) {
@@ -235,8 +309,10 @@
                     </div>
                   }
                 </div>
+                }
 
                 <!-- Right Column: Recent & Favorite Entities -->
+                @if (hasEntitiesColumnContent) {
                 <div class="home-column">
                   <!-- Recent Entities Section (list format) -->
                   @if (recentEntities.length > 0) {
@@ -301,6 +377,7 @@
                     </div>
                   }
                 </div>
+                }
               </div>
             }
 
@@ -390,6 +467,7 @@
           [selectedRecordId]="state.selectedRecordId"
           [config]="viewerConfig"
           [gridState]="currentGridState"
+          [timelineConfig]="currentTimelineConfig"
           (viewModeChange)="onViewModeChanged($event)"
           (filterTextChange)="onFilterTextChanged($event)"
           (recordSelected)="onViewerRecordSelected($event)"
@@ -423,8 +501,28 @@
     [viewEntity]="selectedViewEntity"
     [isOpen]="state.viewConfigPanelOpen"
     [currentGridState]="currentGridState"
+    [externalFilterState]="filterDialogState"
+    [isSaving]="isSavingView"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
-    (delete)="onDeleteView()">
+    (delete)="onDeleteView()"
+    (openFilterDialogRequest)="onOpenFilterDialogRequest($event)">
   </mj-view-config-panel>
+
+  <!-- Filter Dialog (rendered at dashboard level for full viewport width) -->
+  <mj-filter-dialog
+    [isOpen]="isFilterDialogOpen"
+    [fields]="filterDialogFields"
+    [filter]="filterDialogState"
+    [disabled]="filterDialogDisabled"
+    (close)="onCloseFilterDialog()"
+    (apply)="onFilterApplied($event)">
+  </mj-filter-dialog>
+
+  <!-- Excel Export Component (hidden, used for export functionality) -->
+  <kendo-excelexport #excelExport [data]="exportData" [fileName]="exportFileName">
+    @for (col of exportColumns; track col.Name) {
+      <kendo-excelexport-column [field]="col.Name" [title]="col.DisplayName"></kendo-excelexport-column>
+    }
+  </kendo-excelexport>
 </div>

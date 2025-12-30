@@ -1,0 +1,16 @@
+{
+  "name": "ResultFieldInvalidComponent",
+  "description": "Component accessing non-existent properties on RunView/RunQuery result objects (violates runview-runquery-result-validation rule)",
+  "code": "function ResultFieldInvalidComponent({ utilities, savedUserSettings, onSavedUserSettingsChange }) {\n  const [data, setData] = useState([]);\n  const [count, setCount] = useState(0);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Products',\n        MaxRows: 50\n      });\n\n      // VIOLATION: 'Data' is not a valid property, should be 'Results'\n      if (result.Data && result.Data.length > 0) {\n        setData(result.Data);\n      }\n\n      // VIOLATION: 'Rows' is not a valid property, should be 'Results'\n      const rows = result.Rows || [];\n\n      // VIOLATION: 'Records' is not a valid property, should be 'Results'\n      const records = result.Records;\n\n      // VIOLATION: 'Count' is not a valid property, should be 'RowCount'\n      setCount(result.Count || 0);\n\n      // VIOLATION: 'TotalCount' is not a valid property, should be 'TotalRowCount'\n      const totalCount = result.TotalCount;\n\n      // VIOLATION: 'Error' is not a valid property, should be 'ErrorMessage'\n      if (result.Error) {\n        console.error(result.Error);\n      }\n\n      // VIOLATION: 'IsSuccess' is not a valid property, should be 'Success'\n      if (!result.IsSuccess) {\n        console.error('Failed to load');\n      }\n\n      setLoading(false);\n    }\n    loadData();\n  }, []);\n\n  if (loading) return <div>Loading...</div>;\n\n  return (\n    <div>\n      <h1>Products ({count})</h1>\n      <ul>\n        {data.map(item => (\n          <li key={item.ID}>{item.Name}</li>\n        ))}\n      </ul>\n    </div>\n  );\n}",
+  "componentType": "interactive",
+  "libraries": [],
+  "dataRequirements": {
+    "entities": [
+      {
+        "name": "Products",
+        "type": "view",
+        "maxRows": 50
+      }
+    ]
+  }
+}

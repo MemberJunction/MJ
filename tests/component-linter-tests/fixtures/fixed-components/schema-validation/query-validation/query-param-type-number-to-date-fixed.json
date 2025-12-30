@@ -1,0 +1,21 @@
+{
+  "name": "QueryParamTypeNumberToDateFixed",
+  "type": "generic",
+  "title": "Query Parameter Type Number to Date - Fixed Pattern",
+  "description": "Tests correct usage of date parameter with ISO date string",
+  "code": "function QueryParamTypeNumberToDateFixed({ utilities }) {\n  const [registrations, setRegistrations] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      // ✅ StartDate expects date string, passing ISO date format\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Event Registrations',\n        CategoryPath: 'Events/Reports',\n        Parameters: { StartDate: '2024-01-01' }\n      });\n      if (result?.Success) {\n        setRegistrations(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Event Registrations</h3>\n      {registrations.map((r, i) => <div key={i}>{r.EventName}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Event Registrations",
+      "categoryPath": "Events/Reports",
+      "parameters": [
+        {"name": "StartDate", "type": "datetime", "isRequired": true}
+      ]
+    }]
+  }
+}

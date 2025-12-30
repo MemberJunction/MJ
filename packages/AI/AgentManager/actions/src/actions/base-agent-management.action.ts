@@ -2,7 +2,8 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { BaseEntity, Metadata, LogError, RunView, UserInfo } from "@memberjunction/core";
 import { DatabaseProviderBase } from "@memberjunction/core";
-import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended, AIAgentPromptEntity } from "@memberjunction/core-entities";
+import { AIAgentTypeEntity, AIAgentPromptEntity } from "@memberjunction/core-entities";
+import { AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { 
     AgentLoadResult,
     ParameterResult,

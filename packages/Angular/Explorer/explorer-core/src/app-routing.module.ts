@@ -1,25 +1,15 @@
 import { ComponentRef, Injectable, NgModule } from '@angular/core';
 import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
 import {
-  SingleEntityComponent,
   SingleRecordComponent,
-  HomeWrapperComponent,
-  UserNotificationsComponent,
-  DataBrowserComponent,
-  ReportBrowserComponent,
-  DashboardBrowserComponent,
-  AuthGuardService as AuthGuard,
-  FilesComponent,
-  QueryBrowserComponent,
-  ListViewComponent,
-  ChatWrapperComponent,
+  AuthGuardService as AuthGuard
 } from './public-api';
-import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
-import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
-import { LogError, Metadata } from '@memberjunction/core';
+import { LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
+import { MJGlobal, MJEventType } from '@memberjunction/global';
+import { firstValueFrom, filter, take } from 'rxjs';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
   storedRoutes: { [key: string]: DetachedRouteHandleExt | null } = {};
@@ -137,6 +127,7 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
 export class ResourceResolver implements Resolve<void> {
   private processedUrls = new Map<string, number>();
   private readonly URL_DEBOUNCE_MS = 100; // Allow same URL after 100ms
+  private loggedInPromise: Promise<void> | null = null;
 
   constructor(
     private sharedService: SharedService,
@@ -144,22 +135,30 @@ export class ResourceResolver implements Resolve<void> {
     private appManager: ApplicationManager,
     private tabService: TabService
   ) {
-    // Subscribe to router events
-    this.router.events.subscribe(event => {
-      // if (event instanceof NavigationEnd) {
-      //   LogStatus('NavigationEnd:', event.url);
-      // }
-      // if (event instanceof NavigationError) {
-      //   LogError(`NavigationError: ${event.error}`);
-      // }
-      // if (event instanceof NavigationCancel) {
-      //   LogError(`NavigationCancel: ${event.reason}`);
-      // }
-    });
+    // Create a promise that resolves when the user is logged in and metadata is loaded
+    this.loggedInPromise = this.waitForLogin();
   }
 
-  resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
-    console.log('[ResourceResolver.resolve] Called with URL:', state.url);
+  /**
+   * Wait for the LoggedIn event which indicates metadata is loaded.
+   * Uses replay (true) to catch the event even if it already fired.
+   */
+  private async waitForLogin(): Promise<void> {
+    await firstValueFrom(
+      MJGlobal.Instance.GetEventListener(true).pipe(
+        filter(event => event.event === MJEventType.LoggedIn),
+        take(1)
+      )
+    );
+
+    await StartupManager.Instance.Startup();
+  }
+
+  async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
+    // Wait for login/metadata to be ready before processing
+    if (this.loggedInPromise) {
+      await this.loggedInPromise;
+    }
 
     // Prevent duplicate processing of the same URL within a short time window
     // This allows legitimate re-navigation to the same URL (like app switching)
@@ -168,32 +167,28 @@ export class ResourceResolver implements Resolve<void> {
     const lastProcessed = this.processedUrls.get(state.url);
 
     if (lastProcessed && (now - lastProcessed) < this.URL_DEBOUNCE_MS) {
-      console.log('[ResourceResolver.resolve] Recently processed URL (debounced):', state.url);
       return;
     }
 
     this.processedUrls.set(state.url, now);
-    console.log('[ResourceResolver.resolve] Processing URL:', state.url);
 
     const md = new Metadata();
+    const applications = md.Applications;
 
     // Handle app-level navigation: /app/:appName (no nav item - app default)
     if (route.params['appName'] !== undefined && route.params['navItemName'] === undefined) {
       const appName = decodeURIComponent(route.params['appName']);
-      console.log('[ResourceResolver.resolve] App-only URL detected:', appName);
 
-      // Find the app
-      const app = md.Applications.find(a =>
-        a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
-      );
+      // IMPORTANT: Check if user has access to this app BEFORE proceeding
+      // Use the ApplicationManager's access check which respects UserApplication records
+      const accessResult = this.appManager.CheckAppAccess(appName);
 
-      if (!app) {
-        LogError(`Application ${appName} not found in metadata`);
+      if (accessResult.status !== 'accessible') {
+        // User doesn't have access - let the shell component handle the error dialog
+        // Don't create any tabs here
+        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
-
-      console.log('[ResourceResolver.resolve] Found app:', app.Name, 'ID:', app.ID);
-      console.log('[ResourceResolver.resolve] Letting shell handle default tab creation');
 
       // Let the app create its default tab (will load default dashboard if no nav items)
       // The shell component will handle this after setting the active app
@@ -206,10 +201,20 @@ export class ResourceResolver implements Resolve<void> {
       const appName = decodeURIComponent(route.params['appName']);
       const navItemName = decodeURIComponent(route.params['navItemName']);
 
-      console.log('[ResourceResolver.resolve] App nav item URL detected:', appName, '/', navItemName);
+      // IMPORTANT: Check if user has access to this app BEFORE proceeding
+      // Use the ApplicationManager's access check which respects UserApplication records
+      const accessResult = this.appManager.CheckAppAccess(appName);
 
-      // Find the app
-      const app = md.Applications.find(a =>
+      if (accessResult.status !== 'accessible') {
+        // User doesn't have access - let the shell component handle the error dialog
+        // Don't create any tabs here
+        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
+        return;
+      }
+
+      // Find the app in metadata for nav item details
+      const app = applications.find(a =>
+        a.Path.trim().toLowerCase() === appName.trim().toLowerCase()  ||
         a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
       );
 
@@ -217,8 +222,6 @@ export class ResourceResolver implements Resolve<void> {
         LogError(`Application ${appName} not found in metadata`);
         return;
       }
-
-      console.log('[ResourceResolver.resolve] Found app:', app.Name, 'ID:', app.ID);
 
       // Get nav items from the app's DefaultNavItems JSON
       let navItems: any[] = [];
@@ -232,8 +235,6 @@ export class ResourceResolver implements Resolve<void> {
         }
       }
 
-      console.log('[ResourceResolver.resolve] Nav items count:', navItems.length);
-
       // Find the nav item by label (case-insensitive)
       const navItem = navItems.find(item =>
         item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
@@ -243,8 +244,6 @@ export class ResourceResolver implements Resolve<void> {
         LogError(`Nav item ${navItemName} not found in app ${appName}`);
         return;
       }
-
-      console.log('[ResourceResolver.resolve] Found nav item:', navItem.Label, 'ResourceType:', navItem.ResourceType);
 
       // Get the resource type from the nav item
       if (!navItem.ResourceType) {
@@ -256,8 +255,6 @@ export class ResourceResolver implements Resolve<void> {
       // based on the URL to avoid navigation loops
 
       // Queue tab request via TabService
-      console.log('[ResourceResolver.resolve] Queuing tab request via TabService');
-
       // Build configuration - include DriverClass for Custom resource types
       const config: any = {
         route: navItem.Route,
@@ -273,7 +270,6 @@ export class ResourceResolver implements Resolve<void> {
       // For Custom resource types, include the DriverClass
       if (navItem.ResourceType === 'Custom' && navItem.DriverClass) {
         config.driverClass = navItem.DriverClass;
-        console.log('[ResourceResolver.resolve] Added DriverClass for Custom resource:', navItem.DriverClass);
       }
 
       this.tabService.OpenTab({
@@ -282,7 +278,7 @@ export class ResourceResolver implements Resolve<void> {
         Configuration: config,
         IsPinned: false
       });
-      console.log('[ResourceResolver.resolve] Tab request queued');
+
       return;
     }
 
@@ -413,44 +409,32 @@ export class ResourceResolver implements Resolve<void> {
       return;
     }
 
+    if (route.params['searchInput'] !== undefined) {
+      // /resource/search/:searchInput
+      const searchInput = decodeURIComponent(route.params['searchInput']);
+      const entityName = route.queryParams['Entity'] || '';
+
+      // Queue tab request via TabService
+      this.tabService.OpenTab({
+        ApplicationId: SYSTEM_APP_ID,
+        Title: `Search: ${searchInput}`,
+        Configuration: {
+          resourceType: 'Search Results',
+          Entity: entityName,
+          SearchInput: searchInput,
+          recordId: searchInput
+        },
+        ResourceRecordId: searchInput,
+        IsPinned: false
+      });
+      return;
+    }
+
     LogError(`Unable to parse resource route parameters from URL: ${state.url}`);
   }
 }
 
-const routes: Routes = [
-  { path: '', component: HomeWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'home', component: HomeWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'chat', component: ChatWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'chat/:conversationId', component: ChatWrapperComponent, canActivate: [AuthGuard] },
-  { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'dashboards/:folderID', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'reports/:folderID', component: ReportBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'queries/:folderID', component: QueryBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },
-  { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },
-  { path: 'lists', component: ListViewComponent, canActivate: [AuthGuard] },
-  { path: 'lists/:folderID', component: ListViewComponent, canActivate: [AuthGuard] },
-  {
-    path: 'settings',
-    component: SettingsComponent,
-    canActivate: [AuthGuard],
-    children: [
-      {
-        path: '',
-        component: SettingsComponent,
-        pathMatch: 'full',
-      },
-      {
-        path: '**',
-        component: SettingsComponent,
-      },
-    ],
-  },
-  { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },
-  { path: 'style-guide-test', component: StyleGuideTestComponent, canActivate: [AuthGuard] },
-  { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },
+const routes: Routes = [ 
   {
     path: 'app/:appName/:navItemName',
     resolve: { data: ResourceResolver },
@@ -500,9 +484,11 @@ const routes: Routes = [
     component: SingleRecordComponent,
   },
   {
-    path: '**',
-    redirectTo: 'home',
-  },
+    path: 'resource/search/:searchInput',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  } 
 ];
 
 interface DetachedRouteHandleExt extends DetachedRouteHandle {

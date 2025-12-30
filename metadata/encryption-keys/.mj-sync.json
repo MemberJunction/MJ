@@ -1,0 +1,29 @@
+{
+  "entity": "MJ: Encryption Keys",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".encryption-keys.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "lookupFields": {
+      "EncryptionKeySourceID": {
+        "entity": "MJ: Encryption Key Sources",
+        "field": "ID"
+      },
+      "EncryptionAlgorithmID": {
+        "entity": "MJ: Encryption Algorithms",
+        "field": "ID"
+      }
+    },
+    "relatedEntities": {}
+  }
+}

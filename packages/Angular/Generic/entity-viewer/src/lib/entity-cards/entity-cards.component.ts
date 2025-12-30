@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
@@ -29,7 +29,8 @@ import { HighlightUtil } from '../utils/highlight.util';
 @Component({
   selector: 'mj-entity-cards',
   templateUrl: './entity-cards.component.html',
-  styleUrls: ['./entity-cards.component.css']
+  styleUrls: ['./entity-cards.component.css'],
+  encapsulation: ViewEncapsulation.None
 })
 export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked {
   constructor(
