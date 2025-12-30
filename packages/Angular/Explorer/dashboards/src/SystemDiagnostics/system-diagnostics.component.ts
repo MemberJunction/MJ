@@ -7157,7 +7157,11 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
         if (sample && typeof sample === 'object') {
             try {
-                const json = JSON.stringify(sample);
+                // For MJ entity objects, use GetAll() to get just the data values
+                // This avoids serializing the massive metadata/prototype chain
+                const sampleObj = sample as { GetAll?: () => Record<string, unknown> };
+                const dataToSerialize = sampleObj.GetAll ? sampleObj.GetAll() : sample;
+                const json = JSON.stringify(dataToSerialize);
                 bytesPerItem = json.length * 2; // UTF-16
             } catch {
                 bytesPerItem = 500;
