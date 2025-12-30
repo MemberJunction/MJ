@@ -15,6 +15,7 @@ import { MentionAutocompleteService, MentionSuggestion } from '../../services/me
 import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentConfigurationEntity } from '@memberjunction/core-entities';
+import { ChatMessageContentBlock } from '@memberjunction/ai';
 
 /**
  * ContentEditable-based mention editor with visual chips/pills
