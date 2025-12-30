@@ -326,7 +326,7 @@ function SimpleChart({
         plugins: {
           title: {
             display: !!title,
-            text: title || `${entityName} by ${groupBy}`,
+            text: title,
             font: {
               size: 16,
               weight: 600
@@ -505,27 +505,25 @@ function SimpleChart({
   return (
     <div style={{ width: '100%', position: 'relative' }}>
       {enableExport && (
-        <button
-          onClick={() => window.SimpleChartExport && window.SimpleChartExport()}
-          style={{
-            position: 'absolute',
-            top: 10,
-            right: 10,
-            padding: '4px 8px',
-            fontSize: '12px',
-            backgroundColor: '#fff',
-            border: '1px solid #d9d9d9',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            zIndex: 10,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}
-          title="Download as PNG"
-        >
-          📥 Export
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+          <button
+            onClick={() => window.SimpleChartExport && window.SimpleChartExport()}
+            style={{
+              padding: '4px 8px',
+              fontSize: '12px',
+              backgroundColor: '#fff',
+              border: '1px solid #d9d9d9',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title="Download as PNG"
+          >
+            📥 Export
+          </button>
+        </div>
       )}
       <div style={{ width: '100%', height: `${height}px` }}>
         <canvas ref={canvasRef} />
