@@ -497,6 +497,270 @@ The `GraphQLDataProvider` is simply a **transport layer** that plugs into the ex
 
 **Result: ~80% of non-UI code is directly reused from existing MJ packages.**
 
+---
+
+## Part 2.6: React Native Runtime Architecture
+
+Understanding how React Native executes code is essential for confidence in MJ package compatibility.
+
+### TypeScript/JavaScript Execution Model
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     YOUR MJ CODE                                 │
+│  TypeScript (Metadata, BaseEntity, RunView, AI packages)        │
+│                          │                                       │
+│                          │ tsc compile (at build time)           │
+│                          ▼                                       │
+│                     JavaScript                                   │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           │ Bundled by Metro bundler
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  HERMES JAVASCRIPT ENGINE                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Meta's custom JS engine, optimized for React Native    │   │
+│  │  • ES8+ full support (classes, async/await, decorators) │   │
+│  │  • Ahead-of-time bytecode compilation                   │   │
+│  │  • Fast startup, low memory footprint                   │   │
+│  │  • Your MJ code runs here UNCHANGED                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           │ JSI (JavaScript Interface) - synchronous calls
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    NATIVE LAYER                                  │
+│  ┌────────────────────────┐  ┌────────────────────────────┐    │
+│  │      iOS (Swift)       │  │    Android (Kotlin)        │    │
+│  │  • Real UIKit views    │  │  • Real Android views      │    │
+│  │  • AVFoundation audio  │  │  • MediaRecorder           │    │
+│  │  • Keychain storage    │  │  • Keystore storage        │    │
+│  │  • Face ID / Touch ID  │  │  • Fingerprint / Face      │    │
+│  │  • SQLite              │  │  • SQLite                  │    │
+│  │  • Push (APNs)         │  │  • Push (FCM)              │    │
+│  └────────────────────────┘  └────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Threading Model
+
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   JS Thread      │     │   UI Thread      │     │   Background     │
+│                  │     │   (Native)       │     │   Thread(s)      │
+│ • MJ TypeScript  │     │ • View rendering │     │ • Network I/O    │
+│ • React logic    │◄───▶│ • Touch events   │     │ • SQLite queries │
+│ • Business logic │     │ • Animations     │     │ • File I/O       │
+│ • BaseEntity     │     │ • Gestures       │     │ • Heavy compute  │
+│ • Metadata       │     │                  │     │                  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+         ▲                         ▲                       ▲
+         └─────────── JSI Bridge ──┴───────────────────────┘
+```
+
+**Key Insight:** Your MJ TypeScript code runs entirely in the JavaScript thread (Hermes engine). It never needs to know it's on mobile - it's just JavaScript executing in a JavaScript engine, making network calls to your GraphQL API.
+
+### OOP and Classes: Fully Supported
+
+There's a common misconception that React uses "functional programming" and doesn't support classes. **This is incorrect.**
+
+The "functional" trend in React is **only about UI components** (using hooks like `useState`, `useEffect` instead of `class extends Component`). Your business logic, services, and data models remain fully class-based.
+
+```tsx
+// ✅ MJ CLASSES WORK UNCHANGED
+import { Metadata, RunView, BaseEntity } from '@memberjunction/core';
+import { ContactEntity, CompanyEntity } from '@memberjunction/core-entities';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { BaseAgent } from '@memberjunction/ai-agents';
+
+// All of these work exactly as they do in Angular/web:
+const md = new Metadata();                                    // ✅ Class instantiation
+const contact = await md.GetEntityObject<ContactEntity>('Contacts');  // ✅ Generics
+await contact.Load(someId);                                   // ✅ Async methods
+contact.FirstName = 'Updated';                                // ✅ Property setters
+await contact.Save();                                         // ✅ Validation & save
+
+// Your own service classes work too
+class ContactService {
+  private md = new Metadata();
+
+  async getContact(id: string): Promise<ContactEntity> {
+    const entity = await this.md.GetEntityObject<ContactEntity>('Contacts');
+    await entity.Load(id);
+    return entity;
+  }
+}
+
+// Only the UI layer uses functional patterns
+function ContactScreen({ id }: Props) {
+  const [contact, setContact] = useState<ContactEntity | null>(null);
+  const service = useMemo(() => new ContactService(), []);
+
+  useEffect(() => {
+    service.getContact(id).then(setContact);
+  }, [id]);
+
+  return <Text>{contact?.FirstName}</Text>;
+}
+```
+
+**What works unchanged:**
+- `BaseEntity` and all 500+ generated subclasses ✅
+- `Metadata` class ✅
+- `RunView` class ✅
+- `BaseEngine` and all engine classes ✅
+- `AIPromptRunner`, `BaseAgent` ✅
+- Class factory, `@RegisterClass` decorators ✅
+- Inheritance, abstract classes, interfaces ✅
+- Async/await, Promises ✅
+- Zod validation ✅
+
+---
+
+## Part 2.7: Local Storage Adapter Pattern
+
+### The Challenge: IndexedDB vs SQLite
+
+The current `GraphQLDataProvider` uses **IndexedDB** for caching, which is a browser-only API. React Native doesn't have IndexedDB, but has **SQLite** available natively.
+
+### Solution: Storage Adapter Interface
+
+Rather than forking the provider, we introduce a simple adapter interface:
+
+```typescript
+// Abstract storage interface - works on any platform
+interface ILocalStorageProvider {
+  // Key-value operations
+  get<T>(key: string): Promise<T | null>;
+  set<T>(key: string, value: T): Promise<void>;
+  delete(key: string): Promise<void>;
+
+  // Query operations (for entity caching)
+  queryEntities<T>(entityName: string, filter?: string): Promise<T[]>;
+  saveEntity<T>(entityName: string, id: string, data: T): Promise<void>;
+  deleteEntity(entityName: string, id: string): Promise<void>;
+
+  // Bulk operations
+  clear(): Promise<void>;
+  clearEntity(entityName: string): Promise<void>;
+}
+
+// Browser implementation (existing behavior, extracted)
+class IndexedDBStorageProvider implements ILocalStorageProvider {
+  // Uses IndexedDB - works in browsers
+}
+
+// Mobile implementation (new)
+class SQLiteStorageProvider implements ILocalStorageProvider {
+  // Uses react-native-sqlite-storage or expo-sqlite
+  // Available on both iOS and Android
+}
+
+// GraphQLDataProvider accepts the adapter
+class GraphQLDataProvider {
+  constructor(
+    config: GraphQLProviderConfig,
+    storage?: ILocalStorageProvider  // Optional, defaults to IndexedDB
+  ) {
+    this.storage = storage ?? new IndexedDBStorageProvider();
+  }
+}
+```
+
+### Mobile App Initialization
+
+```tsx
+// Mobile app startup
+import { SQLiteStorageProvider } from '@memberjunction/mobile-core';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+
+async function initializeMJ(authToken: string) {
+  // Create mobile-specific storage
+  const storage = new SQLiteStorageProvider();
+  await storage.initialize();  // Opens SQLite database
+
+  // Configure provider with SQLite storage
+  const provider = new GraphQLDataProvider({
+    endpoint: 'https://api.yourcompany.com/graphql',
+    token: authToken,
+  }, storage);  // Pass SQLite adapter
+
+  // Rest of initialization is identical to web
+  const md = new Metadata();
+  await md.Refresh();
+}
+```
+
+### Storage Comparison
+
+| Feature | IndexedDB (Browser) | SQLite (Mobile) |
+|---------|---------------------|-----------------|
+| Query capability | Limited (key-based) | Full SQL |
+| Performance | Good | Excellent |
+| Storage limit | ~50% of disk | Device storage |
+| Encryption | No (use Web Crypto) | Yes (SQLCipher) |
+| React Native | ❌ Not available | ✅ Native support |
+
+### Implementation Effort
+
+This adapter pattern requires **minimal changes** to existing code:
+- Extract current IndexedDB usage into `IndexedDBStorageProvider` class
+- Create `ILocalStorageProvider` interface
+- Add optional constructor parameter to `GraphQLDataProvider`
+- Create `SQLiteStorageProvider` for mobile
+
+**Estimated effort: 1-2 days**
+
+---
+
+## Part 2.8: Production Validation
+
+React Native is not experimental technology. It powers some of the world's most demanding mobile applications.
+
+### Meta (Creator of React Native)
+
+| App | React Native Usage |
+|-----|-------------------|
+| **Facebook** | Many features/surfaces (hybrid approach) |
+| **Facebook Ads Manager** | Built entirely with React Native |
+| **Instagram** | Significant portions (Explore, Push Notifications, many screens) |
+| **Messenger** | Various features |
+| **Meta Quest companion** | React Native |
+
+Meta also developed **Hermes**, the JavaScript engine optimized specifically for React Native performance.
+
+### Other Major Companies
+
+| Company | Apps | Scale |
+|---------|------|-------|
+| **Microsoft** | Outlook, Office, Xbox, Teams, Skype | Billions of users |
+| **Shopify** | Main shopping app, Shop, Point of Sale | Millions of merchants |
+| **Discord** | iOS and Android apps | 150M+ monthly users |
+| **Coinbase** | Main trading app | Millions of daily transactions |
+| **Bloomberg** | Consumer mobile app | Real-time financial data |
+| **Walmart** | Main shopping app | #1 retailer |
+| **Pinterest** | Portions of their app | 450M+ monthly users |
+| **Wix** | Main app | Millions of users |
+
+### Why This Matters for MJ
+
+These are **serious, high-performance, enterprise-scale applications** handling:
+- Millions of concurrent users (Facebook, Instagram)
+- Real-time financial data and trading (Coinbase, Bloomberg)
+- Complex enterprise workflows (Microsoft Office, Shopify POS)
+- E-commerce at scale (Walmart, Shopify)
+
+If React Native handles these use cases, it can absolutely handle MJ's:
+- Entity framework and metadata
+- AI agents and prompts
+- Voice interfaces
+- Offline sync
+- Real-time subscriptions
+
+The architecture we're proposing (TypeScript business logic + React Native UI) is exactly what these companies use in production.
+
 #### Light Adaptation Required
 
 | Package | Adaptation Needed |
