@@ -5,8 +5,8 @@ import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { CompositeKey, TelemetryManager, TelemetryEvent, TelemetryPattern, TelemetryInsight, TelemetryCategory, TelemetryParamsUnion, isSingleRunViewParams, isSingleRunQueryParams, isBatchRunViewParams } from '@memberjunction/core';
-import { ResourceData, UserSettingEntity } from '@memberjunction/core-entities';
-import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata, RunView } from '@memberjunction/core';
+import { ResourceData, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import * as d3 from 'd3';
 
@@ -7424,7 +7424,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     // === User Preferences Persistence ===
 
     /**
-     * Load user preferences from MJ: User Settings entity
+     * Load user preferences from MJ: User Settings entity using UserInfoEngine for cached access
      */
     private async loadUserPreferences(): Promise<void> {
         try {
@@ -7434,15 +7434,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 return;
             }
 
-            const rv = new RunView();
-            const result = await rv.RunView<UserSettingEntity>({
-                EntityName: 'MJ: User Settings',
-                ExtraFilter: `UserID='${userId}' AND Setting='${SYSTEM_DIAGNOSTICS_SETTINGS_KEY}'`,
-                ResultType: 'entity_object'
-            });
+            const engine = UserInfoEngine.Instance;
 
-            if (result.Success && result.Results.length > 0) {
-                this.userSettingEntity = result.Results[0];
+            // Find setting from cached user settings
+            const setting = engine.UserSettings.find(s => s.Setting === SYSTEM_DIAGNOSTICS_SETTINGS_KEY);
+
+            if (setting) {
+                this.userSettingEntity = setting;
                 if (this.userSettingEntity.Value) {
                     const prefs = JSON.parse(this.userSettingEntity.Value) as Partial<SystemDiagnosticsUserPreferences>;
                     this.applyUserPreferences(prefs);
@@ -7507,24 +7505,20 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     /**
-     * Save user preferences to MJ: User Settings entity
+     * Save user preferences to MJ: User Settings entity using UserInfoEngine for cached lookup
      */
     private async saveUserPreferences(): Promise<void> {
         try {
             const userId = this.metadata.CurrentUser?.ID;
             if (!userId) return;
 
-            // Create setting entity if it doesn't exist
+            // Find existing setting from cached user settings if not already loaded
             if (!this.userSettingEntity) {
-                const rv = new RunView();
-                const result = await rv.RunView<UserSettingEntity>({
-                    EntityName: 'MJ: User Settings',
-                    ExtraFilter: `UserID='${userId}' AND Setting='${SYSTEM_DIAGNOSTICS_SETTINGS_KEY}'`,
-                    ResultType: 'entity_object'
-                });
+                const engine = UserInfoEngine.Instance;
+                const setting = engine.UserSettings.find(s => s.Setting === SYSTEM_DIAGNOSTICS_SETTINGS_KEY);
 
-                if (result.Success && result.Results.length > 0) {
-                    this.userSettingEntity = result.Results[0];
+                if (setting) {
+                    this.userSettingEntity = setting;
                 } else {
                     this.userSettingEntity = await this.metadata.GetEntityObject<UserSettingEntity>('MJ: User Settings');
                     this.userSettingEntity.UserID = userId;
