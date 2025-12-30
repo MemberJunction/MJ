@@ -396,7 +396,7 @@ export class ExplorerStateService {
   }
 
   /**
-   * Load state from UserSetting
+   * Load state from UserSetting using UserInfoEngine for cached access
    */
   private async loadState(): Promise<void> {
     try {
@@ -404,20 +404,15 @@ export class ExplorerStateService {
       if (!userId) return;
 
       const settingKey = this.getSettingKey();
-      const rv = new RunView();
-      const result = await rv.RunView<UserSettingEntity>({
-        EntityName: 'MJ: User Settings',
-        ExtraFilter: `UserID='${userId}' AND Setting='${settingKey}'`,
-        ResultType: 'entity_object'
-      });
+      const engine = UserInfoEngine.Instance;
 
-      if (result.Success && result.Results.length > 0) {
-        const setting = result.Results[0];
-        if (setting.Value) {
-          const savedState = JSON.parse(setting.Value) as Partial<DataExplorerState>;
-          // Merge with defaults to handle new properties
-          this.state$.next({ ...DEFAULT_EXPLORER_STATE, ...savedState });
-        }
+      // Find the setting from cached user settings
+      const setting = engine.UserSettings.find(s => s.Setting === settingKey);
+
+      if (setting?.Value) {
+        const savedState = JSON.parse(setting.Value) as Partial<DataExplorerState>;
+        // Merge with defaults to handle new properties
+        this.state$.next({ ...DEFAULT_EXPLORER_STATE, ...savedState });
       } else {
         // No saved state, use defaults
         this.state$.next({ ...DEFAULT_EXPLORER_STATE });
@@ -497,7 +492,7 @@ export class ExplorerStateService {
   }
 
   /**
-   * Save state to UserSetting
+   * Save state to UserSetting using UserInfoEngine for cached lookup
    */
   private async saveState(): Promise<void> {
     try {
@@ -506,19 +501,13 @@ export class ExplorerStateService {
 
       const settingKey = this.getSettingKey();
       const md = new Metadata();
-      const rv = new RunView();
+      const engine = UserInfoEngine.Instance;
 
-      // Check if setting exists
-      const result = await rv.RunView<UserSettingEntity>({
-        EntityName: 'MJ: User Settings',
-        ExtraFilter: `UserID='${userId}' AND Setting='${settingKey}'`,
-        ResultType: 'entity_object'
-      });
+      // Find existing setting from cached user settings
+      let setting = engine.UserSettings.find(s => s.Setting === settingKey);
 
-      let setting: UserSettingEntity;
-      if (result.Success && result.Results.length > 0) {
-        setting = result.Results[0];
-      } else {
+      if (!setting) {
+        // Create new setting if not found
         setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = settingKey;
