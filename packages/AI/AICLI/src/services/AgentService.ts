@@ -1,7 +1,6 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { AIAgentEntityExtended } from '@memberjunction/core-entities';
-import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { initializeMJProvider } from '../lib/mj-provider';
 import { AgentInfo, ExecutionResult } from '../lib/output-formatter';
