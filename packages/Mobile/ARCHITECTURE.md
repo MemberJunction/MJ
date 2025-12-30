@@ -189,6 +189,314 @@ These should remain web-only or link to web:
 | `@memberjunction/graphql-dataprovider` | API communication |
 | `@memberjunction/templates-base-types` | Template processing |
 
+---
+
+## Part 2.5: MemberJunction TypeScript Layer Integration (CRITICAL)
+
+The mobile app does **NOT** simply consume raw API responses. It uses the **full MJ entity framework** with `Metadata`, `BaseEntity`, `RunView`, and all generated entity classes. This is the key architectural decision that enables 80%+ code reuse.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Mobile App (React Native)                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   React Components                                              │
+│        │                                                        │
+│        │ Use typed entity objects directly                      │
+│        ▼                                                        │
+│   ┌─────────────────────────────────────────────────────────┐  │
+│   │  MJ TypeScript Layer (FULL REUSE)                       │  │
+│   │  ┌─────────────────────────────────────────────────────┐│  │
+│   │  │ Metadata                                            ││  │
+│   │  │  • GetEntityObject<T>() - creates typed entities    ││  │
+│   │  │  • Entity/Field metadata access                     ││  │
+│   │  │  • Permissions, relationships, validation rules     ││  │
+│   │  └─────────────────────────────────────────────────────┘│  │
+│   │  ┌─────────────────────────────────────────────────────┐│  │
+│   │  │ BaseEntity & Generated Subclasses                   ││  │
+│   │  │  • ContactEntity, CompanyEntity, etc.               ││  │
+│   │  │  • Type-safe property access (getters/setters)      ││  │
+│   │  │  • Zod validation built-in                          ││  │
+│   │  │  • Save(), Load(), Delete() with full validation    ││  │
+│   │  │  • Dirty tracking, change detection                 ││  │
+│   │  └─────────────────────────────────────────────────────┘│  │
+│   │  ┌─────────────────────────────────────────────────────┐│  │
+│   │  │ RunView                                             ││  │
+│   │  │  • Query entities with type-safe results            ││  │
+│   │  │  • Filters, ordering, pagination                    ││  │
+│   │  │  • Returns actual entity objects, not raw JSON      ││  │
+│   │  └─────────────────────────────────────────────────────┘│  │
+│   │  ┌─────────────────────────────────────────────────────┐│  │
+│   │  │ AI Packages                                         ││  │
+│   │  │  • AIPromptRunner - execute prompts                 ││  │
+│   │  │  • BaseAgent - run AI agents                        ││  │
+│   │  │  • LLM abstraction (same code as server)            ││  │
+│   │  └─────────────────────────────────────────────────────┘│  │
+│   └─────────────────────────────────────────────────────────┘  │
+│        │                                                        │
+│        │ Provider interface                                     │
+│        ▼                                                        │
+│   ┌─────────────────────────────────────────────────────────┐  │
+│   │  GraphQLDataProvider (from @memberjunction/graphql-*)   │  │
+│   │  • Implements IEntityDataProvider                       │  │
+│   │  • Implements IMetadataProvider                         │  │
+│   │  • Implements IRunViewProvider                          │  │
+│   │  • Handles network, caching, auth                       │  │
+│   └─────────────────────────────────────────────────────────┘  │
+│        │                                                        │
+│        ▼                                                        │
+│   MJAPI Server (GraphQL)                                        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Concrete Code Examples
+
+#### Example 1: Loading and Displaying a Contact (Mobile Component)
+
+```tsx
+// React Native component using full MJ entity framework
+import { Metadata, RunView } from '@memberjunction/core';
+import { ContactEntity } from '@memberjunction/core-entities';
+import { useEffect, useState } from 'react';
+
+export function ContactDetailScreen({ contactId }: { contactId: string }) {
+  const [contact, setContact] = useState<ContactEntity | null>(null);
+
+  useEffect(() => {
+    async function loadContact() {
+      const md = new Metadata();
+      // Uses the EXACT same pattern as Angular/web code
+      const entity = await md.GetEntityObject<ContactEntity>('Contacts');
+      await entity.Load(contactId);
+      setContact(entity);
+    }
+    loadContact();
+  }, [contactId]);
+
+  if (!contact) return <LoadingSpinner />;
+
+  return (
+    <View>
+      {/* Type-safe property access - same as web */}
+      <Text style={styles.name}>{contact.FirstName} {contact.LastName}</Text>
+      <Text style={styles.email}>{contact.Email}</Text>
+      <Text style={styles.phone}>{contact.Phone}</Text>
+
+      {/* Entity relationships work the same */}
+      <Text>Company: {contact.Company}</Text>
+
+      <Button title="Call" onPress={() => Linking.openURL(`tel:${contact.Phone}`)} />
+    </View>
+  );
+}
+```
+
+#### Example 2: Searching with RunView
+
+```tsx
+// Search screen using RunView - identical pattern to web
+import { RunView } from '@memberjunction/core';
+import { ContactEntity } from '@memberjunction/core-entities';
+
+export function useContactSearch(searchTerm: string) {
+  const [results, setResults] = useState<ContactEntity[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    async function search() {
+      if (!searchTerm) return;
+      setLoading(true);
+
+      const rv = new RunView();
+      const result = await rv.RunView<ContactEntity>({
+        EntityName: 'Contacts',
+        ExtraFilter: `FirstName LIKE '%${searchTerm}%' OR LastName LIKE '%${searchTerm}%'`,
+        OrderBy: 'LastName, FirstName',
+        MaxRows: 50,
+        ResultType: 'entity_object'  // Returns actual ContactEntity objects!
+      });
+
+      if (result.Success) {
+        setResults(result.Results);  // Fully typed ContactEntity[]
+      }
+      setLoading(false);
+    }
+    search();
+  }, [searchTerm]);
+
+  return { results, loading };
+}
+```
+
+#### Example 3: Creating/Updating Records
+
+```tsx
+// Create a new activity note - uses BaseEntity.Save()
+import { Metadata } from '@memberjunction/core';
+import { ActivityEntity } from '@memberjunction/core-entities';
+
+async function createActivityNote(contactId: string, note: string) {
+  const md = new Metadata();
+  const activity = await md.GetEntityObject<ActivityEntity>('Activities');
+
+  // NewRecord() initializes with defaults
+  activity.NewRecord();
+
+  // Type-safe property assignment
+  activity.ContactID = contactId;
+  activity.Type = 'Note';
+  activity.Description = note;
+  activity.ActivityDate = new Date();
+
+  // Save() handles validation, network, everything
+  const success = await activity.Save();
+
+  if (!success) {
+    // Validation errors are on the entity
+    console.error('Save failed:', activity.LatestResult?.Message);
+  }
+
+  return success;
+}
+```
+
+#### Example 4: Using AI Prompts (Same as Server)
+
+```tsx
+// Voice command processing using MJ AI packages
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { Metadata } from '@memberjunction/core';
+
+async function processVoiceCommand(transcribedText: string) {
+  const md = new Metadata();
+
+  // Load the prompt definition (same as web/server)
+  const promptRunner = new AIPromptRunner();
+  const params = new AIPromptParams();
+  params.promptName = 'Mobile Voice Command Parser';
+  params.data = { userInput: transcribedText };
+
+  const result = await promptRunner.ExecutePrompt(params);
+
+  if (result.Success) {
+    // AI parsed the intent and entities
+    const parsed = JSON.parse(result.Output);
+    return handleParsedCommand(parsed);
+  }
+}
+```
+
+#### Example 5: Batch Loading with RunViews (Plural)
+
+```tsx
+// Dashboard data loading - same efficient pattern as web
+import { RunView } from '@memberjunction/core';
+
+async function loadDashboardData(userId: string) {
+  const rv = new RunView();
+
+  // Single call, multiple views - exactly like web
+  const [opportunities, activities, tasks] = await rv.RunViews([
+    {
+      EntityName: 'Opportunities',
+      ExtraFilter: `OwnerID='${userId}' AND Status='Open'`,
+      OrderBy: 'CloseDate',
+      MaxRows: 100,
+      ResultType: 'entity_object'
+    },
+    {
+      EntityName: 'Activities',
+      ExtraFilter: `OwnerID='${userId}' AND ActivityDate >= GETDATE()-7`,
+      OrderBy: 'ActivityDate DESC',
+      MaxRows: 50,
+      ResultType: 'entity_object'
+    },
+    {
+      EntityName: 'Tasks',
+      ExtraFilter: `AssignedToID='${userId}' AND Status='Pending'`,
+      OrderBy: 'DueDate',
+      MaxRows: 20,
+      ResultType: 'entity_object'
+    }
+  ]);
+
+  return {
+    opportunities: opportunities.Results,
+    activities: activities.Results,
+    tasks: tasks.Results
+  };
+}
+```
+
+### Provider Initialization (App Startup)
+
+```tsx
+// App initialization - connects MJ layer to GraphQL backend
+import { setupGraphQLProvider } from '@memberjunction/graphql-dataprovider';
+import { Metadata } from '@memberjunction/core';
+
+async function initializeMJFramework(authToken: string) {
+  // Configure the GraphQL provider - same as web
+  await setupGraphQLProvider({
+    endpoint: 'https://api.yourcompany.com/graphql',
+    token: authToken,
+    wsEndpoint: 'wss://api.yourcompany.com/graphql' // For subscriptions
+  });
+
+  // Initialize metadata cache
+  const md = new Metadata();
+  await md.Refresh(); // Loads entity definitions, permissions, etc.
+
+  console.log('MJ Framework initialized with', md.Entities.length, 'entities');
+}
+```
+
+### What This Enables
+
+| Capability | How It Works |
+|------------|--------------|
+| **Full Type Safety** | All 500+ entity classes work in mobile with IntelliSense |
+| **Validation** | Zod schemas validate data before save attempts |
+| **Dirty Tracking** | `entity.Dirty` knows what changed for efficient sync |
+| **Relationships** | `contact.Company` loads related data automatically |
+| **Computed Fields** | Server-side computed fields work identically |
+| **Permissions** | `entity.GetUserPermissions()` works for UI decisions |
+| **Metadata** | Field labels, descriptions, types all available |
+
+### Key Insight: We're NOT Building a "Client" for an API
+
+Traditional mobile apps treat the server as a black box and parse JSON responses. The MJ mobile app is different:
+
+```
+Traditional Mobile App:
+  API Response (JSON) → Parse → Plain objects → UI
+
+MJ Mobile App:
+  GraphQLDataProvider → MJ Entity Framework → Typed Entities → UI
+                        (same code as web)
+```
+
+The `GraphQLDataProvider` is simply a **transport layer** that plugs into the existing MJ provider interface. The actual business logic, validation, entity relationships, and metadata all come from the shared TypeScript packages.
+
+### Shared Code Percentage Breakdown
+
+| Layer | Shared | Mobile-Specific |
+|-------|--------|-----------------|
+| Entity classes & types | 100% | 0% |
+| Metadata & RunView | 100% | 0% |
+| AI prompts & agents | 100% | 0% |
+| Validation logic | 100% | 0% |
+| Business rules | 100% | 0% |
+| Data provider | 95% | 5% (offline sync) |
+| UI components | 0% | 100% (React Native) |
+| Navigation | 0% | 100% (React Native) |
+
+**Result: ~80% of non-UI code is directly reused from existing MJ packages.**
+
 #### Light Adaptation Required
 
 | Package | Adaptation Needed |
