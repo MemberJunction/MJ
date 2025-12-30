@@ -1629,8 +1629,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     let agentResponseMessage: ConversationDetailEntity | undefined = undefined;
 
     try {
-      // Update user message status to In-Progress
-      userMessage.Status = 'In-Progress';
+      // User message is sent successfully - mark complete immediately
+      // (No UI uses User message 'In-Progress' - only AI messages need that status)
+      userMessage.Status = 'Complete';
       await userMessage.Save();
       this.messageSent.emit(userMessage);
 
@@ -1883,8 +1884,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     let agentResponseMessage: ConversationDetailEntity | undefined = undefined;
 
     try {
-      // Update user message status to In-Progress
-      userMessage.Status = 'In-Progress';
+      // User message is sent successfully - mark complete immediately
+      // (No UI uses User message 'In-Progress' - only AI messages need that status)
+      userMessage.Status = 'Complete';
       await userMessage.Save();
       this.messageSent.emit(userMessage);
 
