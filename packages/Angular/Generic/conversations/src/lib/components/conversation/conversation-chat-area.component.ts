@@ -596,6 +596,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       // Ensure current user is in the avatar map for new messages
       this.ensureCurrentUserInAvatarMap();
+
+      // Invalidate cache when new message is added.
+      // Without this, navigating away and back would load stale cached data
+      // that doesn't include this new message.
+      if (this.conversationId) {
+        this.invalidateConversationCache(this.conversationId);
+      }
     }
 
     // Scroll to bottom when new message is sent
@@ -808,8 +815,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       for (const message of this.messages) {
         if (!message.ID) continue;
 
-        const currentStatus = message.Status;
         const previousStatus = this.previousMessageStatuses.get(message.ID);
+
+        // CRITICAL FIX: If message was tracked as In-Progress, reload from database to get actual current status.
+        // This handles the navigation scenario where local state becomes stale while we're away.
+        // The database has the real status and content (updated by streaming callbacks or agent completion).
+        if (previousStatus === 'In-Progress') {
+          try {
+            await message.Load(message.ID);
+          } catch (loadError) {
+            console.error(`Failed to reload message ${message.ID}:`, loadError);
+            continue;
+          }
+        }
+
+        const currentStatus = message.Status;
 
         // Detect completion: was In-Progress, now Complete
         if (previousStatus === 'In-Progress' && currentStatus === 'Complete') {
