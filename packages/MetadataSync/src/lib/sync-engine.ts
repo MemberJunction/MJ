@@ -734,8 +734,27 @@ export class SyncEngine {
    */
   calculateChecksum(data: any): string {
     const hash = crypto.createHash('sha256');
-    hash.update(JSON.stringify(data, null, 2));
+    // Use a replacer function to ensure consistent key ordering for deterministic checksums
+    const sortedJson = JSON.stringify(data, this.sortedReplacer, 2);
+    hash.update(sortedJson);
     return hash.digest('hex');
+  }
+
+  /**
+   * Replacer function for JSON.stringify that sorts object keys alphabetically
+   * Ensures deterministic checksums regardless of property order
+   */
+  private sortedReplacer(key: string, value: any): any {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // Sort object keys alphabetically
+      return Object.keys(value)
+        .sort()
+        .reduce((sorted: any, key: string) => {
+          sorted[key] = value[key];
+          return sorted;
+        }, {});
+    }
+    return value;
   }
 
   /**

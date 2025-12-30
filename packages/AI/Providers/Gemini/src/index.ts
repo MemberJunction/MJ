@@ -9,8 +9,9 @@ import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
-    private _gemini: GoogleGenAI;
-    
+    protected _gemini: GoogleGenAI | null = null;
+    private _geminiPromise: Promise<GoogleGenAI> | null = null;
+
     // State tracking for streaming thinking extraction
     private _streamingState: {
         accumulatedThinking: string;
@@ -26,13 +27,45 @@ export class GeminiLLM extends BaseLLM {
 
     constructor(apiKey: string) {
         super(apiKey);
-        this._gemini = new GoogleGenAI({ apiKey });
+        // Note: We don't initialize the client here to allow subclasses to set up first
+        // Initialization happens lazily on first use via ensureGeminiClient()
+    }
+
+    /**
+     * Factory method to create the GoogleGenAI client instance
+     * Subclasses can override this to provide custom configuration
+     *
+     * @returns Promise that resolves to a configured GoogleGenAI client
+     */
+    protected async createClient(): Promise<GoogleGenAI> {
+        return new GoogleGenAI({ apiKey: this.apiKey });
+    }
+
+    /**
+     * Ensure the Gemini client is initialized before use
+     * This method should be called at the start of any method that uses the client
+     */
+    private async ensureGeminiClient(): Promise<GoogleGenAI> {
+        if (this._gemini) {
+            return this._gemini;
+        }
+
+        if (!this._geminiPromise) {
+            this._geminiPromise = this.createClient();
+        }
+
+        this._gemini = await this._geminiPromise;
+        return this._gemini;
     }
 
     /**
      * Read only getter method to get the Gemini client instance
+     * Note: This is async now because the client may not be initialized yet
      */
     public get GeminiClient(): GoogleGenAI {
+        if (!this._gemini) {
+            throw new Error('Gemini client not initialized. Ensure async initialization is complete before accessing GeminiClient.');
+        }
         return this._gemini;
     }
 
@@ -219,9 +252,12 @@ export class GeminiLLM extends BaseLLM {
             const chatConfig: Record<string, unknown> = {};
             this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
 
+            // Ensure Gemini client is initialized
+            const client = await this.ensureGeminiClient();
+
             // Create chat with history (all messages except the last)
             // Don't use systemInstruction parameter - we're bundling it with the user message
-            const chat = this.GeminiClient.chats.create({
+            const chat = client.chats.create({
                 config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
                 model: modelName,
                 history: history
@@ -433,9 +469,12 @@ export class GeminiLLM extends BaseLLM {
         const chatConfig: Record<string, unknown> = {};
         this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
 
+        // Ensure Gemini client is initialized
+        const client = await this.ensureGeminiClient();
+
         // Create chat with history (all messages except the last)
         // Don't use systemInstruction parameter - we're bundling it with the user message
-        const chat = this.GeminiClient.chats.create({
+        const chat = client.chats.create({
             config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
             model: modelName,
             history: history

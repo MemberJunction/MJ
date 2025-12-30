@@ -14,7 +14,7 @@
     {
       "name": "entityName",
       "type": "string",
-      "description": "Optional entity name for metadata-aware formatting (dates, money, value lists). If omitted, component uses basic type detection and works with any data array.",
+      "description": "Optional entity name for metadata-aware formatting (dates, money, value lists). If omitted, component uses basic type detection and works with any data array. Note: This property is NOT used for generating the chart title - always provide an explicit 'title' property to avoid undefined titles.",
       "required": false
     },
     {
@@ -65,7 +65,7 @@
     {
       "name": "title",
       "type": "string",
-      "description": "Chart title. If not provided, generates from entity and groupBy field",
+      "description": "Chart title displayed above the chart. If not provided, no title will be shown. Best practice: Always provide a descriptive title when using the component to avoid undefined values in the display.",
       "required": false
     },
     {
@@ -135,7 +135,7 @@
     {
       "name": "enableExport",
       "type": "boolean",
-      "description": "Show export button to download chart as image",
+      "description": "When true, displays an export button in the top-right corner above the chart to download chart as PNG image. Button is positioned outside the chart canvas to avoid overlaying the visualization.",
       "required": false,
       "defaultValue": true
     }
