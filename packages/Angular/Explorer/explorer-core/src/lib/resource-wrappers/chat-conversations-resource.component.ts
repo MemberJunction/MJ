@@ -4,14 +4,14 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService } from '@memberjunction/ng-conversations';
+import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService } from '@memberjunction/ng-conversations';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 
 export function LoadChatConversationsResource() {
   // Force inclusion in production builds (tree shaking workaround)
   // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatConversationsResource(null!, null!, null!, null!, null!);
+  const test = new ChatConversationsResource(null!, null!, null!, null!, null!, null!);
 }
 
 /**
@@ -209,7 +209,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private conversationData: ConversationDataService,
     private router: Router,
     private mentionAutocompleteService: MentionAutocompleteService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private streamingService: ConversationStreamingService
   ) {
     super();
   }
@@ -240,6 +241,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // CRITICAL: Initialize AIEngine and mention service BEFORE children render
     // This prevents the slow first-load issue where each child would trigger initialization
     await this.initializeEngines();
+
+    // Initialize global streaming service for PubSub updates
+    // This enables reconnection to in-progress agents after browser refresh
+    this.streamingService.initialize();
 
     // CRITICAL: Set selectedConversationId SYNCHRONOUSLY before child components initialize
     // Parse URL first and apply state synchronously for the ID
