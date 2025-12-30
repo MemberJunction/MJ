@@ -93,23 +93,28 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
         const params = [
             {
                 PropertyName: '_testTypes',
-                EntityName: 'MJ: Test Types'
+                EntityName: 'MJ: Test Types',
+                CacheLocal: true
             },
             {
                 PropertyName: '_tests',
-                EntityName: 'MJ: Tests'
+                EntityName: 'MJ: Tests',
+                CacheLocal: true
             },
             {
                 PropertyName: '_testSuites',
-                EntityName: 'MJ: Test Suites'
+                EntityName: 'MJ: Test Suites',
+                CacheLocal: true
             },
             {
                 PropertyName: '_testRubrics',
-                EntityName: 'MJ: Test Rubrics'
+                EntityName: 'MJ: Test Rubrics',
+                CacheLocal: true
             },
             {
                 PropertyName: '_testSuiteTests',
-                EntityName: 'MJ: Test Suite Tests'
+                EntityName: 'MJ: Test Suite Tests',
+                CacheLocal: true
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);

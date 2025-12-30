@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, CredentialTypeEntity, AIConfigurationEntity, EncryptionKeySourceEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, EncryptionAlgorithmEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, EncryptionKeyEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, CredentialEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, CredentialCategoryEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, UserSettingEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, TestRunFeedbackEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, TestEntity, TestTypeEntity, AIVendorEntity, TaskTypeEntity, CredentialTypeEntity, AIConfigurationEntity, EncryptionKeySourceEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentConfigurationEntity, TestSuiteTestEntity, AIAgentNoteEntity, EnvironmentEntity, ArtifactPermissionEntity, AIAgentActionEntity, TestRubricEntity, TaskDependencyEntity, EncryptionAlgorithmEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, TestRunEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, EncryptionKeyEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, ArtifactUseEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, AIAgentExampleEntity, CredentialEntity, TestSuiteEntity, ConversationArtifactEntity, CollectionPermissionEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ConversationDetailRatingEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, TestSuiteRunEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, CredentialCategoryEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, AICredentialBindingEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, UserSettingEntity, ArtifactVersionAttributeEntity, AIAgentDataSourceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -1990,10 +1990,6 @@ each time the agent processes a prompt step.`})
     ScheduledJobRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(510)
-    TestRun?: string;
-        
-    @Field({nullable: true}) 
     @MaxLength(16)
     RootParentRunID?: string;
         
@@ -2900,13 +2896,13 @@ export class MJAIVendor_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `Optional reference to a default credential for this vendor. When set, all models using this vendor will use this credential unless overridden at a higher priority level (AIModelVendor or AIPromptModel). When any credential is configured in the hierarchy, legacy authentication methods (environment variables, apiKeys parameter) are bypassed in favor of the Credentials system.`}) 
+    @Field({nullable: true, description: `Reference to the type of credential this vendor expects (e.g., API Key, GCP Service Account, Azure Service Principal). Used for type-based default credential resolution when no explicit binding exists, and for UI guidance when creating credentials.`}) 
     @MaxLength(16)
-    CredentialID?: string;
+    CredentialTypeID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(400)
-    Credential?: string;
+    @MaxLength(200)
+    CredentialType?: string;
         
     @Field(() => [MJAIPromptModel_])
     MJ_AIPromptModels_VendorIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
@@ -2925,6 +2921,9 @@ export class MJAIVendor_ {
     
     @Field(() => [MJAIModelCost_])
     MJ_AIModelCosts_VendorIDArray: MJAIModelCost_[]; // Link to MJ_AIModelCosts
+    
+    @Field(() => [MJAICredentialBinding_])
+    MJ_AICredentialBindings_AIVendorIDArray: MJAICredentialBinding_[]; // Link to MJ_AICredentialBindings
     
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_OverrideVendorIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -2946,7 +2945,7 @@ export class CreateMJAIVendorInput {
     Description: string | null;
 
     @Field({ nullable: true })
-    CredentialID: string | null;
+    CredentialTypeID: string | null;
 }
     
 
@@ -2965,7 +2964,7 @@ export class UpdateMJAIVendorInput {
     Description?: string | null;
 
     @Field({ nullable: true })
-    CredentialID?: string | null;
+    CredentialTypeID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3092,6 +3091,17 @@ export class MJAIVendorResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelCosts] WHERE [VendorID]='${mjaivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAICredentialBinding_])
+    async MJ_AICredentialBindings_AIVendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAICredentialBindings] WHERE [AIVendorID]='${mjaivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Credential Bindings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Credential Bindings', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -3338,6 +3348,9 @@ export class MJCredentialType_ {
     @Field(() => [MJCredential_])
     MJ_Credentials_CredentialTypeIDArray: MJCredential_[]; // Link to MJ_Credentials
     
+    @Field(() => [MJAIVendor_])
+    MJ_AIVendors_CredentialTypeIDArray: MJAIVendor_[]; // Link to MJ_AIVendors
+    
 }
 
 //****************************************************************************
@@ -3464,6 +3477,17 @@ export class MJCredentialTypeResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCredentials] WHERE [CredentialTypeID]='${mjcredentialtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Credentials', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Credentials', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIVendor_])
+    async MJ_AIVendors_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIVendors] WHERE [CredentialTypeID]='${mjcredentialtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Vendors', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Vendors', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -5593,10 +5617,6 @@ export class MJAIPromptModel_ {
     @Field(() => Int, {nullable: true, description: `Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`}) 
     EffortLevel?: number;
         
-    @Field({nullable: true, description: `Optional reference to a credential specific to this prompt-model configuration. Takes precedence over AIModelVendor.CredentialID and AIVendor.CredentialID. Useful for prompts that require dedicated credentials (e.g., high-rate-limit keys for critical prompts). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.`}) 
-    @MaxLength(16)
-    CredentialID?: string;
-        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -5613,10 +5633,9 @@ export class MJAIPromptModel_ {
     @MaxLength(200)
     Configuration?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(400)
-    Credential?: string;
-        
+    @Field(() => [MJAICredentialBinding_])
+    MJ_AICredentialBindings_AIPromptModelIDArray: MJAICredentialBinding_[]; // Link to MJ_AICredentialBindings
+    
 }
 
 //****************************************************************************
@@ -5662,9 +5681,6 @@ export class CreateMJAIPromptModelInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
-
-    @Field({ nullable: true })
-    CredentialID: string | null;
 }
     
 
@@ -5711,9 +5727,6 @@ export class UpdateMJAIPromptModelInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
-
-    @Field({ nullable: true })
-    CredentialID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5777,6 +5790,17 @@ export class MJAIPromptModelResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJAICredentialBinding_])
+    async MJ_AICredentialBindings_AIPromptModelIDArray(@Root() mjaipromptmodel_: MJAIPromptModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAICredentialBindings] WHERE [AIPromptModelID]='${mjaipromptmodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Credential Bindings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Credential Bindings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIPromptModel_)
     async CreateMJAIPromptModel(
         @Arg('input', () => CreateMJAIPromptModelInput) input: CreateMJAIPromptModelInput,
@@ -6520,13 +6544,6 @@ export class MJAIAgentNote_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     SourceConversation?: string;
-        
-    @Field({nullable: true}) 
-    SourceConversationDetail?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    SourceAIAgentRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -9658,10 +9675,6 @@ export class MJAIResultCache_ {
     @MaxLength(200)
     Configuration?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    PromptRun?: string;
-        
 }
 
 //****************************************************************************
@@ -10972,10 +10985,6 @@ export class MJEmployeeCompanyIntegration_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(162)
-    Employee?: string;
-        
     @Field() 
     @MaxLength(510)
     CompanyIntegration: string;
@@ -11140,10 +11149,6 @@ export class MJEmployeeRole_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(162)
-    Employee?: string;
-        
     @Field() 
     @MaxLength(100)
     Role: string;
@@ -11295,10 +11300,6 @@ export class MJEmployeeSkill_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(162)
-    Employee?: string;
         
     @Field() 
     @MaxLength(100)
@@ -17197,14 +17198,6 @@ export class MJErrorLog_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    CompanyIntegrationRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(900)
-    CompanyIntegrationRunDetail?: string;
-        
 }
 
 //****************************************************************************
@@ -20156,10 +20149,6 @@ export class MJRecordChange_ {
     @Field() 
     @MaxLength(200)
     User: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    ReplayRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -24706,9 +24695,6 @@ export class MJReport_ {
     Conversation?: string;
         
     @Field({nullable: true}) 
-    ConversationDetail?: string;
-        
-    @Field({nullable: true}) 
     @MaxLength(510)
     DataContext?: string;
         
@@ -27129,10 +27115,6 @@ export class MJConversation_ {
     @MaxLength(510)
     Project?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    TestRun?: string;
-        
     @Field(() => [MJConversationDetail_])
     ConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to ConversationDetails
     
@@ -28273,10 +28255,6 @@ export class MJRecordMergeDeletionLog_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(900)
-    RecordMergeLog: string;
-        
 }
 
 //****************************************************************************
@@ -28983,7 +28961,7 @@ export class MJQuery_ {
     @Field(() => Boolean, {description: `When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`}) 
     AuditQueryRuns: boolean;
         
-    @Field(() => Boolean, {description: `When true, query results will be cached in memory with TTL expiration`}) 
+    @Field(() => Boolean, {description: `When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.`}) 
     CacheEnabled: boolean;
         
     @Field(() => Int, {nullable: true, description: `Time-to-live in minutes for cached query results. NULL uses default TTL.`}) 
@@ -28998,6 +28976,9 @@ export class MJQuery_ {
     @Field({nullable: true, description: `The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.`}) 
     @MaxLength(16)
     EmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`}) 
+    CacheValidationSQL?: string;
         
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -29085,6 +29066,9 @@ export class CreateMJQueryInput {
 
     @Field({ nullable: true })
     EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    CacheValidationSQL: string | null;
 }
     
 
@@ -29149,6 +29133,9 @@ export class UpdateMJQueryInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    CacheValidationSQL?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -33630,10 +33617,6 @@ export class MJDuplicateRunDetail_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    @MaxLength(510)
-    DuplicateRun: string;
-        
     @Field(() => [MJDuplicateRunDetailMatch_])
     DuplicateRunDetailMatches_DuplicateRunDetailIDArray: MJDuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
     
@@ -34410,10 +34393,6 @@ export class MJEntityActionInvocation_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(850)
-    EntityAction: string;
         
     @Field() 
     @MaxLength(510)
@@ -35407,13 +35386,6 @@ export class MJEntityActionFilter_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(850)
-    EntityAction: string;
-        
-    @Field() 
-    ActionFilter: string;
         
 }
 
@@ -39066,10 +39038,6 @@ export class MJTemplateParam_ {
     @MaxLength(510)
     Entity?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    TemplateContent?: string;
-        
 }
 
 //****************************************************************************
@@ -39457,10 +39425,6 @@ export class MJRecommendation_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(510)
-    RecommendationRun: string;
         
     @Field() 
     @MaxLength(510)
@@ -40012,9 +39976,6 @@ export class MJRecommendationItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    Recommendation: string;
-        
-    @Field() 
     @MaxLength(510)
     DestinationEntity: string;
         
@@ -40359,10 +40320,6 @@ export class MJEntityCommunicationField_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(200)
-    EntityCommunicationMessageType: string;
         
 }
 
@@ -41046,10 +41003,6 @@ export class MJEntityActionParam_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(850)
-    EntityAction: string;
         
     @Field() 
     @MaxLength(510)
@@ -42648,10 +42601,6 @@ export class MJAIModelVendor_ {
     @MaxLength(16)
     TypeID: string;
         
-    @Field({nullable: true, description: `Optional reference to a credential specific to this model-vendor combination. Takes precedence over AIVendor.CredentialID. Useful for scenarios where a model requires different credentials per vendor (e.g., Azure OpenAI vs direct OpenAI). When any credential is configured in the hierarchy, legacy authentication methods are bypassed.`}) 
-    @MaxLength(16)
-    CredentialID?: string;
-        
     @Field() 
     @MaxLength(100)
     Model: string;
@@ -42664,10 +42613,9 @@ export class MJAIModelVendor_ {
     @MaxLength(100)
     Type: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(400)
-    Credential?: string;
-        
+    @Field(() => [MJAICredentialBinding_])
+    MJ_AICredentialBindings_AIModelVendorIDArray: MJAICredentialBinding_[]; // Link to MJ_AICredentialBindings
+    
 }
 
 //****************************************************************************
@@ -42716,9 +42664,6 @@ export class CreateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     TypeID?: string;
-
-    @Field({ nullable: true })
-    CredentialID: string | null;
 }
     
 
@@ -42768,9 +42713,6 @@ export class UpdateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     TypeID?: string;
-
-    @Field({ nullable: true })
-    CredentialID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -42834,6 +42776,17 @@ export class MJAIModelVendorResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJAICredentialBinding_])
+    async MJ_AICredentialBindings_AIModelVendorIDArray(@Root() mjaimodelvendor_: MJAIModelVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAICredentialBindings] WHERE [AIModelVendorID]='${mjaimodelvendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Credential Bindings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Credential Bindings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIModelVendor_)
     async CreateMJAIModelVendor(
         @Arg('input', () => CreateMJAIModelVendorInput) input: CreateMJAIModelVendorInput,
@@ -45888,13 +45841,6 @@ export class MJAIAgentExample_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
-    SourceConversationDetail?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    SourceAIAgentRun?: string;
-        
-    @Field({nullable: true}) 
     @MaxLength(100)
     EmbeddingModel?: string;
         
@@ -46164,14 +46110,8 @@ export class MJCredential_ {
     @MaxLength(200)
     Category?: string;
         
-    @Field(() => [MJAIPromptModel_])
-    MJ_AIPromptModels_CredentialIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
-    
-    @Field(() => [MJAIModelVendor_])
-    MJ_AIModelVendors_CredentialIDArray: MJAIModelVendor_[]; // Link to MJ_AIModelVendors
-    
-    @Field(() => [MJAIVendor_])
-    MJ_AIVendors_CredentialIDArray: MJAIVendor_[]; // Link to MJ_AIVendors
+    @Field(() => [MJAICredentialBinding_])
+    MJ_AICredentialBindings_CredentialIDArray: MJAICredentialBinding_[]; // Link to MJ_AICredentialBindings
     
 }
 
@@ -46321,36 +46261,14 @@ export class MJCredentialResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJAIPromptModel_])
-    async MJ_AIPromptModels_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
+    @FieldResolver(() => [MJAICredentialBinding_])
+    async MJ_AICredentialBindings_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAICredentialBindings] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Credential Bindings', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJAIModelVendor_])
-    async MJ_AIModelVendors_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Vendors', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJAIVendor_])
-    async MJ_AIVendors_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIVendors] WHERE [CredentialID]='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Vendors', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Vendors', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Credential Bindings', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -48181,9 +48099,6 @@ export class MJConversationDetailRating_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field() 
-    ConversationDetail: string;
         
     @Field() 
     @MaxLength(200)
@@ -53195,14 +53110,6 @@ detailed information about what validation rules failed.`})
     Comments?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(510)
-    AgentRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    Parent?: string;
-        
-    @Field({nullable: true}) 
     @MaxLength(16)
     RootParentID?: string;
         
@@ -53474,9 +53381,6 @@ export class MJConversationDetailArtifact_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    ConversationDetail: string;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     ArtifactVersion?: string;
@@ -53696,9 +53600,6 @@ export class MJTask_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Project?: string;
-        
-    @Field({nullable: true}) 
-    ConversationDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -53945,6 +53846,218 @@ export class MJTaskResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Tasks', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Credential Bindings
+//****************************************************************************
+@ObjectType({ description: `Junction table that binds credentials to AI entities (Vendors, ModelVendors, PromptModels). Decouples credential assignments from core AI entities to prevent MJ updates from overwriting customer configurations. Supports priority-based failover with multiple credentials per binding level.` })
+export class MJAICredentialBinding_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Reference to the credential being bound.`}) 
+    @MaxLength(16)
+    CredentialID: string;
+        
+    @Field({description: `The type of AI entity this credential is bound to: Vendor (broadest), ModelVendor (model+vendor specific), or PromptModel (most specific). Resolution follows prompt → model → vendor hierarchy.`}) 
+    @MaxLength(40)
+    BindingType: string;
+        
+    @Field({nullable: true, description: `Reference to AIVendor when BindingType is Vendor. NULL otherwise.`}) 
+    @MaxLength(16)
+    AIVendorID?: string;
+        
+    @Field({nullable: true, description: `Reference to AIModelVendor when BindingType is ModelVendor. NULL otherwise.`}) 
+    @MaxLength(16)
+    AIModelVendorID?: string;
+        
+    @Field({nullable: true, description: `Reference to AIPromptModel when BindingType is PromptModel. NULL otherwise.`}) 
+    @MaxLength(16)
+    AIPromptModelID?: string;
+        
+    @Field(() => Int, {description: `Priority for credential selection when multiple bindings exist at the same level. Lower values have higher priority (0 is highest). Enables failover when primary credentials are unavailable.`}) 
+    Priority: number;
+        
+    @Field(() => Boolean, {description: `When false, this binding is ignored during credential resolution. Allows temporary disabling without deletion.`}) 
+    IsActive: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(400)
+    Credential: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    AIVendor?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    AIModelVendor?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    AIPromptModel?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Credential Bindings
+//****************************************************************************
+@InputType()
+export class CreateMJAICredentialBindingInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    CredentialID?: string;
+
+    @Field({ nullable: true })
+    BindingType?: string;
+
+    @Field({ nullable: true })
+    AIVendorID: string | null;
+
+    @Field({ nullable: true })
+    AIModelVendorID: string | null;
+
+    @Field({ nullable: true })
+    AIPromptModelID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Credential Bindings
+//****************************************************************************
+@InputType()
+export class UpdateMJAICredentialBindingInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    CredentialID?: string;
+
+    @Field({ nullable: true })
+    BindingType?: string;
+
+    @Field({ nullable: true })
+    AIVendorID?: string | null;
+
+    @Field({ nullable: true })
+    AIModelVendorID?: string | null;
+
+    @Field({ nullable: true })
+    AIPromptModelID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Credential Bindings
+//****************************************************************************
+@ObjectType()
+export class RunMJAICredentialBindingViewResult {
+    @Field(() => [MJAICredentialBinding_])
+    Results: MJAICredentialBinding_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAICredentialBinding_)
+export class MJAICredentialBindingResolver extends ResolverBase {
+    @Query(() => RunMJAICredentialBindingViewResult)
+    async RunMJAICredentialBindingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAICredentialBindingViewResult)
+    async RunMJAICredentialBindingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAICredentialBindingViewResult)
+    async RunMJAICredentialBindingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Credential Bindings';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAICredentialBinding_, { nullable: true })
+    async MJAICredentialBinding(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAICredentialBinding_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Credential Bindings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAICredentialBindings] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Credential Bindings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Credential Bindings', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAICredentialBinding_)
+    async CreateMJAICredentialBinding(
+        @Arg('input', () => CreateMJAICredentialBindingInput) input: CreateMJAICredentialBindingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Credential Bindings', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAICredentialBinding_)
+    async UpdateMJAICredentialBinding(
+        @Arg('input', () => UpdateMJAICredentialBindingInput) input: UpdateMJAICredentialBindingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Credential Bindings', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAICredentialBinding_)
+    async DeleteMJAICredentialBinding(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Credential Bindings', key, options, provider, userPayload, pubSub);
     }
     
 }

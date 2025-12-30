@@ -54,7 +54,6 @@ import {
   RecordMergeResult,
   RecordMergeDetailResult,
   EntityDependency,
-  IRunQueryProvider,
   RunQueryResult,
   RunQueryParams,
   PotentialDuplicateRequest,
@@ -70,6 +69,12 @@ import {
   QueryInfo,
   QueryCategoryInfo,
   QueryCache,
+  RunViewWithCacheCheckParams,
+  RunViewsWithCacheCheckResponse,
+  RunViewWithCacheCheckResult,
+  RunQueryWithCacheCheckParams,
+  RunQueriesWithCacheCheckResponse,
+  RunQueryWithCacheCheckResult,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
 
@@ -237,7 +242,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends DatabaseProviderBase
-  implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
+  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider
 {
   private _pool: sql.ConnectionPool;
   
@@ -787,7 +792,8 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IRunQueryProvider
   /**************************************************************************/
-  public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+  protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
     try {
       // Find and validate query
       const query = await this.findAndValidateQuery(params, contextUser);
@@ -1025,6 +1031,284 @@ export class SQLServerDataProvider
     LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
   }
 
+  /**
+   * Internal implementation of batch query execution.
+   * Runs multiple queries in parallel for efficiency.
+   * @param params - Array of query parameters
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of query results
+   */
+  protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
+    // Run all queries in parallel
+    const promises = params.map((p) => this.InternalRunQuery(p, contextUser));
+    return Promise.all(promises);
+  }
+
+  /**
+   * RunQueriesWithCacheCheck - Smart cache validation for batch RunQueries.
+   * For each query request, if cacheStatus is provided, uses the Query's CacheValidationSQL
+   * to check if the cached data is still current by comparing MAX(__mj_UpdatedAt) and COUNT(*)
+   * with client's values. Returns 'current' if cache is valid (no data), or 'stale' with fresh data.
+   *
+   * Queries without CacheValidationSQL configured will return 'no_validation' status with full data.
+   */
+  public async RunQueriesWithCacheCheck<T = unknown>(
+    params: RunQueryWithCacheCheckParams[],
+    contextUser?: UserInfo
+  ): Promise<RunQueriesWithCacheCheckResponse<T>> {
+    try {
+      const user = contextUser || this.CurrentUser;
+      if (!user) {
+        return {
+          success: false,
+          results: [],
+          errorMessage: 'No user context available',
+        };
+      }
+
+      // Separate items that need cache check from those that don't
+      const itemsNeedingCacheCheck: Array<{
+        index: number;
+        item: RunQueryWithCacheCheckParams;
+        queryInfo: QueryInfo;
+      }> = [];
+      const itemsWithoutCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams }> = [];
+      const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+      const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
+
+      // Pre-process all items to resolve query info and validate
+      for (let i = 0; i < params.length; i++) {
+        const item = params[i];
+
+        // Resolve query info
+        const queryInfo = this.resolveQueryInfo(item.params);
+        if (!queryInfo) {
+          errorResults.push({
+            queryIndex: i,
+            queryId: item.params.QueryID || '',
+            status: 'error',
+            errorMessage: `Query not found: ${item.params.QueryID || item.params.QueryName}`,
+          });
+          continue;
+        }
+
+        // Check permissions
+        if (!queryInfo.UserCanRun(user)) {
+          errorResults.push({
+            queryIndex: i,
+            queryId: queryInfo.ID,
+            status: 'error',
+            errorMessage: `User does not have permission to run query: ${queryInfo.Name}`,
+          });
+          continue;
+        }
+
+        if (!item.cacheStatus) {
+          // No cache status provided - will run full query
+          itemsWithoutCacheCheck.push({ index: i, item });
+          continue;
+        }
+
+        // Check if query has CacheValidationSQL
+        if (!queryInfo.CacheValidationSQL) {
+          // No validation SQL configured - will run full query and return 'no_validation'
+          itemsWithoutValidationSQL.push({ index: i, item, queryInfo });
+          continue;
+        }
+
+        itemsNeedingCacheCheck.push({ index: i, item, queryInfo });
+      }
+
+      // Execute batched cache status check for all items that need it
+      const cacheStatusResults = await this.getBatchedQueryCacheStatus(itemsNeedingCacheCheck, contextUser);
+
+      // Determine which items are current vs stale
+      const staleItems: Array<{ index: number; params: RunQueryParams; queryInfo: QueryInfo }> = [];
+      const currentResults: RunQueryWithCacheCheckResult<T>[] = [];
+
+      for (const { index, item, queryInfo } of itemsNeedingCacheCheck) {
+        const serverStatus = cacheStatusResults.get(index);
+        if (!serverStatus || !serverStatus.success) {
+          errorResults.push({
+            queryIndex: index,
+            queryId: queryInfo.ID,
+            status: 'error',
+            errorMessage: serverStatus?.errorMessage || 'Failed to get cache status',
+          });
+          continue;
+        }
+
+        const isCurrent = this.isCacheCurrent(item.cacheStatus!, serverStatus);
+        if (isCurrent) {
+          currentResults.push({
+            queryIndex: index,
+            queryId: queryInfo.ID,
+            status: 'current',
+          });
+        } else {
+          staleItems.push({ index, params: item.params, queryInfo });
+        }
+      }
+
+      // Run full queries in parallel for:
+      // 1. Items without cache status (no fingerprint from client)
+      // 2. Items without CacheValidationSQL (always return data with 'no_validation' status)
+      // 3. Items with stale cache
+      const fullQueryPromises: Promise<RunQueryWithCacheCheckResult<T>>[] = [
+        ...itemsWithoutCacheCheck.map(({ index, item }) =>
+          this.runFullQueryAndReturnForQuery<T>(item.params, index, 'stale', contextUser)
+        ),
+        ...itemsWithoutValidationSQL.map(({ index, item, queryInfo }) =>
+          this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, queryInfo.ID)
+        ),
+        ...staleItems.map(({ index, params: queryParams, queryInfo }) =>
+          this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, queryInfo.ID)
+        ),
+      ];
+
+      const fullQueryResults = await Promise.all(fullQueryPromises);
+
+      // Combine all results and sort by queryIndex
+      const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+      allResults.sort((a, b) => a.queryIndex - b.queryIndex);
+
+      return {
+        success: true,
+        results: allResults,
+      };
+    } catch (e) {
+      LogError(e);
+      return {
+        success: false,
+        results: [],
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+    }
+  }
+
+  /**
+   * Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath).
+   */
+  protected resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
+    if (params.QueryID) {
+      return this.Queries.find((q) => q.ID === params.QueryID);
+    }
+
+    if (params.QueryName) {
+      // Match by name and optional category path
+      const matchingQueries = this.Queries.filter(
+        (q) => q.Name.trim().toLowerCase() === params.QueryName?.trim().toLowerCase()
+      );
+
+      if (matchingQueries.length === 0) return undefined;
+      if (matchingQueries.length === 1) return matchingQueries[0];
+
+      // Multiple matches - use CategoryPath or CategoryID to disambiguate
+      if (params.CategoryPath) {
+        const byPath = matchingQueries.find(
+          (q) => q.CategoryPath.toLowerCase() === params.CategoryPath?.toLowerCase()
+        );
+        if (byPath) return byPath;
+      }
+
+      if (params.CategoryID) {
+        const byId = matchingQueries.find((q) => q.CategoryID === params.CategoryID);
+        if (byId) return byId;
+      }
+
+      // Return first match if no category disambiguation
+      return matchingQueries[0];
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Executes a batched cache status check for multiple queries using their CacheValidationSQL.
+   */
+  protected async getBatchedQueryCacheStatus(
+    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+    contextUser?: UserInfo
+  ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+    const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
+
+    if (items.length === 0) {
+      return results;
+    }
+
+    // Build array of SQL statements for batch execution
+    const sqlStatements: string[] = [];
+    for (const { queryInfo } of items) {
+      // CacheValidationSQL should return MaxUpdatedAt and RowCount
+      sqlStatements.push(queryInfo.CacheValidationSQL!);
+    }
+
+    try {
+      // Execute the batched SQL
+      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+
+      // Process each result set and map to the corresponding item index
+      for (let i = 0; i < items.length; i++) {
+        const { index } = items[i];
+        const resultSet = resultSets[i];
+
+        if (resultSet && resultSet.length > 0) {
+          const row = resultSet[0] as { MaxUpdatedAt: Date | string | null; RowCount: number };
+          results.set(index, {
+            success: true,
+            rowCount: row.RowCount,
+            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
+          });
+        } else {
+          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+        }
+      }
+    } catch (e) {
+      // If batch fails, mark all items as failed
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      for (const { index } of items) {
+        results.set(index, { success: false, errorMessage });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Runs the full query and returns results with cache metadata.
+   */
+  protected async runFullQueryAndReturnForQuery<T = unknown>(
+    params: RunQueryParams,
+    queryIndex: number,
+    status: 'stale' | 'no_validation',
+    contextUser?: UserInfo,
+    queryId?: string
+  ): Promise<RunQueryWithCacheCheckResult<T>> {
+    const result = await this.InternalRunQuery(params, contextUser);
+
+    if (!result.Success) {
+      return {
+        queryIndex,
+        queryId: queryId || result.QueryID || '',
+        status: 'error',
+        errorMessage: result.ErrorMessage || 'Unknown error executing query',
+      };
+    }
+
+    // Extract maxUpdatedAt from results
+    const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+
+    return {
+      queryIndex,
+      queryId: result.QueryID,
+      status,
+      results: result.Results as T[],
+      maxUpdatedAt,
+      rowCount: result.Results.length,
+    };
+  }
+
   /**************************************************************************/
   // END ---- IRunQueryProvider
   /**************************************************************************/
@@ -1089,10 +1373,8 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IRunViewProvider
   /**************************************************************************/
-  public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-    // add call to pre-processor that was previously in the @memberjunction/core RunView class but now
-    // is handled in ProviderBase when sub-classes like this one invoke the pre/post process properly
-    await this.PreProcessRunView(params, contextUser);
+  protected async InternalRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunView()
 
     const startTime = new Date();
     try {
@@ -1321,10 +1603,6 @@ export class SQLServerDataProvider
           ErrorMessage: null,
         };
 
-        // add call to post-processor that was previously in the @memberjunction/core RunView class but now
-        // is handled in ProviderBase when sub-classes like this one invoke the post process properly
-        await this.PostProcessRunView(result, params, contextUser); 
-
         return result;
       } 
       else {
@@ -1345,18 +1623,320 @@ export class SQLServerDataProvider
     }
   }
 
-  public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-    // pre-process in base class
-    await this.PreProcessRunViews(params, contextUser);
-
-    // do the work
-    const promises = params.map((p) => this.RunView<T>(p, contextUser));
+  protected async InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+    // This is the internal implementation - pre/post processing is handled by ProviderBase.RunViews()
+    // Note: We call InternalRunView directly since we're already inside the internal flow
+    const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
     const results = await Promise.all(promises);
+    return results;
+  }
 
-    // post-process in base class
-    await this.PostProcessRunViews(results, params, contextUser);
+  /**
+   * RunViewsWithCacheCheck - Smart cache validation for batch RunViews.
+   * For each view request, if cacheStatus is provided, first checks if the cache is current
+   * by comparing MAX(__mj_UpdatedAt) and COUNT(*) with client's values.
+   * Returns 'current' if cache is valid (no data), or 'stale' with fresh data if cache is outdated.
+   *
+   * Optimized to batch all cache status checks into a single SQL call with multiple result sets.
+   */
+  public async RunViewsWithCacheCheck<T = unknown>(
+    params: RunViewWithCacheCheckParams[],
+    contextUser?: UserInfo
+  ): Promise<RunViewsWithCacheCheckResponse<T>> {
+    try {
+      const user = contextUser || this.CurrentUser;
+      if (!user) {
+        return {
+          success: false,
+          results: [],
+          errorMessage: 'No user context available',
+        };
+      }
+
+      // Separate items that need cache check from those that don't
+      const itemsNeedingCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+      const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
+      const errorResults: RunViewWithCacheCheckResult<T>[] = [];
+
+      // Pre-process all items to build WHERE clauses and validate
+      for (let i = 0; i < params.length; i++) {
+        const item = params[i];
+        if (!item.cacheStatus) {
+          // No cache status - will run full query
+          itemsWithoutCacheCheck.push({ index: i, item });
+          continue;
+        }
+
+        // Get entity info
+        const entityInfo = this.Entities.find(
+          (e) => e.Name.trim().toLowerCase() === item.params.EntityName?.trim().toLowerCase()
+        );
+        if (!entityInfo) {
+          errorResults.push({
+            viewIndex: i,
+            status: 'error',
+            errorMessage: `Entity ${item.params.EntityName} not found in metadata`,
+          });
+          continue;
+        }
+
+        try {
+          // Check permissions
+          this.CheckUserReadPermissions(entityInfo.Name, user);
+          // Build WHERE clause
+          const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
+          itemsNeedingCacheCheck.push({ index: i, item, entityInfo, whereSQL });
+        } catch (e) {
+          errorResults.push({
+            viewIndex: i,
+            status: 'error',
+            errorMessage: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      // Execute batched cache status check for all items that need it
+      const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
+
+      // Determine which items are current vs stale
+      const staleItems: Array<{ index: number; params: RunViewParams }> = [];
+      const currentResults: RunViewWithCacheCheckResult<T>[] = [];
+
+      for (const { index, item } of itemsNeedingCacheCheck) {
+        const serverStatus = cacheStatusResults.get(index);
+        if (!serverStatus || !serverStatus.success) {
+          errorResults.push({
+            viewIndex: index,
+            status: 'error',
+            errorMessage: serverStatus?.errorMessage || 'Failed to get cache status',
+          });
+          continue;
+        }
+
+        const isCurrent = this.isCacheCurrent(item.cacheStatus!, serverStatus);
+        if (isCurrent) {
+          currentResults.push({
+            viewIndex: index,
+            status: 'current',
+          });
+        } else {
+          staleItems.push({ index, params: item.params });
+        }
+      }
+
+      // Run full queries in parallel for:
+      // 1. Items without cache status (no fingerprint from client)
+      // 2. Items with stale cache
+      const fullQueryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
+        ...itemsWithoutCacheCheck.map(({ index, item }) =>
+          this.runFullQueryAndReturn<T>(item.params, index, contextUser)
+        ),
+        ...staleItems.map(({ index, params: viewParams }) =>
+          this.runFullQueryAndReturn<T>(viewParams, index, contextUser)
+        ),
+      ];
+
+      const fullQueryResults = await Promise.all(fullQueryPromises);
+
+      // Combine all results and sort by viewIndex
+      const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+      allResults.sort((a, b) => a.viewIndex - b.viewIndex);
+
+      return {
+        success: true,
+        results: allResults,
+      };
+    } catch (e) {
+      LogError(e);
+      return {
+        success: false,
+        results: [],
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+    }
+  }
+
+  /**
+   * Executes a batched cache status check for multiple views in a single SQL call.
+   * Uses multiple result sets to return status for each view efficiently.
+   */
+  protected async getBatchedServerCacheStatus(
+    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
+    contextUser?: UserInfo
+  ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+    const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
+
+    if (items.length === 0) {
+      return results;
+    }
+
+    // Build array of SQL statements for batch execution
+    const sqlStatements: string[] = [];
+    for (const { entityInfo, whereSQL } of items) {
+      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+      sqlStatements.push(statusSQL);
+    }
+
+    try {
+      // Execute the batched SQL using existing ExecuteSQLBatch method
+      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+
+      // Process each result set and map to the corresponding item index
+      for (let i = 0; i < items.length; i++) {
+        const { index } = items[i];
+        const resultSet = resultSets[i];
+
+        if (resultSet && resultSet.length > 0) {
+          const row = resultSet[0] as { TotalRows: number; MaxUpdatedAt: Date | string | null };
+          results.set(index, {
+            success: true,
+            rowCount: row.TotalRows,
+            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
+          });
+        } else {
+          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+        }
+      }
+    } catch (e) {
+      // If batch fails, mark all items as failed
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      for (const { index } of items) {
+        results.set(index, { success: false, errorMessage });
+      }
+    }
 
     return results;
+  }
+
+  /**
+   * Builds the WHERE clause for cache status check, using same logic as InternalRunView.
+   */
+  protected async buildWhereClauseForCacheCheck(
+    params: RunViewParams,
+    entityInfo: EntityInfo,
+    user: UserInfo
+  ): Promise<string> {
+    let whereSQL = '';
+    let bHasWhere = false;
+
+    // Extra filter
+    if (params.ExtraFilter && params.ExtraFilter.length > 0) {
+      if (!this.validateUserProvidedSQLClause(params.ExtraFilter)) {
+        throw new Error(`Invalid Extra Filter: ${params.ExtraFilter}`);
+      }
+      whereSQL = `(${params.ExtraFilter})`;
+      bHasWhere = true;
+    }
+
+    // User search string
+    if (params.UserSearchString && params.UserSearchString.length > 0) {
+      if (!this.validateUserProvidedSQLClause(params.UserSearchString)) {
+        throw new Error(`Invalid User Search SQL clause: ${params.UserSearchString}`);
+      }
+      const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString);
+      if (sUserSearchSQL.length > 0) {
+        if (bHasWhere) {
+          whereSQL += ` AND (${sUserSearchSQL})`;
+        } else {
+          whereSQL = `(${sUserSearchSQL})`;
+          bHasWhere = true;
+        }
+      }
+    }
+
+    // Row Level Security
+    if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+      const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+      if (rlsWhereClause && rlsWhereClause.length > 0) {
+        if (bHasWhere) {
+          whereSQL += ` AND (${rlsWhereClause})`;
+        } else {
+          whereSQL = `(${rlsWhereClause})`;
+        }
+      }
+    }
+
+    return whereSQL;
+  }
+
+  /**
+   * Compares client cache status with server status to determine if cache is current.
+   */
+  protected isCacheCurrent(
+    clientStatus: { maxUpdatedAt: string; rowCount: number },
+    serverStatus: { maxUpdatedAt?: string; rowCount?: number }
+  ): boolean {
+    // Row count must match
+    if (clientStatus.rowCount !== serverStatus.rowCount) {
+      return false;
+    }
+
+    // Compare maxUpdatedAt dates
+    const clientDate = new Date(clientStatus.maxUpdatedAt);
+    const serverDate = serverStatus.maxUpdatedAt ? new Date(serverStatus.maxUpdatedAt) : null;
+
+    if (!serverDate) {
+      // No records on server, so if client has any, it's stale
+      return clientStatus.rowCount === 0;
+    }
+
+    // Dates must match (compare as ISO strings for precision)
+    return clientDate.toISOString() === serverDate.toISOString();
+  }
+
+  /**
+   * Runs the full query and returns results with cache metadata.
+   */
+  protected async runFullQueryAndReturn<T = unknown>(
+    params: RunViewParams,
+    viewIndex: number,
+    contextUser?: UserInfo
+  ): Promise<RunViewWithCacheCheckResult<T>> {
+    const result = await this.InternalRunView<T>(params, contextUser);
+
+    if (!result.Success) {
+      return {
+        viewIndex,
+        status: 'error',
+        errorMessage: result.ErrorMessage || 'Unknown error executing view',
+      };
+    }
+
+    // Extract maxUpdatedAt from results
+    const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+
+    return {
+      viewIndex,
+      status: 'stale',
+      results: result.Results,
+      maxUpdatedAt,
+      rowCount: result.Results.length,
+    };
+  }
+
+  /**
+   * Extracts the maximum __mj_UpdatedAt value from a result set.
+   * @param results - Array of result objects that may contain __mj_UpdatedAt
+   * @returns ISO string of the max timestamp, or current time if none found
+   */
+  protected extractMaxUpdatedAt(results: unknown[]): string {
+    if (!results || results.length === 0) {
+      return new Date().toISOString();
+    }
+
+    let maxDate: Date | null = null;
+    for (const row of results) {
+      const rowObj = row as Record<string, unknown>;
+      const updatedAt = rowObj['__mj_UpdatedAt'];
+      if (updatedAt) {
+        const date = new Date(updatedAt as string);
+        if (!isNaN(date.getTime()) && (!maxDate || date > maxDate)) {
+          maxDate = date;
+        }
+      }
+    }
+
+    return maxDate ? maxDate.toISOString() : new Date().toISOString();
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {
@@ -4558,28 +5138,53 @@ export class SQLServerDataProvider
   }
 }
 
-// This implementation is purely in memory and doesn't bother to persist to a file. It is fine to load it once per server instance load
+/**
+ * In-memory storage provider for Node.js server-side usage.
+ * Uses a Map of Maps structure for category isolation:
+ * Map<category, Map<key, value>>
+ *
+ * This implementation is purely in-memory and doesn't persist to disk.
+ * Data is retained for the lifetime of the server process.
+ */
 class NodeLocalStorageProvider implements ILocalStorageProvider {
-  private _localStorage: any = {};
+  private static readonly DEFAULT_CATEGORY = 'default';
+  private _storage: Map<string, Map<string, string>> = new Map();
 
-  public async GetItem(key: string): Promise<string | null> {
-    return new Promise((resolve) => {
-      if (this._localStorage.hasOwnProperty(key)) resolve(this._localStorage[key]);
-      else resolve(null);
-    });
+  /**
+   * Gets or creates a category map
+   */
+  private getCategoryMap(category: string): Map<string, string> {
+    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
+    let categoryMap = this._storage.get(cat);
+    if (!categoryMap) {
+      categoryMap = new Map();
+      this._storage.set(cat, categoryMap);
+    }
+    return categoryMap;
   }
 
-  public async SetItem(key: string, value: string): Promise<void> {
-    return new Promise((resolve) => {
-      this._localStorage[key] = value;
-      resolve();
-    });
+  public async GetItem(key: string, category?: string): Promise<string | null> {
+    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
+    return categoryMap.get(key) ?? null;
   }
 
-  public async Remove(key: string): Promise<void> {
-    return new Promise((resolve) => {
-      if (this._localStorage.hasOwnProperty(key)) delete this._localStorage[key];
-      resolve();
-    });
+  public async SetItem(key: string, value: string, category?: string): Promise<void> {
+    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
+    categoryMap.set(key, value);
+  }
+
+  public async Remove(key: string, category?: string): Promise<void> {
+    const categoryMap = this.getCategoryMap(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
+    categoryMap.delete(key);
+  }
+
+  public async ClearCategory(category: string): Promise<void> {
+    const cat = category || NodeLocalStorageProvider.DEFAULT_CATEGORY;
+    this._storage.delete(cat);
+  }
+
+  public async GetCategoryKeys(category: string): Promise<string[]> {
+    const categoryMap = this._storage.get(category || NodeLocalStorageProvider.DEFAULT_CATEGORY);
+    return categoryMap ? Array.from(categoryMap.keys()) : [];
   }
 }

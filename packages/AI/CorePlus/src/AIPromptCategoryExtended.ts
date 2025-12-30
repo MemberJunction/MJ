@@ -1,5 +1,5 @@
 import { BaseEntity } from "@memberjunction/core";
-import { AIPromptCategoryEntity } from "../generated/entity_subclasses";
+import { AIPromptCategoryEntity } from "@memberjunction/core-entities";
 import { AIPromptEntityExtended } from "./AIPromptExtended";
 import { RegisterClass } from "@memberjunction/global";
 
@@ -10,3 +10,7 @@ export class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {
         return this._prompts;
     }
 }
+
+
+//tree shaking stub
+export function LoadAIPromptCategoryEntityExtended() {}

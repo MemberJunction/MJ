@@ -1,10 +1,12 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIModelEntityExtended, AIVendorEntity, AIModelTypeEntity, ResourceData } from '@memberjunction/core-entities';
-import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { AIVendorEntity, AIModelTypeEntity, ResourceData } from '@memberjunction/core-entities';
+import { Metadata, CompositeKey } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface ModelDisplayData extends AIModelEntityExtended {
   VendorName?: string;
@@ -28,11 +30,11 @@ export function LoadAIModelsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIModelsResource')
 @Component({
-  selector: 'app-model-management-v2',
-  templateUrl: './model-management-v2.component.html',
-  styleUrls: ['./model-management-v2.component.css']
+  selector: 'app-model-management',
+  templateUrl: './model-management.component.html',
+  styleUrls: ['./model-management.component.css']
 })
-export class ModelManagementV2Component extends BaseResourceComponent implements OnInit, OnDestroy {
+export class ModelManagementComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   // View state
   public viewMode: 'grid' | 'list' = 'grid';
@@ -56,8 +58,13 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
   public speedRankRange = { min: 0, max: 10 };
   public costRankRange = { min: 0, max: 10 };
 
+  // Detail panel
+  public selectedModel: ModelDisplayData | null = null;
+  public detailPanelVisible = false;
+
   // Sorting
   public sortBy = 'name';
+  public sortDirection: 'asc' | 'desc' = 'asc';
   public sortOptions = [
     { value: 'name', label: 'Name' },
     { value: 'vendor', label: 'Vendor' },
@@ -132,32 +139,13 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
 
   private async loadInitialData(): Promise<void> {
     try {
-      const rv = new RunView();
+      // Ensure AIEngineBase is configured (no-op if already loaded)
+      await AIEngineBase.Instance.Config(false);
 
-      // Load models with proper generic typing
-      const modelResults = await rv.RunView<AIModelEntityExtended>({
-        EntityName: 'AI Models',
-        OrderBy: 'Name',
-        MaxRows: 1000 
-      });
-
-      // Load vendors and types in parallel
-      const [vendorResults, typeResults] = await Promise.all([
-        rv.RunView<AIVendorEntity>({
-          EntityName: 'MJ: AI Vendors',
-          OrderBy: 'Name',
-          MaxRows: 1000 
-        }),
-        rv.RunView<AIModelTypeEntity>({
-          EntityName: 'AI Model Types',
-          OrderBy: 'Name',
-          MaxRows: 1000 
-        })
-      ]);
-
-      // Results are now properly typed, no casting needed
-      this.vendors = vendorResults.Results;
-      this.modelTypes = typeResults.Results;
+      // Get cached data from AIEngineBase
+      const models = AIEngineBase.Instance.Models;
+      this.vendors = AIEngineBase.Instance.Vendors;
+      this.modelTypes = AIEngineBase.Instance.ModelTypes;
       
       // Log summary data
       
@@ -165,8 +153,8 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
       const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));
       const typeMap = new Map(this.modelTypes.map(t => [t.ID, t.Name]));
 
-      // Transform models to display format - Results already typed as AIModelEntityExtended[]
-      this.models = modelResults.Results.map((model, index) => {
+      // Transform models to display format
+      this.models = models.map((model) => {
         
         // Find vendor ID by matching vendor name
         let vendorId: string | undefined;
@@ -313,26 +301,38 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
     this.filteredModels.sort((a, b) => {
       const modelA = a as ModelDisplayData;
       const modelB = b as ModelDisplayData;
+      let comparison = 0;
+
       switch (this.sortBy) {
         case 'name':
-          return (modelA.Name || '').localeCompare(modelB.Name || '');
+          comparison = (modelA.Name || '').localeCompare(modelB.Name || '');
+          break;
         case 'vendor':
-          return (modelA.VendorName || '').localeCompare(modelB.VendorName || '');
+          comparison = (modelA.VendorName || '').localeCompare(modelB.VendorName || '');
+          break;
         case 'type':
-          return (modelA.ModelTypeName || '').localeCompare(modelB.ModelTypeName || '');
+          comparison = (modelA.ModelTypeName || '').localeCompare(modelB.ModelTypeName || '');
+          break;
         case 'powerRank':
-          return (modelB.PowerRank || 0) - (modelA.PowerRank || 0);
+          comparison = (modelA.PowerRank || 0) - (modelB.PowerRank || 0);
+          break;
         case 'speedRank':
-          return (modelB.SpeedRank || 0) - (modelA.SpeedRank || 0);
+          comparison = (modelA.SpeedRank || 0) - (modelB.SpeedRank || 0);
+          break;
         case 'costRank':
-          return (modelA.CostRank || 0) - (modelB.CostRank || 0);
+          comparison = (modelA.CostRank || 0) - (modelB.CostRank || 0);
+          break;
         case 'created':
-          return new Date(modelB.__mj_CreatedAt).getTime() - new Date(modelA.__mj_CreatedAt).getTime();
+          comparison = new Date(modelA.__mj_CreatedAt).getTime() - new Date(modelB.__mj_CreatedAt).getTime();
+          break;
         case 'updated':
-          return new Date(modelB.__mj_UpdatedAt).getTime() - new Date(modelA.__mj_UpdatedAt).getTime();
+          comparison = new Date(modelA.__mj_UpdatedAt).getTime() - new Date(modelB.__mj_UpdatedAt).getTime();
+          break;
         default:
-          return 0;
+          comparison = 0;
       }
+
+      return this.sortDirection === 'desc' ? -comparison : comparison;
     });
   }
 
@@ -352,7 +352,14 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
   }
 
   public onSortChange(sortBy: string): void {
-    this.sortBy = sortBy;
+    if (this.sortBy === sortBy) {
+      // Toggle direction if same column
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column, default to ascending
+      this.sortBy = sortBy;
+      this.sortDirection = 'asc';
+    }
     this.sortModels();
   }
 
@@ -381,6 +388,39 @@ export class ModelManagementV2Component extends BaseResourceComponent implements
   public openModel(modelId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: modelId }]);
     this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+  }
+
+  /**
+   * Show the detail panel for a model
+   */
+  public showModelDetails(model: AIModelEntityExtended, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedModel = model as ModelDisplayData;
+    this.detailPanelVisible = true;
+  }
+
+  /**
+   * Close the detail panel
+   */
+  public closeDetailPanel(): void {
+    this.detailPanelVisible = false;
+    // Delay clearing selectedModel for smoother animation
+    setTimeout(() => {
+      if (!this.detailPanelVisible) {
+        this.selectedModel = null;
+      }
+    }, 300);
+  }
+
+  /**
+   * Open the full entity record from the detail panel
+   */
+  public openModelFromPanel(): void {
+    if (this.selectedModel) {
+      this.openModel(this.selectedModel.ID);
+    }
   }
 
   public async createNewModel(): Promise<void> {

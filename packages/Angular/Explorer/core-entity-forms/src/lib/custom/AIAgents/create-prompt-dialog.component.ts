@@ -1,13 +1,14 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
+import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { AIPromptEntityExtended, TemplateEntity, AIPromptTypeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { TemplateEntity, AIPromptTypeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
 import { AIPromptManagementService } from '../AIPrompts/ai-prompt-management.service';
-import { TemplateSelectorConfig, TemplateSelectorResult } from '../AIPrompts/template-selector-dialog.component';
+import { TemplateSelectorConfig } from '../AIPrompts/template-selector-dialog.component';
 
 export interface CreatePromptConfig {
   /** Title for the dialog */

@@ -11,8 +11,8 @@ import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashbo
 // ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent are now in
 // @memberjunction/ng-entity-relationship-diagram and imported via EntityRelationshipDiagramModule
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
-import { ModelManagementV2Component } from './AI/components/models/model-management-v2.component';
-import { PromptManagementV2Component } from './AI/components/prompts/prompt-management-v2.component';
+import { ModelManagementComponent } from './AI/components/models/model-management.component';
+import { PromptManagementComponent } from './AI/components/prompts/prompt-management.component';
 import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
 import { AgentConfigurationComponent } from './AI/components/agents/agent-configuration.component';
 import { AgentFilterPanelComponent } from './AI/components/agents/agent-filter-panel.component';
@@ -115,6 +115,8 @@ import { CredentialEditPanelComponent } from './Credentials/components/credentia
 import { CredentialTypeEditPanelComponent } from './Credentials/components/credential-type-edit-panel.component';
 import { CredentialCategoryEditPanelComponent } from './Credentials/components/credential-category-edit-panel.component';
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
+// System Diagnostics Components
+import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 
 
 
@@ -122,8 +124,8 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
   declarations: [
     EntityAdminDashboardComponent,
     // ERDCompositeComponent, EntityFilterPanelComponent, EntityDetailsComponent now in Generic package
-    ModelManagementV2Component,
-    PromptManagementV2Component,
+    ModelManagementComponent,
+    PromptManagementComponent,
     PromptFilterPanelComponent,
     AgentConfigurationComponent,
     AgentFilterPanelComponent,
@@ -204,7 +206,9 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CredentialEditPanelComponent,
     CredentialTypeEditPanelComponent,
     CredentialCategoryEditPanelComponent,
-    GroupByPipe
+    GroupByPipe,
+    // System Diagnostics Components
+    SystemDiagnosticsComponent
   ],
   imports: [
     CommonModule,
@@ -252,9 +256,9 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     TestingDashboardComponent,
     // Export AI components (now BaseResourceComponent-based)
     ExecutionMonitoringComponent,
-    PromptManagementV2Component,
+    PromptManagementComponent,
     AgentConfigurationComponent,
-    ModelManagementV2Component,
+    ModelManagementComponent,
     SystemConfigurationComponent,
     // Export Actions components (now BaseResourceComponent-based)
     ActionsOverviewComponent,
@@ -295,7 +299,9 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CredentialEditPanelComponent,
     CredentialTypeEditPanelComponent,
     CredentialCategoryEditPanelComponent,
-    GroupByPipe
+    GroupByPipe,
+    // System Diagnostics Components
+    SystemDiagnosticsComponent
   ]
 })
 export class DashboardsModule { }

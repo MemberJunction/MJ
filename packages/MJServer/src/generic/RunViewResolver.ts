@@ -1,11 +1,12 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { KeyValuePairOutputType } from './KeyInputOutputTypes.js';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 /********************************************************************************
  * The PURPOSE of this resolver is to provide a generic way to run a view and return the results.
@@ -383,10 +384,75 @@ export class RunViewGenericInput {
   StartRow?: number;
 }
 
+//****************************************************************************
+// INPUT/OUTPUT TYPES for RunViewsWithCacheCheck
+//****************************************************************************
+
+@InputType()
+export class RunViewCacheStatusInput {
+  @Field(() => String, { description: 'The maximum __mj_UpdatedAt value from cached results' })
+  maxUpdatedAt: string;
+
+  @Field(() => Int, { description: 'The number of rows in cached results' })
+  rowCount: number;
+}
+
+@InputType()
+export class RunViewWithCacheCheckInput {
+  @Field(() => RunDynamicViewInput, { description: 'The RunView parameters' })
+  params: RunDynamicViewInput;
+
+  @Field(() => RunViewCacheStatusInput, {
+    nullable: true,
+    description: 'Optional cache status - if provided, server will check if cache is current'
+  })
+  cacheStatus?: RunViewCacheStatusInput;
+}
+
+@ObjectType()
+export class RunViewWithCacheCheckResultOutput {
+  @Field(() => Int, { description: 'The index of this view in the batch request' })
+  viewIndex: number;
+
+  @Field(() => String, { description: "'current', 'stale', or 'error'" })
+  status: string;
+
+  @Field(() => [RunViewGenericResultRow], {
+    nullable: true,
+    description: 'Fresh results - only populated when status is stale'
+  })
+  Results?: RunViewGenericResultRow[];
+
+  @Field(() => String, { nullable: true, description: 'Max __mj_UpdatedAt from results when stale' })
+  maxUpdatedAt?: string;
+
+  @Field(() => Int, { nullable: true, description: 'Row count of results when stale' })
+  rowCount?: number;
+
+  @Field(() => String, { nullable: true, description: 'Error message if status is error' })
+  errorMessage?: string;
+}
+
+@ObjectType()
+export class RunViewsWithCacheCheckOutput {
+  @Field(() => Boolean, { description: 'Whether the overall operation succeeded' })
+  success: boolean;
+
+  @Field(() => [RunViewWithCacheCheckResultOutput], { description: 'Results for each view in the batch' })
+  results: RunViewWithCacheCheckResultOutput[];
+
+  @Field(() => String, { nullable: true, description: 'Overall error message if success is false' })
+  errorMessage?: string;
+}
+
+//****************************************************************************
+// OUTPUT TYPES for RunView Results
+//****************************************************************************
+
 @ObjectType()
 export class RunViewResultRow {
-  @Field(() => [KeyValuePairOutputType], { 
-    description: 'Primary key values for the record' 
+  @Field(() => [KeyValuePairOutputType], {
+    description: 'Primary key values for the record'
   })
   PrimaryKey: KeyValuePairOutputType[];
 
@@ -768,6 +834,94 @@ export class RunViewResolver extends ResolverBase {
     } catch (err) {
       LogError(err);
       return null;
+    }
+  }
+
+  /**
+   * RunViewsWithCacheCheck - Smart cache validation for batch RunViews.
+   * For each view, if cacheStatus is provided, the server checks if the cache is current.
+   * If current, returns status='current' with no data. If stale, returns status='stale' with fresh data.
+   */
+  @Query(() => RunViewsWithCacheCheckOutput)
+  async RunViewsWithCacheCheck(
+    @Arg('input', () => [RunViewWithCacheCheckInput]) input: RunViewWithCacheCheckInput[],
+    @Ctx() { providers, userPayload }: AppContext
+  ): Promise<RunViewsWithCacheCheckOutput> {
+    try {
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+
+      // Cast provider to SQLServerDataProvider to access RunViewsWithCacheCheck method
+      const sqlProvider = provider as unknown as SQLServerDataProvider;
+      if (!sqlProvider.RunViewsWithCacheCheck) {
+        throw new Error('Provider does not support RunViewsWithCacheCheck');
+      }
+
+      // Convert GraphQL input types to core types
+      const coreParams: RunViewWithCacheCheckParams[] = input.map(item => ({
+        params: {
+          EntityName: item.params.EntityName,
+          ExtraFilter: item.params.ExtraFilter,
+          OrderBy: item.params.OrderBy,
+          Fields: item.params.Fields,
+          UserSearchString: item.params.UserSearchString,
+          ExcludeUserViewRunID: item.params.ExcludeUserViewRunID,
+          OverrideExcludeFilter: item.params.OverrideExcludeFilter,
+          IgnoreMaxRows: item.params.IgnoreMaxRows,
+          MaxRows: item.params.MaxRows,
+          ForceAuditLog: item.params.ForceAuditLog,
+          AuditLogDescription: item.params.AuditLogDescription,
+          ResultType: (item.params.ResultType || 'simple') as 'simple' | 'entity_object' | 'count_only',
+          StartRow: item.params.StartRow,
+        },
+        cacheStatus: item.cacheStatus ? {
+          maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+          rowCount: item.cacheStatus.rowCount,
+        } : undefined,
+      }));
+
+      const response = await sqlProvider.RunViewsWithCacheCheck(coreParams, userPayload.userRecord);
+
+      // Transform results to include processed data rows
+      const transformedResults: RunViewWithCacheCheckResultOutput[] = response.results.map((result, index) => {
+        const inputItem = input[index];
+        const entity = provider.Entities.find(e => e.Name === inputItem.params.EntityName);
+
+        if (result.status === 'stale' && result.results && entity) {
+          // Process raw data into GraphQL-compatible format
+          const processedRows = this.processRawData(result.results as Record<string, unknown>[], entity.ID, entity);
+          return {
+            viewIndex: result.viewIndex,
+            status: result.status,
+            Results: processedRows,
+            maxUpdatedAt: result.maxUpdatedAt,
+            rowCount: result.rowCount,
+            errorMessage: result.errorMessage,
+          };
+        }
+
+        return {
+          viewIndex: result.viewIndex,
+          status: result.status,
+          Results: undefined,
+          maxUpdatedAt: result.maxUpdatedAt,
+          rowCount: result.rowCount,
+          errorMessage: result.errorMessage,
+        };
+      });
+
+      return {
+        success: response.success,
+        results: transformedResults,
+        errorMessage: response.errorMessage,
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      LogError(err);
+      return {
+        success: false,
+        results: [],
+        errorMessage,
+      };
     }
   }
 

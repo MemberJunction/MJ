@@ -41,10 +41,8 @@ export class AppComponent implements OnInit {
       const wsurl: string = environment.GRAPHQL_WS_URI;
 
       try {
-        console.log('Setting up GraphQL client...');
         const start = Date.now();
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
-          console.log('[GraphQL] Token expired, refreshing...');
           const refresh$ = await this.authBase.refresh();
           const claims = await lastValueFrom(refresh$);
           // Auth0 uses __raw, MSAL uses idToken
@@ -55,29 +53,13 @@ export class AppComponent implements OnInit {
             throw new Error('Failed to refresh authentication token');
           }
 
-          console.log('[GraphQL] Token refreshed successfully');
           return token;
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
         const end = Date.now();
-        console.log(`GraphQL Client Setup took ${end - start}ms`);
+        console.log(`Client Setup Complete:  ${end - start}ms`);
 
-        // const testUrl = 'http://localhost:4050/'
-        // const testwSUrl = 'ws://localhost:4050/'
-        // const c2 = new GraphQLProviderConfigData(token, testUrl, testwSUrl, async () => {
-        //   const refresh$ = await this.authBase.refresh();
-        //   const claims = await lastValueFrom(refresh$);
-        //   const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
-        //   return token;
-        // }, environment.MJ_CORE_SCHEMA_NAME);
-        // const g2 = new GraphQLDataProvider();
-        // await g2.Config(c2, true);
-        // console.log(g2.Entities);
-
-        const refreshStart = Date.now();
         await SharedService.RefreshData(true);
-        const refreshEnd = Date.now();
-        console.log(`GetAllMetadata() took ${refreshEnd - refreshStart}ms`);
 
         // Check to see if the user has access... 
         const md = new Metadata();

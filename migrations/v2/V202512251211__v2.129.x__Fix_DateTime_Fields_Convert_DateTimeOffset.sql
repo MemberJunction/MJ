@@ -42,7 +42,7 @@ ALTER TABLE [${flyway:defaultSchema}].[RecordMergeLog] ALTER COLUMN [ProcessingS
 ALTER TABLE [${flyway:defaultSchema}].[RecordMergeLog] ADD CONSTRAINT [DF_RecordMergeLog_StartedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [ProcessingStartedAt];
 
 -- TestRunFeedback.ReviewedAt
-ALTER TABLE [${flyway:defaultSchema}].[TestRunFeedback] DROP CONSTRAINT [DF__TestRunFe__Revie__5952B50F];
+ALTER TABLE [${flyway:defaultSchema}].[TestRunFeedback] DROP CONSTRAINT [DF__TestRunFe__Revie__3C6170A6];
 ALTER TABLE [${flyway:defaultSchema}].[TestRunFeedback] ALTER COLUMN [ReviewedAt] datetimeoffset(7) NOT NULL;
 ALTER TABLE [${flyway:defaultSchema}].[TestRunFeedback] ADD CONSTRAINT [DF_TestRunFeedback_ReviewedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [ReviewedAt];
 

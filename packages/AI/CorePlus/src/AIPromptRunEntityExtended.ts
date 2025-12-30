@@ -1,6 +1,6 @@
 import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BaseEntity } from '@memberjunction/core';
-import { AIPromptRunEntity } from '../generated/entity_subclasses';
+import { AIPromptRunEntity } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 
 /**

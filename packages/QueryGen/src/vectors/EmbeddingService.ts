@@ -49,9 +49,9 @@ export class EmbeddingService {
     ]);
 
     return {
-      userQuestion: userQuestionResult.result.vector,
-      description: descResult.result.vector,
-      technicalDescription: techDescResult.result.vector,
+      userQuestion: userQuestionResult?.result.vector || [],
+      description: descResult?.result.vector || [],
+      technicalDescription: techDescResult?.result.vector || [],
     };
   }
 

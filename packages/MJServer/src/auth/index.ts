@@ -14,7 +14,6 @@ export { IAuthProvider } from './IAuthProvider.js';
 export { AuthProviderFactory } from './AuthProviderFactory.js';
 
 // This is a hard-coded forever constant due to internal migrations
-const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
 
 class MissingAuthError extends Error {
   constructor() {
@@ -171,7 +170,7 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
 };
 
 export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
-  const systemUser = UserCache.Instance.Users.find((u) => u.ID.toLowerCase() === SYSTEM_USER_ID.toLowerCase());
+  const systemUser = UserCache.Instance.GetSystemUser();
   if (!systemUser) {
     if (dataSource && attemptCacheUpdateIfNeeded) {
       console.warn(`System user not found in cache. Updating cache in attempt to find the user...`);
@@ -179,7 +178,7 @@ export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCach
       await refreshUserCache(dataSource);
       return getSystemUser(dataSource, false); // try one more time but do not update cache next time if not found
     }
-    throw new Error(`System user ID '${SYSTEM_USER_ID}' not found in database`);
+    throw new Error(`System user ID '${UserCache.Instance.SYSTEM_USER_ID}' not found in database`);
   }
   return systemUser;
 };

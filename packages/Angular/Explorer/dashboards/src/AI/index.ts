@@ -3,9 +3,9 @@ export * from './services/ai-instrumentation.service';
 
 // Main Components
 export * from './components/execution-monitoring.component';
-export * from './components/prompts/prompt-management-v2.component';
+export * from './components/prompts/prompt-management.component';
 export * from './components/agents/agent-configuration.component';
-export * from './components/models/model-management-v2.component';
+export * from './components/models/model-management.component';
 export * from './components/system/system-configuration.component';
 
 // Widget Components

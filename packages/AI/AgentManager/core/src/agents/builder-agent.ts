@@ -2,7 +2,7 @@ import { BaseAgent } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AgentSpec } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
-import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentSpecSync } from '../agent-spec-sync';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';

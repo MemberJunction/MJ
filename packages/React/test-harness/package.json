@@ -27,6 +27,7 @@
     "@babel/traverse": "^7.23.0",
     "@babel/types": "^7.23.0",
     "@memberjunction/ai-vectors-memory": "2.128.0",
+    "@memberjunction/ai-core-plus": "2.128.0",
     "@memberjunction/aiengine": "2.128.0",
     "@memberjunction/core": "2.128.0",
     "@memberjunction/core-entities": "2.128.0",

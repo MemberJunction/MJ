@@ -19,6 +19,7 @@ export class TestRunFormComponent extends BaseFormComponent {
             { sectionKey: 'runMetadata', sectionName: 'Run Metadata', isExpanded: false },
             { sectionKey: 'inputExpectedOutput', sectionName: 'Input & Expected Output', isExpanded: false },
             { sectionKey: 'resultAnalysis', sectionName: 'Result Analysis', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRunFeedbacks', sectionName: 'MJ: Test Run Feedbacks', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },

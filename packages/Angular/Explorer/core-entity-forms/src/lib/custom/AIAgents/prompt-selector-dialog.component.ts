@@ -3,7 +3,7 @@ import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { FormControl } from '@angular/forms';
 import { RunView } from '@memberjunction/core';
-import { AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface PromptSelectorConfig {
