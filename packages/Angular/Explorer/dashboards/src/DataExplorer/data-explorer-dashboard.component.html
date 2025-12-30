@@ -483,6 +483,16 @@
   <!-- Detail Panel (Right - Slide In) -->
   @if (state.detailPanelOpen && selectedRecord) {
     <div class="detail-panel" [style.width.px]="state.detailPanelWidth">
+      <!-- Detail Panel Actions Bar -->
+      <div class="detail-panel-actions">
+        <button
+          class="detail-action-btn"
+          (click)="openListManagementDialog()"
+          title="Add to List">
+          <i class="fa-solid fa-list-check"></i>
+          <span>Add to List</span>
+        </button>
+      </div>
       <mj-entity-record-detail-panel
         [entity]="detailPanelEntity"
         [record]="selectedRecord"
@@ -525,4 +535,14 @@
       <kendo-excelexport-column [field]="col.Name" [title]="col.DisplayName"></kendo-excelexport-column>
     }
   </kendo-excelexport>
+
+  <!-- List Management Dialog -->
+  @if (showListManagementDialog && listManagementConfig) {
+    <mj-list-management-dialog
+      [config]="listManagementConfig"
+      [visible]="showListManagementDialog"
+      (complete)="onListManagementComplete($event)"
+      (cancel)="onListManagementCancel()">
+    </mj-list-management-dialog>
+  }
 </div>

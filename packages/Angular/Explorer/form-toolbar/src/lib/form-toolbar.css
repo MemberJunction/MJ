@@ -196,3 +196,27 @@
     padding-bottom: 5px;
     align-items: center;
 }
+
+/* List button with count badge */
+.toolbar-container button.list-button {
+    position: relative;
+}
+
+.list-count-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+    border: 2px solid #f9fafb;
+}

@@ -30,6 +30,7 @@ import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeep
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -161,6 +162,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public exportData: any[] = [];
   public exportColumns: { Name: string; DisplayName: string }[] = [];
   public exportFileName: string = 'export.xlsx';
+
+  // List management
+  public showListManagementDialog: boolean = false;
+  public listManagementConfig: ListManagementDialogConfig | null = null;
 
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -2068,6 +2073,73 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   get isAtHomeLevel(): boolean {
     return !this.selectedEntity;
+  }
+
+  // ========================================
+  // LIST MANAGEMENT
+  // ========================================
+
+  /**
+   * Open the list management dialog for the currently selected record
+   */
+  public openListManagementDialog(): void {
+    if (!this.selectedEntity || !this.selectedRecord) {
+      return;
+    }
+
+    const recordId = this.selectedRecord.PrimaryKey.ToConcatenatedString();
+    const recordName = this.getRecordDisplayName(this.selectedRecord);
+
+    this.listManagementConfig = {
+      mode: 'manage',
+      entityId: this.selectedEntity.ID,
+      entityName: this.selectedEntity.Name,
+      recordIds: [recordId],
+      recordDisplayNames: [recordName],
+      allowCreate: true,
+      allowRemove: true,
+      showMembership: true,
+      dialogTitle: `Manage Lists for "${recordName}"`
+    };
+
+    this.showListManagementDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle completion of the list management dialog
+   */
+  public onListManagementComplete(result: ListManagementResult): void {
+    this.showListManagementDialog = false;
+    this.listManagementConfig = null;
+
+    if (result.action === 'apply') {
+      const addedCount = result.added.length;
+      const removedCount = result.removed.length;
+
+      if (addedCount > 0 || removedCount > 0) {
+        let message = '';
+        if (addedCount > 0) {
+          message += `Added to ${addedCount} list(s)`;
+        }
+        if (removedCount > 0) {
+          if (message) message += ', ';
+          message += `Removed from ${removedCount} list(s)`;
+        }
+        this.showNotification(message, 'success', 2500);
+      }
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle cancellation of the list management dialog
+   */
+  public onListManagementCancel(): void {
+    this.showListManagementDialog = false;
+    this.listManagementConfig = null;
+    this.cdr.detectChanges();
   }
 }
 

@@ -99,6 +99,7 @@ import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { CommunicationDashboardComponent } from './Communication/communication-dashboard.component';
 import { CommunicationMonitorResourceComponent } from './Communication/communication-monitor-resource.component';
 import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
@@ -241,7 +242,8 @@ import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnosti
     ExplorerSettingsModule,
     SharedGenericModule,
     FilterBuilderModule,
-    EntityRelationshipDiagramModule
+    EntityRelationshipDiagramModule,
+    ListManagementModule
   ],
   providers: [
     AIInstrumentationService,
