@@ -1,4 +1,4 @@
-import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport, RunQuery, SetProvider } from "@memberjunction/core";
+import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport, RunQuery, SetProvider, StartupManager } from "@memberjunction/core";
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 import { SQLServerProviderConfigData } from "./types";
 import * as sql from 'mssql';
@@ -31,8 +31,10 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData):
                     }
                 }, config.CheckRefreshIntervalSeconds * 1000)
             }
+
+            await StartupManager.Instance.Startup();
     
-            return provider
+            return provider;
         }
         else {
             //pool is not connected, so wait for it

@@ -4,7 +4,7 @@ import {
   SingleRecordComponent,
   AuthGuardService as AuthGuard
 } from './public-api';
-import { LogError, Metadata } from '@memberjunction/core';
+import { LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
@@ -150,6 +150,8 @@ export class ResourceResolver implements Resolve<void> {
         take(1)
       )
     );
+
+    await StartupManager.Instance.Startup();
   }
 
   async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {

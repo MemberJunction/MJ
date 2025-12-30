@@ -182,10 +182,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Start the loading animation with cycling messages
     this.startLoadingAnimation();
 
-    await StartupManager.Instance.Startup();          
-
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
+
+    await StartupManager.Instance.Startup();          
 
     // Get current user
     const md = new Metadata();
