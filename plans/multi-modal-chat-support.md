@@ -671,3 +671,25 @@ The existing provider implementations already handle ChatMessageContentBlock arr
 4. **Deduplication** - Detect and reuse identical files
 5. **Compression** - Auto-compress images before storage
 6. **CDN integration** - Serve attachments via CDN for performance
+
+---
+
+## Implementation Progress
+
+### Completed
+- [x] **Phase 1**: Database migration created (`V202512301826__v2.130.x_Multi_Modal_Chat_Support.sql`)
+- [x] **Phase 2**: Core types extended (`chat.types.ts` - serialization utilities)
+- [x] **Phase 2**: Anthropic provider updated with vision support
+- [x] **Phase 3**: ConversationUtility extended with attachment methods and types
+- [x] **Phase 4**: ConversationAttachmentService created
+- [x] **Phase 5.1**: MentionEditorComponent updated with paste/drag-drop/file-picker
+- [x] **Phase 5.2**: ImageViewerComponent created for full-size display
+- [x] **Phase 5.3**: MessageItemComponent updated for attachment thumbnails
+- [x] **Phase 5.4**: MessageInputBoxComponent updated for attachment flow
+
+### In Progress
+- [ ] **Phase 6**: AI agent execution integration (passing attachments to providers)
+
+### Pending
+- [ ] Run CodeGen after migration to generate entities
+- [ ] E2E testing of full attachment flow

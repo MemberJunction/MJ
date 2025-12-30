@@ -67,6 +67,39 @@
           }
         </div>
 
+        <!-- Message Attachments -->
+        @if (hasAttachments) {
+          <div class="message-attachments">
+            @for (attachment of attachments; track attachment.id) {
+              <div class="attachment-item"
+                   [class.image-attachment]="attachment.type === 'Image'"
+                   (click)="onAttachmentClick(attachment)">
+                @if (attachment.type === 'Image') {
+                  <img
+                    [src]="attachment.thumbnailUrl || attachment.contentUrl"
+                    [alt]="attachment.fileName || 'Image attachment'"
+                    class="attachment-thumbnail"
+                    loading="lazy">
+                  <div class="attachment-overlay">
+                    <i class="fas fa-expand"></i>
+                  </div>
+                } @else {
+                  <div class="attachment-file">
+                    <i class="fas"
+                       [ngClass]="{
+                         'fa-file-video': attachment.type === 'Video',
+                         'fa-file-audio': attachment.type === 'Audio',
+                         'fa-file': attachment.type === 'Document'
+                       }"></i>
+                    <span class="file-name">{{ attachment.fileName || 'File' }}</span>
+                    <span class="file-size">{{ formatFileSize(attachment.sizeBytes) }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
         <!-- Artifact Message Card -->
         @if (hasArtifact && artifact && artifactVersion) {
           <div class="artifact-wrapper" [class.system-artifact]="isSystemArtifact">
