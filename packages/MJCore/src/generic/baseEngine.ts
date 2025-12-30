@@ -118,6 +118,34 @@ export interface ConfigExOptions {
 }
 
 /**
+ * Event emitted when engine data changes (e.g., after a refresh triggered by entity save/delete).
+ * Subscribe to an engine's DataChange$ observable to react to data updates.
+ */
+export interface EngineDataChangeEvent {
+    /**
+     * The configuration that was refreshed. Contains PropertyName, EntityName, DatasetName, etc.
+     */
+    config: BaseEnginePropertyConfig;
+    /**
+     * The type of change that triggered this event.
+     * - 'refresh': Full data reload from database (via RunView)
+     * - 'add': Single entity was added to the array (immediate mutation)
+     * - 'update': Single entity was updated in the array (immediate mutation)
+     * - 'delete': Single entity was removed from the array (immediate mutation)
+     */
+    changeType: 'refresh' | 'add' | 'update' | 'delete';
+    /**
+     * The current data array. This is the same data now available on the engine property.
+     */
+    data: unknown[];
+    /**
+     * For 'add', 'update', or 'delete' events, this is the entity that was affected.
+     * For 'refresh' events, this is undefined.
+     */
+    affectedEntity?: BaseEntity;
+}
+
+/**
  * Abstract base class for any engine-style class which executes work on behalf of a caller typically using a provider-style architecture with plug-ins. This base class
  * provides a mechanism for loading metadata from the database and caching it for use by the engine. Subclasses must implement the Config abstract method and within that
  * generally it is recommended to call the Load method to load the metadata. Subclasses can also override the AdditionalLoading method to perform additional loading tasks.
@@ -132,12 +160,59 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
+    private _dataChange$ = new Subject<EngineDataChangeEvent>();
 
     /**
      * While the BaseEngine class is a singleton, normally, it is possible to have multiple instances of the class in an application if the class is used in multiple contexts that have different providers.
      */
     public constructor() {
         super();
+    }
+
+    /**
+     * Observable that emits when any data property changes due to a refresh.
+     * Subscribe to this to react to engine data updates (e.g., sync Angular observables).
+     *
+     * Events are emitted after data is refreshed in response to BaseEntity save/delete events.
+     * The event includes the full config and the new data array.
+     *
+     * @example
+     * ```typescript
+     * UserInfoEngine.Instance.DataChange$.subscribe(event => {
+     *   if (event.config.PropertyName === 'UserApplications') {
+     *     // Sync local state with engine's updated data
+     *     this.refreshLocalAppList();
+     *   }
+     * });
+     * ```
+     */
+    public get DataChange$(): Observable<EngineDataChangeEvent> {
+        return this._dataChange$.asObservable();
+    }
+
+    /**
+     * Notify listeners that a data property has changed.
+     * Called automatically by HandleSingleViewResult after data refresh and by applyImmediateMutation for array operations.
+     * Subclasses can also call this manually when modifying data arrays directly.
+     *
+     * @param config - The configuration for the property that changed
+     * @param data - The current data array
+     * @param changeType - The type of change: 'refresh', 'add', 'update', or 'delete'
+     * @param affectedEntity - For add/update/delete, the entity that was affected
+     */
+    protected NotifyDataChange(
+        config: BaseEnginePropertyConfig,
+        data: unknown[],
+        changeType: 'refresh' | 'add' | 'update' | 'delete' = 'refresh',
+        affectedEntity?: BaseEntity
+    ): void {
+        const event: EngineDataChangeEvent = {
+            config,
+            changeType,
+            data,
+            affectedEntity
+        };
+        this._dataChange$.next(event);
     }
 
     /**
@@ -378,24 +453,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * This method handles the individual base entity event and just checks to see if it is a delete or save event and if so, debounces it. 
-     * Override this method if you want to have a different handling for the filtering of events that are debounced or if you don't want to debounce
-     * at all you can do that in an override of this method.
-     * @param event 
+     * This method handles the individual base entity event. For events that can use immediate array mutations
+     * (no Filter, OrderBy, or AdditionalLoading override), processing happens synchronously without debounce.
+     * For events that require full view refresh, debouncing is applied to batch rapid successive changes.
+     *
+     * Override this method if you want to have a different handling for the filtering of events that are debounced
+     * or if you don't want to debounce at all you can do that in an override of this method.
+     * @param event
      */
     protected async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
             if (event.type === 'delete' || event.type === 'save') {
                 const eName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
-                const matchingAutoRefreshConfig: boolean = this.Configs.some((config: BaseEnginePropertyConfig) => {
-                    return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === eName
+                const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+                    return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === eName;
                 });
 
-                if (matchingAutoRefreshConfig){
+                if (matchingConfigs.length === 0) {
+                    return true;
+                }
+
+                // Check if ALL matching configs can use immediate mutation
+                const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
+
+                if (allCanUseImmediate) {
+                    // Process immediately without debounce - synchronous array mutations
+                    for (const config of matchingConfigs) {
+                        this.applyImmediateMutation(config, event);
+                    }
+                    return true;
+                } else {
+                    // At least one config requires full refresh, use debouncing
                     return this.DebounceIndividualBaseEntityEvent(event);
                 }
             }
-            
+
             return true;
         }
         catch (e) {
@@ -445,43 +537,284 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
     }
     
-    private _entityEventDebounceTime: number = 5000;// Default debounce time in milliseconds (5 seconds)
+    private _entityEventDebounceTime: number = 1500; // Default debounce time in milliseconds (1.5 seconds)
     /**
-     * Overridable property to set the debounce time for entity events. Default is 5000 milliseconds (5 seconds).
+     * Overridable property to set the debounce time for entity events. Default is 1500 milliseconds (1.5 seconds).
+     * This debounce time is used when immediate array mutations cannot be applied (e.g., when Filter, OrderBy,
+     * or AdditionalLoading overrides are present) and a full view refresh is required.
+     *
+     * Note: When immediate mutations ARE possible (no Filter, OrderBy, or AdditionalLoading override),
+     * updates happen synchronously without any debounce delay.
      */
     protected get EntityEventDebounceTime(): number {
-        return this._entityEventDebounceTime; 
+        return this._entityEventDebounceTime;
     }
     
     /**
      * This method does the actual work of processing the entity event. It is not directly called from the event handler because we want to first debounce the events
      * which also introduces a delay which is usually desirable so that our processing is typically outside of the scope of any transaction processing that would have
      * originated the event.
-     * 
+     *
      * This is the best method to override if you want to change the actual processing of an entity event but do NOT want to modify the debouncing behavior.
      */
     protected async ProcessEntityEvent(event: BaseEntityEvent): Promise<void> {
         try {
             const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
             let refreshCount = 0;
+
             for (const config of this.Configs) {
                 if (config.AutoRefresh && config.Type === 'entity' && config.EntityName?.trim().toLowerCase() === entityName) {
-                    // LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
-                    await this.LoadSingleConfig(config, this._contextUser);
-                    refreshCount++;
+                    // For UPDATE events, check if the exact object is already in our array.
+                    // If so, it's already been mutated in place - no need to refresh.
+                    if (event.type === 'save' && event.saveSubType === 'update') {
+                        if (this.isEntityAlreadyInArray(config, event.baseEntity)) {
+                            // Object already in array and updated in place, skip refresh
+                            // LogStatus(`>>> Skipping refresh for ${config.PropertyName} - object already in array`);
+                            continue;
+                        }
+                    }
+
+                    // For CREATE events, check if the entity was already added to our array
+                    // (e.g., by engine methods like InstallApplication that manually push).
+                    if (event.type === 'save' && event.saveSubType === 'create') {
+                        if (this.isEntityAlreadyInArray(config, event.baseEntity)) {
+                            // Object already in array (manually added), skip refresh
+                            // LogStatus(`>>> Skipping refresh for ${config.PropertyName} - newly created object already in array`);
+                            continue;
+                        }
+                    }
+
+                    // For DELETE events, check if the entity was already removed from our array
+                    // (e.g., by engine methods like UninstallApplication that manually splice).
+                    // Also check by primary key since the object reference may still exist but be removed.
+                    if (event.type === 'delete') {
+                        if (!this.isEntityInArrayByRefOrKey(config, event.baseEntity)) {
+                            // Object not in array (already removed), skip refresh
+                            // LogStatus(`>>> Skipping refresh for ${config.PropertyName} - deleted object not in array`);
+                            continue;
+                        }
+                    }
+
+                    // Check if we can use immediate array mutation instead of running a view
+                    if (this.canUseImmediateMutation(config)) {
+                        // LogStatus(`>>> Immediate mutation for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}`);
+                        this.applyImmediateMutation(config, event);
+                    } else {
+                        // LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
+                        await this.LoadSingleConfig(config, this._contextUser);
+                        refreshCount++;
+                    }
                 }
             }
+
+            // Only call AdditionalLoading if we did full refreshes (not for immediate mutations)
+            // Immediate mutations don't require AdditionalLoading since the entity object is already complete
             if (refreshCount > 0) {
-                // we need to call AdditionalLoading here - because in many cases engine sub-classes do various kinds of data mashups 
+                // we need to call AdditionalLoading here - because in many cases engine sub-classes do various kinds of data mashups
                 // after we have loaded - for example the TemplateEngine takes the TemplateContents and TemplateParams and stuffs them
                 // into arrays in each template to make it easier to get Params/Contents for each Template. Such operations are common
                 // and need to be done after the initial load and after any refreshes.
                 await this.AdditionalLoading(this._contextUser);
-            }    
+            }
         }
         catch (e) {
             LogError(e);
         }
+    }
+
+    /**
+     * Checks if the exact entity object reference is already in the config's data array.
+     * Used to skip unnecessary refreshes for UPDATE events where the object was mutated in place.
+     *
+     * @param config - The configuration to check
+     * @param entity - The entity to look for
+     * @returns true if the exact object reference is already in the array
+     */
+    protected isEntityAlreadyInArray(config: BaseEnginePropertyConfig, entity: BaseEntity): boolean {
+        const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
+        if (!currentData) {
+            return false;
+        }
+        return currentData.indexOf(entity) >= 0;
+    }
+
+    /**
+     * Checks if an entity is in the config's data array by object reference OR by primary key match.
+     * Used for DELETE events where we need to know if the entity still exists in the array.
+     * The object reference may still exist (entity.Delete() just marks it deleted), but if it was
+     * manually spliced out by engine code, we check by primary key as fallback.
+     *
+     * @param config - The configuration to check
+     * @param entity - The entity to look for
+     * @returns true if the entity is in the array (by reference or by primary key)
+     */
+    protected isEntityInArrayByRefOrKey(config: BaseEnginePropertyConfig, entity: BaseEntity): boolean {
+        const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
+        if (!currentData) {
+            return false;
+        }
+
+        // First check by object reference
+        if (currentData.indexOf(entity) >= 0) {
+            return true;
+        }
+
+        // Fallback: check by primary key
+        return this.findEntityIndexByPrimaryKeys(currentData, entity) >= 0;
+    }
+
+    /**
+     * Determines if an immediate array mutation can be used instead of running a full view refresh.
+     * Immediate mutations are only safe when:
+     * 1. The config has no Filter (no server-side filtering that might exclude the entity)
+     * 2. The config has no OrderBy (no server-side ordering that would need to be maintained)
+     * 3. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
+     *
+     * @param config - The configuration to check
+     * @returns true if immediate mutation is safe, false if a full view refresh is needed
+     */
+    protected canUseImmediateMutation(config: BaseEnginePropertyConfig): boolean {
+        // If there's a filter, we can't safely do immediate mutations because:
+        // - For creates: the new entity might not match the filter
+        // - For updates: the entity might now match or no longer match the filter
+        if (config.Filter) {
+            return false;
+        }
+
+        // If there's an OrderBy, we can't safely do immediate mutations because:
+        // - For creates: we'd need to insert at the correct position
+        // - For updates: the entity might need to move to a different position
+        if (config.OrderBy) {
+            return false;
+        }
+
+        // Check if AdditionalLoading is overridden in the subclass
+        // If it is, we need to run full refresh to ensure post-processing happens
+        if (this.hasAdditionalLoadingOverride()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Checks if the current instance has overridden the AdditionalLoading method.
+     * We do this by comparing the method to the base class's method.
+     *
+     * @returns true if AdditionalLoading is overridden, false if using the base implementation
+     */
+    protected hasAdditionalLoadingOverride(): boolean {
+        // Get the prototype chain to find the base class method
+        const baseProto = BaseEngine.prototype;
+        const instanceProto = Object.getPrototypeOf(this);
+
+        // If the instance's AdditionalLoading is different from the base class's,
+        // it means the subclass has overridden it
+        return instanceProto.AdditionalLoading !== baseProto.AdditionalLoading;
+    }
+
+    /**
+     * Applies an immediate array mutation based on the entity event type.
+     * This is faster than running a full view refresh for simple add/update/delete operations.
+     *
+     * @param config - The configuration for the property being mutated
+     * @param event - The entity event containing the affected entity and event type
+     */
+    protected applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): void {
+        const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
+        if (!currentData) {
+            // No existing array, nothing to mutate
+            return;
+        }
+
+        const entity = event.baseEntity;
+
+        if (event.type === 'save') {
+            if (event.saveSubType === 'create') {
+                // For create, first check if the exact object is already in the array
+                const existsByRef = currentData.indexOf(entity) >= 0;
+                if (existsByRef) {
+                    // Object already in array, nothing to do (already up to date)
+                    return;
+                }
+
+                // Check by composite primary key in case it was added with a different object reference
+                const indexByKey = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                if (indexByKey >= 0) {
+                    // Already exists by key, treat as update
+                    currentData[indexByKey] = entity;
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this.NotifyDataChange(config, currentData, 'update', entity);
+                } else {
+                    // Add the new entity to the array
+                    currentData.push(entity);
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this.NotifyDataChange(config, currentData, 'add', entity);
+                }
+            } else {
+                // Update: first check if the exact object is already in the array
+                const existsByRef = currentData.indexOf(entity) >= 0;
+                if (existsByRef) {
+                    // Object already in array and is the same reference, nothing to do
+                    return;
+                }
+
+                // Find by composite primary key and replace
+                const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                if (index >= 0) {
+                    currentData[index] = entity;
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this.NotifyDataChange(config, currentData, 'update', entity);
+                } else {
+                    // Entity not found in array - this shouldn't happen normally,
+                    // but if it does, add it (might have been created before we started listening)
+                    currentData.push(entity);
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this.NotifyDataChange(config, currentData, 'add', entity);
+                }
+            }
+        } else if (event.type === 'delete') {
+            // For delete, first try to find by object reference
+            let index = currentData.indexOf(entity);
+            if (index < 0) {
+                // Not found by reference, search by composite primary key
+                index = this.findEntityIndexByPrimaryKeys(currentData, entity);
+            }
+
+            if (index >= 0) {
+                currentData.splice(index, 1);
+                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                this.NotifyDataChange(config, currentData, 'delete', entity);
+            }
+        }
+    }
+
+    /**
+     * Finds an entity in the array by matching all primary key columns.
+     * Supports composite primary keys by comparing all PrimaryKey fields from EntityInfo.
+     *
+     * @param dataArray - The array of entities to search
+     * @param targetEntity - The entity to find (using its primary key values)
+     * @returns The index of the matching entity, or -1 if not found
+     */
+    protected findEntityIndexByPrimaryKeys(dataArray: BaseEntity[], targetEntity: BaseEntity): number {
+        const primaryKeys = targetEntity.EntityInfo.PrimaryKeys;
+        if (!primaryKeys || primaryKeys.length === 0) {
+            // Fallback to single PrimaryKey property if no PrimaryKeys defined
+            const pkValue = targetEntity.PrimaryKey.ToString();
+            return dataArray.findIndex(e => e.PrimaryKey.ToString() === pkValue);
+        }
+
+        // Get target entity's primary key values
+        const targetKeyValues = primaryKeys.map(pk => (targetEntity as unknown as Record<string, unknown>)[pk.Name]);
+
+        return dataArray.findIndex(e => {
+            // Compare all primary key values
+            return primaryKeys.every((pk, idx) => {
+                const entityValue = (e as unknown as Record<string, unknown>)[pk.Name];
+                return entityValue === targetKeyValues[idx];
+            });
+        });
     }
     
 
@@ -559,6 +892,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 (this as any)[config.PropertyName] = result.Results;
             }
             this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results });
+
+            // Notify listeners that this property's data has changed
+            this.NotifyDataChange(config, result.Results);
 
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);

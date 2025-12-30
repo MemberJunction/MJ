@@ -214,6 +214,7 @@ export class ResourceResolver implements Resolve<void> {
 
       // Find the app in metadata for nav item details
       const app = applications.find(a =>
+        a.Path.trim().toLowerCase() === appName.trim().toLowerCase()  ||
         a.Name.trim().toLowerCase() === appName.trim().toLowerCase()
       );
 

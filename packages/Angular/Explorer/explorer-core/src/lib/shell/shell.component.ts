@@ -249,8 +249,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Use combineLatest to wait for loading to complete before deciding there are no apps
     this.subscriptions.push(
       combineLatest([this.appManager.Applications, this.appManager.Loading]).subscribe(async ([apps, isLoading]) => {
-        console.log(`[ShellComponent] Applications subscription fired: apps.length=${apps.length}, isLoading=${isLoading}`);
-
         // Don't make decisions while still loading - wait for load to complete
         if (isLoading) {
           return;
@@ -270,7 +268,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           const routeAppPath = decodeURIComponent(appMatch[1]);
           // Find the app from the URL by Path (or Name for backwards compatibility)
           const urlApp = this.appManager.GetAppByPath(routeAppPath);
-          console.log(`[ShellComponent] Looking for app by path "${routeAppPath}": found=${!!urlApp}`);
 
           if (urlApp) {
             // Set the app from URL - takes precedence over workspace restoration
@@ -292,7 +289,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             return;
           } else {
             // App not found in user's list - check why and show appropriate dialog
-            console.log(`[ShellComponent] App not found in user's list, calling handleAppAccessError`);
             await this.handleAppAccessError(routeAppPath, apps);
             return;
           }
@@ -1549,7 +1545,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Prevent showing the dialog multiple times for the same app path
     // This can happen when the applications$ observable emits multiple times during reload
     if (this.pendingAppPath === appPath) {
-      console.log(`[ShellComponent] Skipping duplicate handleAppAccessError for "${appPath}"`);
       return;
     }
 
@@ -1686,19 +1681,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Install an app for the user and navigate to it
    */
   private async installAndNavigateToApp(appId: string): Promise<void> {
-    console.log(`[ShellComponent] installAndNavigateToApp: appId=${appId}`);
-
     // Clear pendingAppPath to allow fresh handling after installation
     this.pendingAppPath = null;
 
     try {
       const userApp = await this.appManager.InstallAppForUser(appId);
-      console.log(`[ShellComponent] InstallAppForUser result: ${userApp ? 'success' : 'failed'}`);
 
       if (userApp) {
         // App installed successfully - navigate to it
         const app = this.appManager.GetAppById(appId);
-        console.log(`[ShellComponent] GetAppById(${appId}): ${app ? app.Name : 'not found'}`);
 
         if (app) {
           await this.navigateToApp(app);

@@ -103,6 +103,7 @@ export class ApplicationManager {
   /**
    * Initialize the application manager by subscribing to the LoggedIn event.
    * Applications are loaded when the event fires, ensuring metadata is ready.
+   * Also subscribes to UserInfoEngine data changes to auto-sync when user apps change.
    */
   Initialize(): void {
     if (this.initialized) {
@@ -114,8 +115,59 @@ export class ApplicationManager {
       if (event.event === MJEventType.LoggedIn) {
         await StartupManager.Instance.Startup() // make sure this is done
         this.loadApplications();
+        this.subscribeToEngineChanges();
       }
     });
+  }
+
+  /**
+   * Subscribe to UserInfoEngine data changes to automatically sync our observables
+   * when UserApplication records are modified.
+   */
+  private subscribeToEngineChanges(): void {
+    const engine = UserInfoEngine.Instance;
+    engine.DataChange$.subscribe(event => {
+      // When UserApplications data changes in the engine, sync our observables
+      if (event.config.PropertyName === 'UserApplications') {
+        this.syncFromEngine();
+      }
+    });
+  }
+
+  /**
+   * Sync our BehaviorSubjects with the current data from UserInfoEngine.
+   * Called when the engine emits a data change event for UserApplications.
+   */
+  private syncFromEngine(): void {
+    const allApps = this.allApplications$.value;
+    const engine = UserInfoEngine.Instance;
+    const userApps = engine.UserApplications;
+
+    // Build a map for quick lookup
+    const appMap = new Map<string, BaseApplication>();
+    for (const app of allApps) {
+      appMap.set(app.ID, app);
+    }
+
+    // Build user's filtered and ordered app list
+    const userAppConfigs: UserAppConfig[] = [];
+    const activeApps: BaseApplication[] = [];
+
+    for (const userApp of userApps) {
+      const app = appMap.get(userApp.ApplicationID);
+      if (app && userApp.IsActive) {
+        userAppConfigs.push({
+          app,
+          userAppId: userApp.ID,
+          sequence: userApp.Sequence,
+          isActive: userApp.IsActive
+        });
+        activeApps.push(app);
+      }
+    }
+
+    this.userAppConfigs$.next(userAppConfigs);
+    this.applications$.next(activeApps);
   }
 
   /**
@@ -440,62 +492,42 @@ export class ApplicationManager {
    */
   async InstallAppForUser(appId: string): Promise<UserApplicationEntity | null> {
     const engine = UserInfoEngine.Instance;
-    const userApp = await engine.InstallApplication(appId);
-
-    if (userApp) {
-      // Reload user applications to update the local app list
-      await this.loadUserApplicationConfig();
-    }
-
-    return userApp;
+    // The engine will emit DataChange$ after the entity save triggers a refresh,
+    // which our subscribeToEngineChanges() handler will pick up and call syncFromEngine()
+    return await engine.InstallApplication(appId);
   }
 
   /**
    * Enable an existing but disabled UserApplication record.
    * Delegates to UserInfoEngine for the actual enabling.
+   * Sync happens automatically via DataChange$ subscription.
    */
   async EnableAppForUser(appId: string): Promise<boolean> {
     const engine = UserInfoEngine.Instance;
-    const success = await engine.EnableApplication(appId);
-
-    if (success) {
-      // Reload user applications to update the local app list
-      await this.loadUserApplicationConfig();
-    }
-
-    return success;
+    // The engine will emit DataChange$ after the entity save triggers a refresh
+    return await engine.EnableApplication(appId);
   }
 
   /**
    * Disable an application for the current user.
    * Delegates to UserInfoEngine for the actual disabling.
+   * Sync happens automatically via DataChange$ subscription.
    */
   async DisableAppForUser(appId: string): Promise<boolean> {
     const engine = UserInfoEngine.Instance;
-    const success = await engine.DisableApplication(appId);
-
-    if (success) {
-      // Reload user applications to update the local app list
-      await this.loadUserApplicationConfig();
-    }
-
-    return success;
+    // The engine will emit DataChange$ after the entity save triggers a refresh
+    return await engine.DisableApplication(appId);
   }
 
   /**
    * Uninstall an application for the current user.
    * Delegates to UserInfoEngine for the actual uninstallation.
+   * Sync happens automatically via DataChange$ subscription.
    */
   async UninstallAppForUser(appId: string): Promise<boolean> {
     const engine = UserInfoEngine.Instance;
-    const success = await engine.UninstallApplication(appId);
-
-    if (success) {
-      // Reload user applications to update the local app list
-      await this.loadUserApplicationConfig();
-    }
-
-    return success;
+    // The engine will emit DataChange$ after the entity delete triggers a refresh
+    return await engine.UninstallApplication(appId);
   }
 }
 
