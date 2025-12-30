@@ -85,7 +85,6 @@ Return **only high-confidence notes (≥70)** in this JSON structure:
   "notes": [
     {
       "type": "Preference",
-      "noteTypeId": "44444444-4444-4444-4444-444444444444",
       "agentId": null,
       "userId": "user-uuid-here",
       "companyId": null,
@@ -99,6 +98,8 @@ Return **only high-confidence notes (≥70)** in this JSON structure:
   ]
 }
 ```
+
+**Important**: The `type` field must be exactly one of: `Preference`, `Constraint`, `Context`, `Example`, or `Issue`. The system will automatically look up the corresponding note type ID.
 
 ## Quality Standards
 

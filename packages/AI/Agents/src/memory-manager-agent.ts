@@ -15,7 +15,6 @@ import { AIEngine } from '@memberjunction/aiengine';
  */
 interface ExtractedNote {
     type: 'Preference' | 'Constraint' | 'Context' | 'Example' | 'Issue';
-    noteTypeId: string;
     agentId?: string;
     userId?: string;
     companyId?: string;
@@ -179,6 +178,7 @@ export class MemoryManagerAgent extends BaseAgent {
     /**
      * Extract notes from conversation details using AI analysis.
      * Works at ConversationDetail level with user<->AI message pairs.
+     * Uses LLM-based deduplication to avoid adding redundant notes.
      */
     private async ExtractNotes(
         conversationDetails: ConversationDetailEntity[],
@@ -247,7 +247,63 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Filter by confidence threshold
-        return (result.result.notes || []).filter(n => n.confidence >= 70);
+        const candidateNotes = (result.result.notes || []).filter(n => n.confidence >= 70);
+
+        if (candidateNotes.length === 0) {
+            return [];
+        }
+
+        // Apply LLM-based deduplication (same pattern as examples)
+        const approvedNotes: ExtractedNote[] = [];
+
+        // Find deduplication prompt
+        const dedupePrompt = AIEngine.Instance.Prompts.find(p =>
+            p.Name === 'Memory Manager - Deduplicate Note' && p.Category === 'MJ: System'
+        );
+
+        for (const candidate of candidateNotes) {
+            // Find similar existing notes using semantic search
+            const similarNotes = await AIEngine.Instance.FindSimilarAgentNotes(
+                candidate.content,
+                candidate.agentId,
+                candidate.userId,
+                candidate.companyId,
+                5, // Top 5 similar
+                0.7 // 70% similarity threshold
+            );
+
+            // If deduplication prompt exists and similar notes found, ask LLM
+            if (dedupePrompt && similarNotes.length > 0) {
+                const dedupeParams = new AIPromptParams();
+                dedupeParams.prompt = dedupePrompt;
+                dedupeParams.data = {
+                    candidateNote: candidate,
+                    similarNotes: similarNotes.map(s => ({
+                        type: s.note.Type,
+                        content: s.note.Note,
+                        agentId: s.note.AgentID,
+                        userId: s.note.UserID,
+                        companyId: s.note.CompanyID,
+                        similarity: s.similarity
+                    }))
+                };
+                dedupeParams.contextUser = contextUser;
+
+                const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
+
+                if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
+                    approvedNotes.push(candidate);
+                    LogStatus(`Memory Manager: Approved note - ${dedupeResult.result.reason}`);
+                } else {
+                    LogStatus(`Memory Manager: Skipped duplicate note - ${dedupeResult.result?.reason || 'too similar to existing notes'}`);
+                }
+            } else {
+                // No similar notes found or no deduplication prompt, add the note
+                approvedNotes.push(candidate);
+            }
+        }
+
+        return approvedNotes;
     }
 
     /**
@@ -362,6 +418,13 @@ export class MemoryManagerAgent extends BaseAgent {
 
         for (const extracted of extractedNotes) {
             try {
+                // Look up the AgentNoteTypeID from the type name
+                const noteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName(extracted.type);
+                if (!noteTypeId) {
+                    LogError(`Memory Manager: Unknown note type "${extracted.type}" - skipping note creation`);
+                    continue;
+                }
+
                 // Check if we should merge with existing
                 if (extracted.mergeWithExistingId) {
                     const existingNote = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', contextUser);
@@ -369,6 +432,7 @@ export class MemoryManagerAgent extends BaseAgent {
                         // Update existing note
                         existingNote.Note = extracted.content;
                         existingNote.Type = extracted.type;
+                        existingNote.AgentNoteTypeID = noteTypeId;
                         await existingNote.Save();
                         created++;
                     }
@@ -378,7 +442,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     note.AgentID = extracted.agentId || null;
                     note.UserID = extracted.userId || null;
                     note.CompanyID = extracted.companyId || null;
-                    note.AgentNoteTypeID = extracted.noteTypeId;
+                    note.AgentNoteTypeID = noteTypeId;
                     note.Type = extracted.type;
                     note.Note = extracted.content;
                     note.IsAutoGenerated = true;
