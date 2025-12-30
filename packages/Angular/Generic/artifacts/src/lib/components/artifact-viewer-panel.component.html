@@ -27,7 +27,16 @@
                 <span class="version-number">v{{ version.VersionNumber }}</span>
                 <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
                 @if (version.VersionNumber === selectedVersionNumber) {
-                  <i class="fas fa-check"></i>
+                  <i class="fas fa-check version-check"></i>
+                }
+                <!-- Delete button for artifact owner (only if more than one version) -->
+                @if (canEdit && allVersions.length > 1) {
+                  <button class="version-delete-btn"
+                          (click)="onDeleteVersion(version, $event)"
+                          [disabled]="isDeletingVersion"
+                          [title]="'Delete version ' + version.VersionNumber">
+                    <i class="fas fa-trash"></i>
+                  </button>
                 }
               </div>
             }

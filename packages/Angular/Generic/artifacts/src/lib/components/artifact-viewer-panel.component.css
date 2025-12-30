@@ -143,9 +143,49 @@
   font-size: 12px;
 }
 
-.version-option i.fa-check {
+.version-option i.version-check {
   color: #10B981;
   margin-left: auto;
+}
+
+/* Version Delete Button - appears on hover */
+.version-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: #9CA3AF;
+  opacity: 0;
+  transition: all 0.15s;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.version-option:hover .version-delete-btn {
+  opacity: 1;
+}
+
+.version-delete-btn:hover:not(:disabled) {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.version-delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+.version-delete-btn i {
+  font-size: 11px;
+}
+
+/* When both checkmark and delete button are present, adjust layout */
+.version-option .version-check {
+  margin-left: 0;
+  margin-right: 4px;
 }
 
 .save-to-collection-btn {

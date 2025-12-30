@@ -1224,6 +1224,67 @@
   }
 }
 
+/* ============================================
+   User Message Hover Actions (Slack/Discord style)
+   ============================================ */
+
+/* Container for user message hover actions - positioned at top-right */
+.user-message-actions {
+  position: absolute;
+  top: 8px;
+  right: 24px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Show actions on message hover */
+.message-item:hover .user-message-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Individual hover action button */
+.hover-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #6B7280;
+  font-size: 13px;
+  transition: all 150ms ease;
+}
+
+.hover-action-btn:hover {
+  background-color: #F3F4F6;
+  color: #111827;
+}
+
+.hover-action-btn.edit:hover {
+  background-color: #EFF6FF;
+  color: #3B82F6;
+}
+
+.hover-action-btn.delete:hover {
+  background-color: #FEE2E2;
+  color: #DC2626;
+}
+
 /* Form Response Pills */
 :host ::ng-deep .form-response-pill {
   margin: 0 3px;

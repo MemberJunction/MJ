@@ -286,5 +286,18 @@
         <span class="reaction-count">0</span>
       </button>
     </div>
+
+    <!-- Hover Delete Button for User Messages -->
+    @if (isUserMessage && !isEditing && !isProcessing && messageStatus === 'Complete') {
+      <div class="user-message-actions">
+        <button class="hover-action-btn edit" (click)="onEditClick()" title="Edit Message">
+          <i class="fas fa-pencil-alt"></i>
+        </button>
+        <button class="hover-action-btn delete" (click)="onDeleteClick()" title="Delete Message">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    }
+
   </div>
 </div>

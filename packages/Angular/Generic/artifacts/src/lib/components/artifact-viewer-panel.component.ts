@@ -47,6 +47,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public error: string | null = null;
   public jsonContent = '';
   public showVersionDropdown = false;
+  public isDeletingVersion = false; // Tracks if a version delete is in progress
   public artifactCollections: CollectionArtifactEntity[] = []; // All collections for ALL versions
   public currentVersionCollections: CollectionArtifactEntity[] = []; // Collections containing CURRENT version only
   public primaryCollection: CollectionEntity | null = null;
@@ -665,6 +666,95 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     // Also reload links data to update conversation/collection links
     await this.loadLinksData();
+  }
+
+  /**
+   * Delete an artifact version after confirmation.
+   * Only allowed for artifact owners (canEdit=true) and when more than one version exists.
+   * Version numbers are NOT renumbered - gaps are allowed.
+   */
+  async onDeleteVersion(version: ArtifactVersionEntity, event: Event): Promise<void> {
+    event.stopPropagation(); // Prevent version selection when clicking delete
+
+    // Safety checks
+    if (!this.canEdit) {
+      this.notificationService.CreateSimpleNotification('You do not have permission to delete versions', 'error');
+      return;
+    }
+
+    if (this.allVersions.length <= 1) {
+      this.notificationService.CreateSimpleNotification('Cannot delete the last remaining version', 'error');
+      return;
+    }
+
+    // Format date for display
+    const createdDate = version.__mj_CreatedAt
+      ? new Date(version.__mj_CreatedAt).toLocaleDateString()
+      : 'Unknown date';
+
+    // Confirmation dialog
+    const confirmMessage = `Delete version ${version.VersionNumber} of "${this.artifact?.Name || 'this artifact'}"?\n\n` +
+      `Created: ${createdDate}\n\n` +
+      `Note: Version numbers will not be renumbered.\n\n` +
+      `This action cannot be undone.`;
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    this.isDeletingVersion = true;
+
+    try {
+      // Perform the delete
+      const deleted = await version.Delete();
+
+      if (deleted) {
+        // Remove from local array
+        const deletedIndex = this.allVersions.findIndex(v => v.ID === version.ID);
+        if (deletedIndex !== -1) {
+          this.allVersions.splice(deletedIndex, 1);
+        }
+
+        // If we deleted the currently selected version, switch to another
+        if (this.artifactVersion?.ID === version.ID) {
+          // Select the latest remaining version (first in DESC order)
+          const newSelectedVersion = this.allVersions[0];
+          if (newSelectedVersion) {
+            this.artifactVersion = newSelectedVersion;
+            this.selectedVersionNumber = newSelectedVersion.VersionNumber || 1;
+            this.jsonContent = this.FormatJSON(newSelectedVersion.Content || '{}');
+
+            // Reload data for new version
+            await this.loadVersionAttributes();
+            await this.loadCollectionAssociations();
+            await this.loadLinksData();
+          }
+        }
+
+        // Close dropdown
+        this.showVersionDropdown = false;
+
+        this.notificationService.CreateSimpleNotification(
+          `Version ${version.VersionNumber} deleted successfully`,
+          'success',
+          3000
+        );
+      } else {
+        this.notificationService.CreateSimpleNotification(
+          'Failed to delete version. Please try again.',
+          'error'
+        );
+      }
+    } catch (err) {
+      console.error('Error deleting artifact version:', err);
+      LogError(err);
+      this.notificationService.CreateSimpleNotification(
+        'Error deleting version: ' + (err as Error).message,
+        'error'
+      );
+    } finally {
+      this.isDeletingVersion = false;
+    }
   }
 
   async onSaveToLibrary(): Promise<void> {

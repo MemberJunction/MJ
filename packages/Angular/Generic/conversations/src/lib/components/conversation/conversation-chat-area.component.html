@@ -80,6 +80,7 @@
               [userAvatarMap]="userAvatarMap"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
+              (deleteMessage)="onDeleteMessage($event)"
               (retryMessage)="onRetryMessage($event)"
               (testFeedbackMessage)="onTestFeedbackMessage($event)"
               (artifactClicked)="onArtifactClicked($event)"
@@ -315,4 +316,17 @@
     (saved)="onCollectionPickerSaved($event)"
     (cancelled)="onCollectionPickerCancelled()">
   </mj-artifact-collection-picker-modal>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteConfirmModal) {
+  <mj-delete-confirm-modal
+    [isVisible]="showDeleteConfirmModal"
+    [title]="'Delete Messages'"
+    [messagesToDelete]="deleteTargetMessages"
+    [artifactsAffected]="deleteAffectedArtifacts"
+    [isDeleting]="isDeletingMessages"
+    (confirmed)="onDeleteConfirmed($event)"
+    (cancelled)="onDeleteCancelled()">
+  </mj-delete-confirm-modal>
 }

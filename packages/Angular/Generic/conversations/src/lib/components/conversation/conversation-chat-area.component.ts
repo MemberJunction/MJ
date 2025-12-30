@@ -105,6 +105,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public isArtifactShareModalOpen: boolean = false;
   public artifactToShare: ArtifactEntity | null = null;
 
+  // Delete confirmation modal state
+  public showDeleteConfirmModal: boolean = false;
+  public deleteTargetMessages: ConversationDetailEntity[] = [];
+  public deleteAffectedArtifacts: { artifactId: string; name: string }[] = [];
+  public isDeletingMessages: boolean = false;
+
   // Conversation data cache: ConversationID -> Array of ConversationDetailComplete
   // Stores raw query results so we don't need to re-query when switching conversations
   private conversationDataCache = new Map<string, ConversationDetailComplete[]>();
@@ -1325,6 +1331,151 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // This should find the parent user message and re-trigger the agent invocation
     LogStatusEx({message: 'Retry requested for message', verboseOnly: true, additionalArgs: [message.ID]});
     // For now, just log it - full implementation would require refactoring agent invocation
+  }
+
+  /**
+   * Handle delete message request from message list
+   * Opens confirmation dialog and performs cascade delete of messages from selected through end
+   * @param message The message to start deletion from
+   */
+  async onDeleteMessage(message: ConversationDetailEntity): Promise<void> {
+    if (!message || !message.ID) {
+      console.warn('Cannot delete message: invalid message or missing ID');
+      return;
+    }
+
+    // Find index of message in the array
+    const messageIndex = this.messages.findIndex(m => m.ID === message.ID);
+    if (messageIndex === -1) {
+      console.warn('Cannot delete message: message not found in conversation');
+      return;
+    }
+
+    // Calculate cascade: all messages from selected through end
+    const messagesToDelete = this.messages.slice(messageIndex);
+
+    // Collect artifacts associated with messages to be deleted
+    const affectedArtifacts: { artifactId: string; name: string }[] = [];
+    for (const msg of messagesToDelete) {
+      const artifacts = this.artifactsByDetailId.get(msg.ID);
+      if (artifacts) {
+        for (const artifact of artifacts) {
+          // Avoid duplicates if same artifact appears in multiple messages
+          if (!affectedArtifacts.some(a => a.artifactId === artifact.artifactId)) {
+            affectedArtifacts.push({
+              artifactId: artifact.artifactId,
+              name: artifact.artifactName
+            });
+          }
+        }
+      }
+    }
+
+    // Store data for modal and open it
+    this.deleteTargetMessages = messagesToDelete;
+    this.deleteAffectedArtifacts = affectedArtifacts;
+    this.showDeleteConfirmModal = true;
+  }
+
+  /**
+   * Handle delete confirmation from modal
+   * @param event Contains keepArtifacts flag from user selection
+   */
+  async onDeleteConfirmed(event: { keepArtifacts: boolean }): Promise<void> {
+    if (this.deleteTargetMessages.length === 0) {
+      this.onDeleteCancelled();
+      return;
+    }
+
+    this.isDeletingMessages = true;
+
+    try {
+      // Convert to format expected by performCascadeDelete
+      const affectedArtifactsWithVersions = this.deleteAffectedArtifacts.map(a => ({
+        artifactId: a.artifactId,
+        versionId: '', // Not needed for current implementation
+        name: a.name
+      }));
+
+      await this.performCascadeDelete(
+        this.deleteTargetMessages,
+        affectedArtifactsWithVersions,
+        event.keepArtifacts
+      );
+
+      // Close modal and reset state
+      this.showDeleteConfirmModal = false;
+      this.deleteTargetMessages = [];
+      this.deleteAffectedArtifacts = [];
+    } catch (error) {
+      console.error('Error during message deletion:', error);
+      // Keep modal open so user can retry or cancel
+    } finally {
+      this.isDeletingMessages = false;
+    }
+  }
+
+  /**
+   * Handle delete cancellation from modal
+   */
+  onDeleteCancelled(): void {
+    this.showDeleteConfirmModal = false;
+    this.deleteTargetMessages = [];
+    this.deleteAffectedArtifacts = [];
+    this.isDeletingMessages = false;
+  }
+
+  /**
+   * Perform cascade delete of messages and optionally their artifacts
+   * Deletes in reverse order (newest first) to avoid foreign key issues
+   * @param messagesToDelete Messages to delete
+   * @param affectedArtifacts Artifacts to handle (delete or unlink)
+   * @param keepArtifacts If true, unlink artifacts instead of deleting them (not yet implemented)
+   */
+  private async performCascadeDelete(
+    messagesToDelete: ConversationDetailEntity[],
+    _affectedArtifacts: { artifactId: string; versionId: string; name: string }[],
+    _keepArtifacts: boolean = false
+  ): Promise<void> {
+    try {
+      // Delete in reverse order (newest first) to avoid any potential FK issues
+      const reversedMessages = [...messagesToDelete].reverse();
+
+      for (const msg of reversedMessages) {
+        // Delete the ConversationDetail record
+        // FK cascade should handle ConversationDetailArtifact junction records
+        const deleteResult = await msg.Delete();
+        if (!deleteResult) {
+          console.error('Failed to delete message:', msg.ID);
+          throw new Error(`Failed to delete message ${msg.ID}`);
+        }
+      }
+
+      // Clear caches for deleted messages
+      for (const msg of messagesToDelete) {
+        this.artifactsByDetailId.delete(msg.ID);
+        this.systemArtifactsByDetailId.delete(msg.ID);
+        this.agentRunsByDetailId.delete(msg.ID);
+        this.ratingsByDetailId.delete(msg.ID);
+      }
+
+      // Remove from messages array
+      const deletedIds = new Set(messagesToDelete.map(m => m.ID));
+      this.messages = this.messages.filter(m => !deletedIds.has(m.ID));
+
+      // Clear conversation data cache to force reload on next visit
+      if (this.conversationId) {
+        this.conversationDataCache.delete(this.conversationId);
+      }
+
+      // Update artifact count display
+      this.artifactCount = this.calculateUniqueArtifactCount();
+
+      LogStatusEx({ message: `Deleted ${messagesToDelete.length} message(s)`, verboseOnly: false });
+    } catch (error) {
+      console.error('Error during cascade delete:', error);
+      alert('Failed to delete messages. Please try again.');
+    }
   }
 
   async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
