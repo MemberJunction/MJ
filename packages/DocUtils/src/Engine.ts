@@ -66,11 +66,13 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Libraries',
-                PropertyName: '_Libraries'
+                PropertyName: '_Libraries',
+                CacheLocal: true
             },
             {
                 EntityName: 'Library Items',
-                PropertyName: '_LibraryItems'
+                PropertyName: '_LibraryItems',
+                CacheLocal: true
             },
         ]; 
         await this.Load(configs, provider, forceRefresh, contextUser);

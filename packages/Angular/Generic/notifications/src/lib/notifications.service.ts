@@ -1,6 +1,6 @@
 import { ElementRef, Injectable } from '@angular/core';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
-import { UserNotificationEntity } from '@memberjunction/core-entities';
+import { LogError, Metadata } from '@memberjunction/core';
+import { UserInfoEngine, UserNotificationEntity } from '@memberjunction/core-entities';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
@@ -172,24 +172,17 @@ export class MJNotificationService {
 
   /**
    * Refresh the User Notifications from the database. This is called automatically when the service is first loaded after login occurs.
+   * Uses UserInfoEngine for centralized data access with local caching.
    */
   public static async RefreshUserNotifications() {
     try {
-      const rv = new RunView();
-      const md = new Metadata();
-      const result = await rv.RunView({
-          EntityName: 'User Notifications',
-          ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
-          OrderBy: '__mj_CreatedAt DESC',
-          ResultType: 'entity_object' /* we want the entity objects, this has a little bit of overhead cost, but since we'll want to be able to modify the unread state it is helpful to have these ready to go */
-      })
-      if (result && result.Success) {
-        MJNotificationService._userNotifications = result.Results;
-        // Emit to observables
-        MJNotificationService._notifications$.next(result.Results);
-        MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
-        MJNotificationService._loaded = true;
-      }
+      // Use UserInfoEngine for centralized, cached access
+      const engine = UserInfoEngine.Instance;
+      MJNotificationService._userNotifications = engine.UserNotifications;
+      // Emit to observables
+      MJNotificationService._notifications$.next(engine.UserNotifications);
+      MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
+      MJNotificationService._loaded = true;
     }
     catch (e) {
       LogError(e);

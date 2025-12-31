@@ -5,7 +5,8 @@ import { RunView, Metadata } from '@memberjunction/core';
 import {
   EntityPermissionEntity,
   EntityEntity,
-  RoleEntity
+  RoleEntity,
+  ResourceData
 } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
@@ -80,6 +81,10 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
 
   constructor() {
     super();
+  }
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Permissions"
   }
 
   protected initDashboard(): void {

@@ -1,9 +1,10 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, Metadata, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { ResourcePermissionEntity, ResourceTypeEntity } from "../../generated/entity_subclasses";
 
 /**
  * Resource Permission Engine is used for accessing metadata about permissions for resources and also determining if a user has access to a resource and at what level.
  */
+@RegisterForStartup()
 export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
@@ -16,12 +17,14 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     private _ResourceTypes: {
         ResourceTypes: ResourceTypeEntity[];
     };
+
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
                 EntityName: 'Resource Permissions',
-                PropertyName: "_Permissions"
+                PropertyName: "_Permissions",
+                CacheLocal: true
             },
             {
                 Type: 'dataset',
@@ -30,7 +33,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
                 DatasetResultHandling: "single_property"
             }
         ]
-        await this.Load(c, provider, forceRefresh, contextUser);
+        await super.Load(c, provider, forceRefresh, contextUser);
     }
   
     public get ResourceTypes(): ResourceTypeEntity[] {

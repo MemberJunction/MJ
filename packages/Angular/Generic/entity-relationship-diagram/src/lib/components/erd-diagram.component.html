@@ -1,0 +1,35 @@
+<div class="erd-section">
+  @if (showHeader) {
+    <div class="section-header">
+      <h3>{{ headerTitle }}</h3>
+      <div class="erd-controls">
+        <button class="control-btn" (click)="zoomIn()" title="Zoom In">
+          <span class="fa-solid fa-search-plus"></span>
+        </button>
+        <button class="control-btn" (click)="zoomOut()" title="Zoom Out">
+          <span class="fa-solid fa-search-minus"></span>
+        </button>
+        <button class="control-btn" (click)="resetZoom()" title="Reset Zoom">
+          <span class="fa-solid fa-expand"></span>
+        </button>
+        <button class="control-btn" (click)="refresh(); refreshRequested.emit()" title="Refresh Diagram">
+          <span class="fa-solid fa-refresh"></span>
+        </button>
+      </div>
+    </div>
+  }
+  <div class="erd-container" #erdContainer>
+    @if (isRefreshing) {
+      <div class="loading-overlay">
+        <div class="loading-content">
+          <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+          </div>
+          <div class="loading-text">Loading diagram...</div>
+        </div>
+      </div>
+    }
+  </div>
+</div>

@@ -24,6 +24,7 @@
     "@memberjunction/actions": "2.128.0",
     "@memberjunction/actions-base": "2.128.0",
     "@memberjunction/ai": "2.128.0",
+    "@memberjunction/encryption": "2.128.0",
     "@memberjunction/ai-provider-bundle": "2.128.0",
     "@memberjunction/ai-vector-dupe": "2.128.0",
     "@memberjunction/aiengine": "2.128.0",

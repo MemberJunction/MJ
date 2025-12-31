@@ -60,8 +60,6 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
             throw new Error('User is a required property for the AvailableResourcesDialogComponent');
         }
 
-        // load up the current permissions for the specified ResourceTypeID and user
-        await ResourcePermissionEngine.Instance.Config();
         // now we can get the permissions for the specified resource
         this.resourcePermissions = ResourcePermissionEngine.Instance.GetUserAvailableResources(this.User, this.ResourceTypeID);
         if (this.resourcePermissions.length === 0) {

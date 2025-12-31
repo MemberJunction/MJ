@@ -3,6 +3,7 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
+import { ResourceData } from '@memberjunction/core-entities';
 
 interface TestingDashboardState {
   activeTab: string;
@@ -53,6 +54,11 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     super();
     this.setupStateManagement();
     this.updateNavigationSelection();
+  }
+
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Testing"
   }
 
   ngAfterViewInit(): void {
@@ -164,7 +170,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       }, 0);
     }
 
-    this.LoadingComplete.emit();
+    this.NotifyLoadComplete();    
   }
 
   public getCurrentTabLabel(): string {

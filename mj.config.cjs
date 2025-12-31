@@ -300,6 +300,10 @@ const mjServerConfig = {
     defaultLockTimeout: 600000, // 10 minutes in ms - default timeout for job locks
     staleLockCleanupInterval: 300000 // 5 minutes in ms - interval for checking stale locks
   },
+  telemetry: {
+    enabled: true, // Enable server-side telemetry collection
+    level: 'standard' // 'minimal' | 'standard' | 'verbose' | 'debug'
+  },
   /**
    * Authentication Provider Configuration
    * This replaces the legacy individual provider fields (webClientID, tenantID, auth0Domain, etc.)

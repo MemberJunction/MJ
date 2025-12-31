@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
-import { Subscription, firstValueFrom } from 'rxjs';
+import { Subscription, firstValueFrom, combineLatest } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import {
   ApplicationManager,
@@ -9,16 +9,20 @@ import {
   BaseApplication,
   TabService,
   WorkspaceConfiguration,
-  WorkspaceTab
+  WorkspaceTab,
+  AppAccessResult
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, StartupManager } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
+import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
+import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
+import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -42,12 +46,34 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   activeApp: BaseApplication | null = null;
   loading = true;
   initialized = false;
+  private waitingForFirstResource = false;
   tabBarVisible = true; // Controlled by workspace manager
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
+
+  // Loading animation state
+  private loadingMessageInterval: ReturnType<typeof setInterval> | null = null;
+  private loadingMessageIndex = 0;
+  private usedMessageIndices: number[] = [];
+  private usedGradientIndices: number[] = [];
+  private messageCycleCount = 0; // Track message cycles for color changes
+  private activeTheme: LoadingTheme;
+  private readonly messageIntervalMs = 2500; // 2.5 seconds per message
+  private readonly colorChangeEveryNMessages = 2; // Change color every 2 messages (5 seconds)
+  // All available animation types (used for random selection when theme doesn't specify)
+  private readonly allAnimationTypes: LoadingAnimationType[] = ['pulse', 'spin', 'bounce', 'pulse-spin'];
+  // Animation sequencing
+  private animationSequence: AnimationStep[] = [];
+  private currentAnimationIndex = 0;
+  private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
+  currentLoadingText: string;
+  currentLoadingColor: string;
+  currentLoadingTextColor: string;
+  currentLoadingGradient: LogoGradient | null;
+  currentLoadingAnimation: 'pulse' | 'spin' | 'bounce' | 'pulse-spin' = 'pulse';
 
   // User avatar state
   userImageURL = '';
@@ -59,6 +85,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   searchableEntities: EntityInfo[] = [];
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+
+  // App access dialog
+  @ViewChild('appAccessDialog') appAccessDialog!: AppAccessDialogComponent;
+  private pendingAppPath: string | null = null; // Store the app path we tried to access
 
   /**
    * Get Nav Bar apps positioned to the left of the app switcher
@@ -92,7 +122,34 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private settingsDialogService: SettingsDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService
-  ) {}
+  ) {
+    // Initialize theme immediately so loading UI shows correct colors from the start
+    this.activeTheme = getActiveTheme();
+
+    // Initialize animation based on theme configuration
+    this.initializeAnimationFromTheme();
+
+    // Set first message
+    this.currentLoadingText = this.activeTheme.messages[0];
+
+    if (this.activeTheme.staticColors) {
+      // Standard theme: keep MJ blue, no gradient
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = '#757575'; // Default gray text
+      this.currentLoadingGradient = null;
+    } else {
+      // Themed period: use theme colors and first gradient from the start
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = this.activeTheme.colors[0];
+
+      // Set initial gradient if theme has gradients
+      if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+        this.currentLoadingGradient = this.activeTheme.gradients[0];
+      } else {
+        this.currentLoadingGradient = null;
+      }
+    }
+  }
 
   async ngOnInit(): Promise<void> {
     try {
@@ -122,8 +179,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   async initializeShell(): Promise<void> {
+    // Start the loading animation with cycling messages
+    this.startLoadingAnimation();
+
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
+
+    await StartupManager.Instance.Startup();          
 
     // Get current user
     const md = new Metadata();
@@ -184,44 +246,58 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     );
 
     // Subscribe to applications loading - set app based on URL or default to first
+    // Use combineLatest to wait for loading to complete before deciding there are no apps
     this.subscriptions.push(
-      this.appManager.Applications.subscribe(async apps => {
-        if (apps.length > 0) {
-          // Check if URL specifies an app by parsing the browser URL
-          const currentUrl = this.router.url;
-          const appMatch = currentUrl.match(/\/app\/([^\/]+)/);
+      combineLatest([this.appManager.Applications, this.appManager.Loading]).subscribe(async ([apps, isLoading]) => {
+        // Don't make decisions while still loading - wait for load to complete
+        if (isLoading) {
+          return;
+        }
 
-          if (appMatch) {
-            const routeAppPath = decodeURIComponent(appMatch[1]);
-            // Find the app from the URL by Path (or Name for backwards compatibility)
-            const urlApp = this.appManager.GetAppByPath(routeAppPath);
+        // Handle the case where user has no apps at all (only after loading is complete)
+        if (apps.length === 0) {
+          await this.handleNoAppsAvailable();
+          return;
+        }
 
-            if (urlApp) {
-              // Set the app from URL - takes precedence over workspace restoration
-              await this.appManager.SetActiveApp(urlApp.ID);
+        // Check if URL specifies an app by parsing the browser URL
+        const currentUrl = this.router.url;
+        const appMatch = currentUrl.match(/\/app\/([^\/]+)/);
 
-              // If the URL is just /app/:appName (no nav item), create default tab
-              const hasNavItem = currentUrl.match(/\/app\/[^\/]+\/[^\/]+/);
+        if (appMatch) {
+          const routeAppPath = decodeURIComponent(appMatch[1]);
+          // Find the app from the URL by Path (or Name for backwards compatibility)
+          const urlApp = this.appManager.GetAppByPath(routeAppPath);
 
-              if (!hasNavItem) {
-                const existingTabs = this.workspaceManager.GetAppTabs(urlApp.ID);
-                if (existingTabs.length === 0) {
-                  const tabRequest = await urlApp.CreateDefaultTab();
-                  if (tabRequest) {
-                    this.tabService.OpenTab(tabRequest);
-                  }
+          if (urlApp) {
+            // Set the app from URL - takes precedence over workspace restoration
+            await this.appManager.SetActiveApp(urlApp.ID);
+
+            // If the URL is just /app/:appName (no nav item), create default tab
+            const hasNavItem = currentUrl.match(/\/app\/[^\/]+\/[^\/]+/);
+
+            if (!hasNavItem) {
+              const existingTabs = this.workspaceManager.GetAppTabs(urlApp.ID);
+              if (existingTabs.length === 0) {
+                const tabRequest = await urlApp.CreateDefaultTab();
+                if (tabRequest) {
+                  this.tabService.OpenTab(tabRequest);
                 }
               }
-
-              return;
             }
-          }
 
-          // Set default app if URL doesn't specify one AND no app is active yet
-          const currentActiveApp = this.appManager.GetActiveApp();
-          if (!appMatch && !currentActiveApp) {
-            await this.appManager.SetActiveApp(apps[0].ID);
+            return;
+          } else {
+            // App not found in user's list - check why and show appropriate dialog
+            await this.handleAppAccessError(routeAppPath, apps);
+            return;
           }
+        }
+
+        // Set default app if URL doesn't specify one AND no app is active yet
+        const currentActiveApp = this.appManager.GetActiveApp();
+        if (!appMatch && !currentActiveApp) {
+          await this.appManager.SetActiveApp(apps[0].ID);
         }
       })
     );
@@ -298,7 +374,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     await this.loadSearchableEntities();
 
     this.initialized = true;
-    this.loading = false;
+    this.waitingForFirstResource = true;
   }
 
   /**
@@ -780,7 +856,260 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Layout initialization happens in TabContainerComponent
   }
 
+  /**
+   * Called when the first resource component finishes loading.
+   * We accept subsequent calls to this method in ordre to ensure we are
+   * not forever showing animation for loading - this can happen if there is
+   * a race condition in components we DO NOT control, so while the naming
+   * is intended to imply the goal it doesn't "hurt" to have this work this way
+   */
+  onFirstResourceLoadComplete(): void {
+    this.waitingForFirstResource = false;
+    this.loading = false;
+    this.stopLoadingAnimation();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Start the loading message cycling animation.
+   * Messages cycle every 2.5 seconds without repeating until all are used.
+   * Colors change every 5 seconds (every 2nd message cycle).
+   * For themed periods: use theme colors/gradients from the start.
+   * For standard theme: keep MJ blue throughout (no color changes).
+   * Animation is randomly selected from pulse, spin, and pulse-spin.
+   * Theme is selected based on current date and user's browser locale.
+   */
+  private startLoadingAnimation(): void {
+    // Select the appropriate theme based on date and locale
+    this.activeTheme = getActiveTheme();
+    console.log(`🎨 Loading theme: ${this.activeTheme.name}`);
+
+    // Reset state
+    this.usedMessageIndices = [0]; // Mark first message as used
+    this.usedGradientIndices = [];
+    this.loadingMessageIndex = 0;
+    this.messageCycleCount = 0;
+
+    // Initialize display with first message and initial color/gradient
+    this.initializeLoadingDisplay();
+
+    // Initialize animation based on theme configuration
+    this.initializeAnimationFromTheme();
+
+    // Start the animation sequence (if there are multiple steps)
+    this.startAnimationSequence();
+
+    // Start cycling every 2.5 seconds
+    this.loadingMessageInterval = setInterval(() => {
+      this.cycleToNextMessage();
+      this.cdr.detectChanges();
+    }, this.messageIntervalMs);
+  }
+
+  /**
+   * Stop the loading message cycling animation.
+   */
+  private stopLoadingAnimation(): void {
+    if (this.loadingMessageInterval) {
+      clearInterval(this.loadingMessageInterval);
+      this.loadingMessageInterval = null;
+    }
+    // Also clear any animation sequence timeout
+    if (this.animationSequenceTimeout) {
+      clearTimeout(this.animationSequenceTimeout);
+      this.animationSequenceTimeout = null;
+    }
+  }
+
+  /**
+   * Initialize the loading display with first message and initial color/gradient.
+   * For themed periods, applies theme styling from the start.
+   * For standard theme, keeps MJ blue throughout.
+   */
+  private initializeLoadingDisplay(): void {
+    // Set first message
+    this.currentLoadingText = this.activeTheme.messages[0];
+
+    if (this.activeTheme.staticColors) {
+      // Standard theme: keep MJ blue, no gradient
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = '#757575'; // Default gray text
+      this.currentLoadingGradient = null;
+    } else {
+      // Themed period: use theme colors and first gradient from the start
+      this.currentLoadingColor = this.activeTheme.colors[0];
+      this.currentLoadingTextColor = this.activeTheme.colors[0];
+
+      // Set initial gradient if theme has gradients
+      if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+        this.currentLoadingGradient = this.activeTheme.gradients[0];
+        this.usedGradientIndices = [0];
+      } else {
+        this.currentLoadingGradient = null;
+      }
+    }
+  }
+
+  /**
+   * Cycle to the next loading message, avoiding repeats until all are used.
+   * Colors change every colorChangeEveryNMessages cycles (5 seconds).
+   * For standard theme, colors remain static.
+   */
+  private cycleToNextMessage(): void {
+    const messages = this.activeTheme.messages;
+    this.messageCycleCount++;
+
+    // If we've used all messages, reset the used list (but exclude current to avoid immediate repeat)
+    if (this.usedMessageIndices.length >= messages.length) {
+      this.usedMessageIndices = [this.loadingMessageIndex];
+    }
+
+    // Find a random unused message index
+    const availableIndices = messages
+      .map((_, i) => i)
+      .filter(i => !this.usedMessageIndices.includes(i));
+
+    if (availableIndices.length > 0) {
+      const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+      this.usedMessageIndices.push(randomIndex);
+      this.loadingMessageIndex = randomIndex;
+
+      // Update the message
+      this.currentLoadingText = this.activeTheme.messages[randomIndex];
+
+      // Check if it's time to change colors (every 2nd message = every 5 seconds)
+      // But only for non-static themes
+      if (!this.activeTheme.staticColors && this.messageCycleCount % this.colorChangeEveryNMessages === 0) {
+        this.cycleToNextColor();
+      }
+    }
+  }
+
+  /**
+   * Cycle to the next color/gradient from the theme.
+   * Alternates through gradients if available.
+   */
+  private cycleToNextColor(): void {
+    // Cycle to next gradient if available
+    if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
+      const gradients = this.activeTheme.gradients;
+
+      // If we've used all gradients, reset (but exclude current to avoid immediate repeat)
+      if (this.usedGradientIndices.length >= gradients.length) {
+        const lastUsed = this.usedGradientIndices[this.usedGradientIndices.length - 1];
+        this.usedGradientIndices = [lastUsed];
+      }
+
+      // Find next gradient (simple rotation for gradients)
+      const currentIndex = this.usedGradientIndices[this.usedGradientIndices.length - 1] ?? -1;
+      const nextIndex = (currentIndex + 1) % gradients.length;
+      this.usedGradientIndices.push(nextIndex);
+      this.currentLoadingGradient = gradients[nextIndex];
+    }
+
+    // Also cycle text color through theme colors
+    const colors = this.activeTheme.colors;
+    if (colors.length > 1) {
+      // Get a random color from the theme for text
+      const randomIndex = Math.floor(Math.random() * colors.length);
+      this.currentLoadingColor = colors[randomIndex];
+      this.currentLoadingTextColor = colors[randomIndex];
+    }
+  }
+
+  /**
+   * Initialize animation configuration from the current theme.
+   * Converts the theme's animation config (string or array) to a normalized sequence.
+   */
+  private initializeAnimationFromTheme(): void {
+    this.currentAnimationIndex = 0;
+
+    const themeAnimations = this.activeTheme.animations;
+
+    if (!themeAnimations) {
+      // No animation config - use random selection for non-standard themes
+      if (this.activeTheme.id === 'standard') {
+        // Standard theme defaults to pulse only
+        this.animationSequence = [{ type: 'pulse' }];
+      } else {
+        // Random selection for themed holidays without explicit config
+        const randomType = this.allAnimationTypes[
+          Math.floor(Math.random() * this.allAnimationTypes.length)
+        ];
+        this.animationSequence = [{ type: randomType }];
+      }
+    } else if (typeof themeAnimations === 'string') {
+      // Single animation type specified
+      this.animationSequence = [{ type: themeAnimations }];
+    } else {
+      // Array of animation steps
+      this.animationSequence = themeAnimations;
+    }
+
+    // Set initial animation
+    if (this.animationSequence.length > 0) {
+      this.currentLoadingAnimation = this.animationSequence[0].type;
+    }
+  }
+
+  /**
+   * Start the animation sequence, scheduling transitions between animation steps.
+   */
+  private startAnimationSequence(): void {
+    // Clear any existing timeout
+    if (this.animationSequenceTimeout) {
+      clearTimeout(this.animationSequenceTimeout);
+      this.animationSequenceTimeout = null;
+    }
+
+    this.currentAnimationIndex = 0;
+    this.scheduleNextAnimationStep();
+  }
+
+  /**
+   * Schedule the transition to the next animation step based on current step's duration.
+   */
+  private scheduleNextAnimationStep(): void {
+    if (this.animationSequence.length <= 1) {
+      // Only one step - no transitions needed
+      return;
+    }
+
+    const currentStep = this.animationSequence[this.currentAnimationIndex];
+    const durationMs = currentStep.durationMs;
+
+    // If no duration specified (or 0), this step runs indefinitely
+    if (!durationMs || durationMs <= 0) {
+      return;
+    }
+
+    // Schedule transition to next step
+    this.animationSequenceTimeout = setTimeout(() => {
+      this.transitionToNextAnimation();
+    }, durationMs);
+  }
+
+  /**
+   * Transition to the next animation in the sequence.
+   */
+  private transitionToNextAnimation(): void {
+    this.currentAnimationIndex++;
+
+    if (this.currentAnimationIndex >= this.animationSequence.length) {
+      // Sequence complete - stay on last animation
+      return;
+    }
+
+    const nextStep = this.animationSequence[this.currentAnimationIndex];
+    this.currentLoadingAnimation = nextStep.type;
+    this.cdr.detectChanges();
+
+    // Schedule the next transition if this step has a duration
+    this.scheduleNextAnimationStep();
+  }
+
   ngOnDestroy(): void {
+    this.stopLoadingAnimation();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.layoutManager.Destroy();
   }
@@ -1199,5 +1528,249 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       IsPinned: false
     });
+  }
+
+  // ========================================
+  // APP ACCESS ERROR HANDLING
+  // ========================================
+
+  /**
+   * Handle app access error by showing the appropriate dialog based on the access check result.
+   * IMPORTANT: This keeps the loading screen visible and does NOT navigate to any app
+   * until the user makes a decision in the dialog.
+   * @param appPath The app path from the URL that the user tried to access
+   * @param availableApps The list of apps the user has access to (for fallback)
+   */
+  private async handleAppAccessError(appPath: string, availableApps: BaseApplication[]): Promise<void> {
+    // Prevent showing the dialog multiple times for the same app path
+    // This can happen when the applications$ observable emits multiple times during reload
+    if (this.pendingAppPath === appPath) {
+      return;
+    }
+
+    const accessResult = this.appManager.CheckAppAccess(appPath);
+    this.pendingAppPath = appPath;
+
+    LogStatus(`App access check for "${appPath}": ${accessResult.status} - ${accessResult.message}`);
+
+    const dialogConfig = this.mapAccessResultToDialogConfig(accessResult);
+
+    // IMPORTANT: Keep loading screen visible while dialog is shown
+    // Do NOT set any active app or create any tabs yet
+    // The loading screen stays visible because we haven't called onFirstResourceLoadComplete
+
+    // Show the dialog on top of the loading screen
+    // Use setTimeout to ensure the dialog component is ready after view init
+    setTimeout(() => {
+      if (this.appAccessDialog) {
+        this.appAccessDialog.show(dialogConfig);
+      } else {
+        // Fallback if dialog not available - redirect to first app
+        console.warn('App access dialog not available, redirecting to first app');
+        this.redirectToFirstApp(availableApps);
+      }
+    }, 0);
+  }
+
+  /**
+   * Map an AppAccessResult to the dialog configuration
+   */
+  private mapAccessResultToDialogConfig(accessResult: AppAccessResult): AppAccessDialogConfig {
+    switch (accessResult.status) {
+      case 'not_found':
+        return {
+          type: 'not_found',
+          appName: accessResult.appName
+        };
+
+      case 'inactive':
+        return {
+          type: 'inactive',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      case 'not_installed':
+        return {
+          type: 'not_installed',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      case 'disabled':
+        return {
+          type: 'disabled',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      default:
+        // 'accessible' shouldn't reach here, but handle it as a generic error
+        return {
+          type: 'no_access',
+          appName: accessResult.appName
+        };
+    }
+  }
+
+  /**
+   * Handle when user has no apps available at all
+   */
+  private async handleNoAppsAvailable(): Promise<void> {
+    LogStatus('User has no applications available');
+
+    // Stop loading animation and show the dialog
+    this.stopLoadingAnimation();
+    this.loading = false;
+    this.cdr.detectChanges();
+
+    setTimeout(() => {
+      if (this.appAccessDialog) {
+        this.appAccessDialog.show({ type: 'no_apps' });
+      }
+    }, 0);
+  }
+
+  /**
+   * Handle Golden Layout initialization failure
+   */
+  handleLayoutError(): void {
+    LogStatus('Golden Layout initialization failed');
+
+    const availableApps = this.appManager.GetAllApps();
+    if (availableApps.length > 0) {
+      setTimeout(() => {
+        if (this.appAccessDialog) {
+          this.appAccessDialog.show({ type: 'layout_error' });
+        } else {
+          // Direct redirect if dialog not available
+          this.redirectToFirstApp(availableApps);
+        }
+      }, 0);
+    }
+  }
+
+  /**
+   * Handle dialog result (install, enable, or redirect)
+   */
+  async onAppAccessDialogResult(result: AppAccessDialogResult): Promise<void> {
+    const availableApps = this.appManager.GetAllApps();
+
+    switch (result.action) {
+      case 'install':
+        if (result.appId) {
+          await this.installAndNavigateToApp(result.appId);
+        }
+        break;
+
+      case 'enable':
+        if (result.appId) {
+          await this.enableAndNavigateToApp(result.appId);
+        }
+        break;
+
+      case 'redirect':
+      case 'dismissed':
+      default:
+        this.redirectToFirstApp(availableApps);
+        break;
+    }
+  }
+
+  /**
+   * Install an app for the user and navigate to it
+   */
+  private async installAndNavigateToApp(appId: string): Promise<void> {
+    // Clear pendingAppPath to allow fresh handling after installation
+    this.pendingAppPath = null;
+
+    try {
+      const userApp = await this.appManager.InstallAppForUser(appId);
+
+      if (userApp) {
+        // App installed successfully - navigate to it
+        const app = this.appManager.GetAppById(appId);
+
+        if (app) {
+          await this.navigateToApp(app);
+          this.appAccessDialog?.completeProcessing();
+        } else {
+          // Fallback - reload might be needed
+          console.warn(`[ShellComponent] App ${appId} not found after install, redirecting to first app`);
+          this.appAccessDialog?.completeProcessing();
+          this.redirectToFirstApp(this.appManager.GetAllApps());
+        }
+      } else {
+        // Installation failed
+        console.error('[ShellComponent] Installation failed');
+        this.appAccessDialog?.completeProcessing();
+        this.redirectToFirstApp(this.appManager.GetAllApps());
+      }
+    } catch (error) {
+      console.error('Error installing app:', error);
+      this.appAccessDialog?.completeProcessing();
+      this.redirectToFirstApp(this.appManager.GetAllApps());
+    }
+  }
+
+  /**
+   * Enable a disabled app for the user and navigate to it
+   */
+  private async enableAndNavigateToApp(appId: string): Promise<void> {
+    try {
+      const success = await this.appManager.EnableAppForUser(appId);
+
+      if (success) {
+        // App enabled successfully - navigate to it
+        const app = this.appManager.GetAppById(appId);
+        if (app) {
+          await this.navigateToApp(app);
+          this.appAccessDialog?.completeProcessing();
+        } else {
+          this.appAccessDialog?.completeProcessing();
+          this.redirectToFirstApp(this.appManager.GetAllApps());
+        }
+      } else {
+        this.appAccessDialog?.completeProcessing();
+        this.redirectToFirstApp(this.appManager.GetAllApps());
+      }
+    } catch (error) {
+      console.error('Error enabling app:', error);
+      this.appAccessDialog?.completeProcessing();
+      this.redirectToFirstApp(this.appManager.GetAllApps());
+    }
+  }
+
+  /**
+   * Navigate to a specific app and create its default tab
+   */
+  private async navigateToApp(app: BaseApplication): Promise<void> {
+    await this.appManager.SetActiveApp(app.ID);
+
+    const existingTabs = this.workspaceManager.GetAppTabs(app.ID);
+    if (existingTabs.length === 0) {
+      const tabRequest = await app.CreateDefaultTab();
+      if (tabRequest) {
+        this.tabService.OpenTab(tabRequest);
+      }
+    }
+
+    // Update URL to reflect the new app
+    const appPath = app.Path || app.Name;
+    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`, { replaceUrl: true });
+  }
+
+  /**
+   * Redirect to the first available app (fallback)
+   */
+  private async redirectToFirstApp(apps: BaseApplication[]): Promise<void> {
+    if (apps.length > 0) {
+      const firstApp = apps[0];
+      await this.navigateToApp(firstApp);
+    } else {
+      // No apps available - this shouldn't happen, but handle gracefully
+      this.loading = false;
+      this.cdr.detectChanges();
+    }
   }
 }

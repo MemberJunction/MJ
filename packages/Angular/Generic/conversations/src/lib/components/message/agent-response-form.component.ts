@@ -52,6 +52,37 @@ export class AgentResponseFormComponent implements OnInit {
   }
 
   /**
+   * Get the choice question that should be rendered in the footer (if any)
+   * Forms with a buttongroup/radio question have those buttons in the footer instead of Submit
+   */
+  public get footerChoiceQuestion(): FormQuestion | null {
+    if (!this.responseForm || this.isSimpleChoice) return null;
+
+    // Find the last buttongroup/radio question - it becomes the footer action
+    const choiceQuestions = this.responseForm.questions.filter(q => this.isChoiceQuestion(q));
+    return choiceQuestions.length > 0 ? choiceQuestions[choiceQuestions.length - 1] : null;
+  }
+
+  /**
+   * Get questions to render in the main form area (excludes footer choice question)
+   */
+  public get mainQuestions(): FormQuestion[] {
+    if (!this.responseForm) return [];
+
+    const footerChoice = this.footerChoiceQuestion;
+    if (!footerChoice) return this.responseForm.questions;
+
+    return this.responseForm.questions.filter(q => q.id !== footerChoice.id);
+  }
+
+  /**
+   * Check if we should show the standard Submit button (no footer choice question)
+   */
+  public get showSubmitButton(): boolean {
+    return !this.footerChoiceQuestion;
+  }
+
+  /**
    * Check if component should be visible
    */
   public get isVisible(): boolean {
@@ -144,6 +175,45 @@ export class AgentResponseFormComponent implements OnInit {
         this.isSubmitting = false;
         this.cdr.detectChanges();
       }, 1000);
+    }
+  }
+
+  /**
+   * Handle footer choice button click (for forms with choice buttons in footer)
+   * Submits the form with all field values plus the selected choice
+   */
+  public onFooterChoiceClick(value: any): void {
+    if (!this.disabled && !this.isSubmitting && this.footerChoiceQuestion) {
+      // First validate any required fields in the main form
+      const mainControlKeys = this.mainQuestions.map(q => q.id);
+      let hasInvalidFields = false;
+
+      for (const key of mainControlKeys) {
+        const control = this.formGroup.get(key);
+        if (control?.invalid) {
+          control.markAsTouched();
+          hasInvalidFields = true;
+        }
+      }
+
+      if (hasInvalidFields) {
+        return;
+      }
+
+      this.isSubmitting = true;
+
+      // Gather all form values and add the choice value
+      const formData = { ...this.formGroup.value };
+      formData[this.footerChoiceQuestion.id] = value;
+
+      this.formSubmitted.emit(formData);
+
+      // Reset form and submitting state
+      Promise.resolve().then(() => {
+        this.formGroup.reset();
+        this.isSubmitting = false;
+        this.cdr.detectChanges();
+      });
     }
   }
 

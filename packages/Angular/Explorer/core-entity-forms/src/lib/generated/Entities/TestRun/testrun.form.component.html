@@ -3,27 +3,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Test & Target Info Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="testTargetInfo"
+        sectionName="Test & Target Info"
+        icon="fa fa-bullseye"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="TestID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TestSuiteRunID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -43,14 +33,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Sequence"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="TargetType"
             Type="textbox"
             [EditMode]="EditMode"
@@ -61,6 +43,50 @@
             [ShowLabel]="true"
             FieldName="TargetLogID"
             Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Test"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RunByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Run Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="runMetadata"
+        sectionName="Run Metadata"
+        icon="fa fa-clock"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TestSuiteRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Sequence"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -96,6 +122,16 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Input & Expected Output Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="inputExpectedOutput"
+        sectionName="Input & Expected Output"
+        icon="fa fa-database"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -120,6 +156,16 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Result Analysis Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="resultAnalysis"
+        sectionName="Result Analysis"
+        icon="fa fa-chart-line"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -176,6 +222,34 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="details"
+        sectionName="Details"
+        icon="fa fa-align-left"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="TestSuiteRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -192,22 +266,6 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Test"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RunByUser"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
     <!-- ========================================
@@ -218,7 +276,7 @@
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJTestRunFeedbacks"
         sectionName="MJ: Test Run Feedbacks"
-        icon="fa fa-table"
+        icon="fa fa-clipboard-check"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"

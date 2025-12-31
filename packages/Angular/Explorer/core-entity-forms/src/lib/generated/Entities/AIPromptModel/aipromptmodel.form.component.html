@@ -204,5 +204,29 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- MJ: AI Credential Bindings Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAICredentialBindings"
+        sectionName="MJ: AI Credential Bindings"
+        icon="fa fa-table"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAICredentialBindings')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Credential Bindings','AIPromptModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Credential Bindings')"
+                [AllowLoad]="IsSectionExpanded('mJAICredentialBindings')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAICredentialBindings', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

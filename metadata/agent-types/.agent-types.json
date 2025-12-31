@@ -16,9 +16,17 @@
       "ID": "F7926101-5099-4FA5-836A-479D9707C818"
     },
     "sync": {
-      "lastModified": "2025-08-19T16:17:50.974Z",
-      "checksum": "049bd9d3ed38d19fabeb3b890e6965ab7f9e5319a92e9bdfbc7be076535dee2b"
-    }
+      "lastModified": "2025-12-30T23:07:33.554Z",
+      "checksum": "cccc01e46a3b6c8a1c4ae7bf0fbdb9d9288af23ded2d014ee7aac7ea9d735e27"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.SystemPromptID",
+        "expression": "@lookup:AI Prompts.Name=Loop Agent Type: System Prompt",
+        "resolved": "FF7D441F-36E1-458A-B548-0FC2208923BE"
+      }
+    ]
   },
   {
     "fields": {
@@ -36,8 +44,8 @@
       "ID": "4F6A189B-C068-4736-9F23-3FF540B40FDD"
     },
     "sync": {
-      "lastModified": "2025-08-19T16:17:50.964Z",
-      "checksum": "258749c212a25d38d0b03bc4fb41b63c15593192ff3827f0cc022b99752df5cb"
+      "lastModified": "2025-12-30T23:07:33.547Z",
+      "checksum": "a76eb179f00dcf192c1a97ce2de365403f7e47a77b90a1ef7c475ae83f27d8b2"
     }
   }
 ]

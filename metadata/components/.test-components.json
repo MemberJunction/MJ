@@ -9,16 +9,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/test-entity-data-grid.spec.json",
-      "FunctionalRequirements": "Test component to validate EntityDataGrid functionality with real MJ data. Two side-by-side grids: LEFT GRID (Partial Cache Mode) shows ALL Action Params (~1800 rows) with no extraFilter, enters partial cache mode (maxCachedRows=1000), tests server-side pagination/sorting/caching. RIGHT GRID (Full Cache Mode) shows filtered Action Params (Type='User Defined'), should have < 1000 rows entering full cache mode, tests client-side instant sort/filter/pagination. Includes test controls for toggling indicators/warnings, adjusting cache limits, and event log for monitoring cache hits, page loads, and mode transitions.",
-      "TechnicalDesign": "React component with two EntityDataGrid instances and test controls. State management for showIndicators, showWarnings, cacheLimit. Two-column layout with EntityDataGrid instances. Controls panel with toggles and cache limit input. Event logging to console and display panel showing cache mode changes, page loads, and cache hit/miss status. Left grid: entityName='Action Params', no extraFilter. Right grid: entityName='Action Params', extraFilter=\"Type='User Defined'\". Both grids expose all test-relevant events and props."
+      "Specification": "@file:spec/test-entity-data-grid.spec.json"
     },
     "primaryKey": {
       "ID": "88E31796-27C7-481D-9621-8D5D4143A976"
     },
     "sync": {
-      "lastModified": "2025-12-09T19:22:16.651Z",
-      "checksum": "84ca80767329951bbe7e064b0c15f14c13136f9c6a5294f169140f0e2ff9a605"
+      "lastModified": "2025-12-30T23:16:04.670Z",
+      "checksum": "4858ee545cb8ab2c01bdb2227cd5cc091142f06cbdcfe4f5c0a91eb078678d76"
     }
   }
 ]

@@ -20,6 +20,7 @@
     "@memberjunction/core-entities": "2.128.0",
     "@memberjunction/aiengine": "2.128.0",
     "@memberjunction/ai": "2.128.0",
+    "@memberjunction/ai-core-plus": "2.128.0",
     "@memberjunction/ai-vectordb": "2.128.0",
     "dotenv": "^16.4.1",
     "openai": "^4.28.4"

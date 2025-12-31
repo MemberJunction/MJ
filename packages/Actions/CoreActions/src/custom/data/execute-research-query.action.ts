@@ -7,7 +7,7 @@ import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { AIPromptEntityExtended } from '@memberjunction/core-entities';
+import type { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Action that executes read-only SQL SELECT queries for research purposes with

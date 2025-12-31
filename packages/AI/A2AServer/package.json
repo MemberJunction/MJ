@@ -24,6 +24,7 @@
   "dependencies": {
     "@memberjunction/ai": "2.128.0",
     "@memberjunction/ai-agents": "2.128.0",
+    "@memberjunction/ai-core-plus": "2.128.0",
     "@memberjunction/aiengine": "2.128.0",
     "@memberjunction/core": "2.128.0",
     "@memberjunction/core-entities": "2.128.0",

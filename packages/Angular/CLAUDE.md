@@ -254,3 +254,113 @@ export class WorkspaceComponent {
 3. **Proper Encapsulation**: Components don't reach into global state
 4. **Framework Alignment**: Works with Angular's change detection naturally
 5. **Multiple Instance Support**: Same component can be used multiple times without conflict
+
+## 🚨 CRITICAL: Creating Custom Entity Forms 🚨
+
+### Overview
+MemberJunction uses `@RegisterClass` to allow custom forms to override generated forms. When a user opens an entity record, the system looks for the highest-priority registered form for that entity.
+
+### The Pattern: Extend the Generated Form
+
+**CRITICAL**: To ensure your custom form takes priority over the generated form, you MUST:
+1. **Extend the generated form class** (not `BaseFormComponent` directly)
+2. **Use `@RegisterClass(BaseFormComponent, 'Entity Name')`** with the exact entity name
+3. **Name your class with `Extended` suffix** (convention)
+
+#### Why Extend the Generated Form?
+The `@RegisterClass` system uses registration order to determine priority. Since:
+- Generated forms are compiled first (they're in `generated/` folder)
+- Custom forms import and extend generated forms (creating a dependency)
+- The custom form registers AFTER the generated form it extends
+
+This means the custom form automatically has higher priority and will be used instead of the generated form.
+
+### ❌ DON'T: Extend BaseFormComponent Directly
+```typescript
+// BAD: Extending BaseFormComponent directly may not ensure priority
+@RegisterClass(BaseFormComponent, 'Entities')
+@Component({...})
+export class EntityFormComponent extends BaseFormComponent {
+    // This might not take priority over the generated form!
+}
+```
+
+### ✅ DO: Extend the Generated Form
+```typescript
+// GOOD: Extend the generated form to ensure priority
+import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form.component';
+
+@RegisterClass(BaseFormComponent, 'Entities')
+@Component({
+    selector: 'mj-entity-form',
+    templateUrl: './entity-form.component.html',
+    styleUrls: ['./entity-form.component.css']
+})
+export class EntityFormComponentExtended extends EntityFormComponent implements OnInit, OnDestroy {
+    // Your custom implementation
+    public record!: EntityEntity;  // Strongly typed record
+
+    override async ngOnInit(): Promise<void> {
+        await super.ngOnInit();
+        // Your custom initialization
+    }
+}
+
+export function LoadEntityFormComponentExtended() {
+    // Prevents tree-shaking
+}
+```
+
+### Complete Custom Form Checklist
+
+1. **Create component files** in `core-entity-forms/src/lib/custom/YourEntity/`:
+   - `your-entity-form.component.ts`
+   - `your-entity-form.component.html`
+   - `your-entity-form.component.css`
+
+2. **Import the generated form**:
+   ```typescript
+   import { YourEntityFormComponent } from '../../generated/Entities/YourEntity/yourentity.form.component';
+   ```
+
+3. **Extend the generated form with RegisterClass**:
+   ```typescript
+   @RegisterClass(BaseFormComponent, 'Your Entity Name')  // Exact entity name from metadata
+   @Component({...})
+   export class YourEntityFormComponentExtended extends YourEntityFormComponent {
+   ```
+
+4. **Add tree-shaking prevention function**:
+   ```typescript
+   export function LoadYourEntityFormComponentExtended() {
+       // Prevents tree-shaking
+   }
+   ```
+
+5. **Register in custom-forms.module.ts**:
+   ```typescript
+   // Import
+   import { YourEntityFormComponentExtended, LoadYourEntityFormComponentExtended } from "./YourEntity/your-entity-form.component";
+
+   // Add to declarations and exports arrays
+   declarations: [YourEntityFormComponentExtended, ...],
+   exports: [YourEntityFormComponentExtended, ...],
+
+   // Call loader in LoadCoreCustomForms()
+   export function LoadCoreCustomForms() {
+       LoadYourEntityFormComponentExtended();
+       // ... other loaders
+   }
+   ```
+
+### Finding Entity Names
+Entity names for `@RegisterClass` must match exactly. Find them in:
+- `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` - look at `@RegisterClass` decorator JSDoc comments
+- Example: `AIAgentEntity` → `"AI Agents"`, `EntityEntity` → `"Entities"`
+
+### Existing Custom Forms (Examples)
+Look at these for reference:
+- `AIAgentFormComponentExtended` - extends `AIAgentFormComponent`
+- `AIPromptFormComponentExtended` - extends `AIPromptFormComponent`
+- `EntityFormComponentExtended` - extends `EntityFormComponent`
+- `ActionFormComponentExtended` - extends `ActionFormComponent`

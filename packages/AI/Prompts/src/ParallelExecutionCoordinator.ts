@@ -1,7 +1,7 @@
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
-import { AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import {
   ExecutionTask,
   ExecutionTaskResult,

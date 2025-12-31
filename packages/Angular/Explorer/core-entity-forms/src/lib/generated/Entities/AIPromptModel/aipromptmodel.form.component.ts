@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { AIPromptModelEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Models') // Tell MemberJunction about this class
 @Component({
@@ -18,7 +19,8 @@ export class AIPromptModelFormComponent extends BaseFormComponent {
             { sectionKey: 'vendorConfiguration', sectionName: 'Vendor & Configuration', isExpanded: true },
             { sectionKey: 'executionParallelSettings', sectionName: 'Execution & Parallel Settings', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAICredentialBindings', sectionName: 'MJ: AI Credential Bindings', isExpanded: false }
         ]);
     }
 }

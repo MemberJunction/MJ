@@ -14,7 +14,10 @@ export class TestRunFeedbackFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'reviewContext', sectionName: 'Review Context', isExpanded: true },
+            { sectionKey: 'feedbackContent', sectionName: 'Feedback Content', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

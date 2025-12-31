@@ -3,6 +3,7 @@ import { LoadActionEntityServer } from './custom/ActionEntity.server';
 import { LoadApplicationEntityServer } from './custom/ApplicationEntity.server';
 import { LoadAIPromptEntityExtendedServerSubClass } from './custom/AIPromptEntityExtended.server';
 import { LoadAIPromptRunEntityServerSubClass } from './custom/AIPromptRunEntity.server';
+import { LoadConversationDetailEntityServerSubClass } from './custom/ConversationDetailEntity.server';
 import { LoadDuplicateRunEntityServerSubClass } from './custom/DuplicateRunEntity.server';
 import { LoadQueryEntityServerSubClass } from './custom/QueryEntity.server';
 import { LoadReportEntityServerSubClass } from './custom/reportEntity.server';
@@ -16,6 +17,7 @@ LoadAIProviders(); // Ensure all AI providers are loaded
 
 export * from './custom/AIPromptEntityExtended.server';
 export * from './custom/AIPromptRunEntity.server';
+export * from './custom/ConversationDetailEntity.server';
 export * from './custom/DuplicateRunEntity.server';
 export * from './custom/QueryEntity.server';
 export * from './custom/reportEntity.server';
@@ -33,6 +35,7 @@ export * from './custom/util';
 export function LoadCoreEntitiesServerSubClasses(): void {
     LoadAIPromptEntityExtendedServerSubClass();
     LoadAIPromptRunEntityServerSubClass();
+    LoadConversationDetailEntityServerSubClass();
     LoadDuplicateRunEntityServerSubClass();
     LoadQueryEntityServerSubClass();
     LoadReportEntityServerSubClass();

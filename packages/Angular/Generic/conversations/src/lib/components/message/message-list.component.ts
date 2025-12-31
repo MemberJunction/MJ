@@ -14,12 +14,13 @@ import {
   AfterViewInit,
   AfterViewChecked
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
+import { AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Container component for displaying a list of messages
@@ -58,6 +59,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   private _renderedMessages = new Map<string, any>();
   private _shouldScrollToBottom = false;
+  private _previousMessageCount = 0; // Track previous count to detect new messages
 
   public currentDateDisplay: string = 'Today';
   public showDateNav: boolean = false;
@@ -303,8 +305,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         }
       });
 
-      // Scroll to bottom if this is a new message
-      if (messages.length > 0) {
+      // Only scroll to bottom if new messages were added (not just updates)
+      // This prevents scrolling when the message list is merely refreshed (e.g., during agent run timer)
+      const previousCount = this._previousMessageCount;
+      this._previousMessageCount = messages.length;
+
+      if (messages.length > previousCount) {
         this._shouldScrollToBottom = true;
       }
     } finally {

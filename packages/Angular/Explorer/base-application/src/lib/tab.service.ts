@@ -30,15 +30,8 @@ export class TabService {
    * Request that a new tab be opened
    */
   OpenTab(request: TabRequest): void {
-    console.log('[TabService.OpenTab] Tab request queued:', {
-      appId: request.ApplicationId,
-      title: request.Title,
-      config: request.Configuration
-    });
-
     // Store in queue for replay
     this.queuedRequests.push(request);
-    console.log('[TabService.OpenTab] Queue size:', this.queuedRequests.length);
 
     // Emit to current subscribers
     this.tabRequest$.next(request);
@@ -48,7 +41,6 @@ export class TabService {
    * Get all queued tab requests (for replay on subscription)
    */
   GetQueuedRequests(): TabRequest[] {
-    console.log('[TabService.GetQueuedRequests] Returning', this.queuedRequests.length, 'queued requests');
     return [...this.queuedRequests];
   }
 
@@ -56,7 +48,6 @@ export class TabService {
    * Clear the queue after requests have been processed
    */
   ClearQueue(): void {
-    console.log('[TabService.ClearQueue] Clearing', this.queuedRequests.length, 'processed requests');
     this.queuedRequests = [];
   }
 

@@ -2,7 +2,6 @@ import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
-import { EntityInfo } from '../generic/entityInfo';
 
 /**
  * Parameters for running either a stored or dynamic view. 
@@ -101,10 +100,38 @@ export type RunViewParams = {
 
     /**
      * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
-     * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or 
+     * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or
      * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
      */
     ResultType?: 'simple' | 'entity_object' | 'count_only';
+
+    /**
+     * Internal flag set by BaseEngine when loading entity configurations.
+     * When true, telemetry analyzers will skip false-positive warnings about
+     * "entity already loaded by engine" since the engine IS the one calling RunView.
+     *
+     * @internal This property is for framework internal use only.
+     */
+    _fromEngine?: boolean;
+
+    /**
+     * When set to true, the RunView will first check the LocalCacheManager for cached results.
+     * If cached results exist and are still valid, they will be returned immediately without
+     * hitting the server. This is useful for frequently-accessed, relatively-static data.
+     *
+     * Note: The LocalCacheManager must be initialized before this can work.
+     * Cached results are automatically invalidated when the underlying entity data changes.
+     *
+     * @default false
+     */
+    CacheLocal?: boolean;
+
+    /**
+     * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
+     * After this time, cached results will be considered stale and fresh data will be fetched.
+     * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
+     */
+    CacheLocalTTL?: number;
 } 
 
 /**
@@ -134,25 +161,24 @@ export class RunView  {
 
     /**
      * Runs a view based on the provided parameters, see documentation for RunViewParams for more
-     * @param params 
+     * @param params
      * @param contextUser if provided, this user is used for permissions and logging. For server based calls, this is generally required because there is no "Current User" since this object is shared across all requests.
-     * @returns 
+     * @returns
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        // simple proxy to the provider, pre/post process moved to ProviderBase and called by each sub-class
-        // for validation and for optional transformation of the result
-        return await this.ProviderToUse.RunView<T>(params, contextUser);
+        // Simple proxy to the provider - caching, telemetry, and transformation are handled by ProviderBase Pre/Post hooks
+        return this.ProviderToUse.RunView<T>(params, contextUser);
     }
 
     /**
      * Runs multiple views based on the provided parameters, see documentation for RunViewParams for more information
-     * @param params 
-     * @param contextUser 
-     * @returns 
+     * @param params
+     * @param contextUser
+     * @returns
      */
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-        // same as RunView, a simple proxy to the provider, pre/post processes are moved to
-        // ProviderBase as with RunView
+        // Simple proxy to the provider, pre/post processes are moved to
+        // ProviderBase which handles telemetry and transformation
         return this.ProviderToUse.RunViews(params, contextUser);
     }
 

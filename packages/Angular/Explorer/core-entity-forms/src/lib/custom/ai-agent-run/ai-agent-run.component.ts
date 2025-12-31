@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, ElementRef 
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { AIAgentRunEntityExtended, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentRunEntityExtended, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';

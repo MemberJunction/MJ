@@ -5,16 +5,7 @@
 export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 
-export * from './lib/auth-button/auth-button.component'
-export * from './lib/dashboard-browser-component/dashboard-browser.component'
-export * from './lib/data-browser-component/data-browser.component'
-export * from './lib/generic-browse-list/generic-browse-list.component'
-export * from './lib/home-component/home.component'
-export * from './lib/home-wrapper/home-wrapper.component'
-export * from './lib/navigation/navigation.component'
-export * from './lib/report-browser-component/report-browser.component'
 export * from './lib/resource-wrappers/dashboard-resource.component'
-export * from './lib/tabbed-dashboard/tabbed-dashboard.component'
 export * from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component'
 export * from './lib/resource-wrappers/record-resource.component'
 export * from './lib/resource-wrappers/resource-wrappers-loader'
@@ -23,16 +14,10 @@ export * from './lib/resource-wrappers/view-resource.component'
 export * from './lib/resource-wrappers/list-detail-resource.component'
 export * from './lib/resource-wrappers/chat-conversations-resource.component'
 export * from './lib/resource-wrappers/artifact-resource.component'
-export * from './lib/files/files.component'
-export * from './lib/single-application/single-application.component'
-export * from './lib/favorites/favorites.component'
-export * from './lib/header/header.component'
-export * from './lib/header/MSFT_UserImageService'
 
 // New Shell Module (New Explorer UX)
 export * from './lib/shell/shell.module'
 export * from './lib/shell/shell.component'
-export * from './lib/single-entity/single-entity.component'
 export * from './lib/single-record/single-record.component'
 export * from './lib/single-search-result/single-search-result.component'
 export * from './lib/single-dashboard/single-dashboard.component'
@@ -43,11 +28,7 @@ export * from './lib/user-profile/user-profile.component'
 export * from './lib/user-notifications/user-notifications.component';
 export * from './lib/guards/auth-guard.service';
 export * from './lib/guards/entities.guard';
-export * from './lib/list-view/list-view.component';
-export * from './lib/resource-browser/resource-browser.component';
-export * from './lib/chat-wrapper/chat-wrapper.component';
 
-export * from './lib/query-browser-component/query-browser.component'
 export * from './lib/single-query/single-query.component'
 export * from './lib/resource-wrappers/query-resource.component'
 

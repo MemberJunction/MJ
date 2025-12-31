@@ -1,4 +1,4 @@
-import { BaseEngine, IMetadataProvider, UserInfo, RunView } from "@memberjunction/core";
+import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
 import { ActionCategoryEntity, ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { ActionEntityExtended } from "./ActionEntity-Extended";
 
@@ -212,30 +212,36 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
     */
    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-      const config = [
+      const config: Array<Partial<BaseEnginePropertyConfig>> = [
          {
                EntityName: 'Actions',
-               PropertyName: '_Actions'
+               PropertyName: '_Actions',
+               CacheLocal: true
          },
          {
                EntityName: 'Action Categories',
-               PropertyName: '_ActionCategories'
+               PropertyName: '_ActionCategories',
+               CacheLocal: true
          },
          {
                EntityName: 'Action Filters',
-               PropertyName: '_Filters'
+               PropertyName: '_Filters',
+               CacheLocal: true
          },
          {
                EntityName: 'Action Result Codes',
-               PropertyName: '_ActionResultCodes'
+               PropertyName: '_ActionResultCodes',
+               CacheLocal: true
          },
          {
                EntityName: 'Action Params',
-               PropertyName: '_Params'
+               PropertyName: '_Params',
+               CacheLocal: true
          },
          {
                EntityName: 'Action Libraries',
-               PropertyName: '_ActionLibraries'
+               PropertyName: '_ActionLibraries',
+               CacheLocal: true
          }];
 
       await this.Load(config, provider, forceRefresh, contextUser);

@@ -2,19 +2,21 @@ import { BrowserManager } from './browser-context';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
 import { ComponentLinter, Violation } from './component-linter';
-import { 
-  ComponentSpec, 
-  ComponentUtilities, 
+import {
+  ComponentSpec,
+  ComponentUtilities,
   SimpleAITools,
   SimpleExecutePromptParams,
   SimpleExecutePromptResult,
   SimpleEmbedTextParams,
   SimpleEmbedTextResult,
-  ComponentObject
+  ComponentObject,
+  SimpleEntityInfo
 } from '@memberjunction/interactive-component-types';
-import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
  
 
 /**
@@ -58,6 +60,25 @@ export interface ComponentExecutionOptions {
   isRootComponent?: boolean;
   debug?: boolean;
   utilities?: ComponentUtilities;
+
+  /**
+   * Optional array of entity metadata providing complete field lists per entity.
+   * Used by the linter to validate field usage with two-tier severity:
+   * - Medium: Field exists in entity but not declared in dataRequirements
+   * - Critical: Field does not exist in entity at all
+   *
+   * If not provided, linter only checks against dataRequirements.fieldMetadata
+   * which may cause false-positive critical errors for valid but undeclared fields.
+   *
+   * @example
+   * // Caller provides metadata for entities used in component
+   * const md = new Metadata();
+   * const entityNames = spec.dataRequirements.entities.map(e => e.name);
+   * const entityMetadata = md.Entities
+   *   .filter(e => entityNames.includes(e.Name))
+   *   .map(e => SimpleEntityInfo.FromEntityInfo(e));
+   */
+  entityMetadata?: SimpleEntityInfo[];
 }
 
 export interface ComponentExecutionResult {
@@ -70,6 +91,26 @@ export interface ComponentExecutionResult {
   executionTime: number;
   renderCount?: number;
   lintViolations?: Violation[];
+  /**
+   * If true, the browser/page crashed during execution or cleanup.
+   * This is an infrastructure issue, not a code issue.
+   */
+  browserCrash?: boolean;
+  /**
+   * Whether the component code executed successfully, independent of browser crashes.
+   *
+   * **Calculation**: No critical or high severity errors exist, EXCLUDING errors
+   * with rule='browser-crash' (which are infrastructure issues, not code issues).
+   * Medium, low, and warning severity errors do not affect this metric.
+   *
+   * **Usage**: Use this field to determine if the generated code is valid:
+   * - If `codeExecutionSuccess=true`: the code works (don't regenerate)
+   * - If `codeExecutionSuccess=false`: there are real code errors (regenerate)
+   *
+   * Note: The `success` field may be false due to browser crashes even when code is fine.
+   * This field gives you the "did the code work?" answer directly.
+   */
+  codeExecutionSuccess?: boolean;
 }
 
 /**
@@ -93,7 +134,54 @@ export class ComponentRunner {
   // Only flag if it's likely an infinite loop (10000+ is suspicious)
   private static readonly MAX_RENDER_COUNT = 10000;
 
+  // Browser/page crash patterns - these are infrastructure issues, not code errors
+  private static readonly BROWSER_CRASH_PATTERNS = [
+    'target page, context or browser has been closed',
+    'target closed',
+    'browser has been closed',
+    'context has been closed',
+    'connection closed',
+    'protocol error',
+    'browser closed unexpectedly'
+  ];
+
   constructor(private browserManager: BrowserManager) {}
+
+  /**
+   * Check if an error message indicates a browser/page crash (infrastructure issue)
+   */
+  private static isBrowserCrashError(message: string): boolean {
+    const lowerMessage = message.toLowerCase();
+    return ComponentRunner.BROWSER_CRASH_PATTERNS.some(pattern =>
+      lowerMessage.includes(pattern)
+    );
+  }
+
+  /**
+   * Reclassify violations that are actually browser crashes.
+   * Browser crashes should be marked as low severity with rule='browser-crash'
+   * since they're infrastructure issues, not code errors.
+   */
+  private static reclassifyBrowserCrashErrors(violations: Violation[]): { violations: Violation[], hasBrowserCrash: boolean } {
+    let hasBrowserCrash = false;
+
+    const reclassified = violations.map(v => {
+      // Only reclassify critical/high errors that match browser crash patterns
+      if ((v.severity === 'critical' || v.severity === 'high') &&
+          ComponentRunner.isBrowserCrashError(v.message)) {
+        hasBrowserCrash = true;
+        return {
+          ...v,
+          severity: 'low' as const,
+          rule: 'browser-crash',
+          source: 'test-harness' as const
+        };
+      }
+      return v;
+    });
+
+    return { violations: reclassified, hasBrowserCrash };
+  }
 
   /**
    * Lint component code before execution
@@ -866,6 +954,33 @@ export class ComponentRunner {
         console.log('Execution result:', executionResult);
       }
 
+      // If we hit a timeout, skip all remaining page operations - the browser may be unresponsive
+      // Return early with the timeout error to avoid "Target page closed" crashes
+      if (hasTimeout) {
+        console.log('⚠️ Timeout detected - skipping remaining page operations');
+
+        // Build timeout-specific violation
+        const timeoutViolation: Violation = {
+          message: `Component execution timed out after ${globalTimeout}ms. This usually indicates an infinite render loop.`,
+          severity: 'critical' as const,
+          rule: 'timeout',
+          line: 0,
+          column: 0,
+          source: 'test-harness' as const
+        };
+
+        return {
+          success: false,
+          errors: [timeoutViolation],
+          warnings: [],
+          console: [],
+          html: '<html><body><!-- Timeout - no content captured --></body></html>',
+          screenshot: Buffer.from(''),
+          renderCount: 0,
+          executionTime: Date.now() - startTime
+        };
+      }
+
       // Wait for render completion
       const renderWaitTime = options.renderWaitTime || 500;
       await page.waitForTimeout(renderWaitTime);
@@ -1017,12 +1132,24 @@ export class ComponentRunner {
       });
       
       // Combine all error violations
-      const allErrorViolations = [...errorViolations, ...criticalWarningViolations];
-      
+      const combinedErrors = [...errorViolations, ...criticalWarningViolations];
+
+      // Reclassify any browser crash errors before calculating success metrics
+      const { violations: allErrorViolations, hasBrowserCrash } =
+        ComponentRunner.reclassifyBrowserCrashErrors(combinedErrors);
+
+      // Calculate codeExecutionSuccess: no critical/high errors excluding browser-crash
+      // Medium, low, and warning severity don't affect this metric
+      const nonCrashCriticalHighErrors = allErrorViolations.filter(e =>
+        (e.severity === 'critical' || e.severity === 'high') && e.rule !== 'browser-crash'
+      );
+      const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
+
       const result: ComponentExecutionResult = {
         success: success && dataErrors.length === 0 && criticalWarningViolations.length === 0, // Fail on critical warnings too
         html,
         errors: allErrorViolations,
+        browserCrash: hasBrowserCrash,
         warnings: regularWarnings.map(w => ({
           message: w,
           severity: 'low' as const,
@@ -1033,7 +1160,8 @@ export class ComponentRunner {
         console: consoleLogs,
         screenshot,
         executionTime: Date.now() - startTime,
-        renderCount
+        renderCount,
+        codeExecutionSuccess
       };
 
       if (debug) {
@@ -1044,24 +1172,21 @@ export class ComponentRunner {
 
     } catch (error) {
       // For catch block errors, we need to handle them specially
-      const catchError = {
-        message: error instanceof Error ? error.message : String(error),
-        source: 'test-harness' as const // Errors caught here are usually test harness issues
-      };
-      
-      // Create error violations including the catch error
-      const errorViolations: Violation[] = [{
-        message: catchError.message,
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Create initial error violations - the caught error plus any data errors
+      const initialViolations: Violation[] = [{
+        message: errorMessage,
         severity: 'critical' as const,
         rule: 'runtime-error',
         line: 0,
         column: 0,
-        source: catchError.source
+        source: 'test-harness' as const
       }];
-      
+
       // Add any data errors
       dataErrors.forEach(e => {
-        errorViolations.push({
+        initialViolations.push({
           message: e,
           severity: 'critical' as const,
           rule: 'runtime-error',
@@ -1070,7 +1195,18 @@ export class ComponentRunner {
           source: 'user-component' as const
         });
       });
-      
+
+      // Reclassify any browser crash errors using the shared helper
+      const { violations: errorViolations, hasBrowserCrash } =
+        ComponentRunner.reclassifyBrowserCrashErrors(initialViolations);
+
+      // Calculate codeExecutionSuccess: no critical/high errors excluding browser-crash
+      // Medium, low, and warning severity don't affect this metric
+      const nonCrashCriticalHighErrors = errorViolations.filter(e =>
+        (e.severity === 'critical' || e.severity === 'high') && e.rule !== 'browser-crash'
+      );
+      const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
+
       const result: ComponentExecutionResult = {
         success: false,
         html: '',
@@ -1084,11 +1220,18 @@ export class ComponentRunner {
         })),
         console: consoleLogs,
         executionTime: Date.now() - startTime,
-        renderCount
+        renderCount,
+        browserCrash: hasBrowserCrash,
+        codeExecutionSuccess
       };
 
       if (debug) {
-        console.log('\n❌ Component execution failed with error:', error);
+        if (hasBrowserCrash && codeExecutionSuccess) {
+          console.log('\n⚠️ Browser crashed but code executed successfully - component worked fine');
+          console.log('   codeExecutionSuccess=true, no need to regenerate');
+        } else {
+          console.log('\n❌ Component execution failed with error:', error);
+        }
         this.dumpDebugInfo(result);
       }
 

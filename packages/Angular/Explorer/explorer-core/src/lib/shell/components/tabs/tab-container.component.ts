@@ -11,7 +11,9 @@ import {
   ComponentRef,
   ViewEncapsulation,
   ChangeDetectorRef,
-  HostListener
+  HostListener,
+  Output,
+  EventEmitter
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -28,6 +30,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { DatasetResultType, LogError, Metadata, RunView } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
+import { DashboardResource } from '../../../resource-wrappers/dashboard-resource.component';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -49,7 +52,23 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
 
+  /**
+   * Emitted when the first resource component finishes loading.
+   * This allows the shell to keep showing its loading indicator until the first
+   * resource is ready, eliminating the visual gap between shell loading and resource loading.
+   */
+  @Output() firstResourceLoadComplete = new EventEmitter<void>();
+
+  /**
+   * Emitted when Golden Layout fails to initialize after multiple retries.
+   * The shell can use this to show an error dialog and redirect.
+   */
+  @Output() layoutInitError = new EventEmitter<void>();
+
   private subscriptions: Subscription[] = [];
+  private layoutInitRetryCount = 0;
+  private readonly MAX_LAYOUT_INIT_RETRIES = 5;
+  private hasEmittedFirstLoadComplete = false;
   private layoutInitialized = false;
 
   // Track component references for cleanup (legacy - keep for backward compat during transition)
@@ -158,10 +177,21 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private initializeGoldenLayout(forceCreateTabs = false): void {
     if (!this.glContainer?.nativeElement) {
-      console.warn('Golden Layout container not available, waiting...');
+      this.layoutInitRetryCount++;
+
+      if (this.layoutInitRetryCount > this.MAX_LAYOUT_INIT_RETRIES) {
+        console.error(`Golden Layout container not available after ${this.MAX_LAYOUT_INIT_RETRIES} retries, emitting error`);
+        this.layoutInitError.emit();
+        return;
+      }
+
+      console.warn(`Golden Layout container not available, retry ${this.layoutInitRetryCount}/${this.MAX_LAYOUT_INIT_RETRIES}...`);
       setTimeout(() => this.initializeGoldenLayout(forceCreateTabs), 50);
       return;
     }
+
+    // Reset retry counter on success
+    this.layoutInitRetryCount = 0;
 
     if (this.layoutInitialized) {
       return; // Already initialized
@@ -276,7 +306,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const shouldUseSingleResourceMode = !tabBarVisible;
 
     if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
-      console.log(`🔄 Switching to ${shouldUseSingleResourceMode ? 'single-resource' : 'multi-tab'} mode`);
       this.useSingleResourceMode = shouldUseSingleResourceMode;
       this.cdr.detectChanges();
 
@@ -287,7 +316,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         setTimeout(() => {
           // First, destroy Golden Layout if it was initialized (prevents stale state)
           if (this.layoutInitialized) {
-            console.log('[TabContainer] Destroying Golden Layout when transitioning to single-resource mode');
             this.layoutManager.Destroy();
             this.layoutInitialized = false;
           }
@@ -393,8 +421,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     );
 
     if (cached) {
-      console.log(`♻️ Reusing cached component for single-resource mode: ${driverClass}`);
-
       // Clean up previous single-resource component (if different)
       this.cleanupSingleResourceComponent();
 
@@ -408,12 +434,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Store reference for cleanup
       this.singleResourceComponentRef = cached.componentRef;
 
-      console.log('✅ Single-resource component transferred from cache (instant!)');
       return;
     }
-
-    // **Fallback: Create new component if not in cache**
-    console.log(`📦 Creating new component for single-resource mode: ${driverClass}`);
 
     // Get the component registration
     const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
@@ -443,7 +465,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Wire up events
     instance.LoadCompleteEvent = () => {
-      console.log('✅ Single-resource component loaded');
+      this.emitFirstLoadCompleteOnce();
     };
 
     // Get the native element and append to container
@@ -568,8 +590,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       );
 
       if (cached) {
-        console.log(`♻️ Reusing cached component for ${resourceData.ResourceType} (driver: ${driverClass})`);
-
         // Reattach the cached wrapper element
         glContainer.element.appendChild(cached.wrapperElement);
 
@@ -592,9 +612,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
         return;
       }
-
-      // No cached component found - create new one
-      console.log(`🆕 Creating new component for ${resourceData.ResourceType} using driver class: ${driverClass}`);
 
       // Get the component registration using the driver class
       const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
@@ -623,6 +640,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       instance.LoadCompleteEvent = () => {
         // Tab content loaded - update tab title with resource display name
         this.updateTabTitleFromResource(tabId, instance, resourceData);
+        this.emitFirstLoadCompleteOnce();
       };
 
       instance.ResourceRecordSavedEvent = (entity: { Get?: (key: string) => unknown }) => {
@@ -1104,5 +1122,14 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.workspaceManager.CloseTabsToRight(this.contextMenuTabId);
     }
     this.hideContextMenu();
+  }
+
+  /**
+   * While the naming implies this is only invoked once, components we DO NOT CONTROL might have race
+   * conditions that result in unpredictable behavior. To avoid those causing loading screen overaly to show
+   * forever we emit all events upstream
+   */
+  private emitFirstLoadCompleteOnce(): void {
+    this.firstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
   }
 }

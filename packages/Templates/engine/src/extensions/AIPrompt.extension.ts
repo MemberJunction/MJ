@@ -3,7 +3,7 @@ import { MJGlobal, RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase";
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
-import { AIModelEntityExtended } from "@memberjunction/core-entities";
+import { AIModelEntityExtended } from "@memberjunction/ai-core-plus";
 // TODO: Add type defs based on nunjucks classes used for extensions
 type Parser = any;
 type Nodes = any;

@@ -1,11 +1,10 @@
-import { Arg, Ctx, Field, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
-import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
+import { AppContext, UserPayload } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context';
-import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
-import { LearningCycleScheduler } from '../scheduler/LearningCycleScheduler.js';
+import { LoadDataContextItemsServer } from '@memberjunction/data-context-server'; 
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
 import {
@@ -16,8 +15,7 @@ import {
   SkipAPIDataRequestResponse,
   SkipAPIClarifyingQuestionResponse,
   SkipEntityInfo,
-  SkipQueryInfo,
-  SkipQueryEntityInfo,
+  SkipQueryInfo, 
   SkipAPIRunScriptRequest,
   SkipAPIRequestAPIKey,
   SkipRequestPhase,
@@ -26,13 +24,10 @@ import {
   SkipEntityFieldInfo,
   SkipEntityRelationshipInfo,
   SkipEntityFieldValueInfo,
-  SkipAPILearningCycleRequest,
-  SkipAPILearningCycleResponse,
-  SkipLearningCycleNoteChange,
+  SkipAPILearningCycleRequest, 
   SkipConversation,
   SkipAPIArtifact,
-  SkipAPIAgentRequest,
-  SkipAPIArtifactRequest,
+  SkipAPIAgentRequest, 
   SkipAPIArtifactType,
   SkipAPIArtifactVersion,
 } from '@memberjunction/skip-types';
@@ -50,10 +45,9 @@ import {
   ConversationEntity,
   DataContextEntity,
   DataContextItemEntity,
-  UserNotificationEntity,
-  AIAgentEntityExtended
+  UserNotificationEntity
 } from '@memberjunction/core-entities';
-import { apiKey as callbackAPIKey, AskSkipInfo, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath, mj_core_schema } from '../config.js';
+import { apiKey as callbackAPIKey, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath } from '../config.js';
 import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
@@ -656,7 +650,7 @@ export class AskSkipResolver {
   //     learningCycleEntity.StartedAt = startTime;
 
   //     if (!(await learningCycleEntity.Save())) {
-  //       throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //       throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //     }
 
   //     const learningCycleId = learningCycleEntity.ID;
@@ -676,7 +670,7 @@ export class AskSkipResolver {
   //         learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
   //         learningCycleEntity.EndedAt = new Date();
   //         if (!(await learningCycleEntity.Save())) {
-  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //         }
   //         const result: SkipAPILearningCycleResponse = {
   //           success: true,
@@ -702,7 +696,7 @@ export class AskSkipResolver {
   //         learningCycleEntity.EndedAt = endTime;
 
   //         if (!(await learningCycleEntity.Save())) {
-  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //         }
           
   //         return response;
@@ -945,7 +939,7 @@ export class AskSkipResolver {
 
 //       // Save the note
 //       if (!(await noteEntity.Save())) {
-//         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
+//         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.CompleteMessage}`);
 //         return false;
 //       }
 
@@ -986,7 +980,7 @@ export class AskSkipResolver {
 
 //     // Proceed with deletion
 //     if (!(await noteEntity.Delete())) {
-//       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
+//       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.CompleteMessage}`);
 //       return false;
 //     }
 
@@ -1732,7 +1726,11 @@ export class AskSkipResolver {
         QueryID: e.QueryID,
         EntityID: e.EntityID,
         Entity: e.Entity
-      }))
+      })),
+      CacheEnabled: q.CacheEnabled,
+      CacheMaxSize: q.CacheMaxSize,
+      CacheTTLMinutes: q.CacheMaxSize,
+      CacheValidationSQL: q.CacheValidationSQL
     }));
   }
 

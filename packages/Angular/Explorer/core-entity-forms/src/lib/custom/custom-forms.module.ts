@@ -12,7 +12,8 @@ import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { EntityFormExtendedComponent, LoadEntitiesFormComponent } from "./Entities/entities-form.component";
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { EntityFormComponentExtended, LoadEntityFormComponentExtended } from "./Entities/entity-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
 import { EntityActionExtendedFormComponent, LoadEntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
@@ -40,6 +41,7 @@ import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
+import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
@@ -71,7 +73,7 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
 
 @NgModule({
     declarations: [
-        EntityFormExtendedComponent,
+        EntityFormComponentExtended,
         EntityActionExtendedFormComponent,
         TemplatesFormExtendedComponent,
         TemplateParamDialogComponent,
@@ -155,10 +157,12 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
         AITestHarnessModule,
         ActionGalleryModule,
         TestingModule,
-        MJIntegratedFlowEditorComponent
+        MJIntegratedFlowEditorComponent,
+        SharedGenericModule,
+        EntityRelationshipDiagramModule
     ],
     exports: [
-        EntityFormExtendedComponent,
+        EntityFormComponentExtended,
         EntityActionExtendedFormComponent,
         TemplatesFormExtendedComponent,
         TemplateEditorComponent,
@@ -194,7 +198,7 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
 export class MemberJunctionCoreEntityFormsModule { }
 
 export function LoadCoreCustomForms() {
-    LoadEntitiesFormComponent()
+    LoadEntityFormComponentExtended()
     LoadEntityActionExtendedFormComponent();
     LoadTemplatesFormExtendedComponent();
     LoadAIPromptFormComponentExtended();

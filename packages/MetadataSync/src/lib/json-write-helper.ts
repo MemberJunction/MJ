@@ -30,30 +30,28 @@ export class JsonWriteHelper {
     if (Array.isArray(data)) {
       return data.map(item => this.normalizeRecordDataOrder(item));
     }
-    
+
     if (data && typeof data === 'object') {
       // Check if this looks like a RecordData object
       if (data.fields !== undefined) {
-        // This is a RecordData object - rebuild with correct order
+        // This is a RecordData object - rebuild preserving original key order
+        // but ensuring known keys maintain their relative order when present
         const ordered: any = {};
-        
-        // Add properties in desired order: fields, relatedEntities, primaryKey, sync, deleteRecord
-        if (data.fields !== undefined) {
-          ordered.fields = this.normalizeRecordDataOrder(data.fields);
+        // Known keys that are part of RecordData structure
+        // __mj_sync_notes is a system-managed key that should appear after sync
+        const knownKeys = ['fields', 'relatedEntities', 'primaryKey', 'sync', '__mj_sync_notes', 'deleteRecord'];
+
+        // Process keys in original order, preserving user's ordering
+        for (const key of Object.keys(data)) {
+          if (knownKeys.includes(key)) {
+            // Known key - process recursively
+            ordered[key] = this.normalizeRecordDataOrder(data[key]);
+          } else {
+            // Unknown key (like _comments) - preserve exactly as-is
+            ordered[key] = data[key];
+          }
         }
-        if (data.relatedEntities !== undefined) {
-          ordered.relatedEntities = this.normalizeRecordDataOrder(data.relatedEntities);
-        }
-        if (data.primaryKey !== undefined) {
-          ordered.primaryKey = this.normalizeRecordDataOrder(data.primaryKey);
-        }
-        if (data.sync !== undefined) {
-          ordered.sync = this.normalizeRecordDataOrder(data.sync);
-        }
-        if (data.deleteRecord !== undefined) {
-          ordered.deleteRecord = this.normalizeRecordDataOrder(data.deleteRecord);
-        }
-        
+
         return ordered;
       } else {
         // Regular object - recursively process properties
@@ -64,7 +62,7 @@ export class JsonWriteHelper {
         return processed;
       }
     }
-    
+
     return data;
   }
 

@@ -1,7 +1,8 @@
 import { Component, ElementRef, ChangeDetectorRef, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { AIPromptRunEntityExtended, AIPromptEntityExtended, AIModelEntity } from '@memberjunction/core-entities';
+import { AIPromptRunEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { AIPromptRunFormComponent } from '../../generated/Entities/AIPromptRun/aipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';

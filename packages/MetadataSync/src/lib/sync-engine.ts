@@ -58,6 +58,42 @@ export class DeferrableLookupError extends Error {
 }
 
 /**
+ * Represents a nested lookup resolution that occurred within a parent lookup
+ */
+export interface NestedSyncResolution {
+  /** The original @lookup expression */
+  expression: string;
+  /** The resolved value (typically a GUID) */
+  resolved: string;
+}
+
+/**
+ * Represents a single sync resolution note tracking how a reference was resolved
+ */
+export interface SyncNote {
+  /** Type of resolution: 'lookup' for @lookup references, 'parent' for @parent references */
+  type: 'lookup' | 'parent';
+  /** The field path where this resolution occurred (e.g., "primaryKey.ID" or "fields.CategoryID") */
+  field: string;
+  /** The original expression before resolution (e.g., "@lookup:Entities.Name=Test") */
+  expression: string;
+  /** The resolved value (e.g., a GUID) */
+  resolved: string;
+  /** For lookup resolutions with nested @lookup expressions, tracks each nested resolution */
+  nested?: NestedSyncResolution[];
+}
+
+/**
+ * Collector for gathering sync resolution notes during field processing
+ */
+export interface SyncResolutionCollector {
+  /** Array of collected sync notes */
+  notes: SyncNote[];
+  /** Current field path prefix (e.g., "fields" or "primaryKey") */
+  fieldPrefix: string;
+}
+
+/**
  * Represents the structure of a metadata record with optional sync tracking
  */
 export interface RecordData {
@@ -121,11 +157,11 @@ export class SyncEngine {
   
   /**
    * Process special references in field values and handle complex objects
-   * 
+   *
    * Automatically handles:
    * - Arrays and objects are converted to JSON strings
    * - Scalars (strings, numbers, booleans, null) pass through unchanged
-   * 
+   *
    * Handles the following reference types for string values:
    * - `@parent:fieldName` - References a field from the parent record
    * - `@root:fieldName` - References a field from the root record
@@ -133,28 +169,46 @@ export class SyncEngine {
    * - `@url:address` - Fetches content from a URL
    * - `@lookup:Entity.Field=Value` - Looks up an entity ID by field value
    * - `@env:VARIABLE` - Reads an environment variable
-   * 
+   *
    * @param value - The field value to process
    * @param baseDir - Base directory for resolving relative file paths
    * @param parentRecord - Optional parent entity for @parent references
    * @param rootRecord - Optional root entity for @root references
+   * @param depth - Current recursion depth (for preventing infinite loops)
+   * @param batchContext - Optional batch context for in-memory entity resolution
+   * @param resolutionCollector - Optional collector for tracking @lookup and @parent resolutions
+   * @param fieldName - Optional field name for tracking resolutions
    * @returns The processed value with all references resolved
    * @throws Error if a reference cannot be resolved
-   * 
+   *
    * @example
    * ```typescript
    * // File reference
    * const content = await processFieldValue('@file:template.md', '/path/to/dir');
-   * 
+   *
    * // Lookup with auto-create
    * const userId = await processFieldValue('@lookup:Users.Email=john@example.com?create', '/path');
-   * 
+   *
    * // Complex object - automatically stringified
    * const jsonStr = await processFieldValue({items: [{id: 1}, {id: 2}]}, '/path');
    * // Returns: '{\n  "items": [\n    {\n      "id": 1\n    },\n    {\n      "id": 2\n    }\n  ]\n}'
+   *
+   * // With resolution collector for tracking
+   * const collector: SyncResolutionCollector = { notes: [], fieldPrefix: 'fields' };
+   * const result = await processFieldValue('@lookup:Users.Email=admin@example.com', '/path', null, null, 0, undefined, collector, 'UserID');
+   * // collector.notes will contain the resolution info
    * ```
    */
-  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null, depth: number = 0, batchContext?: Map<string, BaseEntity>): Promise<any> {
+  async processFieldValue(
+    value: any,
+    baseDir: string,
+    parentRecord?: BaseEntity | null,
+    rootRecord?: BaseEntity | null,
+    depth: number = 0,
+    batchContext?: Map<string, BaseEntity>,
+    resolutionCollector?: SyncResolutionCollector,
+    fieldName?: string
+  ): Promise<any> {
     // Check recursion depth limit
     const MAX_RECURSION_DEPTH = 50;
     if (depth > MAX_RECURSION_DEPTH) {
@@ -189,8 +243,20 @@ export class SyncEngine {
       if (!parentRecord) {
         throw new Error(`@parent reference used but no parent record available: ${value}`);
       }
-      const fieldName = extractKeywordValue(value) || '';
-      return parentRecord.Get(fieldName);
+      const parentFieldName = extractKeywordValue(value) || '';
+      const resolvedValue = parentRecord.Get(parentFieldName);
+
+      // Track the resolution if collector is provided
+      if (resolutionCollector && fieldName) {
+        resolutionCollector.notes.push({
+          type: 'parent',
+          field: `${resolutionCollector.fieldPrefix}.${fieldName}`,
+          expression: value,
+          resolved: String(resolvedValue)
+        });
+      }
+
+      return resolvedValue;
     }
 
     // Check for @root: reference
@@ -292,24 +358,40 @@ export class SyncEngine {
       const lookupFields: Array<{fieldName: string, fieldValue: string}> = [];
       const lookupPairs = lookupPart.split('&');
 
+      // Collector for nested resolutions within this lookup
+      const nestedResolutions: NestedSyncResolution[] = [];
+
       for (const pair of lookupPairs) {
         const fieldMatch = pair.match(/^(.+?)=(.+)$/);
         if (!fieldMatch) {
           throw new Error(`Invalid lookup field format: ${pair} in ${value}`);
         }
-        const [, fieldName, fieldValue] = fieldMatch;
+        const [, lookupFieldName, fieldValue] = fieldMatch;
+        const rawFieldValue = fieldValue.trim();
 
         // Recursively process the field value to resolve any nested @ commands
+        // Create a temporary collector to capture nested resolutions
+        const nestedCollector: SyncResolutionCollector = { notes: [], fieldPrefix: '' };
         const processedValue = await this.processFieldValue(
-          fieldValue.trim(),
+          rawFieldValue,
           baseDir,
           parentRecord,
           rootRecord,
           depth + 1,
-          batchContext
+          batchContext,
+          nestedCollector,
+          lookupFieldName // Pass field name for tracking
         );
 
-        lookupFields.push({ fieldName: fieldName.trim(), fieldValue: processedValue });
+        // If the raw value was a lookup expression that got resolved, track it as nested
+        if (rawFieldValue.startsWith(METADATA_KEYWORDS.LOOKUP) && rawFieldValue !== processedValue) {
+          nestedResolutions.push({
+            expression: rawFieldValue,
+            resolved: String(processedValue)
+          });
+        }
+
+        lookupFields.push({ fieldName: lookupFieldName.trim(), fieldValue: processedValue });
       }
 
       if (lookupFields.length === 0) {
@@ -342,7 +424,26 @@ export class SyncEngine {
         }
       }
 
-      return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value);
+      const resolvedValue = await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value);
+
+      // Track the resolution if collector is provided
+      if (resolutionCollector && fieldName) {
+        const note: SyncNote = {
+          type: 'lookup',
+          field: `${resolutionCollector.fieldPrefix}.${fieldName}`,
+          expression: value,
+          resolved: String(resolvedValue)
+        };
+
+        // Include nested resolutions if any were captured
+        if (nestedResolutions.length > 0) {
+          note.nested = nestedResolutions;
+        }
+
+        resolutionCollector.notes.push(note);
+      }
+
+      return resolvedValue;
     }
     
     // Check for @env: reference
@@ -633,8 +734,27 @@ export class SyncEngine {
    */
   calculateChecksum(data: any): string {
     const hash = crypto.createHash('sha256');
-    hash.update(JSON.stringify(data, null, 2));
+    // Use a replacer function to ensure consistent key ordering for deterministic checksums
+    const sortedJson = JSON.stringify(data, this.sortedReplacer, 2);
+    hash.update(sortedJson);
     return hash.digest('hex');
+  }
+
+  /**
+   * Replacer function for JSON.stringify that sorts object keys alphabetically
+   * Ensures deterministic checksums regardless of property order
+   */
+  private sortedReplacer(key: string, value: any): any {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // Sort object keys alphabetically
+      return Object.keys(value)
+        .sort()
+        .reduce((sorted: any, key: string) => {
+          sorted[key] = value[key];
+          return sorted;
+        }, {});
+    }
+    return value;
   }
 
   /**

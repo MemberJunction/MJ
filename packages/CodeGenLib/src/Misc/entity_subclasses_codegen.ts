@@ -22,11 +22,10 @@ export class EntitySubClassGeneratorBase {
    */
   public async generateAllEntitySubClasses(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, skipDBUpdate: boolean): Promise<boolean> {
     try {
-      const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
-
-      const zodContent: string = sortedEntities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
+      // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
+      const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
       let sContent: string = "";
-      for (const e of sortedEntities) {
+      for (const e of entities) {
         sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
       }
       const allContent = `${this.generateEntitySubClassFileHeader()} \n ${zodContent} \n ${sContent}`;

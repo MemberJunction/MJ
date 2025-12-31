@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef, ViewContainerRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { AIPromptEntityExtended, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntityExtended, AIVendorEntity, AIPromptCategoryEntityExtended, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntityExtended, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIVendorEntity, AIModelVendorEntity, AIPromptTypeEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -11,6 +11,7 @@ import { AIPromptFormComponent } from '../../generated/Entities/AIPrompt/aipromp
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { AIPromptManagementService } from './ai-prompt-management.service';
+import { AIModelEntityExtended, AIPromptCategoryEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 @RegisterClass(BaseFormComponent, 'AI Prompts')
 @Component({

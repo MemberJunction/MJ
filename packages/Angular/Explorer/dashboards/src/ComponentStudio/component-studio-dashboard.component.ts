@@ -4,7 +4,8 @@ import { RegisterClass } from '@memberjunction/global';
 import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
 import {
   ComponentEntityExtended,
-  ArtifactVersionEntity
+  ArtifactVersionEntity,
+  ResourceData
 } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -112,9 +113,15 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     super();
   }
 
-  ngAfterViewInit(): void {
+
+  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+    return "Component Studio"
+  }
+
+  async ngAfterViewInit() {
     this.initDashboard();
-    this.loadData();
+    await this.loadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {

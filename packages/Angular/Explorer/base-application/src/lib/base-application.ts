@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView } from '@memberjunction/core';
-import { DashboardEntity, DashboardUserPreferenceEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { DashboardEngine, DashboardUserPreferenceEntity } from '@memberjunction/core-entities';
 import { NavItem } from './interfaces/nav-item.interface';
 import { TabRequest } from './interfaces/tab-request.interface';
 
@@ -155,14 +155,14 @@ export class BaseApplication {
   /**
    * Loads the default dashboard for this app from DashboardUserPreference.
    * Uses a simple cascading pattern:
-   * For the app scope: return user preferences if they exist, otherwise system defaults
+   * For the app scope: return user preferences if they exist, otherwise system defaults.
+   *
+   * Leverages DashboardEngine which is pre-warmed on login, so no database queries are needed.
    * Returns null if no dashboards are available.
    */
   private async loadDefaultDashboard(): Promise<TabRequest | null> {
     try {
       const md = new Metadata();
-      const rv = new RunView();
-      const entity = md.EntityByName('MJ: Dashboard User Preferences');
       const currentUserId = md.CurrentUser?.ID;
 
       if (!currentUserId) {
@@ -170,46 +170,33 @@ export class BaseApplication {
         return null;
       }
 
-      // Build the cascading filter following the legacy pattern:
-      // Show user preferences for this app, OR show system defaults if user has no preferences
-      const userFilter = `UserID='${currentUserId}' AND Scope='App' AND ApplicationID='${this.ID}'`;
-      const baseCondition = `Scope='App' AND ApplicationID='${this.ID}'`;
+      // Ensure DashboardEngine is configured (no-op if already loaded)
+      await DashboardEngine.Instance.Config(false);
 
-      // Single query that returns:
-      // 1. User preferences if they exist for this app
-      // 2. System defaults (UserID IS NULL) if user has no preferences for this app
-      const filter = `(${userFilter})
-                      OR
-                      (UserID IS NULL AND ${baseCondition} AND
-                       NOT EXISTS (SELECT 1 FROM [${entity.SchemaName}].vwDashboardUserPreferences dup2
-                                  WHERE ${userFilter}))`;
+      // Get all preferences from the cached engine
+      const allPreferences = DashboardEngine.Instance.DashboardUserPreferences;
 
-      const result = await rv.RunView<DashboardUserPreferenceEntity>({
-        EntityName: 'MJ: Dashboard User Preferences',
-        ExtraFilter: filter,
-        OrderBy: 'DisplayOrder ASC',
-        MaxRows: 1,
-        ResultType: 'entity_object'
-      });
+      // Find preferences for this app with App scope
+      const appPreferences = allPreferences.filter(
+        p => p.Scope === 'App' && p.ApplicationID === this.ID
+      );
 
-      if (result.Success && result.Results && result.Results.length > 0) {
-        const preference = result.Results[0];
-        if (preference.DashboardID) {
-          return {
-            ApplicationId: this.ID,
-            Title: this.Name, // Use app name instead of dashboard name
-            ResourceType: 'Dashboards',
-            ResourceRecordId: preference.DashboardID,
-            Configuration: {
-              resourceType: 'Dashboards',
-              recordId: preference.DashboardID,
-              appName: this.Name,  // Mark this as an app-level dashboard
-              isAppDefault: true   // Flag to indicate this is the app's default view
-            }
-          };
-        }
-      } else {
-        console.log(`[${this.Name}] No results found. Success:`, result.Success, 'Results:', result.Results?.length);
+      // First, look for user-specific preferences
+      const preference = this.findBestPreference(appPreferences, currentUserId);
+
+      if (preference?.DashboardID) {
+        return {
+          ApplicationId: this.ID,
+          Title: this.Name, // Use app name instead of dashboard name
+          ResourceType: 'Dashboards',
+          ResourceRecordId: preference.DashboardID,
+          Configuration: {
+            resourceType: 'Dashboards',
+            recordId: preference.DashboardID,
+            appName: this.Name,  // Mark this as an app-level dashboard
+            isAppDefault: true   // Flag to indicate this is the app's default view
+          }
+        };
       }
     } catch (error) {
       console.error(`[${this.Name}] Error loading default dashboard:`, error);
@@ -217,6 +204,29 @@ export class BaseApplication {
 
     // No dashboard configured - fall back to Data Explorer filtered by this application
     return this.createDataExplorerTab();
+  }
+
+  /**
+   * Finds the best dashboard preference using cascading logic:
+   * 1. User-specific preferences (lowest DisplayOrder)
+   * 2. System defaults (UserID is null) if no user preferences exist
+   */
+  private findBestPreference(
+    preferences: Array<DashboardUserPreferenceEntity>,
+    currentUserId: string
+  ): DashboardUserPreferenceEntity | null {
+    // Sort by DisplayOrder
+    const sorted = [...preferences].sort((a, b) => a.DisplayOrder - b.DisplayOrder);
+
+    // First, look for user-specific preference
+    const userPreference = sorted.find(p => p.UserID === currentUserId);
+    if (userPreference) {
+      return userPreference;
+    }
+
+    // Fall back to system default (UserID is null)
+    const systemDefault = sorted.find(p => p.UserID === null);
+    return systemDefault || null;
   }
 
   /**
