@@ -4,12 +4,13 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { ListEntity, ListCategoryEntity, ListDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
-import { Subject, takeUntil, firstValueFrom } from 'rxjs';
+import { Subject, firstValueFrom } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { DialogService } from '@progress/kendo-angular-dialog';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export function LoadListsMyListsResource() {
-  const test = new ListsMyListsResource(null!, null!, null!);
+  const test = new ListsMyListsResource(null!, null!, null!, null!);
 }
 
 interface ListViewModel {
@@ -1005,7 +1006,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   constructor(
     private cdr: ChangeDetectorRef,
     private tabService: TabService,
-    private dialogService: DialogService
+    private dialogService: DialogService,
+    private notificationService: MJNotificationService
   ) {
     super();
   }
@@ -1044,7 +1046,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         {
           EntityName: 'List Categories',
           OrderBy: 'Name',
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
+          CacheLocal: true  // Categories rarely change, cache for performance
         },
         {
           EntityName: 'List Details',
@@ -1309,6 +1312,9 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
     try {
       const md = new Metadata();
+      const rv = new RunView();
+
+      // Create the new list
       const newList = await md.GetEntityObject<ListEntity>('Lists');
       newList.Name = `${listToDuplicate.Name} (Copy)`;
       newList.Description = listToDuplicate.Description;
@@ -1316,8 +1322,42 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       newList.CategoryID = listToDuplicate.CategoryID;
       newList.UserID = md.CurrentUser!.ID;
 
-      await newList.Save();
+      const listSaved = await newList.Save();
+      if (!listSaved) {
+        this.notificationService.CreateSimpleNotification('Failed to duplicate list', 'error', 4000);
+        return;
+      }
+
+      // Copy all list items
+      const itemsResult = await rv.RunView<ListDetailEntity>({
+        EntityName: 'List Details',
+        ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
+        ResultType: 'entity_object'
+      });
+
+      if (itemsResult.Success && itemsResult.Results.length > 0) {
+        let copiedCount = 0;
+        for (const item of itemsResult.Results) {
+          const newItem = await md.GetEntityObject<ListDetailEntity>('List Details');
+          newItem.ListID = newList.ID;
+          newItem.RecordID = item.RecordID;
+          newItem.Sequence = item.Sequence;
+          const itemSaved = await newItem.Save();
+          if (itemSaved) copiedCount++;
+        }
+        this.notificationService.CreateSimpleNotification(
+          `List duplicated with ${copiedCount} item${copiedCount !== 1 ? 's' : ''}`,
+          'success',
+          3000
+        );
+      } else {
+        this.notificationService.CreateSimpleNotification('List duplicated successfully', 'success', 3000);
+      }
+
       await this.loadData();
+    } catch (error) {
+      console.error('Error duplicating list:', error);
+      this.notificationService.CreateSimpleNotification('Error duplicating list. Please try again.', 'error', 4000);
     } finally {
       this.isLoading = false;
       this.cdr.detectChanges();
@@ -1328,11 +1368,12 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     if (!this.selectedContextList) return;
 
     const listToDelete = this.selectedContextList;
+    const listName = listToDelete.Name;
     this.closeContextMenu();
 
     const confirmDialog = this.dialogService.open({
       title: 'Delete List',
-      content: `Are you sure you want to delete "${listToDelete.Name}"? This will also remove all items in the list.`,
+      content: `Are you sure you want to delete "${listName}"? This will also remove all items in the list.`,
       actions: [
         { text: 'Cancel' },
         { text: 'Delete', themeColor: 'error' }
@@ -1350,8 +1391,16 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         this.cdr.detectChanges();
 
         try {
-          await listToDelete.Delete();
+          const deleted = await listToDelete.Delete();
+          if (deleted) {
+            this.notificationService.CreateSimpleNotification(`"${listName}" deleted`, 'success', 3000);
+          } else {
+            this.notificationService.CreateSimpleNotification('Failed to delete list', 'error', 4000);
+          }
           await this.loadData();
+        } catch (error) {
+          console.error('Error deleting list:', error);
+          this.notificationService.CreateSimpleNotification('Error deleting list. Please try again.', 'error', 4000);
         } finally {
           this.isDeleting = false;
           this.isLoading = false;
@@ -1379,6 +1428,9 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.isSaving = true;
     this.cdr.detectChanges();
 
+    const isEditing = !!this.editingList;
+    const listName = this.newListName;
+
     try {
       const md = new Metadata();
       let list: ListEntity;
@@ -1397,9 +1449,23 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
       const saved = await list.Save();
       if (saved) {
+        this.notificationService.CreateSimpleNotification(
+          isEditing ? `"${listName}" updated` : `"${listName}" created`,
+          'success',
+          3000
+        );
         this.closeCreateDialog();
         await this.loadData();
+      } else {
+        this.notificationService.CreateSimpleNotification(
+          isEditing ? 'Failed to update list' : 'Failed to create list',
+          'error',
+          4000
+        );
       }
+    } catch (error) {
+      console.error('Error saving list:', error);
+      this.notificationService.CreateSimpleNotification('Error saving list. Please try again.', 'error', 4000);
     } finally {
       this.isSaving = false;
       this.cdr.detectChanges();

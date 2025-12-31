@@ -6,9 +6,10 @@ import { ListEntity, UserEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export function LoadListsBrowseResource() {
-  const test = new ListsBrowseResource(null!, null!);
+  const test = new ListsBrowseResource(null!, null!, null!);
 }
 
 interface BrowseListItem {
@@ -115,22 +116,30 @@ interface BrowseListItem {
         </div>
 
         <div class="lists-table">
-          <table>
+          <table role="grid" aria-label="Lists table">
             <thead>
               <tr>
-                <th class="col-name">Name</th>
-                <th class="col-entity">Entity</th>
-                <th class="col-items">Items</th>
-                <th class="col-owner">Owner</th>
-                <th class="col-updated">Updated</th>
-                <th class="col-actions"></th>
+                <th class="col-name" scope="col">Name</th>
+                <th class="col-entity" scope="col">Entity</th>
+                <th class="col-items" scope="col">Items</th>
+                <th class="col-owner" scope="col">Owner</th>
+                <th class="col-updated" scope="col">Updated</th>
+                <th class="col-actions" scope="col"><span class="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let item of filteredLists" (click)="openList(item)" class="list-row">
-                <td class="col-name">
+              <tr
+                *ngFor="let item of filteredLists"
+                (click)="openList(item)"
+                (keydown.enter)="openList(item)"
+                (keydown.space)="openList(item); $event.preventDefault()"
+                class="list-row"
+                tabindex="0"
+                role="row"
+                [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items - owned by ' + (item.isOwner ? 'you' : item.ownerName)">
+                <td class="col-name" role="gridcell">
                   <div class="name-cell">
-                    <div class="list-icon" [style.background-color]="getEntityColor(item.entityName)">
+                    <div class="list-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
                       <i [class]="getEntityIcon(item.entityName)"></i>
                     </div>
                     <div class="name-content">
@@ -139,31 +148,35 @@ interface BrowseListItem {
                     </div>
                   </div>
                 </td>
-                <td class="col-entity">
+                <td class="col-entity" role="gridcell">
                   <span class="entity-badge">{{item.entityName}}</span>
                 </td>
-                <td class="col-items">{{item.itemCount}}</td>
-                <td class="col-owner">
+                <td class="col-items" role="gridcell">{{item.itemCount}}</td>
+                <td class="col-owner" role="gridcell">
                   <span class="owner-name" [class.is-me]="item.isOwner">
                     {{item.isOwner ? 'You' : item.ownerName}}
                   </span>
                 </td>
-                <td class="col-updated">{{formatDate(item.list.__mj_UpdatedAt)}}</td>
-                <td class="col-actions">
+                <td class="col-updated" role="gridcell">{{formatDate(item.list.__mj_UpdatedAt)}}</td>
+                <td class="col-actions" role="gridcell">
                   <button
                     class="action-btn"
                     *ngIf="!item.isOwner"
                     (click)="requestAccess($event, item)"
                     title="Request access (coming soon)"
-                    disabled>
-                    <i class="fa-solid fa-lock"></i>
+                    disabled
+                    tabindex="-1">
+                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                    <span class="sr-only">Request access</span>
                   </button>
                   <button
                     class="action-btn"
                     *ngIf="item.isOwner"
                     (click)="openList(item)"
-                    title="Open list">
-                    <i class="fa-solid fa-arrow-right"></i>
+                    title="Open list"
+                    tabindex="-1">
+                    <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                    <span class="sr-only">Open list</span>
                   </button>
                 </td>
               </tr>
@@ -446,14 +459,36 @@ interface BrowseListItem {
     .list-row {
       cursor: pointer;
       transition: background 0.15s;
+      outline: none;
     }
 
     .list-row:hover {
       background: #f5f5f5;
     }
 
+    .list-row:focus {
+      background: #e8f4fd;
+    }
+
+    .list-row:focus-visible {
+      background: #e3f2fd;
+      box-shadow: inset 3px 0 0 #2196F3;
+    }
+
     .list-row:last-child td {
       border-bottom: none;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .col-name { width: 35%; }
@@ -634,7 +669,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   constructor(
     private cdr: ChangeDetectorRef,
-    private tabService: TabService
+    private tabService: TabService,
+    private notificationService: MJNotificationService
   ) {
     super();
   }
@@ -851,6 +887,13 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
       // Open the list in a new tab using the ListDetailResource
       this.tabService.OpenList(item.list.ID, item.list.Name, appId);
+    } else {
+      // Show info notification for non-owners
+      this.notificationService.CreateSimpleNotification(
+        'Sharing coming soon! You\'ll be able to request access to this list.',
+        'info',
+        4000
+      );
     }
   }
 

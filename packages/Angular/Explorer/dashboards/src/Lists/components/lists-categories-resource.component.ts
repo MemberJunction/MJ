@@ -5,9 +5,10 @@ import { ResourceData, ListCategoryEntity, ListEntity } from '@memberjunction/co
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject, firstValueFrom } from 'rxjs';
 import { DialogService } from '@progress/kendo-angular-dialog';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export function LoadListsCategoriesResource() {
-  const test = new ListsCategoriesResource(null!, null!);
+  const test = new ListsCategoriesResource(null!, null!, null!);
 }
 
 interface CategoryViewModel {
@@ -75,7 +76,7 @@ interface CategoryViewModel {
               <h3>Categories</h3>
               <span class="count-badge">{{categories.length}}</span>
             </div>
-            <div class="tree-content">
+            <div class="tree-content" role="tree" aria-label="Category tree">
               <ng-container *ngFor="let vm of getTopLevelCategories()">
                 <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { vm: vm }"></ng-container>
               </ng-container>
@@ -150,19 +151,30 @@ interface CategoryViewModel {
           <div
             class="node-content"
             [class.selected]="selectedCategory?.ID === vm.category.ID"
-            (click)="selectCategory(vm.category)">
+            (click)="selectCategory(vm.category)"
+            (keydown.enter)="selectCategory(vm.category)"
+            (keydown.space)="selectCategory(vm.category); $event.preventDefault()"
+            (keydown.arrowRight)="expandNode($event, vm)"
+            (keydown.arrowLeft)="collapseNode($event, vm)"
+            tabindex="0"
+            role="treeitem"
+            [attr.aria-expanded]="hasChildren(vm.category) ? vm.isExpanded : null"
+            [attr.aria-selected]="selectedCategory?.ID === vm.category.ID"
+            [attr.aria-label]="vm.category.Name + ' - ' + vm.listCount + ' lists'">
             <button
               class="expand-btn"
               *ngIf="hasChildren(vm.category)"
-              (click)="toggleExpand($event, vm)">
+              (click)="toggleExpand($event, vm)"
+              tabindex="-1"
+              aria-hidden="true">
               <i [class]="vm.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
             </button>
             <span class="expand-placeholder" *ngIf="!hasChildren(vm.category)"></span>
-            <i class="fa-solid fa-folder" [class.fa-folder-open]="vm.isExpanded"></i>
+            <i class="fa-solid fa-folder" [class.fa-folder-open]="vm.isExpanded" aria-hidden="true"></i>
             <span class="node-name">{{vm.category.Name}}</span>
-            <span class="node-count">{{vm.listCount}}</span>
+            <span class="node-count" aria-hidden="true">{{vm.listCount}}</span>
           </div>
-          <div class="node-children" *ngIf="vm.isExpanded && hasChildren(vm.category)">
+          <div class="node-children" *ngIf="vm.isExpanded && hasChildren(vm.category)" role="group">
             <ng-container *ngFor="let childVm of getChildCategories(vm.category)">
               <ng-container *ngTemplateOutlet="categoryNodeTemplate; context: { vm: childVm }"></ng-container>
             </ng-container>
@@ -481,8 +493,23 @@ interface CategoryViewModel {
       background: #f5f5f5;
     }
 
+    .node-content:focus {
+      outline: none;
+      background: #e8f4fd;
+    }
+
+    .node-content:focus-visible {
+      outline: 2px solid #2196F3;
+      outline-offset: -2px;
+      background: #e8f4fd;
+    }
+
     .node-content.selected {
       background: #e3f2fd;
+    }
+
+    .node-content.selected:focus-visible {
+      outline: 2px solid #1976D2;
     }
 
     .expand-btn {
@@ -694,7 +721,8 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
   constructor(
     private cdr: ChangeDetectorRef,
-    private dialogService: DialogService
+    private dialogService: DialogService,
+    private notificationService: MJNotificationService
   ) {
     super();
   }
@@ -721,7 +749,8 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         {
           EntityName: 'List Categories',
           OrderBy: 'Name',
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
+          CacheLocal: true  // Categories rarely change, cache for performance
         },
         {
           EntityName: 'Lists',
@@ -842,6 +871,20 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     vm.isExpanded = !vm.isExpanded;
   }
 
+  expandNode(event: Event, vm: CategoryViewModel) {
+    event.preventDefault();
+    if (this.hasChildren(vm.category) && !vm.isExpanded) {
+      vm.isExpanded = true;
+    }
+  }
+
+  collapseNode(event: Event, vm: CategoryViewModel) {
+    event.preventDefault();
+    if (vm.isExpanded) {
+      vm.isExpanded = false;
+    }
+  }
+
   selectCategory(category: ListCategoryEntity) {
     this.selectedCategory = category;
     this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
@@ -885,10 +928,11 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     if (!this.selectedCategory) return;
 
     const categoryToDelete = this.selectedCategory;
+    const categoryName = categoryToDelete.Name;
     const listsInCategory = this.listsByCategoryId.get(categoryToDelete.ID) || [];
     const childCategories = this.categories.filter(c => c.ParentID === categoryToDelete.ID);
 
-    let message = `Are you sure you want to delete "${categoryToDelete.Name}"?`;
+    let message = `Are you sure you want to delete "${categoryName}"?`;
     if (listsInCategory.length > 0) {
       message += ` ${listsInCategory.length} list(s) will be uncategorized.`;
     }
@@ -915,9 +959,17 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         this.cdr.detectChanges();
 
         try {
-          await categoryToDelete.Delete();
+          const deleted = await categoryToDelete.Delete();
+          if (deleted) {
+            this.notificationService.CreateSimpleNotification(`"${categoryName}" deleted`, 'success', 3000);
+          } else {
+            this.notificationService.CreateSimpleNotification('Failed to delete category', 'error', 4000);
+          }
           this.selectedCategory = null;
           await this.loadData();
+        } catch (error) {
+          console.error('Error deleting category:', error);
+          this.notificationService.CreateSimpleNotification('Error deleting category. Please try again.', 'error', 4000);
         } finally {
           this.isLoading = false;
           this.cdr.detectChanges();
@@ -937,10 +989,12 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     this.isSaving = true;
     this.cdr.detectChanges();
 
+    const isEditing = !!this.editingCategory;
+    const categoryName = this.dialogName;
+
     try {
       const md = new Metadata();
       let category: ListCategoryEntity;
-      const wasEditing = !!this.editingCategory;
 
       if (this.editingCategory) {
         category = this.editingCategory;
@@ -954,15 +1008,29 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
       const saved = await category.Save();
       if (saved) {
+        this.notificationService.CreateSimpleNotification(
+          isEditing ? `"${categoryName}" updated` : `"${categoryName}" created`,
+          'success',
+          3000
+        );
         this.closeDialog();
         await this.loadData();
 
         // Re-select the saved category
-        if (wasEditing) {
+        if (isEditing) {
           this.selectedCategory = category;
           this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
         }
+      } else {
+        this.notificationService.CreateSimpleNotification(
+          isEditing ? 'Failed to update category' : 'Failed to create category',
+          'error',
+          4000
+        );
       }
+    } catch (error) {
+      console.error('Error saving category:', error);
+      this.notificationService.CreateSimpleNotification('Error saving category. Please try again.', 'error', 4000);
     } finally {
       this.isSaving = false;
       this.cdr.detectChanges();
