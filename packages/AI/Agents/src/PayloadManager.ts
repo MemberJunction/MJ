@@ -34,14 +34,14 @@
 
 import { LogError, LogStatus } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
-import { DeepDiffer, DeepDiffResult } from '@memberjunction/global';
+import { DeepDiffer, DeepDiffResult, SecurityValidator, DEFAULT_SECURITY_OPTIONS } from '@memberjunction/global';
 import * as _ from 'lodash';
 import { PayloadChangeAnalyzer, PayloadAnalysisResult, PayloadWarning } from './PayloadChangeAnalyzer';
-import { 
-    PayloadOperation, 
-    parsePathWithOperations, 
+import {
+    PayloadOperation,
+    parsePathWithOperations,
     parsePathsWithOperations,
-    isOperationAllowed 
+    isOperationAllowed
 } from './types/payload-operations';
 
 
@@ -905,6 +905,14 @@ export class PayloadManager {
      * adding or updating properties from the source. It handles nested objects
      * recursively, ensuring that partial updates don't wipe out existing data.
      *
+     * **Security Features:**
+     * - Maximum recursion depth limit (default: 10) to prevent stack overflow
+     * - Maximum payload size limit (default: 1MB) to prevent DoS attacks
+     * - Prototype pollution protection (checks for __proto__, constructor, prototype)
+     * - Clear error messages when security limits are exceeded
+     *
+     * Uses shared `SecurityValidator` from `@memberjunction/global` for validation.
+     *
      * @example
      * ```typescript
      * const dest = { decision: { Y: 4, Z: 2 } };
@@ -915,28 +923,97 @@ export class PayloadManager {
      *
      * @param destination The target object to merge into
      * @param source The source object to merge from
+     * @param options Optional configuration for security limits
+     * @param currentDepth Internal parameter tracking recursion depth
      * @returns A new merged object with all properties from both objects
+     * @throws Error if security limits are exceeded
      *
      * @public
      */
-    public deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
+    public deepMerge<T = Record<string, unknown>>(
+        destination: T | null | undefined,
+        source: Partial<T> | null | undefined,
+        options: {
+            maxDepth?: number;
+            maxSize?: number;
+            preventPrototypePollution?: boolean;
+        } = {},
+        currentDepth = 0
+    ): T {
+        // Apply default options
+        const opts = {
+            ...DEFAULT_SECURITY_OPTIONS,
+            ...options
+        };
+
+        // Early return for null/undefined
         if (!source) return destination as T;
-        if (!destination) return _.cloneDeep(source) as T;
-        
+        if (!destination) {
+            const cloned = _.cloneDeep(source) as T;
+            SecurityValidator.validateSecure(cloned, {
+                ...opts,
+                context: 'Deep Merge (source clone)'
+            });
+            return cloned;
+        }
+
+        // Check recursion depth limit
+        try {
+            SecurityValidator.validateRecursionDepth(currentDepth, opts.maxDepth, 'Deep Merge');
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(errorMsg);
+            throw error;
+        }
+
+        // Validate for prototype pollution before merging
+        if (opts.preventPrototypePollution) {
+            try {
+                SecurityValidator.validateNoPrototypePollution(source, 'Deep Merge (source)');
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                LogError(errorMsg);
+                throw error;
+            }
+        }
+
         const result = _.cloneDeep(destination);
-        
+
         for (const key in source) {
             if (source.hasOwnProperty(key)) {
+                // Security: Prevent prototype pollution at key level
+                if (opts.preventPrototypePollution && SecurityValidator.hasPrototypePollution({ [key]: null })) {
+                    const errorMsg = `Deep merge rejected: Attempt to set dangerous property '${key}' detected. This may be a prototype pollution attack.`;
+                    LogError(errorMsg);
+                    throw new Error(errorMsg);
+                }
+
                 if (_.isObject(source[key]) && !_.isArray(source[key]) && _.isObject(result[key]) && !_.isArray(result[key])) {
-                    // Both are objects - recursive merge
-                    result[key] = this.deepMerge(result[key], source[key]) as T[Extract<keyof T, string>];
+                    // Both are objects - recursive merge with incremented depth
+                    result[key] = this.deepMerge(
+                        result[key],
+                        source[key],
+                        opts,
+                        currentDepth + 1
+                    ) as T[Extract<keyof T, string>];
                 } else {
                     // Otherwise, source overwrites destination
                     result[key] = _.cloneDeep(source[key]) as T[Extract<keyof T, string>];
                 }
             }
         }
-        
+
+        // Validate final result size (only at top level)
+        if (currentDepth === 0) {
+            try {
+                SecurityValidator.validateObjectSize(result, opts.maxSize, 'Deep Merge (result)');
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                LogError(errorMsg);
+                throw error;
+            }
+        }
+
         return result;
     }
 

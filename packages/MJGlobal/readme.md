@@ -19,6 +19,7 @@ The `@memberjunction/global` library serves as the foundation for cross-componen
 - **Class Reflection Utilities** - Runtime class hierarchy inspection and analysis
 - **Deep Diff Engine** - Comprehensive object comparison and change tracking
 - **JSON Validator** - Lightweight JSON validation with flexible rules and special syntax
+- **Security Validator** - Centralized security validation for prototype pollution, size limits, and recursion depth
 - **Warning Manager** - Smart warning system with debouncing, batching, and session tracking
 - **Utility Functions** - Common string manipulation, JSON parsing (including recursive nested JSON parsing), pattern matching, and formatting utilities
 
@@ -460,6 +461,168 @@ const formTemplate = {
   }
 };
 ```
+
+### Security Validator
+
+Centralized security validation utilities for protecting against common attack vectors including prototype pollution, denial-of-service attacks, and stack overflow from deeply nested data structures.
+
+```typescript
+import { SecurityValidator, SecurityValidationOptions, DEFAULT_SECURITY_OPTIONS } from '@memberjunction/global';
+
+// Check for prototype pollution
+const untrustedData = { __proto__: { isAdmin: true } };
+const hasDangerousKeys = SecurityValidator.hasPrototypePollution(untrustedData);
+console.log(hasDangerousKeys); // true
+
+// Validate and throw on pollution detection
+try {
+  SecurityValidator.validateNoPrototypePollution(untrustedData, 'User Input');
+} catch (error) {
+  console.error(error.message);
+  // "Prototype pollution detected in User Input: Found dangerous key (__proto__, constructor, prototype)"
+}
+
+// Validate object size
+const largeObject = { data: 'x'.repeat(2 * 1024 * 1024) }; // 2MB
+try {
+  SecurityValidator.validateObjectSize(largeObject, 1024 * 1024, 'API Response');
+} catch (error) {
+  console.error(error.message);
+  // "API Response: Object size (2097152 bytes) exceeds maximum allowed size (1048576 bytes)..."
+}
+
+// Get object size
+const size = SecurityValidator.getObjectSize({ key: 'value' });
+console.log(`Object is ${size} bytes`);
+
+// Validate string size before JSON parsing
+try {
+  const jsonString = JSON.stringify(largeObject);
+  SecurityValidator.validateStringSize(jsonString, 10 * 1024 * 1024, 'JSON Input');
+  const parsed = JSON.parse(jsonString);
+} catch (error) {
+  console.error('String too large to parse safely');
+}
+
+// Validate recursion depth in recursive operations
+function processNested(obj: unknown, depth = 0): void {
+  SecurityValidator.validateRecursionDepth(depth, 10, 'Object Processing');
+  // ... recursive logic
+}
+
+// Comprehensive validation with custom options
+const options: SecurityValidationOptions = {
+  maxSize: 5 * 1024 * 1024,  // 5MB
+  maxDepth: 15,
+  preventPrototypePollution: true,
+  context: 'File Upload'
+};
+
+try {
+  SecurityValidator.validateSecure(untrustedData, options);
+} catch (error) {
+  console.error('Security validation failed:', error.message);
+}
+
+// Use default security options
+console.log(DEFAULT_SECURITY_OPTIONS);
+// {
+//   maxSize: 1048576,           // 1MB
+//   maxDepth: 10,               // Maximum nesting
+//   preventPrototypePollution: true
+// }
+```
+
+#### Security Features
+
+**Prototype Pollution Protection:**
+- Detects dangerous keys: `__proto__`, `constructor`, `prototype`
+- Recursively scans nested objects and arrays
+- Prevents attacks that modify JavaScript object prototypes
+
+**Size Validation:**
+- Validates object size using JSON serialization
+- Prevents denial-of-service from oversized payloads
+- Configurable limits with sensible defaults (1MB)
+
+**Recursion Depth Limits:**
+- Prevents stack overflow from deeply nested structures
+- Configurable maximum depth (default: 10)
+- Clear error messages indicating circular references or excessive nesting
+
+**String Size Validation:**
+- Pre-parsing size checks for JSON strings
+- Prevents DoS attacks before expensive parse operations
+- Configurable limits (default: varies by use case)
+
+#### Default Security Options
+
+```typescript
+import { DEFAULT_SECURITY_OPTIONS, DANGEROUS_KEYS } from '@memberjunction/global';
+
+// Platform-wide security defaults
+console.log(DEFAULT_SECURITY_OPTIONS);
+// { maxSize: 1048576, maxDepth: 10, preventPrototypePollution: true }
+
+// List of dangerous prototype pollution keys
+console.log(DANGEROUS_KEYS);
+// ['__proto__', 'constructor', 'prototype']
+```
+
+#### Use Cases
+
+1. **API Input Validation:**
+```typescript
+// Validate untrusted API data before processing
+try {
+  SecurityValidator.validateSecure(apiPayload, {
+    maxSize: 2 * 1024 * 1024,  // 2MB limit for API requests
+    context: 'API Request'
+  });
+  processApiData(apiPayload);
+} catch (error) {
+  return { error: 'Invalid request data' };
+}
+```
+
+2. **JSON Parsing Protection:**
+```typescript
+// Validate JSON string size before parsing
+function safeJsonParse<T>(jsonString: string): T {
+  SecurityValidator.validateStringSize(jsonString, 10 * 1024 * 1024, 'JSON Parse');
+  const parsed = JSON.parse(jsonString);
+  SecurityValidator.validateNoPrototypePollution(parsed, 'Parsed JSON');
+  return parsed as T;
+}
+```
+
+3. **Recursive Operations:**
+```typescript
+// Prevent stack overflow in deep merge operations
+function deepMerge<T>(target: T, source: Partial<T>, depth = 0): T {
+  SecurityValidator.validateRecursionDepth(depth, 10, 'Deep Merge');
+  // ... merge logic with depth + 1 for nested calls
+}
+```
+
+4. **User File Uploads:**
+```typescript
+// Validate uploaded data before storage
+function processUpload(fileData: unknown): void {
+  SecurityValidator.validateSecure(fileData, {
+    maxSize: 10 * 1024 * 1024,  // 10MB for file uploads
+    context: 'File Upload'
+  });
+  saveToDatabase(fileData);
+}
+```
+
+#### Integration with Other Packages
+
+The SecurityValidator is used throughout MemberJunction for consistent security:
+- **@memberjunction/ai-agents** - Validates agent payloads and JSON responses
+- **@memberjunction/core** - Future integration for entity validation
+- **Custom packages** - Reusable for any security validation needs
 
 ## Event Types
 

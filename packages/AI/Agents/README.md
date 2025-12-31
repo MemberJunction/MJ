@@ -1567,6 +1567,134 @@ A prime example of this feature is the Betty action for knowledge base queries:
 
 This enables knowledge base agents to maintain conversation context across multiple queries, improving response relevance and follow-up question handling.
 
+## Security Features
+
+The AI Agents package includes comprehensive security protections against common attack vectors and resource exhaustion scenarios. All security validations use the shared `SecurityValidator` utility from `@memberjunction/global` to ensure consistent behavior across the entire MemberJunction platform.
+
+### Shared Security Utilities
+
+Security validation is centralized in the `SecurityValidator` class from `@memberjunction/global`, providing:
+- **Prototype pollution detection** - Prevents malicious `__proto__`, `constructor`, or `prototype` keys
+- **Size validation** - Prevents DoS attacks from oversized payloads
+- **Recursion depth limits** - Prevents stack overflow from deeply nested structures
+- **Consistent defaults** - Same security settings across all packages
+
+See [`@memberjunction/global` SecurityValidator documentation](../../../MJGlobal/src/SecurityValidator.ts) for detailed API reference.
+
+### JSON Parsing Security (BaseAgentType)
+
+The `parseJSONResponse` method in `BaseAgentType` implements multiple layers of security using `SecurityValidator`:
+
+**Size Validation:**
+- Maximum JSON string size validation (default: 10MB) before parsing
+- Prevents denial-of-service (DoS) attacks from extremely large JSON payloads
+- Configurable via `MAX_JSON_SIZE` property (can be overridden in subclasses)
+
+**Prototype Pollution Protection:**
+- Automatically scans parsed JSON for dangerous keys: `__proto__`, `constructor`, `prototype`
+- Recursively checks nested objects and arrays
+- Rejects any response containing these keys to prevent prototype pollution attacks
+
+**Example:**
+```typescript
+// The parser automatically rejects malicious payloads:
+const maliciousResponse = {
+    data: "normal data",
+    "__proto__": { isAdmin: true }  // REJECTED - prototype pollution attempt
+};
+
+// Clear error messages with security context:
+// "Prototype pollution attempt detected in JSON response for LoopAgentType.
+//  Response contains dangerous keys (__proto__, constructor, or prototype)."
+```
+
+### Deep Merge Security (PayloadManager)
+
+The `deepMerge` method in `PayloadManager` implements strict security controls for merging agent payloads using `SecurityValidator`:
+
+**Recursion Depth Limits:**
+- Maximum depth limit (default: 10) prevents stack overflow from deeply nested objects
+- Uses `SecurityValidator.validateRecursionDepth()` for consistent enforcement
+- Tracks current depth through recursive calls
+- Throws clear error when limit exceeded
+
+**Size Limits:**
+- Maximum payload size validation (default: 1MB)
+- Uses `SecurityValidator.validateObjectSize()` for consistent measurement
+- Checks final merged payload size to prevent memory exhaustion
+- Configurable via `options.maxSize` parameter
+
+**Prototype Pollution Protection:**
+- Uses `SecurityValidator.validateNoPrototypePollution()` and `hasPrototypePollution()`
+- Validates both source and destination objects before merging
+- Rejects merge operations with dangerous keys
+- Recursively scans all nested objects
+
+**Configuration:**
+```typescript
+const payloadManager = new PayloadManager();
+
+// Use default security settings (recommended)
+const merged = payloadManager.deepMerge(destination, source);
+
+// Override limits for specific use cases
+const merged = payloadManager.deepMerge(destination, source, {
+    maxDepth: 15,              // Allow deeper nesting
+    maxSize: 5 * 1024 * 1024, // Allow 5MB payloads
+    preventPrototypePollution: true  // Always keep this enabled
+});
+```
+
+**Security Error Messages:**
+```typescript
+// Depth limit exceeded:
+// "Deep merge exceeded maximum depth of 10. This may indicate circular
+//  references or extremely nested data."
+
+// Size limit exceeded:
+// "Payload size (2097152 bytes) exceeds maximum allowed size (1048576 bytes).
+//  This may indicate a DoS attack or excessive data."
+
+// Prototype pollution:
+// "Deep merge rejected: Attempt to set dangerous property '__proto__' detected.
+//  This may be a prototype pollution attack."
+```
+
+### Security Best Practices
+
+1. **Keep Default Limits:** The default security settings are designed for production use - only override when necessary
+2. **Never Disable Prototype Pollution Protection:** Always keep `preventPrototypePollution: true`
+3. **Monitor Logs:** Security violations are logged with `LogError()` for audit trails
+4. **Test Edge Cases:** Test your agents with:
+   - Large payloads (approaching size limits)
+   - Deeply nested objects (approaching depth limits)
+   - Malformed JSON responses
+   - Objects with `__proto__` keys
+
+### Environment-Specific Configuration
+
+You can configure security limits based on your deployment environment:
+
+```typescript
+// Development - stricter limits for faster debugging
+const devConfig = {
+    maxDepth: 5,
+    maxSize: 512 * 1024  // 512KB
+};
+
+// Production - standard limits
+const prodConfig = {
+    maxDepth: 10,
+    maxSize: 1024 * 1024  // 1MB
+};
+
+// High-trust internal agents - relaxed limits
+const internalConfig = {
+    maxDepth: 15,
+    maxSize: 5 * 1024 * 1024  // 5MB
+};
+```
+
 ## Agent Permissions System
 
 The agent framework includes a comprehensive ACL-based permissions system that controls who can view, run, edit, and delete agents.

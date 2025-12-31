@@ -14,7 +14,7 @@
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
 import { AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
-import { MJGlobal, JSONValidator } from '@memberjunction/global';
+import { MJGlobal, JSONValidator, SecurityValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { ActionResult } from '@memberjunction/actions-base';
 
@@ -64,6 +64,13 @@ export abstract class BaseAgentType {
      * @static
      */
     public static readonly CURRENT_PAYLOAD_PLACEHOLDER = '_CURRENT_PAYLOAD';
+
+    /**
+     * Maximum JSON string size before parsing (10MB default)
+     * Can be overridden by subclasses if needed
+     * @protected
+     */
+    protected readonly MAX_JSON_SIZE = 10 * 1024 * 1024;
 
     /**
      * This method allows each agent type to initialize its agent-run-specific state package as required. Not all agent
@@ -280,37 +287,74 @@ export abstract class BaseAgentType {
 
     /**
      * Parses JSON response from prompt execution with automatic validation syntax cleaning
-     * 
+     *
+     * **Security Features:**
+     * - Maximum JSON string size validation (default: 10MB) to prevent DoS attacks
+     * - Prototype pollution detection after parsing
+     * - Clear error messages with security context
+     *
+     * Uses shared `SecurityValidator` from `@memberjunction/global` for validation.
+     *
      * @template T The expected response type
      * @param {AIPromptRunResult} promptResult - The prompt execution result
-     * 
-     * @returns {T | null} Parsed response or null if parsing fails
-     * 
+     *
+     * @returns {T | null} Parsed response or null if parsing/validation fails
+     *
      * @protected
      */
     protected parseJSONResponse<T>(promptResult: AIPromptRunResult): T | null {
         if (!promptResult.success || !promptResult.result) {
             return null;
         }
-        
+
         try {
             let response: T;
             if (typeof promptResult.result === 'string') {
+                // Security: Check size before parsing to prevent DoS
+                try {
+                    SecurityValidator.validateStringSize(
+                        promptResult.result,
+                        this.MAX_JSON_SIZE,
+                        `JSON Parsing (${this.constructor.name})`
+                    );
+                } catch (sizeError) {
+                    const errorMsg = sizeError instanceof Error ? sizeError.message : String(sizeError);
+                    LogError(errorMsg);
+                    return null;
+                }
+
                 response = JSON.parse(promptResult.result);
+
+                // Security: Check for prototype pollution after parsing
+                if (SecurityValidator.hasPrototypePollution(response)) {
+                    const errorMsg = `Prototype pollution attempt detected in JSON response for ${this.constructor.name}. ` +
+                        `Response contains dangerous keys (__proto__, constructor, or prototype).`;
+                    LogError(errorMsg);
+                    return null;
+                }
             } else {
                 response = promptResult.result as T;
+
+                // Security: Check object responses too
+                if (SecurityValidator.hasPrototypePollution(response)) {
+                    const errorMsg = `Prototype pollution attempt detected in object response for ${this.constructor.name}. ` +
+                        `Response contains dangerous keys (__proto__, constructor, or prototype).`;
+                    LogError(errorMsg);
+                    return null;
+                }
             }
-            
+
             // Clean validation syntax from the response
             response = this._jsonValidator.cleanValidationSyntax<T>(response);
-            
+
             if (IsVerboseLoggingEnabled()) {
                 console.log(`${this.constructor.name}: Cleaned response from validation syntax`, response);
             }
-            
+
             return response;
         } catch (error) {
-            LogError(`Failed to parse JSON response in ${this.constructor.name}: ${error.message}`);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`Failed to parse JSON response in ${this.constructor.name}: ${errorMsg}`);
             return null;
         }
     }
