@@ -205,33 +205,34 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           return;
         }
 
-        // Build formatted progress message
-        const taskName = progress.taskName || 'Task';
-        const progressMessage = progress.message;
-        // Prefer hierarchical step (e.g., "2.1.3") over flat stepCount
-        // Note: hierarchicalStep is nested inside metadata.progress from GraphQL
-        const stepDisplay = (progress.metadata as any)?.progress?.hierarchicalStep || progress.stepCount;
-
-        let updatedMessage: string;
-        if (stepDisplay != null) {
-          updatedMessage = `🔄 **${taskName}** • Step ${stepDisplay}\n\n${progressMessage}`;
+        // Conditional formatting based on resolver type
+        // TaskOrchestrator (Sage task graphs): Show formatted header with context
+        // RunAIAgentResolver (direct agent): Plain message to match normal flow
+        if (progress.resolver === 'TaskOrchestrator') {
+          const taskName = progress.taskName || 'Task';
+          // Prefer hierarchical step (e.g., "2.1.3") over flat stepCount
+          const stepDisplay = (progress.metadata as any)?.progress?.hierarchicalStep || progress.stepCount;
+          if (stepDisplay != null) {
+            message.Message = `🔄 **${taskName}** • Step ${stepDisplay}\n\n${progress.message}`;
+          } else {
+            message.Message = `🔄 **${taskName}**\n\n${progress.message}`;
+          }
         } else {
-          updatedMessage = `🔄 **${taskName}**\n\n${progressMessage}`;
+          // Direct agent execution - plain message (matches normal flow)
+          message.Message = progress.message;
         }
 
-        message.Message = updatedMessage;
-
         // Use safe save to prevent race conditions with completion
-        const saved = await this.safeSaveConversationDetail(message, `StreamingProgress:${taskName}`);
+        const saved = await this.safeSaveConversationDetail(message, `StreamingProgress:${progress.taskName || 'Agent'}`);
 
         if (saved) {
           // CRITICAL: Emit update to trigger UI refresh
           this.messageSent.emit(message);
 
           // CRITICAL: Update ActiveTasksService to keep the tasks dropdown in sync
-          this.activeTasks.updateStatusByConversationDetailId(message.ID, progressMessage);
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, progress.message);
 
-          console.log(`[StreamingCallback] Updated message ${messageId}: ${taskName}`);
+          console.log(`[StreamingCallback] Updated message ${messageId}: ${progress.taskName || 'Agent'}`);
         }
       } catch (error) {
         console.error(`[StreamingCallback] Error updating message ${messageId}:`, error);

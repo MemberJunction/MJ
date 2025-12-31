@@ -16,6 +16,8 @@ export interface MessageProgressUpdate {
   conversationDetailId: string;
   metadata?: any;
   stepCount?: number;
+  /** Identifies which backend resolver published this update */
+  resolver?: 'TaskOrchestrator' | 'RunAIAgentResolver' | string;
 }
 
 /**
@@ -251,7 +253,8 @@ export class ConversationStreamingService implements OnDestroy {
         percentComplete,
         taskName,
         conversationDetailId,
-        metadata
+        metadata,
+        resolver: 'TaskOrchestrator'
       };
 
       // Invoke all registered callbacks for this specific message
@@ -309,7 +312,8 @@ export class ConversationStreamingService implements OnDestroy {
         taskName: agentRun?.Agent || 'Agent',
         conversationDetailId,
         metadata: { agentRun, progress },
-        stepCount
+        stepCount,
+        resolver: 'RunAIAgentResolver'
       };
 
       // Invoke all registered callbacks for this specific message
