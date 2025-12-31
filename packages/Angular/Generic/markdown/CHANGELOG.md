@@ -1,5 +1,7 @@
 # @memberjunction/ng-markdown
 
+## 2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.129.0
+
+### Minor Changes
+
+- c7e38aa: migration
+
+### Patch Changes
+
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [6ce6e67]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/ai-core-plus@2.129.0
+  - @memberjunction/ng-entity-relationship-diagram@2.129.0
+  - @memberjunction/graphql-dataprovider@2.129.0
+  - @memberjunction/ai-engine-base@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/actions-base@2.129.0
+  - @memberjunction/ng-base-forms@2.129.0
+  - @memberjunction/ng-form-toolbar@2.129.0
+  - @memberjunction/ng-link-directives@2.129.0
+  - @memberjunction/ng-shared@2.129.0
+  - @memberjunction/ng-user-view-grid@2.129.0
+  - @memberjunction/ng-testing@2.129.0
+  - @memberjunction/ng-action-gallery@2.129.0
+  - @memberjunction/ng-ai-test-harness@2.129.0
+  - @memberjunction/ng-code-editor@2.129.0
+  - @memberjunction/ng-container-directives@2.129.0
+  - @memberjunction/ng-deep-diff@2.129.0
+  - @memberjunction/ng-join-grid@2.129.0
+  - @memberjunction/ng-notifications@2.129.0
+  - @memberjunction/ng-shared-generic@2.129.0
+  - @memberjunction/ng-timeline@2.129.0
+  - @memberjunction/templates-base-types@2.129.0
+  - @memberjunction/ai@2.129.0
+  - @memberjunction/ng-tabstrip@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes
