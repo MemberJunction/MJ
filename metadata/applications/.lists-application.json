@@ -1,0 +1,39 @@
+{
+  "fields": {
+    "Name": "Lists",
+    "Description": "Manage static collections of records across any entity",
+    "Icon": "fa-solid fa-list-check",
+    "DefaultForNewUser": false,
+    "Color": "#2196F3",
+    "DefaultSequence": 50,
+    "Status": "Active",
+    "NavigationStyle": "Both",
+    "TopNavLocation": "Left of User Menu",
+    "DefaultNavItems": [
+      {
+        "Label": "My Lists",
+        "Icon": "fa-solid fa-list-check",
+        "ResourceType": "Custom",
+        "DriverClass": "ListsMyListsResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Browse",
+        "Icon": "fa-solid fa-folder-open",
+        "ResourceType": "Custom",
+        "DriverClass": "ListsBrowseResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Categories",
+        "Icon": "fa-solid fa-tags",
+        "ResourceType": "Custom",
+        "DriverClass": "ListsCategoriesResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  }
+}
