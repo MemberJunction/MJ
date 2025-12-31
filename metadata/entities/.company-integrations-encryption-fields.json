@@ -24,8 +24,8 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=AccessToken"
           },
           "sync": {
-            "lastModified": "2025-12-29T20:56:29.397Z",
-            "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
+            "lastModified": "2025-12-30T23:07:38.868Z",
+            "checksum": "a45fd51f3adf368ba113766c23e0bf6ead9199d90c89152fb0e2bc0fafa1bd06"
           },
           "__mj_sync_notes": [
             {
@@ -62,8 +62,8 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=RefreshToken"
           },
           "sync": {
-            "lastModified": "2025-12-29T20:56:29.418Z",
-            "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
+            "lastModified": "2025-12-30T23:07:38.889Z",
+            "checksum": "a45fd51f3adf368ba113766c23e0bf6ead9199d90c89152fb0e2bc0fafa1bd06"
           },
           "__mj_sync_notes": [
             {
@@ -100,8 +100,8 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=APIKey"
           },
           "sync": {
-            "lastModified": "2025-12-29T20:56:29.438Z",
-            "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
+            "lastModified": "2025-12-30T23:07:38.911Z",
+            "checksum": "a45fd51f3adf368ba113766c23e0bf6ead9199d90c89152fb0e2bc0fafa1bd06"
           },
           "__mj_sync_notes": [
             {
@@ -138,8 +138,8 @@
             "ID": "@lookup:Entity Fields.EntityID=@lookup:Entities.Name=Company Integrations&Name=ClientSecret"
           },
           "sync": {
-            "lastModified": "2025-12-29T20:56:29.455Z",
-            "checksum": "2b894397c6c7f3a247a4b7ecd53a90717181d6a538a0b30096d118e4cbc02c6d"
+            "lastModified": "2025-12-30T23:07:38.926Z",
+            "checksum": "a45fd51f3adf368ba113766c23e0bf6ead9199d90c89152fb0e2bc0fafa1bd06"
           },
           "__mj_sync_notes": [
             {
