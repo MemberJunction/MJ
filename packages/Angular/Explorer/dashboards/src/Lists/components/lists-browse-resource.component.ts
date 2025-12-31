@@ -5,9 +5,10 @@ import { ResourceData } from '@memberjunction/core-entities';
 import { ListEntity, UserEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
+import { TabService } from '@memberjunction/ng-base-application';
 
 export function LoadListsBrowseResource() {
-  const test = new ListsBrowseResource(null!);
+  const test = new ListsBrowseResource(null!, null!);
 }
 
 interface BrowseListItem {
@@ -76,17 +77,24 @@ interface BrowseListItem {
 
       <!-- Empty State -->
       <div class="empty-state" *ngIf="!isLoading && filteredLists.length === 0 && !searchTerm">
-        <i class="fa-solid fa-folder-open"></i>
+        <div class="empty-state-icon-wrapper">
+          <div class="icon-bg"></div>
+          <i class="fa-solid fa-folder-open"></i>
+        </div>
         <h3>No Lists Found</h3>
         <p>There are no lists in the organization yet.</p>
+        <p class="empty-hint">Lists created by you or shared with you will appear here.</p>
       </div>
 
       <!-- No Results State -->
-      <div class="empty-state" *ngIf="!isLoading && filteredLists.length === 0 && searchTerm">
-        <i class="fa-solid fa-search"></i>
-        <h3>No Results</h3>
-        <p>No lists match your search criteria.</p>
-        <button class="btn-clear" (click)="clearFilters()">Clear Filters</button>
+      <div class="empty-state search-empty" *ngIf="!isLoading && filteredLists.length === 0 && searchTerm">
+        <div class="empty-state-icon-wrapper search">
+          <i class="fa-solid fa-filter-circle-xmark"></i>
+        </div>
+        <h3>No Results Found</h3>
+        <p>No lists match your current filters.</p>
+        <p class="empty-hint">Try adjusting your search or filters.</p>
+        <button class="btn-clear" (click)="clearFilters()">Clear All Filters</button>
       </div>
 
       <!-- Results -->
@@ -296,38 +304,81 @@ interface BrowseListItem {
       align-items: center;
       justify-content: center;
       flex: 1;
-      padding: 40px;
+      padding: 48px 40px;
       text-align: center;
+      max-width: 420px;
+      margin: 0 auto;
     }
 
-    .empty-state i {
-      font-size: 64px;
-      color: #ccc;
-      margin-bottom: 16px;
+    .empty-state-icon-wrapper {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .empty-state-icon-wrapper .icon-bg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%);
+    }
+
+    .empty-state-icon-wrapper > i {
+      position: relative;
+      font-size: 48px;
+      color: #2196F3;
+      z-index: 1;
+    }
+
+    .empty-state-icon-wrapper.search > i {
+      font-size: 42px;
+      color: #9e9e9e;
     }
 
     .empty-state h3 {
-      margin: 0 0 8px;
+      margin: 0 0 12px;
       font-size: 20px;
-      color: #666;
+      font-weight: 600;
+      color: #333;
     }
 
     .empty-state p {
-      margin: 0 0 24px;
-      color: #999;
+      margin: 0 0 8px;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .empty-state p:last-of-type {
+      margin-bottom: 20px;
+    }
+
+    .empty-hint {
+      color: #999 !important;
+      font-size: 13px !important;
+    }
+
+    .search-empty .empty-state-icon-wrapper {
+      margin-bottom: 20px;
     }
 
     .btn-clear {
-      padding: 8px 16px;
-      background: #f0f0f0;
-      border: none;
+      padding: 10px 20px;
+      background: #f5f5f5;
+      border: 1px solid #e0e0e0;
       border-radius: 6px;
-      color: #666;
+      color: #555;
       cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
     }
 
     .btn-clear:hover {
-      background: #e0e0e0;
+      background: #eeeeee;
+      border-color: #d0d0d0;
     }
 
     /* Content */
@@ -581,7 +632,10 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   private entityIconMap: Map<string, string> = new Map();
   private currentUserId: string = '';
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private tabService: TabService
+  ) {
     super();
   }
 
@@ -792,8 +846,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   openList(item: BrowseListItem) {
     if (item.isOwner) {
-      console.log('Open list:', item.list.Name, item.list.ID);
-      // Navigate to list detail
+      // Get the application ID from the resource data
+      const appId = this.Data?.ApplicationId || '';
+
+      // Open the list in a new tab using the ListDetailResource
+      this.tabService.OpenList(item.list.ID, item.list.Name, appId);
     }
   }
 

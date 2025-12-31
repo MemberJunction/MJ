@@ -3,10 +3,11 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ListCategoryEntity, ListEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
-import { Subject } from 'rxjs';
+import { Subject, firstValueFrom } from 'rxjs';
+import { DialogService } from '@progress/kendo-angular-dialog';
 
 export function LoadListsCategoriesResource() {
-  const test = new ListsCategoriesResource(null!);
+  const test = new ListsCategoriesResource(null!, null!);
 }
 
 interface CategoryViewModel {
@@ -43,9 +44,22 @@ interface CategoryViewModel {
 
       <!-- Empty State -->
       <div class="empty-state" *ngIf="!isLoading && categoryViewModels.length === 0">
-        <i class="fa-solid fa-folder-tree"></i>
+        <div class="empty-state-icon-wrapper">
+          <div class="icon-bg"></div>
+          <i class="fa-solid fa-folder-tree"></i>
+        </div>
         <h3>No Categories Yet</h3>
-        <p>Create categories to organize your lists.</p>
+        <p>Categories help you organize lists into logical groups.</p>
+        <div class="empty-state-features">
+          <div class="feature-item">
+            <i class="fa-solid fa-check-circle"></i>
+            <span>Create hierarchical folder structures</span>
+          </div>
+          <div class="feature-item">
+            <i class="fa-solid fa-check-circle"></i>
+            <span>Quickly find related lists</span>
+          </div>
+        </div>
         <button class="btn-create-large" (click)="createCategory()">
           <i class="fa-solid fa-plus"></i>
           Create Your First Category
@@ -192,13 +206,14 @@ interface CategoryViewModel {
           </div>
         </div>
         <kendo-dialog-actions>
-          <button kendoButton (click)="closeDialog()">Cancel</button>
+          <button kendoButton (click)="closeDialog()" [disabled]="isSaving">Cancel</button>
           <button
             kendoButton
             [primary]="true"
             (click)="saveCategory()"
-            [disabled]="!dialogName">
-            {{editingCategory ? 'Save' : 'Create'}}
+            [disabled]="!dialogName || isSaving">
+            <span *ngIf="isSaving" class="k-icon k-i-loading"></span>
+            {{isSaving ? 'Saving...' : (editingCategory ? 'Save' : 'Create')}}
           </button>
         </kendo-dialog-actions>
       </kendo-dialog>
@@ -283,43 +298,90 @@ interface CategoryViewModel {
       align-items: center;
       justify-content: center;
       flex: 1;
-      padding: 40px;
+      padding: 48px 40px;
       text-align: center;
+      max-width: 420px;
+      margin: 0 auto;
     }
 
-    .empty-state i {
-      font-size: 64px;
-      color: #ccc;
-      margin-bottom: 16px;
+    .empty-state-icon-wrapper {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .empty-state-icon-wrapper .icon-bg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%);
+    }
+
+    .empty-state-icon-wrapper > i {
+      position: relative;
+      font-size: 48px;
+      color: #2196F3;
+      z-index: 1;
     }
 
     .empty-state h3 {
-      margin: 0 0 8px;
-      font-size: 20px;
-      color: #666;
+      margin: 0 0 12px;
+      font-size: 22px;
+      font-weight: 600;
+      color: #333;
     }
 
     .empty-state p {
-      margin: 0 0 24px;
-      color: #999;
+      margin: 0 0 8px;
+      color: #666;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .empty-state-features {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 16px 0 24px;
+      text-align: left;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+
+    .feature-item i {
+      font-size: 14px !important;
+      color: #4CAF50 !important;
     }
 
     .btn-create-large {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 24px;
-      background: #2196F3;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
       color: white;
       border: none;
-      border-radius: 6px;
-      font-size: 16px;
+      border-radius: 8px;
+      font-size: 15px;
       font-weight: 500;
       cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
     }
 
     .btn-create-large:hover {
-      background: #1976D2;
+      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
     }
 
     /* Content Layout */
@@ -624,10 +686,16 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   dialogParentId: string | null = null;
   availableParents: Array<{ ID: string | null; displayName: string }> = [];
 
+  // Operation states
+  isSaving = false;
+
   private listsByCategoryId: Map<string, ListEntity[]> = new Map();
   private categoryMap: Map<string, ListCategoryEntity> = new Map();
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private dialogService: DialogService
+  ) {
     super();
   }
 
@@ -816,23 +884,47 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   async deleteCategory() {
     if (!this.selectedCategory) return;
 
-    const listsInCategory = this.listsByCategoryId.get(this.selectedCategory.ID) || [];
-    const childCategories = this.categories.filter(c => c.ParentID === this.selectedCategory!.ID);
+    const categoryToDelete = this.selectedCategory;
+    const listsInCategory = this.listsByCategoryId.get(categoryToDelete.ID) || [];
+    const childCategories = this.categories.filter(c => c.ParentID === categoryToDelete.ID);
 
-    let message = `Are you sure you want to delete "${this.selectedCategory.Name}"?`;
+    let message = `Are you sure you want to delete "${categoryToDelete.Name}"?`;
     if (listsInCategory.length > 0) {
-      message += `\n\n${listsInCategory.length} list(s) will be uncategorized.`;
+      message += ` ${listsInCategory.length} list(s) will be uncategorized.`;
     }
     if (childCategories.length > 0) {
-      message += `\n\n${childCategories.length} subcategory(ies) will become top-level.`;
+      message += ` ${childCategories.length} subcategory(ies) will become top-level.`;
     }
 
-    if (confirm(message)) {
-      const deleted = await this.selectedCategory.Delete();
-      if (deleted) {
-        this.selectedCategory = null;
-        await this.loadData();
+    const confirmDialog = this.dialogService.open({
+      title: 'Delete Category',
+      content: message,
+      actions: [
+        { text: 'Cancel' },
+        { text: 'Delete', themeColor: 'error' }
+      ],
+      width: 450,
+      height: 220
+    });
+
+    try {
+      const result = await firstValueFrom(confirmDialog.result);
+      if (result && (result as { text: string }).text === 'Delete') {
+        // Show loading state during delete
+        this.isLoading = true;
+        this.cdr.detectChanges();
+
+        try {
+          await categoryToDelete.Delete();
+          this.selectedCategory = null;
+          await this.loadData();
+        } finally {
+          this.isLoading = false;
+          this.cdr.detectChanges();
+        }
       }
+    } catch {
+      // Dialog was closed without action
     }
   }
 
@@ -842,29 +934,38 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   }
 
   async saveCategory() {
-    const md = new Metadata();
-    let category: ListCategoryEntity;
+    this.isSaving = true;
+    this.cdr.detectChanges();
 
-    if (this.editingCategory) {
-      category = this.editingCategory;
-    } else {
-      category = await md.GetEntityObject<ListCategoryEntity>('List Categories');
-    }
+    try {
+      const md = new Metadata();
+      let category: ListCategoryEntity;
+      const wasEditing = !!this.editingCategory;
 
-    category.Name = this.dialogName;
-    category.Description = this.dialogDescription || undefined;
-    category.ParentID = this.dialogParentId || undefined;
-
-    const saved = await category.Save();
-    if (saved) {
-      this.closeDialog();
-      await this.loadData();
-
-      // Re-select the saved category
       if (this.editingCategory) {
-        this.selectedCategory = category;
-        this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
+        category = this.editingCategory;
+      } else {
+        category = await md.GetEntityObject<ListCategoryEntity>('List Categories');
       }
+
+      category.Name = this.dialogName;
+      category.Description = this.dialogDescription || undefined;
+      category.ParentID = this.dialogParentId || undefined;
+
+      const saved = await category.Save();
+      if (saved) {
+        this.closeDialog();
+        await this.loadData();
+
+        // Re-select the saved category
+        if (wasEditing) {
+          this.selectedCategory = category;
+          this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
+        }
+      }
+    } finally {
+      this.isSaving = false;
+      this.cdr.detectChanges();
     }
   }
 

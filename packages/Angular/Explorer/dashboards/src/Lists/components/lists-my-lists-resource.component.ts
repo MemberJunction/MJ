@@ -4,10 +4,12 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { ListEntity, ListCategoryEntity, ListDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, takeUntil, firstValueFrom } from 'rxjs';
+import { TabService } from '@memberjunction/ng-base-application';
+import { DialogService } from '@progress/kendo-angular-dialog';
 
 export function LoadListsMyListsResource() {
-  const test = new ListsMyListsResource(null!);
+  const test = new ListsMyListsResource(null!, null!, null!);
 }
 
 interface ListViewModel {
@@ -60,9 +62,26 @@ interface CategoryNode {
 
       <!-- Empty State -->
       <div class="empty-state" *ngIf="!isLoading && filteredLists.length === 0 && !searchTerm">
-        <i class="fa-solid fa-inbox"></i>
+        <div class="empty-state-icon-wrapper">
+          <div class="icon-bg"></div>
+          <i class="fa-solid fa-list-check"></i>
+        </div>
         <h3>No Lists Yet</h3>
-        <p>Create your first list to start organizing records.</p>
+        <p>Lists help you organize and track groups of records across your data.</p>
+        <div class="empty-state-features">
+          <div class="feature-item">
+            <i class="fa-solid fa-check-circle"></i>
+            <span>Group records from any entity</span>
+          </div>
+          <div class="feature-item">
+            <i class="fa-solid fa-check-circle"></i>
+            <span>Organize with categories</span>
+          </div>
+          <div class="feature-item">
+            <i class="fa-solid fa-check-circle"></i>
+            <span>Quick access from any view</span>
+          </div>
+        </div>
         <button class="btn-create-large" (click)="createNewList()">
           <i class="fa-solid fa-plus"></i>
           Create Your First List
@@ -70,10 +89,13 @@ interface CategoryNode {
       </div>
 
       <!-- No Results State -->
-      <div class="empty-state" *ngIf="!isLoading && filteredLists.length === 0 && searchTerm">
-        <i class="fa-solid fa-search"></i>
-        <h3>No Results</h3>
-        <p>No lists match "{{searchTerm}}"</p>
+      <div class="empty-state search-empty" *ngIf="!isLoading && filteredLists.length === 0 && searchTerm">
+        <div class="empty-state-icon-wrapper search">
+          <i class="fa-solid fa-search"></i>
+        </div>
+        <h3>No Results Found</h3>
+        <p>No lists match "<strong>{{searchTerm}}</strong>"</p>
+        <p class="empty-hint">Try a different search term or clear your search.</p>
         <button class="btn-clear" (click)="clearSearch()">Clear Search</button>
       </div>
 
@@ -106,18 +128,23 @@ interface CategoryNode {
         </div>
 
         <!-- Grid View -->
-        <div class="lists-grid" *ngIf="viewMode === 'grid'">
+        <div class="lists-grid" *ngIf="viewMode === 'grid'" role="list" aria-label="My Lists">
           <div
             class="list-card"
             *ngFor="let item of filteredLists"
-            (click)="openList(item.list)">
+            (click)="openList(item.list)"
+            (keydown.enter)="openList(item.list)"
+            (keydown.space)="openList(item.list); $event.preventDefault()"
+            tabindex="0"
+            role="listitem"
+            [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items'">
             <div class="card-header">
-              <div class="card-icon" [style.background-color]="getEntityColor(item.list.Entity)">
+              <div class="card-icon" [style.background-color]="getEntityColor(item.list.Entity)" aria-hidden="true">
                 <i [class]="getEntityIcon(item.list.Entity)"></i>
               </div>
               <div class="card-menu">
-                <button class="menu-btn" (click)="openListMenu($event, item.list)">
-                  <i class="fa-solid fa-ellipsis-v"></i>
+                <button class="menu-btn" (click)="openListMenu($event, item.list)" aria-label="More options for {{item.list.Name}}">
+                  <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
@@ -172,12 +199,17 @@ interface CategoryNode {
           </div>
 
           <!-- Lists in this category -->
-          <div class="category-lists" *ngIf="node.isExpanded">
+          <div class="category-lists" *ngIf="node.isExpanded" role="list">
             <div
               class="list-row"
               *ngFor="let item of node.lists"
-              (click)="openList(item.list)">
-              <div class="list-icon" [style.background-color]="getEntityColor(item.list.Entity)">
+              (click)="openList(item.list)"
+              (keydown.enter)="openList(item.list)"
+              (keydown.space)="openList(item.list); $event.preventDefault()"
+              tabindex="0"
+              role="listitem"
+              [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items'">
+              <div class="list-icon" [style.background-color]="getEntityColor(item.list.Entity)" aria-hidden="true">
                 <i [class]="getEntityIcon(item.list.Entity)"></i>
               </div>
               <div class="list-info">
@@ -185,8 +217,8 @@ interface CategoryNode {
                 <span class="list-meta">{{item.entityName}} &middot; {{item.itemCount}} items</span>
               </div>
               <div class="list-actions">
-                <button class="action-btn" (click)="openListMenu($event, item.list)" title="More options">
-                  <i class="fa-solid fa-ellipsis-v"></i>
+                <button class="action-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
+                  <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
@@ -250,13 +282,14 @@ interface CategoryNode {
           </div>
         </div>
         <kendo-dialog-actions>
-          <button kendoButton (click)="closeCreateDialog()">Cancel</button>
+          <button kendoButton (click)="closeCreateDialog()" [disabled]="isSaving">Cancel</button>
           <button
             kendoButton
             [primary]="true"
             (click)="saveList()"
-            [disabled]="!newListName || !selectedEntityId">
-            {{editingList ? 'Save' : 'Create'}}
+            [disabled]="!newListName || !selectedEntityId || isSaving">
+            <span *ngIf="isSaving" class="k-icon k-i-loading"></span>
+            {{isSaving ? 'Saving...' : (editingList ? 'Save' : 'Create')}}
           </button>
         </kendo-dialog-actions>
       </kendo-dialog>
@@ -410,48 +443,112 @@ interface CategoryNode {
       align-items: center;
       justify-content: center;
       flex: 1;
-      padding: 40px;
+      padding: 48px 40px;
       text-align: center;
+      max-width: 480px;
+      margin: 0 auto;
     }
 
-    .empty-state i {
-      font-size: 64px;
-      color: #ccc;
-      margin-bottom: 16px;
+    .empty-state-icon-wrapper {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .empty-state-icon-wrapper .icon-bg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%);
+    }
+
+    .empty-state-icon-wrapper > i {
+      position: relative;
+      font-size: 56px;
+      color: #2196F3;
+      z-index: 1;
+    }
+
+    .empty-state-icon-wrapper.search > i {
+      font-size: 48px;
+      color: #9e9e9e;
     }
 
     .empty-state h3 {
-      margin: 0 0 8px;
-      font-size: 20px;
-      color: #666;
+      margin: 0 0 12px;
+      font-size: 22px;
+      font-weight: 600;
+      color: #333;
     }
 
     .empty-state p {
-      margin: 0 0 24px;
-      color: #999;
+      margin: 0 0 8px;
+      color: #666;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .empty-state p:last-of-type {
+      margin-bottom: 24px;
+    }
+
+    .empty-hint {
+      color: #999 !important;
+      font-size: 13px !important;
+    }
+
+    .empty-state-features {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 28px;
+      text-align: left;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+
+    .feature-item i {
+      font-size: 14px !important;
+      color: #4CAF50 !important;
+    }
+
+    .search-empty .empty-state-icon-wrapper {
+      margin-bottom: 20px;
     }
 
     .btn-create-large {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 24px;
-      background: #2196F3;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
       color: white;
       border: none;
-      border-radius: 6px;
-      font-size: 16px;
+      border-radius: 8px;
+      font-size: 15px;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
     }
 
     .btn-create-large:hover {
-      background: #1976D2;
+      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
     }
 
     .btn-clear {
-      padding: 8px 16px;
+      padding: 10px 20px;
       background: #f0f0f0;
       border: none;
       border-radius: 6px;
@@ -516,12 +613,27 @@ interface CategoryNode {
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       overflow: hidden;
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s, outline 0.1s;
+      outline: 2px solid transparent;
     }
 
     .list-card:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+
+    .list-card:focus {
+      outline: 2px solid #2196F3;
+      outline-offset: 2px;
+    }
+
+    .list-card:focus:not(:focus-visible) {
+      outline: none;
+    }
+
+    .list-card:focus-visible {
+      outline: 2px solid #2196F3;
+      outline-offset: 2px;
     }
 
     .card-header {
@@ -681,10 +793,20 @@ interface CategoryNode {
       padding: 12px 16px 12px 40px;
       cursor: pointer;
       transition: background 0.2s;
+      outline: none;
     }
 
     .list-row:hover {
       background: #f5f5f5;
+    }
+
+    .list-row:focus {
+      background: #e3f2fd;
+    }
+
+    .list-row:focus-visible {
+      background: #e3f2fd;
+      box-shadow: inset 3px 0 0 #2196F3;
     }
 
     .list-icon {
@@ -872,11 +994,19 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   selectedEntityId = '';
   selectedCategoryId: string | null = null;
 
+  // Operation states
+  isSaving = false;
+  isDeleting = false;
+
   private categoryMap: Map<string, ListCategoryEntity> = new Map();
   private entityColorMap: Map<string, string> = new Map();
   private entityIconMap: Map<string, string> = new Map();
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private tabService: TabService,
+    private dialogService: DialogService
+  ) {
     super();
   }
 
@@ -1126,10 +1256,11 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   }
 
   openList(list: ListEntity) {
-    // Navigate to list detail view
-    // For now, we'll open it via the existing list-detail resource
-    // This would use NavigationService in a full implementation
-    console.log('Open list:', list.Name, list.ID);
+    // Get the application ID from the resource data
+    const appId = this.Data?.ApplicationId || '';
+
+    // Open the list in a new tab using the ListDetailResource
+    this.tabService.OpenList(list.ID, list.Name, appId);
   }
 
   openListMenu(event: Event, list: ListEntity) {
@@ -1169,31 +1300,67 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   async duplicateList() {
     if (!this.selectedContextList) return;
 
-    const md = new Metadata();
-    const newList = await md.GetEntityObject<ListEntity>('Lists');
-    newList.Name = `${this.selectedContextList.Name} (Copy)`;
-    newList.Description = this.selectedContextList.Description;
-    newList.EntityID = this.selectedContextList.EntityID;
-    newList.CategoryID = this.selectedContextList.CategoryID;
-    newList.UserID = md.CurrentUser!.ID;
-
-    const saved = await newList.Save();
-    if (saved) {
-      await this.loadData();
-    }
+    const listToDuplicate = this.selectedContextList;
     this.closeContextMenu();
+
+    // Show loading state
+    this.isLoading = true;
+    this.cdr.detectChanges();
+
+    try {
+      const md = new Metadata();
+      const newList = await md.GetEntityObject<ListEntity>('Lists');
+      newList.Name = `${listToDuplicate.Name} (Copy)`;
+      newList.Description = listToDuplicate.Description;
+      newList.EntityID = listToDuplicate.EntityID;
+      newList.CategoryID = listToDuplicate.CategoryID;
+      newList.UserID = md.CurrentUser!.ID;
+
+      await newList.Save();
+      await this.loadData();
+    } finally {
+      this.isLoading = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async deleteList() {
     if (!this.selectedContextList) return;
 
-    if (confirm(`Are you sure you want to delete "${this.selectedContextList.Name}"? This will also remove all items in the list.`)) {
-      const deleted = await this.selectedContextList.Delete();
-      if (deleted) {
-        await this.loadData();
-      }
-    }
+    const listToDelete = this.selectedContextList;
     this.closeContextMenu();
+
+    const confirmDialog = this.dialogService.open({
+      title: 'Delete List',
+      content: `Are you sure you want to delete "${listToDelete.Name}"? This will also remove all items in the list.`,
+      actions: [
+        { text: 'Cancel' },
+        { text: 'Delete', themeColor: 'error' }
+      ],
+      width: 450,
+      height: 200
+    });
+
+    try {
+      const result = await firstValueFrom(confirmDialog.result);
+      if (result && (result as { text: string }).text === 'Delete') {
+        // Show loading state during delete
+        this.isDeleting = true;
+        this.isLoading = true;
+        this.cdr.detectChanges();
+
+        try {
+          await listToDelete.Delete();
+          await this.loadData();
+        } finally {
+          this.isDeleting = false;
+          this.isLoading = false;
+          this.cdr.detectChanges();
+        }
+      }
+    } catch {
+      // Dialog was closed without action
+    }
   }
 
   closeCreateDialog() {
@@ -1209,25 +1376,33 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   }
 
   async saveList() {
-    const md = new Metadata();
-    let list: ListEntity;
+    this.isSaving = true;
+    this.cdr.detectChanges();
 
-    if (this.editingList) {
-      list = this.editingList;
-    } else {
-      list = await md.GetEntityObject<ListEntity>('Lists');
-      list.UserID = md.CurrentUser!.ID;
-      list.EntityID = this.selectedEntityId;
-    }
+    try {
+      const md = new Metadata();
+      let list: ListEntity;
 
-    list.Name = this.newListName;
-    list.Description = this.newListDescription || undefined;
-    list.CategoryID = this.selectedCategoryId || undefined;
+      if (this.editingList) {
+        list = this.editingList;
+      } else {
+        list = await md.GetEntityObject<ListEntity>('Lists');
+        list.UserID = md.CurrentUser!.ID;
+        list.EntityID = this.selectedEntityId;
+      }
 
-    const saved = await list.Save();
-    if (saved) {
-      this.closeCreateDialog();
-      await this.loadData();
+      list.Name = this.newListName;
+      list.Description = this.newListDescription || undefined;
+      list.CategoryID = this.selectedCategoryId || undefined;
+
+      const saved = await list.Save();
+      if (saved) {
+        this.closeCreateDialog();
+        await this.loadData();
+      }
+    } finally {
+      this.isSaving = false;
+      this.cdr.detectChanges();
     }
   }
 
