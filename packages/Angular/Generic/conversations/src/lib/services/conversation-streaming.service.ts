@@ -277,11 +277,26 @@ export class ConversationStreamingService implements OnDestroy {
   /**
    * Route agent progress updates (from RunAIAgentResolver) to registered callbacks.
    * Uses conversationDetailID from agentRun data for direct routing.
+   * Also handles completion messages to remove tasks from ActiveTasksService.
    */
   private async routeAgentProgress(statusObj: any): Promise<void> {
     try {
       // Extract progress information from RunAIAgentResolver message
-      const { agentRun, progress } = statusObj.data || {};
+      const { agentRun, progress, type } = statusObj.data || {};
+
+      // Handle completion messages - these don't have progress.message
+      // Backend sends type: 'complete' when agent finishes
+      if (type === 'complete') {
+        const agentRunId = statusObj.data?.agentRunId;
+        if (agentRunId) {
+          const removed = this.activeTasks.removeByAgentRunId(agentRunId);
+          if (removed) {
+            console.log(`[ConversationStreamingService] ✅ Agent run ${agentRunId} completed, removed from active tasks`);
+          }
+        }
+        return;
+      }
+
       const conversationDetailId = agentRun?.ConversationDetailID;
       const message = progress?.message;
       const percentComplete = progress?.percentage;

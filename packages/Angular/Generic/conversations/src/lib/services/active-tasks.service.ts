@@ -11,6 +11,7 @@ export interface ActiveTask {
   id: string;
   agentName: string;
   agentId?: string; // The agent ID for looking up icon/metadata
+  agentRunId?: string; // The AIAgentRun ID for finding task on completion
   status: string;
   relatedMessageId: string;
   conversationDetailId?: string;  // The ConversationDetail that tracks this task
@@ -170,6 +171,30 @@ export class ActiveTasksService {
   }
 
   /**
+   * Get an active task by its agent run ID
+   * @param agentRunId The AIAgentRun ID
+   * @returns The task if found, undefined otherwise
+   */
+  getByAgentRunId(agentRunId: string): ActiveTask | undefined {
+    const tasks = Array.from(this._tasks$.value.values());
+    return tasks.find(task => task.agentRunId === agentRunId);
+  }
+
+  /**
+   * Remove a task by its agent run ID
+   * @param agentRunId The AIAgentRun ID
+   * @returns true if task was found and removed, false otherwise
+   */
+  removeByAgentRunId(agentRunId: string): boolean {
+    const task = this.getByAgentRunId(agentRunId);
+    if (task) {
+      this.remove(task.id);
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Clear all active tasks
    */
   clear(): void {
@@ -233,6 +258,7 @@ export class ActiveTasksService {
         this.add({
           agentName: agentRun.Agent || 'Unknown Agent',
           agentId: agentRun.AgentID,
+          agentRunId: agentRun.ID, // For finding task on completion
           status: 'Reconnecting...',
           relatedMessageId: agentRun.ConversationDetailID || agentRun.ID,
           conversationDetailId: agentRun.ConversationDetailID || undefined,
