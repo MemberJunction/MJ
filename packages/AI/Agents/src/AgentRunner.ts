@@ -179,13 +179,14 @@ export class AgentRunner {
             if (options.conversationDetailId) {
                 agentResponseDetailId = options.conversationDetailId;
 
-                // Load the conversation detail to get the conversation ID
-                const detail = await md.GetEntityObject<ConversationDetailEntity>(
+                // Load the conversation detail to get the conversation ID AND keep reference for final status update
+                // This ensures backend can update Status/Message even if frontend disconnects (browser refresh)
+                agentResponseDetail = await md.GetEntityObject<ConversationDetailEntity>(
                     'Conversation Details',
                     contextUser
                 );
-                if (await detail.Load(agentResponseDetailId)) {
-                    conversationId = detail.ConversationID;
+                if (await agentResponseDetail.Load(agentResponseDetailId)) {
+                    conversationId = agentResponseDetail.ConversationID;
                     LogStatus(`Using existing conversation ${conversationId} and agent response detail ${agentResponseDetailId}`);
                     // Note: In this case, we don't know the user message detail ID
                     userMessageDetailId = agentResponseDetailId; // For backward compatibility
@@ -328,8 +329,9 @@ export class AgentRunner {
 
             const agentResult = await this.RunAgent<C, R>(modifiedParams);
 
-            // Step 5: Update agent response detail with final result (only if we created it)
-            if (serverCreatedAgentResponse && agentResponseDetail && agentResponseDetailId) {
+            // Step 5: Update agent response detail with final result
+            // ALWAYS update status - don't rely on frontend (browser may refresh during execution)
+            if (agentResponseDetail && agentResponseDetailId) {
                 LogStatus('Updating agent response detail with final result');
 
                 // Reload to get any updates from agent execution
