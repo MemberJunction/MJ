@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity,  TemplateParamEntity, ActionParamEntity, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity,  TemplateParamEntity, ActionParamEntity, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -3756,6 +3756,17 @@ The context is now within limits. Please retry your request with the recovered c
         this._agentRun.AgentID = params.agent.ID;
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
+
+            // Also set ConversationID by looking up the conversation detail
+            // This enables tracking active tasks by conversation after browser refresh
+            try {
+                const convDetail = await this._metadata.GetEntityObject<ConversationDetailEntity>('Conversation Details', params.contextUser);
+                if (await convDetail.Load(params.conversationDetailId)) {
+                    this._agentRun.ConversationID = convDetail.ConversationID;
+                }
+            } catch (err) {
+                console.warn('Could not lookup ConversationID from ConversationDetail:', err);
+            }
         }
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();

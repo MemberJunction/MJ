@@ -4,14 +4,14 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService } from '@memberjunction/ng-conversations';
+import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService } from '@memberjunction/ng-conversations';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 
 export function LoadChatConversationsResource() {
   // Force inclusion in production builds (tree shaking workaround)
   // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatConversationsResource(null!, null!, null!, null!, null!, null!);
+  const test = new ChatConversationsResource(null!, null!, null!, null!, null!, null!, null!);
 }
 
 /**
@@ -210,7 +210,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private router: Router,
     private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
-    private streamingService: ConversationStreamingService
+    private streamingService: ConversationStreamingService,
+    private activeTasksService: ActiveTasksService
   ) {
     super();
   }
@@ -314,6 +315,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
       // Then initialize mention autocomplete service which uses the loaded agents
       await this.mentionAutocompleteService.initialize(this.currentUser);
+
+      // Restore active tasks from database (for browser refresh during agent execution)
+      await this.activeTasksService.restoreFromDatabase(this.currentUser);
 
       // Mark as ready - child components can now render
       this.isReady = true;

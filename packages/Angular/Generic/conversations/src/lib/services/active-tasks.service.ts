@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { RunView, UserInfo } from '@memberjunction/core';
+import { AIAgentRunEntity, ConversationEntity } from '@memberjunction/core-entities';
 
 /**
  * Represents an active agent task that is currently running
@@ -172,5 +174,81 @@ export class ActiveTasksService {
    */
   clear(): void {
     this._tasks$.next(new Map());
+  }
+
+  /**
+   * Restore active tasks from database by querying running agent runs.
+   * Call this on app initialization to restore state after browser refresh.
+   * @param currentUser The current user to filter agent runs by
+   */
+  async restoreFromDatabase(currentUser: UserInfo): Promise<void> {
+    try {
+      const rv = new RunView();
+
+      // Query for running agent runs owned by this user
+      const result = await rv.RunView<AIAgentRunEntity>({
+        EntityName: 'MJ: AI Agent Runs',
+        ExtraFilter: `Status='Running' AND UserID='${currentUser.ID}'`,
+        ResultType: 'entity_object'
+      }, currentUser);
+
+      if (!result.Success || !result.Results || result.Results.length === 0) {
+        // No running tasks or query failed - nothing to restore
+        return;
+      }
+
+      // Get conversation names for display
+      const conversationIds = new Set(
+        result.Results
+          .filter(run => run.ConversationID)
+          .map(run => run.ConversationID!)
+      );
+
+      const conversationNames = new Map<string, string>();
+      if (conversationIds.size > 0) {
+        const convResult = await rv.RunView<ConversationEntity>({
+          EntityName: 'Conversations',
+          ExtraFilter: `ID IN (${Array.from(conversationIds).map(id => `'${id}'`).join(',')})`,
+          ResultType: 'entity_object'
+        }, currentUser);
+
+        if (convResult.Success && convResult.Results) {
+          for (const conv of convResult.Results) {
+            if (conv.Name) {
+              conversationNames.set(conv.ID, conv.Name);
+            }
+          }
+        }
+      }
+
+      // Add each running agent to ActiveTasksService
+      let restoredCount = 0;
+      for (const agentRun of result.Results) {
+        // Skip if already tracked (prevents duplicates)
+        if (agentRun.ConversationDetailID &&
+            this.getByConversationDetailId(agentRun.ConversationDetailID)) {
+          continue;
+        }
+
+        this.add({
+          agentName: agentRun.Agent || 'Unknown Agent',
+          agentId: agentRun.AgentID,
+          status: 'Reconnecting...',
+          relatedMessageId: agentRun.ConversationDetailID || agentRun.ID,
+          conversationDetailId: agentRun.ConversationDetailID || undefined,
+          conversationId: agentRun.ConversationID || undefined,
+          conversationName: agentRun.ConversationID
+            ? conversationNames.get(agentRun.ConversationID) || null
+            : null
+        });
+        restoredCount++;
+      }
+
+      if (restoredCount > 0) {
+        console.log(`✅ Restored ${restoredCount} active task(s) from database`);
+      }
+    } catch (error) {
+      console.error('Failed to restore active tasks from database:', error);
+    }
   }
 }
