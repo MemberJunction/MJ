@@ -1,6 +1,7 @@
 import { Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { AIAgentNoteEntity, AIAgentExampleEntity } from "@memberjunction/core-entities";
 import { AIEngine } from "@memberjunction/aiengine";
+import { UserScope } from "@memberjunction/ai-core-plus";
 
 /**
  * Parameters for retrieving notes in a specific context
@@ -13,6 +14,14 @@ export interface GetNotesParams {
     strategy: 'Relevant' | 'Recent' | 'All';
     maxNotes: number;
     contextUser: UserInfo;
+    /**
+     * Optional user scope for multi-tenant SaaS deployments.
+     * When provided, enables hierarchical scope filtering:
+     * - Global notes (no scope)
+     * - Primary-scope notes (e.g., org-level)
+     * - Fully-scoped notes (e.g., contact-level)
+     */
+    userScope?: UserScope;
 }
 
 /**
@@ -26,6 +35,11 @@ export interface GetExamplesParams {
     strategy: 'Semantic' | 'Recent' | 'Rated';
     maxExamples: number;
     contextUser: UserInfo;
+    /**
+     * Optional user scope for multi-tenant SaaS deployments.
+     * When provided, enables hierarchical scope filtering.
+     */
+    userScope?: UserScope;
 }
 
 /**
@@ -135,12 +149,14 @@ export class AgentContextInjector {
     }
 
     /**
-     * Build filter with 8-level scoping priority for notes
+     * Build filter with 8-level scoping priority for notes.
+     * Combines MJ-internal scoping (AgentID, UserID, CompanyID) with
+     * multi-tenant SaaS scoping (PrimaryScopeEntityID, PrimaryScopeRecordID, SecondaryScopes).
      */
     private buildNotesScopingFilter(params: GetNotesParams): string {
         const filters: string[] = ['Status = \'Active\''];
 
-        // Build scoping filter using OR conditions with priority
+        // Build MJ-internal scoping filter using OR conditions with priority
         const scopeConditions: string[] = [];
 
         // Priority 1: AgentID + UserID + CompanyID
@@ -185,12 +201,52 @@ export class AgentContextInjector {
             filters.push(`(${scopeConditions.join(' OR ')})`);
         }
 
+        // Add multi-tenant SaaS scoping if userScope is provided
+        if (params.userScope) {
+            const saasScopes = this.buildSaasScopeFilter(params.userScope);
+            filters.push(`(${saasScopes})`);
+        }
+
         return filters.join(' AND ');
+    }
+
+    /**
+     * Build filter for multi-tenant SaaS scoping with hierarchical inheritance.
+     * Returns notes at all applicable scope levels (global → primary → full).
+     */
+    private buildSaasScopeFilter(userScope: UserScope): string {
+        const conditions: string[] = [];
+
+        // Always include global notes (no scope set)
+        conditions.push('PrimaryScopeRecordID IS NULL');
+
+        if (userScope.primaryRecordId) {
+            // Include primary-scope-only notes (matches org, no secondary scopes)
+            conditions.push(`(
+                PrimaryScopeRecordID = '${userScope.primaryRecordId}'
+                AND (SecondaryScopes IS NULL OR SecondaryScopes = '{}')
+            )`);
+
+            // Include fully-scoped notes if secondary scopes are provided
+            if (userScope.secondary && Object.keys(userScope.secondary).length > 0) {
+                const secondaryConditions = Object.entries(userScope.secondary)
+                    .map(([key, val]) => `JSON_VALUE(SecondaryScopes, '$.${key}') = '${val}'`)
+                    .join(' AND ');
+
+                conditions.push(`(
+                    PrimaryScopeRecordID = '${userScope.primaryRecordId}'
+                    AND ${secondaryConditions}
+                )`);
+            }
+        }
+
+        return conditions.join(' OR ');
     }
 
     /**
      * Filter examples using multi-dimensional scoping priority.
      * Implements 4-level scoping hierarchy for examples (examples are always agent-specific).
+     * Also handles multi-tenant SaaS scoping when userScope is provided.
      */
     private filterExamplesByScoping(examples: AIAgentExampleEntity[], params: GetExamplesParams): AIAgentExampleEntity[] {
         return examples.filter(example => {
@@ -204,7 +260,7 @@ export class AgentContextInjector {
                 return false;
             }
 
-            // Check scoping priority (any of these conditions can match)
+            // Check MJ-internal scoping priority (any of these conditions can match)
             const matchesPriority1 = params.userId && params.companyId &&
                 example.UserID === params.userId && example.CompanyID === params.companyId;
 
@@ -216,8 +272,61 @@ export class AgentContextInjector {
 
             const matchesPriority4 = example.UserID == null && example.CompanyID == null;
 
-            return matchesPriority1 || matchesPriority2 || matchesPriority3 || matchesPriority4;
+            const matchesMJScoping = matchesPriority1 || matchesPriority2 || matchesPriority3 || matchesPriority4;
+            if (!matchesMJScoping) {
+                return false;
+            }
+
+            // Check multi-tenant SaaS scoping if userScope is provided
+            if (params.userScope) {
+                return this.matchesSaasScope(example, params.userScope);
+            }
+
+            return true;
         });
+    }
+
+    /**
+     * Check if an example matches the SaaS scope criteria (hierarchical).
+     * Returns true for: global, primary-only, or fully-scoped matches.
+     */
+    private matchesSaasScope(example: AIAgentExampleEntity, userScope: UserScope): boolean {
+        // Global examples (no scope) always match
+        if (!example.PrimaryScopeRecordID) {
+            return true;
+        }
+
+        // No primary scope provided - only global examples match
+        if (!userScope.primaryRecordId) {
+            return false;
+        }
+
+        // Primary scope must match
+        if (example.PrimaryScopeRecordID !== userScope.primaryRecordId) {
+            return false;
+        }
+
+        // If example has no secondary scopes, it's an org-level example - matches
+        const exampleSecondary = example.SecondaryScopes;
+        if (!exampleSecondary || exampleSecondary === '{}') {
+            return true;
+        }
+
+        // Example has secondary scopes - check if they match
+        if (!userScope.secondary || Object.keys(userScope.secondary).length === 0) {
+            // User has no secondary scope but example does - no match
+            return false;
+        }
+
+        // Parse and match secondary scopes
+        try {
+            const parsedSecondary = JSON.parse(exampleSecondary);
+            return Object.entries(parsedSecondary).every(([key, val]) =>
+                userScope.secondary?.[key] === val
+            );
+        } catch {
+            return false;
+        }
     }
 
     /**

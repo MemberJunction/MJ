@@ -3805,6 +3805,29 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TestRunID = params.testRunId;
         }
 
+        // Set user scope for multi-tenant SaaS deployments
+        if (params.userScope) {
+            // Resolve primary entity ID from entity name
+            if (params.userScope.primaryEntityName) {
+                const primaryEntity = this._metadata.Entities.find(
+                    e => e.Name === params.userScope!.primaryEntityName
+                );
+                if (primaryEntity) {
+                    this._agentRun.PrimaryScopeEntityID = primaryEntity.ID;
+                } else {
+                    LogError(`UserScope: Entity "${params.userScope.primaryEntityName}" not found in metadata`);
+                }
+            }
+            // Set primary scope record ID
+            if (params.userScope.primaryRecordId) {
+                this._agentRun.PrimaryScopeRecordID = params.userScope.primaryRecordId;
+            }
+            // Set secondary scopes as JSON
+            if (params.userScope.secondary && Object.keys(params.userScope.secondary).length > 0) {
+                this._agentRun.SecondaryScopes = JSON.stringify(params.userScope.secondary);
+            }
+        }
+
         // Save the agent run
         if (!await this._agentRun.Save()) {
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));

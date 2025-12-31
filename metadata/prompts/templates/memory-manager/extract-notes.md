@@ -62,6 +62,21 @@ Determine the appropriate scope for each note:
 - **Global** (all null): System-wide best practices or constraints
 - **Combined** (multiple IDs): More specific scoping (e.g., user + agent)
 
+### Multi-Tenant Scope Level (for SaaS deployments)
+
+When the agent is used in a multi-tenant SaaS context, determine the appropriate scope level using the `scopeLevel` field:
+
+- **"global"**: Applies to ALL users and organizations (e.g., "Always greet politely", "Use professional tone")
+- **"organization"**: Applies to all contacts within an organization (e.g., "This org uses metric units", "Company policy requires formal salutations")
+- **"contact"**: Specific to one individual contact (e.g., "John prefers email over phone", "Sarah is on vacation until Jan 15")
+
+**Hints for determining scope level:**
+- Keywords like "always", "all customers", "everyone" → `global`
+- Keywords like "company", "organization", "all users here", "our policy" → `organization`
+- Specific person names, individual preferences, personal context → `contact`
+
+If the conversation doesn't have clear multi-tenant context, omit the `scopeLevel` field (defaults to most specific).
+
 ### Comparison with Existing Notes
 
 For each potential note:
@@ -90,6 +105,20 @@ Return **only high-confidence notes (≥70)** in this JSON structure:
       "companyId": null,
       "content": "User prefers responses with bullet points and concise summaries",
       "confidence": 85,
+      "scopeLevel": "contact",
+      "sourceConversationId": "conv-uuid-here",
+      "sourceConversationDetailId": "detail-uuid-here",
+      "sourceAgentRunId": null,
+      "mergeWithExistingId": null
+    },
+    {
+      "type": "Context",
+      "agentId": null,
+      "userId": null,
+      "companyId": "company-uuid-here",
+      "content": "Company uses metric units for all measurements",
+      "confidence": 90,
+      "scopeLevel": "organization",
       "sourceConversationId": "conv-uuid-here",
       "sourceConversationDetailId": "detail-uuid-here",
       "sourceAgentRunId": null,
@@ -99,7 +128,9 @@ Return **only high-confidence notes (≥70)** in this JSON structure:
 }
 ```
 
-**Important**: The `type` field must be exactly one of: `Preference`, `Constraint`, `Context`, `Example`, or `Issue`. The system will automatically look up the corresponding note type ID.
+**Important**:
+- The `type` field must be exactly one of: `Preference`, `Constraint`, `Context`, `Example`, or `Issue`. The system will automatically look up the corresponding note type ID.
+- The `scopeLevel` field is optional and only applies for multi-tenant SaaS deployments. Valid values: `"global"`, `"organization"`, `"contact"`. If omitted, defaults to most specific (contact-level).
 
 ## Quality Standards
 

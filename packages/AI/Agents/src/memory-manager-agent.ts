@@ -24,6 +24,13 @@ interface ExtractedNote {
     sourceConversationDetailId?: string;
     sourceAgentRunId?: string;
     mergeWithExistingId?: string; // If should update existing note
+    /**
+     * Scope level hint from LLM analysis.
+     * - 'global': Applies to all users (e.g., "Always greet politely")
+     * - 'organization': Applies to all contacts in an org (e.g., "This org uses metric units")
+     * - 'contact': Specific to one contact (e.g., "John prefers email")
+     */
+    scopeLevel?: 'global' | 'organization' | 'contact';
 }
 
 /**
@@ -41,6 +48,13 @@ interface ExtractedExample {
     sourceConversationId?: string;
     sourceConversationDetailId?: string;
     sourceAgentRunId?: string;
+    /**
+     * Scope level hint from LLM analysis.
+     * - 'global': Applies to all users
+     * - 'organization': Applies to all contacts in an org
+     * - 'contact': Specific to one contact
+     */
+    scopeLevel?: 'global' | 'organization' | 'contact';
 }
 
 /**
@@ -410,11 +424,16 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Create note records from extracted data
+     * Create note records from extracted data.
+     * Inherits scope from source agent run and applies scopeLevel to determine scope specificity.
      */
     private async CreateNoteRecords(extractedNotes: ExtractedNote[], contextUser: UserInfo): Promise<number> {
         let created = 0;
         const md = new Metadata();
+        const rv = new RunView();
+
+        // Cache source agent runs to avoid repeated lookups
+        const runCache = new Map<string, AIAgentRunEntity | null>();
 
         for (const extracted of extractedNotes) {
             try {
@@ -423,6 +442,21 @@ export class MemoryManagerAgent extends BaseAgent {
                 if (!noteTypeId) {
                     LogError(`Memory Manager: Unknown note type "${extracted.type}" - skipping note creation`);
                     continue;
+                }
+
+                // Load source agent run for scope inheritance (if available)
+                let sourceRun: AIAgentRunEntity | null = null;
+                if (extracted.sourceAgentRunId) {
+                    if (!runCache.has(extracted.sourceAgentRunId)) {
+                        const runResult = await rv.RunView<AIAgentRunEntity>({
+                            EntityName: 'MJ: AI Agent Runs',
+                            ExtraFilter: `ID='${extracted.sourceAgentRunId}'`,
+                            MaxRows: 1,
+                            ResultType: 'entity_object'
+                        }, contextUser);
+                        runCache.set(extracted.sourceAgentRunId, runResult.Success && runResult.Results?.length > 0 ? runResult.Results[0] : null);
+                    }
+                    sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
                 }
 
                 // Check if we should merge with existing
@@ -451,6 +485,28 @@ export class MemoryManagerAgent extends BaseAgent {
                     note.SourceConversationDetailID = extracted.sourceConversationDetailId || null;
                     note.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
 
+                    // Apply scope from source agent run based on scopeLevel hint
+                    if (sourceRun && sourceRun.PrimaryScopeEntityID) {
+                        const scopeLevel = extracted.scopeLevel || 'contact'; // Default to most specific
+
+                        if (scopeLevel === 'global') {
+                            // Global note - no scope fields set
+                            note.PrimaryScopeEntityID = null;
+                            note.PrimaryScopeRecordID = null;
+                            note.SecondaryScopes = null;
+                        } else if (scopeLevel === 'organization') {
+                            // Org-level note - primary scope only, no secondary
+                            note.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
+                            note.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
+                            note.SecondaryScopes = null;
+                        } else {
+                            // Fully-scoped note (contact level) - inherit full scope
+                            note.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
+                            note.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
+                            note.SecondaryScopes = sourceRun.SecondaryScopes;
+                        }
+                    }
+
                     if (await note.Save()) {
                         created++;
                     }
@@ -464,14 +520,34 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Create example records from extracted data
+     * Create example records from extracted data.
+     * Inherits scope from source agent run and applies scopeLevel to determine scope specificity.
      */
     private async CreateExampleRecords(extractedExamples: ExtractedExample[], contextUser: UserInfo): Promise<number> {
         let created = 0;
         const md = new Metadata();
+        const rv = new RunView();
+
+        // Cache source agent runs to avoid repeated lookups
+        const runCache = new Map<string, AIAgentRunEntity | null>();
 
         for (const extracted of extractedExamples) {
             try {
+                // Load source agent run for scope inheritance (if available)
+                let sourceRun: AIAgentRunEntity | null = null;
+                if (extracted.sourceAgentRunId) {
+                    if (!runCache.has(extracted.sourceAgentRunId)) {
+                        const runResult = await rv.RunView<AIAgentRunEntity>({
+                            EntityName: 'MJ: AI Agent Runs',
+                            ExtraFilter: `ID='${extracted.sourceAgentRunId}'`,
+                            MaxRows: 1,
+                            ResultType: 'entity_object'
+                        }, contextUser);
+                        runCache.set(extracted.sourceAgentRunId, runResult.Success && runResult.Results?.length > 0 ? runResult.Results[0] : null);
+                    }
+                    sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
+                }
+
                 const example = await md.GetEntityObject<AIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
                 example.AgentID = extracted.agentId;
                 example.UserID = extracted.userId || null;
@@ -485,6 +561,28 @@ export class MemoryManagerAgent extends BaseAgent {
                 example.SourceConversationID = extracted.sourceConversationId || null;
                 example.SourceConversationDetailID = extracted.sourceConversationDetailId || null;
                 example.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
+
+                // Apply scope from source agent run based on scopeLevel hint
+                if (sourceRun && sourceRun.PrimaryScopeEntityID) {
+                    const scopeLevel = extracted.scopeLevel || 'contact'; // Default to most specific
+
+                    if (scopeLevel === 'global') {
+                        // Global example - no scope fields set
+                        example.PrimaryScopeEntityID = null;
+                        example.PrimaryScopeRecordID = null;
+                        example.SecondaryScopes = null;
+                    } else if (scopeLevel === 'organization') {
+                        // Org-level example - primary scope only, no secondary
+                        example.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
+                        example.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
+                        example.SecondaryScopes = null;
+                    } else {
+                        // Fully-scoped example (contact level) - inherit full scope
+                        example.PrimaryScopeEntityID = sourceRun.PrimaryScopeEntityID;
+                        example.PrimaryScopeRecordID = sourceRun.PrimaryScopeRecordID;
+                        example.SecondaryScopes = sourceRun.SecondaryScopes;
+                    }
+                }
 
                 if (await example.Save()) {
                     created++;
