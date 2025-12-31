@@ -12,7 +12,7 @@
  * @since 2.130.0
  */
 
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     FileStorageProviderEntity,
     FileEntity,
@@ -25,8 +25,6 @@ import {
     ConversationUtility,
     AttachmentType,
     AttachmentLimits,
-    AttachmentDefaults,
-    AttachmentValidationResult,
     AttachmentContent,
     DEFAULT_ATTACHMENT_LIMITS,
     DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES
@@ -589,7 +587,10 @@ export class ConversationAttachmentService {
     }
 
     /**
-     * Create an attachment record in the database
+     * Create an attachment record in the database.
+     *
+     * NOTE: After CodeGen runs with the migration, this method should be updated to use
+     * the generated ConversationDetailAttachmentEntity type instead of BaseEntity.
      */
     private async createAttachmentRecord(
         data: {
@@ -608,42 +609,45 @@ export class ConversationAttachmentService {
         },
         contextUser: UserInfo
     ): Promise<ConversationDetailAttachmentRecord | null> {
-        // Note: The entity name may need adjustment after CodeGen runs
-        const attachment = await this.md.GetEntityObject<{
-            ConversationDetailID: string;
-            AttachmentType: string;
-            MimeType: string;
-            FileName: string | null;
-            FileSizeBytes: number;
-            Width: number | null;
-            Height: number | null;
-            DurationSeconds: number | null;
-            InlineData: string | null;
-            FileID: string | null;
-            DisplayOrder: number;
-            ThumbnailBase64: string | null;
-            Save: () => Promise<boolean>;
-            GetAll: () => Record<string, unknown>;
-        }>('Conversation Detail Attachments', contextUser);
+        // Get a generic BaseEntity - the entity won't exist until CodeGen runs
+        // TODO: After CodeGen, replace with: GetEntityObject<ConversationDetailAttachmentEntity>
+        const attachment = await this.md.GetEntityObject<BaseEntity>('Conversation Detail Attachments', contextUser);
 
-        attachment.ConversationDetailID = data.conversationDetailId;
-        attachment.AttachmentType = data.attachmentType;
-        attachment.MimeType = data.mimeType;
-        attachment.FileName = data.fileName;
-        attachment.FileSizeBytes = data.sizeBytes;
-        attachment.Width = data.width;
-        attachment.Height = data.height;
-        attachment.DurationSeconds = data.durationSeconds;
-        attachment.InlineData = data.inlineData;
-        attachment.FileID = data.fileId;
-        attachment.DisplayOrder = data.displayOrder;
-        attachment.ThumbnailBase64 = data.thumbnailBase64;
+        // Use Set() method to populate fields dynamically
+        attachment.Set('ConversationDetailID', data.conversationDetailId);
+        attachment.Set('AttachmentType', data.attachmentType);
+        attachment.Set('MimeType', data.mimeType);
+        attachment.Set('FileName', data.fileName);
+        attachment.Set('FileSizeBytes', data.sizeBytes);
+        attachment.Set('Width', data.width);
+        attachment.Set('Height', data.height);
+        attachment.Set('DurationSeconds', data.durationSeconds);
+        attachment.Set('InlineData', data.inlineData);
+        attachment.Set('FileID', data.fileId);
+        attachment.Set('DisplayOrder', data.displayOrder);
+        attachment.Set('ThumbnailBase64', data.thumbnailBase64);
 
         if (!await attachment.Save()) {
             return null;
         }
 
-        return attachment.GetAll() as ConversationDetailAttachmentRecord;
+        // Convert the entity's data to our record interface
+        const allData = attachment.GetAll();
+        return {
+            ID: allData['ID'] as string,
+            ConversationDetailID: allData['ConversationDetailID'] as string,
+            AttachmentType: allData['AttachmentType'] as AttachmentType,
+            MimeType: allData['MimeType'] as string,
+            FileName: allData['FileName'] as string | null,
+            FileSizeBytes: allData['FileSizeBytes'] as number,
+            Width: allData['Width'] as number | null,
+            Height: allData['Height'] as number | null,
+            DurationSeconds: allData['DurationSeconds'] as number | null,
+            InlineData: allData['InlineData'] as string | null,
+            FileID: allData['FileID'] as string | null,
+            DisplayOrder: allData['DisplayOrder'] as number,
+            ThumbnailBase64: allData['ThumbnailBase64'] as string | null
+        };
     }
 }
 
