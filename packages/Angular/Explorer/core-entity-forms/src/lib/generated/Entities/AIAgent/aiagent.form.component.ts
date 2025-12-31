@@ -20,6 +20,7 @@ export class AIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'contextCompression', sectionName: 'Context Compression', isExpanded: false },
             { sectionKey: 'payloadDataFlow', sectionName: 'Payload & Data Flow', isExpanded: false },
             { sectionKey: 'runtimeLimitsExecutionSettings', sectionName: 'Runtime Limits & Execution Settings', isExpanded: false },
+            { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'aIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'aIAgentLearningCycles', sectionName: 'AIAgent Learning Cycles', isExpanded: false },

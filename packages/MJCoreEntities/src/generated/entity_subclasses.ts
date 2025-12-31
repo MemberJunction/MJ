@@ -977,12 +977,12 @@ export const AIAgentNoteSchema = z.object({
         * * Default Value: newsequentialid()`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent ID
+        * * Display Name: Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
     AgentNoteTypeID: z.string().nullable().describe(`
         * * Field Name: AgentNoteTypeID
-        * * Display Name: Agent Note Type ID
+        * * Display Name: Agent Note Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agent Note Types (vwAIAgentNoteTypes.ID)`),
     Note: z.string().nullable().describe(`
@@ -1002,7 +1002,7 @@ export const AIAgentNoteSchema = z.object({
         * * Default Value: getutcdate()`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User`),
@@ -1043,25 +1043,25 @@ export const AIAgentNoteSchema = z.object({
         * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
     SourceConversationID: z.string().nullable().describe(`
         * * Field Name: SourceConversationID
-        * * Display Name: Source Conversation ID
+        * * Display Name: Source Conversation
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
         * * Description: Optional reference to the conversation that inspired or generated this note.`),
     SourceConversationDetailID: z.string().nullable().describe(`
         * * Field Name: SourceConversationDetailID
-        * * Display Name: Source Conversation Detail ID
+        * * Display Name: Source Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to the specific conversation message that inspired this note.`),
     SourceAIAgentRunID: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRunID
-        * * Display Name: Source AI Agent Run ID
+        * * Display Name: Source AI Agent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Optional reference to the AI agent run that generated this note.`),
     CompanyID: z.string().nullable().describe(`
         * * Field Name: CompanyID
-        * * Display Name: Company ID
+        * * Display Name: Company
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
         * * Description: Optional company scope for this note. When populated with UserID, creates org+user specific notes.`),
@@ -1072,10 +1072,26 @@ export const AIAgentNoteSchema = z.object({
         * * Description: JSON array of embedding vector for semantic search on Note field. Auto-generated when Note changes.`),
     EmbeddingModelID: z.string().nullable().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         * * Description: Reference to the AI model used to generate the embedding vector.`),
+    PrimaryScopeEntityID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntityID
+        * * Display Name: Primary Scope Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global note.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.`),
+    SecondaryScopes: z.string().nullable().describe(`
+        * * Field Name: SecondaryScopes
+        * * Display Name: Secondary Scopes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level note. Populated = fully-scoped note.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1092,6 +1108,14 @@ export const AIAgentNoteSchema = z.object({
         * * Field Name: SourceConversation
         * * Display Name: Source Conversation
         * * SQL Data Type: nvarchar(255)`),
+    SourceConversationDetail: z.string().nullable().describe(`
+        * * Field Name: SourceConversationDetail
+        * * Display Name: Source Conversation Detail
+        * * SQL Data Type: nvarchar(MAX)`),
+    SourceAIAgentRun: z.string().nullable().describe(`
+        * * Field Name: SourceAIAgentRun
+        * * Display Name: Source AI Agent Run
+        * * SQL Data Type: nvarchar(255)`),
     Company: z.string().nullable().describe(`
         * * Field Name: Company
         * * Display Name: Company
@@ -1100,6 +1124,10 @@ export const AIAgentNoteSchema = z.object({
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model
         * * SQL Data Type: nvarchar(50)`),
+    PrimaryScopeEntity: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntity
+        * * Display Name: Primary Scope Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIAgentNoteEntityType = z.infer<typeof AIAgentNoteSchema>;
@@ -1231,7 +1259,7 @@ export const AIAgentSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.`),
@@ -1270,7 +1298,7 @@ export const AIAgentSchema = z.object({
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt ID
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
@@ -1280,7 +1308,7 @@ export const AIAgentSchema = z.object({
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Agent Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
@@ -1433,13 +1461,13 @@ if this limit is exceeded.`),
         * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
     DefaultArtifactTypeID: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactTypeID
-        * * Display Name: Default Artifact Type ID
+        * * Display Name: Default Artifact Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User ID
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -1545,9 +1573,14 @@ if this limit is exceeded.`),
         * * Display Name: Max Messages
         * * SQL Data Type: int
         * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
+    ScopeConfig: z.string().nullable().describe(`
+        * * Field Name: ScopeConfig
+        * * Display Name: Scope Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent (Name)
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
@@ -1563,11 +1596,11 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner User
+        * * Display Name: Owner User (Name)
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -8511,25 +8544,25 @@ export const AIAgentExampleSchema = z.object({
         * * Default Value: newsequentialid()`),
     AgentID: z.string().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent ID
+        * * Display Name: Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: The AI agent this example is associated with. Examples are always agent-specific.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: Optional user scope. When populated, this example is specific to this user.`),
     CompanyID: z.string().nullable().describe(`
         * * Field Name: CompanyID
-        * * Display Name: Company ID
+        * * Display Name: Company
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
         * * Description: Optional company scope. When populated, this example is specific to this company.`),
     Type: z.union([z.literal('Constraint'), z.literal('Context'), z.literal('Example'), z.literal('Issue'), z.literal('Preference')]).describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Example Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Example
     * * Value List Type: List
@@ -8552,25 +8585,25 @@ export const AIAgentExampleSchema = z.object({
         * * Description: The successful output or response that the agent provided for this example.`),
     IsAutoGenerated: z.boolean().describe(`
         * * Field Name: IsAutoGenerated
-        * * Display Name: Is Auto Generated
+        * * Display Name: Auto Generated
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether this example was automatically captured (1) or manually created (0).`),
     SourceConversationID: z.string().nullable().describe(`
         * * Field Name: SourceConversationID
-        * * Display Name: Source Conversation ID
+        * * Display Name: Source Conversation
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
         * * Description: Optional reference to the conversation where this example originated.`),
     SourceConversationDetailID: z.string().nullable().describe(`
         * * Field Name: SourceConversationDetailID
-        * * Display Name: Source Conversation Detail ID
+        * * Display Name: Source Conversation Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to the specific conversation message that represents this example.`),
     SourceAIAgentRunID: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRunID
-        * * Display Name: Source AI Agent Run ID
+        * * Display Name: Source AI Agent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Optional reference to the AI agent run that generated this example.`),
@@ -8612,10 +8645,26 @@ export const AIAgentExampleSchema = z.object({
         * * Description: JSON array of embedding vector for semantic search on ExampleInput field. Auto-generated when ExampleInput changes.`),
     EmbeddingModelID: z.string().nullable().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         * * Description: Reference to the AI model used to generate the embedding vector.`),
+    PrimaryScopeEntityID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntityID
+        * * Display Name: Primary Scope Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global example.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The record ID within the primary scope entity. NULL means global example. When set with empty SecondaryScopes, indicates primary-scope-only example.`),
+    SecondaryScopes: z.string().nullable().describe(`
+        * * Field Name: SecondaryScopes
+        * * Display Name: Secondary Scopes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level example. Populated = fully-scoped example.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -8632,10 +8681,22 @@ export const AIAgentExampleSchema = z.object({
         * * Field Name: SourceConversation
         * * Display Name: Source Conversation
         * * SQL Data Type: nvarchar(255)`),
+    SourceConversationDetail: z.string().nullable().describe(`
+        * * Field Name: SourceConversationDetail
+        * * Display Name: Source Conversation Detail
+        * * SQL Data Type: nvarchar(MAX)`),
+    SourceAIAgentRun: z.string().nullable().describe(`
+        * * Field Name: SourceAIAgentRun
+        * * Display Name: Source AI Agent Run
+        * * SQL Data Type: nvarchar(255)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model
         * * SQL Data Type: nvarchar(50)`),
+    PrimaryScopeEntity: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntity
+        * * Display Name: Primary Scope Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIAgentExampleEntityType = z.infer<typeof AIAgentExampleSchema>;
@@ -9071,7 +9132,7 @@ export const AIAgentRunSchema = z.object({
         * * Description: Unique identifier for this agent run`),
     AgentID: z.string().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent ID
+        * * Display Name: Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: Reference to the AIAgent that is being executed in this run`),
@@ -9117,13 +9178,13 @@ export const AIAgentRunSchema = z.object({
         * * Description: Error message if the agent run failed. NULL for successful runs.`),
     ConversationID: z.string().nullable().describe(`
         * * Field Name: ConversationID
-        * * Display Name: Conversation ID
+        * * Display Name: Conversation
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
         * * Description: Identifier linking multiple agent runs that are part of the same conversation or user session`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: User context identifier for authentication and permissions during the agent run`),
@@ -9309,6 +9370,22 @@ each time the agent processes a prompt step.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this agent run to a test run if this execution was part of a test. Allows navigation from agent execution to test context.`),
+    PrimaryScopeEntityID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntityID
+        * * Display Name: Primary Scope Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`),
+    SecondaryScopes: z.string().nullable().describe(`
+        * * Field Name: SecondaryScopes
+        * * Display Name: Secondary Scopes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -9349,6 +9426,14 @@ each time the agent processes a prompt step.`),
         * * Field Name: ScheduledJobRun
         * * Display Name: Scheduled Job Run
         * * SQL Data Type: nvarchar(200)`),
+    TestRun: z.string().nullable().describe(`
+        * * Field Name: TestRun
+        * * Display Name: Test Run
+        * * SQL Data Type: nvarchar(255)`),
+    PrimaryScopeEntity: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntity
+        * * Display Name: Primary Scope Entity
+        * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
         * * Display Name: Root Parent Run ID
@@ -20813,7 +20898,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent ID
+    * * Display Name: Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     */
@@ -20826,7 +20911,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
 
     /**
     * * Field Name: AgentNoteTypeID
-    * * Display Name: Agent Note Type ID
+    * * Display Name: Agent Note Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agent Note Types (vwAIAgentNoteTypes.ID)
     */
@@ -20872,7 +20957,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User
@@ -20953,7 +21038,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
 
     /**
     * * Field Name: SourceConversationID
-    * * Display Name: Source Conversation ID
+    * * Display Name: Source Conversation
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
     * * Description: Optional reference to the conversation that inspired or generated this note.
@@ -20967,7 +21052,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
 
     /**
     * * Field Name: SourceConversationDetailID
-    * * Display Name: Source Conversation Detail ID
+    * * Display Name: Source Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: Optional reference to the specific conversation message that inspired this note.
@@ -20981,7 +21066,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
 
     /**
     * * Field Name: SourceAIAgentRunID
-    * * Display Name: Source AI Agent Run ID
+    * * Display Name: Source AI Agent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Optional reference to the AI agent run that generated this note.
@@ -20995,7 +21080,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
 
     /**
     * * Field Name: CompanyID
-    * * Display Name: Company ID
+    * * Display Name: Company
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
     * * Description: Optional company scope for this note. When populated with UserID, creates org+user specific notes.
@@ -21022,7 +21107,7 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: Reference to the AI model used to generate the embedding vector.
@@ -21032,6 +21117,46 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     }
     set EmbeddingModelID(value: string | null) {
         this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntityID
+    * * Display Name: Primary Scope Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global note.
+    */
+    get PrimaryScopeEntityID(): string | null {
+        return this.Get('PrimaryScopeEntityID');
+    }
+    set PrimaryScopeEntityID(value: string | null) {
+        this.Set('PrimaryScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: SecondaryScopes
+    * * Display Name: Secondary Scopes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level note. Populated = fully-scoped note.
+    */
+    get SecondaryScopes(): string | null {
+        return this.Get('SecondaryScopes');
+    }
+    set SecondaryScopes(value: string | null) {
+        this.Set('SecondaryScopes', value);
     }
 
     /**
@@ -21071,6 +21196,24 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     }
 
     /**
+    * * Field Name: SourceConversationDetail
+    * * Display Name: Source Conversation Detail
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get SourceConversationDetail(): string | null {
+        return this.Get('SourceConversationDetail');
+    }
+
+    /**
+    * * Field Name: SourceAIAgentRun
+    * * Display Name: Source AI Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceAIAgentRun(): string | null {
+        return this.Get('SourceAIAgentRun');
+    }
+
+    /**
     * * Field Name: Company
     * * Display Name: Company
     * * SQL Data Type: nvarchar(50)
@@ -21086,6 +21229,15 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntity
+    * * Display Name: Primary Scope Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PrimaryScopeEntity(): string | null {
+        return this.Get('PrimaryScopeEntity');
     }
 }
 
@@ -21536,7 +21688,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.
@@ -21623,7 +21775,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt ID
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     */
@@ -21649,7 +21801,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Agent Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
@@ -21986,7 +22138,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactTypeID
-    * * Display Name: Default Artifact Type ID
+    * * Display Name: Default Artifact Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
     * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.
@@ -22000,7 +22152,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User ID
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -22219,8 +22371,21 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: ScopeConfig
+    * * Display Name: Scope Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}
+    */
+    get ScopeConfig(): string | null {
+        return this.Get('ScopeConfig');
+    }
+    set ScopeConfig(value: string | null) {
+        this.Set('ScopeConfig', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent (Name)
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -22256,7 +22421,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner User
+    * * Display Name: Owner User (Name)
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -22265,7 +22430,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -40095,7 +40260,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent ID
+    * * Display Name: Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: The AI agent this example is associated with. Examples are always agent-specific.
@@ -40109,7 +40274,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Optional user scope. When populated, this example is specific to this user.
@@ -40123,7 +40288,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: CompanyID
-    * * Display Name: Company ID
+    * * Display Name: Company
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
     * * Description: Optional company scope. When populated, this example is specific to this company.
@@ -40137,7 +40302,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Example Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Example
     * * Value List Type: List
@@ -40184,7 +40349,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: IsAutoGenerated
-    * * Display Name: Is Auto Generated
+    * * Display Name: Auto Generated
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates whether this example was automatically captured (1) or manually created (0).
@@ -40198,7 +40363,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: SourceConversationID
-    * * Display Name: Source Conversation ID
+    * * Display Name: Source Conversation
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
     * * Description: Optional reference to the conversation where this example originated.
@@ -40212,7 +40377,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: SourceConversationDetailID
-    * * Display Name: Source Conversation Detail ID
+    * * Display Name: Source Conversation Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     * * Description: Optional reference to the specific conversation message that represents this example.
@@ -40226,7 +40391,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: SourceAIAgentRunID
-    * * Display Name: Source AI Agent Run ID
+    * * Display Name: Source AI Agent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Optional reference to the AI agent run that generated this example.
@@ -40318,7 +40483,7 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: Reference to the AI model used to generate the embedding vector.
@@ -40328,6 +40493,46 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
     }
     set EmbeddingModelID(value: string | null) {
         this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntityID
+    * * Display Name: Primary Scope Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global example.
+    */
+    get PrimaryScopeEntityID(): string | null {
+        return this.Get('PrimaryScopeEntityID');
+    }
+    set PrimaryScopeEntityID(value: string | null) {
+        this.Set('PrimaryScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The record ID within the primary scope entity. NULL means global example. When set with empty SecondaryScopes, indicates primary-scope-only example.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: SecondaryScopes
+    * * Display Name: Secondary Scopes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level example. Populated = fully-scoped example.
+    */
+    get SecondaryScopes(): string | null {
+        return this.Get('SecondaryScopes');
+    }
+    set SecondaryScopes(value: string | null) {
+        this.Set('SecondaryScopes', value);
     }
 
     /**
@@ -40367,12 +40572,39 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
     }
 
     /**
+    * * Field Name: SourceConversationDetail
+    * * Display Name: Source Conversation Detail
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get SourceConversationDetail(): string | null {
+        return this.Get('SourceConversationDetail');
+    }
+
+    /**
+    * * Field Name: SourceAIAgentRun
+    * * Display Name: Source AI Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceAIAgentRun(): string | null {
+        return this.Get('SourceAIAgentRun');
+    }
+
+    /**
     * * Field Name: EmbeddingModel
     * * Display Name: Embedding Model
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntity
+    * * Display Name: Primary Scope Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PrimaryScopeEntity(): string | null {
+        return this.Get('PrimaryScopeEntity');
     }
 }
 
@@ -41541,7 +41773,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent ID
+    * * Display Name: Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: Reference to the AIAgent that is being executed in this run
@@ -41643,7 +41875,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationID
-    * * Display Name: Conversation ID
+    * * Display Name: Conversation
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
     * * Description: Identifier linking multiple agent runs that are part of the same conversation or user session
@@ -41657,7 +41889,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: User context identifier for authentication and permissions during the agent run
@@ -42095,6 +42327,46 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: PrimaryScopeEntityID
+    * * Display Name: Primary Scope Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)
+    */
+    get PrimaryScopeEntityID(): string | null {
+        return this.Get('PrimaryScopeEntityID');
+    }
+    set PrimaryScopeEntityID(value: string | null) {
+        this.Set('PrimaryScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: SecondaryScopes
+    * * Display Name: Secondary Scopes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}
+    */
+    get SecondaryScopes(): string | null {
+        return this.Get('SecondaryScopes');
+    }
+    set SecondaryScopes(value: string | null) {
+        this.Set('SecondaryScopes', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -42182,6 +42454,24 @@ each time the agent processes a prompt step.
     */
     get ScheduledJobRun(): string | null {
         return this.Get('ScheduledJobRun');
+    }
+
+    /**
+    * * Field Name: TestRun
+    * * Display Name: Test Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TestRun(): string | null {
+        return this.Get('TestRun');
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntity
+    * * Display Name: Primary Scope Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PrimaryScopeEntity(): string | null {
+        return this.Get('PrimaryScopeEntity');
     }
 
     /**
