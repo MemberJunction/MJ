@@ -48,7 +48,7 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="SQL"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -64,7 +64,7 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="OriginalSQL"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -165,6 +165,14 @@
             [ShowLabel]="true"
             FieldName="CacheMaxSize"
             Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CacheValidationSQL"
+            Type="code"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>

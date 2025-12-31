@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ai-anthropic
 
+## 2.129.0
+
+### Minor Changes
+
+- c7e38aa: migration
+
+### Patch Changes
+
+- Updated dependencies [fbae243]
+- Updated dependencies [c7e38aa]
+  - @memberjunction/global@2.129.0
+  - @memberjunction/ai@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

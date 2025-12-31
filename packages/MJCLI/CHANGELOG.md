@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/cli
 
+## 2.129.0
+
+### Minor Changes
+
+- 8e2ec79: migration
+
+### Patch Changes
+
+- Updated dependencies [20c360f]
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [0fb62af]
+- Updated dependencies [b684942]
+- Updated dependencies [8e2ec79]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/metadata-sync@2.129.0
+  - @memberjunction/core@2.129.0
+  - @memberjunction/sqlserver-dataprovider@2.129.0
+  - @memberjunction/codegen-lib@2.129.0
+  - @memberjunction/ai-cli@2.129.0
+  - @memberjunction/db-auto-doc@2.129.0
+  - @memberjunction/query-gen@2.129.0
+  - @memberjunction/testing-cli@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

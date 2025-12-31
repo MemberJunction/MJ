@@ -364,16 +364,11 @@ export class DashboardResource extends BaseResourceComponent {
 
     protected async loadDashboardUserState(dashboardId: string): Promise<DashboardUserStateEntity> {
         // handle user state changes for the dashboard
-        const rv = new RunView();
         const md = new Metadata();
-        const stateResult = await rv.RunView({
-            EntityName: 'MJ: Dashboard User States',
-            ExtraFilter: `DashboardID='${dashboardId}' AND UserID='${md.CurrentUser.ID}'`,
-            ResultType: 'entity_object',
-        });
+        const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => dus.DashboardID === dashboardId && dus.UserID === md.CurrentUser.ID)
         let stateObject: DashboardUserStateEntity;
-        if (stateResult && stateResult.Success && stateResult.Results.length > 0) {
-            stateObject = stateResult.Results[0];
+        if (stateResult && stateResult.length > 0) {
+            stateObject = stateResult[0];
         }
         else {
             stateObject = await md.GetEntityObject<DashboardUserStateEntity>('MJ: Dashboard User States');

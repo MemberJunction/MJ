@@ -11,6 +11,8 @@
     "credential-categories",
     "credential-types",
     "resource-types",
+    "ai-vendors",
+    "ai-models",
     "ai-configurations",
     "artifact-types",
     "action-categories",

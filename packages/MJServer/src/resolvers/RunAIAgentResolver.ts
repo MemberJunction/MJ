@@ -1,9 +1,9 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
-import { AIAgentEntityExtended, ConversationDetailEntity, UserNotificationEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import { AIAgentEntityExtended, AIAgentRunEntityExtended, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';

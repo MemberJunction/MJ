@@ -641,8 +641,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
 
 
   async ngAfterViewInit() {
-    await ResourcePermissionEngine.Instance.Config();
-
     // Delay height calculation to ensure DOM is fully rendered
     setTimeout(() => {
       this.setGridHeight();

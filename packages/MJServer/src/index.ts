@@ -69,6 +69,8 @@ LoadSendGridProvider();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
+import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
+import { getSystemUser } from './auth/index.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -110,6 +112,7 @@ export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
 export * from './resolvers/CreateQueryResolver.js';
+export * from './resolvers/TelemetryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -147,11 +150,6 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   const setupComplete$ = new ReplaySubject(1);
   await pool.connect();
 
-  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
-  await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
-  const md = new Metadata();
-  console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
-
   const dataSources = [new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
   
   // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
@@ -169,6 +167,28 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
     console.log('Read-only Connection Pool has been initialized.');
   }
+
+  const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
+  await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
+  const md = new Metadata();
+  console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+
+  // Initialize server telemetry based on config
+  const tm = TelemetryManager.Instance;
+  if (configInfo.telemetry?.enabled) {
+    tm.SetEnabled(true);
+    if (configInfo.telemetry?.level) {
+      tm.UpdateSettings({ level: configInfo.telemetry.level as TelemetryLevel });
+    }
+    console.log(`Server telemetry enabled with level: ${configInfo.telemetry.level || 'standard'}`);
+  } else {
+    tm.SetEnabled(false);
+    console.log('Server telemetry disabled');
+  }
+
+  // Initialize LocalCacheManager with the server-side storage provider (in-memory)
+  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
+  console.log('LocalCacheManager initialized');
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);

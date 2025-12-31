@@ -1,10 +1,11 @@
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { TaskEntity, TaskDependencyEntity, TaskTypeEntity, AIAgentEntityExtended, ConversationDetailEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, UserNotificationEntity } from '@memberjunction/core-entities';
+import { TaskEntity, TaskDependencyEntity, TaskTypeEntity, ConversationDetailEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { PubSubEngine } from 'type-graphql';
 import { UserPayload } from '../types.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Task definition from LLM response

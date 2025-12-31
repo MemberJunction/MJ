@@ -18,7 +18,8 @@ export class CredentialTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
             { sectionKey: 'technicalDetails', sectionName: 'Technical Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJCredentials', sectionName: 'MJ: Credentials', isExpanded: false }
+            { sectionKey: 'mJCredentials', sectionName: 'MJ: Credentials', isExpanded: false },
+            { sectionKey: 'mJAIVendors', sectionName: 'MJ: AI Vendors', isExpanded: false }
         ]);
     }
 }

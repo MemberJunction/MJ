@@ -49,11 +49,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const p = <SQLServerDataProvider> ( provider || Metadata.Provider );
 
-        const c = [
+        const c: Array<Partial<BaseEnginePropertyConfig>> = [
             {
                 EntityName: "Entities",
                 PropertyName: "_EligibleEntities",
-                Filter: `ID IN (SELECT ID FROM ${p.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)` // limit to entities that are in this view. This view has the logic which basically is TrackRecordChanges=1 and also has an UpdatedAt field
+                Filter: `ID IN (SELECT ID FROM ${p.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)`, // limit to entities that are in this view. This view has the logic which basically is TrackRecordChanges=1 and also has an UpdatedAt field
+                CacheLocal: true
             }
         ];
         await this.Load(c, provider, forceRefresh, contextUser);

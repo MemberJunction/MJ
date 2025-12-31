@@ -1,65 +1,174 @@
 -- Migration: Convert datetime columns to datetimeoffset in ${flyway:defaultSchema} schema
 -- Existing values will be converted with +00:00 (UTC) offset
+-- This version dynamically looks up constraint names to avoid hard-coded references
+
+-- =====================================================
+-- HELPER: Dynamic constraint drop and recreate procedure
+-- =====================================================
+
+-- Temporarily create a helper procedure for this migration
+IF OBJECT_ID('tempdb..#AlterColumnWithConstraint') IS NOT NULL
+    DROP PROCEDURE #AlterColumnWithConstraint;
+GO
+
+CREATE PROCEDURE #AlterColumnWithConstraint
+    @SchemaName NVARCHAR(128),
+    @TableName NVARCHAR(128),
+    @ColumnName NVARCHAR(128),
+    @NewDataType NVARCHAR(50),
+    @IsNullable BIT,
+    @NewDefaultExpression NVARCHAR(MAX)
+AS
+BEGIN
+    DECLARE @ConstraintName NVARCHAR(128);
+    DECLARE @SQL NVARCHAR(MAX);
+    DECLARE @NullSpec NVARCHAR(10) = CASE WHEN @IsNullable = 1 THEN 'NULL' ELSE 'NOT NULL' END;
+
+    -- Find existing default constraint if any
+    SELECT TOP 1 @ConstraintName = dc.name
+    FROM sys.default_constraints dc
+    INNER JOIN sys.columns c ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+    INNER JOIN sys.tables t ON c.object_id = t.object_id
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE s.name = @SchemaName
+      AND t.name = @TableName
+      AND c.name = @ColumnName;
+
+    -- Drop existing constraint if found
+    IF @ConstraintName IS NOT NULL
+    BEGIN
+        SET @SQL = 'ALTER TABLE [' + @SchemaName + '].[' + @TableName + '] DROP CONSTRAINT [' + @ConstraintName + '];';
+        PRINT 'Dropping constraint: ' + @ConstraintName;
+        EXEC sp_executesql @SQL;
+    END
+    ELSE
+    BEGIN
+        PRINT 'No existing constraint found for ' + @SchemaName + '.' + @TableName + '.' + @ColumnName;
+    END
+
+    -- Alter the column
+    SET @SQL = 'ALTER TABLE [' + @SchemaName + '].[' + @TableName + '] ALTER COLUMN [' + @ColumnName + '] ' + @NewDataType + ' ' + @NullSpec + ';';
+    PRINT 'Altering column: ' + @SchemaName + '.' + @TableName + '.' + @ColumnName;
+    EXEC sp_executesql @SQL;
+
+    -- Recreate constraint if a default was provided
+    IF @NewDefaultExpression IS NOT NULL
+    BEGIN
+        -- Generate a consistent constraint name
+        DECLARE @NewConstraintName NVARCHAR(128) = 'DF_' + @TableName + '_' + @ColumnName;
+
+        SET @SQL = 'ALTER TABLE [' + @SchemaName + '].[' + @TableName + '] ADD CONSTRAINT [' + @NewConstraintName + '] DEFAULT (' + @NewDefaultExpression + ') FOR [' + @ColumnName + '];';
+        PRINT 'Creating constraint: ' + @NewConstraintName;
+        EXEC sp_executesql @SQL;
+    END
+END;
+GO
 
 -- =====================================================
 -- COLUMNS WITH DEFAULT CONSTRAINTS
--- Must drop constraint, alter column, then recreate with SYSDATETIMEOFFSET()
+-- Using the helper procedure to safely handle constraints
 -- =====================================================
 
+PRINT '=== Processing columns with default constraints ===';
+
 -- CompanyIntegrationRunAPILog.ExecutedAt
-ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRunAPILog] DROP CONSTRAINT [DF_CompanyIntegrationRunAPILog_ExecutedAt];
-ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRunAPILog] ALTER COLUMN [ExecutedAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRunAPILog] ADD CONSTRAINT [DF_CompanyIntegrationRunAPILog_ExecutedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [ExecutedAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'CompanyIntegrationRunAPILog',
+    @ColumnName = 'ExecutedAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- CompanyIntegrationRunDetail.ExecutedAt
-ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRunDetail] DROP CONSTRAINT [DF_CompanyIntegrationRunDetail_ExecutedAt];
-ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRunDetail] ALTER COLUMN [ExecutedAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRunDetail] ADD CONSTRAINT [DF_CompanyIntegrationRunDetail_ExecutedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [ExecutedAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'CompanyIntegrationRunDetail',
+    @ColumnName = 'ExecutedAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- DuplicateRun.StartedAt
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRun] DROP CONSTRAINT [DF_DuplicateRun_StartedAt];
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRun] ALTER COLUMN [StartedAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRun] ADD CONSTRAINT [DF_DuplicateRun_StartedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [StartedAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'DuplicateRun',
+    @ColumnName = 'StartedAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- DuplicateRunDetailMatch.MatchedAt
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRunDetailMatch] DROP CONSTRAINT [DF_DuplicateRunDetailMatch_MatchedAt];
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRunDetailMatch] ALTER COLUMN [MatchedAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRunDetailMatch] ADD CONSTRAINT [DF_DuplicateRunDetailMatch_MatchedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [MatchedAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'DuplicateRunDetailMatch',
+    @ColumnName = 'MatchedAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- DuplicateRunDetailMatch.MergedAt
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRunDetailMatch] DROP CONSTRAINT [DF_DuplicateRunDetailMatch_MergedAt];
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRunDetailMatch] ALTER COLUMN [MergedAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[DuplicateRunDetailMatch] ADD CONSTRAINT [DF_DuplicateRunDetailMatch_MergedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [MergedAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'DuplicateRunDetailMatch',
+    @ColumnName = 'MergedAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- Queue.LastHeartbeat
-ALTER TABLE [${flyway:defaultSchema}].[Queue] DROP CONSTRAINT [DF_Queue_LastHeartbeat];
-ALTER TABLE [${flyway:defaultSchema}].[Queue] ALTER COLUMN [LastHeartbeat] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[Queue] ADD CONSTRAINT [DF_Queue_LastHeartbeat] DEFAULT (SYSDATETIMEOFFSET()) FOR [LastHeartbeat];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'Queue',
+    @ColumnName = 'LastHeartbeat',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- RecordMergeLog.ProcessingStartedAt
-ALTER TABLE [${flyway:defaultSchema}].[RecordMergeLog] DROP CONSTRAINT [DF_RecordMergeLog_StartedAt];
-ALTER TABLE [${flyway:defaultSchema}].[RecordMergeLog] ALTER COLUMN [ProcessingStartedAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[RecordMergeLog] ADD CONSTRAINT [DF_RecordMergeLog_StartedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [ProcessingStartedAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'RecordMergeLog',
+    @ColumnName = 'ProcessingStartedAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- TestRunFeedback.ReviewedAt
-ALTER TABLE [${flyway:defaultSchema}].[TestRunFeedback] DROP CONSTRAINT [DF__TestRunFe__Revie__5952B50F];
-ALTER TABLE [${flyway:defaultSchema}].[TestRunFeedback] ALTER COLUMN [ReviewedAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[TestRunFeedback] ADD CONSTRAINT [DF_TestRunFeedback_ReviewedAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [ReviewedAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'TestRunFeedback',
+    @ColumnName = 'ReviewedAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- UserRecordLog.EarliestAt
-ALTER TABLE [${flyway:defaultSchema}].[UserRecordLog] DROP CONSTRAINT [DF_UserRecordLog_EarliestAt];
-ALTER TABLE [${flyway:defaultSchema}].[UserRecordLog] ALTER COLUMN [EarliestAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[UserRecordLog] ADD CONSTRAINT [DF_UserRecordLog_EarliestAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [EarliestAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'UserRecordLog',
+    @ColumnName = 'EarliestAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
 
 -- UserRecordLog.LatestAt
-ALTER TABLE [${flyway:defaultSchema}].[UserRecordLog] DROP CONSTRAINT [DF_UserRecordLog_LatestAt];
-ALTER TABLE [${flyway:defaultSchema}].[UserRecordLog] ALTER COLUMN [LatestAt] datetimeoffset(7) NOT NULL;
-ALTER TABLE [${flyway:defaultSchema}].[UserRecordLog] ADD CONSTRAINT [DF_UserRecordLog_LatestAt] DEFAULT (SYSDATETIMEOFFSET()) FOR [LatestAt];
+EXEC #AlterColumnWithConstraint
+    @SchemaName = '${flyway:defaultSchema}',
+    @TableName = 'UserRecordLog',
+    @ColumnName = 'LatestAt',
+    @NewDataType = 'datetimeoffset(7)',
+    @IsNullable = 0,
+    @NewDefaultExpression = 'SYSDATETIMEOFFSET()';
+
+PRINT '=== Completed columns with default constraints ===';
 
 -- =====================================================
 -- COLUMNS WITHOUT DEFAULT CONSTRAINTS
 -- Simple ALTER COLUMN statements
 -- =====================================================
+
+PRINT '=== Processing columns without default constraints ===';
 
 -- Action
 ALTER TABLE [${flyway:defaultSchema}].[Action] ALTER COLUMN [CodeApprovedAt] datetimeoffset(7) NULL;

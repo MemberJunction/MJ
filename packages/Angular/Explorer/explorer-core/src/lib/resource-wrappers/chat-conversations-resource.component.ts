@@ -1,17 +1,17 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
-import { Metadata, CompositeKey, RunView } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService } from '@memberjunction/ng-conversations';
+import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService } from '@memberjunction/ng-conversations';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 
 export function LoadChatConversationsResource() {
   // Force inclusion in production builds (tree shaking workaround)
   // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatConversationsResource(null!, null!, null!, null!, null!);
+  const test = new ChatConversationsResource(null!, null!, null!, null!, null!, null!);
 }
 
 /**
@@ -209,7 +209,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private conversationData: ConversationDataService,
     private router: Router,
     private mentionAutocompleteService: MentionAutocompleteService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private streamingService: ConversationStreamingService
   ) {
     super();
   }
@@ -240,6 +241,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // CRITICAL: Initialize AIEngine and mention service BEFORE children render
     // This prevents the slow first-load issue where each child would trigger initialization
     await this.initializeEngines();
+
+    // Initialize global streaming service for PubSub updates
+    // This enables reconnection to in-progress agents after browser refresh
+    this.streamingService.initialize();
 
     // CRITICAL: Set selectedConversationId SYNCHRONOUSLY before child components initialize
     // Parse URL first and apply state synchronously for the ID
@@ -657,7 +662,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Save sidebar state to User Settings entity on server
+   * Save sidebar state to User Settings entity on server using UserInfoEngine for cached lookup
    */
   private async saveSidebarStateToServer(state: { collapsed: boolean; pinned: boolean }): Promise<void> {
     try {
@@ -666,20 +671,13 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         return;
       }
 
-      const rv = new RunView();
-      const result = await rv.RunView<UserSettingEntity>({
-        EntityName: 'MJ: User Settings',
-        ExtraFilter: `UserID='${userId}' AND Setting='${this.USER_SETTING_SIDEBAR_KEY}'`,
-        ResultType: 'entity_object'
-      });
-
+      const engine = UserInfoEngine.Instance;
       const md = new Metadata();
-      let setting: UserSettingEntity;
 
-      if (result.Success && result.Results && result.Results.length > 0) {
-        // Update existing setting
-        setting = result.Results[0];
-      } else {
+      // Find existing setting from cached user settings
+      let setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
+
+      if (!setting) {
         // Create new setting
         setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
@@ -694,29 +692,22 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Load sidebar state from User Settings (server), falling back to localStorage
+   * Load sidebar state from User Settings (server) using UserInfoEngine, falling back to localStorage
    * For new users with no saved state, defaults to collapsed with new conversation
    */
   private async loadSidebarState(): Promise<void> {
     try {
       const userId = this.currentUser?.ID;
       if (userId) {
-        // Try loading from User Settings first
-        const rv = new RunView();
-        const result = await rv.RunView<UserSettingEntity>({
-          EntityName: 'MJ: User Settings',
-          ExtraFilter: `UserID='${userId}' AND Setting='${this.USER_SETTING_SIDEBAR_KEY}'`,
-          ResultType: 'entity_object'
-        });
+        // Try loading from cached User Settings first
+        const engine = UserInfoEngine.Instance;
+        const setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
 
-        if (result.Success && result.Results && result.Results.length > 0) {
-          const setting = result.Results[0];
-          if (setting.Value) {
-            const state = JSON.parse(setting.Value);
-            this.isSidebarCollapsed = state.collapsed ?? true;
-            this.isSidebarPinned = state.pinned ?? false;
-            return;
-          }
+        if (setting?.Value) {
+          const state = JSON.parse(setting.Value);
+          this.isSidebarCollapsed = state.collapsed ?? true;
+          this.isSidebarPinned = state.pinned ?? false;
+          return;
         }
       }
 
