@@ -15,14 +15,15 @@ This document outlines a comprehensive roadmap to enhance MemberJunction's agent
 ## Table of Contents
 
 1. [Current State Analysis](#current-state-analysis)
-2. [Phase 1: Critical Bug Fixes](#phase-1-critical-bug-fixes)
-3. [Phase 2: Feature Completions](#phase-2-feature-completions)
-4. [Phase 3: Reranking Framework](#phase-3-reranking-framework)
-5. [Phase 4: Flexible Vector Configuration](#phase-4-flexible-vector-configuration)
-6. [Phase 5: Graph Memory Foundation](#phase-5-graph-memory-foundation)
-7. [Phase 6: Advanced Graph Features](#phase-6-advanced-graph-features)
-8. [Implementation Timeline](#implementation-timeline)
-9. [Success Metrics](#success-metrics)
+2. [Phase 1: Critical Bug Fixes](#phase-1-critical-bug-fixes) ✅
+3. [Phase 2: Feature Completions](#phase-2-feature-completions) ✅
+4. [Phase 3: Multi-Tenant Scoping](#phase-3-multi-tenant-scoping) 🔴 NEW
+5. [Phase 4: Reranking Framework](#phase-4-reranking-framework)
+6. [Phase 5: Flexible Vector Configuration](#phase-5-flexible-vector-configuration)
+7. [Phase 6: Graph Memory Foundation](#phase-6-graph-memory-foundation)
+8. [Phase 7: Advanced Graph Features](#phase-7-advanced-graph-features)
+9. [Implementation Timeline](#implementation-timeline)
+10. [Success Metrics](#success-metrics)
 
 ---
 
@@ -242,12 +243,479 @@ LogError('Failed to load embeddings', undefined, error);
 
 ---
 
-## Phase 3: Reranking Framework
+## Phase 3: Multi-Tenant Scoping
+
+**Priority:** 🔴 CRITICAL - Required for SaaS deployments
+**Estimated Effort:** 1-2 weeks
+
+### 3.1 Problem Statement
+
+Current MJ agent memory scoping uses MJ-internal concepts:
+- `UserID` - MJ auth system user (AD/Azure/Google identity)
+- `CompanyID` - MJ organizational unit (department, division, subsidiary)
+
+These **do not map** to multi-tenant SaaS concepts:
+- **Tenant/Organization** - The customer company paying for the SaaS
+- **Contact** - A person at that organization
+- **Team/Department** - Groupings within the tenant
+
+SaaS applications like Izzy (customer service) and Skip (analytics) build their own entity hierarchies on top of MJ. Agent memory needs to scope notes/examples to these custom entities without hardcoding any specific schema.
+
+### 3.2 Design Goals
+
+1. **Entity-Agnostic** - Core MJ doesn't know about "Organizations" or "Contacts"
+2. **Performant** - Primary scope indexed for fast filtering (millions of rows → thousands)
+3. **Flexible** - Secondary scopes via JSON for arbitrary dimensions
+4. **Hierarchical** - Support global → org-level → fully-scoped inheritance
+5. **Consistent** - Same pattern across Agent config, Runs, Notes, Examples
+
+### 3.3 Scoping Pattern
+
+Use a hybrid approach across all scoped entities:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `PrimaryScopeEntityID` | UNIQUEIDENTIFIER (FK to Entity) | Which entity type is the primary scope |
+| `PrimaryScopeRecordID` | NVARCHAR(100) (indexed) | The actual record ID in that entity |
+| `SecondaryScopes` | NVARCHAR(MAX) (JSON) | Additional scope dimensions |
+
+**Query Pattern:**
+```sql
+-- Fast indexed lookup on primary scope, then JSON filter
+SELECT * FROM __mj.AIAgentNote
+WHERE PrimaryScopeEntityID = @OrgEntityID
+  AND PrimaryScopeRecordID = 'org-123'
+  AND AgentID = @AgentID
+  AND JSON_VALUE(SecondaryScopes, '$.ContactID') = '456'
+```
+
+### 3.4 Hierarchical Scope Matching
+
+Notes/Examples can exist at different scope levels:
+
+| Level | PrimaryScopeRecordID | SecondaryScopes | Applies To |
+|-------|---------------------|-----------------|------------|
+| **Global** | NULL | NULL/empty | All users of this agent |
+| **Org-only** | "org-123" | NULL/empty | All contacts in org-123 |
+| **Fully-scoped** | "org-123" | `{"ContactID": "456"}` | Only contact-456 in org-123 |
+
+**Retrieval Logic** (cascading inheritance):
+```typescript
+// For ContactID=456 in OrgID=123, retrieve ALL applicable notes:
+const notes = await rv.RunView({
+    EntityName: 'AI Agent Notes',
+    ExtraFilter: `
+        AgentID = '${agentId}'
+        AND Status = 'Active'
+        AND (
+            -- Global notes (no scope)
+            PrimaryScopeRecordID IS NULL
+
+            -- Org-level notes (matches org, no additional scope)
+            OR (PrimaryScopeRecordID = 'org-123'
+                AND (SecondaryScopes IS NULL OR SecondaryScopes = '{}'))
+
+            -- Fully-scoped notes (matches org + contact)
+            OR (PrimaryScopeRecordID = 'org-123'
+                AND JSON_VALUE(SecondaryScopes, '$.ContactID') = '456')
+        )
+    `,
+    OrderBy: 'ScopeSpecificity DESC, AgentNoteType.Priority ASC'
+});
+```
+
+**Scope Specificity Ranking:**
+1. Fully-scoped notes (most specific, highest priority)
+2. Org-level notes (general org knowledge)
+3. Global notes (universal truths, lowest priority)
+
+### 3.5 Database Schema Changes
+
+#### 3.5.1 AIAgent Table - Scope Configuration
+
+Add JSON configuration defining expected scope dimensions:
+
+```sql
+ALTER TABLE __mj.AIAgent ADD
+    ScopeConfig NVARCHAR(MAX) NULL;  -- JSON configuration
+
+-- Example ScopeConfig:
+-- {
+--   "dimensions": [
+--     {
+--       "name": "OrganizationID",
+--       "entityId": "...",
+--       "isPrimary": true,
+--       "priority": 1,
+--       "required": true,
+--       "description": "Tenant organization"
+--     },
+--     {
+--       "name": "ContactID",
+--       "entityId": "...",
+--       "isPrimary": false,
+--       "priority": 2,
+--       "required": false,
+--       "description": "Individual contact at organization"
+--     }
+--   ],
+--   "inheritanceMode": "cascading"  -- or "strict" for exact match only
+-- }
+```
+
+#### 3.5.2 AIAgentRun Table - Run Scope
+
+Record the scope context for each agent run:
+
+```sql
+ALTER TABLE __mj.AIAgentRun ADD
+    PrimaryScopeEntityID UNIQUEIDENTIFIER NULL
+        REFERENCES __mj.Entity(ID),
+    PrimaryScopeRecordID NVARCHAR(100) NULL,
+    SecondaryScopes NVARCHAR(MAX) NULL;  -- JSON
+
+CREATE INDEX IX_AIAgentRun_PrimaryScope
+    ON __mj.AIAgentRun(PrimaryScopeEntityID, PrimaryScopeRecordID);
+```
+
+#### 3.5.3 AIAgentNote Table - Note Scope
+
+```sql
+ALTER TABLE __mj.AIAgentNote ADD
+    PrimaryScopeEntityID UNIQUEIDENTIFIER NULL
+        REFERENCES __mj.Entity(ID),
+    PrimaryScopeRecordID NVARCHAR(100) NULL,
+    SecondaryScopes NVARCHAR(MAX) NULL;  -- JSON
+
+CREATE INDEX IX_AIAgentNote_PrimaryScope
+    ON __mj.AIAgentNote(PrimaryScopeEntityID, PrimaryScopeRecordID);
+```
+
+#### 3.5.4 AIAgentExample Table - Example Scope
+
+```sql
+ALTER TABLE __mj.AIAgentExample ADD
+    PrimaryScopeEntityID UNIQUEIDENTIFIER NULL
+        REFERENCES __mj.Entity(ID),
+    PrimaryScopeRecordID NVARCHAR(100) NULL,
+    SecondaryScopes NVARCHAR(MAX) NULL;  -- JSON
+
+CREATE INDEX IX_AIAgentExample_PrimaryScope
+    ON __mj.AIAgentExample(PrimaryScopeEntityID, PrimaryScopeRecordID);
+```
+
+### 3.6 Code Changes
+
+#### 3.6.1 ExecuteAgentParams - User Scope Input
+
+**File:** `packages/AI/CorePlus/src/models/ExecuteAgentParams.ts`
+
+```typescript
+export interface UserScope {
+    /** Primary scope entity name (e.g., "Organizations") */
+    primaryEntityName?: string;
+    /** Primary scope record ID */
+    primaryRecordId?: string;
+    /** Additional scope dimensions as key-value pairs */
+    secondary?: Record<string, string>;
+}
+
+export class ExecuteAgentParams {
+    // ... existing properties ...
+
+    /**
+     * Scope context for multi-tenant deployments.
+     * SaaS applications populate this with tenant/user context.
+     *
+     * @example
+     * params.userScope = {
+     *     primaryEntityName: 'Organizations',
+     *     primaryRecordId: 'org-123',
+     *     secondary: { ContactID: '456', TeamID: 'alpha' }
+     * };
+     */
+    userScope?: UserScope;
+}
+```
+
+#### 3.6.2 Agent Executor - Scope Recording
+
+**File:** `packages/AI/Agents/src/agent-executor.ts`
+
+```typescript
+async ExecuteAgent(params: ExecuteAgentParams): Promise<AgentResult> {
+    // Create run record with scope
+    const run = await this.createAgentRun(params);
+
+    if (params.userScope) {
+        run.PrimaryScopeEntityID = await this.resolveEntityId(
+            params.userScope.primaryEntityName
+        );
+        run.PrimaryScopeRecordID = params.userScope.primaryRecordId;
+        run.SecondaryScopes = JSON.stringify(params.userScope.secondary || {});
+    }
+
+    await run.Save();
+
+    // ... rest of execution ...
+}
+```
+
+#### 3.6.3 Memory Manager - Scoped Note Creation
+
+**File:** `packages/AI/Agents/src/memory-manager-agent.ts`
+
+```typescript
+async CreateNoteRecords(
+    extractedNotes: ExtractedNote[],
+    agentRun: AIAgentRunEntity,
+    contextUser: UserInfo
+): Promise<AIAgentNoteEntity[]> {
+    const notes: AIAgentNoteEntity[] = [];
+
+    for (const extracted of extractedNotes) {
+        const note = await md.GetEntityObject<AIAgentNoteEntity>(
+            'AI Agent Notes',
+            contextUser
+        );
+
+        // ... existing note population ...
+
+        // Apply scope from the source run
+        note.PrimaryScopeEntityID = agentRun.PrimaryScopeEntityID;
+        note.PrimaryScopeRecordID = agentRun.PrimaryScopeRecordID;
+
+        // Determine scope level based on note content
+        const scopeLevel = this.determineScopeLevel(extracted, agentRun);
+        if (scopeLevel === 'org-only') {
+            note.SecondaryScopes = null;  // Org-level, no contact-specific
+        } else if (scopeLevel === 'global') {
+            note.PrimaryScopeRecordID = null;  // Global note
+            note.SecondaryScopes = null;
+        } else {
+            note.SecondaryScopes = agentRun.SecondaryScopes;  // Full scope
+        }
+
+        await note.Save();
+        notes.push(note);
+    }
+
+    return notes;
+}
+
+/**
+ * Determine appropriate scope level based on note content.
+ * LLM can help classify: "This org uses metric units" → org-only
+ * vs "John prefers email" → full scope (contact-specific)
+ */
+private determineScopeLevel(
+    extracted: ExtractedNote,
+    run: AIAgentRunEntity
+): 'global' | 'org-only' | 'full' {
+    // Could be LLM-determined or rule-based
+    if (extracted.scopeHint === 'global') return 'global';
+    if (extracted.scopeHint === 'organization') return 'org-only';
+    return 'full';
+}
+```
+
+#### 3.6.4 Agent Context Injector - Scoped Retrieval
+
+**File:** `packages/AI/Agents/src/agent-context-injector.ts`
+
+```typescript
+async GetNotesForContext(
+    params: NoteContextParams
+): Promise<AIAgentNoteEntity[]> {
+    const { agentId, userScope, maxNotes } = params;
+
+    // Build hierarchical scope filter
+    const scopeFilter = this.buildScopeFilter(userScope);
+
+    const result = await rv.RunView<AIAgentNoteEntity>({
+        EntityName: 'AI Agent Notes',
+        ExtraFilter: `
+            AgentID = '${agentId}'
+            AND Status = 'Active'
+            AND (${scopeFilter})
+        `,
+        OrderBy: this.getScopeOrderBy(userScope),
+        MaxRows: maxNotes,
+        ResultType: 'entity_object'
+    });
+
+    return result.Results;
+}
+
+private buildScopeFilter(userScope?: UserScope): string {
+    if (!userScope?.primaryRecordId) {
+        // No scope context - only return global notes
+        return 'PrimaryScopeRecordID IS NULL';
+    }
+
+    const conditions: string[] = [
+        // Global notes
+        'PrimaryScopeRecordID IS NULL'
+    ];
+
+    // Primary-only notes (e.g., org-level)
+    conditions.push(`(
+        PrimaryScopeRecordID = '${userScope.primaryRecordId}'
+        AND (SecondaryScopes IS NULL OR SecondaryScopes = '{}')
+    )`);
+
+    // Fully-scoped notes
+    if (userScope.secondary && Object.keys(userScope.secondary).length > 0) {
+        const secondaryConditions = Object.entries(userScope.secondary)
+            .map(([key, val]) => `JSON_VALUE(SecondaryScopes, '$.${key}') = '${val}'`)
+            .join(' AND ');
+
+        conditions.push(`(
+            PrimaryScopeRecordID = '${userScope.primaryRecordId}'
+            AND ${secondaryConditions}
+        )`);
+    }
+
+    return conditions.join(' OR ');
+}
+
+/**
+ * Order by scope specificity: fully-scoped first, then org-level, then global
+ */
+private getScopeOrderBy(userScope?: UserScope): string {
+    return `
+        CASE
+            WHEN PrimaryScopeRecordID IS NOT NULL
+                 AND SecondaryScopes IS NOT NULL
+                 AND SecondaryScopes != '{}'
+            THEN 0  -- Fully scoped (highest priority)
+            WHEN PrimaryScopeRecordID IS NOT NULL
+            THEN 1  -- Primary scope only
+            ELSE 2  -- Global (lowest priority)
+        END ASC,
+        AgentNoteType.Priority ASC,
+        __mj_CreatedAt DESC
+    `;
+}
+```
+
+### 3.7 SaaS Integration Example
+
+**Izzy Customer Service App:**
+
+```typescript
+// In Izzy's agent invocation code
+async handleCustomerInteraction(
+    message: string,
+    contact: Contact,
+    organization: Organization
+) {
+    const params = new ExecuteAgentParams();
+    params.agentId = 'izzy-customer-service-agent';
+    params.userMessage = message;
+
+    // Populate scope from Izzy's entity model
+    params.userScope = {
+        primaryEntityName: 'Organizations',
+        primaryRecordId: organization.ID,
+        secondary: {
+            ContactID: contact.ID,
+            TeamID: contact.SupportTeamID  // Optional additional scope
+        }
+    };
+
+    const result = await agentExecutor.ExecuteAgent(params);
+    return result;
+}
+```
+
+**Skip Analytics App:**
+
+```typescript
+// In Skip's agent invocation
+async analyzeData(query: string, tenant: SkipTenant, analyst: SkipUser) {
+    const params = new ExecuteAgentParams();
+    params.agentId = 'skip-analytics-agent';
+    params.userMessage = query;
+
+    params.userScope = {
+        primaryEntityName: 'Skip Tenants',  // Skip's tenant entity
+        primaryRecordId: tenant.ID,
+        secondary: {
+            AnalystID: analyst.ID,
+            DepartmentID: analyst.DepartmentID
+        }
+    };
+
+    const result = await agentExecutor.ExecuteAgent(params);
+    return result;
+}
+```
+
+### 3.8 Memory Manager Scope-Level Determination
+
+The Memory Manager needs to decide what scope level to assign to extracted notes. This can be done via:
+
+**Option A: LLM Classification (Recommended)**
+
+Update the extract-notes prompt to return a `scopeLevel` hint:
+
+```json
+{
+    "type": "Preference",
+    "content": "Customer prefers metric units for all measurements",
+    "scopeLevel": "organization",  // This applies to all contacts in the org
+    "confidence": 0.85
+}
+```
+
+```json
+{
+    "type": "Context",
+    "content": "John mentioned he's on vacation next week",
+    "scopeLevel": "contact",  // This is specific to John (full scope)
+    "confidence": 0.90
+}
+```
+
+**Option B: Rule-Based Classification**
+
+```typescript
+private determineScopeLevel(note: ExtractedNote): ScopeLevel {
+    const content = note.content.toLowerCase();
+
+    // Keywords suggesting global scope
+    if (content.includes('always') || content.includes('all customers')) {
+        return 'global';
+    }
+
+    // Keywords suggesting org scope
+    if (content.includes('company') || content.includes('organization') ||
+        content.includes('all users') || content.includes('policy')) {
+        return 'org-only';
+    }
+
+    // Default to full scope (most specific)
+    return 'full';
+}
+```
+
+### 3.9 Success Metrics
+
+- [ ] Notes/Examples correctly scoped by tenant in multi-tenant deployment
+- [ ] Hierarchical retrieval returns appropriate mix of global + org + contact notes
+- [ ] No cross-tenant data leakage in agent responses
+- [ ] < 5ms overhead for scope filtering on indexed queries
+- [ ] SaaS apps can configure custom scope dimensions without MJ core changes
+
+---
+
+## Phase 4: Reranking Framework
 
 **Priority:** 🟠 HIGH VALUE - Significant accuracy improvement
 **Estimated Effort:** 2-3 weeks
 
-### 3.1 Overview
+### 4.1 Overview
 
 Reranking is a two-stage retrieval pattern that dramatically improves search accuracy:
 
@@ -522,12 +990,12 @@ For each document, provide a relevance score from 0.0 to 1.0:
 
 ---
 
-## Phase 4: Flexible Vector Configuration
+## Phase 5: Flexible Vector Configuration
 
 **Priority:** 🟡 MEDIUM - Enables advanced use cases
 **Estimated Effort:** 2-3 weeks
 
-### 4.1 Overview
+### 5.1 Overview
 
 Enable per-agent configuration of:
 - **Embedding Model** - Which model generates embeddings
@@ -535,7 +1003,7 @@ Enable per-agent configuration of:
 - **Distance Metric** - How similarity is calculated
 - **Search Parameters** - TopK, thresholds, etc.
 
-### 4.2 Design Considerations
+### 5.2 Design Considerations
 
 **Cross-Agent Note/Example Sharing:**
 - Notes scoped globally (AgentID = NULL) should be searchable by all agents
@@ -546,7 +1014,7 @@ Enable per-agent configuration of:
 - Most deployments will use single embedding model + single vector store
 - Per-agent config is for advanced scenarios (specialized agents, multi-tenant)
 
-### 4.3 Database Schema
+### 5.3 Database Schema
 
 **New Entity: AIAgentVectorConfiguration**
 ```sql
@@ -603,7 +1071,7 @@ CREATE TABLE __mj.SystemVectorConfiguration (
 );
 ```
 
-### 4.4 AIEngine Updates
+### 5.4 AIEngine Updates
 
 ```typescript
 // packages/AI/Engine/src/AIEngine.ts
@@ -649,7 +1117,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 }
 ```
 
-### 4.5 Multi-Embedding Support for Global Notes
+### 5.5 Multi-Embedding Support for Global Notes
 
 When agents use different embedding models, global notes need embeddings from each model:
 
@@ -673,12 +1141,12 @@ CREATE TABLE __mj.AIAgentNoteEmbedding (
 
 ---
 
-## Phase 5: Graph Memory Foundation
+## Phase 6: Graph Memory Foundation
 
 **Priority:** 🟡 MEDIUM - Enables relationship reasoning
 **Estimated Effort:** 4-6 weeks
 
-### 5.1 Overview
+### 6.1 Overview
 
 Graph memory stores **entities** and **relationships** extracted from notes/examples, enabling:
 - Multi-hop reasoning ("John → manages → Sales Team → has → Q1 Deadline")
@@ -686,7 +1154,7 @@ Graph memory stores **entities** and **relationships** extracted from notes/exam
 - Temporal tracking of entity changes
 - Contradiction detection (conflicting relationships)
 
-### 5.2 Framework-Level Primitive
+### 6.2 Framework-Level Primitive
 
 **New Package:** `@memberjunction/ai-graph`
 
@@ -712,7 +1180,7 @@ packages/AI/Graph/
 │       └── src/models/Neo4jGraphStore.ts   # Neo4j implementation
 ```
 
-### 5.3 Base Abstraction
+### 6.3 Base Abstraction
 
 ```typescript
 // packages/AI/Graph/Core/src/generic/BaseGraphStore.ts
@@ -769,7 +1237,7 @@ export abstract class BaseGraphStore {
 }
 ```
 
-### 5.4 SQL Server Implementation (Recommended Start)
+### 6.4 SQL Server Implementation (Recommended Start)
 
 Uses existing SQL Server infrastructure with recursive CTEs for traversal:
 
@@ -854,7 +1322,7 @@ GROUP BY ID, Name, Type
 ORDER BY ShortestPath;
 ```
 
-### 5.5 Entity Extraction Service
+### 6.5 Entity Extraction Service
 
 ```typescript
 // packages/AI/Graph/Core/src/extraction/EntityExtractor.ts
@@ -923,7 +1391,7 @@ export class EntityExtractor {
 }
 ```
 
-### 5.6 Integration with Memory Manager
+### 6.6 Integration with Memory Manager
 
 **Update Memory Manager to extract graph entities:**
 
@@ -994,7 +1462,7 @@ export class MemoryManagerAgent extends BaseAgent {
 }
 ```
 
-### 5.7 Entity Extraction Prompt
+### 6.7 Entity Extraction Prompt
 
 **File:** `metadata/prompts/templates/graph/extract-entities.md`
 
@@ -1059,12 +1527,12 @@ Extract entities and relationships from the following text.
 
 ---
 
-## Phase 6: Advanced Graph Features
+## Phase 7: Advanced Graph Features
 
 **Priority:** 🔵 FUTURE - Enhanced capabilities
 **Estimated Effort:** 6-8 weeks
 
-### 6.1 Neo4j Integration (Optional)
+### 7.1 Neo4j Integration (Optional)
 
 For deployments requiring advanced graph capabilities:
 
@@ -1095,7 +1563,7 @@ export class Neo4jGraphStore extends BaseGraphStore {
 }
 ```
 
-### 6.2 Temporal Awareness
+### 7.2 Temporal Awareness
 
 Track when relationships were valid:
 
@@ -1119,7 +1587,7 @@ async GetRelationshipsAtTime(
 }
 ```
 
-### 6.3 Contradiction Detection
+### 7.3 Contradiction Detection
 
 Automatically detect conflicting relationships:
 
@@ -1156,7 +1624,7 @@ async DetectContradictions(entityId: string): Promise<Contradiction[]> {
 }
 ```
 
-### 6.4 Graph-Enhanced Agent Context Injection
+### 7.4 Graph-Enhanced Agent Context Injection
 
 ```typescript
 // packages/AI/Agents/src/agent-context-injector.ts
@@ -1217,62 +1685,73 @@ private formatGraphContext(contexts: GraphQueryResult[]): string {
 
 ```
                     2025
-    Jan     Feb     Mar     Apr     May     Jun
-    |-------|-------|-------|-------|-------|
+    Jan     Feb     Mar     Apr     May     Jun     Jul
+    |-------|-------|-------|-------|-------|-------|
 
-Phase 1: Critical Bug Fixes
+Phase 1: Critical Bug Fixes ✅
     [===]
 
-Phase 2: Feature Completions
+Phase 2: Feature Completions ✅
     [=======]
 
-Phase 3: Reranking Framework
-            [===========]
+Phase 3: Multi-Tenant Scoping 🔴 CURRENT
+        [=======]
 
-Phase 4: Flexible Vector Config
-                    [===========]
+Phase 4: Reranking Framework
+                [===========]
 
-Phase 5: Graph Memory Foundation
-                            [===============]
+Phase 5: Flexible Vector Config
+                        [===========]
 
-Phase 6: Advanced Graph (Future)
-                                    [===============]
+Phase 6: Graph Memory Foundation
+                                [===============]
+
+Phase 7: Advanced Graph (Future)
+                                        [===============]
 ```
 
-| Phase | Duration | Dependencies |
-|-------|----------|--------------|
-| Phase 1 | 3-5 days | None |
-| Phase 2 | 1-2 weeks | Phase 1 |
-| Phase 3 | 2-3 weeks | Phase 1 |
-| Phase 4 | 2-3 weeks | Phase 1, 2 |
-| Phase 5 | 4-6 weeks | Phase 1, 2, 3 |
-| Phase 6 | 6-8 weeks | Phase 5 |
+| Phase | Duration | Dependencies | Status |
+|-------|----------|--------------|--------|
+| Phase 1 | 3-5 days | None | ✅ Complete |
+| Phase 2 | 1-2 weeks | Phase 1 | ✅ Complete |
+| Phase 3 | 1-2 weeks | Phase 1, 2 | 🔴 Next |
+| Phase 4 | 2-3 weeks | Phase 1 | Planned |
+| Phase 5 | 2-3 weeks | Phase 1, 2 | Planned |
+| Phase 6 | 4-6 weeks | Phase 1, 2, 4 | Planned |
+| Phase 7 | 6-8 weeks | Phase 6 | Future |
 
 ---
 
 ## Success Metrics
 
-### Phase 1-2 (Stability)
-- [ ] Memory Manager creates notes without Save() failures
-- [ ] All error conditions logged to MJ audit system
-- [ ] Zero silent failures in vector service initialization
+### Phase 1-2 (Stability) ✅
+- [x] Memory Manager creates notes without Save() failures
+- [x] All error conditions logged to MJ audit system
+- [x] Zero silent failures in vector service initialization
 
-### Phase 3 (Reranking)
+### Phase 3 (Multi-Tenant Scoping)
+- [ ] Notes/Examples correctly scoped by tenant in multi-tenant deployment
+- [ ] Hierarchical retrieval returns appropriate mix of global + org + contact notes
+- [ ] No cross-tenant data leakage in agent responses
+- [ ] < 5ms overhead for scope filtering on indexed queries
+- [ ] SaaS apps can configure custom scope dimensions without MJ core changes
+
+### Phase 4 (Reranking)
 - [ ] 30%+ improvement in retrieval accuracy (measured via A/B testing)
 - [ ] Configurable per-agent reranking strategy
 - [ ] <500ms added latency for reranking step
 
-### Phase 4 (Flexible Config)
+### Phase 5 (Flexible Config)
 - [ ] Agents can use different embedding models without cross-contamination
 - [ ] Global notes searchable by agents with different embedding models
 - [ ] Clear documentation for deployment configuration
 
-### Phase 5 (Graph Memory)
+### Phase 6 (Graph Memory)
 - [ ] Entity extraction from >90% of notes
 - [ ] Multi-hop queries return relevant context
 - [ ] Contradiction detection catches >80% of conflicting notes
 
-### Phase 6 (Advanced)
+### Phase 7 (Advanced)
 - [ ] Neo4j integration functional for production deployments
 - [ ] Temporal queries accurate across relationship history
 - [ ] Graph context improves agent response quality by measurable margin
