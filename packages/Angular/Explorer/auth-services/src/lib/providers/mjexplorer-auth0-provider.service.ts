@@ -325,6 +325,22 @@ export class MJAuth0Provider extends MJAuthBase {
     };
   }
 
+  /**
+   * Get profile picture URL from Auth0
+   *
+   * Auth0 includes the picture URL directly in user claims.
+   * No additional API call needed.
+   */
+  protected async getProfilePictureUrlInternal(): Promise<string | null> {
+    try {
+      const user = await firstValueFrom(this.auth.user$);
+      return user?.picture || null;
+    } catch (error) {
+      console.error('[Auth0] Error getting profile picture:', error);
+      return null;
+    }
+  }
+
   // ============================================================================
   // CONFIGURATION
   // ============================================================================

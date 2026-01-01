@@ -457,6 +457,34 @@ export class MJOktaProvider extends MJAuthBase {
     };
   }
 
+  /**
+   * Get profile picture URL from Okta
+   *
+   * Okta may include picture URL in user claims, similar to Auth0.
+   * If available, we can also fetch from Okta's /userinfo endpoint.
+   */
+  protected async getProfilePictureUrlInternal(): Promise<string | null> {
+    try {
+      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+      if (!idToken) {
+        return null;
+      }
+
+      // Check if picture is in claims
+      const pictureUrl = idToken.claims.picture as string;
+      if (pictureUrl) {
+        return pictureUrl;
+      }
+
+      // Alternatively, fetch from userinfo endpoint
+      const user = await this.oktaAuth.getUser();
+      return (user?.picture as string) || null;
+    } catch (error) {
+      console.error('[Okta] Error getting profile picture:', error);
+      return null;
+    }
+  }
+
   // ============================================================================
   // CONFIGURATION
   // ============================================================================

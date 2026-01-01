@@ -160,6 +160,17 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    */
   protected abstract classifyErrorInternal(error: unknown): StandardAuthError;
 
+  /**
+   * Get profile picture URL from auth provider
+   *
+   * Each provider implements its own logic:
+   * - MSAL: Fetches from Microsoft Graph API using access token
+   * - Auth0/Okta: Returns pictureUrl from user claims (already available)
+   *
+   * @returns Promise resolving to image URL or null if not available
+   */
+  protected abstract getProfilePictureUrlInternal(): Promise<string | null>;
+
   // ============================================================================
   // PUBLIC API (Concrete implementations using abstract internals)
   // ============================================================================
@@ -282,6 +293,28 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    */
   classifyError(error: unknown): StandardAuthError {
     return this.classifyErrorInternal(error);
+  }
+
+  /**
+   * Get profile picture URL from auth provider
+   *
+   * Returns the user's profile picture URL if available from the auth provider.
+   * This abstracts away provider-specific logic:
+   * - Microsoft/MSAL: Fetches from Graph API
+   * - Auth0/Okta: Returns from user claims
+   *
+   * @returns Promise resolving to image URL or null if not available
+   *
+   * @example
+   * ```typescript
+   * const pictureUrl = await this.authBase.getProfilePictureUrl();
+   * if (pictureUrl) {
+   *   this.userAvatar = pictureUrl;
+   * }
+   * ```
+   */
+  async getProfilePictureUrl(): Promise<string | null> {
+    return this.getProfilePictureUrlInternal();
   }
 
   // ============================================================================

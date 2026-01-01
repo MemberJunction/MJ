@@ -447,6 +447,50 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     };
   }
 
+  /**
+   * Get profile picture URL from Microsoft Graph API
+   *
+   * MSAL requires fetching the photo from Microsoft Graph.
+   * This is the key advantage of encapsulation - consumers don't need
+   * to know about Graph API, they just call getProfilePictureUrl()!
+   */
+  protected async getProfilePictureUrlInternal(): Promise<string | null> {
+    try {
+      await this.ensureInitialized();
+
+      const account = this.auth.instance.getActiveAccount();
+      if (!account) {
+        return null;
+      }
+
+      // Get access token for Microsoft Graph
+      const response = await this.auth.instance.acquireTokenSilent({
+        scopes: ['User.Read'],
+        account: account,
+        forceRefresh: false
+      });
+
+      if (!response.accessToken) {
+        return null;
+      }
+
+      // Fetch photo from Microsoft Graph
+      const graphResponse = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+        headers: { 'Authorization': `Bearer ${response.accessToken}` }
+      });
+
+      if (graphResponse.ok) {
+        const blob = await graphResponse.blob();
+        return URL.createObjectURL(blob);
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[MSAL] Error getting profile picture:', error);
+      return null;
+    }
+  }
+
   // ============================================================================
   // CONFIGURATION
   // ============================================================================

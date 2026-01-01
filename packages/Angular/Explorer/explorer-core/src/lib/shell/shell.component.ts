@@ -1372,20 +1372,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async syncAvatarFromAuthProvider(user: any): Promise<boolean> {
     try {
-      // v3.0 API - get token info with access token
-      const tokenInfo = await this.authBase.getTokenInfo();
+      // v3.0 API - Clean encapsulation! No provider-specific logic needed!
+      // The provider handles whether it's Graph API, Auth0, or Okta internally
+      const pictureUrl = await this.authBase.getProfilePictureUrl();
 
-      if (!tokenInfo || !tokenInfo.accessToken) {
-        return false;
-      }
-
-      // Check if we're using MSAL provider (Microsoft) by checking provider type
-      if (this.authBase.type === 'msal') {
-        // Microsoft Graph API photo endpoint
-        const imageUrl = 'https://graph.microsoft.com/v1.0/me/photo/$value';
-        const authHeaders = { 'Authorization': `Bearer ${tokenInfo.accessToken}` };
-
-        return await this.userAvatarService.syncFromImageUrl(user, imageUrl, authHeaders);
+      if (pictureUrl) {
+        return await this.userAvatarService.syncFromImageUrl(user, pictureUrl);
       }
 
       return false;
