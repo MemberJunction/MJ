@@ -208,10 +208,18 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         return null;
       }
 
+      // First try to get cached token from account
+      // This avoids unnecessary iframe calls that can timeout
+      if (account.idToken) {
+        return account.idToken;
+      }
+
+      // If not in account, try silent token acquisition
+      // Match original getUserClaims: account parameter + no offline_access
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
-        forceRefresh: false
+        cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
       });
 
       // MSAL-specific detail: JWT is in idToken property
@@ -236,10 +244,11 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         return null;
       }
 
+      // Match original getUserClaims: account parameter + no offline_access
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
-        forceRefresh: false
+        cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
       });
 
       if (!response.idToken) {
@@ -253,7 +262,19 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         scopes: response.scopes
       };
     } catch (error) {
+      // If acquireTokenSilent fails (e.g., iframe timeout), try to use cached account data
       console.error('[MSAL] Error extracting token info:', error);
+
+      const account = this.auth.instance.getActiveAccount();
+      if (account?.idToken) {
+        // Return basic token info from account if available
+        return {
+          idToken: account.idToken,
+          expiresAt: 0, // Unknown from account alone
+          scopes: []
+        };
+      }
+
       return null;
     }
   }
@@ -286,8 +307,6 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
    */
   protected async refreshTokenInternal(): Promise<TokenRefreshResult> {
     try {
-      console.log('[MSAL] Attempting to refresh token...');
-
       await this.ensureInitialized();
 
       const account = this.auth.instance.getActiveAccount();
@@ -302,10 +321,12 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         };
       }
 
+      // IMPORTANT: Match original code exactly - no account parameter, no offline_access
+      // This allows MSAL to find refresh tokens even without scope information
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
-        account: account,
         cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
+        // NOTE: Intentionally NOT passing account or offline_access to match original working code
       });
 
       if (!response.idToken) {
@@ -318,10 +339,6 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
           }
         };
       }
-
-      console.log('[MSAL] Token refresh successful', {
-        expiresOn: response.expiresOn?.toISOString()
-      });
 
       const token: StandardAuthToken = {
         idToken: response.idToken,
@@ -336,7 +353,6 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       };
     } catch (error) {
       console.error('[MSAL] Token refresh failed:', error);
-
       return {
         success: false,
         error: this.classifyErrorInternal(error)
