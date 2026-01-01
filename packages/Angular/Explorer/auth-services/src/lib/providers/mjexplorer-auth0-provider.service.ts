@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { AuthService, IdToken, User, AuthGuard, AuthConfigService, Auth0ClientService, Auth0ClientFactory, AuthClientConfig } from '@auth0/auth0-angular';
 import { Observable, of, firstValueFrom } from 'rxjs';
-import { take } from 'rxjs/operators';
+import { take, filter } from 'rxjs/operators';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
 import {
   StandardUserInfo,
@@ -47,6 +47,7 @@ export class MJAuth0Provider extends MJAuthBase {
         clientId: environment['AUTH0_CLIENTID'],
         authorizationParams: {
           redirect_uri: window.location.origin,
+          scope: 'openid profile email offline_access',
           // No audience parameter - uses ID tokens (matches pre-refactor behavior)
           // ID tokens have aud=clientId by default and contain user claims
         },
@@ -81,8 +82,27 @@ export class MJAuth0Provider extends MJAuthBase {
       return;
     }
 
-    // Auth0 Angular SDK handles initialization internally
-    // Subscribe to authentication state and user info
+    // CRITICAL: Wait for Auth0 SDK to process any redirect callback
+    // The SDK handles this internally and updates isLoading$ when done
+    await firstValueFrom(this.auth.isLoading$.pipe(
+      filter(loading => !loading),
+      take(1)
+    ));
+
+    // Get current authentication state
+    const isAuthenticated = await firstValueFrom(this.auth.isAuthenticated$);
+
+    // CRITICAL: Get current user BEFORE setting up subscriptions
+    // This ensures userInfo$ has a value before app.component.ts subscribes
+    if (isAuthenticated) {
+      const user = await firstValueFrom(this.auth.user$);
+      if (user) {
+        const userInfo = this.mapAuth0UserToStandard(user);
+        this.updateUserInfo(userInfo);
+      }
+    }
+
+    // Subscribe to authentication state and user info for future changes
     this.auth.isAuthenticated$.subscribe((loggedIn) => {
       this.updateAuthState(loggedIn);
     });
