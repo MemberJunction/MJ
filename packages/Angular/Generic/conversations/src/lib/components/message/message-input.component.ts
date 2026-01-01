@@ -8,7 +8,7 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
-import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
+import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
@@ -209,13 +209,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         // TaskOrchestrator (Sage task graphs): Show formatted header with context
         // RunAIAgentResolver (direct agent): Plain message to match normal flow
         if (progress.resolver === 'TaskOrchestrator') {
-          const taskName = progress.taskName || 'Task';
           // Prefer hierarchical step (e.g., "2.1.3") over flat stepCount
-          const stepDisplay = (progress.metadata as any)?.progress?.hierarchicalStep || progress.stepCount;
+          const stepDisplay = progress.metadata?.progress?.hierarchicalStep || progress.stepCount;
           if (stepDisplay != null) {
-            message.Message = `🔄 **${taskName}** • Step ${stepDisplay}\n\n${progress.message}`;
+            message.Message = `**Step ${stepDisplay}**\n\n${progress.message}`;
           } else {
-            message.Message = `🔄 **${taskName}**\n\n${progress.message}`;
+            message.Message = progress.message;
           }
         } else {
           // Direct agent execution - plain message (matches normal flow)
@@ -662,8 +661,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     let capturedAgentRunId: string | null = null;
 
     return async (progress) => {
-      let progressAgentRun = progress.metadata?.agentRun as any | undefined;
-      const progressAgentRunId = progressAgentRun?.ID || progress.metadata?.agentRunId as string | undefined;
+      const metadata = progress.metadata as MessageProgressMetadata | undefined;
+      const progressAgentRun = metadata?.agentRun;
+      const progressAgentRunId = metadata?.agentRun?.ID || metadata?.agentRunId;
 
       // Capture the agent run ID from the first progress message
       if (!capturedAgentRunId && progressAgentRunId) {

@@ -234,7 +234,8 @@ export class ActiveTasksService {
         const convResult = await rv.RunView<ConversationEntity>({
           EntityName: 'Conversations',
           ExtraFilter: `ID IN (${Array.from(conversationIds).map(id => `'${id}'`).join(',')})`,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
+          CacheLocal: true
         }, currentUser);
 
         if (convResult.Success && convResult.Results) {

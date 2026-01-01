@@ -9,9 +9,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 
 export function LoadChatConversationsResource() {
-  // Force inclusion in production builds (tree shaking workaround)
-  // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatConversationsResource(null!, null!, null!, null!, null!, null!, null!);
+  // Tree-shaking prevention - function reference keeps class in bundle
 }
 
 /**
@@ -313,11 +311,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       // Initialize AIEngine first - this is the heavy operation that loads all agents
       await AIEngineBase.Instance.Config(false);
 
-      // Then initialize mention autocomplete service which uses the loaded agents
-      await this.mentionAutocompleteService.initialize(this.currentUser);
-
-      // Restore active tasks from database (for browser refresh during agent execution)
-      await this.activeTasksService.restoreFromDatabase(this.currentUser);
+      // Initialize services in parallel - they're independent operations
+      await Promise.all([
+        this.mentionAutocompleteService.initialize(this.currentUser),
+        this.activeTasksService.restoreFromDatabase(this.currentUser)
+      ]);
 
       // Mark as ready - child components can now render
       this.isReady = true;

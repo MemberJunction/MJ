@@ -7,6 +7,29 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 
 /**
+ * Metadata structure for message progress updates
+ */
+export interface MessageProgressMetadata {
+  /** Progress details (from RunAIAgentResolver) */
+  progress?: {
+    hierarchicalStep?: string;
+    percentage?: number;
+    message?: string;
+    stepCount?: number;
+    agentName?: string;
+    agentType?: string;
+  };
+  /** Agent run information (from RunAIAgentResolver) */
+  agentRun?: {
+    Agent?: string;
+    ConversationDetailID?: string;
+    ID?: string;
+  };
+  /** Agent run ID (alternative to agentRun.ID) */
+  agentRunId?: string;
+}
+
+/**
  * Message progress update structure
  */
 export interface MessageProgressUpdate {
@@ -14,7 +37,7 @@ export interface MessageProgressUpdate {
   percentComplete?: number;
   taskName?: string;
   conversationDetailId: string;
-  metadata?: any;
+  metadata?: MessageProgressMetadata;
   stepCount?: number;
   /** Identifies which backend resolver published this update */
   resolver?: 'TaskOrchestrator' | 'RunAIAgentResolver' | string;
@@ -326,7 +349,7 @@ export class ConversationStreamingService implements OnDestroy {
         percentComplete,
         taskName: agentRun?.Agent || 'Agent',
         conversationDetailId,
-        metadata: { agentRun, progress },
+        metadata: { agentRun, progress } as MessageProgressMetadata,
         stepCount,
         resolver: 'RunAIAgentResolver'
       };
