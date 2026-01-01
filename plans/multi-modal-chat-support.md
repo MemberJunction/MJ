@@ -4,263 +4,342 @@
 
 This plan describes the implementation of multi-modal content support (images, video, audio) in MemberJunction conversations. The design provides:
 
-1. **Scalable storage** - Small files inline (base64), large files in MJStorage
-2. **Provider flexibility** - Configurable storage providers (S3, Azure, etc.)
-3. **Capability metadata** - Model and agent-level input/output support flags
-4. **Configurable limits** - System → Model → Agent cascade for size/count limits
+1. **Normalized Modality System** - Extensible modality metadata without schema changes
+2. **Cascading Configuration** - Agent -> Model -> ModelType -> System defaults
+3. **Scalable storage** - Small files inline (base64), large files in MJStorage
+4. **Provider flexibility** - Configurable storage providers (S3, Azure, etc.)
 5. **Backward compatibility** - Existing text messages remain unchanged
 6. **Central utility** - ConversationUtility as single source of truth
 
 ---
 
-## Phase 1: Database Schema
+## Phase 1: Database Schema (REVISED - Normalized Modality Approach)
 
-### 1.1 AI Model Entity - New Fields
+### Design Philosophy
 
-Add the following fields to the `AIModel` table:
+Instead of flat columns on AIModel/AIAgent tables for each modality (which requires ALTER TABLE for new modalities), we use a normalized schema with junction tables:
 
-```sql
--- Input capabilities
-SupportsImageInput          BIT DEFAULT 0
-SupportsVideoInput          BIT DEFAULT 0
-SupportsAudioInput          BIT DEFAULT 0
+- **AIModality** - Master list of content types (Text, Image, Audio, Video, File, Embedding)
+- **AIModelType** - Default modalities for each model type (LLM, TTS, STT, etc.)
+- **AIModelModality** - Per-model capability overrides (extends/restricts type defaults)
+- **AIAgentModality** - Per-agent capability overrides (extends/restricts model defaults)
 
--- Output capabilities (for generative models)
-SupportsImageOutput         BIT DEFAULT 0
-SupportsVideoOutput         BIT DEFAULT 0
-SupportsAudioOutput         BIT DEFAULT 0
+### 1.1 AIModality Entity (NEW)
 
--- Input size limits in bytes (NULL = use system default)
-MaxImageInputSizeBytes      INT NULL    -- Default: 5,242,880 (5MB)
-MaxVideoInputSizeBytes      INT NULL    -- Default: 52,428,800 (50MB)
-MaxAudioInputSizeBytes      INT NULL    -- Default: 26,214,400 (25MB)
-
--- Count limits per message (NULL = use system default)
-MaxImagesPerMessage         INT NULL    -- Default: 10
-MaxVideosPerMessage         INT NULL    -- Default: 3
-MaxAudiosPerMessage         INT NULL    -- Default: 5
-```
-
-### 1.2 AI Agent Entity - New Fields
-
-Add the following fields to the `AIAgent` table:
+Master table for all content modalities:
 
 ```sql
--- Input toggles (agent can disable even if model supports)
-AllowImageInput             BIT DEFAULT 1
-AllowVideoInput             BIT DEFAULT 0
-AllowAudioInput             BIT DEFAULT 0
-
--- Output toggles
-AllowImageOutput            BIT DEFAULT 1
-AllowVideoOutput            BIT DEFAULT 0
-AllowAudioOutput            BIT DEFAULT 0
-
--- Override limits (NULL = use model's limit, then system default)
-MaxImageInputSizeBytes      INT NULL
-MaxVideoInputSizeBytes      INT NULL
-MaxAudioInputSizeBytes      INT NULL
-MaxImagesPerMessage         INT NULL
-MaxVideosPerMessage         INT NULL
-MaxAudiosPerMessage         INT NULL
-
--- Storage configuration
-AttachmentStorageProviderID UNIQUEIDENTIFIER NULL  -- FK to File Storage Providers
-AttachmentStoragePath       NVARCHAR(500) NULL     -- Root path in storage provider
-
--- Inline storage threshold (NULL = use system default of 1MB)
--- Files <= this size stored as base64 inline
--- Files > this size stored in MJStorage
--- Set to 0 to always use MJStorage
-InlineStorageThresholdBytes INT NULL
-```
-
-### 1.3 NEW: Conversation Detail Attachment Entity
-
-Create new table `ConversationDetailAttachment`:
-
-```sql
-CREATE TABLE [__mj].[ConversationDetailAttachment] (
-    ID                      UNIQUEIDENTIFIER DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
-    ConversationDetailID    UNIQUEIDENTIFIER NOT NULL,  -- FK to ConversationDetail
-
-    -- Content classification
-    AttachmentType          NVARCHAR(20) NOT NULL,      -- 'Image', 'Video', 'Audio', 'Document'
-    MimeType                NVARCHAR(100) NOT NULL,     -- 'image/png', 'video/mp4', etc.
-
-    -- File metadata
-    FileName                NVARCHAR(4000) NULL,        -- Long for cloud storage paths
-    FileSizeBytes           INT NOT NULL,
-    Width                   INT NULL,                    -- pixels (image/video)
-    Height                  INT NULL,                    -- pixels (image/video)
-    DurationSeconds         INT NULL,                    -- audio/video duration
-
-    -- Storage: ONE of these will be populated
-    InlineData              NVARCHAR(MAX) NULL,         -- base64 for small files
-    FileID                  UNIQUEIDENTIFIER NULL,      -- FK to Files (MJStorage)
-
-    -- Display optimization
-    DisplayOrder            INT DEFAULT 0,
-    ThumbnailBase64         NVARCHAR(MAX) NULL,         -- Small preview (max 200px)
-
-    -- Constraints (CodeGen will add timestamps and indexes)
-    CONSTRAINT FK_CDA_ConversationDetail
-        FOREIGN KEY (ConversationDetailID) REFERENCES [__mj].[ConversationDetail](ID),
-    CONSTRAINT FK_CDA_File
-        FOREIGN KEY (FileID) REFERENCES [__mj].[File](ID),
-    CONSTRAINT CK_CDA_StorageType
-        CHECK (InlineData IS NOT NULL OR FileID IS NOT NULL)
+CREATE TABLE AIModality (
+    ID                          UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    Name                        NVARCHAR(50) NOT NULL,       -- 'Text', 'Image', 'Audio', etc.
+    Description                 NVARCHAR(500) NULL,
+    ContentBlockType            NVARCHAR(50) NOT NULL,       -- Maps to chat.types.ts
+    MIMETypePattern             NVARCHAR(100) NULL,          -- 'image/*', 'audio/*', etc.
+    Type                        NVARCHAR(50) NOT NULL,       -- 'Content', 'Structured', 'Binary'
+    DefaultMaxSizeBytes         INT NULL,                     -- System-wide default
+    DefaultMaxCountPerMessage   INT NULL,                     -- System-wide default
+    DisplayOrder                INT NOT NULL DEFAULT 0,
+    CONSTRAINT PK_AIModality PRIMARY KEY (ID),
+    CONSTRAINT UQ_AIModality_Name UNIQUE (Name),
+    CONSTRAINT CK_AIModality_Type CHECK (Type IN ('Content', 'Structured', 'Binary')),
+    CONSTRAINT CK_AIModality_ContentBlockType CHECK (ContentBlockType IN ('text', 'image_url', 'video_url', 'audio_url', 'file_url', 'embedding'))
 );
 ```
 
-### 1.4 System Defaults
+**ContentBlockType Mapping** (to `ChatMessageContentBlock.type` in chat.types.ts):
+- `text` - Plain text content
+- `image_url` - Images (base64 data URL or external URL)
+- `audio_url` - Audio files
+- `video_url` - Video files
+- `file_url` - Generic files (PDFs, documents)
+- `embedding` - Vector embeddings (JSON format)
 
-These will be defined as constants in code and can be overridden via `mj.config.cjs`:
+**Type Classification**:
+- `Content` - Human-readable text
+- `Structured` - JSON/embeddings
+- `Binary` - Media files (images, audio, video)
 
-```javascript
-// Default attachment settings
-attachmentDefaults: {
-    // Size limits (bytes)
-    maxImageSizeBytes: 5 * 1024 * 1024,      // 5MB
-    maxVideoSizeBytes: 50 * 1024 * 1024,     // 50MB
-    maxAudioSizeBytes: 25 * 1024 * 1024,     // 25MB
+**Seed Data** (with fixed UUIDs for referential integrity):
+| ID | Name | ContentBlockType | Type | DefaultMaxSizeBytes |
+|----|------|------------------|------|---------------------|
+| EA43F4CF-EC26-41D7-B2AC-CF928AF63E46 | Text | text | Content | NULL |
+| AAD386E4-D6ED-4E6E-8960-B56AC1D2783B | Image | image_url | Binary | 5,242,880 (5MB) |
+| FC3CAE20-6FA8-4ABF-B02E-62CEA920313E | Audio | audio_url | Binary | 26,214,400 (25MB) |
+| 9AAD272B-A1C8-4498-ACFC-0C6D50D82B96 | Video | video_url | Binary | 52,428,800 (50MB) |
+| 3E930454-29AE-48B9-8888-10FD74BC67B9 | File | file_url | Binary | 10,485,760 (10MB) |
+| BB0C8564-E79C-4AF9-82B0-26D6EAB4BC01 | Embedding | embedding | Structured | NULL |
 
-    // Count limits per message
-    maxImagesPerMessage: 10,
-    maxVideosPerMessage: 3,
-    maxAudiosPerMessage: 5,
+### 1.2 AIModelType Updates
 
-    // Storage threshold (files <= this go inline as base64)
-    inlineStorageThresholdBytes: 1 * 1024 * 1024,  // 1MB
+Add default modality fields to AIModelType for inheritance:
 
-    // Thumbnail settings
-    thumbnailMaxDimension: 200,              // pixels
-    thumbnailQuality: 0.7                    // JPEG quality
-}
+```sql
+ALTER TABLE AIModelType ADD
+    DefaultInputModalityID      UNIQUEIDENTIFIER NULL,   -- FK to AIModality
+    DefaultOutputModalityID     UNIQUEIDENTIFIER NULL;   -- FK to AIModality
+```
+
+**Model Type Defaults**:
+| Type | Default Input | Default Output |
+|------|--------------|----------------|
+| LLM | Text | Text |
+| TTS (Text-to-Speech) | Text | Audio |
+| STT (Speech-to-Text) | Audio | Text |
+| Embeddings | Text | Embedding |
+| Image Generator | Text | Image |
+| Video | Text | Video |
+
+**Note**: The former "Audio" model type has been renamed to "TTS" for clarity. A new "STT" model type has been added for speech-to-text models like Whisper.
+
+### 1.3 AIModel Updates
+
+Add inheritance flag and version lineage:
+
+```sql
+ALTER TABLE AIModel ADD
+    InheritTypeModalities       BIT NOT NULL DEFAULT 1,  -- Inherit+extend from type
+    PriorVersionID              UNIQUEIDENTIFIER NULL;   -- FK to AIModel for version history
+```
+
+**Inheritance Semantics**:
+- `InheritTypeModalities = 1` (default): Model inherits default modalities from AIModelType, plus any additional modalities in AIModelModality
+- `InheritTypeModalities = 0`: Model uses ONLY modalities in AIModelModality (complete override)
+
+### 1.4 AIModelModality Junction Table (NEW)
+
+Per-model modality overrides:
+
+```sql
+CREATE TABLE AIModelModality (
+    ID                      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    AIModelID               UNIQUEIDENTIFIER NOT NULL,      -- FK to AIModel
+    ModalityID              UNIQUEIDENTIFIER NOT NULL,      -- FK to AIModality
+    Direction               NVARCHAR(10) NOT NULL,          -- 'Input' or 'Output'
+    IsSupported             BIT NOT NULL DEFAULT 1,         -- Can disable inherited modality
+    IsRequired              BIT NOT NULL DEFAULT 0,         -- Required for this model
+    MaxSizeBytes            INT NULL,                        -- Override system default
+    MaxCountPerMessage      INT NULL,                        -- Override system default
+    CONSTRAINT PK_AIModelModality PRIMARY KEY (ID),
+    CONSTRAINT UQ_AIModelModality_ModelModalityDir UNIQUE (AIModelID, ModalityID, Direction),
+    CONSTRAINT CK_AIModelModality_Direction CHECK (Direction IN ('Input', 'Output'))
+);
+```
+
+### 1.5 AIAgentModality Junction Table (NEW)
+
+Per-agent modality overrides:
+
+```sql
+CREATE TABLE AIAgentModality (
+    ID                      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    AIAgentID               UNIQUEIDENTIFIER NOT NULL,      -- FK to AIAgent
+    ModalityID              UNIQUEIDENTIFIER NOT NULL,      -- FK to AIModality
+    Direction               NVARCHAR(10) NOT NULL,          -- 'Input' or 'Output'
+    IsAllowed               BIT NOT NULL DEFAULT 1,         -- Can restrict model capability
+    MaxSizeBytes            INT NULL,                        -- Override model/system default
+    MaxCountPerMessage      INT NULL,                        -- Override model/system default
+    CONSTRAINT PK_AIAgentModality PRIMARY KEY (ID),
+    CONSTRAINT UQ_AIAgentModality_AgentModalityDir UNIQUE (AIAgentID, ModalityID, Direction),
+    CONSTRAINT CK_AIAgentModality_Direction CHECK (Direction IN ('Input', 'Output'))
+);
+```
+
+**Agent Default Behavior**: If NO AIAgentModality records exist for an agent:
+- Default to Text input/output only
+- This is safe default since all agents support text
+- Helper method in AIEngineBase resolves this
+
+### 1.6 AIAgent Storage Configuration
+
+Add storage config to AIAgent:
+
+```sql
+ALTER TABLE AIAgent ADD
+    AttachmentStorageProviderID     UNIQUEIDENTIFIER NULL,  -- FK to File Storage Providers
+    AttachmentRootPath              NVARCHAR(500) NULL,     -- Root path (agent run ID appended)
+    InlineStorageThresholdBytes     INT NULL;               -- NULL = use system default
+```
+
+### 1.7 AIConfiguration Storage Defaults
+
+Add system-wide storage defaults:
+
+```sql
+ALTER TABLE AIConfiguration ADD
+    DefaultStorageProviderID        UNIQUEIDENTIFIER NULL,  -- FK to File Storage Providers
+    DefaultStorageRootPath          NVARCHAR(500) NULL;     -- System-wide default path
+```
+
+### 1.8 ConversationDetailAttachment Entity (NEW)
+
+Store message attachments:
+
+```sql
+CREATE TABLE ConversationDetailAttachment (
+    ID                      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    ConversationDetailID    UNIQUEIDENTIFIER NOT NULL,      -- FK to ConversationDetail
+    ModalityID              UNIQUEIDENTIFIER NOT NULL,      -- FK to AIModality
+    MimeType                NVARCHAR(100) NOT NULL,         -- 'image/png', 'audio/mp3', etc.
+    FileName                NVARCHAR(4000) NULL,            -- Original filename
+    FileSizeBytes           INT NOT NULL,
+    Width                   INT NULL,                        -- pixels (image/video)
+    Height                  INT NULL,                        -- pixels (image/video)
+    DurationSeconds         INT NULL,                        -- audio/video duration
+    InlineData              NVARCHAR(MAX) NULL,             -- base64 for small files
+    FileID                  UNIQUEIDENTIFIER NULL,          -- FK to Files (MJStorage)
+    DisplayOrder            INT NOT NULL DEFAULT 0,
+    ThumbnailBase64         NVARCHAR(MAX) NULL,             -- Small preview
+    CONSTRAINT PK_ConvDetailAttachment PRIMARY KEY (ID),
+    CONSTRAINT CK_CDA_StorageType CHECK (InlineData IS NOT NULL OR FileID IS NOT NULL)
+);
 ```
 
 ---
 
-## Phase 2: Entity Classes and CodeGen
+## Phase 2: Modality Resolution Logic
 
-After running CodeGen for the new schema:
+### 2.1 Cascade Resolution
 
-### 2.1 Generated Classes
-- `ConversationDetailAttachmentEntity` - New entity for attachments
-- Updated `AIModelEntity` with new capability/limit fields
-- Updated `AIAgentEntity` with new input/output toggles and limits
+When determining what modalities a model/agent supports:
 
-### 2.2 Validation Rules
-- `AttachmentType` must be one of: 'Image', 'Video', 'Audio', 'Document'
-- Either `InlineData` OR `FileID` must be populated (not both, not neither)
-- `FileSizeBytes` must be > 0
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Resolve Supported Modalities                   │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │ Agent has records?    │
+                    └───────────────────────┘
+                      Yes │           │ No
+                          ▼           ▼
+            ┌─────────────────┐   ┌───────────────────────┐
+            │ Use Agent       │   │ Default to Text       │
+            │ Modalities      │   │ in/out only           │
+            └─────────────────┘   └───────────────────────┘
+                          │
+                          ▼
+            ┌─────────────────────────────────────────────┐
+            │ For each agent modality:                    │
+            │  1. Check model supports it                 │
+            │  2. Check agent IsAllowed = 1               │
+            │  3. Intersection = effective capabilities   │
+            └─────────────────────────────────────────────┘
+```
+
+### 2.2 Model Modality Resolution
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Get Model Modalities                          │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │ InheritTypeModalities │
+                    │ = 1?                  │
+                    └───────────────────────┘
+                      Yes │           │ No
+                          ▼           ▼
+            ┌─────────────────┐   ┌─────────────────────┐
+            │ Start with Type │   │ Use ONLY            │
+            │ defaults        │   │ AIModelModality     │
+            │ + Add model     │   │ records             │
+            │ extensions      │   └─────────────────────┘
+            └─────────────────┘
+                          │
+                          ▼
+            ┌─────────────────────────────────────────────┐
+            │ Apply IsSupported = 0 to remove inherited   │
+            └─────────────────────────────────────────────┘
+```
+
+### 2.3 Limit Resolution Cascade
+
+```
+GetEffectiveLimit(limitName, agent, model, modality, systemDefaults):
+    1. Check agent's AIAgentModality override -> if set, return it
+    2. Check model's AIModelModality override -> if set, return it
+    3. Check modality's default -> if set, return it
+    4. Return system default from config
+```
 
 ---
 
-## Phase 3: ConversationUtility Extension
+## Phase 3: Core Types and Utilities
 
-Extend `packages/AI/CorePlus/src/conversation-utility.ts` to be the central source of truth for all message content handling.
+### 3.1 TypeScript Types (Already Done)
 
-### 3.1 New Types
+`chat.types.ts` already defines:
 
 ```typescript
-/**
- * Attachment content in messages
- */
-export interface AttachmentContent {
-  /** Mode identifier */
-  _mode: 'attachment';
-  /** Attachment ID (from ConversationDetailAttachment) */
-  id: string;
-  /** Attachment type */
-  type: 'Image' | 'Video' | 'Audio' | 'Document';
-  /** MIME type */
-  mimeType: string;
-  /** Original filename */
-  fileName?: string;
-  /** File size in bytes */
-  sizeBytes: number;
-  /** Width (images/video) */
-  width?: number;
-  /** Height (images/video) */
-  height?: number;
-  /** Duration in seconds (audio/video) */
-  duration?: number;
-  /** Thumbnail base64 for preview */
-  thumbnail?: string;
+export type ChatMessageContentBlock = {
+    type: 'text' | 'image_url' | 'video_url' | 'audio_url' | 'file_url';
+    content: string;        // URL or base64 data URL
+    mimeType?: string;      // Required for raw base64
+    fileName?: string;
+    fileSize?: number;
+    width?: number;
+    height?: number;
 }
 
-/**
- * Extended union type for all special content
- */
-export type SpecialContent = MentionContent | FormResponseContent | AttachmentContent;
+export type ChatMessageContent = string | ChatMessageContentBlock[];
 ```
 
-### 3.2 New Methods
+### 3.2 Serialization Utilities (Already Done)
 
 ```typescript
-/**
- * Create an attachment reference token
- */
-public static CreateAttachmentReference(attachment: AttachmentContent): string;
+// Prefix marker for serialized content blocks
+export const CONTENT_BLOCKS_PREFIX = '$$CONTENT_BLOCKS$$';
 
-/**
- * Check if message contains attachments
- */
-public static ContainsAttachments(text: string): boolean;
+// Serialize content for database storage
+export function serializeMessageContent(content: ChatMessageContent): string;
 
-/**
- * Get all attachment references from a message
- */
-public static GetAttachmentReferences(text: string): AttachmentContent[];
+// Deserialize from database
+export function deserializeMessageContent(message: string): ChatMessageContent;
 
+// Helper functions
+export function hasImageContent(content: ChatMessageContent): boolean;
+export function getTextFromContent(content: ChatMessageContent): string;
+export function parseBase64DataUrl(dataUrl: string): { mediaType: string; data: string } | null;
+export function createBase64DataUrl(base64Data: string, mimeType: string): string;
+```
+
+### 3.3 ConversationUtility Extensions
+
+Add methods to `conversation-utility.ts`:
+
+```typescript
 /**
  * Build ChatMessageContent from ConversationDetail + Attachments
- * This is the primary method for converting stored messages to AI-ready format
  */
 public static async BuildChatMessageContent(
-  messageText: string,
-  attachments: ConversationDetailAttachmentEntity[],
-  storageProvider?: FileStorageProviderEntity
+    messageText: string,
+    attachments: ConversationDetailAttachmentEntity[],
+    storageProvider?: FileStorageProviderEntity
 ): Promise<ChatMessageContent>;
 
 /**
- * Validate attachment against limits
+ * Validate attachment against effective limits
  */
 public static ValidateAttachment(
-  attachment: { type: string; sizeBytes: number },
-  currentCounts: { images: number; videos: number; audios: number },
-  agent: AIAgentEntity,
-  model: AIModelEntity,
-  systemDefaults: AttachmentDefaults
+    attachment: { modalityId: string; sizeBytes: number },
+    currentCounts: Map<string, number>,
+    agentModalities: AIAgentModalityEntity[],
+    modelModalities: AIModelModalityEntity[],
+    modality: AIModalityEntity,
+    systemDefaults: AttachmentDefaults
 ): { allowed: boolean; reason?: string };
 
 /**
- * Get effective limit (agent → model → system cascade)
- */
-public static GetEffectiveLimit(
-  limitName: string,
-  agent: AIAgentEntity,
-  model: AIModelEntity,
-  systemDefaults: AttachmentDefaults
-): number;
-
-/**
- * Determine if attachment should be stored inline or in MJStorage
+ * Determine if attachment should be stored inline
  */
 public static ShouldStoreInline(
-  sizeBytes: number,
-  agent: AIAgentEntity,
-  systemDefaults: AttachmentDefaults
+    sizeBytes: number,
+    agent: AIAgentEntity,
+    systemDefaults: AttachmentDefaults
 ): boolean;
 ```
-
-### 3.3 Import Updates
-
-Add imports for:
-- `ChatMessageContent`, `ChatMessageContentBlock` from `@memberjunction/ai`
-- `ConversationDetailAttachmentEntity`, `AIAgentEntity`, `AIModelEntity` from `@memberjunction/core-entities`
-- Storage utilities from `@memberjunction/storage`
 
 ---
 
@@ -268,63 +347,42 @@ Add imports for:
 
 Create `packages/AI/CorePlus/src/attachment-service.ts`:
 
-### 4.1 Service Class
-
 ```typescript
 export class ConversationAttachmentService {
-  /**
-   * Process and store an attachment
-   * Handles: validation, thumbnail generation, inline vs MJStorage decision
-   */
-  async addAttachment(
-    conversationDetailId: string,
-    file: { data: Buffer | string; mimeType: string; fileName?: string },
-    agent: AIAgentEntity,
-    model: AIModelEntity,
-    contextUser: UserInfo
-  ): Promise<ConversationDetailAttachmentEntity>;
+    /**
+     * Process and store an attachment
+     */
+    async addAttachment(
+        conversationDetailId: string,
+        file: { data: Buffer | string; mimeType: string; fileName?: string },
+        agent: AIAgentEntity,
+        model: AIModelEntity,
+        contextUser: UserInfo
+    ): Promise<ConversationDetailAttachmentEntity>;
 
-  /**
-   * Get attachment data (resolves from inline or MJStorage)
-   */
-  async getAttachmentData(
-    attachment: ConversationDetailAttachmentEntity,
-    contextUser: UserInfo
-  ): Promise<{ data: string; mimeType: string }>;
+    /**
+     * Get attachment data (resolves from inline or MJStorage)
+     */
+    async getAttachmentData(
+        attachment: ConversationDetailAttachmentEntity,
+        contextUser: UserInfo
+    ): Promise<{ data: string; mimeType: string }>;
 
-  /**
-   * Get pre-auth download URL for MJStorage attachments
-   */
-  async getDownloadUrl(
-    attachment: ConversationDetailAttachmentEntity,
-    contextUser: UserInfo
-  ): Promise<string | null>;
+    /**
+     * Delete attachment (and underlying file if in MJStorage)
+     */
+    async deleteAttachment(
+        attachmentId: string,
+        contextUser: UserInfo
+    ): Promise<boolean>;
 
-  /**
-   * Delete attachment (and underlying file if in MJStorage)
-   */
-  async deleteAttachment(
-    attachmentId: string,
-    contextUser: UserInfo
-  ): Promise<boolean>;
-
-  /**
-   * Load all attachments for a conversation detail
-   */
-  async getAttachments(
-    conversationDetailId: string,
-    contextUser: UserInfo
-  ): Promise<ConversationDetailAttachmentEntity[]>;
-
-  /**
-   * Generate thumbnail for image/video
-   */
-  private async generateThumbnail(
-    data: Buffer,
-    mimeType: string,
-    maxDimension: number,
-    quality: number
-  ): Promise<string>;
+    /**
+     * Load all attachments for a conversation detail
+     */
+    async getAttachments(
+        conversationDetailId: string,
+        contextUser: UserInfo
+    ): Promise<ConversationDetailAttachmentEntity[]>;
 }
 ```
 
@@ -334,225 +392,89 @@ export class ConversationAttachmentService {
 
 ### 5.1 MentionEditorComponent Updates
 
-File: `packages/Angular/Generic/conversations/src/lib/components/mention/mention-editor.component.ts`
-
-**New Features:**
 - Image paste from clipboard (Ctrl+V)
 - Drag & drop support
 - File picker button
 - Inline thumbnail display with remove button
 - Click thumbnail to expand
 
-**New Properties:**
-```typescript
-@Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
-@Input() maxAttachments: number = 10;
-@Input() maxAttachmentSize: number = 5 * 1024 * 1024; // 5MB
+### 5.2 ImageViewerComponent (NEW)
 
-private pendingAttachments: PendingAttachment[] = [];
-
-interface PendingAttachment {
-  id: string;           // Local ID for tracking
-  file: File;           // Original file
-  dataUrl: string;      // Base64 data URL
-  mimeType: string;
-  fileName: string;
-  sizeBytes: number;
-  width?: number;
-  height?: number;
-  thumbnailUrl?: string;
-}
-```
-
-**New Methods:**
-```typescript
-// Handle paste event for images
-private handleImagePaste(event: ClipboardEvent): void;
-
-// Handle drag & drop
-onDragOver(event: DragEvent): void;
-onDrop(event: DragEvent): void;
-
-// Handle file picker
-onFileSelected(event: Event): void;
-
-// Process added file
-private async processFile(file: File): Promise<void>;
-
-// Validate file against limits
-private validateFile(file: File): { valid: boolean; error?: string };
-
-// Insert thumbnail into editor
-private insertThumbnail(attachment: PendingAttachment): void;
-
-// Remove attachment
-removeAttachment(id: string): void;
-
-// Get all pending attachments
-getPendingAttachments(): PendingAttachment[];
-
-// Clear pending attachments
-clearPendingAttachments(): void;
-```
-
-### 5.2 New ImageViewerComponent
-
-File: `packages/Angular/Generic/conversations/src/lib/components/image-viewer/`
-
-**Features:**
 - Full-screen modal overlay
 - Zoom controls (scroll wheel, buttons)
 - Pan support for zoomed images
 - Download button
 - Close on Escape or click outside
 
-```typescript
-@Component({
-  selector: 'mj-image-viewer',
-  template: `...`,
-  styles: [`...`]
-})
-export class ImageViewerComponent {
-  @Input() imageUrl: string = '';
-  @Input() fileName: string = '';
-  @Output() closed = new EventEmitter<void>();
-
-  zoom: number = 1;
-  position: { x: number; y: number } = { x: 0, y: 0 };
-
-  zoomIn(): void;
-  zoomOut(): void;
-  resetZoom(): void;
-  download(): void;
-  close(): void;
-}
-```
-
 ### 5.3 MessageItemComponent Updates
 
-File: `packages/Angular/Generic/conversations/src/lib/components/message/message-item.component.ts`
-
-**New Features:**
 - Display attachment thumbnails in message
 - Grid layout for multiple images
 - Click to expand (opens ImageViewerComponent)
 - Video/audio player for those types
 
-**New Methods:**
-```typescript
-// Load attachments for this message
-loadAttachments(): Promise<void>;
-
-// Get image attachments
-getImageAttachments(): ConversationDetailAttachmentEntity[];
-
-// Expand image
-expandImage(attachment: ConversationDetailAttachmentEntity): void;
-
-// Get thumbnail URL
-getThumbnailUrl(attachment: ConversationDetailAttachmentEntity): string;
-```
-
-### 5.4 MessageInputComponent Updates
-
-File: `packages/Angular/Generic/conversations/src/lib/components/message-input/message-input.component.ts`
-
-**Changes:**
-- Handle attachments from MentionEditor
-- Upload attachments on send
-- Link attachments to ConversationDetail
-
-```typescript
-async sendMessage(): Promise<void> {
-  // Get text and attachments
-  const text = this.mentionEditor.getPlainTextWithJsonMentions();
-  const pendingAttachments = this.mentionEditor.getPendingAttachments();
-
-  // Create message
-  const messageDetail = await this.createMessageDetail();
-  messageDetail.Message = text;
-  await messageDetail.Save();
-
-  // Upload attachments
-  for (const pending of pendingAttachments) {
-    await this.attachmentService.addAttachment(
-      messageDetail.ID,
-      pending,
-      this.agent,
-      this.model,
-      this.currentUser
-    );
-  }
-
-  // Clear and emit
-  this.mentionEditor.clear();
-  this.mentionEditor.clearPendingAttachments();
-  this.messageSent.emit(messageDetail);
-}
-```
-
 ---
 
-## Phase 6: Agent/AI Integration
+## Phase 6: AI Provider Integration
 
 ### 6.1 Message Building for AI
-
-When sending messages to AI providers, use ConversationUtility to build ChatMessageContent:
 
 ```typescript
 // In agent execution
 const attachments = await attachmentService.getAttachments(detail.ID, contextUser);
 const content = await ConversationUtility.BuildChatMessageContent(
-  detail.Message,
-  attachments,
-  storageProvider
+    detail.Message,
+    attachments,
+    storageProvider
 );
 
 const chatMessage: ChatMessage = {
-  role: detail.Role === 'User' ? 'user' : 'assistant',
-  content: content
+    role: detail.Role === 'User' ? 'user' : 'assistant',
+    content: content
 };
 ```
 
 ### 6.2 Provider Compatibility
 
-The existing provider implementations already handle ChatMessageContentBlock arrays:
-- **OpenAI**: ✅ Handles `image_url` blocks
-- **Anthropic**: ✅ Updated to handle `image_url` blocks with vision support
-- **Gemini**: ✅ Maps to `inlineData` format
-- **Mistral**: ✅ Native `image_url` support
+Existing provider implementations handle ChatMessageContentBlock arrays:
+- **OpenAI**: Handles `image_url` blocks
+- **Anthropic**: Updated to handle vision content
+- **Gemini**: Maps to `inlineData` format
+- **Mistral**: Native `image_url` support
 - **Others**: Fall back to text extraction for non-vision models
 
 ---
 
 ## Implementation Checklist
 
-### Phase 1: Database
-- [ ] Create migration for AIModel new fields
-- [ ] Create migration for AIAgent new fields
-- [ ] Create migration for ConversationDetailAttachment table
+### Phase 1: Database (Migration Created)
+- [x] Create AIModality table with seed data
+- [x] Add DefaultInputModalityID/DefaultOutputModalityID to AIModelType
+- [x] Add InheritTypeModalities and PriorVersionID to AIModel
+- [x] Create AIModelModality junction table
+- [x] Create AIAgentModality junction table
+- [x] Add storage config to AIAgent
+- [x] Add storage defaults to AIConfiguration
+- [x] Create ConversationDetailAttachment table
+- [x] Rename "Diffusion" to "Image Generator" model type
+- [x] Rename "Audio" to "TTS" model type
+- [x] Add new "STT" model type
+
+### Phase 2: Run Migration & CodeGen
+- [ ] Run Flyway migration
 - [ ] Run CodeGen to generate entity classes
+- [ ] Verify generated TypeScript types
 
-### Phase 2: Core Types (Already Done)
-- [x] Extend ChatMessageContentBlock with metadata
-- [x] Add serialization utilities
-- [x] Update Anthropic provider for vision
-
-### Phase 3: ConversationUtility
-- [ ] Add AttachmentContent type
-- [ ] Add CreateAttachmentReference method
-- [ ] Add ContainsAttachments method
-- [ ] Add GetAttachmentReferences method
-- [ ] Add BuildChatMessageContent method
-- [ ] Add ValidateAttachment method
-- [ ] Add GetEffectiveLimit method
-- [ ] Add ShouldStoreInline method
+### Phase 3: Core Types (Partially Done)
+- [x] ChatMessageContentBlock type extended
+- [x] Serialization utilities added
+- [ ] ConversationUtility extensions
+- [ ] Modality resolution helper methods
 
 ### Phase 4: Attachment Service
 - [ ] Create ConversationAttachmentService class
 - [ ] Implement addAttachment with validation
 - [ ] Implement getAttachmentData
-- [ ] Implement getDownloadUrl
 - [ ] Implement deleteAttachment
 - [ ] Implement thumbnail generation
 
@@ -562,8 +484,6 @@ The existing provider implementations already handle ChatMessageContentBlock arr
 - [ ] Add file picker button
 - [ ] Create ImageViewerComponent
 - [ ] Update MessageItemComponent for thumbnails
-- [ ] Update MessageInputComponent for attachments
-- [ ] Add CSS styles for attachment display
 
 ### Phase 6: Integration
 - [ ] Update agent execution to use BuildChatMessageContent
@@ -582,10 +502,10 @@ The existing provider implementations already handle ChatMessageContentBlock arr
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Validate Against Limits                      │
-│  1. Check agent.AllowImageInput (etc.)                          │
-│  2. Check model.SupportsImageInput (etc.)                       │
-│  3. Check size: agent ?? model ?? system default                │
-│  4. Check count: agent ?? model ?? system default               │
+│  1. Resolve effective modalities (agent → model → type)         │
+│  2. Check IsAllowed/IsSupported for modality+direction          │
+│  3. Check size against cascaded limit                           │
+│  4. Check count against cascaded limit                          │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                     ┌───────────┴───────────┐
@@ -610,114 +530,27 @@ The existing provider implementations already handle ChatMessageContentBlock arr
                                 ▼
         ┌─────────────────────────────────────────────┐
         │  Create ConversationDetailAttachment        │
-        │  record with metadata                       │
+        │  record with ModalityID reference           │
         └─────────────────────────────────────────────┘
 ```
 
 ---
 
-## Limit Cascade Logic
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Get Effective Limit                           │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-                    ┌───────────────────────┐
-                    │ Agent has override?   │
-                    └───────────────────────┘
-                      Yes │           │ No
-                          ▼           ▼
-                ┌─────────────┐   ┌───────────────────────┐
-                │ Use Agent   │   │ Model has setting?    │
-                │ Value       │   └───────────────────────┘
-                └─────────────┘     Yes │           │ No
-                                        ▼           ▼
-                              ┌─────────────┐   ┌─────────────┐
-                              │ Use Model   │   │ Use System  │
-                              │ Value       │   │ Default     │
-                              └─────────────┘   └─────────────┘
-```
-
----
-
-## Testing Strategy
-
-### Unit Tests
-- ConversationUtility attachment methods
-- Limit validation logic
-- Inline vs MJStorage decision
-
-### Integration Tests
-- Upload attachment flow
-- Download/preview flow
-- AI message building with attachments
-
-### E2E Tests
-- Paste image in editor
-- Drag & drop file
-- Send message with attachments
-- View message with thumbnails
-- Expand image to full size
-
----
-
 ## Future Considerations
 
-1. **Video thumbnails** - Generate frame captures for video previews
-2. **Audio waveforms** - Visual representation of audio files
-3. **Attachment search** - Search within conversation attachments
-4. **Deduplication** - Detect and reuse identical files
-5. **Compression** - Auto-compress images before storage
-6. **CDN integration** - Serve attachments via CDN for performance
+1. **AIArchitecture as M2M** - Hybrid architectures (e.g., Vision+LLM models) could be modeled with AIModelArchitecture junction table with Rank/Weight fields
+2. **Video thumbnails** - Generate frame captures for video previews
+3. **Audio waveforms** - Visual representation of audio files
+4. **Attachment search** - Search within conversation attachments
+5. **Deduplication** - Detect and reuse identical files
+6. **Compression** - Auto-compress images before storage
+7. **CDN integration** - Serve attachments via CDN for performance
 
 ---
 
-## Implementation Progress
+## Migration File
 
-### Completed
-- [x] **Phase 1**: Database migration created (`V202512301826__v2.130.x_Multi_Modal_Chat_Support.sql`)
-- [x] **Phase 2**: Core types extended (`chat.types.ts` - serialization utilities)
-- [x] **Phase 2**: Anthropic provider updated with vision support
-- [x] **Phase 3**: ConversationUtility extended with attachment methods and types
-- [x] **Phase 4**: ConversationAttachmentService created
-- [x] **Phase 5.1**: MentionEditorComponent updated with paste/drag-drop/file-picker
-- [x] **Phase 5.2**: ImageViewerComponent created for full-size display
-- [x] **Phase 5.3**: MessageItemComponent updated for attachment thumbnails
-- [x] **Phase 5.4**: MessageInputBoxComponent updated for attachment flow
+The database migration implementing this schema is located at:
+`migrations/v2/V202601010001__v2.130.x_Multi_Modal_Chat_Support.sql`
 
-### In Progress
-- [ ] **Phase 6**: AI agent execution integration (passing attachments to providers)
-
-### Remaining Integration Work
-
-After running the database migration and CodeGen:
-
-1. **MessageInputComponent Integration** (`message-input.component.ts`):
-   - In `createMessageDetail()` and `createMessageDetailFromText()`:
-     - Get pending attachments from `MessageInputBoxComponent.getPendingAttachments()`
-     - For each attachment:
-       - Create `ConversationDetailAttachment` record (via server)
-       - If inline: store base64 in `InlineData`
-       - If large: upload to MJStorage, store `FileID`
-     - Build message text with `@{attachment:...}` references
-
-2. **Server-side Message Loading** (`ConversationDetailEntity` or service):
-   - When loading conversation history for agent execution:
-     - Load `ConversationDetailAttachment` records for each message
-     - For each attachment:
-       - If `InlineData`: use directly as data URL
-       - If `FileID`: generate pre-authenticated download URL
-     - Use `ConversationUtility.BuildChatMessageContent()` to create multi-modal content
-
-3. **Agent Execution** (already supported):
-   - `BaseAgent` already handles `ChatMessageContent` as content blocks
-   - Providers (Anthropic, OpenAI, Gemini) already format vision content
-   - No changes needed in agent execution flow
-
-### Pending
-- [ ] Run CodeGen after migration to generate `ConversationDetailAttachmentEntity`
-- [ ] Implement server-side attachment upload endpoint
-- [ ] Update MessageInputComponent to save attachments
-- [ ] E2E testing of full attachment flow
+This migration creates all tables, seed data, and relationships described above.
