@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
-import { Subscription, firstValueFrom, combineLatest } from 'rxjs';
+import { Subscription, combineLatest } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import {
   ApplicationManager,
@@ -1372,14 +1372,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async syncAvatarFromAuthProvider(user: any): Promise<boolean> {
     try {
-      const claims = await firstValueFrom(await this.authBase.getUserClaims());
+      // v3.0 API - get token info with access token
+      const tokenInfo = await this.authBase.getTokenInfo();
 
-      // Check if Microsoft
-      if (claims && claims.authority &&
-          (claims.authority.includes('microsoftonline.com') || claims.authority.includes('microsoft.com'))) {
+      if (!tokenInfo || !tokenInfo.accessToken) {
+        return false;
+      }
+
+      // Check if we're using MSAL provider (Microsoft) by checking provider type
+      if (this.authBase.type === 'msal') {
         // Microsoft Graph API photo endpoint
         const imageUrl = 'https://graph.microsoft.com/v1.0/me/photo/$value';
-        const authHeaders = { 'Authorization': `Bearer ${claims.accessToken}` };
+        const authHeaders = { 'Authorization': `Bearer ${tokenInfo.accessToken}` };
 
         return await this.userAvatarService.syncFromImageUrl(user, imageUrl, authHeaders);
       }
