@@ -29,7 +29,7 @@ import { LoadOllamaLLM, LoadOllamaEmbedding } from '@memberjunction/ai-ollama';
 import { LoadOpenRouterLLM } from '@memberjunction/ai-openrouter';
 import { LoadRexRecommendationsProvider } from '@memberjunction/ai-recommendations-rex';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
-import { LoadVertexLLM, LoadVertexEmbedding } from '@memberjunction/ai-vertex';
+import { LoadVertexLLM } from '@memberjunction/ai-vertex';
 import { LoadxAILLM } from '@memberjunction/ai-xai';
 
 /**
@@ -70,7 +70,7 @@ export function LoadAIProviders(): void {
     LoadLocalEmbedding();
     LoadMistralEmbedding();
     LoadOllamaEmbedding();
-    LoadVertexEmbedding();
+    // Note: LoadVertexEmbedding() removed - deprecated SDK, will be re-added when @google/genai supports embeddings
 
     // Audio/Video Providers
     LoadElevenLabsAudioGenerator();

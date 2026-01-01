@@ -1497,13 +1497,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[]): any[] {
         const result: any[] = [];
+
+        // Sort entities alphabetically by name to ensure deterministic ordering
+        // This prevents non-deterministic output in CodeGen and other metadata consumers
+        const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
+
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
                 // populate the field values for each field, if we have them
                 f.EntityFieldValues = fieldValues.filter(fv => fv.EntityFieldID === f.ID);
             }
-            
-        for (let e of entities) {
+
+        for (let e of sortedEntities) {
             e.EntityFields = fields.filter(f => f.EntityID === e.ID).sort((a, b) => a.Sequence - b.Sequence);
             e.EntityPermissions = permissions.filter(p => p.EntityID === e.ID);
             e.EntityRelationships = relationships.filter(r => r.EntityID === e.ID);

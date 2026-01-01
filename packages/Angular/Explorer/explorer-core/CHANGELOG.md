@@ -1,5 +1,60 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.129.0
+
+### Minor Changes
+
+- c7e38aa: migration
+
+### Patch Changes
+
+- 573179f: Fix Conversation UI issues with Browser Refresh
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [573179f]
+- Updated dependencies [6ce6e67]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [a39946c]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [3458156]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/ng-conversations@2.129.0
+  - @memberjunction/ai-core-plus@2.129.0
+  - @memberjunction/ng-artifacts@2.129.0
+  - @memberjunction/ai-engine-base@2.129.0
+  - @memberjunction/ng-entity-form-dialog@2.129.0
+  - @memberjunction/ng-entity-permissions@2.129.0
+  - @memberjunction/ng-entity-viewer@2.129.0
+  - @memberjunction/entity-communications-client@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/ng-auth-services@2.129.0
+  - @memberjunction/ng-base-application@2.129.0
+  - @memberjunction/ng-base-forms@2.129.0
+  - @memberjunction/ng-compare-records@2.129.0
+  - @memberjunction/ng-dashboards@2.129.0
+  - @memberjunction/ng-explorer-settings@2.129.0
+  - @memberjunction/ng-record-changes@2.129.0
+  - @memberjunction/ng-shared@2.129.0
+  - @memberjunction/ng-user-view-grid@2.129.0
+  - @memberjunction/ng-user-view-properties@2.129.0
+  - @memberjunction/ng-ai-test-harness@2.129.0
+  - @memberjunction/ng-container-directives@2.129.0
+  - @memberjunction/ng-file-storage@2.129.0
+  - @memberjunction/ng-notifications@2.129.0
+  - @memberjunction/ng-query-grid@2.129.0
+  - @memberjunction/ng-record-selector@2.129.0
+  - @memberjunction/ng-resource-permissions@2.129.0
+  - @memberjunction/ng-shared-generic@2.129.0
+  - @memberjunction/ng-user-avatar@2.129.0
+  - @memberjunction/communication-types@2.129.0
+  - @memberjunction/templates-base-types@2.129.0
+  - @memberjunction/ng-tabstrip@2.129.0
+  - @memberjunction/ng-generic-dialog@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

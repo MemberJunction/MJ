@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/core
 
+## 2.129.0
+
+### Minor Changes
+
+- c391d7d: Migration
+- 8c412cf: migration
+- fbae243: migration
+- c7e38aa: migration
+- 7a39231: Add Vertex AI provider with Google GenAI SDK integration, resolve database connection timeout, and improve conversation UI
+
+### Patch Changes
+
+- 0fb62af: Move GraphQL type name utilities to @memberjunction/core and clean up unused imports
+- 7d42aa5: Fix non-deterministic entity ordering in metadata system and remove redundant entity sorting in CodeGen
+- Updated dependencies [fbae243]
+- Updated dependencies [c7e38aa]
+  - @memberjunction/global@2.129.0
+
 ## 2.128.0
 
 ### Minor Changes
