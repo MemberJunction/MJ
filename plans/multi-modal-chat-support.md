@@ -461,9 +461,19 @@ Existing provider implementations handle ChatMessageContentBlock arrays:
 - [x] Add new "STT" model type
 
 ### Phase 2: Run Migration & CodeGen
-- [ ] Run Flyway migration
-- [ ] Run CodeGen to generate entity classes
-- [ ] Verify generated TypeScript types
+- [x] Run Flyway migration
+- [x] Run CodeGen to generate entity classes
+- [x] Verify generated TypeScript types
+
+### Phase 2.5: AIArchitecture Catalog (ADDED)
+- [x] Create AIArchitecture table with 10 architecture types
+- [x] Create AIModelArchitecture junction table with Rank/Weight
+- [x] Map 73+ LLM models to Transformer architecture
+- [x] Map 10 embedding models to Transformer architecture
+- [x] Map 2 TTS models to Transformer architecture
+- [x] Map 1 video model to Diffusion architecture
+- [x] Add secondary MoE mappings for Mixtral/Gemini/Qwen/GPT-5/Llama4/Grok4/DeepSeek
+- [x] Add secondary Vision Transformer mappings for multimodal models
 
 ### Phase 3: Core Types (Partially Done)
 - [x] ChatMessageContentBlock type extended
@@ -538,7 +548,7 @@ Existing provider implementations handle ChatMessageContentBlock arrays:
 
 ## Future Considerations
 
-1. **AIArchitecture as M2M** - Hybrid architectures (e.g., Vision+LLM models) could be modeled with AIModelArchitecture junction table with Rank/Weight fields
+1. ~~**AIArchitecture as M2M**~~ - ✅ **IMPLEMENTED** in this migration: AIArchitecture and AIModelArchitecture tables with Rank/Weight fields for hybrid architectures. 80+ models mapped with primary and secondary architectures.
 2. **Video thumbnails** - Generate frame captures for video previews
 3. **Audio waveforms** - Visual representation of audio files
 4. **Attachment search** - Search within conversation attachments
