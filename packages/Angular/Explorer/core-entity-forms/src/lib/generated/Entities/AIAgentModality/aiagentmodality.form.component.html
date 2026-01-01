@@ -3,71 +3,87 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Model Information Section -->
+    <!-- Agent Reference Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="modelInformation"
-        sectionName="Model Information"
-        icon="fa fa-info-circle"
+        sectionKey="agentReference"
+        sectionName="Agent Reference"
+        icon="fa fa-user"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
+            FieldName="AgentID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="Agent"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Default Modality Section -->
+    <!-- Modality Configuration Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="defaultModality"
-        sectionName="Default Modality"
+        sectionKey="modalityConfiguration"
+        sectionName="Modality Configuration"
         icon="fa fa-sliders-h"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DefaultInputModalityID"
+            FieldName="ModalityID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
             LinkType="Record"
-            LinkComponentType="Dropdown"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DefaultOutputModalityID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Dropdown"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DefaultInputModality"
-            Type="textbox"
+            FieldName="Direction"
+            Type="dropdownlist"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DefaultOutputModality"
+            FieldName="IsAllowed"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxSizeBytes"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxCountPerMessage"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Modality"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -99,51 +115,6 @@
             [formContext]="formContext"
         ></mj-form-field>
 
-    </mj-collapsible-panel>
-    <!-- ========================================
-         RELATED ENTITY PANELS - AFTER
-         ======================================== -->
-
-    <!-- AI Models Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIModels"
-        sectionName="AI Models"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIModels')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('AI Models','AIModelTypeID')"
-                [NewRecordValues]="NewRecordValues('AI Models')"
-                [AllowLoad]="IsSectionExpanded('aIModels')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('aIModels', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- AI Prompts Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIPrompts"
-        sectionName="AI Prompts"
-        icon="fa fa-robot"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIPrompts')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','AIModelTypeID')"
-                [NewRecordValues]="NewRecordValues('AI Prompts')"
-                [AllowLoad]="IsSectionExpanded('aIPrompts')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
     </mj-collapsible-panel>
 </mj-record-form-container>
         

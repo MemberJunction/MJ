@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Provider Identification Section -->
+    <!-- Core Architecture Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="providerIdentification"
-        sectionName="Provider Identification"
-        icon="fa fa-tag"
+        sectionKey="coreArchitecture"
+        sectionName="Core Architecture"
+        icon="fa fa-cogs"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -26,20 +26,38 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Category"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Driver Configuration Section -->
+    <!-- Hierarchy Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="driverConfiguration"
-        sectionName="Driver Configuration"
-        icon="fa fa-plug"
+        sectionKey="hierarchy"
+        sectionName="Hierarchy"
+        icon="fa fa-sitemap"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ServerDriverKey"
+            FieldName="ParentArchitectureID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentArchitecture"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -47,7 +65,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ClientDriverKey"
+            FieldName="RootParentArchitectureID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -55,17 +73,26 @@
 
     </mj-collapsible-panel>
 
-    <!-- Selection & Availability Section -->
+    <!-- Publication & References Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="selectionAvailability"
-        sectionName="Selection & Availability"
-        icon="fa fa-sliders-h"
+        sectionKey="publicationReferences"
+        sectionName="Publication & References"
+        icon="fa fa-book"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Priority"
+            FieldName="WikipediaURL"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="YearIntroduced"
             Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -73,16 +100,8 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SupportsSearch"
-            Type="checkbox"
+            FieldName="KeyPaper"
+            Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -118,64 +137,43 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
-    <!-- Files Section -->
+    <!-- MJ: AI Architectures Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="files"
-        sectionName="Files"
-        icon="fa fa-file"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('files')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Files','ProviderID')"
-                [NewRecordValues]="NewRecordValues('Files')"
-                [AllowLoad]="IsSectionExpanded('files')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('files', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- MJ: AI Configurations Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIConfigurations"
-        sectionName="MJ: AI Configurations"
-        icon="fa fa-brain"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIConfigurations')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultStorageProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
-                [AllowLoad]="IsSectionExpanded('mJAIConfigurations')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('mJAIConfigurations', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- AI Agents Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="aIAgents"
-        sectionName="AI Agents"
+        sectionKey="mJAIArchitectures"
+        sectionName="MJ: AI Architectures"
         icon="fa fa-robot"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIAgents')">
+        [badgeCount]="GetSectionRowCount('mJAIArchitectures')">
         <div *ngIf="record.IsSaved">
             <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','AttachmentStorageProviderID')"
-                [NewRecordValues]="NewRecordValues('AI Agents')"
-                [AllowLoad]="IsSectionExpanded('aIAgents')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Architectures','ParentArchitectureID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Architectures')"
+                [AllowLoad]="IsSectionExpanded('mJAIArchitectures')"
                 [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
+                (dataLoaded)="SetSectionRowCount('mJAIArchitectures', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Model Architectures Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIModelArchitectures"
+        sectionName="MJ: AI Model Architectures"
+        icon="fa fa-brain"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIModelArchitectures')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Architectures','ArchitectureID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Architectures')"
+                [AllowLoad]="IsSectionExpanded('mJAIModelArchitectures')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIModelArchitectures', $event.totalRowCount)"
                 >
             </mj-user-view-grid>
         </div>

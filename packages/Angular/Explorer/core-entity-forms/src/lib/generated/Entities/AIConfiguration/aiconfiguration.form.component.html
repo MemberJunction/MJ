@@ -75,6 +75,24 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="DefaultStorageProviderID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultStorageRootPath"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="DefaultPromptForContextCompression"
             Type="textbox"
             [EditMode]="EditMode"
@@ -84,6 +102,14 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="DefaultPromptForContextSummarization"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultStorageProvider"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"

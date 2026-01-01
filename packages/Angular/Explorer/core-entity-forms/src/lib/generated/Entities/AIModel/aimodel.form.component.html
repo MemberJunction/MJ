@@ -381,6 +381,48 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: AI Model Architectures Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIModelArchitectures"
+        sectionName="MJ: AI Model Architectures"
+        icon="fa fa-brain"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIModelArchitectures')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Architectures','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Architectures')"
+                [AllowLoad]="IsSectionExpanded('mJAIModelArchitectures')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIModelArchitectures', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Model Modalities Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIModelModalities"
+        sectionName="MJ: AI Model Modalities"
+        icon="fa fa-brain"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIModelModalities')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Modalities','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Modalities')"
+                [AllowLoad]="IsSectionExpanded('mJAIModelModalities')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIModelModalities', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- AIAgent Models Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="aIAgentModels"

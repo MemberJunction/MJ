@@ -28,6 +28,8 @@ export class AIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'contentTypes', sectionName: 'Content Types', isExpanded: false },
             { sectionKey: 'entityAIActions', sectionName: 'Entity AI Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'MJ: AI Agent Examples', isExpanded: false },
+            { sectionKey: 'mJAIModelArchitectures', sectionName: 'MJ: AI Model Architectures', isExpanded: false },
+            { sectionKey: 'mJAIModelModalities', sectionName: 'MJ: AI Model Modalities', isExpanded: false },
             { sectionKey: 'aIAgentModels', sectionName: 'AIAgent Models', isExpanded: false },
             { sectionKey: 'mJAIModelVendors', sectionName: 'MJ: AI Model Vendors', isExpanded: false },
             { sectionKey: 'generatedCodes', sectionName: 'Generated Codes', isExpanded: false },
