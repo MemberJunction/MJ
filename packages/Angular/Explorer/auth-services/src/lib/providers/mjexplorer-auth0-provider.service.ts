@@ -204,24 +204,23 @@ export class MJAuth0Provider extends MJAuthBase {
   /**
    * Refresh token using Auth0's silent authentication
    *
-   * Uses getAccessTokenSilently with cacheMode: 'off' to force refresh
+   * Uses cacheMode: 'off' to bypass cache and force token refresh
+   * With useRefreshTokens: true and offline_access scope, this will use refresh tokens
    */
   protected async refreshTokenInternal(): Promise<TokenRefreshResult> {
     try {
       console.log('[Auth0] Attempting to refresh token...');
 
-      // Force token refresh using refresh tokens (if available) or silent auth
+      // Force token refresh by bypassing cache
+      // With useRefreshTokens: true and offline_access scope, this will use refresh tokens
       await firstValueFrom(this.auth.getAccessTokenSilently({
-        cacheMode: 'off',
-        authorizationParams: {
-          ignoreCache: true
-        }
+        cacheMode: 'off'
       }));
 
       // Small delay to ensure Auth0 SDK has updated observables
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Extract fresh token info
+      // Extract fresh token info from updated observables
       const token = await this.extractTokenInfoInternal();
 
       if (!token) {
