@@ -1,16 +1,18 @@
-import { 
-  BaseLLM, 
-  ChatParams, 
-  ChatResult, 
-  ChatResultChoice, 
-  ChatMessageRole, 
-  ClassifyParams, 
-  ClassifyResult, 
-  SummarizeParams, 
-  SummarizeResult, 
-  ModelUsage, 
+import {
+  BaseLLM,
+  ChatParams,
+  ChatResult,
+  ChatResultChoice,
+  ChatMessageRole,
+  ClassifyParams,
+  ClassifyResult,
+  SummarizeParams,
+  SummarizeResult,
+  ModelUsage,
   ChatMessage,
-  ErrorAnalyzer 
+  ChatMessageContentBlock,
+  ErrorAnalyzer,
+  parseBase64DataUrl
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { 
@@ -366,14 +368,96 @@ export class BedrockLLM extends BaseLLM {
 
   /**
    * Convert MemberJunction chat messages to Bedrock-compatible messages
+   * Supports multimodal content for Claude models (images via base64)
    */
   private convertToBedrockMessages(messages: ChatMessage[]): any[] {
     return messages.map(msg => {
+      const role = this.mapRole(msg.role);
+
+      // If content is a simple string, return as-is for text-only models
+      // or wrap in content array for Claude models
+      if (typeof msg.content === 'string') {
+        return {
+          role,
+          content: msg.content
+        };
+      }
+
+      // Content is an array of ChatMessageContentBlock - convert to Bedrock format
+      const contentBlocks = msg.content as ChatMessageContentBlock[];
+      const bedrockContent: any[] = [];
+
+      for (const block of contentBlocks) {
+        if (block.type === 'text') {
+          bedrockContent.push({
+            type: 'text',
+            text: block.content
+          });
+        } else if (block.type === 'image_url') {
+          // Convert image to Bedrock/Claude format
+          const imageBlock = this.formatImageForBedrock(block);
+          if (imageBlock) {
+            bedrockContent.push(imageBlock);
+          }
+        }
+        // Note: audio_url, video_url, file_url not yet supported by Bedrock Claude
+      }
+
       return {
-        role: this.mapRole(msg.role),
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+        role,
+        content: bedrockContent.length > 0 ? bedrockContent : msg.content
       };
     });
+  }
+
+  /**
+   * Format an image content block for Bedrock Claude API
+   * Claude expects: { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "..." } }
+   */
+  private formatImageForBedrock(block: ChatMessageContentBlock): any | null {
+    const content = block.content;
+
+    // Check if it's a data URL (data:image/png;base64,...)
+    const parsed = parseBase64DataUrl(content);
+    if (parsed) {
+      return {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: parsed.mediaType,
+          data: parsed.data
+        }
+      };
+    }
+
+    // Check if it's raw base64 with mimeType provided
+    if (block.mimeType && !content.startsWith('http')) {
+      return {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: block.mimeType,
+          data: content
+        }
+      };
+    }
+
+    // URLs are not supported by Bedrock Claude - must be base64
+    if (content.startsWith('http://') || content.startsWith('https://')) {
+      console.warn('Bedrock Claude does not support image URLs, only base64. Skipping image.');
+      return null;
+    }
+
+    // If we can't determine the format, try to use it as base64 with a default type
+    console.warn('Image content block has unknown format, attempting to use as base64 JPEG');
+    return {
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: 'image/jpeg',
+        data: content
+      }
+    };
   }
 
   /**

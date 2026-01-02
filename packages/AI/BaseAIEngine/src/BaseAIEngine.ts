@@ -266,15 +266,23 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
         try {
             await AIEngineBase.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
-            const models = AIEngineBase.Instance.Models.filter(m => m.AIModelType?.trim().toLowerCase() === modelType.trim().toLowerCase() && 
-                                                                (vendorName && vendorName.length > 0 ? m.Vendor?.trim().toLowerCase() === vendorName.trim().toLowerCase() : true)); // if vendorname is not provided, then we get all models of the specified type 
+            const models = AIEngineBase.Instance.Models.filter(m => {
+                // Guard against AIModelType/Vendor being non-string (defensive coding for data issues)
+                const mModelType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
+                const mVendor = typeof m.Vendor === 'string' ? m.Vendor.trim().toLowerCase() : '';
+                const targetType = modelType.trim().toLowerCase();
+                const targetVendor = vendorName && vendorName.length > 0 ? vendorName.trim().toLowerCase() : '';
+
+                return mModelType === targetType &&
+                       (targetVendor === '' || mVendor === targetVendor);
+            });
             // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
             models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
-            return models[0];    
+            return models[0];
         }
         catch (e) {
             LogError(e); // force logging to help debug scenario here
-            throw e; 
+            throw e;
         }
     }
 

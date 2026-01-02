@@ -475,30 +475,38 @@ Existing provider implementations handle ChatMessageContentBlock arrays:
 - [x] Add secondary MoE mappings for Mixtral/Gemini/Qwen/GPT-5/Llama4/Grok4/DeepSeek
 - [x] Add secondary Vision Transformer mappings for multimodal models
 
-### Phase 3: Core Types (Partially Done)
+### Phase 3: Core Types (COMPLETED)
 - [x] ChatMessageContentBlock type extended
 - [x] Serialization utilities added
-- [ ] ConversationUtility extensions
-- [ ] Modality resolution helper methods
+- [x] ConversationUtility extensions (GetAttachmentTypeFromMime, CreateAttachmentReference, etc.)
+- [x] AttachmentContent and AttachmentType types defined
 
-### Phase 4: Attachment Service
-- [ ] Create ConversationAttachmentService class
-- [ ] Implement addAttachment with validation
-- [ ] Implement getAttachmentData
-- [ ] Implement deleteAttachment
-- [ ] Implement thumbnail generation
+### Phase 4: Attachment Service (COMPLETED)
+- [x] Create ConversationAttachmentService class (`ng-conversations` package)
+- [x] Implement loadAttachmentsForMessages with batch loading
+- [x] Implement saveAttachments with modality ID resolution
+- [x] Implement createAttachmentReferences for message text tokens
+- [x] Implement processFile for PendingAttachment creation
+- [x] Implement createThumbnail with configurable max size
+- [x] Implement getImageDimensions for dimension capture
 
-### Phase 5: UI Components
-- [ ] Update MentionEditorComponent for image paste
-- [ ] Add drag & drop support
-- [ ] Add file picker button
-- [ ] Create ImageViewerComponent
-- [ ] Update MessageItemComponent for thumbnails
+### Phase 5: UI Components (COMPLETED)
+- [x] Update MentionEditorComponent for image paste (already existed)
+- [x] Drag & drop support (already existed in MentionEditorComponent)
+- [x] File picker button (already existed in MentionEditorComponent)
+- [x] ImageViewerComponent (already existed)
+- [x] MessageItemComponent attachment display (already had template support)
+- [x] Wire up attachmentsMap from conversation-chat-area to message-list to message-item
+- [x] Wire up attachment saving in message-input with pending attachment tracking
+- [x] Add attachmentClicked output events through component hierarchy
 
-### Phase 6: Integration
+### Phase 6: Integration (In Progress)
+- [x] Message input saves attachments after message save
+- [x] Attachment references appended to message text
+- [x] Attachments loaded in batch during peripheral data load
 - [ ] Update agent execution to use BuildChatMessageContent
-- [ ] Test with vision-capable models
-- [ ] Test storage provider integration
+- [ ] Test with vision-capable models (Claude, GPT-4V, Gemini)
+- [ ] Test storage provider integration for large files
 
 ---
 

@@ -14,7 +14,9 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
+import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
+import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
@@ -88,6 +90,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   // Track registered streaming callbacks for cleanup
   private registeredCallbacks = new Map<string, (progress: MessageProgressUpdate) => Promise<void>>();
 
+  // Track pending attachments from the input box
+  private pendingAttachments: PendingAttachment[] = [];
+
   constructor(
     private dialogService: DialogService,
     private toastService: ToastService,
@@ -97,7 +102,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService
+    private mentionAutocomplete: MentionAutocompleteService,
+    private attachmentService: ConversationAttachmentService
   ) {}
 
   async ngOnInit() {
@@ -262,22 +268,72 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
+   * Handle attachments changed from the input box
+   */
+  onAttachmentsChanged(attachments: PendingAttachment[]): void {
+    this.pendingAttachments = attachments;
+  }
+
+  /**
+   * Handle attachment errors from the input box
+   */
+  onAttachmentError(error: string): void {
+    this.toastService.error(error);
+  }
+
+  /**
    * Handle text submitted from the input box
    */
   async onTextSubmitted(text: string): Promise<void> {
-    // Use the text parameter directly since the box component already cleared its value
-    if (!text || !text.trim()) {
-      console.log('[MessageInput] Empty text, aborting');
+    // Check if we have either text or attachments
+    const hasText = text && text.trim().length > 0;
+    const hasAttachments = this.pendingAttachments.length > 0;
+
+    if (!hasText && !hasAttachments) {
+      console.log('[MessageInput] Empty text and no attachments, aborting');
       return;
     }
 
     this.isSending = true;
+
+    // Store attachments locally since we'll clear them after send
+    const attachmentsToSave = [...this.pendingAttachments];
+
     try {
-      const messageDetail = await this.createMessageDetailFromText(text.trim());
+      const messageDetail = await this.createMessageDetailFromText(text?.trim() || '');
 
       const saved = await messageDetail.Save();
 
       if (saved) {
+        // Save attachments if any were pending
+        if (attachmentsToSave.length > 0) {
+          try {
+            const savedAttachments = await this.attachmentService.saveAttachments(
+              messageDetail.ID,
+              attachmentsToSave,
+              this.currentUser
+            );
+
+            // If attachments were saved, add attachment references to the message
+            if (savedAttachments.length > 0) {
+              const attachmentRefs = this.attachmentService.createAttachmentReferences(savedAttachments);
+              if (attachmentRefs) {
+                // Append attachment references to the message
+                messageDetail.Message = messageDetail.Message
+                  ? `${messageDetail.Message} ${attachmentRefs}`
+                  : attachmentRefs;
+                await messageDetail.Save();
+              }
+            }
+          } catch (attachmentError) {
+            console.error('Failed to save attachments:', attachmentError);
+            this.toastService.error('Some attachments could not be saved');
+          }
+        }
+
+        // Clear pending attachments after successful send
+        this.pendingAttachments = [];
+
         await this.handleSuccessfulSend(messageDetail);
       } else {
         this.handleSendFailure(messageDetail);

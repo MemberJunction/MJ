@@ -782,10 +782,13 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Returns an array of the local embedding models, sorted with the highest power models first
      */
     public get LocalEmbeddingModels(): AIModelEntityExtended[] {
-        const embeddingModels = this.Models.filter(m =>
-            m.AIModelType?.trim().toLowerCase() === this.EmbeddingModelTypeName.toLowerCase() &&
-            m.Vendor && m.Vendor.trim().toLowerCase() === this.LocalEmbeddingModelVendorName.toLowerCase()
-        );
+        const embeddingModels = this.Models.filter(m => {
+            // Guard against AIModelType being non-string (defensive coding for data issues)
+            const modelType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
+            const vendor = typeof m.Vendor === 'string' ? m.Vendor.trim().toLowerCase() : '';
+            return modelType === this.EmbeddingModelTypeName.toLowerCase() &&
+                   vendor === this.LocalEmbeddingModelVendorName.toLowerCase();
+        });
         return embeddingModels.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
     }
 

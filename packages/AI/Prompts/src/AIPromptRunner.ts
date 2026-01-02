@@ -2763,9 +2763,12 @@ export class AIPromptRunner {
       }
       
       // Get all models of this specific type
-      allModels = aiEngine.Models.filter(m => 
-        m.AIModelType?.trim().toLowerCase() === modelType.Name.trim().toLowerCase()
-      );
+      const targetTypeName = modelType.Name.trim().toLowerCase();
+      allModels = aiEngine.Models.filter(m => {
+        // Guard against AIModelType being non-string (defensive coding for data issues)
+        const mType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
+        return mType === targetTypeName;
+      });
     } else {
       // No type restriction - get all models
       allModels = aiEngine.Models;

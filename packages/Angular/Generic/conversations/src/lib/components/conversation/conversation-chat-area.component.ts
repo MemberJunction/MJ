@@ -8,6 +8,8 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
+import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
@@ -133,6 +135,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public ratingsByDetailId = new Map<string, RatingJSON[]>();
 
   /**
+   * Attachments by conversation detail ID (loaded from ConversationDetailAttachments)
+   */
+  public attachmentsByDetailId = new Map<string, MessageAttachment[]>();
+
+  /**
    * In-progress message IDs for streaming reconnection
    * Passed to message-input component to reconnect PubSub updates
    */
@@ -178,7 +185,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private cdr: ChangeDetectorRef,
     private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
-    private dialogService: DialogService
+    private dialogService: DialogService,
+    private attachmentService: ConversationAttachmentService
   ) {}
 
   async ngOnInit() {
@@ -534,11 +542,23 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         }
       }
 
+      // Load attachments for all messages in this conversation
+      // Uses the ConversationAttachmentService to batch-load all attachments
+      this.attachmentsByDetailId.clear();
+      const messageIds = conversationData.map(row => row.ID).filter((id): id is string => !!id);
+      if (messageIds.length > 0) {
+        const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(messageIds, this.currentUser);
+        for (const [detailId, attachments] of attachmentsMap) {
+          this.attachmentsByDetailId.set(detailId, attachments);
+        }
+      }
+
       // Create new Map references to trigger Angular change detection
       this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
       this.artifactsByDetailId = new Map(this.artifactsByDetailId);
       this.ratingsByDetailId = new Map(this.ratingsByDetailId);
       this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
+      this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
 
       // Clear combined cache since we loaded new artifacts
       this._combinedArtifactsMap = null;
@@ -548,7 +568,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       // Debug: Log summary
       const systemArtifactCount = this.systemArtifactsByDetailId.size;
-      LogStatusEx({message: `📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} user artifact mappings, ${systemArtifactCount} system artifact mappings (${this.artifactCount} unique user artifacts)`, verboseOnly: true});
+      const attachmentCount = this.attachmentsByDetailId.size;
+      LogStatusEx({message: `📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} user artifact mappings, ${systemArtifactCount} system artifact mappings (${this.artifactCount} unique user artifacts), ${attachmentCount} messages with attachments`, verboseOnly: true});
 
       // CRITICAL: Trigger message re-render now that agent runs and artifacts are loaded
       // This updates all message components with the newly loaded agent run data
@@ -1346,6 +1367,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // This should find the parent user message and re-trigger the agent invocation
     LogStatusEx({message: 'Retry requested for message', verboseOnly: true, additionalArgs: [message.ID]});
     // For now, just log it - full implementation would require refactoring agent invocation
+  }
+
+  /**
+   * Handle attachment click - opens the image viewer for images
+   */
+  onAttachmentClicked(attachment: MessageAttachment): void {
+    // For now, just log the click - TODO: implement image viewer modal
+    console.log('Attachment clicked:', attachment);
+    // The image viewer component can be opened here when ready
   }
 
   async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
