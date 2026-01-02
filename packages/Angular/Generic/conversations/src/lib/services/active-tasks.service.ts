@@ -2,7 +2,8 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { RunView, UserInfo } from '@memberjunction/core';
-import { AIAgentRunEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { AIAgentRunEntity } from '@memberjunction/core-entities';
+import { ConversationDataService } from './conversation-data.service';
 
 /**
  * Represents an active agent task that is currently running
@@ -30,6 +31,8 @@ export interface ActiveTask {
 export class ActiveTasksService {
   private _tasks$ = new BehaviorSubject<Map<string, ActiveTask>>(new Map());
   private _conversationIdsWithTasks$ = new BehaviorSubject<Set<string>>(new Set());
+
+  constructor(private conversationData: ConversationDataService) {}
 
   /**
    * Observable of all active tasks as an array
@@ -211,9 +214,11 @@ export class ActiveTasksService {
       const rv = new RunView();
 
       // Query for running agent runs owned by this user
+      // Only restore parent agents (those with ConversationDetailID) - child agents don't have one
+      // This matches normal behavior where we only track parent agents, not child agents
       const result = await rv.RunView<AIAgentRunEntity>({
         EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `Status='Running' AND UserID='${currentUser.ID}'`,
+        ExtraFilter: `Status='Running' AND UserID='${currentUser.ID}' AND ConversationDetailID IS NOT NULL`,
         ResultType: 'entity_object'
       }, currentUser);
 
@@ -222,27 +227,13 @@ export class ActiveTasksService {
         return;
       }
 
-      // Get conversation names for display
-      const conversationIds = new Set(
-        result.Results
-          .filter(run => run.ConversationID)
-          .map(run => run.ConversationID!)
-      );
-
+      // Get conversation names from cached ConversationDataService
       const conversationNames = new Map<string, string>();
-      if (conversationIds.size > 0) {
-        const convResult = await rv.RunView<ConversationEntity>({
-          EntityName: 'Conversations',
-          ExtraFilter: `ID IN (${Array.from(conversationIds).map(id => `'${id}'`).join(',')})`,
-          ResultType: 'entity_object',
-          CacheLocal: true
-        }, currentUser);
-
-        if (convResult.Success && convResult.Results) {
-          for (const conv of convResult.Results) {
-            if (conv.Name) {
-              conversationNames.set(conv.ID, conv.Name);
-            }
+      for (const agentRun of result.Results) {
+        if (agentRun.ConversationID) {
+          const conv = this.conversationData.getConversationById(agentRun.ConversationID);
+          if (conv?.Name) {
+            conversationNames.set(agentRun.ConversationID, conv.Name);
           }
         }
       }

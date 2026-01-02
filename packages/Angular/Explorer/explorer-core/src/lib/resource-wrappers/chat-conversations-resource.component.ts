@@ -302,20 +302,21 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Initialize AI Engine and mention autocomplete service BEFORE child components render.
+   * Initialize AI Engine, conversations, and services BEFORE child components render.
    * This prevents the slow first-load issue where initialization would block conversation loading.
    * The `false` parameter means "don't force refresh if already initialized".
    */
   private async initializeEngines(): Promise<void> {
     try {
-      // Initialize AIEngine first - this is the heavy operation that loads all agents
-      await AIEngineBase.Instance.Config(false);
-
-      // Initialize services in parallel - they're independent operations
+      // Initialize AIEngine, conversations, and mention service in parallel
       await Promise.all([
-        this.mentionAutocompleteService.initialize(this.currentUser),
-        this.activeTasksService.restoreFromDatabase(this.currentUser)
+        AIEngineBase.Instance.Config(false),
+        this.conversationData.loadConversations(this.environmentId, this.currentUser),
+        this.mentionAutocompleteService.initialize(this.currentUser)
       ]);
+
+      // Restore active tasks AFTER conversations are cached (uses in-memory lookup)
+      await this.activeTasksService.restoreFromDatabase(this.currentUser);
 
       // Mark as ready - child components can now render
       this.isReady = true;
