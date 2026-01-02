@@ -236,10 +236,24 @@ export class ValidationService {
       });
     }
 
-    // Validate fields
-    if (entityData.fields) {
-      await this.validateFields(entityData.fields, entityInfo, filePath, parentContext);
+    // Validate that 'fields' property exists (required)
+    if (!entityData.fields) {
+      const context = parentContext
+        ? `Related entity "${parentContext.field}" in ${parentContext.entity}`
+        : `Record`;
+      this.addError({
+        type: 'field',
+        severity: 'error',
+        entity: entityInfo.Name,
+        file: filePath,
+        message: `${context} is missing required "fields" property. Did you mean "fields" instead of "field"?`,
+        suggestion: 'Each record must have a "fields" object containing the entity field values',
+      });
+      return; // Can't continue validation without fields
     }
+
+    // Validate fields
+    await this.validateFields(entityData.fields, entityInfo, filePath, parentContext);
 
     // Track dependencies
     this.trackEntityDependencies(entityData, entityInfo.Name, filePath);
