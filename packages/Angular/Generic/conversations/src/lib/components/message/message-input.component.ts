@@ -205,20 +205,16 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           return;
         }
 
-        // Conditional formatting based on resolver type
-        // TaskOrchestrator (Sage task graphs): Show formatted header with context
-        // RunAIAgentResolver (direct agent): Plain message to match normal flow
+        // Default: plain message (used by RunAIAgentResolver and TaskOrchestrator without step info)
+        message.Message = progress.message;
+
+        // TaskOrchestrator with step info: add formatted header
+        // Prefer hierarchical step (e.g., "2.1.3") over flat stepCount
         if (progress.resolver === 'TaskOrchestrator') {
-          // Prefer hierarchical step (e.g., "2.1.3") over flat stepCount
           const stepDisplay = progress.metadata?.progress?.hierarchicalStep || progress.stepCount;
           if (stepDisplay != null) {
             message.Message = `**Step ${stepDisplay}**\n\n${progress.message}`;
-          } else {
-            message.Message = progress.message;
           }
-        } else {
-          // Direct agent execution - plain message (matches normal flow)
-          message.Message = progress.message;
         }
 
         // Use safe save to prevent race conditions with completion
