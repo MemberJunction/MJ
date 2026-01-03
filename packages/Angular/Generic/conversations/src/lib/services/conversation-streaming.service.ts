@@ -7,6 +7,29 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 
 /**
+ * Metadata structure for message progress updates
+ */
+export interface MessageProgressMetadata {
+  /** Progress details (from RunAIAgentResolver) */
+  progress?: {
+    hierarchicalStep?: string;
+    percentage?: number;
+    message?: string;
+    stepCount?: number;
+    agentName?: string;
+    agentType?: string;
+  };
+  /** Agent run information (from RunAIAgentResolver) */
+  agentRun?: {
+    Agent?: string;
+    ConversationDetailID?: string;
+    ID?: string;
+  };
+  /** Agent run ID (alternative to agentRun.ID) */
+  agentRunId?: string;
+}
+
+/**
  * Message progress update structure
  */
 export interface MessageProgressUpdate {
@@ -14,8 +37,10 @@ export interface MessageProgressUpdate {
   percentComplete?: number;
   taskName?: string;
   conversationDetailId: string;
-  metadata?: any;
+  metadata?: MessageProgressMetadata;
   stepCount?: number;
+  /** Identifies which backend resolver published this update */
+  resolver?: 'TaskOrchestrator' | 'RunAIAgentResolver' | string;
 }
 
 /**
@@ -251,7 +276,8 @@ export class ConversationStreamingService implements OnDestroy {
         percentComplete,
         taskName,
         conversationDetailId,
-        metadata
+        metadata,
+        resolver: 'TaskOrchestrator'
       };
 
       // Invoke all registered callbacks for this specific message
@@ -274,11 +300,26 @@ export class ConversationStreamingService implements OnDestroy {
   /**
    * Route agent progress updates (from RunAIAgentResolver) to registered callbacks.
    * Uses conversationDetailID from agentRun data for direct routing.
+   * Also handles completion messages to remove tasks from ActiveTasksService.
    */
   private async routeAgentProgress(statusObj: any): Promise<void> {
     try {
       // Extract progress information from RunAIAgentResolver message
-      const { agentRun, progress } = statusObj.data || {};
+      const { agentRun, progress, type } = statusObj.data || {};
+
+      // Handle completion messages - these don't have progress.message
+      // Backend sends type: 'complete' when agent finishes
+      if (type === 'complete') {
+        const agentRunId = statusObj.data?.agentRunId;
+        if (agentRunId) {
+          const removed = this.activeTasks.removeByAgentRunId(agentRunId);
+          if (removed) {
+            console.log(`[ConversationStreamingService] ✅ Agent run ${agentRunId} completed, removed from active tasks`);
+          }
+        }
+        return;
+      }
+
       const conversationDetailId = agentRun?.ConversationDetailID;
       const message = progress?.message;
       const percentComplete = progress?.percentage;
@@ -308,8 +349,9 @@ export class ConversationStreamingService implements OnDestroy {
         percentComplete,
         taskName: agentRun?.Agent || 'Agent',
         conversationDetailId,
-        metadata: { agentRun, progress },
-        stepCount
+        metadata: { agentRun, progress } as MessageProgressMetadata,
+        stepCount,
+        resolver: 'RunAIAgentResolver'
       };
 
       // Invoke all registered callbacks for this specific message

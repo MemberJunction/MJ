@@ -870,8 +870,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
               this.messages = [...this.messages];
               this.cdr.detectChanges();
 
-              // IMPORTANT: Remove from tracking map so timer can stop when all messages complete
+              // Remove from tracking map so timer can stop when all messages complete
               this.previousMessageStatuses.delete(message.ID);
+
+              // Remove task from ActiveTasksService (clears spinner in conversation list)
+              const task = this.activeTasks.getByConversationDetailId(message.ID);
+              if (task) {
+                this.activeTasks.remove(task.id);
+              }
             } catch (error) {
               console.error('Failed to reload agent run on completion:', error);
             }

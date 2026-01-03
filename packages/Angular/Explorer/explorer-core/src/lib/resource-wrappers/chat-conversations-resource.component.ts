@@ -4,14 +4,12 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService } from '@memberjunction/ng-conversations';
+import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService } from '@memberjunction/ng-conversations';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 
 export function LoadChatConversationsResource() {
-  // Force inclusion in production builds (tree shaking workaround)
-  // Using null placeholders since Angular DI provides actual instances
-  const test = new ChatConversationsResource(null!, null!, null!, null!, null!, null!);
+  // Tree-shaking prevention - function reference keeps class in bundle
 }
 
 /**
@@ -210,7 +208,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private router: Router,
     private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
-    private streamingService: ConversationStreamingService
+    private streamingService: ConversationStreamingService,
+    private activeTasksService: ActiveTasksService
   ) {
     super();
   }
@@ -303,17 +302,21 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Initialize AI Engine and mention autocomplete service BEFORE child components render.
+   * Initialize AI Engine, conversations, and services BEFORE child components render.
    * This prevents the slow first-load issue where initialization would block conversation loading.
    * The `false` parameter means "don't force refresh if already initialized".
    */
   private async initializeEngines(): Promise<void> {
     try {
-      // Initialize AIEngine first - this is the heavy operation that loads all agents
-      await AIEngineBase.Instance.Config(false);
+      // Initialize AIEngine, conversations, and mention service in parallel
+      await Promise.all([
+        AIEngineBase.Instance.Config(false),
+        this.conversationData.loadConversations(this.environmentId, this.currentUser),
+        this.mentionAutocompleteService.initialize(this.currentUser)
+      ]);
 
-      // Then initialize mention autocomplete service which uses the loaded agents
-      await this.mentionAutocompleteService.initialize(this.currentUser);
+      // Restore active tasks AFTER conversations are cached (uses in-memory lookup)
+      await this.activeTasksService.restoreFromDatabase(this.currentUser);
 
       // Mark as ready - child components can now render
       this.isReady = true;
