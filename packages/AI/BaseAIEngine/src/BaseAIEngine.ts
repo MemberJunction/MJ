@@ -106,6 +106,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentModalities: AIAgentModalityEntity[] = [];
     private _modelModalities: AIModelModalityEntity[] = [];
 
+    /**
+     * Cache for configuration inheritance chains.
+     * Key: configurationId, Value: array of AIConfigurationEntity from child to root
+     */
+    private _configurationChainCache: Map<string, AIConfigurationEntity[]> = new Map();
+
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
             {
@@ -283,6 +289,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // Clear the configuration chain cache when data is reloaded
+        this._configurationChainCache.clear();
+
         // handle associating prompts with prompt categories
         //here we're using the underlying data (i.e _promptCategories and _prompts)
         //rather than the getter methods because the engine's Loaded property is still false
@@ -661,10 +670,120 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns The parameter entity or null if not found
      */
     public GetConfigurationParam(configurationId: string, paramName: string): AIConfigurationParamEntity | null {
-        return this._configurationParams.find(p => 
-            p.ConfigurationID === configurationId && 
+        return this._configurationParams.find(p =>
+            p.ConfigurationID === configurationId &&
             p.Name.toLowerCase() === paramName.toLowerCase()
         ) || null;
+    }
+
+    /**
+     * Returns the inheritance chain for a configuration, starting with the specified
+     * configuration and walking up through parent configurations to the root.
+     *
+     * The chain is ordered from most-specific (the requested configuration) to
+     * least-specific (the root parent with no ParentID).
+     *
+     * Results are cached for performance. Cache is invalidated when configurations
+     * are reloaded via Config().
+     *
+     * @param configurationId - The ID of the configuration to get the chain for
+     * @returns Array of AIConfigurationEntity objects representing the inheritance chain,
+     *          or empty array if the configuration is not found
+     * @throws Error if a circular reference is detected in the configuration hierarchy
+     *
+     * @example
+     * // Single configuration with no parent
+     * const chain = AIEngine.Instance.GetConfigurationChain('config-a');
+     * // Returns: [ConfigA]
+     *
+     * @example
+     * // Child -> Parent -> Grandparent chain
+     * const chain = AIEngine.Instance.GetConfigurationChain('child-config');
+     * // Returns: [ChildConfig, ParentConfig, GrandparentConfig]
+     *
+     * @example
+     * // Usage in model selection - first config in chain with a match wins
+     * const chain = AIEngine.Instance.GetConfigurationChain(configId);
+     * for (const config of chain) {
+     *   const models = promptModels.filter(pm => pm.ConfigurationID === config.ID);
+     *   if (models.length > 0) return models;
+     * }
+     * // Fall back to null-config models if no match in chain
+     */
+    public GetConfigurationChain(configurationId: string): AIConfigurationEntity[] {
+        // Check cache first
+        if (this._configurationChainCache.has(configurationId)) {
+            return this._configurationChainCache.get(configurationId)!;
+        }
+
+        const chain: AIConfigurationEntity[] = [];
+        const visitedIds = new Set<string>();
+        let currentId: string | null = configurationId;
+
+        while (currentId) {
+            // Cycle detection
+            if (visitedIds.has(currentId)) {
+                const chainNames = chain.map(c => c.Name).join(' -> ');
+                throw new Error(
+                    `Circular reference detected in AI Configuration hierarchy. ` +
+                    `Configuration ID "${currentId}" appears multiple times in the chain: ` +
+                    `${chainNames} -> [CYCLE]`
+                );
+            }
+
+            const config = this._configurations.find(c => c.ID === currentId);
+            if (!config) break;
+
+            visitedIds.add(currentId);
+            chain.push(config);
+            currentId = config.ParentID; // Will be null for root configs
+        }
+
+        // Cache the result
+        this._configurationChainCache.set(configurationId, chain);
+
+        return chain;
+    }
+
+    /**
+     * Returns all configuration parameters for a configuration, including inherited
+     * parameters from parent configurations. Child parameters override parent parameters
+     * with the same name (case-insensitive match).
+     *
+     * The inheritance chain is walked from root to child, so child values take precedence
+     * over parent values for parameters with the same name.
+     *
+     * @param configurationId - The ID of the configuration to get parameters for
+     * @returns Array of AIConfigurationParamEntity objects, with child overrides applied.
+     *          Returns empty array if configuration is not found.
+     *
+     * @example
+     * // Parent has: temperature=0.7, maxTokens=4000
+     * // Child has: temperature=0.9
+     * // Result: temperature=0.9 (child), maxTokens=4000 (inherited from parent)
+     * const params = AIEngine.Instance.GetConfigurationParamsWithInheritance('child-config-id');
+     */
+    public GetConfigurationParamsWithInheritance(configurationId: string): AIConfigurationParamEntity[] {
+        const chain = this.GetConfigurationChain(configurationId);
+
+        if (chain.length === 0) {
+            return [];
+        }
+
+        // Use a map to track params by name (lowercase for case-insensitive matching)
+        // Walk chain in reverse (root first, child last) so child overwrites parent
+        const paramMap = new Map<string, AIConfigurationParamEntity>();
+
+        for (let i = chain.length - 1; i >= 0; i--) {
+            const configParams = this._configurationParams.filter(
+                p => p.ConfigurationID === chain[i].ID
+            );
+            for (const param of configParams) {
+                paramMap.set(param.Name.toLowerCase(), param);
+            }
+        }
+
+        return Array.from(paramMap.values());
     }
 
     public get AgentDataSources(): AIAgentDataSourceEntity[] {

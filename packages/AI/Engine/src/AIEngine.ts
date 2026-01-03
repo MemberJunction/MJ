@@ -197,6 +197,29 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public GetConfigurationParam(configurationId: string, paramName: string): AIConfigurationParamEntity | null {
         return this.Base.GetConfigurationParam(configurationId, paramName);
     }
+    /**
+     * Returns the inheritance chain for a configuration, starting with the specified
+     * configuration and walking up through parent configurations to the root.
+     * Delegates to AIEngineBase.GetConfigurationChain.
+     *
+     * @param configurationId - The ID of the configuration to get the chain for
+     * @returns Array of AIConfigurationEntity objects representing the inheritance chain
+     * @throws Error if a circular reference is detected in the configuration hierarchy
+     */
+    public GetConfigurationChain(configurationId: string): AIConfigurationEntity[] {
+        return this.Base.GetConfigurationChain(configurationId);
+    }
+    /**
+     * Returns all configuration parameters for a configuration, including inherited
+     * parameters from parent configurations. Child parameters override parent parameters.
+     * Delegates to AIEngineBase.GetConfigurationParamsWithInheritance.
+     *
+     * @param configurationId - The ID of the configuration to get parameters for
+     * @returns Array of AIConfigurationParamEntity objects, with child overrides applied
+     */
+    public GetConfigurationParamsWithInheritance(configurationId: string): AIConfigurationParamEntity[] {
+        return this.Base.GetConfigurationParamsWithInheritance(configurationId);
+    }
     public GetAgentSteps(agentId: string, status?: string): AIAgentStepEntity[] {
         return this.Base.GetAgentSteps(agentId, status);
     }
