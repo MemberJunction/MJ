@@ -20,7 +20,10 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteType
          AIAgentDataSourceEntity,
          AIAgentConfigurationEntity,
          AIAgentExampleEntity,
-         AICredentialBindingEntity} from "@memberjunction/core-entities";
+         AICredentialBindingEntity,
+         AIModalityEntity,
+         AIAgentModalityEntity,
+         AIModelModalityEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { AIPromptEntityExtended, AIPromptCategoryEntityExtended, AIModelEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
@@ -59,6 +62,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPermissions: AIAgentPermissionEntity[] = [];
     private _agentConfigurations: AIAgentConfigurationEntity[] = [];
     private _credentialBindings: AICredentialBindingEntity[] = [];
+    private _modalities: AIModalityEntity[] = [];
+    private _agentModalities: AIAgentModalityEntity[] = [];
+    private _modelModalities: AIModelModalityEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
@@ -211,6 +217,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_credentialBindings',
                 EntityName: 'MJ: AI Credential Bindings',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_modalities',
+                EntityName: 'MJ: AI Modalities',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentModalities',
+                EntityName: 'MJ: AI Agent Modalities',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_modelModalities',
+                EntityName: 'MJ: AI Model Modalities',
                 CacheLocal: true
             }
         ];
@@ -616,6 +637,141 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentStepPaths(): AIAgentStepPathEntity[] {
         return this._agentStepPaths;
+    }
+
+    // ==========================================
+    // Modality Accessors and Helper Methods
+    // ==========================================
+
+    /**
+     * Gets all AI modalities (Text, Image, Audio, Video, File, Embedding, etc.)
+     */
+    public get Modalities(): AIModalityEntity[] {
+        return this._modalities;
+    }
+
+    /**
+     * Gets all agent-modality mappings
+     */
+    public get AgentModalities(): AIAgentModalityEntity[] {
+        return this._agentModalities;
+    }
+
+    /**
+     * Gets all model-modality mappings
+     */
+    public get ModelModalities(): AIModelModalityEntity[] {
+        return this._modelModalities;
+    }
+
+    /**
+     * Gets a modality by name (case-insensitive)
+     * @param name - The modality name (e.g., 'Text', 'Image', 'Audio', 'Video', 'File')
+     * @returns The modality entity or undefined if not found
+     */
+    public GetModalityByName(name: string): AIModalityEntity | undefined {
+        return this._modalities.find(m => m.Name.toLowerCase() === name.toLowerCase());
+    }
+
+    /**
+     * Gets all modalities supported by an agent for a given direction
+     * @param agentId - The agent ID
+     * @param direction - 'Input' or 'Output'
+     * @returns Array of modality entities the agent supports
+     */
+    public GetAgentModalities(agentId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+        const agentModalityRecords = this._agentModalities.filter(
+            am => am.AgentID === agentId && am.Direction === direction
+        );
+
+        return agentModalityRecords
+            .map(am => this._modalities.find(m => m.ID === am.ModalityID))
+            .filter((m): m is AIModalityEntity => m !== undefined);
+    }
+
+    /**
+     * Gets all modalities supported by a model for a given direction
+     * @param modelId - The model ID
+     * @param direction - 'Input' or 'Output'
+     * @returns Array of modality entities the model supports
+     */
+    public GetModelModalities(modelId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+        const modelModalityRecords = this._modelModalities.filter(
+            mm => mm.ModelID === modelId && mm.Direction === direction
+        );
+
+        return modelModalityRecords
+            .map(mm => this._modalities.find(m => m.ID === mm.ModalityID))
+            .filter((m): m is AIModalityEntity => m !== undefined);
+    }
+
+    /**
+     * Checks if an agent supports a specific modality for a given direction.
+     * If no agent modalities are configured, defaults to text-only.
+     * @param agentId - The agent ID
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio')
+     * @param direction - 'Input' or 'Output'
+     * @returns True if the agent supports this modality
+     */
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        // Check if agent has explicit modality records
+        const agentModalities = this.GetAgentModalities(agentId, direction);
+
+        if (agentModalities.length > 0) {
+            // Agent has explicit modality configuration - check it
+            return agentModalities.some(m => m.Name.toLowerCase() === modalityName.toLowerCase());
+        }
+
+        // No explicit agent modalities configured - default to text-only
+        return modalityName.toLowerCase() === 'text';
+    }
+
+    /**
+     * Checks if a model supports a specific modality for a given direction
+     * @param modelId - The model ID
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio')
+     * @param direction - 'Input' or 'Output'
+     * @returns True if the model supports this modality
+     */
+    public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        const modelModalities = this.GetModelModalities(modelId, direction);
+
+        if (modelModalities.length > 0) {
+            return modelModalities.some(m => m.Name.toLowerCase() === modalityName.toLowerCase());
+        }
+
+        // No explicit model modalities - assume text-only (default for LLMs)
+        return modalityName.toLowerCase() === 'text';
+    }
+
+    /**
+     * Checks if an agent supports any non-text input modalities (images, audio, video, files).
+     * This is used to determine if attachment upload should be enabled in the UI.
+     * @param agentId - The agent ID
+     * @returns True if the agent supports at least one non-text input modality
+     */
+    public AgentSupportsAttachments(agentId: string): boolean {
+        const nonTextModalities = ['image', 'audio', 'video', 'file'];
+        return nonTextModalities.some(modalityName =>
+            this.AgentSupportsModality(agentId, modalityName, 'Input')
+        );
+    }
+
+    /**
+     * Gets all input modality names supported by an agent (for UI display/filtering)
+     * @param agentId - The agent ID
+     * @returns Array of modality names the agent accepts as input
+     */
+    public GetAgentSupportedInputModalities(agentId: string): string[] {
+        // Check explicit agent modalities
+        const agentModalities = this.GetAgentModalities(agentId, 'Input');
+
+        if (agentModalities.length > 0) {
+            return agentModalities.map(m => m.Name);
+        }
+
+        // No explicit modalities configured - default to text-only
+        return ['Text'];
     }
 
     /**

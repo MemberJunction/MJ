@@ -7,17 +7,19 @@
  * - Thumbnail generation for images
  * - CRUD operations for attachments
  *
- * @module @memberjunction/ai-core-plus
+ * @module @memberjunction/aiengine
  * @author MemberJunction.com
  * @since 2.130.0
  */
 
-import { BaseEntity, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     FileStorageProviderEntity,
     FileEntity,
     AIAgentEntity,
-    AIModelEntity
+    AIModelEntity,
+    ConversationDetailAttachmentEntity,
+    AIModalityEntity
 } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { FileStorageBase } from '@memberjunction/storage';
@@ -28,7 +30,7 @@ import {
     AttachmentContent,
     DEFAULT_ATTACHMENT_LIMITS,
     DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES
-} from './conversation-utility';
+} from '@memberjunction/ai-core-plus';
 import { createBase64DataUrl, parseBase64DataUrl } from '@memberjunction/ai';
 
 /**
@@ -55,38 +57,27 @@ export interface AddAttachmentInput {
 export interface AddAttachmentResult {
     /** Whether the operation succeeded */
     success: boolean;
-    /** The created attachment record (if successful) */
-    attachment?: ConversationDetailAttachmentRecord;
+    /** The created attachment entity (if successful) */
+    attachment?: ConversationDetailAttachmentEntity;
     /** Error message (if failed) */
     error?: string;
-}
-
-/**
- * Attachment record structure (mirrors the ConversationDetailAttachment entity)
- */
-export interface ConversationDetailAttachmentRecord {
-    ID: string;
-    ConversationDetailID: string;
-    AttachmentType: AttachmentType;
-    MimeType: string;
-    FileName: string | null;
-    FileSizeBytes: number;
-    Width: number | null;
-    Height: number | null;
-    DurationSeconds: number | null;
-    InlineData: string | null;
-    FileID: string | null;
-    DisplayOrder: number;
-    ThumbnailBase64: string | null;
 }
 
 /**
  * Attachment data with content for AI consumption
  */
 export interface AttachmentWithData {
-    record: ConversationDetailAttachmentRecord;
+    attachment: ConversationDetailAttachmentEntity;
     /** The full content as data URL or pre-auth download URL */
     contentUrl: string;
+}
+
+/**
+ * Cached modality lookup
+ */
+interface ModalityCache {
+    byName: Map<string, AIModalityEntity>;
+    loaded: boolean;
 }
 
 /**
@@ -95,9 +86,52 @@ export interface AttachmentWithData {
  */
 export class ConversationAttachmentService {
     private md: Metadata;
+    private modalityCache: ModalityCache = { byName: new Map(), loaded: false };
 
     constructor() {
         this.md = new Metadata();
+    }
+
+    /**
+     * Load and cache modalities for efficient lookup
+     */
+    private async loadModalitiesIfNeeded(contextUser: UserInfo): Promise<void> {
+        if (this.modalityCache.loaded) {
+            return;
+        }
+
+        const rv = new RunView();
+        const result = await rv.RunView<AIModalityEntity>({
+            EntityName: 'MJ: AI Modalities',
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (result.Success && result.Results) {
+            for (const modality of result.Results) {
+                this.modalityCache.byName.set(modality.Name.toLowerCase(), modality);
+            }
+            this.modalityCache.loaded = true;
+        }
+    }
+
+    /**
+     * Get modality by name (e.g., 'Image', 'Audio', 'Video', 'File')
+     */
+    private async getModalityByName(name: string, contextUser: UserInfo): Promise<AIModalityEntity | null> {
+        await this.loadModalitiesIfNeeded(contextUser);
+        return this.modalityCache.byName.get(name.toLowerCase()) || null;
+    }
+
+    /**
+     * Convert AttachmentType to modality name
+     */
+    private attachmentTypeToModalityName(attachmentType: AttachmentType): string {
+        // AttachmentType is 'Image' | 'Video' | 'Audio' | 'Document'
+        // Modality names are 'Image', 'Audio', 'Video', 'File' etc.
+        if (attachmentType === 'Document') {
+            return 'File';
+        }
+        return attachmentType;
     }
 
     /**
@@ -128,19 +162,26 @@ export class ConversationAttachmentService {
         // Calculate size from base64
         const sizeBytes = this.calculateBase64Size(base64Data);
 
-        // Determine attachment type
+        // Determine attachment type from MIME
         const attachmentType = ConversationUtility.GetAttachmentTypeFromMime(mimeType);
 
-        // Build limits from agent/model
-        const agentLimits = this.extractAgentLimits(agent);
-        const modelLimits = this.extractModelLimits(model);
+        // Get the modality entity for this attachment type
+        const modalityName = this.attachmentTypeToModalityName(attachmentType);
+        const modality = await this.getModalityByName(modalityName, contextUser);
+        if (!modality) {
+            return {
+                success: false,
+                error: `Unknown modality type: ${modalityName}`
+            };
+        }
 
-        // Validate attachment
+        // Validate attachment against limits
+        // For now, use default limits since agent/model don't have these specific fields
         const validation = ConversationUtility.ValidateAttachment(
             { type: attachmentType, sizeBytes },
             existingCounts,
-            agentLimits,
-            modelLimits,
+            null, // Agent limits - not currently stored on entity
+            null, // Model limits - not currently stored on entity
             DEFAULT_ATTACHMENT_LIMITS
         );
 
@@ -151,8 +192,8 @@ export class ConversationAttachmentService {
             };
         }
 
-        // Determine storage mode
-        const agentThreshold = agent?.Get('InlineStorageThresholdBytes') as number | null;
+        // Determine storage mode using agent's threshold if available
+        const agentThreshold = agent?.InlineStorageThresholdBytes ?? null;
         const storeInline = ConversationUtility.ShouldStoreInline(
             sizeBytes,
             agentThreshold,
@@ -190,10 +231,10 @@ export class ConversationAttachmentService {
             thumbnailBase64 = await this.generateImageThumbnail(base64Data, mimeType);
         }
 
-        // Create attachment record
+        // Create attachment record using strongly-typed entity
         const attachment = await this.createAttachmentRecord({
             conversationDetailId,
-            attachmentType,
+            modalityId: modality.ID,
             mimeType,
             fileName: input.fileName || null,
             sizeBytes,
@@ -224,12 +265,12 @@ export class ConversationAttachmentService {
      * For inline attachments, returns the base64 data URL.
      * For MJStorage attachments, returns a pre-authenticated download URL.
      *
-     * @param attachment - The attachment record
+     * @param attachment - The attachment entity
      * @param contextUser - The current user context
      * @returns The attachment with content URL
      */
     async getAttachmentData(
-        attachment: ConversationDetailAttachmentRecord,
+        attachment: ConversationDetailAttachmentEntity,
         contextUser: UserInfo
     ): Promise<AttachmentWithData | null> {
         let contentUrl: string;
@@ -249,7 +290,7 @@ export class ConversationAttachmentService {
         }
 
         return {
-            record: attachment,
+            attachment,
             contentUrl
         };
     }
@@ -289,25 +330,25 @@ export class ConversationAttachmentService {
      *
      * @param conversationDetailId - The conversation detail ID
      * @param contextUser - The current user context
-     * @returns Array of attachment records
+     * @returns Array of attachment entities
      */
     async getAttachments(
         conversationDetailId: string,
         contextUser: UserInfo
-    ): Promise<ConversationDetailAttachmentRecord[]> {
+    ): Promise<ConversationDetailAttachmentEntity[]> {
         const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'Conversation Detail Attachments',
+        const result = await rv.RunView<ConversationDetailAttachmentEntity>({
+            EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID='${conversationDetailId}'`,
             OrderBy: 'DisplayOrder ASC',
-            ResultType: 'simple'
+            ResultType: 'entity_object'
         }, contextUser);
 
         if (!result.Success || !result.Results) {
             return [];
         }
 
-        return result.Results as ConversationDetailAttachmentRecord[];
+        return result.Results;
     }
 
     /**
@@ -320,7 +361,7 @@ export class ConversationAttachmentService {
     async getAttachmentsBatch(
         conversationDetailIds: string[],
         contextUser: UserInfo
-    ): Promise<Map<string, ConversationDetailAttachmentRecord[]>> {
+    ): Promise<Map<string, ConversationDetailAttachmentEntity[]>> {
         if (conversationDetailIds.length === 0) {
             return new Map();
         }
@@ -328,21 +369,21 @@ export class ConversationAttachmentService {
         const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
         const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'Conversation Detail Attachments',
+        const result = await rv.RunView<ConversationDetailAttachmentEntity>({
+            EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID IN (${idList})`,
             OrderBy: 'DisplayOrder ASC',
-            ResultType: 'simple'
+            ResultType: 'entity_object'
         }, contextUser);
 
-        const map = new Map<string, ConversationDetailAttachmentRecord[]>();
+        const map = new Map<string, ConversationDetailAttachmentEntity[]>();
 
         if (!result.Success || !result.Results) {
             return map;
         }
 
         // Group by conversation detail ID
-        for (const att of result.Results as ConversationDetailAttachmentRecord[]) {
+        for (const att of result.Results) {
             const existing = map.get(att.ConversationDetailID) || [];
             existing.push(att);
             map.set(att.ConversationDetailID, existing);
@@ -359,19 +400,15 @@ export class ConversationAttachmentService {
      * @returns Whether deletion succeeded
      */
     async deleteAttachment(attachmentId: string, contextUser: UserInfo): Promise<boolean> {
-        // Load attachment
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'Conversation Detail Attachments',
-            ExtraFilter: `ID='${attachmentId}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
+        // Load attachment using strongly-typed entity
+        const attachment = await this.md.GetEntityObject<ConversationDetailAttachmentEntity>(
+            'MJ: Conversation Detail Attachments',
+            contextUser
+        );
 
-        if (!result.Success || !result.Results || result.Results.length === 0) {
+        if (!await attachment.Load(attachmentId)) {
             return false;
         }
-
-        const attachment = result.Results[0] as { Delete: () => Promise<boolean>; FileID: string | null };
 
         // If stored in MJStorage, delete the file
         if (attachment.FileID) {
@@ -384,15 +421,23 @@ export class ConversationAttachmentService {
 
     /**
      * Create an AttachmentContent reference for embedding in messages.
+     * Maps from entity to the content block type used in AI messages.
      *
-     * @param attachment - The attachment record
+     * @param attachment - The attachment entity
      * @returns The attachment content reference
      */
-    createAttachmentReference(attachment: ConversationDetailAttachmentRecord): AttachmentContent {
+    createAttachmentReference(attachment: ConversationDetailAttachmentEntity): AttachmentContent {
+        // Map from modality to AttachmentType
+        const modalityName = attachment.Modality?.toLowerCase() || 'file';
+        let type: AttachmentType = 'Document';
+        if (modalityName === 'image') type = 'Image';
+        else if (modalityName === 'video') type = 'Video';
+        else if (modalityName === 'audio') type = 'Audio';
+
         return {
             _mode: 'attachment',
             id: attachment.ID,
-            type: attachment.AttachmentType,
+            type,
             mimeType: attachment.MimeType,
             fileName: attachment.FileName || undefined,
             sizeBytes: attachment.FileSizeBytes,
@@ -417,38 +462,6 @@ export class ConversationAttachmentService {
     }
 
     /**
-     * Extract attachment limits from agent entity
-     */
-    private extractAgentLimits(agent: AIAgentEntity | null): Partial<AttachmentLimits> | null {
-        if (!agent) return null;
-
-        return {
-            maxImageSizeBytes: agent.Get('MaxImageInputSizeBytes') as number | undefined,
-            maxVideoSizeBytes: agent.Get('MaxVideoInputSizeBytes') as number | undefined,
-            maxAudioSizeBytes: agent.Get('MaxAudioInputSizeBytes') as number | undefined,
-            maxImagesPerMessage: agent.Get('MaxImagesPerMessage') as number | undefined,
-            maxVideosPerMessage: agent.Get('MaxVideosPerMessage') as number | undefined,
-            maxAudiosPerMessage: agent.Get('MaxAudiosPerMessage') as number | undefined
-        };
-    }
-
-    /**
-     * Extract attachment limits from model entity
-     */
-    private extractModelLimits(model: AIModelEntity | null): Partial<AttachmentLimits> | null {
-        if (!model) return null;
-
-        return {
-            maxImageSizeBytes: model.Get('MaxImageInputSizeBytes') as number | undefined,
-            maxVideoSizeBytes: model.Get('MaxVideoInputSizeBytes') as number | undefined,
-            maxAudioSizeBytes: model.Get('MaxAudioInputSizeBytes') as number | undefined,
-            maxImagesPerMessage: model.Get('MaxImagesPerMessage') as number | undefined,
-            maxVideosPerMessage: model.Get('MaxVideosPerMessage') as number | undefined,
-            maxAudiosPerMessage: model.Get('MaxAudiosPerMessage') as number | undefined
-        };
-    }
-
-    /**
      * Upload data to MJStorage
      */
     private async uploadToStorage(
@@ -459,7 +472,7 @@ export class ConversationAttachmentService {
         contextUser: UserInfo
     ): Promise<{ success: boolean; fileId?: string; error?: string }> {
         // Get storage provider from agent config or use default
-        const providerId = agent?.Get('AttachmentStorageProviderID') as string | null;
+        const providerId = agent?.AttachmentStorageProviderID ?? null;
         if (!providerId) {
             return {
                 success: false,
@@ -482,8 +495,8 @@ export class ConversationAttachmentService {
             provider.ServerDriverKey
         );
 
-        // Determine storage path
-        const basePath = (agent?.Get('AttachmentStoragePath') as string) || 'conversation-attachments';
+        // Determine storage path - use a default if agent doesn't have one
+        const basePath = 'conversation-attachments';
         const timestamp = Date.now();
         const objectName = `${basePath}/${timestamp}_${fileName}`;
 
@@ -564,15 +577,15 @@ export class ConversationAttachmentService {
      * image processing, or Canvas API for client-side.
      */
     private async generateImageThumbnail(
-        base64Data: string,
-        mimeType: string,
-        maxDimension: number = 200,
-        quality: number = 0.7
+        _base64Data: string,
+        _mimeType: string,
+        _maxDimension: number = 200,
+        _quality: number = 0.7
     ): Promise<string | null> {
         // For small images, just return the original
-        const size = this.calculateBase64Size(base64Data);
+        const size = this.calculateBase64Size(_base64Data);
         if (size < 50 * 1024) { // Less than 50KB
-            return base64Data;
+            return _base64Data;
         }
 
         // In a full implementation, you would:
@@ -587,15 +600,12 @@ export class ConversationAttachmentService {
     }
 
     /**
-     * Create an attachment record in the database.
-     *
-     * NOTE: After CodeGen runs with the migration, this method should be updated to use
-     * the generated ConversationDetailAttachmentEntity type instead of BaseEntity.
+     * Create an attachment record in the database using strongly-typed entity.
      */
     private async createAttachmentRecord(
         data: {
             conversationDetailId: string;
-            attachmentType: AttachmentType;
+            modalityId: string;
             mimeType: string;
             fileName: string | null;
             sizeBytes: number;
@@ -608,46 +618,31 @@ export class ConversationAttachmentService {
             displayOrder: number;
         },
         contextUser: UserInfo
-    ): Promise<ConversationDetailAttachmentRecord | null> {
-        // Get a generic BaseEntity - the entity won't exist until CodeGen runs
-        // TODO: After CodeGen, replace with: GetEntityObject<ConversationDetailAttachmentEntity>
-        const attachment = await this.md.GetEntityObject<BaseEntity>('Conversation Detail Attachments', contextUser);
+    ): Promise<ConversationDetailAttachmentEntity | null> {
+        const attachment = await this.md.GetEntityObject<ConversationDetailAttachmentEntity>(
+            'MJ: Conversation Detail Attachments',
+            contextUser
+        );
 
-        // Use Set() method to populate fields dynamically
-        attachment.Set('ConversationDetailID', data.conversationDetailId);
-        attachment.Set('AttachmentType', data.attachmentType);
-        attachment.Set('MimeType', data.mimeType);
-        attachment.Set('FileName', data.fileName);
-        attachment.Set('FileSizeBytes', data.sizeBytes);
-        attachment.Set('Width', data.width);
-        attachment.Set('Height', data.height);
-        attachment.Set('DurationSeconds', data.durationSeconds);
-        attachment.Set('InlineData', data.inlineData);
-        attachment.Set('FileID', data.fileId);
-        attachment.Set('DisplayOrder', data.displayOrder);
-        attachment.Set('ThumbnailBase64', data.thumbnailBase64);
+        // Use strongly-typed property setters
+        attachment.ConversationDetailID = data.conversationDetailId;
+        attachment.ModalityID = data.modalityId;
+        attachment.MimeType = data.mimeType;
+        attachment.FileName = data.fileName;
+        attachment.FileSizeBytes = data.sizeBytes;
+        attachment.Width = data.width;
+        attachment.Height = data.height;
+        attachment.DurationSeconds = data.durationSeconds;
+        attachment.InlineData = data.inlineData;
+        attachment.FileID = data.fileId;
+        attachment.DisplayOrder = data.displayOrder;
+        attachment.ThumbnailBase64 = data.thumbnailBase64;
 
         if (!await attachment.Save()) {
             return null;
         }
 
-        // Convert the entity's data to our record interface
-        const allData = attachment.GetAll();
-        return {
-            ID: allData['ID'] as string,
-            ConversationDetailID: allData['ConversationDetailID'] as string,
-            AttachmentType: allData['AttachmentType'] as AttachmentType,
-            MimeType: allData['MimeType'] as string,
-            FileName: allData['FileName'] as string | null,
-            FileSizeBytes: allData['FileSizeBytes'] as number,
-            Width: allData['Width'] as number | null,
-            Height: allData['Height'] as number | null,
-            DurationSeconds: allData['DurationSeconds'] as number | null,
-            InlineData: allData['InlineData'] as string | null,
-            FileID: allData['FileID'] as string | null,
-            DisplayOrder: allData['DisplayOrder'] as number,
-            ThumbnailBase64: allData['ThumbnailBase64'] as string | null
-        };
+        return attachment;
     }
 }
 

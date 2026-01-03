@@ -25,6 +25,7 @@ import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
+import { PendingAttachment } from '../mention/mention-editor.component';
 
 /**
  * Top-level workspace component for conversations
@@ -165,6 +166,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public selectedThreadId: string | null = null;
   public isNewUnsavedConversation: boolean = false;
   public pendingMessageToSend: string | null = null;
+  public pendingAttachmentsToSend: PendingAttachment[] | null = null;
   public pendingArtifactId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
 
@@ -211,6 +213,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.selectedConversation = null;
     this.isNewUnsavedConversation = true;
     this.pendingMessageToSend = null;
+    this.pendingAttachmentsToSend = null;
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -261,6 +264,22 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.selectedConversation = conversation;
     this.isNewUnsavedConversation = false;
     // The conversation is already added to conversationData by the chat area
+  }
+
+  /**
+   * Handler for pending message requested from chat area (empty state)
+   */
+  onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
+    console.log('[Workspace] onPendingMessageRequested called:', {
+      event,
+      eventType: typeof event,
+      text: event?.text,
+      textType: typeof event?.text,
+      attachments: event?.attachments?.length
+    });
+    this.pendingMessageToSend = event.text;
+    this.pendingAttachmentsToSend = event.attachments;
+    console.log('[Workspace] Set pendingMessageToSend to:', this.pendingMessageToSend, 'type:', typeof this.pendingMessageToSend);
   }
 
   /**

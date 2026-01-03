@@ -815,8 +815,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /**
    * Handle pending message requested event (from empty state creating conversation)
    */
-  onPendingMessageRequested(message: string): void {
-    this.pendingMessageToSend = message;
+  onPendingMessageRequested(event: {text: string; attachments: unknown[]}): void {
+    this.pendingMessageToSend = event.text;
+    // Note: attachments are handled internally by the chat-area component
   }
 
   /**

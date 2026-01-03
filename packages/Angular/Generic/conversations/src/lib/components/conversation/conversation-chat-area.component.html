@@ -121,7 +121,9 @@
                       [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                       [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                       [disabled]="isProcessing"
+                      [enableAttachments]="enableAttachments"
                       [initialMessage]="inputRef.conversationId === conversationId ? pendingMessage : null"
+                      [initialAttachments]="inputRef.conversationId === conversationId ? pendingAttachments : null"
                       (messageSent)="onMessageSent($event)"
                       (agentResponse)="onAgentResponse($event)"
                       (agentRunDetected)="onAgentRunDetected($event)"
@@ -317,4 +319,15 @@
     (saved)="onCollectionPickerSaved($event)"
     (cancelled)="onCollectionPickerCancelled()">
   </mj-artifact-collection-picker-modal>
+}
+
+<!-- Image Viewer Modal -->
+@if (showImageViewer) {
+  <mj-image-viewer
+    [imageUrl]="selectedImageUrl"
+    [alt]="selectedImageAlt"
+    [fileName]="selectedImageFileName"
+    [visible]="showImageViewer"
+    (closed)="onImageViewerClosed()">
+  </mj-image-viewer>
 }

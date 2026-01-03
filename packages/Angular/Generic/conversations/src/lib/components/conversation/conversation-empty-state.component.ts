@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
+import { PendingAttachment } from '../mention/mention-editor.component';
 
 @Component({
   selector: 'mj-conversation-empty-state',
@@ -10,7 +11,7 @@ export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
 
-  @Output() messageSent = new EventEmitter<string>();
+  @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
 
   public messageText: string = '';
 
@@ -139,13 +140,13 @@ export class ConversationEmptyStateComponent {
     return shuffled.slice(0, count);
   }
 
-  onTextSubmitted(text: string): void {
-    this.messageSent.emit(text);
+  onEmptyStateSubmit(event: {text: string; attachments: PendingAttachment[]}): void {
+    this.messageSent.emit(event);
   }
 
   onSuggestedPromptClicked(prompt: string): void {
     if (!this.disabled) {
-      this.messageSent.emit(prompt);
+      this.messageSent.emit({ text: prompt, attachments: [] });
     }
   }
 }

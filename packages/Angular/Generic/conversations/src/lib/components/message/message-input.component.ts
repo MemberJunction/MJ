@@ -37,10 +37,58 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() disabled: boolean = false;
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
-  @Input() initialMessage: string | null = null; // Message to send automatically when component initializes
+  @Input() enableAttachments: boolean = true; // Whether to show attachment button (based on agent modality support)
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
+  @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
+
+  // Initial message to send automatically - using getter/setter for precise control
+  private _initialMessage: string | null = null;
+  private _initialAttachments: PendingAttachment[] | null = null;
+  private _isComponentReady = false; // Track if component is ready to send
+
+  @Input()
+  set initialMessage(value: string | null) {
+    console.log('[MessageInput] initialMessage setter called:', {
+      value,
+      valueType: typeof value,
+      isString: typeof value === 'string',
+      isObject: typeof value === 'object',
+      hasTextProp: value && typeof value === 'object' && 'text' in value,
+      conversationId: this.conversationId,
+      isReady: this._isComponentReady
+    });
+
+    // Handle case where an object with {text, attachments} is passed instead of just a string
+    // This can happen if there's a type mismatch in the binding chain
+    let actualValue = value;
+    if (value && typeof value === 'object' && 'text' in value) {
+      console.warn('[MessageInput] Received object instead of string, extracting text property');
+      actualValue = (value as { text: string }).text;
+    }
+
+    const previousValue = this._initialMessage;
+    this._initialMessage = actualValue;
+
+    // If component is ready and we have a new non-null message, trigger send
+    if (this._isComponentReady && actualValue && actualValue !== previousValue) {
+      console.log('[MessageInput] Triggering send from initialMessage setter');
+      this.triggerInitialSend();
+    }
+  }
+  get initialMessage(): string | null {
+    return this._initialMessage;
+  }
+
+  @Input()
+  set initialAttachments(value: PendingAttachment[] | null) {
+    console.log('[MessageInput] initialAttachments setter called:', value?.length || 0, 'items');
+    this._initialAttachments = value;
+  }
+  get initialAttachments(): PendingAttachment[] | null {
+    return this._initialAttachments;
+  }
 
   private _conversationHistory: ConversationDetailEntity[] = [];
   @Input()
@@ -76,6 +124,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
   @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
+  @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
 
   @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
 
@@ -121,20 +170,44 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     if (changes['conversationId'] && !changes['conversationId'].firstChange) {
       this.focusInput();
     }
-
-    // Note: inProgressMessageIds now handled by setter, not ngOnChanges
+    // Note: initialMessage/initialAttachments handled by setters, inProgressMessageIds handled by setter
   }
 
   ngAfterViewInit() {
+    console.log('[MessageInput] ngAfterViewInit - marking component ready, conversationId:', this.conversationId);
     // Focus input on initial load
     this.focusInput();
 
+    // Mark component as ready
+    this._isComponentReady = true;
+
     // If there's an initial message to send (from empty state), send it automatically
-    if (this.initialMessage) {
-      setTimeout(() => {
-        this.sendMessageWithText(this.initialMessage!);
-      }, 100);
+    if (this._initialMessage || (this._initialAttachments && this._initialAttachments.length > 0)) {
+      console.log('[MessageInput] ngAfterViewInit - found initial message, triggering send');
+      this.triggerInitialSend();
     }
+  }
+
+  /**
+   * Triggers sending of initial message and attachments.
+   * Called from setter or ngAfterViewInit when conditions are met.
+   */
+  private triggerInitialSend(): void {
+    const message = this._initialMessage;
+    const attachments = this._initialAttachments;
+
+    console.log('[MessageInput] triggerInitialSend - message:', message, 'attachments:', attachments?.length || 0, 'conversationId:', this.conversationId);
+
+    // Set pending attachments before sending
+    if (attachments && attachments.length > 0) {
+      this.pendingAttachments = [...attachments];
+    }
+
+    // Use setTimeout to ensure we're outside of change detection cycle
+    setTimeout(() => {
+      console.log('[MessageInput] triggerInitialSend - executing sendMessageWithText');
+      this.sendMessageWithText(message || '');
+    }, 100);
   }
 
   ngOnDestroy() {
@@ -294,6 +367,15 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       return;
     }
 
+    // In empty state mode, just emit the data and let parent handle conversation creation
+    if (this.emptyStateMode) {
+      const attachmentsToEmit = [...this.pendingAttachments];
+      this.pendingAttachments = [];
+      this.messageText = '';
+      this.emptyStateSubmit.emit({ text: text?.trim() || '', attachments: attachmentsToEmit });
+      return;
+    }
+
     this.isSending = true;
 
     // Store attachments locally since we'll clear them after send
@@ -306,25 +388,15 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (saved) {
         // Save attachments if any were pending
+        // Attachments are stored in ConversationDetailAttachment table and loaded
+        // separately when building AI messages - no need to add tokens to Message field
         if (attachmentsToSave.length > 0) {
           try {
-            const savedAttachments = await this.attachmentService.saveAttachments(
+            await this.attachmentService.saveAttachments(
               messageDetail.ID,
               attachmentsToSave,
               this.currentUser
             );
-
-            // If attachments were saved, add attachment references to the message
-            if (savedAttachments.length > 0) {
-              const attachmentRefs = this.attachmentService.createAttachmentReferences(savedAttachments);
-              if (attachmentRefs) {
-                // Append attachment references to the message
-                messageDetail.Message = messageDetail.Message
-                  ? `${messageDetail.Message} ${attachmentRefs}`
-                  : attachmentRefs;
-                await messageDetail.Save();
-              }
-            }
           } catch (attachmentError) {
             console.error('Failed to save attachments:', attachmentError);
             this.toastService.error('Some attachments could not be saved');
@@ -367,32 +439,61 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
   /**
    * Send a message with custom text WITHOUT modifying the visible messageText input
-   * Used for suggested responses - sends message silently without affecting user's current input
+   * Used for suggested responses and initial messages from empty state.
+   * Also saves any pending attachments.
    */
   public async sendMessageWithText(text: string): Promise<void> {
-    if (!text || !text.trim()) {
+    console.log('[MessageInput] sendMessageWithText called - text:', text, 'conversationId:', this.conversationId);
+    const hasText = text && text.trim().length > 0;
+    const hasAttachments = this.pendingAttachments.length > 0;
+
+    if (!hasText && !hasAttachments) {
+      console.log('[MessageInput] sendMessageWithText - no text or attachments, aborting');
       return;
     }
 
     if (this.isSending) {
+      console.log('[MessageInput] sendMessageWithText - already sending, aborting');
       return;
     }
 
+    console.log('[MessageInput] sendMessageWithText - proceeding with send');
     this.isSending = true;
+    const attachmentsToSave = [...this.pendingAttachments];
+
     try {
       const detail = await this.dataCache.createConversationDetail(this.currentUser);
       detail.ConversationID = this.conversationId;
-      detail.Message = text.trim();
+      detail.Message = text?.trim() || '';
       detail.Role = 'User';
       detail.UserID = this.currentUser.ID; // Set the user who sent the message
+      console.log('[MessageInput] sendMessageWithText - created detail, saving to conversationId:', this.conversationId);
 
       if (this.parentMessageId) {
         detail.ParentID = this.parentMessageId;
       }
 
       const saved = await detail.Save();
+      console.log('[MessageInput] sendMessageWithText - save result:', saved);
 
       if (saved) {
+        // Save attachments if any were pending
+        if (attachmentsToSave.length > 0) {
+          try {
+            await this.attachmentService.saveAttachments(
+              detail.ID,
+              attachmentsToSave,
+              this.currentUser
+            );
+          } catch (attachmentError) {
+            console.error('Failed to save attachments:', attachmentError);
+            this.toastService.error('Some attachments could not be saved');
+          }
+        }
+
+        // Clear pending attachments after successful send
+        this.pendingAttachments = [];
+
         this.messageSent.emit(detail);
 
         const mentionResult = this.parseMentionsFromMessage(detail.Message);

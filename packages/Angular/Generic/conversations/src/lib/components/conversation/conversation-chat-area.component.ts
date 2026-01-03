@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
-import { AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -13,6 +14,7 @@ import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
+import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
@@ -47,7 +49,30 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @Input() conversation: ConversationEntity | null = null;
   @Input() threadId: string | null = null;
   @Input() isNewConversation: boolean = false;
-  @Input() pendingMessage: string | null = null;
+
+  // Using getter/setter to debug and ensure correct type
+  private _pendingMessage: string | null = null;
+  @Input()
+  set pendingMessage(value: string | null) {
+    console.log('[ChatArea] pendingMessage setter called:', {
+      value,
+      valueType: typeof value,
+      isObject: typeof value === 'object',
+      hasTextProp: value && typeof value === 'object' && 'text' in value
+    });
+    // Handle case where an object is incorrectly passed
+    if (value && typeof value === 'object' && 'text' in value) {
+      console.warn('[ChatArea] Received object instead of string for pendingMessage, extracting text');
+      this._pendingMessage = (value as { text: string }).text;
+    } else {
+      this._pendingMessage = value;
+    }
+  }
+  get pendingMessage(): string | null {
+    return this._pendingMessage;
+  }
+
+  @Input() pendingAttachments: PendingAttachment[] | null = null; // Attachments from empty state
   @Input() pendingArtifactId: string | null = null;
   @Input() pendingArtifactVersionNumber: number | null = null;
 
@@ -62,7 +87,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @Output() threadClosed = new EventEmitter<void>();
   @Output() pendingArtifactConsumed = new EventEmitter<void>();
   @Output() pendingMessageConsumed = new EventEmitter<void>();
-  @Output() pendingMessageRequested = new EventEmitter<string>();
+  @Output() pendingMessageRequested = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
@@ -177,6 +202,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   // LocalStorage key
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
+  // Image viewer state
+  public showImageViewer: boolean = false;
+  public selectedImageUrl: string = '';
+  public selectedImageAlt: string = '';
+  public selectedImageFileName: string = '';
+
+  // Attachment support based on agent modalities
+  // Computed from conversation manager (Sage) and any previous agent in conversation
+  public enableAttachments: boolean = false;
+  private conversationManagerAgent: AIAgentEntityExtended | null = null;
+
   constructor(
     public conversationData: ConversationDataService,
     private agentStateService: AgentStateService,
@@ -200,6 +236,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       await this.mentionAutocompleteService.initialize(this.currentUser);
     }
 
+    // Initialize attachment support based on agent modalities
+    await this.initializeAttachmentSupport();
+
     // Load saved artifact pane width
     this.loadArtifactPaneWidth();
 
@@ -216,6 +255,62 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     window.addEventListener('mouseup', this.onResizeEnd.bind(this));
     window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
     window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
+  }
+
+  /**
+   * Initializes attachment support by checking if the conversation manager agent (Sage)
+   * or any recent agent in the conversation supports non-text input modalities.
+   */
+  private async initializeAttachmentSupport(): Promise<void> {
+    try {
+      // Ensure AIEngineBase is configured with modality data
+      await AIEngineBase.Instance.Config(false);
+
+      // Get the conversation manager agent (Sage)
+      this.conversationManagerAgent = await this.conversationAgentService.getConversationManagerAgent();
+
+      if (this.conversationManagerAgent?.ID) {
+        // Check if Sage supports attachments
+        this.enableAttachments = AIEngineBase.Instance.AgentSupportsAttachments(this.conversationManagerAgent.ID);
+        LogStatusEx({message: `Attachment support initialized: ${this.enableAttachments} (based on Sage modalities)`, verboseOnly: true});
+      } else {
+        // Default to false if we can't determine
+        this.enableAttachments = false;
+        LogStatusEx({message: 'Attachment support disabled: conversation manager agent not available', verboseOnly: true});
+      }
+    } catch (error) {
+      console.warn('Failed to initialize attachment support:', error);
+      this.enableAttachments = false;
+    }
+  }
+
+  /**
+   * Updates attachment support based on the current conversation context.
+   * Called when conversation changes to check if any agent in the conversation supports attachments.
+   */
+  private updateAttachmentSupport(): void {
+    // Start with Sage's support
+    let supportsAttachments = this.conversationManagerAgent?.ID
+      ? AIEngineBase.Instance.AgentSupportsAttachments(this.conversationManagerAgent.ID)
+      : false;
+
+    // Also check if any previous non-Sage agent in the conversation supports attachments
+    if (!supportsAttachments && this.messages.length > 0) {
+      const lastNonSageAgent = this.messages
+        .slice()
+        .reverse()
+        .find(msg =>
+          msg.Role === 'AI' &&
+          msg.AgentID &&
+          msg.AgentID !== this.conversationManagerAgent?.ID
+        );
+
+      if (lastNonSageAgent?.AgentID) {
+        supportsAttachments = AIEngineBase.Instance.AgentSupportsAttachments(lastNonSageAgent.AgentID);
+      }
+    }
+
+    this.enableAttachments = supportsAttachments;
   }
 
   ngAfterViewChecked() {
@@ -390,6 +485,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
 
     this.messages = messages;
+
+    // Update attachment support based on agents in this conversation
+    this.updateAttachmentSupport();
 
     // Initialize status tracking to detect message completion
     this.previousMessageStatuses.clear();
@@ -594,7 +692,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Database tasks are loaded separately by TasksDropdownComponent
   }
 
-  onMessageSent(message: ConversationDetailEntity): void {
+  async onMessageSent(message: ConversationDetailEntity): Promise<void> {
     // Clear pending message if it was sent - notify parent via output
     if (this.pendingMessage) {
       this.pendingMessageConsumed.emit();
@@ -624,10 +722,32 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       if (this.conversationId) {
         this.invalidateConversationCache(this.conversationId);
       }
+
+      // Load attachments for the new message (if any were saved with it)
+      // This ensures attachments are displayed immediately after sending
+      await this.loadAttachmentsForMessage(message.ID);
     }
 
     // Scroll to bottom when new message is sent
     this.scrollToBottom = true;
+  }
+
+  /**
+   * Loads attachments for a single message and adds them to the attachmentsByDetailId map.
+   * Called after a new message is sent to ensure attachments are displayed immediately.
+   */
+  private async loadAttachmentsForMessage(messageId: string): Promise<void> {
+    try {
+      const attachments = await this.attachmentService.loadAttachmentsForMessage(messageId, this.currentUser);
+      if (attachments.length > 0) {
+        this.attachmentsByDetailId.set(messageId, attachments);
+        // Create new map reference to trigger Angular change detection
+        this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+        LogStatusEx({message: `Loaded ${attachments.length} attachment(s) for message ${messageId}`, verboseOnly: true});
+      }
+    } catch (error) {
+      console.warn('Failed to load attachments for message:', error);
+    }
   }
 
   /**
@@ -1356,7 +1476,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     } else if (!this.conversation || this.isNewConversation) {
       // If no conversation or in new unsaved state, route through empty state handler
       // This will create the conversation and send the message
-      await this.onEmptyStateMessageSent(messageText);
+      await this.onEmptyStateMessageSent({ text: messageText, attachments: [] });
     } else {
       console.error('MessageInputComponent not available and not in a valid state to create conversation');
     }
@@ -1373,9 +1493,25 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Handle attachment click - opens the image viewer for images
    */
   onAttachmentClicked(attachment: MessageAttachment): void {
-    // For now, just log the click - TODO: implement image viewer modal
-    console.log('Attachment clicked:', attachment);
-    // The image viewer component can be opened here when ready
+    if (attachment.type === 'Image' && attachment.contentUrl) {
+      this.selectedImageUrl = attachment.contentUrl;
+      this.selectedImageAlt = attachment.fileName || 'Image attachment';
+      this.selectedImageFileName = attachment.fileName || 'image';
+      this.showImageViewer = true;
+    } else {
+      // For non-image attachments, could trigger download or other action
+      console.log('Non-image attachment clicked:', attachment);
+    }
+  }
+
+  /**
+   * Handle image viewer close
+   */
+  onImageViewerClosed(): void {
+    this.showImageViewer = false;
+    this.selectedImageUrl = '';
+    this.selectedImageAlt = '';
+    this.selectedImageFileName = '';
   }
 
   async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
@@ -1615,12 +1751,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Handle message sent from empty state component
    * Creates a new conversation and emits to parent to update selection
    */
-  async onEmptyStateMessageSent(messageText: string): Promise<void> {
-    if (!messageText || !messageText.trim()) {
+  async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
+    const { text, attachments } = event;
+    if (!text?.trim() && (!attachments || attachments.length === 0)) {
       return;
     }
 
-    LogStatusEx({message: '📨 Empty state message received', verboseOnly: true, additionalArgs: [messageText]});
+    LogStatusEx({message: '📨 Empty state message received', verboseOnly: true, additionalArgs: [text, `${attachments?.length || 0} attachments`]});
 
     try {
       this.isProcessing = true;
@@ -1644,8 +1781,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Parent will update its state and pass back the message via pendingMessage input
       this.conversationCreated.emit(newConversation);
 
-      // Also emit the pending message to be sent (parent will pass it back via input)
-      this.pendingMessageRequested.emit(messageText.trim());
+      // Also emit the pending message and attachments to be sent (parent will pass it back via input)
+      const pendingData = { text: text?.trim() || '', attachments: attachments || [] };
+      console.log('[ChatArea] Emitting pendingMessageRequested:', pendingData, 'text type:', typeof pendingData.text);
+      this.pendingMessageRequested.emit(pendingData);
 
     } catch (error) {
       console.error('❌ Error creating conversation from empty state:', error);

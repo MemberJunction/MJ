@@ -9,7 +9,6 @@ export * from './agent-spec';
 export * from './response-forms';
 export * from './ui-commands';
 export * from './conversation-utility';
-export * from './attachment-service';
 
 export * from './AIPromptExtended';
 export * from './AIPromptCategoryExtended';

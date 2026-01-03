@@ -106,11 +106,10 @@ export class GroqLLM extends BaseLLM {
                         text: block.content
                     });
                 } else if (block.type === 'image_url') {
-                    // Groq uses OpenAI-compatible format for images
                     groqContent.push({
                         type: 'image_url',
                         image_url: {
-                            url: block.content // Can be data URL or HTTP URL
+                            url: block.content
                         }
                     });
                 }

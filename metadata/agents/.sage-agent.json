@@ -6,11 +6,101 @@
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 0,
+      "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "System Only",
       "ExposeAsAction": true,
       "IconClass": "fa-brands fa-superpowers"
     },
     "relatedEntities": {
+      "MJ: AI Agent Modalities": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Input",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "04A52B58-A7B8-42B1-BD3C-C844EE4E58AF"
+          },
+          "sync": {
+            "lastModified": "2026-01-02T21:21:10.569Z",
+            "checksum": "9562d0790334b74d9ba63dadcb809c9bd0c51eb124e74f111fc70c4c4160ea16"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModalityID",
+              "expression": "@lookup:MJ: AI Modalities.Name=Text",
+              "resolved": "EA43F4CF-EC26-41D7-B2AC-CF928AF63E46"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Output",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "8FB9AEC0-985D-4F0E-A4F0-E015D84235F8"
+          },
+          "sync": {
+            "lastModified": "2026-01-02T21:21:10.580Z",
+            "checksum": "088a80dd45831f2b9ee854cd99940fd9c681c5a7b49d8f2f7721bddb455fcc13"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModalityID",
+              "expression": "@lookup:MJ: AI Modalities.Name=Text",
+              "resolved": "EA43F4CF-EC26-41D7-B2AC-CF928AF63E46"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "5D674A47-55B3-4A6F-9D3A-D009CB79589F"
+          },
+          "sync": {
+            "lastModified": "2026-01-02T21:21:10.592Z",
+            "checksum": "1ae24d0996d66621348eb3671cbab31cccbe0469a5a6701645beb6525802e68e"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModalityID",
+              "expression": "@lookup:MJ: AI Modalities.Name=Image",
+              "resolved": "AAD386E4-D6ED-4E6E-8960-B56AC1D2783B"
+            }
+          ]
+        }
+      ],
       "MJ: AI Agent Prompts": [
         {
           "fields": {
@@ -547,14 +637,82 @@
             }
           ]
         }
+      ],
+      "MJ: AI Agent Configurations": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Text",
+            "DisplayName": "Text",
+            "Description": "Text Only",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Text",
+            "IsDefault": true,
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DB6237FC-7926-4495-BA9A-8337CAA18D10"
+          },
+          "sync": {
+            "lastModified": "2026-01-02T20:31:54.846Z",
+            "checksum": "8aa8ae37bc5682d6d2666eb61286cd2b2dd00f8b530da952969b8a8937ae61e3"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.AIConfigurationID",
+              "expression": "@lookup:MJ: AI Configurations.Name=Sage Text",
+              "resolved": "C12390BB-D4F8-433F-B34D-736B24DFBBAA"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Multimodal",
+            "DisplayName": "Multimodal",
+            "Description": "Text + Images",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Multimodal",
+            "IsDefault": false,
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "29D99510-5B54-4D01-BB95-112D729A81DE"
+          },
+          "sync": {
+            "lastModified": "2026-01-02T20:31:54.931Z",
+            "checksum": "ecf58beba406f24f399133786f3d30eadb871c2f58e545e81f6ef2069758f368"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "3AB78346-897F-4238-AA6A-F10A131CC691"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.AIConfigurationID",
+              "expression": "@lookup:MJ: AI Configurations.Name=Sage Multimodal",
+              "resolved": "2C649582-D3A2-47EC-82BF-CEC89B7D8F15"
+            }
+          ]
+        }
       ]
     },
     "primaryKey": {
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.495Z",
-      "checksum": "33b300f5de5761137d0cecf7e866a7c9f539531b5ba2f65798748127dfd77ca0"
+      "lastModified": "2026-01-02T21:23:18.798Z",
+      "checksum": "087a4ef01d5d8c913e0457e80b8043c49947f9f3c5f553bb87080718766ef193"
     },
     "__mj_sync_notes": [
       {

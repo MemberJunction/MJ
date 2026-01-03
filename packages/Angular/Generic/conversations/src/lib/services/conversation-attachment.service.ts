@@ -11,6 +11,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { MessageAttachment } from '../components/message/message-item.component';
 import { PendingAttachment } from '../components/mention/mention-editor.component';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Service for managing conversation attachments.
@@ -20,9 +21,6 @@ import { PendingAttachment } from '../components/mention/mention-editor.componen
   providedIn: 'root'
 })
 export class ConversationAttachmentService {
-  private modalityCache: Map<string, AIModalityEntity> = new Map();
-  private modalityByNameCache: Map<string, AIModalityEntity> = new Map();
-
   constructor() {}
 
   /**
@@ -95,9 +93,6 @@ export class ConversationAttachmentService {
   ): Promise<ConversationDetailAttachmentEntity[]> {
     const savedAttachments: ConversationDetailAttachmentEntity[] = [];
     const md = new Metadata();
-
-    // Ensure modality cache is loaded
-    await this.ensureModalityCacheLoaded(contextUser);
 
     for (let i = 0; i < pendingAttachments.length; i++) {
       const pending = pendingAttachments[i];
@@ -206,13 +201,14 @@ export class ConversationAttachmentService {
    * Get the AttachmentType from a modality ID
    */
   private getAttachmentTypeFromModality(modalityId: string): AttachmentType {
-    const modality = this.modalityCache.get(modalityId);
-    if (!modality) return 'Document';
+    const modality = AIEngineBase.Instance.Modalities.find(m => m.ID === modalityId)
 
-    const name = modality.Name?.toLowerCase() || '';
+    const name = modality?.Name?.toLowerCase() || '';
+
     if (name === 'image') return 'Image';
     if (name === 'video') return 'Video';
     if (name === 'audio') return 'Audio';
+
     return 'Document';
   }
 
@@ -220,44 +216,30 @@ export class ConversationAttachmentService {
    * Get the modality ID for an attachment type
    */
   private getModalityIdForType(type: AttachmentType): string {
-    const modalityName = type.toLowerCase();
-    const modality = this.modalityByNameCache.get(modalityName);
+    // Map AttachmentType to modality name
+    // AttachmentType is 'Image' | 'Video' | 'Audio' | 'Document'
+    // Modality names are 'Image', 'Audio', 'Video', 'File'
+    let modalityName = type.toLowerCase().trim();
+    if (modalityName === 'document') {
+      modalityName = 'file';
+    }
 
+    const modality = AIEngineBase.Instance.Modalities.find(m => m.Name?.trim().toLowerCase() === modalityName);
     if (modality) {
       return modality.ID;
     }
 
     // Fallback to 'file' modality if specific type not found
-    const fileModality = this.modalityByNameCache.get('file');
-    return fileModality?.ID || '';
-  }
-
-  /**
-   * Ensure the modality cache is loaded
-   */
-  private async ensureModalityCacheLoaded(contextUser?: UserInfo): Promise<void> {
-    if (this.modalityCache.size > 0) {
-      return; // Already loaded
+    // recursive call, so long as the current modality isn't file as that
+    // would cause infinite recursion/stack overflow
+    if (modalityName !== 'file') {
+      return this.getModalityIdForType('Document');
     }
-
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<AIModalityEntity>({
-        EntityName: 'MJ: AI Modalities',
-        ResultType: 'entity_object'
-      }, contextUser);
-
-      if (result.Success && result.Results) {
-        for (const modality of result.Results) {
-          this.modalityCache.set(modality.ID, modality);
-          this.modalityByNameCache.set(modality.Name.toLowerCase(), modality);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading modalities:', error);
+    else {
+      return '';
     }
   }
-
+ 
   /**
    * Extract base64 data from a data URL
    */

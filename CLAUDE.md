@@ -838,6 +838,37 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Export shared components (like dialogs) for reuse
 - Maintain clear separation between container and presentational components
 
+### Input Properties - Use Getter/Setters
+- **ALWAYS** use getter/setter pattern for `@Input()` properties that need reactive behavior
+- **NEVER** rely solely on `ngOnChanges` - it's less precise and harder to debug
+- Getter/setters provide exact control over when values change and enable immediate reactions
+- Example:
+  ```typescript
+  // ✅ GOOD - Precise control with getter/setter
+  private _myInput: string | null = null;
+
+  @Input()
+  set myInput(value: string | null) {
+    const previousValue = this._myInput;
+    this._myInput = value;
+    if (value && value !== previousValue) {
+      this.onMyInputChanged(value);
+    }
+  }
+  get myInput(): string | null {
+    return this._myInput;
+  }
+
+  // ❌ BAD - Direct property with ngOnChanges
+  @Input() myInput: string | null = null;
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['myInput']) {
+      // Less precise, timing issues possible
+    }
+  }
+  ```
+
 ### Loading Indicators
 - **ALWAYS** use the `<mj-loading>` component from `@memberjunction/ng-shared-generic` for all loading states
 - **NEVER** create custom spinners or loading indicators - use the standard MJ loading component

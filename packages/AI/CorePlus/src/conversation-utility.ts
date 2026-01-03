@@ -167,6 +167,11 @@ export class ConversationUtility {
         case 'form':
           replacement = this.formToAgentContext(token.content as FormResponseContent);
           break;
+        case 'attachment':
+          // Attachment tokens are stripped from text - the actual attachment data
+          // is added as separate content blocks by BuildChatMessageContent
+          replacement = '';
+          break;
         default:
           // Unknown mode, leave original text
           replacement = token.originalText;
