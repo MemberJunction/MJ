@@ -344,6 +344,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    * Handle attachments changed from the input box
    */
   onAttachmentsChanged(attachments: PendingAttachment[]): void {
+    console.log('[MessageInput] onAttachmentsChanged:', attachments?.length || 0, 'items, emptyStateMode:', this.emptyStateMode);
     this.pendingAttachments = attachments;
   }
 
@@ -362,6 +363,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const hasText = text && text.trim().length > 0;
     const hasAttachments = this.pendingAttachments.length > 0;
 
+    console.log('[MessageInput] onTextSubmitted - text:', text?.substring(0, 50), 'hasText:', hasText, 'hasAttachments:', hasAttachments, 'pendingAttachments:', this.pendingAttachments.length, 'emptyStateMode:', this.emptyStateMode);
+
     if (!hasText && !hasAttachments) {
       console.log('[MessageInput] Empty text and no attachments, aborting');
       return;
@@ -370,6 +373,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     // In empty state mode, just emit the data and let parent handle conversation creation
     if (this.emptyStateMode) {
       const attachmentsToEmit = [...this.pendingAttachments];
+      console.log('[MessageInput] emptyStateMode: emitting with', attachmentsToEmit.length, 'attachments');
       this.pendingAttachments = [];
       this.messageText = '';
       this.emptyStateSubmit.emit({ text: text?.trim() || '', attachments: attachmentsToEmit });

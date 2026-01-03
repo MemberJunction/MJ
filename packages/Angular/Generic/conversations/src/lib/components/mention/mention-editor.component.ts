@@ -1060,6 +1060,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     // Add to pending attachments
     this.pendingAttachments.push(attachment);
+    console.log('[MentionEditor] Attachment added, emitting attachmentsChanged:', this.pendingAttachments.length, 'items');
     this.attachmentsChanged.emit([...this.pendingAttachments]);
     this.cdr.detectChanges();
   }

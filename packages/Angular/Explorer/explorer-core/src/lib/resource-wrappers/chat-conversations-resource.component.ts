@@ -4,7 +4,7 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService } from '@memberjunction/ng-conversations';
+import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, PendingAttachment } from '@memberjunction/ng-conversations';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 
@@ -70,6 +70,7 @@ export function LoadChatConversationsResource() {
           [threadId]="selectedThreadId"
           [isNewConversation]="isNewUnsavedConversation"
           [pendingMessage]="pendingMessageToSend"
+          [pendingAttachments]="pendingAttachmentsToSend"
           [pendingArtifactId]="pendingArtifactId"
           [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
           (conversationRenamed)="onConversationRenamed($event)"
@@ -198,6 +199,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   public pendingArtifactId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
   public pendingMessageToSend: string | null = null;
+  public pendingAttachmentsToSend: PendingAttachment[] | null = null;
 
   // User Settings persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
@@ -759,11 +761,19 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Handle conversation created from chat area (after first message in new conversation)
+   * Handle conversation created from chat area (after first message in new conversation).
+   * The event now includes pending message and attachments for atomic state update.
    */
-  async onConversationCreated(conversation: ConversationEntity): Promise<void> {
-    this.selectedConversationId = conversation.ID;
-    this.selectedConversation = conversation;
+  async onConversationCreated(event: {
+    conversation: ConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+  }): Promise<void> {
+    // Set ALL state atomically before Angular change detection runs
+    this.pendingMessageToSend = event.pendingMessage || null;
+    this.pendingAttachmentsToSend = event.pendingAttachments || null;
+    this.selectedConversationId = event.conversation.ID;
+    this.selectedConversation = event.conversation;
     this.isNewUnsavedConversation = false;
     this.updateUrl();
   }
@@ -810,14 +820,16 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onPendingMessageConsumed(): void {
     this.pendingMessageToSend = null;
+    this.pendingAttachmentsToSend = null;
   }
 
   /**
-   * Handle pending message requested event (from empty state creating conversation)
+   * Handle pending message requested event (from empty state creating conversation).
+   * @deprecated Use onConversationCreated with pendingMessage instead - this is kept for backwards compatibility.
    */
-  onPendingMessageRequested(event: {text: string; attachments: unknown[]}): void {
+  onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
     this.pendingMessageToSend = event.text;
-    // Note: attachments are handled internally by the chat-area component
+    this.pendingAttachmentsToSend = event.attachments || null;
   }
 
   /**

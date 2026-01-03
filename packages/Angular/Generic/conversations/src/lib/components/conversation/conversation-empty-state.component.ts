@@ -141,6 +141,7 @@ export class ConversationEmptyStateComponent {
   }
 
   onEmptyStateSubmit(event: {text: string; attachments: PendingAttachment[]}): void {
+    console.log('[EmptyState] onEmptyStateSubmit received:', event.text?.substring(0, 50), 'attachments:', event.attachments?.length || 0);
     this.messageSent.emit(event);
   }
 

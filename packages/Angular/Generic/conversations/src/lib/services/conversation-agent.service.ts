@@ -346,16 +346,33 @@ export class ConversationAgentService {
     messageIds: string[],
     attachmentsByDetailId: Map<string, AttachmentData[]>
   ): Promise<boolean> {
+    console.log('[AgentService] loadAttachmentsForMessages - querying for messageIds:', messageIds);
     try {
+      const filter = `ConversationDetailID IN ('${messageIds.join("','")}')`;
+      console.log('[AgentService] loadAttachmentsForMessages - filter:', filter);
+
       const attachmentResult = await rv.RunView<ConversationDetailAttachmentEntity>({
         EntityName: 'MJ: Conversation Detail Attachments',
-        ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}')`,
+        ExtraFilter: filter,
         OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
         ResultType: 'entity_object'
       });
 
+      console.log('[AgentService] loadAttachmentsForMessages - query result:', {
+        success: attachmentResult.Success,
+        count: attachmentResult.Results?.length || 0,
+        error: attachmentResult.ErrorMessage
+      });
+
       if (attachmentResult.Success && attachmentResult.Results && attachmentResult.Results.length > 0) {
         for (const att of attachmentResult.Results) {
+          console.log('[AgentService] loadAttachmentsForMessages - processing attachment:', {
+            id: att.ID,
+            detailId: att.ConversationDetailID,
+            mimeType: att.MimeType,
+            hasInlineData: !!att.InlineData,
+            hasFileID: !!att.FileID
+          });
           // Convert to AttachmentData format
           const attachmentData = this.convertToAttachmentData(att);
           if (attachmentData) {

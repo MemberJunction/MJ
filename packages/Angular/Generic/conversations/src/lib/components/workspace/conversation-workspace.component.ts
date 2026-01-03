@@ -31,6 +31,10 @@ import { PendingAttachment } from '../mention/mention-editor.component';
  * Top-level workspace component for conversations
  * Provides 3-column Slack-style layout: Navigation | Sidebar | Chat Area | Artifact Panel
  * Supports context-based navigation (library or task views)
+ *
+ * @deprecated Use ChatConversationsResource from @memberjunction/ng-explorer-core instead.
+ * This component is maintained for backwards compatibility but the resource-wrapper pattern
+ * is the preferred approach for MJExplorer integration.
  */
 @Component({
   selector: 'mj-conversation-workspace',
@@ -258,19 +262,46 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   /**
    * Handler for new conversation creation from chat area
+   * Now includes pending message and attachments to ensure atomic state update
    */
-  onConversationCreated(conversation: ConversationEntity): void {
-    this.selectedConversationId = conversation.ID;
-    this.selectedConversation = conversation;
-    this.isNewUnsavedConversation = false;
-    // The conversation is already added to conversationData by the chat area
+  onConversationCreated(event: {
+    conversation: ConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+  }): void {
+    console.log('[Workspace] *** onConversationCreated ENTERED ***', event);
+    try {
+      console.log('[Workspace] onConversationCreated called:', {
+        conversationId: event?.conversation?.ID,
+        pendingMessage: event?.pendingMessage?.substring(0, 50),
+        pendingAttachments: event?.pendingAttachments?.length || 0
+      });
+
+      // Set ALL state atomically before Angular change detection runs
+      // This ensures the new message-input component receives the pending data
+      this.pendingMessageToSend = event.pendingMessage || null;
+      this.pendingAttachmentsToSend = event.pendingAttachments || null;
+      this.selectedConversationId = event.conversation.ID;
+      this.selectedConversation = event.conversation;
+      this.isNewUnsavedConversation = false;
+      // The conversation is already added to conversationData by the chat area
+
+      console.log('[Workspace] State set atomically:', {
+        selectedConversationId: this.selectedConversationId,
+        pendingMessageToSend: this.pendingMessageToSend?.substring(0, 50),
+        pendingAttachmentsToSend: this.pendingAttachmentsToSend?.length || 0
+      });
+    } catch (error) {
+      console.error('[Workspace] onConversationCreated ERROR:', error);
+    }
   }
 
   /**
    * Handler for pending message requested from chat area (empty state)
+   * @deprecated Use onConversationCreated with pendingMessage instead
    */
   onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
-    console.log('[Workspace] onPendingMessageRequested called:', {
+    console.log('[Workspace] onPendingMessageRequested called (deprecated):', {
       event,
       eventType: typeof event,
       text: event?.text,

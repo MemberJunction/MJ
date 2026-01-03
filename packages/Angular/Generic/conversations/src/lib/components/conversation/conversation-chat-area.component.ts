@@ -72,7 +72,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     return this._pendingMessage;
   }
 
-  @Input() pendingAttachments: PendingAttachment[] | null = null; // Attachments from empty state
+  // Using getter/setter to ensure reactivity and debug
+  private _pendingAttachments: PendingAttachment[] | null = null;
+  @Input()
+  set pendingAttachments(value: PendingAttachment[] | null) {
+    console.log('[ChatArea] pendingAttachments setter called:', value?.length || 0, 'items');
+    this._pendingAttachments = value;
+  }
+  get pendingAttachments(): PendingAttachment[] | null {
+    return this._pendingAttachments;
+  }
+
   @Input() pendingArtifactId: string | null = null;
   @Input() pendingArtifactVersionNumber: number | null = null;
 
@@ -82,11 +92,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
 
   // STATE CHANGE OUTPUTS - notify parent of state changes
-  @Output() conversationCreated = new EventEmitter<ConversationEntity>();
+  // conversationCreated now includes pendingMessage and pendingAttachments to ensure atomic state update
+  @Output() conversationCreated = new EventEmitter<{
+    conversation: ConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+  }>();
   @Output() threadOpened = new EventEmitter<string>();
   @Output() threadClosed = new EventEmitter<void>();
   @Output() pendingArtifactConsumed = new EventEmitter<void>();
   @Output() pendingMessageConsumed = new EventEmitter<void>();
+  // pendingMessageRequested is deprecated - use conversationCreated with pendingMessage instead
   @Output() pendingMessageRequested = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
@@ -1753,6 +1769,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
     const { text, attachments } = event;
+    console.log('[ChatArea] onEmptyStateMessageSent received event:', 'text:', text?.substring(0, 50), 'attachments:', attachments?.length || 0);
     if (!text?.trim() && (!attachments || attachments.length === 0)) {
       return;
     }
@@ -1777,14 +1794,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       LogStatusEx({message: '✅ Created new conversation', verboseOnly: true, additionalArgs: [newConversation.ID]});
 
-      // Emit to parent with the new conversation AND the pending message
-      // Parent will update its state and pass back the message via pendingMessage input
-      this.conversationCreated.emit(newConversation);
-
-      // Also emit the pending message and attachments to be sent (parent will pass it back via input)
-      const pendingData = { text: text?.trim() || '', attachments: attachments || [] };
-      console.log('[ChatArea] Emitting pendingMessageRequested:', pendingData, 'text type:', typeof pendingData.text);
-      this.pendingMessageRequested.emit(pendingData);
+      // Emit to parent with the new conversation AND the pending message/attachments in a single event
+      // This ensures atomic state update - workspace sets all state before Angular change detection
+      // creates the new message-input component
+      const pendingMessage = text?.trim() || '';
+      const pendingAttachments = attachments || [];
+      console.log('[ChatArea] Emitting conversationCreated with pending data:', {
+        conversationId: newConversation.ID,
+        pendingMessage: pendingMessage.substring(0, 50),
+        pendingAttachments: pendingAttachments.length
+      });
+      this.conversationCreated.emit({
+        conversation: newConversation,
+        pendingMessage,
+        pendingAttachments
+      });
 
     } catch (error) {
       console.error('❌ Error creating conversation from empty state:', error);
