@@ -598,7 +598,34 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       return;
     }
 
-    // Priority 3: No context - use Sage
+    // Priority 3: Check if Sage was explicitly @mentioned with a config preset
+    // If so, treat it like agent continuity so the config preset is preserved
+    if (this.converationManagerAgent?.ID) {
+      const sageConfigPreset = this.agentService.findConfigurationPresetFromHistory(
+        this.converationManagerAgent.ID,
+        this.conversationHistory
+      );
+      if (sageConfigPreset) {
+        // User explicitly @mentioned Sage with a config - use the shared execution helper directly
+        // Pass the already-found config preset to avoid redundant history search
+        await this.executeRouteWithNaming(
+          () => this.executeAgentContinuation(
+            messageDetail,
+            this.converationManagerAgent!.ID,
+            this.converationManagerAgent!.Name || 'Sage',
+            this.conversationId,
+            null, // Sage doesn't use payload continuity
+            null, // Sage doesn't use artifact info
+            sageConfigPreset // Pass the already-found config preset
+          ),
+          messageDetail.Message,
+          isFirstMessage
+        );
+        return;
+      }
+    }
+
+    // Priority 4: No context - use Sage with default config
     await this.handleNoAgentContext(messageDetail, mentionResult, isFirstMessage);
   }
 
@@ -1505,6 +1532,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         ? await this.loadPreviousPayloadForAgent(agent.ID)
         : { payload: null, artifactInfo: null };
 
+      // Find configuration preset from previous @mention in conversation history
+      const configurationPresetId = agent?.ID
+        ? this.agentService.findConfigurationPresetFromHistory(agent.ID, this.conversationHistory)
+        : undefined;
+
       // Invoke the sub-agent with progress callback
       const subResult = await this.agentService.invokeSubAgent(
         agentName,
@@ -1516,7 +1548,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         previousPayload, // Pass previous payload for continuity
         this.createProgressCallback(agentResponseMessage, agentName),
         artifactInfo?.artifactId,
-        artifactInfo?.versionId
+        artifactInfo?.versionId,
+        configurationPresetId // Pass configuration from previous @mention for continuity
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -1556,7 +1589,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         // Update the existing agentResponseMessage to show retry status
         await this.updateConversationDetail(agentResponseMessage, "Retrying...", agentResponseMessage.Status);
 
-        // Retry the sub-agent (reuse previously loaded payload from first attempt)
+        // Retry the sub-agent (reuse previously loaded payload and config from first attempt)
         const retryResult = await this.agentService.invokeSubAgent(
           agentName,
           conversationId,
@@ -1567,7 +1600,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           previousPayload, // Pass same payload as first attempt
           this.createProgressCallback(agentResponseMessage, `${agentName} (retry)`),
           artifactInfo?.artifactId,
-          artifactInfo?.versionId
+          artifactInfo?.versionId,
+          configurationPresetId // Pass same config as first attempt
         );
 
         if (retryResult && retryResult.success) {
@@ -1979,18 +2013,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       .reverse()
       .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
 
-    const lastAIMessage = agentMessages.length > 0 ? agentMessages[0] : null;
-
-    // Extract configuration from previous agent run (for configuration continuity)
-    if (lastAIMessage && this.agentRunsByDetailId) {
-      const previousAgentRun = this.agentRunsByDetailId.get(lastAIMessage.ID);
-      if (previousAgentRun?.ConfigurationID) {
-        previousConfigurationId = previousAgentRun.ConfigurationID;
-        console.log(`🎯 Using configuration from previous agent run: ${previousConfigurationId}`);
-      } else {
-        console.log('📝 No configuration found on previous agent run, will use agent default');
-      }
-    }
+    // Extract configuration preset from the User message that @mentioned this agent
+    // Uses the shared helper method in the agent service
+    previousConfigurationId = this.agentService.findConfigurationPresetFromHistory(agentId, this.conversationHistory);
 
     // Fall back to searching through all agent messages for an artifact
     // This ensures payload continuity even after clarifying exchanges without artifacts
@@ -2031,6 +2056,39 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       }
     }
 
+    // Execute the agent with the gathered context
+    await this.executeAgentContinuation(
+      userMessage,
+      agentId,
+      agentName,
+      conversationId,
+      previousPayload,
+      previousArtifactInfo,
+      previousConfigurationId
+    );
+  }
+
+  /**
+   * Executes agent continuation with all context already gathered.
+   * This is the shared execution logic used by both continueWithAgent and direct Sage config path.
+   *
+   * @param userMessage The user's message entity
+   * @param agentId The agent ID to invoke
+   * @param agentName The agent's display name
+   * @param conversationId The conversation ID
+   * @param previousPayload Optional payload from previous artifact
+   * @param previousArtifactInfo Optional artifact info (id, versionId, versionNumber)
+   * @param configurationId Optional configuration preset ID to use
+   */
+  private async executeAgentContinuation(
+    userMessage: ConversationDetailEntity,
+    agentId: string,
+    agentName: string,
+    conversationId: string,
+    previousPayload: Record<string, unknown> | null,
+    previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null,
+    configurationId?: string
+  ): Promise<void> {
     // Add agent to active tasks
     const taskId = this.activeTasks.add({
       agentName: agentName,
@@ -2078,7 +2136,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         this.createProgressCallback(agentResponseMessage, agentName),
         previousArtifactInfo?.artifactId,
         previousArtifactInfo?.versionId,
-        previousConfigurationId // Pass configuration from previous agent run for continuity
+        configurationId // Pass configuration for continuity
       );
 
       // Remove from active tasks

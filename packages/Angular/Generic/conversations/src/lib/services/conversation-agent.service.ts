@@ -3,13 +3,14 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData, AttachmentType } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity, ConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
+import { MentionParserService } from './mention-parser.service';
 
 /**
  * Context for artifact lookups - provides pre-loaded data from conversation
@@ -48,7 +49,7 @@ export class ConversationAgentService {
    */
   public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
 
-  constructor() {
+  constructor(private mentionParser: MentionParserService) {
     this.initializeAIClient();
   }
 
@@ -106,9 +107,12 @@ export class ConversationAgentService {
    * Process a message through the ambient Sage Agent.
    * This should be called for every message sent in a conversation.
    *
+   * Uses the optimized RunAIAgentFromConversationDetail mutation which loads
+   * conversation history (including attachments) server-side for better performance.
+   *
    * @param conversationId The conversation ID
    * @param message The message that was just sent
-   * @param conversationHistory Recent messages in the conversation for context
+   * @param conversationHistory Recent messages in the conversation for context (kept for backwards compatibility but not used)
    * @param conversationDetailId The ID of the conversation detail record to link to the agent run
    * @param onProgress Optional callback for receiving progress updates during execution
    * @returns The agent's response, or null if the agent chooses not to respond
@@ -142,10 +146,6 @@ export class ConversationAgentService {
       // Indicate agent is processing
       this._isProcessing$.next(true);
 
-      // Build conversation messages for the agent
-      // Note: conversationHistory already includes the current message
-      const conversationMessages = await this.buildAgentMessages(conversationHistory);
-
       // Get current user for permission filtering
       const currentUser = Metadata.Provider.CurrentUser;
       if (!currentUser) {
@@ -154,9 +154,9 @@ export class ConversationAgentService {
 
       // Filter agents by status and hierarchy first
       const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => a.ID !== agent.ID && 
-             !a.ParentID && 
-             a.Status === 'Active' && 
+        a => a.ID !== agent.ID &&
+             !a.ParentID &&
+             a.Status === 'Active' &&
              a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
       );
 
@@ -167,27 +167,33 @@ export class ConversationAgentService {
 
       console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
 
-      // Prepare parameters using the correct ExecuteAgentParams type
-      const params: ExecuteAgentParams = {
-        agent: agent,
-        conversationMessages: conversationMessages,
+      // Use optimized mutation that loads conversation history server-side
+      // This avoids sending large attachment data from client to server
+      const result = await this._aiClient.RunAIAgentFromConversationDetail({
         conversationDetailId: conversationDetailId,
+        agentId: agent.ID,
+        maxHistoryMessages: 20,
         data: {
-          ALL_AVAILABLE_AGENTS: availAgents.map(a => {
-            return {
-              ID: a.ID,
-              Name: a.Name,
-              Description: a.Description
-            }
-          }),
+          ALL_AVAILABLE_AGENTS: availAgents.map(a => ({
+            ID: a.ID,
+            Name: a.Name,
+            Description: a.Description
+          })),
           conversationId: conversationId,
           latestMessageId: message.ID
         },
-        onProgress: onProgress
-      };
-
-      // Run the agent
-      const result = await this._aiClient.RunAIAgent(params);
+        createArtifacts: true,
+        createNotification: true,
+        // Adapt progress callback format: GraphQL uses currentStep, AgentExecutionProgressCallback uses step
+        onProgress: onProgress ? (progress) => {
+          onProgress({
+            step: progress.currentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
+            percentage: progress.percentage,
+            message: progress.message,
+            metadata: progress.metadata
+          });
+        } : undefined
+      });
 
       return result;
     } catch (error) {
@@ -202,9 +208,56 @@ export class ConversationAgentService {
   }
 
   /**
-   * Build the message array for the agent from conversation history
-   * Note: conversationHistory already includes the current message, so we don't add it separately
-   * IMPORTANT: This method loads artifacts and attachments for each message
+   * Find the configuration preset ID from a previous @mention of an agent in conversation history.
+   * Searches backwards through User messages to find the most recent @mention of the specified agent
+   * that includes a configId.
+   *
+   * @param agentId The agent ID to search for
+   * @param conversationHistory The conversation history to search through
+   * @returns The configuration preset ID if found, undefined otherwise
+   */
+  public findConfigurationPresetFromHistory(
+    agentId: string,
+    conversationHistory: ConversationDetailEntity[]
+  ): string | undefined {
+    // Search backwards through history for User messages that @mention this agent with a configId
+    const userMentionWithConfig = conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => {
+        if (msg.Role !== 'User' || !msg.Message) return false;
+        // Parse the message to check for an @mention of this agent with a configId
+        const mentionResult = this.mentionParser.parseMentions(
+          msg.Message,
+          AIEngineBase.Instance.Agents,
+          []
+        );
+        return mentionResult.agentMention?.id === agentId && mentionResult.agentMention?.configurationId;
+      });
+
+    if (userMentionWithConfig) {
+      const mentionResult = this.mentionParser.parseMentions(
+        userMentionWithConfig.Message,
+        AIEngineBase.Instance.Agents,
+        []
+      );
+      if (mentionResult.agentMention?.configurationId) {
+        console.log(`🎯 Found configuration preset from @mention: ${mentionResult.agentMention.configurationId}`);
+        return mentionResult.agentMention.configurationId;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Build the message array for the agent from conversation history.
+   * Note: conversationHistory already includes the current message, so we don't add it separately.
+   * IMPORTANT: This method loads artifacts and attachments for each message.
+   *
+   * @deprecated This method is no longer used by processMessage() which now uses the optimized
+   * RunAIAgentFromConversationDetail mutation that loads history server-side. Kept for backwards
+   * compatibility with other callers that may need client-side message building.
    */
   private async buildAgentMessages(
     history: ConversationDetailEntity[]
