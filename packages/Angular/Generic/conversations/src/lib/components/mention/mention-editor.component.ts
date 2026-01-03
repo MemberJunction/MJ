@@ -69,7 +69,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   // Attachment settings
   @Input() enableAttachments: boolean = true;
   @Input() maxAttachments: number = 10;
-  @Input() maxAttachmentSizeBytes: number = 5 * 1024 * 1024; // 5MB default
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB default
   @Input() acceptedFileTypes: string = 'image/*'; // MIME types to accept
 
   @Output() valueChange = new EventEmitter<string>();

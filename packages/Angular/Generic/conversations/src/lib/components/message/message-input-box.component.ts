@@ -37,7 +37,7 @@ export class MessageInputBoxComponent {
   // Attachment settings
   @Input() enableAttachments: boolean = true;
   @Input() maxAttachments: number = 10;
-  @Input() maxAttachmentSizeBytes: number = 5 * 1024 * 1024; // 5MB
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB
   @Input() acceptedFileTypes: string = 'image/*';
 
   @Output() textSubmitted = new EventEmitter<string>();

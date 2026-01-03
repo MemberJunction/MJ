@@ -90,6 +90,9 @@ export function LoadChatConversationsResource() {
         <mj-loading text="Initializing..." size="large"></mj-loading>
       </div>
     </ng-template>
+
+    <!-- Toast notifications container -->
+    <mj-toast></mj-toast>
   `,
   styles: [`
     :host {
