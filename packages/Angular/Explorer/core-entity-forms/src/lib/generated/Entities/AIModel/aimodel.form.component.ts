@@ -37,7 +37,8 @@ export class AIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptModels', sectionName: 'MJ: AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
-            { sectionKey: 'queries', sectionName: 'Queries', isExpanded: false }
+            { sectionKey: 'queries', sectionName: 'Queries', isExpanded: false },
+            { sectionKey: 'aIModels', sectionName: 'AI Models', isExpanded: false }
         ]);
     }
 }

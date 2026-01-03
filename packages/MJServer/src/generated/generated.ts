@@ -5070,6 +5070,13 @@ export class MJAIModel_ {
     @Field({nullable: true, description: `This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`}) 
     ModelSelectionInsights?: string;
         
+    @Field(() => Boolean, {description: `When TRUE (default), the model inherits default input/output modalities from its AIModelType AND can extend with additional modalities via AIModelModality records. When FALSE, only modalities explicitly defined in AIModelModality are used.`}) 
+    InheritTypeModalities: boolean;
+        
+    @Field({nullable: true, description: `Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.`}) 
+    @MaxLength(16)
+    PriorVersionID?: string;
+        
     @Field() 
     @MaxLength(100)
     AIModelType: string;
@@ -5157,6 +5164,9 @@ export class MJAIModel_ {
     @Field(() => [MJQuery_])
     Queries_EmbeddingModelIDArray: MJQuery_[]; // Link to Queries
     
+    @Field(() => [MJAIModel_])
+    AIModels_PriorVersionIDArray: MJAIModel_[]; // Link to AIModels
+    
 }
 
 //****************************************************************************
@@ -5190,6 +5200,12 @@ export class CreateMJAIModelInput {
 
     @Field({ nullable: true })
     ModelSelectionInsights: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    InheritTypeModalities?: boolean;
+
+    @Field({ nullable: true })
+    PriorVersionID: string | null;
 }
     
 
@@ -5224,6 +5240,12 @@ export class UpdateMJAIModelInput {
 
     @Field({ nullable: true })
     ModelSelectionInsights?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    InheritTypeModalities?: boolean;
+
+    @Field({ nullable: true })
+    PriorVersionID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5504,6 +5526,17 @@ export class MJAIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueries] WHERE [EmbeddingModelID]='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Queries', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('Queries', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIModel_])
+    async AIModels_PriorVersionIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModels] WHERE [PriorVersionID]='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('AI Models', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -43078,7 +43111,7 @@ export class MJTestRun_ {
     @MaxLength(16)
     TargetLogID?: string;
         
-    @Field({description: `Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)`}) 
+    @Field({description: `Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation), Timeout (execution exceeded time limit and was cancelled)`}) 
     @MaxLength(40)
     Status: string;
         
@@ -43130,6 +43163,9 @@ export class MJTestRun_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true, description: `Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.`}) 
+    Log?: string;
         
     @Field() 
     @MaxLength(510)
@@ -43227,6 +43263,9 @@ export class CreateMJTestRunInput {
 
     @Field({ nullable: true })
     ResultDetails: string | null;
+
+    @Field({ nullable: true })
+    Log: string | null;
 }
     
 
@@ -43297,6 +43336,9 @@ export class UpdateMJTestRunInput {
 
     @Field({ nullable: true })
     ResultDetails?: string | null;
+
+    @Field({ nullable: true })
+    Log?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43996,6 +44038,9 @@ export class MJTestSuite_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.`}) 
+    MaxExecutionTimeMS?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -44040,6 +44085,9 @@ export class CreateMJTestSuiteInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionTimeMS: number | null;
 }
     
 
@@ -44068,6 +44116,9 @@ export class UpdateMJTestSuiteInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionTimeMS?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -44444,6 +44495,9 @@ export class MJTest_ {
     @Field(() => Int, {nullable: true, description: `Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.`}) 
     RepeatCount?: number;
         
+    @Field(() => Int, {nullable: true, description: `Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.`}) 
+    MaxExecutionTimeMS?: number;
+        
     @Field() 
     @MaxLength(200)
     Type: string;
@@ -44499,6 +44553,9 @@ export class CreateMJTestInput {
 
     @Field(() => Int, { nullable: true })
     RepeatCount: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionTimeMS: number | null;
 }
     
 
@@ -44545,6 +44602,9 @@ export class UpdateMJTestInput {
 
     @Field(() => Int, { nullable: true })
     RepeatCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionTimeMS?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -1710,7 +1710,7 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AIModelTypeID: z.string().describe(`
         * * Field Name: AIModelTypeID
-        * * Display Name: AI Model Type ID
+        * * Display Name: AI Model Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)`),
     PowerRank: z.number().nullable().describe(`
@@ -1721,7 +1721,7 @@ export const AIModelSchema = z.object({
         * * Description: Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Controls whether this AI model is available for use in the system.`),
@@ -1752,9 +1752,21 @@ export const AIModelSchema = z.object({
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
         * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
+    InheritTypeModalities: z.boolean().describe(`
+        * * Field Name: InheritTypeModalities
+        * * Display Name: Inherit Type Modalities
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When TRUE (default), the model inherits default input/output modalities from its AIModelType AND can extend with additional modalities via AIModelModality records. When FALSE, only modalities explicitly defined in AIModelModality are used.`),
+    PriorVersionID: z.string().nullable().describe(`
+        * * Field Name: PriorVersionID
+        * * Display Name: Prior Version
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        * * Description: Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
-        * * Display Name: AIModel Type
+        * * Display Name: AI Model Type
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -1770,7 +1782,7 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     APIName: z.string().nullable().describe(`
         * * Field Name: APIName
-        * * Display Name: APIName
+        * * Display Name: API Name
         * * SQL Data Type: nvarchar(100)`),
     InputTokenLimit: z.number().nullable().describe(`
         * * Field Name: InputTokenLimit
@@ -14484,7 +14496,7 @@ export const TestRunSchema = z.object({
         * * Description: Foreign Key - Optional parent suite run if this test was part of a suite execution. NULL for standalone test runs.`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User ID
+        * * Display Name: Run By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: Foreign Key - The user who triggered the test run (could be system user for automated runs)`),
@@ -14500,10 +14512,10 @@ export const TestRunSchema = z.object({
         * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.`),
     TargetLogID: z.string().nullable().describe(`
         * * Field Name: TargetLogID
-        * * Display Name: Target Log ID
+        * * Display Name: Target Log
         * * SQL Data Type: uniqueidentifier
         * * Description: ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.`),
-    Status: z.union([z.literal('Error'), z.literal('Failed'), z.literal('Passed'), z.literal('Pending'), z.literal('Running'), z.literal('Skipped')]).describe(`
+    Status: z.union([z.literal('Error'), z.literal('Failed'), z.literal('Passed'), z.literal('Pending'), z.literal('Running'), z.literal('Skipped'), z.literal('Timeout')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -14516,7 +14528,8 @@ export const TestRunSchema = z.object({
     *   * Pending
     *   * Running
     *   * Skipped
-        * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)`),
+    *   * Timeout
+        * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation), Timeout (execution exceeded time limit and was cancelled)`),
     StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
@@ -14529,7 +14542,7 @@ export const TestRunSchema = z.object({
         * * Description: Timestamp when the test run completed`),
     DurationSeconds: z.number().nullable().describe(`
         * * Field Name: DurationSeconds
-        * * Display Name: Duration (seconds)
+        * * Display Name: Duration Seconds
         * * SQL Data Type: decimal(10, 3)
         * * Description: Execution time in seconds for this test`),
     InputData: z.string().nullable().describe(`
@@ -14592,6 +14605,11 @@ export const TestRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Log: z.string().nullable().describe(`
+        * * Field Name: Log
+        * * Display Name: Log
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.`),
     Test: z.string().describe(`
         * * Field Name: Test
         * * Display Name: Test
@@ -14820,7 +14838,7 @@ export const TestSuiteSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
         * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.`),
@@ -14865,13 +14883,18 @@ export const TestSuiteSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    MaxExecutionTimeMS: z.number().nullable().describe(`
+        * * Field Name: MaxExecutionTimeMS
+        * * Display Name: Max Execution Time (ms)
+        * * SQL Data Type: int
+        * * Description: Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -14937,7 +14960,7 @@ export const TestSchema = z.object({
         * * Default Value: newsequentialid()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Test Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
         * * Description: Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.`),
@@ -14990,12 +15013,12 @@ export const TestSchema = z.object({
         * * Description: Priority for execution ordering. Lower numbers run first. Useful for dependencies or critical path tests.`),
     EstimatedDurationSeconds: z.number().nullable().describe(`
         * * Field Name: EstimatedDurationSeconds
-        * * Display Name: Estimated Duration Seconds
+        * * Display Name: Estimated Duration (seconds)
         * * SQL Data Type: int
         * * Description: Estimated execution time in seconds. Used for scheduling and timeout calculations.`),
     EstimatedCostUSD: z.number().nullable().describe(`
         * * Field Name: EstimatedCostUSD
-        * * Display Name: Estimated Cost USD
+        * * Display Name: Estimated Cost (USD)
         * * SQL Data Type: decimal(10, 6)
         * * Description: Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.`),
     __mj_CreatedAt: z.date().describe(`
@@ -15013,9 +15036,14 @@ export const TestSchema = z.object({
         * * Display Name: Repeat Count
         * * SQL Data Type: int
         * * Description: Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.`),
+    MaxExecutionTimeMS: z.number().nullable().describe(`
+        * * Field Name: MaxExecutionTimeMS
+        * * Display Name: Max Execution Time (ms)
+        * * SQL Data Type: int
+        * * Description: Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Test Type Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -23213,7 +23241,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: AIModelTypeID
-    * * Display Name: AI Model Type ID
+    * * Display Name: AI Model Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)
     */
@@ -23240,7 +23268,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Controls whether this AI model is available for use in the system.
@@ -23314,8 +23342,36 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
+    * * Field Name: InheritTypeModalities
+    * * Display Name: Inherit Type Modalities
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When TRUE (default), the model inherits default input/output modalities from its AIModelType AND can extend with additional modalities via AIModelModality records. When FALSE, only modalities explicitly defined in AIModelModality are used.
+    */
+    get InheritTypeModalities(): boolean {
+        return this.Get('InheritTypeModalities');
+    }
+    set InheritTypeModalities(value: boolean) {
+        this.Set('InheritTypeModalities', value);
+    }
+
+    /**
+    * * Field Name: PriorVersionID
+    * * Display Name: Prior Version
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.
+    */
+    get PriorVersionID(): string | null {
+        return this.Get('PriorVersionID');
+    }
+    set PriorVersionID(value: string | null) {
+        this.Set('PriorVersionID', value);
+    }
+
+    /**
     * * Field Name: AIModelType
-    * * Display Name: AIModel Type
+    * * Display Name: AI Model Type
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {
@@ -23351,7 +23407,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: APIName
-    * * Display Name: APIName
+    * * Display Name: API Name
     * * SQL Data Type: nvarchar(100)
     */
     get APIName(): string | null {
@@ -56489,7 +56545,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User ID
+    * * Display Name: Run By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Foreign Key - The user who triggered the test run (could be system user for automated runs)
@@ -56529,7 +56585,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: TargetLogID
-    * * Display Name: Target Log ID
+    * * Display Name: Target Log
     * * SQL Data Type: uniqueidentifier
     * * Description: ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.
     */
@@ -56553,12 +56609,13 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     *   * Pending
     *   * Running
     *   * Skipped
-    * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)
+    *   * Timeout
+    * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation), Timeout (execution exceeded time limit and was cancelled)
     */
-    get Status(): 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' {
+    get Status(): 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' | 'Timeout' {
         return this.Get('Status');
     }
-    set Status(value: 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped') {
+    set Status(value: 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' | 'Timeout') {
         this.Set('Status', value);
     }
 
@@ -56590,7 +56647,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: DurationSeconds
-    * * Display Name: Duration (seconds)
+    * * Display Name: Duration Seconds
     * * SQL Data Type: decimal(10, 3)
     * * Description: Execution time in seconds for this test
     */
@@ -56749,6 +56806,19 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Log
+    * * Display Name: Log
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.
+    */
+    get Log(): string | null {
+        return this.Get('Log');
+    }
+    set Log(value: string | null) {
+        this.Set('Log', value);
     }
 
     /**
@@ -57322,7 +57392,7 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
     * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.
@@ -57426,8 +57496,21 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
     }
 
     /**
+    * * Field Name: MaxExecutionTimeMS
+    * * Display Name: Max Execution Time (ms)
+    * * SQL Data Type: int
+    * * Description: Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.
+    */
+    get MaxExecutionTimeMS(): number | null {
+        return this.Get('MaxExecutionTimeMS');
+    }
+    set MaxExecutionTimeMS(value: number | null) {
+        this.Set('MaxExecutionTimeMS', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -57436,7 +57519,7 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -57646,7 +57729,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Test Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
     * * Description: Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.
@@ -57771,7 +57854,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: EstimatedDurationSeconds
-    * * Display Name: Estimated Duration Seconds
+    * * Display Name: Estimated Duration (seconds)
     * * SQL Data Type: int
     * * Description: Estimated execution time in seconds. Used for scheduling and timeout calculations.
     */
@@ -57784,7 +57867,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: EstimatedCostUSD
-    * * Display Name: Estimated Cost USD
+    * * Display Name: Estimated Cost (USD)
     * * SQL Data Type: decimal(10, 6)
     * * Description: Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.
     */
@@ -57829,8 +57912,21 @@ export class TestEntity extends BaseEntity<TestEntityType> {
     }
 
     /**
+    * * Field Name: MaxExecutionTimeMS
+    * * Display Name: Max Execution Time (ms)
+    * * SQL Data Type: int
+    * * Description: Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.
+    */
+    get MaxExecutionTimeMS(): number | null {
+        return this.Get('MaxExecutionTimeMS');
+    }
+    set MaxExecutionTimeMS(value: number | null) {
+        this.Set('MaxExecutionTimeMS', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Test Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {

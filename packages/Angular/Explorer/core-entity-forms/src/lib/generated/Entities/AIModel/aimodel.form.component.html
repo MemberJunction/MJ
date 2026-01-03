@@ -55,6 +55,24 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="InheritTypeModalities"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PriorVersionID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="AIModelType"
             Type="textbox"
             [EditMode]="EditMode"
@@ -586,6 +604,27 @@
                 [AllowLoad]="IsSectionExpanded('queries')"
                 [EditMode]="GridEditMode()"
                 (dataLoaded)="SetSectionRowCount('queries', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- AI Models Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIModels"
+        sectionName="AI Models"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIModels')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Models','PriorVersionID')"
+                [NewRecordValues]="NewRecordValues('AI Models')"
+                [AllowLoad]="IsSectionExpanded('aIModels')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIModels', $event.totalRowCount)"
                 >
             </mj-user-view-grid>
         </div>
