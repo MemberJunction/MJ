@@ -115,6 +115,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
   @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
+  @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
 
   @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
 
@@ -122,6 +123,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   public isSending: boolean = false;
   public isProcessing: boolean = false; // True when waiting for agent/naming response
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
+  public isUploadingAttachments: boolean = false; // True when uploading attachments to server
+  public uploadingMessage: string = 'Uploading attachments...'; // Message shown during upload
   public converationManagerAgent: AIAgentEntityExtended | null = null;
 
   // Track completion timestamps to prevent race conditions with late progress updates
@@ -375,6 +378,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         // Attachments are stored in ConversationDetailAttachment table and loaded
         // separately when building AI messages - no need to add tokens to Message field
         if (attachmentsToSave.length > 0) {
+          // Show upload indicator for attachments
+          this.isUploadingAttachments = true;
+          this.uploadingMessage = `Uploading ${attachmentsToSave.length} attachment${attachmentsToSave.length > 1 ? 's' : ''}...`;
+          this.uploadStateChanged.emit({ isUploading: true, message: this.uploadingMessage });
+
           try {
             await this.attachmentService.saveAttachments(
               messageDetail.ID,
@@ -384,6 +392,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           } catch (attachmentError) {
             console.error('Failed to save attachments:', attachmentError);
             this.toastService.error('Some attachments could not be saved');
+          } finally {
+            this.isUploadingAttachments = false;
+            this.uploadStateChanged.emit({ isUploading: false, message: '' });
           }
         }
 
@@ -457,6 +468,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       if (saved) {
         // Save attachments if any were pending
         if (attachmentsToSave.length > 0) {
+          // Show upload indicator for attachments
+          this.isUploadingAttachments = true;
+          this.uploadingMessage = `Uploading ${attachmentsToSave.length} attachment${attachmentsToSave.length > 1 ? 's' : ''}...`;
+          this.uploadStateChanged.emit({ isUploading: true, message: this.uploadingMessage });
+
           try {
             await this.attachmentService.saveAttachments(
               detail.ID,
@@ -466,6 +482,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           } catch (attachmentError) {
             console.error('Failed to save attachments:', attachmentError);
             this.toastService.error('Some attachments could not be saved');
+          } finally {
+            this.isUploadingAttachments = false;
+            this.uploadStateChanged.emit({ isUploading: false, message: '' });
           }
         }
 

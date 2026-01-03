@@ -68,6 +68,12 @@
         } @else {
           <!-- Normal Message View -->
           <div class="chat-messages-wrapper">
+          <!-- Upload Indicator Overlay (centered in conversation area) -->
+          @if (isUploadingAttachments) {
+            <div class="upload-indicator-overlay">
+              <mj-loading [text]="uploadingMessage" size="medium"></mj-loading>
+            </div>
+          }
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
               <mj-conversation-message-list
               [messages]="messages"
@@ -135,7 +141,8 @@
                       (artifactCreated)="onArtifactCreated($event)"
                       (conversationRenamed)="onConversationRenamed($event)"
                       (intentCheckStarted)="onIntentCheckStarted()"
-                      (intentCheckCompleted)="onIntentCheckCompleted()">
+                      (intentCheckCompleted)="onIntentCheckCompleted()"
+                      (uploadStateChanged)="onUploadStateChanged($event)">
                     </mj-message-input>
                   }
                 </div>

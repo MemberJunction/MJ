@@ -216,6 +216,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public selectedImageAlt: string = '';
   public selectedImageFileName: string = '';
 
+  // Upload indicator state (shown centered in conversation area)
+  public isUploadingAttachments: boolean = false;
+  public uploadingMessage: string = '';
+
   // Attachment support based on agent modalities
   // Computed from conversation manager (Sage) and any previous agent in conversation
   public enableAttachments: boolean = false;
@@ -1537,6 +1541,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     this.selectedImageUrl = '';
     this.selectedImageAlt = '';
     this.selectedImageFileName = '';
+  }
+
+  /**
+   * Handle upload state changes from message input component
+   */
+  onUploadStateChanged(event: {isUploading: boolean; message: string}): void {
+    this.isUploadingAttachments = event.isUploading;
+    this.uploadingMessage = event.message;
   }
 
   async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
