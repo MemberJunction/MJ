@@ -38,6 +38,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() enableAttachments: boolean = true; // Whether to show attachment button (based on agent modality support)
+  @Input() maxAttachments: number = 10; // Maximum number of attachments per message
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // Maximum size per attachment (20MB default)
+  @Input() acceptedFileTypes: string = 'image/*'; // Accepted MIME types pattern
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
@@ -50,21 +53,10 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
   @Input()
   set initialMessage(value: string | null) {
-    console.log('[MessageInput] initialMessage setter called:', {
-      value,
-      valueType: typeof value,
-      isString: typeof value === 'string',
-      isObject: typeof value === 'object',
-      hasTextProp: value && typeof value === 'object' && 'text' in value,
-      conversationId: this.conversationId,
-      isReady: this._isComponentReady
-    });
-
     // Handle case where an object with {text, attachments} is passed instead of just a string
     // This can happen if there's a type mismatch in the binding chain
     let actualValue = value;
     if (value && typeof value === 'object' && 'text' in value) {
-      console.warn('[MessageInput] Received object instead of string, extracting text property');
       actualValue = (value as { text: string }).text;
     }
 
@@ -73,7 +65,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     // If component is ready and we have a new non-null message, trigger send
     if (this._isComponentReady && actualValue && actualValue !== previousValue) {
-      console.log('[MessageInput] Triggering send from initialMessage setter');
       this.triggerInitialSend();
     }
   }
@@ -83,7 +74,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
   @Input()
   set initialAttachments(value: PendingAttachment[] | null) {
-    console.log('[MessageInput] initialAttachments setter called:', value?.length || 0, 'items');
     this._initialAttachments = value;
   }
   get initialAttachments(): PendingAttachment[] | null {
@@ -174,7 +164,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   ngAfterViewInit() {
-    console.log('[MessageInput] ngAfterViewInit - marking component ready, conversationId:', this.conversationId);
     // Focus input on initial load
     this.focusInput();
 
@@ -183,7 +172,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     // If there's an initial message to send (from empty state), send it automatically
     if (this._initialMessage || (this._initialAttachments && this._initialAttachments.length > 0)) {
-      console.log('[MessageInput] ngAfterViewInit - found initial message, triggering send');
       this.triggerInitialSend();
     }
   }
@@ -196,8 +184,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const message = this._initialMessage;
     const attachments = this._initialAttachments;
 
-    console.log('[MessageInput] triggerInitialSend - message:', message, 'attachments:', attachments?.length || 0, 'conversationId:', this.conversationId);
-
     // Set pending attachments before sending
     if (attachments && attachments.length > 0) {
       this.pendingAttachments = [...attachments];
@@ -205,7 +191,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     // Use setTimeout to ensure we're outside of change detection cycle
     setTimeout(() => {
-      console.log('[MessageInput] triggerInitialSend - executing sendMessageWithText');
       this.sendMessageWithText(message || '');
     }, 100);
   }
@@ -344,7 +329,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    * Handle attachments changed from the input box
    */
   onAttachmentsChanged(attachments: PendingAttachment[]): void {
-    console.log('[MessageInput] onAttachmentsChanged:', attachments?.length || 0, 'items, emptyStateMode:', this.emptyStateMode);
     this.pendingAttachments = attachments;
   }
 
@@ -363,17 +347,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const hasText = text && text.trim().length > 0;
     const hasAttachments = this.pendingAttachments.length > 0;
 
-    console.log('[MessageInput] onTextSubmitted - text:', text?.substring(0, 50), 'hasText:', hasText, 'hasAttachments:', hasAttachments, 'pendingAttachments:', this.pendingAttachments.length, 'emptyStateMode:', this.emptyStateMode);
-
     if (!hasText && !hasAttachments) {
-      console.log('[MessageInput] Empty text and no attachments, aborting');
       return;
     }
 
     // In empty state mode, just emit the data and let parent handle conversation creation
     if (this.emptyStateMode) {
       const attachmentsToEmit = [...this.pendingAttachments];
-      console.log('[MessageInput] emptyStateMode: emitting with', attachmentsToEmit.length, 'attachments');
       this.pendingAttachments = [];
       this.messageText = '';
       this.emptyStateSubmit.emit({ text: text?.trim() || '', attachments: attachmentsToEmit });
@@ -447,21 +427,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    * Also saves any pending attachments.
    */
   public async sendMessageWithText(text: string): Promise<void> {
-    console.log('[MessageInput] sendMessageWithText called - text:', text, 'conversationId:', this.conversationId);
     const hasText = text && text.trim().length > 0;
     const hasAttachments = this.pendingAttachments.length > 0;
 
     if (!hasText && !hasAttachments) {
-      console.log('[MessageInput] sendMessageWithText - no text or attachments, aborting');
       return;
     }
 
     if (this.isSending) {
-      console.log('[MessageInput] sendMessageWithText - already sending, aborting');
       return;
     }
 
-    console.log('[MessageInput] sendMessageWithText - proceeding with send');
     this.isSending = true;
     const attachmentsToSave = [...this.pendingAttachments];
 
@@ -471,14 +447,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       detail.Message = text?.trim() || '';
       detail.Role = 'User';
       detail.UserID = this.currentUser.ID; // Set the user who sent the message
-      console.log('[MessageInput] sendMessageWithText - created detail, saving to conversationId:', this.conversationId);
 
       if (this.parentMessageId) {
         detail.ParentID = this.parentMessageId;
       }
 
       const saved = await detail.Save();
-      console.log('[MessageInput] sendMessageWithText - save result:', saved);
 
       if (saved) {
         // Save attachments if any were pending
@@ -2207,6 +2181,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         return;
       }
 
+      // Convert message to plain text (strips JSON-encoded mentions like @{"id":"...","name":"Sage"} to @Sage)
+      const plainTextMessage = this.mentionParser.toPlainText(
+        message,
+        this.mentionAutocomplete.getAvailableAgents(),
+        this.mentionAutocomplete.getAvailableUsers()
+      );
+
       const aiClient = new GraphQLAIClient(provider);
 
       // Add 30-second timeout to prevent long delays
@@ -2218,7 +2199,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       const result = await Promise.race([
         aiClient.RunAIPrompt({
           promptId: promptId,
-          messages: [{ role: 'user', content: message }],
+          messages: [{ role: 'user', content: plainTextMessage }],
         }),
         timeoutPromise
       ]);

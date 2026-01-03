@@ -166,7 +166,6 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // Use setTimeout to allow mousedown events on dropdown to fire first
     setTimeout(() => {
       if (this.showMentionDropdown) {
-        console.log('[MentionEditor] Closing dropdown on blur');
         this.closeMentionDropdown();
       }
     }, 200);
@@ -341,7 +340,6 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Handle mention selection from dropdown
    */
   onMentionSelected(suggestion: MentionSuggestion): void {
-    console.log('[MentionEditor] Mention selected:', suggestion);
     this.insertMentionChip(suggestion);
     this.closeMentionDropdown();
     this.mentionSelected.emit(suggestion);
@@ -1060,7 +1058,6 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     // Add to pending attachments
     this.pendingAttachments.push(attachment);
-    console.log('[MentionEditor] Attachment added, emitting attachmentsChanged:', this.pendingAttachments.length, 'items');
     this.attachmentsChanged.emit([...this.pendingAttachments]);
     this.cdr.detectChanges();
   }

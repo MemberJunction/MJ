@@ -50,19 +50,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @Input() threadId: string | null = null;
   @Input() isNewConversation: boolean = false;
 
-  // Using getter/setter to debug and ensure correct type
+  // Using getter/setter to ensure correct type handling
   private _pendingMessage: string | null = null;
   @Input()
   set pendingMessage(value: string | null) {
-    console.log('[ChatArea] pendingMessage setter called:', {
-      value,
-      valueType: typeof value,
-      isObject: typeof value === 'object',
-      hasTextProp: value && typeof value === 'object' && 'text' in value
-    });
     // Handle case where an object is incorrectly passed
     if (value && typeof value === 'object' && 'text' in value) {
-      console.warn('[ChatArea] Received object instead of string for pendingMessage, extracting text');
       this._pendingMessage = (value as { text: string }).text;
     } else {
       this._pendingMessage = value;
@@ -72,11 +65,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     return this._pendingMessage;
   }
 
-  // Using getter/setter to ensure reactivity and debug
+  // Using getter/setter to ensure reactivity
   private _pendingAttachments: PendingAttachment[] | null = null;
   @Input()
   set pendingAttachments(value: PendingAttachment[] | null) {
-    console.log('[ChatArea] pendingAttachments setter called:', value?.length || 0, 'items');
     this._pendingAttachments = value;
   }
   get pendingAttachments(): PendingAttachment[] | null {
@@ -227,6 +219,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   // Attachment support based on agent modalities
   // Computed from conversation manager (Sage) and any previous agent in conversation
   public enableAttachments: boolean = false;
+  public maxAttachments: number = 10;
+  public maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB default
+  public acceptedFileTypes: string = 'image/*';
   private conversationManagerAgent: AIAgentEntityExtended | null = null;
 
   constructor(
@@ -286,9 +281,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.conversationManagerAgent = await this.conversationAgentService.getConversationManagerAgent();
 
       if (this.conversationManagerAgent?.ID) {
-        // Check if Sage supports attachments
-        this.enableAttachments = AIEngineBase.Instance.AgentSupportsAttachments(this.conversationManagerAgent.ID);
-        LogStatusEx({message: `Attachment support initialized: ${this.enableAttachments} (based on Sage modalities)`, verboseOnly: true});
+        // Get attachment limits from agent metadata (uses Agent → Model → System → Default cascade)
+        const limits = AIEngineBase.Instance.GetAgentAttachmentLimits(this.conversationManagerAgent.ID);
+        this.enableAttachments = limits.enabled;
+        this.maxAttachments = limits.maxAttachments;
+        this.maxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
+        this.acceptedFileTypes = limits.acceptedFileTypes;
+        LogStatusEx({message: `Attachment support initialized: ${this.enableAttachments} (max ${this.maxAttachments}, ${(this.maxAttachmentSizeBytes / 1024 / 1024).toFixed(0)}MB)`, verboseOnly: true});
       } else {
         // Default to false if we can't determine
         this.enableAttachments = false;
@@ -305,13 +304,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Called when conversation changes to check if any agent in the conversation supports attachments.
    */
   private updateAttachmentSupport(): void {
-    // Start with Sage's support
-    let supportsAttachments = this.conversationManagerAgent?.ID
-      ? AIEngineBase.Instance.AgentSupportsAttachments(this.conversationManagerAgent.ID)
-      : false;
+    // Determine which agent to use for limits - prefer last non-Sage agent, fall back to Sage
+    let agentIdForLimits = this.conversationManagerAgent?.ID || null;
 
-    // Also check if any previous non-Sage agent in the conversation supports attachments
-    if (!supportsAttachments && this.messages.length > 0) {
+    // Check if any previous non-Sage agent in the conversation supports attachments
+    if (this.messages.length > 0) {
       const lastNonSageAgent = this.messages
         .slice()
         .reverse()
@@ -322,11 +319,23 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         );
 
       if (lastNonSageAgent?.AgentID) {
-        supportsAttachments = AIEngineBase.Instance.AgentSupportsAttachments(lastNonSageAgent.AgentID);
+        // Check if this agent supports attachments
+        if (AIEngineBase.Instance.AgentSupportsAttachments(lastNonSageAgent.AgentID)) {
+          agentIdForLimits = lastNonSageAgent.AgentID;
+        }
       }
     }
 
-    this.enableAttachments = supportsAttachments;
+    // Get limits from the determined agent
+    if (agentIdForLimits) {
+      const limits = AIEngineBase.Instance.GetAgentAttachmentLimits(agentIdForLimits);
+      this.enableAttachments = limits.enabled;
+      this.maxAttachments = limits.maxAttachments;
+      this.maxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
+      this.acceptedFileTypes = limits.acceptedFileTypes;
+    } else {
+      this.enableAttachments = false;
+    }
   }
 
   ngAfterViewChecked() {
@@ -1769,7 +1778,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
     const { text, attachments } = event;
-    console.log('[ChatArea] onEmptyStateMessageSent received event:', 'text:', text?.substring(0, 50), 'attachments:', attachments?.length || 0);
     if (!text?.trim() && (!attachments || attachments.length === 0)) {
       return;
     }
@@ -1787,7 +1795,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       );
 
       if (!newConversation) {
-        console.error('❌ Failed to create new conversation');
+        console.error('Failed to create new conversation');
         this.isProcessing = false;
         return;
       }
@@ -1799,11 +1807,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // creates the new message-input component
       const pendingMessage = text?.trim() || '';
       const pendingAttachments = attachments || [];
-      console.log('[ChatArea] Emitting conversationCreated with pending data:', {
-        conversationId: newConversation.ID,
-        pendingMessage: pendingMessage.substring(0, 50),
-        pendingAttachments: pendingAttachments.length
-      });
       this.conversationCreated.emit({
         conversation: newConversation,
         pendingMessage,
@@ -1811,7 +1814,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       });
 
     } catch (error) {
-      console.error('❌ Error creating conversation from empty state:', error);
+      console.error('Error creating conversation from empty state:', error);
     } finally {
       this.isProcessing = false;
     }

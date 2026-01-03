@@ -269,14 +269,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
   }): void {
-    console.log('[Workspace] *** onConversationCreated ENTERED ***', event);
     try {
-      console.log('[Workspace] onConversationCreated called:', {
-        conversationId: event?.conversation?.ID,
-        pendingMessage: event?.pendingMessage?.substring(0, 50),
-        pendingAttachments: event?.pendingAttachments?.length || 0
-      });
-
       // Set ALL state atomically before Angular change detection runs
       // This ensures the new message-input component receives the pending data
       this.pendingMessageToSend = event.pendingMessage || null;
@@ -285,14 +278,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.selectedConversation = event.conversation;
       this.isNewUnsavedConversation = false;
       // The conversation is already added to conversationData by the chat area
-
-      console.log('[Workspace] State set atomically:', {
-        selectedConversationId: this.selectedConversationId,
-        pendingMessageToSend: this.pendingMessageToSend?.substring(0, 50),
-        pendingAttachmentsToSend: this.pendingAttachmentsToSend?.length || 0
-      });
     } catch (error) {
-      console.error('[Workspace] onConversationCreated ERROR:', error);
+      console.error('onConversationCreated ERROR:', error);
     }
   }
 
@@ -301,16 +288,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * @deprecated Use onConversationCreated with pendingMessage instead
    */
   onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
-    console.log('[Workspace] onPendingMessageRequested called (deprecated):', {
-      event,
-      eventType: typeof event,
-      text: event?.text,
-      textType: typeof event?.text,
-      attachments: event?.attachments?.length
-    });
     this.pendingMessageToSend = event.text;
     this.pendingAttachmentsToSend = event.attachments;
-    console.log('[Workspace] Set pendingMessageToSend to:', this.pendingMessageToSend, 'type:', typeof this.pendingMessageToSend);
   }
 
   /**

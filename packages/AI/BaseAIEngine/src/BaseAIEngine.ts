@@ -28,7 +28,47 @@ import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPer
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { AIPromptEntityExtended, AIPromptCategoryEntityExtended, AIModelEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
- 
+
+/**
+ * Represents the effective limits for a specific modality (e.g., Image, Audio).
+ * These limits are resolved using the precedence chain: Agent → Model → System → Defaults.
+ */
+export interface ModalityLimits {
+    /** Maximum size in bytes for this modality. Null means no limit. */
+    maxSizeBytes: number | null;
+    /** Maximum count of items per message for this modality. Null means no limit. */
+    maxCountPerMessage: number | null;
+    /** Maximum dimension (width/height for images). Only applicable for image modality. Null means no limit. */
+    maxDimension: number | null;
+    /** Supported formats as a comma-delimited string (e.g., "image/png, image/jpeg"). Null means all formats. */
+    supportedFormats: string | null;
+    /** Indicates whether this modality is allowed/supported. */
+    isAllowed: boolean;
+    /** The source of the limits ('Agent', 'Model', 'System', or 'Default') */
+    source: 'Agent' | 'Model' | 'System' | 'Default';
+}
+
+/**
+ * Aggregated attachment limits for an agent, combining all relevant input modalities.
+ */
+export interface AgentAttachmentLimits {
+    /** Whether attachments are enabled for this agent */
+    enabled: boolean;
+    /** Maximum total attachments per message across all modalities */
+    maxAttachments: number;
+    /** Maximum size in bytes for any single attachment */
+    maxAttachmentSizeBytes: number;
+    /** Accepted file types as a pattern (e.g., "image/*" or "image/*,audio/*") */
+    acceptedFileTypes: string;
+    /** Individual modality limits */
+    modalities: Map<string, ModalityLimits>;
+}
+
+// Default fallback values when no metadata is configured
+const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
+const DEFAULT_MAX_DIMENSION = 4096;
+
 // this class handles execution of AI Actions
 @RegisterForStartup()
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -772,6 +812,195 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         // No explicit modalities configured - default to text-only
         return ['Text'];
+    }
+
+    // ==========================================
+    // Modality Limit Resolution Methods
+    // ==========================================
+
+    /**
+     * Resolves the effective limits for a specific modality for an agent.
+     * Uses precedence chain: Agent → Model → System → Defaults.
+     *
+     * @param agentId - The ID of the agent
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio', 'Video', 'File')
+     * @param modelId - Optional model ID to check model-specific limits (falls back to system defaults if not provided)
+     * @returns The resolved modality limits with source information
+     */
+    public GetAgentModalityLimits(agentId: string, modalityName: string, modelId?: string): ModalityLimits {
+        // Get the base modality record
+        const modality = this.GetModalityByName(modalityName);
+        if (!modality) {
+            // Modality doesn't exist - return defaults indicating not allowed
+            return {
+                maxSizeBytes: null,
+                maxCountPerMessage: null,
+                maxDimension: null,
+                supportedFormats: null,
+                isAllowed: false,
+                source: 'Default'
+            };
+        }
+
+        // Check agent-specific modality settings first (highest priority)
+        const agentModality = this._agentModalities.find(
+            am => am.AgentID === agentId && am.ModalityID === modality.ID && am.Direction === 'Input'
+        );
+
+        if (agentModality) {
+            // Agent has explicit modality configuration
+            return {
+                maxSizeBytes: agentModality.MaxSizeBytes,
+                maxCountPerMessage: agentModality.MaxCountPerMessage,
+                maxDimension: null, // Agent modality doesn't have MaxDimension
+                supportedFormats: null, // Agent modality doesn't have SupportedFormats
+                isAllowed: agentModality.IsAllowed,
+                source: 'Agent'
+            };
+        }
+
+        // Check model-specific modality settings (second priority)
+        if (modelId) {
+            const modelLimits = this.GetModelModalityLimits(modelId, modalityName);
+            if (modelLimits.source === 'Model') {
+                return modelLimits;
+            }
+        }
+
+        // Fall back to system-wide modality defaults
+        return {
+            maxSizeBytes: modality.DefaultMaxSizeBytes,
+            maxCountPerMessage: modality.DefaultMaxCountPerMessage,
+            maxDimension: null, // System modality doesn't have MaxDimension
+            supportedFormats: null, // System modality doesn't have SupportedFormats by default
+            isAllowed: true, // If modality exists at system level, it's generally allowed
+            source: 'System'
+        };
+    }
+
+    /**
+     * Resolves the effective limits for a specific modality for a model.
+     * Uses precedence chain: Model → System → Defaults.
+     *
+     * @param modelId - The ID of the model
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio', 'Video', 'File')
+     * @returns The resolved modality limits with source information
+     */
+    public GetModelModalityLimits(modelId: string, modalityName: string): ModalityLimits {
+        // Get the base modality record
+        const modality = this.GetModalityByName(modalityName);
+        if (!modality) {
+            return {
+                maxSizeBytes: null,
+                maxCountPerMessage: null,
+                maxDimension: null,
+                supportedFormats: null,
+                isAllowed: false,
+                source: 'Default'
+            };
+        }
+
+        // Check model-specific modality settings
+        const modelModality = this._modelModalities.find(
+            mm => mm.ModelID === modelId && mm.ModalityID === modality.ID && mm.Direction === 'Input'
+        );
+
+        if (modelModality && modelModality.IsSupported) {
+            return {
+                maxSizeBytes: modelModality.MaxSizeBytes,
+                maxCountPerMessage: modelModality.MaxCountPerMessage,
+                maxDimension: modelModality.MaxDimension,
+                supportedFormats: modelModality.SupportedFormats,
+                isAllowed: modelModality.IsSupported,
+                source: 'Model'
+            };
+        }
+
+        // Fall back to system-wide modality defaults
+        return {
+            maxSizeBytes: modality.DefaultMaxSizeBytes,
+            maxCountPerMessage: modality.DefaultMaxCountPerMessage,
+            maxDimension: null,
+            supportedFormats: null,
+            isAllowed: true,
+            source: 'System'
+        };
+    }
+
+    /**
+     * Gets aggregated attachment limits for an agent, suitable for passing to UI components.
+     * Combines limits from all supported input modalities (Image, Audio, Video, File).
+     * Uses the most restrictive limits across all modalities for the aggregate values.
+     *
+     * @param agentId - The ID of the agent
+     * @param modelId - Optional model ID to include model-specific limits in the resolution
+     * @returns Aggregated attachment limits ready for UI component configuration
+     */
+    public GetAgentAttachmentLimits(agentId: string, modelId?: string): AgentAttachmentLimits {
+        const attachmentModalityNames = ['Image', 'Audio', 'Video', 'File'];
+        const modalityLimitsMap = new Map<string, ModalityLimits>();
+
+        let hasAnyAllowed = false;
+        let minMaxSize = DEFAULT_MAX_SIZE_BYTES;
+        let minMaxCount = DEFAULT_MAX_COUNT_PER_MESSAGE;
+        const acceptedTypes: string[] = [];
+
+        for (const modalityName of attachmentModalityNames) {
+            const limits = this.GetAgentModalityLimits(agentId, modalityName, modelId);
+            modalityLimitsMap.set(modalityName, limits);
+
+            if (limits.isAllowed) {
+                hasAnyAllowed = true;
+
+                // Track the most restrictive size limit
+                if (limits.maxSizeBytes != null && limits.maxSizeBytes < minMaxSize) {
+                    minMaxSize = limits.maxSizeBytes;
+                }
+
+                // Track the most restrictive count limit
+                if (limits.maxCountPerMessage != null && limits.maxCountPerMessage < minMaxCount) {
+                    minMaxCount = limits.maxCountPerMessage;
+                }
+
+                // Build accepted file types based on allowed modalities
+                const mimePattern = this.getModalityMimePattern(modalityName, limits.supportedFormats);
+                if (mimePattern) {
+                    acceptedTypes.push(mimePattern);
+                }
+            }
+        }
+
+        return {
+            enabled: hasAnyAllowed,
+            maxAttachments: minMaxCount,
+            maxAttachmentSizeBytes: minMaxSize,
+            acceptedFileTypes: acceptedTypes.length > 0 ? acceptedTypes.join(',') : 'image/*',
+            modalities: modalityLimitsMap
+        };
+    }
+
+    /**
+     * Helper to get MIME type pattern for a modality
+     */
+    private getModalityMimePattern(modalityName: string, supportedFormats: string | null): string | null {
+        // If specific formats are provided, use them
+        if (supportedFormats) {
+            return supportedFormats;
+        }
+
+        // Default MIME patterns by modality
+        switch (modalityName.toLowerCase()) {
+            case 'image':
+                return 'image/*';
+            case 'audio':
+                return 'audio/*';
+            case 'video':
+                return 'video/*';
+            case 'file':
+                return '*/*'; // Accept all file types
+            default:
+                return null;
+        }
     }
 
     /**

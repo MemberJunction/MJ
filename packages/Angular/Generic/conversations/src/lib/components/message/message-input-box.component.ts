@@ -64,7 +64,6 @@ export class MessageInputBoxComponent {
    * Handle attachment changes from MentionEditorComponent
    */
   onAttachmentsChanged(attachments: PendingAttachment[]): void {
-    console.log('[MessageInputBox] onAttachmentsChanged received and re-emitting:', attachments?.length || 0, 'items');
     this.attachmentsChanged.emit(attachments);
   }
 
@@ -96,7 +95,6 @@ export class MessageInputBoxComponent {
   onMentionSelected(suggestion: MentionSuggestion): void {
     // MentionEditorComponent already inserts the mention chip
     // This is just for additional tracking/analytics if needed
-    console.log('[MessageInputBox] Mention selected:', suggestion);
   }
 
   /**
