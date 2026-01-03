@@ -209,6 +209,14 @@ export interface AgentEvalExpectedOutcomes {
 @RegisterClass(BaseTestDriver, 'AgentEvalDriver')
 export class AgentEvalDriver extends BaseTestDriver {
     /**
+     * Returns true as this driver supports cancellation via AbortSignal.
+     * When timeout occurs, the AbortController signals the agent to stop execution.
+     */
+    public override supportsCancellation(): boolean {
+        return true;
+    }
+
+    /**
      * Execute agent evaluation test.
      *
      * Steps:
@@ -223,7 +231,7 @@ export class AgentEvalDriver extends BaseTestDriver {
      * @returns Execution result
      */
     public async Execute(context: DriverExecutionContext): Promise<DriverExecutionResult> {
-        this.log('Starting agent evaluation', context.options.verbose);
+        this.logToTestRun(context, 'info', 'Starting agent evaluation');
 
         try {
             // Parse configuration
@@ -238,17 +246,51 @@ export class AgentEvalDriver extends BaseTestDriver {
             const turns = this.normalizeTurns(input);
             const isMultiTurn = turns.length > 1;
 
-            this.log(`Executing agent: ${agent.Name} (${turns.length} turn${turns.length > 1 ? 's' : ''})`, context.options.verbose);
+            this.logToTestRun(context, 'info', `Executing agent: ${agent.Name} (${turns.length} turn${turns.length > 1 ? 's' : ''})`);
 
-            // Execute agent (single or multi-turn)
-            const { agentRuns, turnResults } = await this.executeAgent(
+            // Execute agent (single or multi-turn) with timeout/cancellation support
+            const { agentRuns, turnResults, timedOut, timeoutMessage } = await this.executeAgent(
                 agent,
                 input,
                 context.contextUser,
                 context.test,
                 config.maxExecutionTime,
-                context.testRun
+                context.testRun,
+                context
             );
+
+            // Handle timeout case
+            if (timedOut) {
+                this.logToTestRun(context, 'error', timeoutMessage || 'Test execution timed out');
+
+                // Build timeout result with partial data if available
+                const result: DriverExecutionResult = {
+                    targetType: 'AI Agent',
+                    targetLogId: agentRuns.length > 0 ? agentRuns[agentRuns.length - 1].ID : '',
+                    status: 'Timeout',
+                    score: 0,
+                    oracleResults: [],
+                    passedChecks: 0,
+                    failedChecks: 0,
+                    totalChecks: 0,
+                    inputData: input,
+                    expectedOutput: expected,
+                    actualOutput: agentRuns.length > 0 ? this.extractAgentOutput(agentRuns[agentRuns.length - 1]) : undefined,
+                    errorMessage: timeoutMessage,
+                    totalCost: turnResults.reduce((sum, tr) => sum + (tr.cost || 0), 0),
+                    durationMs: turnResults.reduce((sum, tr) => sum + (tr.durationMs || 0), 0),
+                    totalTurns: isMultiTurn ? turns.length : undefined,
+                    turnResults: isMultiTurn ? turnResults : undefined,
+                    allAgentRunIds: agentRuns.length > 0 ? agentRuns.map(ar => ar.ID) : undefined
+                };
+
+                // Still try to link any completed agent runs
+                if (agentRuns.length > 0) {
+                    await this.linkTestRunToAgentRuns(context.testRun, agentRuns);
+                }
+
+                return result;
+            }
 
             // Create bidirectional links for all agent runs
             await this.linkTestRunToAgentRuns(context.testRun, agentRuns);
@@ -258,7 +300,7 @@ export class AgentEvalDriver extends BaseTestDriver {
             const actualOutput = this.extractAgentOutput(finalAgentRun);
 
             // Run oracles
-            this.log('Running oracles for evaluation', context.options.verbose);
+            this.logToTestRun(context, 'info', 'Running oracles for evaluation');
             const oracleResults = await this.runOraclesForMultiTurn(
                 config,
                 turns,
@@ -303,14 +345,12 @@ export class AgentEvalDriver extends BaseTestDriver {
                 allAgentRunIds: isMultiTurn ? agentRuns.map(ar => ar.ID) : undefined
             };
 
-            this.log(
-                `Agent evaluation completed: ${status} (Score: ${score})`,
-                context.options.verbose
-            );
+            this.logToTestRun(context, 'info', `Agent evaluation completed: ${status} (Score: ${score})`);
             return result;
 
         } catch (error) {
-            this.logError('Agent evaluation failed', error as Error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logToTestRun(context, 'error', `Agent evaluation failed: ${errorMessage}`);
             throw error;
         }
     }
@@ -457,6 +497,7 @@ export class AgentEvalDriver extends BaseTestDriver {
 
     /**
      * Execute agent (single or multi-turn) and return results.
+     * Uses AbortController for proper cancellation support when timeout occurs.
      * @private
      */
     private async executeAgent(
@@ -465,55 +506,94 @@ export class AgentEvalDriver extends BaseTestDriver {
         contextUser: UserInfo,
         test: TestEntity,
         maxExecutionTime: number | undefined,
-        testRun: TestRunEntity
-    ): Promise<{ agentRuns: AIAgentRunEntity[], turnResults: TurnResult[] }> {
+        testRun: TestRunEntity,
+        context: DriverExecutionContext
+    ): Promise<{ agentRuns: AIAgentRunEntity[], turnResults: TurnResult[], timedOut: boolean, timeoutMessage?: string }> {
         // Normalize to multi-turn format
         const turns = this.normalizeTurns(input);
 
         const agentRuns: AIAgentRunEntity[] = [];
         const turnResults: TurnResult[] = [];
 
+        // Get effective timeout using priority: config JSON > entity field > default
+        const config = this.parseConfig<AgentEvalConfig>(test);
+        const effectiveTimeout = this.getEffectiveTimeout(test, config);
+
+        // Create AbortController for cancellation
+        const abortController = new AbortController();
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        let timedOut = false;
+        let timeoutMessage: string | undefined;
+
+        // Set up timeout to abort execution
+        if (effectiveTimeout > 0) {
+            timeoutId = setTimeout(() => {
+                timedOut = true;
+                timeoutMessage = `Test execution timed out after ${effectiveTimeout}ms`;
+                this.logToTestRun(context, 'warn', timeoutMessage);
+                abortController.abort();
+            }, effectiveTimeout);
+        }
+
         let conversationId: string | undefined = input.conversationContext?.conversationId;
         let previousOutputPayload: Record<string, unknown> | undefined;
 
-        // Execute each turn sequentially
-        for (let i = 0; i < turns.length; i++) {
-            const turn = turns[i];
-            const turnNumber = i + 1;
+        try {
+            // Execute each turn sequentially
+            for (let i = 0; i < turns.length; i++) {
+                // Check if aborted before starting turn
+                if (abortController.signal.aborted) {
+                    this.logToTestRun(context, 'info', `Skipping turn ${i + 1} due to timeout/cancellation`);
+                    break;
+                }
 
-            // Determine input payload for this turn
-            const inputPayload = i === 0
-                ? turn.inputPayload  // First turn: use provided payload
-                : previousOutputPayload;  // Subsequent turns: use previous output
+                const turn = turns[i];
+                const turnNumber = i + 1;
 
-            // Execute single turn
-            const turnResult = await this.executeSingleTurn({
-                agent,
-                turn,
-                turnNumber,
-                totalTurns: turns.length,
-                conversationId,
-                inputPayload,
-                priorMessages: input.conversationContext?.priorMessages,
-                contextUser,
-                test,
-                testRun,
-                maxExecutionTime
-            });
+                // Determine input payload for this turn
+                const inputPayload = i === 0
+                    ? turn.inputPayload  // First turn: use provided payload
+                    : previousOutputPayload;  // Subsequent turns: use previous output
 
-            agentRuns.push(turnResult.agentRun);
-            turnResults.push(turnResult);
+                this.logToTestRun(context, 'info', `Executing turn ${turnNumber} of ${turns.length}`);
 
-            // Update context for next turn
-            conversationId = turnResult.agentRun.ConversationID;
-            previousOutputPayload = this.extractOutputPayload(turnResult.agentRun);
+                // Execute single turn with cancellation token
+                const turnResult = await this.executeSingleTurn({
+                    agent,
+                    turn,
+                    turnNumber,
+                    totalTurns: turns.length,
+                    conversationId,
+                    inputPayload,
+                    priorMessages: input.conversationContext?.priorMessages,
+                    contextUser,
+                    test,
+                    testRun,
+                    cancellationToken: abortController.signal
+                });
+
+                agentRuns.push(turnResult.agentRun);
+                turnResults.push(turnResult);
+
+                this.logToTestRun(context, 'info', `Turn ${turnNumber} completed: ${turnResult.agentRun.Status}`);
+
+                // Update context for next turn
+                conversationId = turnResult.agentRun.ConversationID;
+                previousOutputPayload = this.extractOutputPayload(turnResult.agentRun);
+            }
+        } finally {
+            // Clean up timeout
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
         }
 
-        return { agentRuns, turnResults };
+        return { agentRuns, turnResults, timedOut, timeoutMessage };
     }
 
     /**
      * Execute a single turn in a multi-turn test.
+     * Passes cancellation token to agent for proper timeout handling.
      * @private
      */
     private async executeSingleTurn(params: {
@@ -527,7 +607,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         contextUser: UserInfo;
         test: TestEntity;
         testRun: TestRunEntity;
-        maxExecutionTime?: number;
+        cancellationToken?: AbortSignal;
     }): Promise<TurnResult> {
         const runner = new AgentRunner();
 
@@ -559,7 +639,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                 ? `[${params.testRun.Sequence}] ${params.test.Name}`
                 : `[Test] ${params.test.Name}`);
 
-        // Build execution parameters
+        // Build execution parameters with cancellation token
         const runParams = {
             agent: params.agent as any,
             conversationId: params.conversationId,  // Continue same conversation for multi-turn
@@ -568,24 +648,20 @@ export class AgentEvalDriver extends BaseTestDriver {
             payload: params.inputPayload,  // Pass payload from previous turn
             override: params.turn.executionParams?.modelOverride ? {
                 modelId: params.turn.executionParams.modelOverride
-            } : undefined
+            } : undefined,
+            cancellationToken: params.cancellationToken  // Pass cancellation token to agent
         };
 
-        // Execute with timeout if specified
-        const executePromise = runner.RunAgentInConversation(runParams, {
+        const startTime = Date.now();
+
+        // Execute agent - cancellation is handled via AbortSignal, not Promise.race
+        const runResult = await runner.RunAgentInConversation(runParams, {
             userMessage: params.turn.userMessage,
             createArtifacts: true,
             conversationName: conversationName,
             testRunId: params.testRun.ID
         });
 
-        const startTime = Date.now();
-        const runResult = params.maxExecutionTime
-            ? await Promise.race([
-                executePromise,
-                this.createTimeoutPromise(params.maxExecutionTime)
-            ])
-            : await executePromise;
         const endTime = Date.now();
 
         const agentRun = runResult.agentResult.agentRun;
@@ -598,16 +674,6 @@ export class AgentEvalDriver extends BaseTestDriver {
             durationMs: endTime - startTime,
             cost: agentRun.TotalCost || 0
         };
-    }
-
-    /**
-     * Create a timeout promise that rejects after specified milliseconds.
-     * @private
-     */
-    private createTimeoutPromise(timeoutMs: number): Promise<never> {
-        return new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Agent execution timeout after ${timeoutMs}ms`)), timeoutMs)
-        );
     }
 
     /**

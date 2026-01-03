@@ -14,6 +14,31 @@ import {
 import { IOracle } from './oracles/IOracle';
 
 /**
+ * Log message from test execution
+ */
+export interface TestLogMessage {
+  /**
+   * Timestamp when the message was logged
+   */
+  timestamp: Date;
+
+  /**
+   * Log level
+   */
+  level: 'info' | 'warn' | 'error' | 'debug';
+
+  /**
+   * Log message content
+   */
+  message: string;
+
+  /**
+   * Optional metadata for additional context
+   */
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Progress callback for test execution
  */
 export interface TestProgress {
@@ -82,6 +107,11 @@ export interface TestRunOptions {
    * Progress callback for real-time updates
    */
   progressCallback?: (progress: TestProgress) => void;
+
+  /**
+   * Log callback for streaming execution details to the test run log
+   */
+  logCallback?: (message: TestLogMessage) => void;
 }
 
 /**
@@ -131,7 +161,7 @@ export interface TestRunResult {
   /**
    * Test execution status
    */
-  status: 'Passed' | 'Failed' | 'Skipped' | 'Error';
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Timeout';
 
   /**
    * Overall score (0.0000 to 1.0000)
@@ -356,7 +386,7 @@ export interface DriverExecutionResult {
   /**
    * Execution status
    */
-  status: 'Passed' | 'Failed' | 'Error';
+  status: 'Passed' | 'Failed' | 'Error' | 'Timeout';
 
   /**
    * Overall score

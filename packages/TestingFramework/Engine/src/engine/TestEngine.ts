@@ -30,7 +30,8 @@ import {
     TestRunOptions,
     DriverExecutionResult,
     TestRunResult,
-    TestSuiteRunResult
+    TestSuiteRunResult,
+    TestLogMessage
 } from '../types';
 
 /**
@@ -405,7 +406,8 @@ export class TestEngine extends TestEngineBase {
     private async updateTestRun(
         testRun: TestRunEntity,
         result: DriverExecutionResult,
-        startTime: number
+        startTime: number,
+        logMessages?: TestLogMessage[]
     ): Promise<void> {
         testRun.Status = result.status;
         testRun.Score = result.score;
@@ -422,10 +424,30 @@ export class TestEngine extends TestEngineBase {
         testRun.DurationSeconds = (Date.now() - startTime) / 1000;
         testRun.CompletedAt = new Date();
 
+        // Save accumulated log messages
+        if (logMessages && logMessages.length > 0) {
+            testRun.Log = this.formatLogMessages(logMessages);
+        }
+
+        // Ensure ErrorMessage is populated for timeout and error statuses
+        if ((result.status === 'Timeout' || result.status === 'Error') && result.errorMessage) {
+            testRun.ErrorMessage = result.errorMessage;
+        }
+
         const saved = await testRun.Save();
         if (!saved) {
             this.logError('Failed to update TestRun entity', new Error(testRun.LatestResult?.Message));
         }
+    }
+
+    /**
+     * Format log messages into a single string for storage.
+     * @private
+     */
+    private formatLogMessages(messages: TestLogMessage[]): string {
+        return messages
+            .map(m => `[${m.timestamp.toISOString()}] [${m.level.toUpperCase()}] ${m.message}`)
+            .join('\n');
     }
 
     /**
@@ -527,8 +549,33 @@ export class TestEngine extends TestEngineBase {
         // Get or create driver
         const driver = await this.getDriver(testType, contextUser);
 
+        // Check if driver supports cancellation and log warning if not
+        const supportsCancellation = driver.supportsCancellation();
+        if (!supportsCancellation) {
+            this.log(
+                `Warning: Test type '${testType.Name}' (driver: ${testType.DriverClass}) does not support cancellation. ` +
+                `Timeout will mark test as failed but execution may continue in background.`,
+                options.verbose
+            );
+        }
+
         // Create TestRun entity
         const testRun = await this.createTestRun(test, contextUser, suiteRunId, sequence);
+
+        // Set up log accumulation
+        const logMessages: TestLogMessage[] = [];
+        const originalLogCallback = options.logCallback;
+
+        // Create enhanced options with log accumulation
+        const enhancedOptions: TestRunOptions = {
+            ...options,
+            logCallback: (message: TestLogMessage) => {
+                // Accumulate log messages
+                logMessages.push(message);
+                // Also call original callback if provided
+                originalLogCallback?.(message);
+            }
+        };
 
         // Progress: Executing test
         options.progressCallback?.({
@@ -548,9 +595,24 @@ export class TestEngine extends TestEngineBase {
             test,
             testRun,
             contextUser,
-            options,
+            options: enhancedOptions,
             oracleRegistry: this._oracleRegistry
         });
+
+        // If timeout occurred and driver doesn't support cancellation, add warning to error message
+        if (driverResult.status === 'Timeout' && !supportsCancellation) {
+            const warningMessage = `Test type '${testType.Name}' does not support cancellation - execution may continue in background.`;
+            driverResult.errorMessage = driverResult.errorMessage
+                ? `${driverResult.errorMessage}\n${warningMessage}`
+                : warningMessage;
+
+            // Also add to log
+            logMessages.push({
+                timestamp: new Date(),
+                level: 'warn',
+                message: warningMessage
+            });
+        }
 
         // Progress: Evaluating oracles
         const oracleCount = driverResult.oracleResults?.length || 0;
@@ -564,8 +626,8 @@ export class TestEngine extends TestEngineBase {
             }
         });
 
-        // Update TestRun entity with results
-        await this.updateTestRun(testRun, driverResult, startTime);
+        // Update TestRun entity with results and logs
+        await this.updateTestRun(testRun, driverResult, startTime, logMessages);
 
         // Convert to TestRunResult
         const result: TestRunResult = {
@@ -583,7 +645,8 @@ export class TestEngine extends TestEngineBase {
             durationMs: Date.now() - startTime,
             totalCost: driverResult.totalCost || 0,
             startedAt: testRun.StartedAt!,
-            completedAt: testRun.CompletedAt!
+            completedAt: testRun.CompletedAt!,
+            errorMessage: driverResult.errorMessage
         };
 
         // Add sequence if this is a repeated test iteration

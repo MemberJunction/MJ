@@ -12,7 +12,7 @@ This plan addresses issues with the testing framework's timeout handling:
 
 ### Phase 1: Database & Schema Changes
 
-- [ ] **1.1** Create migration file `V202601031200__v2.130.x_Add_Test_Timeout_And_Log_Fields.sql`
+- [x] **1.1** Create migration file `V202601031300__v3.1.x_Add_Test_Timeout_And_Log_Fields.sql`
   - Drop and recreate CHECK constraint on `TestRun.Status` to add 'Timeout' value
   - Add `MaxExecutionTimeMS INT NULL` to `Test` table
   - Add `MaxExecutionTimeMS INT NULL` to `TestSuite` table
@@ -20,48 +20,52 @@ This plan addresses issues with the testing framework's timeout handling:
   - Add extended properties for all new columns
   - Update extended property for Status column to document new value
 
-- [ ] **1.2** Run migration and CodeGen (manual step - pause for user)
+- [x] **1.2** Run migration and CodeGen (manual step - completed by user)
 
 ### Phase 2: Type Changes (TestingFramework/Engine)
 
-- [ ] **2.1** Update `packages/TestingFramework/Engine/src/types.ts`
+- [x] **2.1** Update `packages/TestingFramework/Engine/src/types.ts`
   - Add `'Timeout'` to `DriverExecutionResult.status` type
+  - Add `'Timeout'` to `TestRunResult.status` type
   - Add `TestLogMessage` interface
   - Add `logCallback` to `TestRunOptions`
 
 ### Phase 3: BaseTestDriver Changes
 
-- [ ] **3.1** Update `packages/TestingFramework/Engine/src/drivers/BaseTestDriver.ts`
+- [x] **3.1** Update `packages/TestingFramework/Engine/src/drivers/BaseTestDriver.ts`
   - Add `DEFAULT_TEST_TIMEOUT_MS` constant (300000ms = 5 minutes)
   - Add `supportsCancellation()` method returning `false` by default
   - Add `getEffectiveTimeout()` helper method
-  - Add log accumulation support
+  - Add `createLogMessage()` helper method
+  - Add `logToTestRun()` method for logging to both console and test run log
 
 ### Phase 4: AgentEvalDriver Changes
 
-- [ ] **4.1** Update `packages/TestingFramework/Engine/src/drivers/AgentEvalDriver.ts`
+- [x] **4.1** Update `packages/TestingFramework/Engine/src/drivers/AgentEvalDriver.ts`
   - Override `supportsCancellation()` to return `true`
-  - Implement `AbortController` pattern in `executeTurn()`
-  - Pass `cancellationToken` to agent execution
-  - Handle timeout and return `'Timeout'` status
+  - Implement `AbortController` pattern in `executeAgent()`
+  - Pass `cancellationToken` to agent execution via `executeSingleTurn()`
+  - Handle timeout and return `'Timeout'` status with partial results
   - Remove old `Promise.race()` timeout pattern
+  - Use `logToTestRun()` for execution logging
 
 ### Phase 5: TestEngine Changes
 
-- [ ] **5.1** Update `packages/TestingFramework/Engine/src/engine/TestEngine.ts`
-  - Add exception-safe cancellation handling
-  - Log warning for drivers that don't support cancellation
-  - Accumulate log messages during execution
+- [x] **5.1** Update `packages/TestingFramework/Engine/src/engine/TestEngine.ts`
+  - Check `supportsCancellation()` and log warning for drivers that don't support it
+  - Set up log accumulation via `logCallback` wrapper
+  - Pass accumulated logs to `updateTestRun()`
   - Save logs to `TestRun.Log` field
-  - Ensure `ErrorMessage` is populated for timeout
+  - Ensure `ErrorMessage` is populated for timeout and error statuses
+  - Add warning to ErrorMessage for non-cancellation drivers
 
 ### Phase 6: Build & Test
 
-- [ ] **6.1** Build TestingFramework packages
+- [x] **6.1** Build TestingFramework packages
   - `cd packages/TestingFramework/Engine && npm run build`
-  - Fix any TypeScript errors
+  - Fixed TypeScript errors
 
-- [ ] **6.2** Manual testing
+- [ ] **6.2** Manual testing (pending)
   - Test with a test that has short timeout
   - Verify timeout status is recorded
   - Verify log is captured

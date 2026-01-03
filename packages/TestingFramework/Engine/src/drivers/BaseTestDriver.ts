@@ -21,8 +21,14 @@ import {
     ScoringWeights,
     ValidationResult,
     ValidationError,
-    ValidationWarning
+    ValidationWarning,
+    TestLogMessage
 } from '../types';
+
+/**
+ * Default timeout for test execution in milliseconds (5 minutes)
+ */
+export const DEFAULT_TEST_TIMEOUT_MS = 300000;
 
 /**
  * Abstract base class for test driver implementations.
@@ -311,5 +317,94 @@ export abstract class BaseTestDriver {
      */
     protected logError(message: string, error?: Error): void {
         LogError(`[${this.constructor.name}] ${message}`, undefined, error);
+    }
+
+    /**
+     * Whether this driver supports cancellation via AbortSignal.
+     *
+     * Drivers should override this to return true if they properly handle
+     * cancellation tokens. When a driver doesn't support cancellation,
+     * timeout will still mark the test as failed but the underlying
+     * execution may continue in the background.
+     *
+     * @returns true if driver supports cancellation, false otherwise
+     */
+    public supportsCancellation(): boolean {
+        return false;
+    }
+
+    /**
+     * Get the effective timeout for a test.
+     *
+     * Priority (highest to lowest):
+     * 1. Configuration JSON maxExecutionTime field (backward compatibility)
+     * 2. Test.MaxExecutionTimeMS column
+     * 3. DEFAULT_TEST_TIMEOUT_MS constant (5 minutes)
+     *
+     * @param test - The test entity
+     * @param config - Parsed configuration object (optional)
+     * @returns Timeout in milliseconds
+     * @protected
+     */
+    protected getEffectiveTimeout(test: TestEntity, config?: { maxExecutionTime?: number }): number {
+        // Priority 1: JSON config maxExecutionTime (backward compatibility)
+        if (config?.maxExecutionTime != null && config.maxExecutionTime > 0) {
+            return config.maxExecutionTime;
+        }
+
+        // Priority 2: Entity field MaxExecutionTimeMS
+        if (test.MaxExecutionTimeMS != null && test.MaxExecutionTimeMS > 0) {
+            return test.MaxExecutionTimeMS;
+        }
+
+        // Priority 3: Default timeout
+        return DEFAULT_TEST_TIMEOUT_MS;
+    }
+
+    /**
+     * Create a log message for the test execution log.
+     *
+     * @param level - Log level
+     * @param message - Log message
+     * @param metadata - Optional metadata
+     * @returns TestLogMessage object
+     * @protected
+     */
+    protected createLogMessage(
+        level: 'info' | 'warn' | 'error' | 'debug',
+        message: string,
+        metadata?: Record<string, unknown>
+    ): TestLogMessage {
+        return {
+            timestamp: new Date(),
+            level,
+            message,
+            metadata
+        };
+    }
+
+    /**
+     * Log a message to both the console (if verbose) and accumulate for test run log.
+     *
+     * @param context - Driver execution context
+     * @param level - Log level
+     * @param message - Log message
+     * @param metadata - Optional metadata
+     * @protected
+     */
+    protected logToTestRun(
+        context: DriverExecutionContext,
+        level: 'info' | 'warn' | 'error' | 'debug',
+        message: string,
+        metadata?: Record<string, unknown>
+    ): void {
+        // Log to console based on level and verbosity
+        const verboseOnly = level === 'debug';
+        this.log(message, verboseOnly);
+
+        // Send to log callback if provided
+        if (context.options.logCallback) {
+            context.options.logCallback(this.createLogMessage(level, message, metadata));
+        }
     }
 }
