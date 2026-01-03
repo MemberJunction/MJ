@@ -9942,13 +9942,13 @@ export const AIConfigurationSchema = z.object({
         * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.`),
     DefaultPromptForContextCompressionID: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextCompressionID
-        * * Display Name: Default Prompt for Context Compression ID
+        * * Display Name: Default Prompt For Context Compression
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt to use for context compression when not specified at the agent level.`),
     DefaultPromptForContextSummarizationID: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextSummarizationID
-        * * Display Name: Default Prompt for Context Summarization ID
+        * * Display Name: Default Prompt For Context Summarization
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt to use for context summarization when not specified at the agent level.`),
@@ -9964,7 +9964,7 @@ export const AIConfigurationSchema = z.object({
         * * Default Value: getutcdate()`),
     DefaultStorageProviderID: z.string().nullable().describe(`
         * * Field Name: DefaultStorageProviderID
-        * * Display Name: Default Storage Provider ID
+        * * Display Name: Default Storage Provider
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
         * * Description: Default file storage provider for agent attachments. Used when an agent does not specify its own AttachmentStorageProviderID.`),
@@ -9973,18 +9973,32 @@ export const AIConfigurationSchema = z.object({
         * * Display Name: Default Storage Root Path
         * * SQL Data Type: nvarchar(500)
         * * Description: Default root path within the storage provider for agent attachments. Used when an agent does not specify its own AttachmentRootPath.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.`),
     DefaultPromptForContextCompression: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextCompression
-        * * Display Name: Default Prompt for Context Compression
+        * * Display Name: Default Prompt For Context Compression
         * * SQL Data Type: nvarchar(255)`),
     DefaultPromptForContextSummarization: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextSummarization
-        * * Display Name: Default Prompt for Context Summarization
+        * * Display Name: Default Prompt For Context Summarization
         * * SQL Data Type: nvarchar(255)`),
     DefaultStorageProvider: z.string().nullable().describe(`
         * * Field Name: DefaultStorageProvider
         * * Display Name: Default Storage Provider
         * * SQL Data Type: nvarchar(50)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIConfigurationEntityType = z.infer<typeof AIConfigurationSchema>;
@@ -44261,7 +44275,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
     /**
     * * Field Name: DefaultPromptForContextCompressionID
-    * * Display Name: Default Prompt for Context Compression ID
+    * * Display Name: Default Prompt For Context Compression
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Default prompt to use for context compression when not specified at the agent level.
@@ -44275,7 +44289,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
     /**
     * * Field Name: DefaultPromptForContextSummarizationID
-    * * Display Name: Default Prompt for Context Summarization ID
+    * * Display Name: Default Prompt For Context Summarization
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Default prompt to use for context summarization when not specified at the agent level.
@@ -44309,7 +44323,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
     /**
     * * Field Name: DefaultStorageProviderID
-    * * Display Name: Default Storage Provider ID
+    * * Display Name: Default Storage Provider
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
     * * Description: Default file storage provider for agent attachments. Used when an agent does not specify its own AttachmentStorageProviderID.
@@ -44335,8 +44349,22 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     }
 
     /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
     * * Field Name: DefaultPromptForContextCompression
-    * * Display Name: Default Prompt for Context Compression
+    * * Display Name: Default Prompt For Context Compression
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultPromptForContextCompression(): string | null {
@@ -44345,7 +44373,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
     /**
     * * Field Name: DefaultPromptForContextSummarization
-    * * Display Name: Default Prompt for Context Summarization
+    * * Display Name: Default Prompt For Context Summarization
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultPromptForContextSummarization(): string | null {
@@ -44359,6 +44387,24 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     */
     get DefaultStorageProvider(): string | null {
         return this.Get('DefaultStorageProvider');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 

@@ -29678,6 +29678,10 @@ export class MJAIConfiguration_ {
     @MaxLength(1000)
     DefaultStorageRootPath?: string;
         
+    @Field({nullable: true, description: `Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     DefaultPromptForContextCompression?: string;
@@ -29689,6 +29693,14 @@ export class MJAIConfiguration_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     DefaultStorageProvider?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [MJAIConfigurationParam_])
     MJ_AIConfigurationParams_ConfigurationIDArray: MJAIConfigurationParam_[]; // Link to MJ_AIConfigurationParams
@@ -29710,6 +29722,9 @@ export class MJAIConfiguration_ {
     
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_ConfigurationIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
+    
+    @Field(() => [MJAIConfiguration_])
+    MJ_AIConfigurations_ParentIDArray: MJAIConfiguration_[]; // Link to MJ_AIConfigurations
     
 }
 
@@ -29744,6 +29759,9 @@ export class CreateMJAIConfigurationInput {
 
     @Field({ nullable: true })
     DefaultStorageRootPath: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
 }
     
 
@@ -29778,6 +29796,9 @@ export class UpdateMJAIConfigurationInput {
 
     @Field({ nullable: true })
     DefaultStorageRootPath?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -29915,6 +29936,17 @@ export class MJAIConfigurationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ConfigurationID]='${mjaiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIConfiguration_])
+    async MJ_AIConfigurations_ParentIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIConfigurations] WHERE [ParentID]='${mjaiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Configurations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Configurations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
