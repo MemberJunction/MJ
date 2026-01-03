@@ -110,11 +110,16 @@ export class ConversationDataService {
   }
 
   /**
-   * Loads conversations from the database
+   * Loads conversations from the database.
+   * Skips if already loaded to prevent redundant DB calls.
    * @param environmentId The environment ID to filter by
    * @param currentUser The current user context
    */
   async loadConversations(environmentId: string, currentUser: UserInfo): Promise<void> {
+    // Skip if already loaded - prevents redundant DB calls when multiple components initialize
+    if (this.conversations.length > 0) {
+      return;
+    }
     this.isLoading = true;
     try {
       const rv = new RunView();

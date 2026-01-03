@@ -8,7 +8,7 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
-import { ConversationStreamingService, MessageProgressUpdate } from '../../services/conversation-streaming.service';
+import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
@@ -272,33 +272,29 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           return;
         }
 
-        // Build formatted progress message
-        const taskName = progress.taskName || 'Task';
-        const progressMessage = progress.message;
-        // Prefer hierarchical step (e.g., "2.1.3") over flat stepCount
-        // Note: hierarchicalStep is nested inside metadata.progress from GraphQL
-        const stepDisplay = (progress.metadata as any)?.progress?.hierarchicalStep || progress.stepCount;
+        // Default: plain message (used by RunAIAgentResolver and TaskOrchestrator without step info)
+        message.Message = progress.message;
 
-        let updatedMessage: string;
-        if (stepDisplay != null) {
-          updatedMessage = `🔄 **${taskName}** • Step ${stepDisplay}\n\n${progressMessage}`;
-        } else {
-          updatedMessage = `🔄 **${taskName}**\n\n${progressMessage}`;
+        // TaskOrchestrator with step info: add formatted header
+        // Prefer hierarchical step (e.g., "2.1.3") over flat stepCount
+        if (progress.resolver === 'TaskOrchestrator') {
+          const stepDisplay = progress.metadata?.progress?.hierarchicalStep || progress.stepCount;
+          if (stepDisplay != null) {
+            message.Message = `**Step ${stepDisplay}**\n\n${progress.message}`;
+          }
         }
 
-        message.Message = updatedMessage;
-
         // Use safe save to prevent race conditions with completion
-        const saved = await this.safeSaveConversationDetail(message, `StreamingProgress:${taskName}`);
+        const saved = await this.safeSaveConversationDetail(message, `StreamingProgress:${progress.taskName || 'Agent'}`);
 
         if (saved) {
           // CRITICAL: Emit update to trigger UI refresh
           this.messageSent.emit(message);
 
           // CRITICAL: Update ActiveTasksService to keep the tasks dropdown in sync
-          this.activeTasks.updateStatusByConversationDetailId(message.ID, progressMessage);
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, progress.message);
 
-          console.log(`[StreamingCallback] Updated message ${messageId}: ${taskName}`);
+          console.log(`[StreamingCallback] Updated message ${messageId}: ${progress.taskName || 'Agent'}`);
         }
       } catch (error) {
         console.error(`[StreamingCallback] Error updating message ${messageId}:`, error);
@@ -842,8 +838,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     let capturedAgentRunId: string | null = null;
 
     return async (progress) => {
-      let progressAgentRun = progress.metadata?.agentRun as any | undefined;
-      const progressAgentRunId = progressAgentRun?.ID || progress.metadata?.agentRunId as string | undefined;
+      const metadata = progress.metadata as MessageProgressMetadata | undefined;
+      const progressAgentRun = metadata?.agentRun;
+      const progressAgentRunId = metadata?.agentRun?.ID || metadata?.agentRunId;
 
       // Capture the agent run ID from the first progress message
       if (!capturedAgentRunId && progressAgentRunId) {
