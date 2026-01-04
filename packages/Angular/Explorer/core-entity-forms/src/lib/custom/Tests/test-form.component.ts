@@ -1,19 +1,19 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
-import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { TestEntity, TestRunEntity, TestSuiteTestEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestFormComponent } from '../../generated/Entities/Test/test.form.component';
 import { TestingDialogService } from '@memberjunction/ng-testing';
+import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
 
 interface ParsedJSON {
-  inputDefinition?: any;
-  expectedOutcomes?: any;
-  configuration?: any;
+  inputDefinition?: Record<string, unknown>;
+  expectedOutcomes?: Record<string, unknown>;
+  configuration?: Record<string, unknown>;
   tags?: string[];
 }
 
@@ -32,9 +32,12 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   // UI state
   activeTab = 'overview';
   loading = false;
+  loadingRuns = false;
+  loadingSuites = false;
   error: string | null = null;
   testRunsLoaded = false;
   suiteTestsLoaded = false;
+  isRefreshing = false;
 
   // Related data
   testRuns: TestRunEntity[] = [];
@@ -45,6 +48,12 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
 
   // Active JSON view
   activeJsonView: 'input' | 'expected' | 'config' | 'tags' = 'input';
+
+  // Code editor configuration
+  jsonToolbar: ToolbarConfig = createCopyOnlyToolbar();
+
+  // Keyboard shortcuts
+  keyboardShortcutsEnabled = true;
 
   constructor(
     elementRef: ElementRef,
@@ -61,7 +70,6 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     await super.ngOnInit();
 
     if (this.record && this.record.ID) {
-      await this.loadRelatedData();
       this.parseJsonFields();
     }
   }
@@ -71,22 +79,41 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     this.destroy$.complete();
   }
 
-  private async loadRelatedData() {
-    this.loading = true;
+  // Keyboard shortcuts
+  @HostListener('document:keydown', ['$event'])
+  handleKeyboardShortcut(event: KeyboardEvent) {
+    if (!this.keyboardShortcutsEnabled) return;
 
-    try {
-      this.cdr.markForCheck();
-    } catch (error) {
-      console.error('Error loading related data:', error);
-      this.error = 'Failed to load related data';
-    } finally {
-      this.loading = false;
-      this.cdr.markForCheck();
+    // Cmd/Ctrl + R: Refresh
+    if ((event.metaKey || event.ctrlKey) && event.key === 'r' && !event.shiftKey) {
+      event.preventDefault();
+      this.refresh();
+      return;
+    }
+
+    // Cmd/Ctrl + Enter: Run test
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      this.runTest();
+      return;
+    }
+
+    // Number keys for tabs (1-4)
+    if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+      switch (event.key) {
+        case '1': this.changeTab('overview'); break;
+        case '2': this.changeTab('config'); break;
+        case '3': this.changeTab('runs'); break;
+        case '4': this.changeTab('suites'); break;
+      }
     }
   }
 
   private async loadTestRuns() {
     if (this.testRunsLoaded) return;
+
+    this.loadingRuns = true;
+    this.cdr.markForCheck();
 
     try {
       const rv = new RunView();
@@ -103,14 +130,20 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
       }
 
       this.testRunsLoaded = true;
-      this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading test runs:', error);
+      SharedService.Instance.CreateSimpleNotification('Failed to load test runs', 'error', 3000);
+    } finally {
+      this.loadingRuns = false;
+      this.cdr.markForCheck();
     }
   }
 
   private async loadSuiteTests() {
     if (this.suiteTestsLoaded) return;
+
+    this.loadingSuites = true;
+    this.cdr.markForCheck();
 
     try {
       const rv = new RunView();
@@ -126,9 +159,12 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
       }
 
       this.suiteTestsLoaded = true;
-      this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading suite tests:', error);
+      SharedService.Instance.CreateSimpleNotification('Failed to load test suites', 'error', 3000);
+    } finally {
+      this.loadingSuites = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -173,10 +209,10 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
 
   getStatusColor(): string {
     switch (this.record.Status) {
-      case 'Active': return '#4caf50';
-      case 'Disabled': return '#9e9e9e';
-      case 'Pending': return '#ffc107';
-      default: return '#999';
+      case 'Active': return '#10b981';
+      case 'Disabled': return '#6b7280';
+      case 'Pending': return '#f59e0b';
+      default: return '#9ca3af';
     }
   }
 
@@ -186,6 +222,22 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
       case 'Disabled': return 'fa-circle-stop';
       case 'Pending': return 'fa-circle-pause';
       default: return 'fa-circle-question';
+    }
+  }
+
+  getStatusClass(): string {
+    return `status-${this.record.Status?.toLowerCase() || 'unknown'}`;
+  }
+
+  getRunStatusColor(status: string): string {
+    switch (status) {
+      case 'Passed': return '#10b981';
+      case 'Failed': return '#ef4444';
+      case 'Error': return '#f59e0b';
+      case 'Timeout': return '#f97316';
+      case 'Running': return '#3b82f6';
+      case 'Pending': return '#8b5cf6';
+      default: return '#6b7280';
     }
   }
 
@@ -253,26 +305,59 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   }
 
   async refresh() {
-    await this.loadRelatedData();
-    if (this.testRunsLoaded) {
-      this.testRunsLoaded = false;
-      await this.loadTestRuns();
-    }
-    if (this.suiteTestsLoaded) {
-      this.suiteTestsLoaded = false;
-      await this.loadSuiteTests();
-    }
+    this.isRefreshing = true;
     this.cdr.markForCheck();
+
+    try {
+      await this.record.Load(this.record.ID);
+      this.parseJsonFields();
+
+      // Reset lazy-loaded data to force reload
+      if (this.testRunsLoaded) {
+        this.testRunsLoaded = false;
+        this.testRuns = [];
+        await this.loadTestRuns();
+      }
+      if (this.suiteTestsLoaded) {
+        this.suiteTestsLoaded = false;
+        this.suiteTests = [];
+        await this.loadSuiteTests();
+      }
+
+      SharedService.Instance.CreateSimpleNotification('Refreshed successfully', 'success', 2000);
+    } catch {
+      SharedService.Instance.CreateSimpleNotification('Failed to refresh', 'error', 3000);
+    } finally {
+      this.isRefreshing = false;
+      this.cdr.markForCheck();
+    }
   }
 
-  getJsonData(): any {
+  getJsonData(): string {
+    let data: Record<string, unknown> | string[] | undefined;
     switch (this.activeJsonView) {
-      case 'input': return this.parsedData.inputDefinition;
-      case 'expected': return this.parsedData.expectedOutcomes;
-      case 'config': return this.parsedData.configuration;
-      case 'tags': return this.parsedData.tags;
-      default: return null;
+      case 'input': data = this.parsedData.inputDefinition; break;
+      case 'expected': data = this.parsedData.expectedOutcomes; break;
+      case 'config': data = this.parsedData.configuration; break;
+      case 'tags': data = this.parsedData.tags; break;
     }
+    return data ? JSON.stringify(data, null, 2) : '// No data available';
+  }
+
+  getRelativeTime(date: Date | string | null): string {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString();
   }
 }
 

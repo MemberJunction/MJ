@@ -1,4 +1,5 @@
 <div class="test-suite-form" kendoDialogContainer>
+  <!-- Header Section -->
   <div class="suite-header">
     <div class="header-content">
       <div class="header-left">
@@ -8,14 +9,25 @@
         <div class="suite-info">
           <h1>{{ record.Name }}</h1>
           <div class="suite-meta">
-            <span class="status-badge" [style.background-color]="getStatusColor()">
+            <span class="status-badge" [ngClass]="getStatusClass()">
+              <i class="fas" [ngClass]="record.Status === 'Active' ? 'fa-circle-check' : 'fa-circle-pause'"></i>
               {{ record.Status }}
+            </span>
+            <span class="test-count" *ngIf="testsLoaded">
+              <i class="fas fa-flask"></i>
+              {{ suiteTests.length }} tests
             </span>
           </div>
         </div>
       </div>
       <div class="header-actions">
-        <button kendoButton (click)="runSuite()" icon="play">Run Suite</button>
+        <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
+          Run Suite
+        </button>
+        <button kendoButton (click)="refresh()" icon="sync" [disabled]="isRefreshing">
+          <i *ngIf="isRefreshing" class="fas fa-sync fa-spin"></i>
+          {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
+        </button>
       </div>
     </div>
     <div class="suite-description" *ngIf="record.Description">
@@ -23,26 +35,41 @@
     </div>
   </div>
 
+  <!-- Tabs -->
   <div class="tabs-container">
-    <div class="tabs">
-      <button class="tab" [class.active]="activeTab === 'overview'" (click)="changeTab('overview')">
+    <div class="tabs" role="tablist">
+      <button class="tab"
+              [class.active]="activeTab === 'overview'"
+              (click)="changeTab('overview')"
+              role="tab"
+              [attr.aria-selected]="activeTab === 'overview'">
         <i class="fas fa-th-large"></i> Overview
       </button>
-      <button class="tab" [class.active]="activeTab === 'tests'" (click)="changeTab('tests')">
+      <button class="tab"
+              [class.active]="activeTab === 'tests'"
+              (click)="changeTab('tests')"
+              role="tab"
+              [attr.aria-selected]="activeTab === 'tests'">
         <i class="fas fa-flask"></i> Tests
         <span class="tab-badge" *ngIf="testsLoaded">{{ suiteTests.length }}</span>
       </button>
-      <button class="tab" [class.active]="activeTab === 'runs'" (click)="changeTab('runs')">
+      <button class="tab"
+              [class.active]="activeTab === 'runs'"
+              (click)="changeTab('runs')"
+              role="tab"
+              [attr.aria-selected]="activeTab === 'runs'">
         <i class="fas fa-history"></i> Runs
         <span class="tab-badge" *ngIf="runsLoaded">{{ suiteRuns.length }}</span>
       </button>
     </div>
   </div>
 
+  <!-- Tab Content -->
   <div class="tab-content">
+    <!-- Overview Tab -->
     <div class="overview-tab" *ngIf="activeTab === 'overview'">
       <div class="info-section">
-        <h3>Suite Information</h3>
+        <h3><i class="fas fa-info-circle"></i> Suite Information</h3>
         <div class="info-grid">
           <div class="info-item">
             <div class="info-label">Name</div>
@@ -50,7 +77,9 @@
           </div>
           <div class="info-item">
             <div class="info-label">Status</div>
-            <div class="info-value">{{ record.Status }}</div>
+            <div class="info-value">
+              <span class="status-badge-inline" [ngClass]="getStatusClass()">{{ record.Status }}</span>
+            </div>
           </div>
           <div class="info-item">
             <div class="info-label">Created</div>
@@ -68,7 +97,7 @@
       </div>
 
       <div class="config-section">
-        <h3>Execution Settings</h3>
+        <h3><i class="fas fa-cogs"></i> Execution Settings</h3>
         <div class="config-grid">
           <div class="config-item">
             <label>Max Execution Time (ms)</label>
@@ -79,46 +108,122 @@
       </div>
     </div>
 
+    <!-- Tests Tab -->
     <div class="tests-tab" *ngIf="activeTab === 'tests'">
-      <div class="tests-list" *ngIf="suiteTests.length > 0">
+      <!-- Loading State -->
+      <div class="loading-state" *ngIf="loadingTests">
+        <div class="skeleton-list">
+          <div class="skeleton-card" *ngFor="let i of [1,2,3,4,5]">
+            <div class="skeleton-sequence"></div>
+            <div class="skeleton-icon"></div>
+            <div class="skeleton-content">
+              <div class="skeleton-line wide"></div>
+              <div class="skeleton-line narrow"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tests List -->
+      <div class="tests-list" *ngIf="!loadingTests && suiteTests.length > 0">
         <div class="test-item" *ngFor="let test of suiteTests" (click)="openTest(test.TestID)">
           <div class="test-sequence">{{ test.Sequence }}</div>
           <div class="test-icon"><i class="fas fa-flask"></i></div>
           <div class="test-content">
             <div class="test-name">{{ test.Test }}</div>
-            <div class="test-status">{{ test.Status }}</div>
+            <div class="test-status">
+              <span *ngIf="test.Status"><i class="fas fa-info-circle"></i> {{ test.Status }}</span>
+            </div>
           </div>
           <i class="fas fa-chevron-right"></i>
         </div>
       </div>
-      <div class="no-data" *ngIf="testsLoaded && suiteTests.length === 0">
-        <i class="fas fa-inbox"></i>
-        <p>No tests in this suite</p>
+
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="testsLoaded && !loadingTests && suiteTests.length === 0">
+        <div class="empty-icon">
+          <i class="fas fa-flask"></i>
+        </div>
+        <h4>No Tests in Suite</h4>
+        <p>Add tests to this suite to start running them together.</p>
       </div>
     </div>
 
+    <!-- Runs Tab -->
     <div class="runs-tab" *ngIf="activeTab === 'runs'">
-      <div class="runs-list" *ngIf="suiteRuns.length > 0">
+      <!-- Loading State -->
+      <div class="loading-state" *ngIf="loadingRuns">
+        <div class="skeleton-list">
+          <div class="skeleton-card" *ngFor="let i of [1,2,3]">
+            <div class="skeleton-icon"></div>
+            <div class="skeleton-content">
+              <div class="skeleton-line wide"></div>
+              <div class="skeleton-line narrow"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Runs List -->
+      <div class="runs-list" *ngIf="!loadingRuns && suiteRuns.length > 0">
         <div class="run-item" *ngFor="let run of suiteRuns" (click)="openSuiteRun(run.ID)">
-          <div class="run-icon" [style.background-color]="run.Status === 'Completed' ? '#4caf50' : run.Status === 'Failed' ? '#f44336' : '#2196f3'">
-            <i class="fas fa-play"></i>
+          <div class="run-icon" [style.background-color]="getRunStatusColor(run.Status)">
+            <i class="fas"
+               [class.fa-check]="run.Status === 'Completed'"
+               [class.fa-times]="run.Status === 'Failed'"
+               [class.fa-spinner]="run.Status === 'Running'"
+               [class.fa-clock]="run.Status === 'Pending'"
+               [class.fa-ban]="run.Status === 'Cancelled'"></i>
           </div>
           <div class="run-content">
             <div class="run-header">
-              <span class="run-id">{{ run.ID.substring(0, 8) }}</span>
-              <span class="run-status">{{ run.Status }}</span>
+              <span class="run-id">Run #{{ run.ID.substring(0, 8) }}</span>
+              <span class="run-status" [style.color]="getRunStatusColor(run.Status)">{{ run.Status }}</span>
             </div>
             <div class="run-meta">
-              <span>{{ run.StartedAt | date:'short' }}</span>
-              <span *ngIf="run.TotalTests">{{ run.PassedTests }}/{{ run.TotalTests }} passed</span>
+              <span><i class="fas fa-calendar"></i> {{ getRelativeTime(run.StartedAt) }}</span>
+              <span *ngIf="run.TotalTests">
+                <i class="fas fa-check-circle"></i> {{ run.PassedTests }}/{{ run.TotalTests }}
+                ({{ getPassRate(run).toFixed(0) }}%)
+              </span>
             </div>
           </div>
           <i class="fas fa-chevron-right"></i>
         </div>
       </div>
-      <div class="no-data" *ngIf="runsLoaded && suiteRuns.length === 0">
-        <i class="fas fa-inbox"></i>
-        <p>No runs for this suite</p>
+
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="runsLoaded && !loadingRuns && suiteRuns.length === 0">
+        <div class="empty-icon">
+          <i class="fas fa-play-circle"></i>
+        </div>
+        <h4>No Suite Runs Yet</h4>
+        <p>Run this suite to see execution history and results here.</p>
+        <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
+          Run Suite Now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts Hint (Desktop Only) -->
+  <div class="keyboard-shortcuts">
+    <div class="shortcuts-header">
+      <i class="fas fa-keyboard"></i>
+      Shortcuts
+    </div>
+    <div class="shortcut-list">
+      <div class="shortcut-item">
+        <span>Refresh</span>
+        <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>R</kbd></span>
+      </div>
+      <div class="shortcut-item">
+        <span>Run Suite</span>
+        <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>Enter</kbd></span>
+      </div>
+      <div class="shortcut-item">
+        <span>Switch Tabs</span>
+        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>3</kbd></span>
       </div>
     </div>
   </div>

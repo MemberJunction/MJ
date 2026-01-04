@@ -1,6 +1,6 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
+import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TestSuiteRunEntity, TestSuiteEntity, TestRunEntity } from '@memberjunction/core-entities';
@@ -8,6 +8,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestSuiteRunFormComponent } from '../../generated/Entities/TestSuiteRun/testsuiterun.form.component';
+import { TestingDialogService } from '@memberjunction/ng-testing';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suite Runs')
 @Component({
@@ -24,19 +25,26 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
   // UI state
   activeTab = 'overview';
   loading = false;
+  loadingTestRuns = false;
   error: string | null = null;
   testRunsLoaded = false;
+  isRefreshing = false;
+  autoRefreshEnabled = false;
 
   // Related entities
   testSuite: TestSuiteEntity | null = null;
   testRuns: TestRunEntity[] = [];
+
+  // Keyboard shortcuts
+  keyboardShortcutsEnabled = true;
 
   constructor(
     elementRef: ElementRef,
     sharedService: SharedService,
     protected router: Router,
     route: ActivatedRoute,
-    protected cdr: ChangeDetectorRef
+    protected cdr: ChangeDetectorRef,
+    private testingDialogService: TestingDialogService
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -46,6 +54,11 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
 
     if (this.record && this.record.ID) {
       await this.loadRelatedData();
+
+      // Auto-refresh for running suite executions
+      if (this.record.Status === 'Running' || this.record.Status === 'Pending') {
+        this.startAutoRefresh();
+      }
     }
   }
 
@@ -54,8 +67,60 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
     this.destroy$.complete();
   }
 
+  // Keyboard shortcuts
+  @HostListener('document:keydown', ['$event'])
+  handleKeyboardShortcut(event: KeyboardEvent) {
+    if (!this.keyboardShortcutsEnabled) return;
+
+    // Cmd/Ctrl + R: Refresh
+    if ((event.metaKey || event.ctrlKey) && event.key === 'r' && !event.shiftKey) {
+      event.preventDefault();
+      this.refresh();
+      return;
+    }
+
+    // Cmd/Ctrl + Shift + R: Re-run suite
+    if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'r') {
+      event.preventDefault();
+      this.reRunSuite();
+      return;
+    }
+
+    // Number keys for tabs (1-3)
+    if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+      switch (event.key) {
+        case '1': this.changeTab('overview'); break;
+        case '2': this.changeTab('runs'); break;
+        case '3': this.changeTab('details'); break;
+      }
+    }
+  }
+
+  private startAutoRefresh() {
+    this.autoRefreshEnabled = true;
+    interval(5000)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        if (this.autoRefreshEnabled && (this.record.Status === 'Running' || this.record.Status === 'Pending')) {
+          this.silentRefresh();
+        } else {
+          this.autoRefreshEnabled = false;
+        }
+      });
+  }
+
+  private async silentRefresh() {
+    try {
+      await this.record.Load(this.record.ID);
+      this.cdr.markForCheck();
+    } catch {
+      // Silently fail on auto-refresh
+    }
+  }
+
   private async loadRelatedData() {
     this.loading = true;
+    this.error = null;
 
     try {
       // Load test suite
@@ -70,15 +135,23 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading related data:', error);
-      this.error = 'Failed to load related data';
+      this.error = 'Failed to load related data. Click to retry.';
     } finally {
       this.loading = false;
       this.cdr.markForCheck();
     }
   }
 
+  async retryLoad() {
+    this.error = null;
+    await this.loadRelatedData();
+  }
+
   private async loadTestRuns() {
     if (this.testRunsLoaded) return;
+
+    this.loadingTestRuns = true;
+    this.cdr.markForCheck();
 
     try {
       const rv = new RunView();
@@ -94,9 +167,12 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
       }
 
       this.testRunsLoaded = true;
-      this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading test runs:', error);
+      SharedService.Instance.CreateSimpleNotification('Failed to load test runs', 'error', 3000);
+    } finally {
+      this.loadingTestRuns = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -113,12 +189,12 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
 
   getStatusColor(): string {
     switch (this.record.Status) {
-      case 'Completed': return '#4caf50';
-      case 'Failed': return '#f44336';
-      case 'Running': return '#2196f3';
-      case 'Pending': return '#ffc107';
-      case 'Cancelled': return '#9e9e9e';
-      default: return '#999';
+      case 'Completed': return '#10b981';
+      case 'Failed': return '#ef4444';
+      case 'Running': return '#3b82f6';
+      case 'Pending': return '#8b5cf6';
+      case 'Cancelled': return '#6b7280';
+      default: return '#9ca3af';
     }
   }
 
@@ -126,11 +202,15 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
     switch (this.record.Status) {
       case 'Completed': return 'fa-check-circle';
       case 'Failed': return 'fa-times-circle';
-      case 'Running': return 'fa-spinner fa-spin';
-      case 'Pending': return 'fa-clock';
+      case 'Running': return 'fa-circle-notch fa-spin';
+      case 'Pending': return 'fa-hourglass-half';
       case 'Cancelled': return 'fa-ban';
       default: return 'fa-question-circle';
     }
+  }
+
+  getStatusClass(): string {
+    return `status-${this.record.Status?.toLowerCase() || 'unknown'}`;
   }
 
   calculateDuration(): string {
@@ -161,6 +241,22 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
     return (passed / total) * 100;
   }
 
+  getRelativeTime(date: Date | string | null): string {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString();
+  }
+
   openTestSuite() {
     if (this.testSuite) {
       SharedService.Instance.OpenEntityRecord('MJ: Test Suites', CompositeKey.FromID(this.testSuite.ID));
@@ -171,13 +267,63 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
     SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(runId));
   }
 
-  async refresh() {
-    await this.loadRelatedData();
-    if (this.testRunsLoaded) {
-      this.testRunsLoaded = false;
-      await this.loadTestRuns();
+  async reRunSuite() {
+    if (!this.record.SuiteID) {
+      SharedService.Instance.CreateSimpleNotification('Cannot re-run: Suite ID not available', 'error', 3000);
+      return;
     }
+
+    this.testingDialogService.OpenSuiteDialog(this.record.SuiteID);
+  }
+
+  async refresh() {
+    this.isRefreshing = true;
     this.cdr.markForCheck();
+
+    try {
+      await this.record.Load(this.record.ID);
+      await this.loadRelatedData();
+
+      // Reset lazy-loaded data
+      if (this.testRunsLoaded) {
+        this.testRunsLoaded = false;
+        this.testRuns = [];
+        await this.loadTestRuns();
+      }
+
+      SharedService.Instance.CreateSimpleNotification('Refreshed successfully', 'success', 2000);
+    } catch {
+      SharedService.Instance.CreateSimpleNotification('Failed to refresh', 'error', 3000);
+    } finally {
+      this.isRefreshing = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  getRunStatusColor(status: string): string {
+    switch (status) {
+      case 'Passed': return '#10b981';
+      case 'Failed': return '#ef4444';
+      case 'Error': return '#f59e0b';
+      case 'Timeout': return '#f97316';
+      case 'Running': return '#3b82f6';
+      case 'Pending': return '#8b5cf6';
+      case 'Skipped': return '#6b7280';
+      default: return '#9ca3af';
+    }
+  }
+
+  getRunStatusIcon(status: string): string {
+    switch (status) {
+      case 'Passed': return 'fa-check';
+      case 'Failed': return 'fa-times';
+      case 'Error': return 'fa-exclamation';
+      case 'Timeout': return 'fa-clock';
+      case 'Running': return 'fa-circle-notch fa-spin';
+      case 'Pending': return 'fa-hourglass-half';
+      case 'Skipped': return 'fa-forward';
+      default: return 'fa-question';
+    }
   }
 }
 

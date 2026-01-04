@@ -158,7 +158,7 @@ interface ExecutionFilters {
           </div>
           <div class="kpi-content">
             <div class="kpi-value">{{ (completedTodayCount$ | async) ?? 0 }}</div>
-            <div class="kpi-label">Passed Today</div>
+            <div class="kpi-label">Passed {{ getTimeRangeLabel() }}</div>
           </div>
           <div class="kpi-arrow">
             <i class="fa-solid fa-chevron-right"></i>
@@ -174,7 +174,7 @@ interface ExecutionFilters {
           </div>
           <div class="kpi-content">
             <div class="kpi-value">{{ (failedTodayCount$ | async) ?? 0 }}</div>
-            <div class="kpi-label">Failed Today</div>
+            <div class="kpi-label">Failed {{ getTimeRangeLabel() }}</div>
           </div>
           <div class="kpi-arrow">
             <i class="fa-solid fa-chevron-right"></i>
@@ -919,11 +919,15 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.setupObservables();
-
+    // Apply initial state if provided
     if (this.initialState) {
       this.filters = { ...this.filters, ...this.initialState.filters };
     }
+
+    // Set the service date range based on the selected time range filter
+    this.updateServiceDateRange();
+
+    this.setupObservables();
   }
 
   ngOnDestroy(): void {
@@ -954,40 +958,26 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     );
 
+    // KPI counts are now based on the full executions$ (which respects the service date range)
+    // This means the counts will match the selected time range filter
     this.runningCount$ = this.executions$.pipe(
       map(execs => execs.filter(e => e.status === 'Running').length)
     );
 
     this.completedTodayCount$ = this.executions$.pipe(
-      map(execs => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return execs.filter(e =>
-          e.status === 'Passed' &&
-          e.startedAt >= today
-        ).length;
-      })
+      map(execs => execs.filter(e => e.status === 'Passed').length)
     );
 
     this.failedTodayCount$ = this.executions$.pipe(
-      map(execs => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return execs.filter(e =>
-          e.status === 'Failed' &&
-          e.startedAt >= today
-        ).length;
-      })
+      map(execs => execs.filter(e => e.status === 'Failed' || e.status === 'Error').length)
     );
 
     this.avgDurationToday$ = this.executions$.pipe(
       map(execs => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayExecs = execs.filter(e => e.startedAt >= today && e.completedAt);
-        if (todayExecs.length === 0) return 0;
-        const totalDuration = todayExecs.reduce((sum, e) => sum + e.duration, 0);
-        return totalDuration / todayExecs.length;
+        const completedExecs = execs.filter(e => e.completedAt || e.status !== 'Running');
+        if (completedExecs.length === 0) return 0;
+        const totalDuration = completedExecs.reduce((sum, e) => sum + e.duration, 0);
+        return totalDuration / completedExecs.length;
       })
     );
 
@@ -1020,6 +1010,7 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   private applyFilters(executions: ExecutionListItem[]): ExecutionListItem[] {
     let filtered = [...executions];
 
+    // Apply status filter
     if (this.filters.status !== 'all') {
       if (this.filters.status === 'running') {
         filtered = filtered.filter(e => e.status === 'Running');
@@ -1032,21 +1023,10 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
       }
     }
 
-    if (this.filters.timeRange !== 'all') {
-      const now = new Date();
-      let startDate = new Date();
+    // Note: Time range filtering is now handled by the service via updateServiceDateRange()
+    // This ensures the KPIs and list use the same data set
 
-      if (this.filters.timeRange === 'today') {
-        startDate.setHours(0, 0, 0, 0);
-      } else if (this.filters.timeRange === 'week') {
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      } else if (this.filters.timeRange === 'month') {
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      }
-
-      filtered = filtered.filter(e => e.startedAt >= startDate);
-    }
-
+    // Apply search text filter
     if (this.filters.searchText) {
       const searchLower = this.filters.searchText.toLowerCase();
       filtered = filtered.filter(e =>
@@ -1055,14 +1035,42 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
       );
     }
 
+    // Sort by most recent first
     filtered.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
 
     return filtered;
   }
 
   onFilterChange(): void {
+    // Update the service date range when time range filter changes
+    this.updateServiceDateRange();
     this.emitStateChange();
     this.cdr.markForCheck();
+  }
+
+  private updateServiceDateRange(): void {
+    const now = new Date();
+    let startDate: Date;
+
+    switch (this.filters.timeRange) {
+      case 'today':
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'all':
+      default:
+        // For "all time", use a very old date (e.g., 1 year ago)
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+    }
+
+    this.instrumentationService.setDateRange(startDate, now);
   }
 
   clearSearch(): void {
@@ -1180,6 +1188,16 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
     const minutes = Math.floor(seconds / 60);
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
     return `${seconds}s`;
+  }
+
+  getTimeRangeLabel(): string {
+    switch (this.filters.timeRange) {
+      case 'today': return 'Today';
+      case 'week': return 'This Week';
+      case 'month': return 'This Month';
+      case 'all': return 'All Time';
+      default: return '';
+    }
   }
 
   private emitStateChange(): void {
