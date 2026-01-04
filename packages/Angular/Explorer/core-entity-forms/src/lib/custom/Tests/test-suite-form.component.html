@@ -60,6 +60,21 @@
             <div class="info-label">Updated</div>
             <div class="info-value">{{ record.__mj_UpdatedAt | date:'medium' }}</div>
           </div>
+          <div class="info-item">
+            <div class="info-label">Max Execution Time</div>
+            <div class="info-value">{{ formatTimeout(record.MaxExecutionTimeMS) }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>Execution Settings</h3>
+        <div class="config-grid">
+          <div class="config-item">
+            <label>Max Execution Time (ms)</label>
+            <input type="number" [(ngModel)]="record.MaxExecutionTimeMS" class="config-input" placeholder="Default: 300000 (5 min)" />
+            <span class="config-hint">Default timeout for tests in this suite</span>
+          </div>
         </div>
       </div>
     </div>

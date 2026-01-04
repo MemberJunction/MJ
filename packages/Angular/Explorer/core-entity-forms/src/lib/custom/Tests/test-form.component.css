@@ -301,6 +301,12 @@
   box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
 }
 
+.config-hint {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
+
 /* Runs Tab */
 .runs-list,
 .suites-list {

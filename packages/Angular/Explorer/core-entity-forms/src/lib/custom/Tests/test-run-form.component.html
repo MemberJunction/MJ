@@ -99,6 +99,10 @@
         <span>Feedback</span>
         <span class="tab-badge" *ngIf="feedbackLoaded">{{ feedbacks.length }}</span>
       </button>
+      <button class="tab" [class.active]="activeTab === 'log'" (click)="changeTab('log')" *ngIf="record.Log">
+        <i class="fas fa-terminal"></i>
+        <span>Execution Log</span>
+      </button>
     </div>
   </div>
 
@@ -107,7 +111,7 @@
     <!-- Overview Tab -->
     <div class="overview-tab" *ngIf="activeTab === 'overview'">
       <!-- Result Hero -->
-      <div class="result-hero" [class.passed]="record.Status === 'Passed'" [class.failed]="record.Status === 'Failed'">
+      <div class="result-hero" [class.passed]="record.Status === 'Passed'" [class.failed]="record.Status === 'Failed'" [class.timeout]="record.Status === 'Timeout'">
         <div class="result-icon">
           <i class="fas" [ngClass]="getStatusIcon()"></i>
         </div>
@@ -294,6 +298,21 @@
       <div class="no-data" *ngIf="feedbackLoaded && feedbacks.length === 0">
         <i class="fas fa-inbox"></i>
         <p>No feedback submitted for this test run</p>
+      </div>
+    </div>
+
+    <!-- Execution Log Tab -->
+    <div class="log-tab" *ngIf="activeTab === 'log'">
+      <div class="log-header">
+        <h3>Execution Log</h3>
+        <div class="log-actions">
+          <button kendoButton (click)="copyLogToClipboard()" icon="copy" title="Copy to clipboard">
+            Copy
+          </button>
+        </div>
+      </div>
+      <div class="log-container">
+        <pre class="log-content">{{ record.Log }}</pre>
       </div>
     </div>
   </div>

@@ -30,7 +30,7 @@ export interface TestRunSummary {
   testName: string;
   suiteName: string;
   testType: string;
-  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running';
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Timeout';
   score: number; // 0-1.0000
   duration: number; // milliseconds
   cost: number; // USD

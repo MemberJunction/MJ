@@ -87,6 +87,20 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     return this.record.Status === 'Active' ? '#4caf50' : '#9e9e9e';
   }
 
+  formatTimeout(ms: number | null): string {
+    if (ms === null || ms === undefined) return 'Default (5 min)';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    if (ms < 3600000) {
+      const mins = Math.floor(ms / 60000);
+      const secs = Math.floor((ms % 60000) / 1000);
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    const hours = Math.floor(ms / 3600000);
+    const mins = Math.floor((ms % 3600000) / 60000);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+
   openTest(testId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Tests', CompositeKey.FromID(testId));
   }

@@ -206,6 +206,7 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
       case 'Passed': return '#4caf50';
       case 'Failed': return '#f44336';
       case 'Error': return '#ff9800';
+      case 'Timeout': return '#e65100';
       case 'Running': return '#2196f3';
       case 'Pending': return '#ffc107';
       case 'Skipped': return '#9e9e9e';
@@ -218,6 +219,7 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
       case 'Passed': return 'fa-check-circle';
       case 'Failed': return 'fa-times-circle';
       case 'Error': return 'fa-exclamation-circle';
+      case 'Timeout': return 'fa-stopwatch';
       case 'Running': return 'fa-spinner fa-spin';
       case 'Pending': return 'fa-clock';
       case 'Skipped': return 'fa-forward';
@@ -300,6 +302,17 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
     const passed = this.record.PassedChecks || 0;
     if (total === 0) return 0;
     return (passed / total) * 100;
+  }
+
+  async copyLogToClipboard(): Promise<void> {
+    if (this.record.Log) {
+      try {
+        await navigator.clipboard.writeText(this.record.Log);
+        SharedService.Instance.CreateSimpleNotification('Log copied to clipboard', 'success', 2000);
+      } catch {
+        SharedService.Instance.CreateSimpleNotification('Failed to copy log', 'error', 2000);
+      }
+    }
   }
 }
 

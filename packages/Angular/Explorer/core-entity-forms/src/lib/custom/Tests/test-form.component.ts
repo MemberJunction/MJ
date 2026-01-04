@@ -224,6 +224,20 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     return `$${cost.toFixed(6)}`;
   }
 
+  formatTimeout(ms: number | null): string {
+    if (ms === null || ms === undefined) return 'Default (5 min)';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    if (ms < 3600000) {
+      const mins = Math.floor(ms / 60000);
+      const secs = Math.floor((ms % 60000) / 1000);
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    const hours = Math.floor(ms / 3600000);
+    const mins = Math.floor((ms % 3600000) / 60000);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+
   openTestRun(runId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(runId));
   }

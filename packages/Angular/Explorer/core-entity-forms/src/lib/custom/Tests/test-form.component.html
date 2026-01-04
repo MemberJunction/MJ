@@ -114,6 +114,10 @@
             <div class="info-value">{{ record.RepeatCount || 1 }}</div>
           </div>
           <div class="info-item">
+            <div class="info-label">Max Execution Time</div>
+            <div class="info-value">{{ formatTimeout(record.MaxExecutionTimeMS) }}</div>
+          </div>
+          <div class="info-item">
             <div class="info-label">Created</div>
             <div class="info-value">{{ record.__mj_CreatedAt | date:'medium' }}</div>
           </div>
@@ -163,6 +167,11 @@
           <div class="config-item">
             <label>Estimated Cost (USD)</label>
             <input type="number" step="0.000001" [(ngModel)]="record.EstimatedCostUSD" class="config-input" />
+          </div>
+          <div class="config-item">
+            <label>Max Execution Time (ms)</label>
+            <input type="number" [(ngModel)]="record.MaxExecutionTimeMS" class="config-input" placeholder="Default: 300000 (5 min)" />
+            <span class="config-hint">Leave empty for default 5 minute timeout</span>
           </div>
         </div>
       </div>
