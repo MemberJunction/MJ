@@ -144,6 +144,55 @@
         Part of Suite Run (Seq: {{ record.Sequence }})
       </span>
     </div>
+
+    <!-- Tags Section - Sleek inline design -->
+    <div class="tags-bar" *ngIf="!editingTags">
+      <div class="tags-bar-content">
+        <span class="tags-bar-label"><i class="fas fa-tags"></i></span>
+        <div class="tags-bar-chips" *ngIf="tags.length > 0">
+          <span class="tag-inline" *ngFor="let tag of tags">{{ tag }}</span>
+        </div>
+        <span class="tags-bar-empty" *ngIf="tags.length === 0">No tags</span>
+        <button class="tags-bar-edit" (click)="startEditingTags()" title="Edit tags">
+          <i class="fas fa-plus"></i> Add
+        </button>
+      </div>
+    </div>
+
+    <!-- Tags Editor - Expanded when editing -->
+    <div class="tags-editor-panel" *ngIf="editingTags">
+      <div class="tags-editor-header">
+        <span class="tags-editor-title"><i class="fas fa-tags"></i> Edit Tags</span>
+      </div>
+      <div class="tags-editor-body">
+        <div class="tags-editor-chips">
+          <span class="tag-editable" *ngFor="let tag of tags">
+            {{ tag }}
+            <button class="tag-remove-btn" (click)="removeTag(tag)" title="Remove tag">
+              <i class="fas fa-times"></i>
+            </button>
+          </span>
+          <span class="tags-empty-hint" *ngIf="tags.length === 0">No tags yet</span>
+        </div>
+        <div class="tags-editor-input">
+          <input type="text"
+                 [(ngModel)]="newTag"
+                 placeholder="Type a tag and press Enter..."
+                 (keyup.enter)="addTag()"
+                 class="tag-text-input" />
+          <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+      </div>
+      <div class="tags-editor-footer">
+        <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
+          <i class="fas fa-spinner fa-spin" *ngIf="savingTags"></i>
+          {{ savingTags ? 'Saving...' : 'Save' }}
+        </button>
+        <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <!-- Tabs -->

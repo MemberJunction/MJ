@@ -21,6 +21,9 @@
         </div>
       </div>
       <div class="header-actions">
+        <button kendoButton (click)="exportToExcel()" icon="file-excel" title="Export to CSV">
+          Export
+        </button>
         <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
           Run Suite
         </button>
@@ -60,6 +63,20 @@
               [attr.aria-selected]="activeTab === 'runs'">
         <i class="fas fa-history"></i> Runs
         <span class="tab-badge" *ngIf="runsLoaded">{{ suiteRuns.length }}</span>
+      </button>
+      <button class="tab"
+              [class.active]="activeTab === 'analytics'"
+              (click)="changeTab('analytics')"
+              role="tab"
+              [attr.aria-selected]="activeTab === 'analytics'">
+        <i class="fas fa-chart-line"></i> Analytics
+      </button>
+      <button class="tab"
+              [class.active]="activeTab === 'compare'"
+              (click)="changeTab('compare')"
+              role="tab"
+              [attr.aria-selected]="activeTab === 'compare'">
+        <i class="fas fa-balance-scale"></i> Compare
       </button>
     </div>
   </div>
@@ -187,6 +204,10 @@
                 ({{ getPassRate(run).toFixed(0) }}%)
               </span>
             </div>
+            <!-- Tags display -->
+            <div class="run-tags" *ngIf="getRunTags(run).length > 0">
+              <span class="tag-chip" *ngFor="let tag of getRunTags(run)">{{ tag }}</span>
+            </div>
           </div>
           <i class="fas fa-chevron-right"></i>
         </div>
@@ -204,13 +225,425 @@
         </button>
       </div>
     </div>
+
+    <!-- Analytics Tab -->
+    <div class="analytics-tab" *ngIf="activeTab === 'analytics'">
+      <!-- Loading State -->
+      <div class="loading-state" *ngIf="loadingAnalytics">
+        <mj-loading text="Loading analytics data..."></mj-loading>
+      </div>
+
+      <ng-container *ngIf="!loadingAnalytics && analyticsLoaded">
+        <!-- View Toggle Sub-nav -->
+        <div class="analytics-subnav">
+          <div class="subnav-tabs">
+            <button class="subnav-tab"
+                    [class.active]="analyticsView === 'summary'"
+                    (click)="setAnalyticsView('summary')">
+              <i class="fas fa-chart-bar"></i>
+              <span>Summary</span>
+            </button>
+            <button class="subnav-tab"
+                    [class.active]="analyticsView === 'matrix'"
+                    (click)="setAnalyticsView('matrix')">
+              <i class="fas fa-th"></i>
+              <span>Matrix</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filters (shared by both views) -->
+        <div class="analytics-filters">
+          <div class="filter-group">
+            <label>Time Range</label>
+            <div class="filter-buttons">
+              <button class="filter-btn" [class.active]="analyticsTimeRange === '7d'" (click)="setTimeRange('7d')">7 Days</button>
+              <button class="filter-btn" [class.active]="analyticsTimeRange === '30d'" (click)="setTimeRange('30d')">30 Days</button>
+              <button class="filter-btn" [class.active]="analyticsTimeRange === '90d'" (click)="setTimeRange('90d')">90 Days</button>
+              <button class="filter-btn" [class.active]="analyticsTimeRange === 'all'" (click)="setTimeRange('all')">All Time</button>
+            </div>
+          </div>
+          <div class="filter-group" *ngIf="uniqueTags.length > 0">
+            <label>Filter by Tag</label>
+            <div class="filter-buttons tag-filters">
+              <button class="filter-btn tag-btn" [class.active]="selectedTagFilter === null" (click)="setTagFilter(null)">All Tags</button>
+              <button class="filter-btn tag-btn" *ngFor="let tag of uniqueTags" [class.active]="selectedTagFilter === tag" (click)="setTagFilter(tag)">{{ tag }}</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary View -->
+        <ng-container *ngIf="analyticsView === 'summary'">
+          <!-- KPI Cards -->
+          <div class="analytics-kpis">
+            <div class="kpi-card">
+              <div class="kpi-icon"><i class="fas fa-play-circle"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value">{{ getTotalRuns() }}</div>
+                <div class="kpi-label">Total Runs</div>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-icon success"><i class="fas fa-check-circle"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value">{{ getAveragePassRate().toFixed(1) }}%</div>
+                <div class="kpi-label">Avg Pass Rate</div>
+                <div class="kpi-trend" [ngClass]="{'trend-up': getPassRateTrend().direction === 'up', 'trend-down': getPassRateTrend().direction === 'down'}">
+                  <i class="fas" [ngClass]="{'fa-arrow-up': getPassRateTrend().direction === 'up', 'fa-arrow-down': getPassRateTrend().direction === 'down', 'fa-minus': getPassRateTrend().direction === 'stable'}"></i>
+                  {{ getPassRateTrend().value.toFixed(1) }}%
+                </div>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-icon info"><i class="fas fa-clock"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value">{{ formatDuration(getAverageDuration()) }}</div>
+                <div class="kpi-label">Avg Duration</div>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-icon warning"><i class="fas fa-dollar-sign"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value">{{ formatCost(getTotalCost()) }}</div>
+                <div class="kpi-label">Total Cost</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Runs Table -->
+          <div class="analytics-table-section">
+            <h3><i class="fas fa-table"></i> Run History</h3>
+            <div class="analytics-table-wrapper">
+              <table class="analytics-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Pass Rate</th>
+                    <th>Tests</th>
+                    <th>Duration</th>
+                    <th>Cost</th>
+                    <th>Tags</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let dp of getFilteredAnalyticsData()" (click)="openSuiteRun(dp.runId)" class="clickable-row">
+                    <td>{{ dp.date | date:'short' }}</td>
+                    <td>
+                      <span class="status-chip" [ngClass]="'status-' + dp.status.toLowerCase()">{{ dp.status }}</span>
+                    </td>
+                    <td>
+                      <div class="pass-rate-cell">
+                        <div class="pass-rate-bar" [style.width.%]="dp.passRate" [ngClass]="{'high': dp.passRate >= 80, 'medium': dp.passRate >= 50 && dp.passRate < 80, 'low': dp.passRate < 50}"></div>
+                        <span>{{ dp.passRate.toFixed(0) }}%</span>
+                      </div>
+                    </td>
+                    <td>{{ dp.passedTests }}/{{ dp.totalTests }}</td>
+                    <td>{{ formatDuration(dp.duration) }}</td>
+                    <td>{{ formatCost(dp.cost) }}</td>
+                    <td>
+                      <div class="tag-cell">
+                        <span class="tag-mini" *ngFor="let tag of dp.tags.slice(0, 2)">{{ tag }}</span>
+                        <span class="tag-more" *ngIf="dp.tags.length > 2">+{{ dp.tags.length - 2 }}</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="empty-state small" *ngIf="getFilteredAnalyticsData().length === 0">
+              <p>No runs match the current filters.</p>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- Matrix View -->
+        <ng-container *ngIf="analyticsView === 'matrix'">
+          <!-- Loading Matrix -->
+          <div class="loading-state" *ngIf="loadingMatrix">
+            <mj-loading text="Loading test matrix..."></mj-loading>
+          </div>
+
+          <!-- Matrix Content -->
+          <div class="matrix-section" *ngIf="!loadingMatrix && matrixLoaded && matrixData.length > 0">
+            <div class="matrix-header">
+              <h3><i class="fas fa-th"></i> Test Results Matrix</h3>
+              <div class="matrix-legend">
+                <span class="legend-item cell-passed"><i class="fas fa-check"></i> Passed</span>
+                <span class="legend-item cell-failed"><i class="fas fa-times"></i> Failed</span>
+                <span class="legend-item cell-error"><i class="fas fa-exclamation"></i> Error</span>
+                <span class="legend-item cell-skipped"><i class="fas fa-forward"></i> Skipped</span>
+              </div>
+            </div>
+
+            <div class="matrix-container">
+              <table class="test-matrix">
+                <thead>
+                  <tr>
+                    <th class="test-name-header">Test</th>
+                    <th class="run-header" *ngFor="let run of matrixData" (click)="openSuiteRun(run.runId)" [title]="'Click to view suite run - ' + (run.date | date:'medium')">
+                      <div class="run-header-content">
+                        <div class="run-tags-header" *ngIf="run.tags.length > 0">
+                          <span class="tag-chip-header" *ngFor="let tag of run.tags.slice(0, 2)">{{ tag }}</span>
+                          <span class="tag-more-header" *ngIf="run.tags.length > 2">+{{ run.tags.length - 2 }}</span>
+                        </div>
+                        <div class="run-date">{{ getRelativeTime(run.date) }}</div>
+                        <div class="run-pass-rate" [ngClass]="{'high': run.passRate >= 80, 'medium': run.passRate >= 50 && run.passRate < 80, 'low': run.passRate < 50}">
+                          {{ run.passRate.toFixed(0) }}%
+                        </div>
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let test of getUniqueTestsFromMatrix()">
+                    <td class="test-name-cell">
+                      <span class="test-name" [title]="test.testName">{{ test.testName }}</span>
+                    </td>
+                    <td class="result-cell"
+                        *ngFor="let run of matrixData"
+                        [ngClass]="getMatrixCellClass(getTestResultForRun(run.runId, test.testId))"
+                        [class.clickable]="getTestResultForRun(run.runId, test.testId)"
+                        [title]="getTestResultForRun(run.runId, test.testId)?.status + ' - Click to view test run' || 'Not Run'"
+                        (click)="onMatrixCellClick(getTestResultForRun(run.runId, test.testId), $event)">
+                      <ng-container *ngIf="getTestResultForRun(run.runId, test.testId) as result">
+                        <i class="fas"
+                           [class.fa-check]="result.status === 'Passed'"
+                           [class.fa-times]="result.status === 'Failed'"
+                           [class.fa-exclamation]="result.status === 'Error'"
+                           [class.fa-forward]="result.status === 'Skipped'"
+                           [class.fa-spinner]="result.status === 'Running'"
+                           [class.fa-clock]="result.status === 'Pending'"></i>
+                        <span class="cell-score" *ngIf="result.score != null">{{ (result.score * 100).toFixed(0) }}%</span>
+                      </ng-container>
+                      <span class="cell-none-indicator" *ngIf="!getTestResultForRun(run.runId, test.testId)">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="matrix-info">
+              <i class="fas fa-info-circle"></i>
+              Showing last {{ matrixData.length }} runs. Click on column headers to view run details.
+            </div>
+          </div>
+
+          <!-- Empty Matrix State -->
+          <div class="empty-state" *ngIf="!loadingMatrix && matrixLoaded && matrixData.length === 0">
+            <div class="empty-icon">
+              <i class="fas fa-th"></i>
+            </div>
+            <h4>No Matrix Data</h4>
+            <p>No suite runs match the current filters.</p>
+          </div>
+        </ng-container>
+      </ng-container>
+
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="!loadingAnalytics && analyticsLoaded && analyticsData.length === 0">
+        <div class="empty-icon">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <h4>No Analytics Data</h4>
+        <p>Run this suite to start collecting analytics data.</p>
+        <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
+          Run Suite Now
+        </button>
+      </div>
+    </div>
+
+    <!-- Compare Tab -->
+    <div class="compare-tab" *ngIf="activeTab === 'compare'">
+      <!-- Run Selection -->
+      <div class="compare-selection">
+        <div class="compare-run-selector">
+          <h4>Run A (Baseline)</h4>
+          <div class="run-selector-list" *ngIf="!loadingRuns && suiteRuns.length > 0">
+            <div class="run-selector-item"
+                 *ngFor="let run of suiteRuns"
+                 [class.selected]="compareRunA?.ID === run.ID"
+                 (click)="selectCompareRunA(run)">
+              <div class="selector-status" [style.background-color]="getRunStatusColor(run.Status)"></div>
+              <div class="selector-content">
+                <div class="selector-date">{{ run.StartedAt | date:'short' }}</div>
+                <div class="selector-rate">{{ getPassRate(run).toFixed(0) }}% pass</div>
+              </div>
+              <div class="selector-tags" *ngIf="getRunTags(run).length > 0">
+                <span class="tag-mini" *ngFor="let tag of getRunTags(run).slice(0, 2)">{{ tag }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="selected-run-preview" *ngIf="compareRunA">
+            <div class="preview-header">
+              <span class="preview-label">Selected:</span>
+              <button class="clear-btn" (click)="compareRunA = null; compareResults = []">Clear</button>
+            </div>
+            <div class="preview-details">
+              <span>{{ compareRunA.StartedAt | date:'medium' }}</span>
+              <span class="preview-rate">{{ getPassRate(compareRunA).toFixed(1) }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="compare-vs"><i class="fas fa-exchange-alt"></i></div>
+
+        <div class="compare-run-selector">
+          <h4>Run B (Compare)</h4>
+          <div class="run-selector-list" *ngIf="!loadingRuns && suiteRuns.length > 0">
+            <div class="run-selector-item"
+                 *ngFor="let run of suiteRuns"
+                 [class.selected]="compareRunB?.ID === run.ID"
+                 [class.disabled]="compareRunA?.ID === run.ID"
+                 (click)="compareRunA?.ID !== run.ID && selectCompareRunB(run)">
+              <div class="selector-status" [style.background-color]="getRunStatusColor(run.Status)"></div>
+              <div class="selector-content">
+                <div class="selector-date">{{ run.StartedAt | date:'short' }}</div>
+                <div class="selector-rate">{{ getPassRate(run).toFixed(0) }}% pass</div>
+              </div>
+              <div class="selector-tags" *ngIf="getRunTags(run).length > 0">
+                <span class="tag-mini" *ngFor="let tag of getRunTags(run).slice(0, 2)">{{ tag }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="selected-run-preview" *ngIf="compareRunB">
+            <div class="preview-header">
+              <span class="preview-label">Selected:</span>
+              <button class="clear-btn" (click)="compareRunB = null; compareResults = []">Clear</button>
+            </div>
+            <div class="preview-details">
+              <span>{{ compareRunB.StartedAt | date:'medium' }}</span>
+              <span class="preview-rate">{{ getPassRate(compareRunB).toFixed(1) }}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comparison Results -->
+      <div class="compare-results" *ngIf="compareRunA && compareRunB && !loadingCompare">
+        <!-- Summary Cards -->
+        <div class="compare-summary">
+          <div class="compare-summary-card">
+            <div class="summary-label">Pass Rate Change</div>
+            <div class="summary-value" [ngClass]="{'positive': getComparePassRateDiff()! > 0, 'negative': getComparePassRateDiff()! < 0}">
+              <i class="fas" [ngClass]="{'fa-arrow-up': getComparePassRateDiff()! > 0, 'fa-arrow-down': getComparePassRateDiff()! < 0, 'fa-minus': getComparePassRateDiff() === 0}"></i>
+              {{ getComparePassRateDiff()! > 0 ? '+' : '' }}{{ getComparePassRateDiff()?.toFixed(1) }}%
+            </div>
+          </div>
+          <div class="compare-summary-card">
+            <div class="summary-label">Duration Change</div>
+            <div class="summary-value" [ngClass]="{'positive': getCompareDurationDiff()! < 0, 'negative': getCompareDurationDiff()! > 0}">
+              <i class="fas" [ngClass]="{'fa-arrow-down': getCompareDurationDiff()! < 0, 'fa-arrow-up': getCompareDurationDiff()! > 0, 'fa-minus': getCompareDurationDiff() === 0}"></i>
+              {{ formatDuration(getAbsCompareDurationDiff()) }}
+            </div>
+          </div>
+          <div class="compare-summary-card improved">
+            <div class="summary-label">Improved</div>
+            <div class="summary-value">{{ getCompareImprovedCount() }}</div>
+          </div>
+          <div class="compare-summary-card regressed">
+            <div class="summary-label">Regressed</div>
+            <div class="summary-value">{{ getCompareRegressedCount() }}</div>
+          </div>
+        </div>
+
+        <!-- Detailed Comparison Table -->
+        <div class="compare-table-section">
+          <h3><i class="fas fa-list"></i> Test-by-Test Comparison</h3>
+          <div class="compare-table-wrapper">
+            <table class="compare-table">
+              <thead>
+                <tr>
+                  <th>Test</th>
+                  <th>Run A Status</th>
+                  <th>Run B Status</th>
+                  <th>Score Diff</th>
+                  <th>Duration Diff</th>
+                  <th>Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let result of compareResults" [ngClass]="{'improved': result.runA && result.runB && result.runA.status !== 'Passed' && result.runB.status === 'Passed', 'regressed': result.runA && result.runB && result.runA.status === 'Passed' && result.runB.status !== 'Passed'}">
+                  <td class="test-name-cell">{{ result.testName }}</td>
+                  <td>
+                    <span class="status-chip" *ngIf="result.runA" [ngClass]="'status-' + result.runA.status.toLowerCase()">{{ result.runA.status }}</span>
+                    <span class="status-chip status-missing" *ngIf="!result.runA">N/A</span>
+                  </td>
+                  <td>
+                    <span class="status-chip" *ngIf="result.runB" [ngClass]="'status-' + result.runB.status.toLowerCase()">{{ result.runB.status }}</span>
+                    <span class="status-chip status-missing" *ngIf="!result.runB">N/A</span>
+                  </td>
+                  <td>
+                    <span *ngIf="result.scoreDiff != null" [ngClass]="{'positive': result.scoreDiff > 0, 'negative': result.scoreDiff < 0}">
+                      {{ result.scoreDiff > 0 ? '+' : '' }}{{ (result.scoreDiff * 100).toFixed(1) }}%
+                    </span>
+                    <span *ngIf="result.scoreDiff == null" class="muted">-</span>
+                  </td>
+                  <td>
+                    <span *ngIf="result.durationDiff != null" [ngClass]="{'positive': result.durationDiff < 0, 'negative': result.durationDiff > 0}">
+                      {{ result.durationDiff > 0 ? '+' : '' }}{{ result.durationDiff.toFixed(1) }}s
+                    </span>
+                    <span *ngIf="result.durationDiff == null" class="muted">-</span>
+                  </td>
+                  <td>
+                    <span class="change-indicator improved" *ngIf="result.runA && result.runB && result.runA.status !== 'Passed' && result.runB.status === 'Passed'">
+                      <i class="fas fa-arrow-up"></i> Fixed
+                    </span>
+                    <span class="change-indicator regressed" *ngIf="result.runA && result.runB && result.runA.status === 'Passed' && result.runB.status !== 'Passed'">
+                      <i class="fas fa-arrow-down"></i> Broke
+                    </span>
+                    <span class="change-indicator unchanged" *ngIf="!result.statusChanged">
+                      <i class="fas fa-minus"></i>
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State for Compare -->
+      <div class="loading-state" *ngIf="loadingCompare">
+        <mj-loading text="Loading comparison data..."></mj-loading>
+      </div>
+
+      <!-- Empty State -->
+      <div class="compare-empty" *ngIf="!compareRunA || !compareRunB">
+        <div class="compare-empty-icon">
+          <i class="fas fa-balance-scale"></i>
+        </div>
+        <h4>Select Two Runs to Compare</h4>
+        <p>Choose a baseline run (A) and a comparison run (B) from the lists above to see a detailed side-by-side comparison.</p>
+      </div>
+
+      <!-- No Runs State -->
+      <div class="empty-state" *ngIf="runsLoaded && suiteRuns.length < 2">
+        <div class="empty-icon">
+          <i class="fas fa-balance-scale"></i>
+        </div>
+        <h4>Not Enough Runs to Compare</h4>
+        <p>You need at least 2 suite runs to use the comparison feature.</p>
+        <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
+          Run Suite Now
+        </button>
+      </div>
+    </div>
   </div>
 
+  <!-- Keyboard Shortcuts Toggle Button -->
+  <button class="shortcuts-toggle" (click)="toggleShortcuts()" [title]="showShortcuts ? 'Hide keyboard shortcuts' : 'Show keyboard shortcuts'">
+    <i class="fas fa-keyboard"></i>
+  </button>
+
   <!-- Keyboard Shortcuts Hint (Desktop Only) -->
-  <div class="keyboard-shortcuts">
+  <div class="keyboard-shortcuts" *ngIf="showShortcuts">
     <div class="shortcuts-header">
       <i class="fas fa-keyboard"></i>
       Shortcuts
+      <button class="shortcuts-close" (click)="toggleShortcuts()" title="Hide shortcuts">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
     <div class="shortcut-list">
       <div class="shortcut-item">
@@ -223,7 +656,7 @@
       </div>
       <div class="shortcut-item">
         <span>Switch Tabs</span>
-        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>3</kbd></span>
+        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>5</kbd></span>
       </div>
     </div>
   </div>

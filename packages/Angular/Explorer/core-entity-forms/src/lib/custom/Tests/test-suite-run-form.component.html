@@ -134,6 +134,55 @@
         </div>
       </div>
     </div>
+
+    <!-- Tags Section - Sleek inline design -->
+    <div class="tags-bar" *ngIf="!editingTags">
+      <div class="tags-bar-content">
+        <span class="tags-bar-label"><i class="fas fa-tags"></i></span>
+        <div class="tags-bar-chips" *ngIf="tags.length > 0">
+          <span class="tag-inline" *ngFor="let tag of tags">{{ tag }}</span>
+        </div>
+        <span class="tags-bar-empty" *ngIf="tags.length === 0">No tags</span>
+        <button class="tags-bar-edit" (click)="startEditingTags()" title="Edit tags">
+          <i class="fas fa-plus"></i> Add
+        </button>
+      </div>
+    </div>
+
+    <!-- Tags Editor - Expanded when editing -->
+    <div class="tags-editor-panel" *ngIf="editingTags">
+      <div class="tags-editor-header">
+        <span class="tags-editor-title"><i class="fas fa-tags"></i> Edit Tags</span>
+      </div>
+      <div class="tags-editor-body">
+        <div class="tags-editor-chips">
+          <span class="tag-editable" *ngFor="let tag of tags">
+            {{ tag }}
+            <button class="tag-remove-btn" (click)="removeTag(tag)" title="Remove tag">
+              <i class="fas fa-times"></i>
+            </button>
+          </span>
+          <span class="tags-empty-hint" *ngIf="tags.length === 0">No tags yet</span>
+        </div>
+        <div class="tags-editor-input">
+          <input type="text"
+                 [(ngModel)]="newTag"
+                 placeholder="Type a tag and press Enter..."
+                 (keyup.enter)="addTag()"
+                 class="tag-text-input" />
+          <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+      </div>
+      <div class="tags-editor-footer">
+        <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
+          <i class="fas fa-spinner fa-spin" *ngIf="savingTags"></i>
+          {{ savingTags ? 'Saving...' : 'Save' }}
+        </button>
+        <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <!-- Tabs -->
@@ -160,6 +209,13 @@
               role="tab"
               [attr.aria-selected]="activeTab === 'details'">
         <i class="fas fa-info-circle"></i> Details
+      </button>
+      <button class="tab"
+              [class.active]="activeTab === 'analytics'"
+              (click)="changeTab('analytics')"
+              role="tab"
+              [attr.aria-selected]="activeTab === 'analytics'">
+        <i class="fas fa-chart-bar"></i> Analytics
       </button>
     </div>
   </div>
@@ -208,6 +264,40 @@
 
     <!-- Test Runs Tab -->
     <div class="runs-tab" *ngIf="activeTab === 'runs'">
+      <!-- Toolbar -->
+      <div class="runs-toolbar" *ngIf="testRunsLoaded && testRuns.length > 0">
+        <div class="run-filters">
+          <button class="filter-btn"
+                  [class.active]="runStatusFilter === null"
+                  (click)="setRunStatusFilter(null)">
+            All ({{ testRuns.length }})
+          </button>
+          <button class="filter-btn passed"
+                  [class.active]="runStatusFilter === 'Passed'"
+                  (click)="setRunStatusFilter('Passed')"
+                  *ngIf="getRunCountByStatus('Passed') > 0">
+            <i class="fas fa-check"></i> Passed ({{ getRunCountByStatus('Passed') }})
+          </button>
+          <button class="filter-btn failed"
+                  [class.active]="runStatusFilter === 'Failed'"
+                  (click)="setRunStatusFilter('Failed')"
+                  *ngIf="getRunCountByStatus('Failed') > 0">
+            <i class="fas fa-times"></i> Failed ({{ getRunCountByStatus('Failed') }})
+          </button>
+          <button class="filter-btn error"
+                  [class.active]="runStatusFilter === 'Error'"
+                  (click)="setRunStatusFilter('Error')"
+                  *ngIf="getRunCountByStatus('Error') > 0">
+            <i class="fas fa-exclamation"></i> Error ({{ getRunCountByStatus('Error') }})
+          </button>
+        </div>
+        <div class="runs-actions">
+          <button kendoButton (click)="exportToCSV()" icon="download">
+            Export CSV
+          </button>
+        </div>
+      </div>
+
       <!-- Loading State -->
       <div class="loading-state" *ngIf="loadingTestRuns">
         <div class="skeleton-list">
@@ -224,26 +314,112 @@
 
       <!-- Test Runs List -->
       <div class="test-runs-list" *ngIf="!loadingTestRuns && testRuns.length > 0">
-        <div class="test-run-item" *ngFor="let run of testRuns" (click)="openTestRun(run.ID)">
-          <div class="run-sequence">{{ run.Sequence || '-' }}</div>
-          <div class="run-icon" [style.background-color]="getRunStatusColor(run.Status)">
-            <i class="fas" [ngClass]="getRunStatusIcon(run.Status)"></i>
-          </div>
-          <div class="run-content">
-            <div class="run-name">{{ run.Test }}</div>
-            <div class="run-meta">
-              <span class="run-status" [style.color]="getRunStatusColor(run.Status)">
-                {{ run.Status }}
-              </span>
-              <span class="run-score" *ngIf="run.Score != null">
-                <i class="fas fa-star"></i> {{ run.Score.toFixed(4) }}
-              </span>
-              <span class="run-duration" *ngIf="run.DurationSeconds">
-                <i class="fas fa-clock"></i> {{ run.DurationSeconds.toFixed(1) }}s
-              </span>
+        <div class="test-run-card" *ngFor="let run of getFilteredTestRuns()">
+          <div class="test-run-item" (click)="toggleRunExpanded(run.ID)">
+            <div class="run-sequence">{{ run.Sequence || '-' }}</div>
+            <div class="run-icon" [style.background-color]="getRunStatusColor(run.Status)">
+              <i class="fas" [ngClass]="getRunStatusIcon(run.Status)"></i>
+            </div>
+            <div class="run-content">
+              <div class="run-header-row">
+                <div class="run-name">{{ run.Test }}</div>
+                <div class="run-feedback-indicator" *ngIf="hasFeedback(run.ID)">
+                  <i class="fas fa-comment-dots"></i>
+                  <span class="feedback-rating">{{ getFeedbackRating(run.ID) }}/10</span>
+                </div>
+              </div>
+              <div class="run-meta">
+                <span class="run-status" [style.color]="getRunStatusColor(run.Status)">
+                  {{ run.Status }}
+                </span>
+                <span class="run-score" *ngIf="run.Score != null">
+                  <i class="fas fa-star"></i> {{ run.Score.toFixed(4) }}
+                </span>
+                <span class="run-duration" *ngIf="run.DurationSeconds">
+                  <i class="fas fa-clock"></i> {{ run.DurationSeconds.toFixed(1) }}s
+                </span>
+                <span class="run-cost" *ngIf="run.CostUSD">
+                  <i class="fas fa-dollar-sign"></i> {{ run.CostUSD.toFixed(6) }}
+                </span>
+              </div>
+              <div class="run-tags" *ngIf="getRunTags(run).length > 0">
+                <span class="tag-chip" *ngFor="let tag of getRunTags(run)">{{ tag }}</span>
+              </div>
+            </div>
+            <div class="run-expand">
+              <i class="fas" [class.fa-chevron-down]="expandedRunId !== run.ID" [class.fa-chevron-up]="expandedRunId === run.ID"></i>
             </div>
           </div>
-          <i class="fas fa-chevron-right"></i>
+
+          <!-- Expanded Inline Feedback -->
+          <div class="inline-feedback" *ngIf="expandedRunId === run.ID">
+            <div class="feedback-divider"></div>
+
+            <div class="feedback-section">
+              <div class="feedback-label">Quick Feedback</div>
+
+              <div class="inline-rating">
+                <div class="rating-numbers">
+                  <button *ngFor="let num of [1,2,3,4,5,6,7,8,9,10]"
+                          type="button"
+                          class="rating-btn"
+                          [class.selected]="num === inlineRating"
+                          [class.hover]="num === inlineHoverRating"
+                          [class.low]="num <= 3"
+                          [class.mid]="num >= 4 && num <= 6"
+                          [class.high]="num >= 7"
+                          (click)="setInlineRating(num); $event.stopPropagation()"
+                          (mouseenter)="inlineHoverRating = num"
+                          (mouseleave)="inlineHoverRating = 0">
+                    {{ num }}
+                  </button>
+                </div>
+                <div class="rating-info" *ngIf="inlineRating > 0">
+                  <span class="rating-value">{{ inlineRating }}/10</span>
+                  <span class="rating-label-text">{{ getInlineRatingLabel() }}</span>
+                </div>
+              </div>
+
+              <div class="correctness-row">
+                <span class="correctness-label">Was it correct?</span>
+                <div class="correctness-options">
+                  <label class="radio-opt" (click)="$event.stopPropagation()">
+                    <input type="radio" name="correct-{{run.ID}}" [value]="true" [(ngModel)]="inlineIsCorrect">
+                    <span>Yes</span>
+                  </label>
+                  <label class="radio-opt" (click)="$event.stopPropagation()">
+                    <input type="radio" name="correct-{{run.ID}}" [value]="false" [(ngModel)]="inlineIsCorrect">
+                    <span>No</span>
+                  </label>
+                  <label class="radio-opt" (click)="$event.stopPropagation()">
+                    <input type="radio" name="correct-{{run.ID}}" [value]="null" [(ngModel)]="inlineIsCorrect">
+                    <span>Not Sure</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="comments-row" (click)="$event.stopPropagation()">
+                <textarea
+                  class="feedback-textarea"
+                  [(ngModel)]="inlineComments"
+                  placeholder="Add comments or corrections..."
+                  rows="3"></textarea>
+              </div>
+
+              <div class="feedback-actions" (click)="$event.stopPropagation()">
+                <button kendoButton (click)="openTestRun(run.ID)">
+                  <i class="fas fa-external-link-alt"></i> View Full Details
+                </button>
+                <button kendoButton
+                        themeColor="primary"
+                        (click)="saveInlineFeedback()"
+                        [disabled]="!canSubmitInlineFeedback() || savingInlineFeedback">
+                  <i class="fas" [ngClass]="savingInlineFeedback ? 'fa-spinner fa-spin' : 'fa-save'"></i>
+                  {{ savingInlineFeedback ? 'Saving...' : (hasFeedback(run.ID) ? 'Update' : 'Save') }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -254,6 +430,16 @@
         </div>
         <h4>No Test Runs Found</h4>
         <p>No test runs have been recorded for this suite execution.</p>
+      </div>
+
+      <!-- Filtered Empty -->
+      <div class="empty-state" *ngIf="testRunsLoaded && !loadingTestRuns && testRuns.length > 0 && getFilteredTestRuns().length === 0">
+        <div class="empty-icon">
+          <i class="fas fa-filter"></i>
+        </div>
+        <h4>No Matching Runs</h4>
+        <p>No test runs match the current filter.</p>
+        <button kendoButton (click)="setRunStatusFilter(null)">Clear Filter</button>
       </div>
     </div>
 
@@ -310,13 +496,165 @@
         </div>
       </div>
     </div>
+
+    <!-- Analytics Tab -->
+    <div class="analytics-tab" *ngIf="activeTab === 'analytics'">
+      <!-- Loading State -->
+      <div class="analytics-loading" *ngIf="loadingTestRuns">
+        <i class="fas fa-spinner fa-spin"></i>
+        <span>Loading test results...</span>
+      </div>
+
+      <!-- Summary Statistics - Moved to top for better overview -->
+      <div class="analytics-section" *ngIf="!loadingTestRuns && testRuns.length > 0">
+        <h3><i class="fas fa-chart-pie"></i> Summary Statistics</h3>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon passed"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">{{ getPassedCount() }}</div>
+              <div class="stat-label">Passed</div>
+              <div class="stat-percent">{{ getPassedPercent().toFixed(1) }}%</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon failed"><i class="fas fa-times-circle"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">{{ getFailedCount() }}</div>
+              <div class="stat-label">Failed</div>
+              <div class="stat-percent">{{ getFailedPercent().toFixed(1) }}%</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon score"><i class="fas fa-star"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">{{ (getAverageScore() * 100).toFixed(1) }}%</div>
+              <div class="stat-label">Avg Score</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon duration"><i class="fas fa-clock"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">{{ getAverageDuration().toFixed(1) }}s</div>
+              <div class="stat-label">Avg Duration</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon cost"><i class="fas fa-dollar-sign"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">${{ getTotalCost().toFixed(4) }}</div>
+              <div class="stat-label">Total Cost</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test Results Table -->
+      <div class="analytics-section" *ngIf="!loadingTestRuns && testRuns.length > 0">
+        <div class="analytics-header">
+          <h3><i class="fas fa-table"></i> Test Results</h3>
+          <div class="analytics-legend">
+            <span class="legend-item passed"><i class="fas fa-check-circle"></i> Passed</span>
+            <span class="legend-item failed"><i class="fas fa-times-circle"></i> Failed</span>
+            <span class="legend-item error"><i class="fas fa-exclamation-circle"></i> Error</span>
+            <span class="legend-item skipped"><i class="fas fa-forward"></i> Skipped</span>
+          </div>
+        </div>
+
+        <!-- Results Table -->
+        <div class="results-table-wrapper">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th class="seq-col">#</th>
+                <th class="name-col">Test Name</th>
+                <th class="status-col">Status</th>
+                <th class="score-col">Score</th>
+                <th class="duration-col">Duration</th>
+                <th class="cost-col">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let run of testRuns; let i = index"
+                  class="result-row"
+                  [class.row-passed]="run.Status === 'Passed'"
+                  [class.row-failed]="run.Status === 'Failed'"
+                  [class.row-error]="run.Status === 'Error'"
+                  [class.row-skipped]="run.Status === 'Skipped'"
+                  (click)="openTestRun(run.ID)">
+                <td class="seq-col">{{ i + 1 }}</td>
+                <td class="name-col">
+                  <div class="test-name-wrapper">
+                    <span class="test-name">{{ run.Test || 'Unknown Test' }}</span>
+                    <div class="test-tags" *ngIf="getRunTags(run).length > 0">
+                      <span class="tag-mini" *ngFor="let tag of getRunTags(run).slice(0, 2)">{{ tag }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="status-col">
+                  <span class="status-badge" [ngClass]="'status-' + run.Status.toLowerCase()">
+                    <i class="fas"
+                       [class.fa-check-circle]="run.Status === 'Passed'"
+                       [class.fa-times-circle]="run.Status === 'Failed'"
+                       [class.fa-exclamation-circle]="run.Status === 'Error'"
+                       [class.fa-forward]="run.Status === 'Skipped'"
+                       [class.fa-clock]="run.Status === 'Pending'"
+                       [class.fa-spinner]="run.Status === 'Running'"
+                       [class.fa-spin]="run.Status === 'Running'"></i>
+                    {{ run.Status }}
+                  </span>
+                </td>
+                <td class="score-col">
+                  <div class="score-display" *ngIf="run.Score != null">
+                    <div class="score-bar-mini">
+                      <div class="score-fill"
+                           [style.width.%]="run.Score * 100"
+                           [class.high]="run.Score >= 0.8"
+                           [class.medium]="run.Score >= 0.5 && run.Score < 0.8"
+                           [class.low]="run.Score < 0.5"></div>
+                    </div>
+                    <span class="score-text">{{ (run.Score * 100).toFixed(0) }}%</span>
+                  </div>
+                  <span class="na-value" *ngIf="run.Score == null">—</span>
+                </td>
+                <td class="duration-col">
+                  <span *ngIf="run.DurationSeconds">{{ run.DurationSeconds.toFixed(1) }}s</span>
+                  <span class="na-value" *ngIf="!run.DurationSeconds">—</span>
+                </td>
+                <td class="cost-col">
+                  <span *ngIf="run.CostUSD">${{ run.CostUSD.toFixed(4) }}</span>
+                  <span class="na-value" *ngIf="!run.CostUSD">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="!loadingTestRuns && testRunsLoaded && testRuns.length === 0">
+        <div class="empty-icon">
+          <i class="fas fa-chart-bar"></i>
+        </div>
+        <h4>No Test Results Yet</h4>
+        <p>Test runs will appear here once the suite execution completes.</p>
+      </div>
+    </div>
   </div>
 
+  <!-- Keyboard Shortcuts Toggle Button -->
+  <button class="shortcuts-toggle" (click)="toggleShortcuts()" [title]="showShortcuts ? 'Hide keyboard shortcuts' : 'Show keyboard shortcuts'">
+    <i class="fas fa-keyboard"></i>
+  </button>
+
   <!-- Keyboard Shortcuts Hint (Desktop Only) -->
-  <div class="keyboard-shortcuts">
+  <div class="keyboard-shortcuts" *ngIf="showShortcuts">
     <div class="shortcuts-header">
       <i class="fas fa-keyboard"></i>
       Shortcuts
+      <button class="shortcuts-close" (click)="toggleShortcuts()" title="Hide shortcuts">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
     <div class="shortcut-list">
       <div class="shortcut-item">
@@ -329,7 +667,7 @@
       </div>
       <div class="shortcut-item">
         <span>Switch Tabs</span>
-        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>3</kbd></span>
+        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>4</kbd></span>
       </div>
     </div>
   </div>

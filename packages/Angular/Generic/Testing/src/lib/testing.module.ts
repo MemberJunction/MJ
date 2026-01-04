@@ -19,6 +19,7 @@ import { TestRunDialogComponent } from './components/test-run-dialog.component';
 import { TestStatusBadgeComponent } from './components/widgets/test-status-badge.component';
 import { ScoreIndicatorComponent } from './components/widgets/score-indicator.component';
 import { CostDisplayComponent } from './components/widgets/cost-display.component';
+import { TestResultsMatrixComponent } from './components/widgets/test-results-matrix.component';
 
 // Services
 import { TestingDialogService } from './services/testing-dialog.service';
@@ -30,7 +31,8 @@ import { TestingExecutionService } from './services/testing-execution.service';
     TestRunDialogComponent,
     TestStatusBadgeComponent,
     ScoreIndicatorComponent,
-    CostDisplayComponent
+    CostDisplayComponent,
+    TestResultsMatrixComponent
   ],
   imports: [
     CommonModule,
@@ -49,7 +51,8 @@ import { TestingExecutionService } from './services/testing-execution.service';
     TestRunDialogComponent,
     TestStatusBadgeComponent,
     ScoreIndicatorComponent,
-    CostDisplayComponent
+    CostDisplayComponent,
+    TestResultsMatrixComponent
   ],
   providers: [
     TestingDialogService,

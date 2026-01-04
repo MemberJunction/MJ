@@ -204,7 +204,11 @@ interface ExecutionFilters {
             <div class="header-cell actions">Actions</div>
           </div>
 
-          @if ((filteredExecutions$ | async)?.length === 0) {
+          @if (isLoading) {
+            <div class="loading-placeholder">
+              <mj-loading text="Loading test executions..."></mj-loading>
+            </div>
+          } @else if ((filteredExecutions$ | async)?.length === 0) {
             <div class="no-data">
               <i class="fa-solid fa-inbox"></i>
               <p>No test executions found</p>
@@ -803,6 +807,15 @@ interface ExecutionFilters {
       box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
     }
 
+    /* Loading State */
+    .loading-placeholder {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 80px 40px;
+      background: linear-gradient(180deg, #fafbff 0%, #f8fafc 100%);
+    }
+
     /* Empty State */
     .no-data {
       padding: 80px 40px;
@@ -889,6 +902,7 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   private activeDialogRef: DialogRef | null = null;
 
   isRefreshing = false;
+  isLoading = false;
   lastUpdated = new Date();
   filters: ExecutionFilters = {
     status: 'all',
@@ -916,6 +930,14 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
     // Initialize GraphQL testing client for cancel/rerun operations
     const dataProvider = Metadata.Provider as GraphQLDataProvider;
     this.testingClient = new GraphQLTestingClient(dataProvider);
+
+    // Subscribe to loading state
+    this.instrumentationService.isLoading$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(loading => {
+      this.isLoading = loading;
+      this.cdr.markForCheck();
+    });
   }
 
   ngOnInit(): void {

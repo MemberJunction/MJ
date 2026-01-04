@@ -84,8 +84,8 @@
               (click)="changeTab('runs')"
               role="tab"
               [attr.aria-selected]="activeTab === 'runs'">
-        <i class="fas fa-list"></i>
-        <span>Test Runs</span>
+        <i class="fas fa-history"></i>
+        <span>Runs</span>
         <span class="tab-badge" *ngIf="testRunsLoaded">{{ testRuns.length }}</span>
       </button>
       <button class="tab"
@@ -96,6 +96,14 @@
         <i class="fas fa-layer-group"></i>
         <span>Test Suites</span>
         <span class="tab-badge" *ngIf="suiteTestsLoaded">{{ suiteTests.length }}</span>
+      </button>
+      <button class="tab"
+              [class.active]="activeTab === 'analytics'"
+              (click)="changeTab('analytics')"
+              role="tab"
+              [attr.aria-selected]="activeTab === 'analytics'">
+        <i class="fas fa-chart-line"></i>
+        <span>Analytics</span>
       </button>
     </div>
   </div>
@@ -314,6 +322,10 @@
               <span *ngIf="run.CostUSD"><i class="fas fa-dollar-sign"></i> {{ formatCost(run.CostUSD) }}</span>
               <span *ngIf="run.Score != null"><i class="fas fa-star"></i> {{ (run.Score * 100).toFixed(1) }}%</span>
             </div>
+            <div class="run-tags" *ngIf="getRunTags(run).length > 0">
+              <span class="run-tag" *ngFor="let tag of getRunTags(run).slice(0, 3)">{{ tag }}</span>
+              <span class="run-tag-more" *ngIf="getRunTags(run).length > 3">+{{ getRunTags(run).length - 3 }}</span>
+            </div>
           </div>
           <i class="fas fa-chevron-right"></i>
         </div>
@@ -373,13 +385,208 @@
         <p>This test is not included in any test suites. Add it to a suite to run it with other tests.</p>
       </div>
     </div>
+
+    <!-- Analytics Tab -->
+    <div class="history-tab" *ngIf="activeTab === 'analytics'">
+      <!-- Loading State -->
+      <div class="loading-state" *ngIf="loadingHistory">
+        <mj-loading text="Loading history..."></mj-loading>
+      </div>
+
+      <!-- History Content -->
+      <div class="history-content" *ngIf="!loadingHistory && historyLoaded">
+        <!-- Filters -->
+        <div class="history-filters">
+          <div class="time-range-filters">
+            <span class="filter-label">Time Range:</span>
+            <button class="filter-btn"
+                    [class.active]="historyTimeRange === '7d'"
+                    (click)="setHistoryTimeRange('7d')">7 Days</button>
+            <button class="filter-btn"
+                    [class.active]="historyTimeRange === '30d'"
+                    (click)="setHistoryTimeRange('30d')">30 Days</button>
+            <button class="filter-btn"
+                    [class.active]="historyTimeRange === '90d'"
+                    (click)="setHistoryTimeRange('90d')">90 Days</button>
+            <button class="filter-btn"
+                    [class.active]="historyTimeRange === 'all'"
+                    (click)="setHistoryTimeRange('all')">All Time</button>
+          </div>
+          <div class="history-actions">
+            <button kendoButton (click)="exportHistoryToCSV()" icon="download" [disabled]="historyData.length === 0">
+              Export CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="history-kpi-cards" *ngIf="historyData.length > 0">
+          <div class="kpi-card">
+            <div class="kpi-icon">
+              <i class="fas fa-play-circle"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value">{{ getTotalRuns() }}</div>
+              <div class="kpi-label">Total Runs</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon pass-rate">
+              <i class="fas fa-percentage"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value">
+                {{ getOverallPassRate().toFixed(1) }}%
+                <i class="fas trend-icon"
+                   [class.fa-arrow-up]="getPassRateTrend() === 'up'"
+                   [class.fa-arrow-down]="getPassRateTrend() === 'down'"
+                   [class.fa-minus]="getPassRateTrend() === 'stable'"
+                   [class.trend-up]="getPassRateTrend() === 'up'"
+                   [class.trend-down]="getPassRateTrend() === 'down'"></i>
+              </div>
+              <div class="kpi-label">Pass Rate</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon">
+              <i class="fas fa-star"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value">{{ (getOverallAvgScore() * 100).toFixed(1) }}%</div>
+              <div class="kpi-label">Avg Score</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value">{{ formatDuration(getOverallAvgDuration()) }}</div>
+              <div class="kpi-label">Avg Duration</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon">
+              <i class="fas fa-dollar-sign"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value">{{ formatCost(getOverallAvgCost()) }}</div>
+              <div class="kpi-label">Avg Cost</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Daily History Table -->
+        <div class="history-section" *ngIf="historyData.length > 0">
+          <h3><i class="fas fa-calendar-alt"></i> Daily Performance</h3>
+          <div class="history-table-container">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Runs</th>
+                  <th>Passed</th>
+                  <th>Failed</th>
+                  <th>Pass Rate</th>
+                  <th>Avg Score</th>
+                  <th>Avg Duration</th>
+                  <th>Avg Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let day of historyData">
+                  <td class="date-cell">{{ day.date | date:'mediumDate' }}</td>
+                  <td class="runs-cell">{{ day.runCount }}</td>
+                  <td class="passed-cell">{{ day.passCount }}</td>
+                  <td class="failed-cell">{{ day.failCount }}</td>
+                  <td class="pass-rate-cell">
+                    <div class="pass-rate-bar">
+                      <div class="pass-rate-fill" [style.width.%]="day.passRate"></div>
+                      <span class="pass-rate-text">{{ day.passRate.toFixed(1) }}%</span>
+                    </div>
+                  </td>
+                  <td class="score-cell">{{ (day.avgScore * 100).toFixed(1) }}%</td>
+                  <td class="duration-cell">{{ formatDuration(day.avgDuration) }}</td>
+                  <td class="cost-cell">{{ formatCost(day.avgCost) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Suite Performance -->
+        <div class="history-section" *ngIf="suitePerformance.length > 0">
+          <h3><i class="fas fa-layer-group"></i> Performance by Suite</h3>
+          <div class="suite-performance-list">
+            <div class="suite-perf-card" *ngFor="let suite of suitePerformance" (click)="openSuiteFromHistory(suite.suiteId)">
+              <div class="suite-perf-header">
+                <div class="suite-perf-name">{{ suite.suiteName }}</div>
+                <div class="suite-perf-tags" *ngIf="suite.tags.length > 0">
+                  <span class="tag-mini" *ngFor="let tag of suite.tags.slice(0, 3)">{{ tag }}</span>
+                  <span class="tag-more" *ngIf="suite.tags.length > 3">+{{ suite.tags.length - 3 }}</span>
+                </div>
+              </div>
+              <div class="suite-perf-stats">
+                <div class="suite-stat">
+                  <span class="stat-value">{{ suite.totalRuns }}</span>
+                  <span class="stat-label">Runs</span>
+                </div>
+                <div class="suite-stat">
+                  <span class="stat-value pass-rate" [class.high]="suite.passRate >= 80" [class.low]="suite.passRate < 50">
+                    {{ suite.passRate.toFixed(1) }}%
+                  </span>
+                  <span class="stat-label">Pass Rate</span>
+                </div>
+                <div class="suite-stat">
+                  <span class="stat-value">{{ (suite.avgScore * 100).toFixed(1) }}%</span>
+                  <span class="stat-label">Avg Score</span>
+                </div>
+                <div class="suite-stat">
+                  <span class="stat-value">{{ formatDuration(suite.avgDuration) }}</span>
+                  <span class="stat-label">Avg Duration</span>
+                </div>
+                <div class="suite-stat">
+                  <span class="stat-value">{{ formatCost(suite.avgCost) }}</span>
+                  <span class="stat-label">Avg Cost</span>
+                </div>
+                <div class="suite-stat" *ngIf="suite.lastRun">
+                  <span class="stat-value">{{ getRelativeTime(suite.lastRun) }}</span>
+                  <span class="stat-label">Last Run</span>
+                </div>
+              </div>
+              <i class="fas fa-chevron-right suite-perf-arrow"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" *ngIf="historyData.length === 0">
+          <div class="empty-icon">
+            <i class="fas fa-chart-line"></i>
+          </div>
+          <h4>No History Available</h4>
+          <p>Run this test to start building history and analytics data.</p>
+          <button kendoButton (click)="runTest()" themeColor="primary" icon="play">
+            Run Test Now
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <!-- Keyboard Shortcuts Toggle Button -->
+  <button class="shortcuts-toggle" (click)="toggleShortcuts()" [title]="showShortcuts ? 'Hide keyboard shortcuts' : 'Show keyboard shortcuts'">
+    <i class="fas fa-keyboard"></i>
+  </button>
+
   <!-- Keyboard Shortcuts Hint (Desktop Only) -->
-  <div class="keyboard-shortcuts">
+  <div class="keyboard-shortcuts" *ngIf="showShortcuts">
     <div class="shortcuts-header">
       <i class="fas fa-keyboard"></i>
       Shortcuts
+      <button class="shortcuts-close" (click)="toggleShortcuts()" title="Hide shortcuts">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
     <div class="shortcut-list">
       <div class="shortcut-item">
@@ -392,7 +599,7 @@
       </div>
       <div class="shortcut-item">
         <span>Switch Tabs</span>
-        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>4</kbd></span>
+        <span class="shortcut-keys"><kbd>1</kbd>-<kbd>5</kbd></span>
       </div>
     </div>
   </div>

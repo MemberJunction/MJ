@@ -9,7 +9,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { TestRunFormComponent } from '../../generated/Entities/TestRun/testrun.form.component';
-import { TestingDialogService } from '@memberjunction/ng-testing';
+import { TestingDialogService, TagsHelper } from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
 
 interface ParsedData {
@@ -68,6 +68,13 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
   // Keyboard shortcuts active
   keyboardShortcutsEnabled = true;
 
+  // Tags management
+  tags: string[] = [];
+  newTag = '';
+  editingTags = false;
+  savingTags = false;
+  private originalTags: string[] = [];
+
   constructor(
     elementRef: ElementRef,
     sharedService: SharedService,
@@ -87,11 +94,74 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
     if (this.record && this.record.ID) {
       await this.loadRelatedData();
       this.parseJsonFields();
+      this.loadTags();
 
       // Auto-refresh for running tests
       if (this.record.Status === 'Running' || this.record.Status === 'Pending') {
         this.startAutoRefresh();
       }
+    }
+  }
+
+  private loadTags(): void {
+    this.tags = TagsHelper.parseTags(this.record.Tags);
+    this.originalTags = [...this.tags];
+  }
+
+  startEditingTags(): void {
+    this.originalTags = [...this.tags];
+    this.editingTags = true;
+    this.cdr.markForCheck();
+  }
+
+  cancelEditingTags(): void {
+    this.tags = [...this.originalTags];
+    this.newTag = '';
+    this.editingTags = false;
+    this.cdr.markForCheck();
+  }
+
+  addTag(): void {
+    const tag = this.newTag.trim();
+    if (tag && !this.tags.includes(tag)) {
+      this.tags = [...this.tags, tag];
+      this.newTag = '';
+      this.cdr.markForCheck();
+    }
+  }
+
+  removeTag(tag: string): void {
+    this.tags = this.tags.filter(t => t !== tag);
+    this.cdr.markForCheck();
+  }
+
+  async saveTags(): Promise<void> {
+    // Auto-add any pending tag in the input before saving
+    const pendingTag = this.newTag.trim();
+    if (pendingTag && !this.tags.includes(pendingTag)) {
+      this.tags = [...this.tags, pendingTag];
+      this.newTag = '';
+    }
+
+    this.savingTags = true;
+    this.cdr.markForCheck();
+
+    try {
+      this.record.Tags = TagsHelper.toJson(this.tags);
+      const result = await this.record.Save();
+
+      if (result) {
+        this.originalTags = [...this.tags];
+        this.editingTags = false;
+        SharedService.Instance.CreateSimpleNotification('Tags saved', 'success', 2000);
+      } else {
+        SharedService.Instance.CreateSimpleNotification('Failed to save tags', 'error', 3000);
+      }
+    } catch {
+      SharedService.Instance.CreateSimpleNotification('Failed to save tags', 'error', 3000);
+    } finally {
+      this.savingTags = false;
+      this.cdr.markForCheck();
     }
   }
 

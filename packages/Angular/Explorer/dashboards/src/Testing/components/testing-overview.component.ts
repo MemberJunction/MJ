@@ -27,8 +27,14 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
       <!-- KPI Cards -->
       <div class="kpi-section">
-        @for (kpi of kpiCards$ | async; track kpi.title) {
-          <app-kpi-card [data]="kpi"></app-kpi-card>
+        @if (isLoading) {
+          <div class="loading-placeholder">
+            <mj-loading text="Loading KPIs..."></mj-loading>
+          </div>
+        } @else {
+          @for (kpi of kpiCards$ | async; track kpi.title) {
+            <app-kpi-card [data]="kpi"></app-kpi-card>
+          }
         }
       </div>
 
@@ -52,23 +58,29 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
             </h3>
           </div>
           <div class="runs-list">
-            @for (run of (recentRuns$ | async) ?? []; track run.id) {
-              <div class="run-item">
-                <div class="run-info" (click)="viewRunDetail(run)">
-                  <div class="run-name">{{ run.testName }}</div>
-                  <div class="run-meta">
-                    {{ run.runDateTime | date:'short' }} • {{ run.testType }}
-                  </div>
-                </div>
-                <div class="run-actions">
-                  <div class="run-metrics">
-                    <app-test-status-badge [status]="run.status" [showIcon]="false"></app-test-status-badge>
-                    <app-score-indicator [score]="run.score" [showBar]="false" [showIcon]="false"></app-score-indicator>
-                  </div>
-                </div>
+            @if (isLoading) {
+              <div class="loading-placeholder panel-loading">
+                <mj-loading text="Loading runs..."></mj-loading>
               </div>
-            } @empty {
-              <div class="no-data">No recent test runs</div>
+            } @else {
+              @for (run of (recentRuns$ | async) ?? []; track run.id) {
+                <div class="run-item">
+                  <div class="run-info" (click)="viewRunDetail(run)">
+                    <div class="run-name">{{ run.testName }}</div>
+                    <div class="run-meta">
+                      {{ run.runDateTime | date:'short' }} • {{ run.testType }}
+                    </div>
+                  </div>
+                  <div class="run-actions">
+                    <div class="run-metrics">
+                      <app-test-status-badge [status]="run.status" [showIcon]="false"></app-test-status-badge>
+                      <app-score-indicator [score]="run.score" [showBar]="false" [showIcon]="false"></app-score-indicator>
+                    </div>
+                  </div>
+                </div>
+              } @empty {
+                <div class="no-data">No recent test runs</div>
+              }
             }
           </div>
         </div>
@@ -82,19 +94,25 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
             </h3>
           </div>
           <div class="stats-content">
-            @if (kpis$ | async; as kpis) {
-              <div class="stat-item">
-                <div class="stat-label">Failed Tests</div>
-                <div class="stat-value failed">{{ kpis.failedTests }}</div>
+            @if (isLoading) {
+              <div class="loading-placeholder panel-loading">
+                <mj-loading text="Loading stats..."></mj-loading>
               </div>
-              <div class="stat-item">
-                <div class="stat-label">Skipped Tests</div>
-                <div class="stat-value skipped">{{ kpis.skippedTests }}</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-label">Avg Duration</div>
-                <div class="stat-value">{{ formatDuration(kpis.averageDuration) }}</div>
-              </div>
+            } @else {
+              @if (kpis$ | async; as kpis) {
+                <div class="stat-item">
+                  <div class="stat-label">Failed Tests</div>
+                  <div class="stat-value failed">{{ kpis.failedTests }}</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-label">Skipped Tests</div>
+                  <div class="stat-value skipped">{{ kpis.skippedTests }}</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-label">Avg Duration</div>
+                  <div class="stat-value">{{ formatDuration(kpis.averageDuration) }}</div>
+                </div>
+              }
             }
           </div>
         </div>
@@ -323,6 +341,18 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
       text-align: center;
       color: #999;
       font-size: 13px;
+    }
+
+    .loading-placeholder {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
+      grid-column: 1 / -1;
+    }
+
+    .loading-placeholder.panel-loading {
+      min-height: 150px;
     }
 
     @media (max-width: 1200px) {
