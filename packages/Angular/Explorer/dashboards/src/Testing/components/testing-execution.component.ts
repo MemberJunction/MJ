@@ -911,6 +911,12 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
     searchText: ''
   };
 
+  // Track previous time range to detect changes requiring server re-query
+  private previousTimeRange: string = 'month';
+
+  // BehaviorSubject to trigger client-side filter updates
+  private filterTrigger$ = new BehaviorSubject<void>(undefined);
+
   executions$!: Observable<ExecutionListItem[]>;
   filteredExecutions$!: Observable<ExecutionListItem[]>;
   runningCount$!: Observable<number>;
@@ -973,8 +979,10 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     );
 
+    // Combine executions with filter trigger to react to client-side filter changes
     this.filteredExecutions$ = combineLatest([
-      this.executions$
+      this.executions$,
+      this.filterTrigger$
     ]).pipe(
       map(([executions]) => this.applyFilters(executions)),
       takeUntil(this.destroy$)
@@ -1064,8 +1072,15 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   }
 
   onFilterChange(): void {
-    // Update the service date range when time range filter changes
-    this.updateServiceDateRange();
+    // Only re-query server when time range changes - status/search filtering is client-side only
+    if (this.filters.timeRange !== this.previousTimeRange) {
+      this.previousTimeRange = this.filters.timeRange;
+      this.updateServiceDateRange();
+    }
+
+    // Trigger client-side filter update via observable
+    this.filterTrigger$.next();
+
     this.emitStateChange();
     this.cdr.markForCheck();
   }

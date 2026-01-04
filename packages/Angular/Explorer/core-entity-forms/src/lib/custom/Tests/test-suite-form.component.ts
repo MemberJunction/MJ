@@ -692,17 +692,57 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
         .attr('font-weight', '700')
         .text(`${run.passRate.toFixed(0)}%`);
 
-      // Tags indicator
+      // Tags indicator - styled pills
       if (run.tags.length > 0) {
-        chart.append('text')
-          .attr('x', x)
-          .attr('y', -55)
-          .attr('text-anchor', 'middle')
-          .attr('fill', '#3b82f6')
-          .attr('font-size', '9px')
-          .text(run.tags.slice(0, 2).join(', '))
-          .style('cursor', 'pointer')
-          .on('click', () => this.openSuiteRun(run.runId));
+        const tagsToShow = run.tags.slice(0, 2);
+        const tagPillWidth = 42;
+        const tagPillHeight = 14;
+        const tagGap = 4;
+        const totalTagsWidth = tagsToShow.length * tagPillWidth + (tagsToShow.length - 1) * tagGap;
+        const tagStartX = x - totalTagsWidth / 2;
+
+        tagsToShow.forEach((tag, tagIndex) => {
+          const tagX = tagStartX + tagIndex * (tagPillWidth + tagGap);
+          const tagY = -68;
+
+          // Pill background with gradient
+          chart.append('rect')
+            .attr('x', tagX)
+            .attr('y', tagY)
+            .attr('width', tagPillWidth)
+            .attr('height', tagPillHeight)
+            .attr('rx', 7)
+            .attr('fill', '#dbeafe')
+            .attr('stroke', '#93c5fd')
+            .attr('stroke-width', 1)
+            .style('cursor', 'pointer')
+            .on('click', () => this.openSuiteRun(run.runId));
+
+          // Tag text
+          chart.append('text')
+            .attr('x', tagX + tagPillWidth / 2)
+            .attr('y', tagY + tagPillHeight / 2 + 3)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#1d4ed8')
+            .attr('font-size', '8px')
+            .attr('font-weight', '600')
+            .text(tag.length > 8 ? tag.substring(0, 7) + '…' : tag)
+            .style('cursor', 'pointer')
+            .on('click', () => this.openSuiteRun(run.runId));
+        });
+
+        // Show +N indicator if more tags
+        if (run.tags.length > 2) {
+          const moreX = tagStartX + tagsToShow.length * (tagPillWidth + tagGap);
+          chart.append('text')
+            .attr('x', moreX)
+            .attr('y', -68 + tagPillHeight / 2 + 3)
+            .attr('text-anchor', 'start')
+            .attr('fill', '#64748b')
+            .attr('font-size', '8px')
+            .attr('font-weight', '500')
+            .text(`+${run.tags.length - 2}`);
+        }
       }
     });
 

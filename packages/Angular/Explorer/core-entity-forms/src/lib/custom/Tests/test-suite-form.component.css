@@ -741,6 +741,21 @@
   flex-wrap: wrap;
 }
 
+.tag-chip-table {
+  display: inline-block;
+  padding: 3px 8px;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border: 1px solid #93c5fd;
+  color: #1d4ed8;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ===========================
    Analytics Tab
    =========================== */

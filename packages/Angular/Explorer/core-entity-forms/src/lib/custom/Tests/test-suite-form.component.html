@@ -359,7 +359,7 @@
                     <td>{{ formatCost(dp.cost) }}</td>
                     <td>
                       <div class="tag-cell">
-                        <span class="tag-mini" *ngFor="let tag of dp.tags.slice(0, 2)">{{ tag }}</span>
+                        <span class="tag-chip-table" *ngFor="let tag of dp.tags.slice(0, 2)">{{ tag }}</span>
                         <span class="tag-more" *ngIf="dp.tags.length > 2">+{{ dp.tags.length - 2 }}</span>
                       </div>
                     </td>
