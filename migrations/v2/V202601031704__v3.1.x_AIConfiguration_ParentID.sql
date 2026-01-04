@@ -29,7 +29,7 @@ EXEC [${flyway:defaultSchema}].spSetDefaultColumnWidthWhereNeeded @ExcludedSchem
 EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @ExcludedSchemaNames='sys,staging', @LogOutput=0, @ContinueOnError=1
 
 --- THEN WE CAN DO our migration
-
+GO
 
 -- Add ParentID column to AIConfiguration
 ALTER TABLE ${flyway:defaultSchema}.AIConfiguration
