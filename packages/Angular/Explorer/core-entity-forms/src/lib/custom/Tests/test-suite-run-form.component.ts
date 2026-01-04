@@ -8,7 +8,18 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestSuiteRunFormComponent } from '../../generated/Entities/TestSuiteRun/testsuiterun.form.component';
-import { TestingDialogService, TagsHelper } from '@memberjunction/ng-testing';
+import {
+  TestingDialogService,
+  TagsHelper,
+  EvaluationPreferencesService,
+  EvaluationPreferences,
+  EvaluationMetrics,
+  TestRunWithFeedback,
+  calculateEvaluationMetrics,
+  normalizeExecutionStatus,
+  getNeedsReviewItems,
+  NeedsReviewItem
+} from '@memberjunction/ng-testing';
 
 /** Settings key for keyboard shortcuts visibility */
 const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
@@ -64,13 +75,24 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
   private shortcutsSettingEntity: UserSettingEntity | null = null;
   private metadata = new Metadata();
 
+  // Evaluation system
+  evalPreferences: EvaluationPreferences = {
+    showExecution: true,
+    showHuman: true,
+    showAuto: false
+  };
+  testRunsWithFeedback: TestRunWithFeedback[] = [];
+  evaluationMetrics: EvaluationMetrics | null = null;
+  needsReviewItems: NeedsReviewItem[] = [];
+
   constructor(
     elementRef: ElementRef,
     sharedService: SharedService,
     protected router: Router,
     route: ActivatedRoute,
     protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService
+    private testingDialogService: TestingDialogService,
+    private evalPrefsService: EvaluationPreferencesService
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -78,6 +100,14 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
   async ngOnInit() {
     await super.ngOnInit();
     this.loadShortcutsSetting();
+
+    // Subscribe to evaluation preferences
+    this.evalPrefsService.preferences$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(prefs => {
+        this.evalPreferences = prefs;
+        this.cdr.markForCheck();
+      });
 
     if (this.record && this.record.ID) {
       await this.loadRelatedData();
@@ -473,6 +503,9 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
         }
       }
 
+      // Build TestRunWithFeedback array and calculate metrics
+      this.buildTestRunsWithFeedback();
+
       this.feedbacksLoaded = true;
     } catch (error) {
       console.error('Error loading feedbacks:', error);
@@ -480,6 +513,43 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
       this.loadingFeedbacks = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Build TestRunWithFeedback array from testRuns and feedbacks
+   */
+  private buildTestRunsWithFeedback(): void {
+    this.testRunsWithFeedback = this.testRuns.map(run => {
+      const feedback = this.feedbacks.get(run.ID);
+      return {
+        id: run.ID,
+        testId: run.TestID,
+        testName: run.Test || 'Unknown Test',
+        executionStatus: normalizeExecutionStatus(run.Status || 'Completed'),
+        originalStatus: run.Status || 'Completed',
+        duration: (run.DurationSeconds || 0) * 1000, // Convert to ms
+        cost: run.CostUSD || 0,
+        runDateTime: run.StartedAt ? new Date(run.StartedAt) : new Date(),
+        autoScore: run.Score,
+        passedChecks: null,
+        failedChecks: null,
+        totalChecks: null,
+        humanRating: feedback?.Rating || null,
+        humanIsCorrect: feedback?.IsCorrect ?? null,
+        humanComments: feedback?.CorrectionSummary || null,
+        hasHumanFeedback: !!feedback,
+        feedbackId: feedback?.ID || null,
+        tags: TagsHelper.parseTags(run.Tags),
+        targetType: null,
+        targetLogID: null
+      };
+    });
+
+    // Calculate metrics
+    this.evaluationMetrics = calculateEvaluationMetrics(this.testRunsWithFeedback);
+
+    // Get items needing review
+    this.needsReviewItems = getNeedsReviewItems(this.testRunsWithFeedback);
   }
 
   toggleRunExpanded(runId: string): void {
@@ -551,6 +621,8 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
 
       if (result) {
         this.feedbacks.set(this.expandedRunId, feedback);
+        // Rebuild the metrics after feedback update
+        this.buildTestRunsWithFeedback();
         SharedService.Instance.CreateSimpleNotification('Feedback saved', 'success', 2000);
         this.expandedRunId = null;
       } else {
@@ -574,6 +646,20 @@ export class TestSuiteRunFormComponentExtended extends TestSuiteRunFormComponent
 
   getFeedbackRating(runId: string): number {
     return this.feedbacks.get(runId)?.Rating || 0;
+  }
+
+  /**
+   * Get TestRunWithFeedback by run ID for template binding
+   */
+  getRunWithFeedback(runId: string): TestRunWithFeedback | undefined {
+    return this.testRunsWithFeedback.find(r => r.id === runId);
+  }
+
+  /**
+   * Get the human correctness status for a run
+   */
+  getHumanIsCorrect(runId: string): boolean | null {
+    return this.feedbacks.get(runId)?.IsCorrect ?? null;
   }
 
   // ===========================

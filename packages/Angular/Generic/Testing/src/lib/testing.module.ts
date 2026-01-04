@@ -20,10 +20,14 @@ import { TestStatusBadgeComponent } from './components/widgets/test-status-badge
 import { ScoreIndicatorComponent } from './components/widgets/score-indicator.component';
 import { CostDisplayComponent } from './components/widgets/cost-display.component';
 import { TestResultsMatrixComponent } from './components/widgets/test-results-matrix.component';
+import { EvaluationBadgeComponent } from './components/widgets/evaluation-badge.component';
+import { EvaluationModeToggleComponent } from './components/widgets/evaluation-mode-toggle.component';
+import { ReviewStatusIndicatorComponent } from './components/widgets/review-status-indicator.component';
 
 // Services
 import { TestingDialogService } from './services/testing-dialog.service';
 import { TestingExecutionService } from './services/testing-execution.service';
+import { EvaluationPreferencesService } from './services/evaluation-preferences.service';
 
 @NgModule({
   declarations: [
@@ -32,7 +36,10 @@ import { TestingExecutionService } from './services/testing-execution.service';
     TestStatusBadgeComponent,
     ScoreIndicatorComponent,
     CostDisplayComponent,
-    TestResultsMatrixComponent
+    TestResultsMatrixComponent,
+    EvaluationBadgeComponent,
+    EvaluationModeToggleComponent,
+    ReviewStatusIndicatorComponent
   ],
   imports: [
     CommonModule,
@@ -52,11 +59,15 @@ import { TestingExecutionService } from './services/testing-execution.service';
     TestStatusBadgeComponent,
     ScoreIndicatorComponent,
     CostDisplayComponent,
-    TestResultsMatrixComponent
+    TestResultsMatrixComponent,
+    EvaluationBadgeComponent,
+    EvaluationModeToggleComponent,
+    ReviewStatusIndicatorComponent
   ],
   providers: [
     TestingDialogService,
-    TestingExecutionService
+    TestingExecutionService,
+    EvaluationPreferencesService
   ]
 })
 export class TestingModule { }

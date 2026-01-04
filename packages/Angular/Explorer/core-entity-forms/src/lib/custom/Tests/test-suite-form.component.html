@@ -21,14 +21,15 @@
         </div>
       </div>
       <div class="header-actions">
-        <button kendoButton (click)="exportToExcel()" icon="file-excel" title="Export to CSV">
-          Export
+        <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
+        <button kendoButton (click)="exportToExcel()" title="Export to CSV">
+          <i class="fas fa-file-excel"></i> Export
         </button>
-        <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
-          Run Suite
+        <button kendoButton (click)="runSuite()" themeColor="primary">
+          <i class="fas fa-play"></i> Run Suite
         </button>
-        <button kendoButton (click)="refresh()" icon="sync" [disabled]="isRefreshing">
-          <i *ngIf="isRefreshing" class="fas fa-sync fa-spin"></i>
+        <button kendoButton (click)="refresh()" [disabled]="isRefreshing">
+          <i class="fas" [ngClass]="isRefreshing ? 'fa-sync fa-spin' : 'fa-sync'"></i>
           {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
         </button>
       </div>
@@ -204,6 +205,32 @@
                 ({{ getPassRate(run).toFixed(0) }}%)
               </span>
             </div>
+            <!-- Evaluation metrics row -->
+            <div class="run-eval-metrics">
+              <!-- Status badge -->
+              <span class="eval-metric status" *ngIf="evalPreferences.showExecution" [class]="'status-' + run.Status.toLowerCase()">
+                <i class="fas"
+                   [class.fa-circle-check]="run.Status === 'Completed'"
+                   [class.fa-circle-xmark]="run.Status === 'Failed'"
+                   [class.fa-spinner]="run.Status === 'Running'"
+                   [class.fa-clock]="run.Status === 'Pending'"
+                   [class.fa-ban]="run.Status === 'Cancelled'"></i>
+              </span>
+              <!-- Human score (placeholder - need avg from suite run) -->
+              <span class="eval-metric human" *ngIf="evalPreferences.showHuman" title="Human evaluation">
+                <i class="fas fa-user"></i>
+                <span class="eval-pending"><i class="fas fa-clock"></i></span>
+              </span>
+              <!-- Auto score (pass rate as proxy) -->
+              <span class="eval-metric auto" *ngIf="evalPreferences.showAuto && run.TotalTests"
+                    [class.high]="getPassRate(run) >= 80"
+                    [class.medium]="getPassRate(run) >= 50 && getPassRate(run) < 80"
+                    [class.low]="getPassRate(run) < 50"
+                    title="Auto score (pass rate)">
+                <i class="fas fa-robot"></i>
+                <span>{{ getPassRate(run).toFixed(0) }}%</span>
+              </span>
+            </div>
             <!-- Tags display -->
             <div class="run-tags" *ngIf="getRunTags(run).length > 0">
               <span class="tag-chip" *ngFor="let tag of getRunTags(run)">{{ tag }}</span>
@@ -220,8 +247,8 @@
         </div>
         <h4>No Suite Runs Yet</h4>
         <p>Run this suite to see execution history and results here.</p>
-        <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
-          Run Suite Now
+        <button kendoButton (click)="runSuite()" themeColor="primary">
+          <i class="fas fa-play"></i> Run Suite Now
         </button>
       </div>
     </div>
@@ -258,32 +285,45 @@
           </div>
         </div>
 
-        <!-- Filters (shared by both views) -->
-        <div class="analytics-filters">
-          <div class="filter-group">
-            <label>Time Range</label>
-            <div class="filter-buttons">
-              <button class="filter-btn" [class.active]="analyticsTimeRange === '7d'" (click)="setTimeRange('7d')">7 Days</button>
-              <button class="filter-btn" [class.active]="analyticsTimeRange === '30d'" (click)="setTimeRange('30d')">30 Days</button>
-              <button class="filter-btn" [class.active]="analyticsTimeRange === '90d'" (click)="setTimeRange('90d')">90 Days</button>
-              <button class="filter-btn" [class.active]="analyticsTimeRange === 'all'" (click)="setTimeRange('all')">All Time</button>
-            </div>
+        <!-- Collapsible Filters (shared by both views) -->
+        <div class="analytics-filters" [class.collapsed]="filtersCollapsed">
+          <div class="filters-header" (click)="toggleFilters()">
+            <span class="filters-title">
+              <i class="fas fa-filter"></i>
+              Filters
+              <span class="filter-summary" *ngIf="filtersCollapsed">
+                {{ analyticsTimeRange === 'all' ? 'All Time' : analyticsTimeRange }}
+                <span *ngIf="selectedTags.length > 0"> · {{ selectedTags.length }} tags</span>
+              </span>
+            </span>
+            <i class="fas" [ngClass]="filtersCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'"></i>
           </div>
-          <div class="filter-group" *ngIf="uniqueTags.length > 0">
-            <label>Filter by Tag <span class="filter-hint" *ngIf="selectedTags.length > 0">({{ selectedTags.length }} selected)</span></label>
-            <div class="filter-buttons tag-filters">
-              <button class="filter-btn tag-btn all-tags-btn"
-                      [class.active]="selectedTags.length === 0"
-                      (click)="toggleTagFilter(null)">
-                <i class="fas fa-layer-group"></i> All Tags
-              </button>
-              <button class="filter-btn tag-btn"
-                      *ngFor="let tag of uniqueTags"
-                      [class.active]="isTagSelected(tag)"
-                      (click)="toggleTagFilter(tag)">
-                <i class="fas fa-check" *ngIf="isTagSelected(tag)"></i>
-                {{ tag }}
-              </button>
+          <div class="filters-content" *ngIf="!filtersCollapsed">
+            <div class="filter-group">
+              <label>Time Range</label>
+              <div class="filter-buttons">
+                <button class="filter-btn" [class.active]="analyticsTimeRange === '7d'" (click)="setTimeRange('7d')">7 Days</button>
+                <button class="filter-btn" [class.active]="analyticsTimeRange === '30d'" (click)="setTimeRange('30d')">30 Days</button>
+                <button class="filter-btn" [class.active]="analyticsTimeRange === '90d'" (click)="setTimeRange('90d')">90 Days</button>
+                <button class="filter-btn" [class.active]="analyticsTimeRange === 'all'" (click)="setTimeRange('all')">All Time</button>
+              </div>
+            </div>
+            <div class="filter-group" *ngIf="uniqueTags.length > 0">
+              <label>Filter by Tag <span class="filter-hint" *ngIf="selectedTags.length > 0">({{ selectedTags.length }} selected)</span></label>
+              <div class="filter-buttons tag-filters">
+                <button class="filter-btn tag-btn all-tags-btn"
+                        [class.active]="selectedTags.length === 0"
+                        (click)="toggleTagFilter(null)">
+                  <i class="fas fa-layer-group"></i> All Tags
+                </button>
+                <button class="filter-btn tag-btn"
+                        *ngFor="let tag of uniqueTags"
+                        [class.active]="isTagSelected(tag)"
+                        (click)="toggleTagFilter(tag)">
+                  <i class="fas fa-check" *ngIf="isTagSelected(tag)"></i>
+                  {{ tag }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -384,19 +424,26 @@
           <div class="matrix-section" *ngIf="!loadingMatrix && matrixLoaded && matrixData.length > 0">
             <div class="matrix-header">
               <h3><i class="fas fa-th"></i> Test Results Matrix</h3>
-              <div class="matrix-legend">
-                <span class="legend-item cell-passed"><i class="fas fa-check"></i> Passed</span>
-                <span class="legend-item cell-failed"><i class="fas fa-times"></i> Failed</span>
-                <span class="legend-item cell-error"><i class="fas fa-exclamation"></i> Error</span>
-                <span class="legend-item cell-skipped"><i class="fas fa-forward"></i> Skipped</span>
+              <div class="matrix-header-right">
+                <span class="matrix-run-count">{{ matrixData.length }} runs · {{ getUniqueTestsFromMatrix().length }} tests</span>
+                <button kendoButton (click)="exportMatrixToCSV()" [disabled]="matrixData.length === 0" title="Export matrix to CSV">
+                  <i class="fas fa-download"></i> Export
+                </button>
               </div>
             </div>
 
-            <div class="matrix-container">
+            <div class="matrix-scroll-container">
               <table class="test-matrix">
                 <thead>
                   <tr>
-                    <th class="test-name-header">Test</th>
+                    <th class="seq-header" (click)="toggleMatrixSort('sequence')" title="Sort by sequence">
+                      #
+                      <i class="fas" [ngClass]="matrixSortBy === 'sequence' ? (matrixSortAsc ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                    </th>
+                    <th class="test-name-header" (click)="toggleMatrixSort('name')" title="Sort by name">
+                      Test
+                      <i class="fas" [ngClass]="matrixSortBy === 'name' ? (matrixSortAsc ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                    </th>
                     <th class="run-header" *ngFor="let run of matrixData" (click)="openSuiteRun(run.runId)" [title]="'Click to view suite run - ' + (run.date | date:'medium')">
                       <div class="run-header-content">
                         <div class="run-tags-header" *ngIf="run.tags.length > 0">
@@ -413,6 +460,7 @@
                 </thead>
                 <tbody>
                   <tr *ngFor="let test of getUniqueTestsFromMatrix()">
+                    <td class="seq-cell">{{ test.sequence }}</td>
                     <td class="test-name-cell">
                       <span class="test-name" [title]="test.testName">{{ test.testName }}</span>
                     </td>
@@ -420,28 +468,86 @@
                         *ngFor="let run of matrixData"
                         [ngClass]="getMatrixCellClass(getTestResultForRun(run.runId, test.testId))"
                         [class.clickable]="getTestResultForRun(run.runId, test.testId)"
+                        [class.cell-not-run]="!getTestResultForRun(run.runId, test.testId)"
                         [title]="getTestResultForRun(run.runId, test.testId)?.status + ' - Click to view test run' || 'Not Run'"
                         (click)="onMatrixCellClick(getTestResultForRun(run.runId, test.testId), $event)">
                       <ng-container *ngIf="getTestResultForRun(run.runId, test.testId) as result">
-                        <i class="fas"
-                           [class.fa-check]="result.status === 'Passed'"
-                           [class.fa-times]="result.status === 'Failed'"
-                           [class.fa-exclamation]="result.status === 'Error'"
-                           [class.fa-forward]="result.status === 'Skipped'"
-                           [class.fa-spinner]="result.status === 'Running'"
-                           [class.fa-clock]="result.status === 'Pending'"></i>
-                        <span class="cell-score" *ngIf="result.score != null">{{ (result.score * 100).toFixed(0) }}%</span>
+                        <div class="cell-eval-stack">
+                          <!-- Status indicator -->
+                          <span class="cell-status" *ngIf="evalPreferences.showExecution"
+                                [ngClass]="'status-' + result.status.toLowerCase()"
+                                [class.cell-skipped-status]="result.status === 'Skipped' || result.status === 'Pending'">
+                            <i class="fas"
+                               [class.fa-check]="result.status === 'Passed'"
+                               [class.fa-times]="result.status === 'Failed'"
+                               [class.fa-exclamation]="result.status === 'Error'"
+                               [class.fa-hourglass-end]="result.status === 'Timeout'"
+                               [class.fa-forward]="result.status === 'Skipped'"
+                               [class.fa-spinner]="result.status === 'Running'"
+                               [class.fa-clock]="result.status === 'Pending'"></i>
+                          </span>
+                          <!-- Human score - slashed icon if no feedback, colored by rating if has feedback -->
+                          <span class="cell-human no-feedback" *ngIf="evalPreferences.showHuman && !result.humanRating" title="No human review">
+                            <i class="fas fa-user-slash"></i>
+                          </span>
+                          <span class="cell-human has-feedback" *ngIf="evalPreferences.showHuman && result.humanRating"
+                                [class.rating-low]="result.humanRating <= 4"
+                                [class.rating-medium]="result.humanRating >= 5 && result.humanRating <= 6"
+                                [class.rating-good]="result.humanRating >= 7 && result.humanRating <= 8"
+                                [class.rating-excellent]="result.humanRating >= 9"
+                                [title]="'Human rating: ' + result.humanRating + '/10'">
+                            <i class="fas fa-user"></i>
+                            <span class="rating-value">{{ result.humanRating }}</span>
+                          </span>
+                          <!-- Auto score - colored by percentage -->
+                          <span class="cell-auto has-score" *ngIf="evalPreferences.showAuto && result.score != null"
+                                [class.score-low]="result.score < 0.5"
+                                [class.score-medium]="result.score >= 0.5 && result.score < 0.7"
+                                [class.score-good]="result.score >= 0.7 && result.score < 0.85"
+                                [class.score-excellent]="result.score >= 0.85"
+                                [title]="'Auto score: ' + (result.score * 100).toFixed(0) + '%'">
+                            <i class="fas fa-robot"></i>
+                            <span class="score-value">{{ (result.score * 100).toFixed(0) }}</span>
+                          </span>
+                          <span class="cell-auto no-score" *ngIf="evalPreferences.showAuto && result.score == null" title="No auto score">
+                            <i class="fas fa-robot"></i>
+                          </span>
+                        </div>
                       </ng-container>
-                      <span class="cell-none-indicator" *ngIf="!getTestResultForRun(run.runId, test.testId)">—</span>
+                      <span class="cell-not-run-indicator" *ngIf="!getTestResultForRun(run.runId, test.testId)">
+                        <i class="fas fa-minus"></i>
+                      </span>
                     </td>
                   </tr>
                 </tbody>
+                <!-- Footer row with totals -->
+                <tfoot>
+                  <tr class="totals-row">
+                    <td class="seq-cell totals-label"></td>
+                    <td class="test-name-cell totals-label">
+                      <strong>Totals</strong>
+                    </td>
+                    <td class="result-cell totals-cell" *ngFor="let run of matrixData">
+                      <div class="cell-eval-stack totals-stack">
+                        <!-- Status totals -->
+                        <span class="totals-status" *ngIf="evalPreferences.showExecution">
+                          <span class="pass-count">{{ getRunPassedCount(run) }}/{{ getRunTotalCount(run) }}</span>
+                        </span>
+                        <!-- Human totals -->
+                        <span class="totals-human" *ngIf="evalPreferences.showHuman">
+                          <span class="avg-label" *ngIf="getRunHumanAvg(run) != null">{{ getRunHumanAvg(run)?.toFixed(1) }}</span>
+                          <span class="count-label">({{ getRunHumanCount(run) }})</span>
+                        </span>
+                        <!-- Auto totals -->
+                        <span class="totals-auto" *ngIf="evalPreferences.showAuto">
+                          <span class="avg-label" *ngIf="getRunAutoAvg(run) != null">{{ (getRunAutoAvg(run)! * 100).toFixed(0) }}%</span>
+                          <span class="count-label">({{ getRunAutoCount(run) }})</span>
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
-            </div>
-
-            <div class="matrix-info">
-              <i class="fas fa-info-circle"></i>
-              Showing last {{ matrixData.length }} runs. Click on column headers to view run details.
             </div>
           </div>
 
@@ -503,8 +609,8 @@
         </div>
         <h4>No Analytics Data</h4>
         <p>Run this suite to start collecting analytics data.</p>
-        <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
-          Run Suite Now
+        <button kendoButton (click)="runSuite()" themeColor="primary">
+          <i class="fas fa-play"></i> Run Suite Now
         </button>
       </div>
     </div>
@@ -680,8 +786,8 @@
         </div>
         <h4>Not Enough Runs to Compare</h4>
         <p>You need at least 2 suite runs to use the comparison feature.</p>
-        <button kendoButton (click)="runSuite()" themeColor="primary" icon="play">
-          Run Suite Now
+        <button kendoButton (click)="runSuite()" themeColor="primary">
+          <i class="fas fa-play"></i> Run Suite Now
         </button>
       </div>
     </div>

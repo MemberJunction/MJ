@@ -1,13 +1,19 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TestEntity, TestRunEntity, TestSuiteTestEntity, TestSuiteRunEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestFormComponent } from '../../generated/Entities/Test/test.form.component';
-import { TestingDialogService, TagsHelper } from '@memberjunction/ng-testing';
+import {
+  TestingDialogService,
+  TagsHelper,
+  EvaluationPreferencesService,
+  EvaluationPreferences
+} from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
 
 /** Settings key for keyboard shortcuts visibility */
@@ -95,13 +101,17 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   private shortcutsSettingEntity: UserSettingEntity | null = null;
   private metadata = new Metadata();
 
+  // Evaluation preferences
+  evalPreferences: EvaluationPreferences = { showExecution: true, showHuman: true, showAuto: false };
+
   constructor(
     elementRef: ElementRef,
     sharedService: SharedService,
     protected router: Router,
     route: ActivatedRoute,
     protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService
+    private testingDialogService: TestingDialogService,
+    private evalPrefsService: EvaluationPreferencesService
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -109,6 +119,14 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   async ngOnInit() {
     await super.ngOnInit();
     this.loadShortcutsSetting();
+
+    // Subscribe to evaluation preferences
+    this.evalPrefsService.preferences$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(prefs => {
+        this.evalPreferences = prefs;
+        this.cdr.markForCheck();
+      });
 
     if (this.record && this.record.ID) {
       this.parseJsonFields();

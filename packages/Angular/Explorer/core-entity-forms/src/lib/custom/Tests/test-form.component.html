@@ -21,11 +21,12 @@
         </div>
       </div>
       <div class="header-actions">
-        <button kendoButton (click)="runTest()" themeColor="primary" icon="play">
-          Run Test
+        <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
+        <button kendoButton (click)="runTest()" themeColor="primary">
+          <i class="fas fa-play"></i> Run Test
         </button>
-        <button kendoButton (click)="refresh()" icon="sync" [disabled]="isRefreshing">
-          <i *ngIf="isRefreshing" class="fas fa-sync fa-spin"></i>
+        <button kendoButton (click)="refresh()" [disabled]="isRefreshing">
+          <i class="fas" [ngClass]="isRefreshing ? 'fa-sync fa-spin' : 'fa-sync'"></i>
           {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
         </button>
       </div>
@@ -338,8 +339,8 @@
         </div>
         <h4>No Test Runs Yet</h4>
         <p>Run this test to see execution history and results here.</p>
-        <button kendoButton (click)="runTest()" themeColor="primary" icon="play">
-          Run Test Now
+        <button kendoButton (click)="runTest()" themeColor="primary">
+          <i class="fas fa-play"></i> Run Test Now
         </button>
       </div>
     </div>
@@ -413,8 +414,8 @@
                     (click)="setHistoryTimeRange('all')">All Time</button>
           </div>
           <div class="history-actions">
-            <button kendoButton (click)="exportHistoryToCSV()" icon="download" [disabled]="historyData.length === 0">
-              Export CSV
+            <button kendoButton (click)="exportHistoryToCSV()" [disabled]="historyData.length === 0">
+              <i class="fas fa-download"></i> Export CSV
             </button>
           </div>
         </div>
@@ -566,8 +567,8 @@
           </div>
           <h4>No History Available</h4>
           <p>Run this test to start building history and analytics data.</p>
-          <button kendoButton (click)="runTest()" themeColor="primary" icon="play">
-            Run Test Now
+          <button kendoButton (click)="runTest()" themeColor="primary">
+            <i class="fas fa-play"></i> Run Test Now
           </button>
         </div>
       </div>

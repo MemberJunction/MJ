@@ -98,6 +98,44 @@ export interface FeedbackStats {
   accuracyRate: number;
 }
 
+/**
+ * Extended test run summary with human feedback data included
+ */
+export interface TestRunWithFeedbackSummary extends TestRunSummary {
+  // Human feedback
+  humanRating: number | null;
+  humanIsCorrect: boolean | null;
+  humanComments: string | null;
+  hasHumanFeedback: boolean;
+  feedbackId: string | null;
+  // Checks (from automated evaluation)
+  passedChecks: number | null;
+  failedChecks: number | null;
+  totalChecks: number | null;
+}
+
+/**
+ * Aggregated evaluation metrics
+ */
+export interface EvaluationSummaryMetrics {
+  totalRuns: number;
+  // Execution
+  execCompletedCount: number;
+  execErrorCount: number;
+  execSuccessRate: number;
+  // Human
+  humanReviewedCount: number;
+  humanPendingCount: number;
+  humanAvgRating: number;
+  humanCorrectRate: number;
+  // Auto
+  autoEvaluatedCount: number;
+  autoAvgScore: number;
+  autoPassRate: number;
+  // Agreement
+  agreementRate: number;
+}
+
 // Simple result types for optimized queries (only fields needed for display)
 interface TestRunSimple {
   ID: string;
@@ -205,6 +243,29 @@ export class TestingInstrumentationService {
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadFeedbackStats())),
     tap(() => this.checkLoadingComplete()),
+    shareReplay(1)
+  );
+
+  /**
+   * Test runs with feedback data joined - for evaluation display
+   */
+  readonly testRunsWithFeedback$ = combineLatest([
+    this._refreshTrigger$,
+    this._dateRange$,
+    this._suiteFilter$,
+    this._testTypeFilter$
+  ]).pipe(
+    tap(() => this._isLoading$.next(true)),
+    switchMap(() => from(this.loadTestRunsWithFeedback())),
+    tap(() => this.checkLoadingComplete()),
+    shareReplay(1)
+  );
+
+  /**
+   * Aggregated evaluation metrics from test runs with feedback
+   */
+  readonly evaluationMetrics$ = this.testRunsWithFeedback$.pipe(
+    map(runs => this.calculateEvaluationMetrics(runs)),
     shareReplay(1)
   );
 
@@ -878,5 +939,193 @@ export class TestingInstrumentationService {
     } else {
       return 7 * 24 * 60 * 60 * 1000; // 1 week
     }
+  }
+
+  /**
+   * Load test runs with feedback data joined for evaluation display
+   */
+  private async loadTestRunsWithFeedback(): Promise<TestRunWithFeedbackSummary[]> {
+    const { start, end } = this._dateRange$.value;
+    const suiteFilter = this._suiteFilter$.value;
+    const typeFilter = this._testTypeFilter$.value;
+
+    let filter = `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`;
+
+    if (suiteFilter) {
+      filter += ` AND TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE TestSuiteID = '${suiteFilter}')`;
+    }
+
+    if (typeFilter) {
+      filter += ` AND TestID IN (SELECT ID FROM [__mj].[vwTests] WHERE TypeID = '${typeFilter}')`;
+    }
+
+    const rv = new RunView();
+
+    // Load test runs with additional fields for evaluation
+    type TestRunExtended = {
+      ID: string;
+      TestID: string;
+      Test: string;
+      Status: string;
+      Score: number;
+      CostUSD: number;
+      StartedAt: Date;
+      CompletedAt: Date | null;
+      TargetType: string;
+      TargetLogID: string;
+      PassedChecks: number | null;
+      FailedChecks: number | null;
+      TotalChecks: number | null;
+    };
+
+    const [testRunsResult, feedbackResult] = await rv.RunViews([
+      {
+        EntityName: 'MJ: Test Runs',
+        ExtraFilter: filter,
+        OrderBy: 'StartedAt DESC',
+        MaxRows: 1000,
+        Fields: ['ID', 'TestID', 'Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt', 'TargetType', 'TargetLogID', 'PassedChecks', 'FailedChecks', 'TotalChecks'],
+        ResultType: 'simple',
+        CacheLocal: true
+      },
+      {
+        EntityName: 'MJ: Test Run Feedbacks',
+        ExtraFilter: `CreatedAt >= '${start.toISOString()}'`,
+        Fields: ['ID', 'TestRunID', 'Rating', 'IsCorrect', 'Comments'],
+        ResultType: 'simple',
+        CacheLocal: true
+      }
+    ]);
+
+    const testRuns = (testRunsResult.Results || []) as TestRunExtended[];
+    const feedbacks = (feedbackResult.Results || []) as TestRunFeedbackSimple[];
+
+    // Create feedback lookup map
+    const feedbackMap = new Map<string, TestRunFeedbackSimple>();
+    feedbacks.forEach(f => {
+      feedbackMap.set(f.TestRunID, f);
+    });
+
+    // Map test runs with feedback
+    return testRuns.map(run => {
+      const startedAt = run.StartedAt instanceof Date ? run.StartedAt : new Date(run.StartedAt);
+      const completedAt = run.CompletedAt
+        ? (run.CompletedAt instanceof Date ? run.CompletedAt : new Date(run.CompletedAt))
+        : null;
+
+      const feedback = feedbackMap.get(run.ID);
+
+      return {
+        id: run.ID,
+        testId: run.TestID || '',
+        testName: run.Test || 'Unknown Test',
+        suiteName: '',
+        testType: run.Test || 'Unknown',
+        status: run.Status as 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Timeout',
+        score: run.Score || 0,
+        duration: completedAt && startedAt
+          ? completedAt.getTime() - startedAt.getTime()
+          : (startedAt ? Date.now() - startedAt.getTime() : 0),
+        cost: run.CostUSD || 0,
+        runDateTime: startedAt,
+        targetType: run.TargetType || '',
+        targetLogID: run.TargetLogID || '',
+        // Checks
+        passedChecks: run.PassedChecks,
+        failedChecks: run.FailedChecks,
+        totalChecks: run.TotalChecks,
+        // Human feedback
+        humanRating: feedback?.Rating ?? null,
+        humanIsCorrect: feedback?.IsCorrect ?? null,
+        humanComments: feedback?.Comments ?? null,
+        hasHumanFeedback: !!feedback,
+        feedbackId: feedback?.ID ?? null
+      };
+    });
+  }
+
+  /**
+   * Calculate aggregated evaluation metrics from test runs with feedback
+   */
+  private calculateEvaluationMetrics(runs: TestRunWithFeedbackSummary[]): EvaluationSummaryMetrics {
+    const totalRuns = runs.length;
+
+    if (totalRuns === 0) {
+      return {
+        totalRuns: 0,
+        execCompletedCount: 0,
+        execErrorCount: 0,
+        execSuccessRate: 0,
+        humanReviewedCount: 0,
+        humanPendingCount: 0,
+        humanAvgRating: 0,
+        humanCorrectRate: 0,
+        autoEvaluatedCount: 0,
+        autoAvgScore: 0,
+        autoPassRate: 0,
+        agreementRate: 0
+      };
+    }
+
+    // Execution metrics
+    const execCompleted = runs.filter(r =>
+      r.status === 'Passed' || r.status === 'Failed'
+    );
+    const execErrors = runs.filter(r =>
+      r.status === 'Error' || r.status === 'Timeout'
+    );
+    const execSuccessRate = totalRuns > 0 ? (execCompleted.length / totalRuns) * 100 : 0;
+
+    // Human feedback metrics
+    const reviewed = runs.filter(r => r.hasHumanFeedback);
+    const pending = runs.filter(r => !r.hasHumanFeedback);
+    const withRating = reviewed.filter(r => r.humanRating != null);
+    const humanAvgRating = withRating.length > 0
+      ? withRating.reduce((sum, r) => sum + (r.humanRating || 0), 0) / withRating.length
+      : 0;
+    const correct = reviewed.filter(r => r.humanIsCorrect === true);
+    const humanCorrectRate = reviewed.length > 0 ? (correct.length / reviewed.length) * 100 : 0;
+
+    // Auto score metrics
+    const evaluated = runs.filter(r => r.score > 0);
+    const autoAvgScore = evaluated.length > 0
+      ? evaluated.reduce((sum, r) => sum + r.score, 0) / evaluated.length
+      : 0;
+    const autoPass = evaluated.filter(r => r.score >= 0.8);
+    const autoPassRate = evaluated.length > 0 ? (autoPass.length / evaluated.length) * 100 : 0;
+
+    // Agreement metrics
+    const bothEvaluated = runs.filter(r =>
+      r.hasHumanFeedback && r.score > 0 && r.humanIsCorrect != null
+    );
+    let agreementCount = 0;
+
+    bothEvaluated.forEach(r => {
+      const autoConsideredPass = r.score >= 0.5;
+      const humanConsideredPass = r.humanIsCorrect === true;
+
+      if (autoConsideredPass === humanConsideredPass) {
+        agreementCount++;
+      }
+    });
+
+    const agreementRate = bothEvaluated.length > 0
+      ? (agreementCount / bothEvaluated.length) * 100
+      : 0;
+
+    return {
+      totalRuns,
+      execCompletedCount: execCompleted.length,
+      execErrorCount: execErrors.length,
+      execSuccessRate,
+      humanReviewedCount: reviewed.length,
+      humanPendingCount: pending.length,
+      humanAvgRating,
+      humanCorrectRate,
+      autoEvaluatedCount: evaluated.length,
+      autoAvgScore,
+      autoPassRate,
+      agreementRate
+    };
   }
 }

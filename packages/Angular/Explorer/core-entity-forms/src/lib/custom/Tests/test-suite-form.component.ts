@@ -2,13 +2,20 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDete
 import * as d3 from 'd3';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { TestSuiteEntity, TestSuiteTestEntity, TestSuiteRunEntity, TestRunEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { TestSuiteEntity, TestSuiteTestEntity, TestSuiteRunEntity, TestRunEntity, TestRunFeedbackEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestSuiteFormComponent } from '../../generated/Entities/TestSuite/testsuite.form.component';
-import { TestingDialogService, TagsHelper, TestRunComparison } from '@memberjunction/ng-testing';
+import {
+  TestingDialogService,
+  TagsHelper,
+  TestRunComparison,
+  EvaluationPreferencesService,
+  EvaluationPreferences
+} from '@memberjunction/ng-testing';
 
 /** Settings key for keyboard shortcuts visibility */
 const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
@@ -69,13 +76,24 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   private shortcutsSettingEntity: UserSettingEntity | null = null;
   private metadata = new Metadata();
 
+  // Evaluation preferences
+  evalPreferences: EvaluationPreferences = { showExecution: true, showHuman: true, showAuto: false };
+
+  // Filter collapse state
+  filtersCollapsed = false;
+
+  // Matrix sorting
+  matrixSortBy: 'sequence' | 'name' = 'sequence';
+  matrixSortAsc = true;
+
   constructor(
     elementRef: ElementRef,
     sharedService: SharedService,
     protected router: Router,
     route: ActivatedRoute,
     protected cdr: ChangeDetectorRef,
-    private testingDialogService: TestingDialogService
+    private testingDialogService: TestingDialogService,
+    private evalPrefsService: EvaluationPreferencesService
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -83,6 +101,18 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   async ngOnInit() {
     await super.ngOnInit();
     this.loadShortcutsSetting();
+
+    // Subscribe to evaluation preferences
+    this.evalPrefsService.preferences$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(prefs => {
+        this.evalPreferences = prefs;
+        this.cdr.markForCheck();
+        // Re-render chart when preferences change (D3 chart needs manual update)
+        if (this.chartRendered && this.analyticsView === 'chart') {
+          this.renderChart();
+        }
+      });
   }
 
   ngAfterViewInit() {
@@ -461,6 +491,9 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
       const matrixData: MatrixDataPoint[] = [];
 
+      // Collect all test run IDs to batch load feedbacks
+      const allTestRunIds: string[] = [];
+
       for (const runData of runsToLoad) {
         const testRunsResult = await rv.RunView<TestRunEntity>({
           EntityName: 'MJ: Test Runs',
@@ -473,13 +506,16 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
           const testResults = new Map<string, TestResultCell>();
 
           for (const testRun of testRunsResult.Results) {
+            allTestRunIds.push(testRun.ID);
             testResults.set(testRun.TestID, {
               testRunId: testRun.ID,
               testId: testRun.TestID,
               testName: testRun.Test || 'Unknown',
               status: testRun.Status,
               score: testRun.Score,
-              duration: testRun.DurationSeconds
+              duration: testRun.DurationSeconds,
+              humanRating: null, // Will be populated below
+              sequence: testRun.Sequence ?? 0
             });
           }
 
@@ -490,6 +526,21 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
             status: runData.status,
             passRate: runData.passRate,
             testResults
+          });
+        }
+      }
+
+      // Batch load feedbacks for all test runs
+      if (allTestRunIds.length > 0) {
+        const feedbackMap = await this.loadFeedbacksForTestRuns(allTestRunIds);
+
+        // Apply feedbacks to matrix data
+        for (const run of matrixData) {
+          run.testResults.forEach((cell, _testId) => {
+            const feedback = feedbackMap.get(cell.testRunId);
+            if (feedback?.Rating != null) {
+              cell.humanRating = feedback.Rating;
+            }
           });
         }
       }
@@ -510,21 +561,84 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     }
   }
 
-  getUniqueTestsFromMatrix(): { testId: string; testName: string }[] {
-    const testsMap = new Map<string, string>();
+  /**
+   * Load feedbacks for a batch of test run IDs
+   * Returns a map of testRunId -> TestRunFeedbackEntity
+   */
+  private async loadFeedbacksForTestRuns(testRunIds: string[]): Promise<Map<string, TestRunFeedbackEntity>> {
+    const feedbackMap = new Map<string, TestRunFeedbackEntity>();
+
+    if (testRunIds.length === 0) return feedbackMap;
+
+    try {
+      const rv = new RunView();
+      // Build IN clause for the IDs (batch in chunks to avoid query size limits)
+      const chunkSize = 50;
+      for (let i = 0; i < testRunIds.length; i += chunkSize) {
+        const chunk = testRunIds.slice(i, i + chunkSize);
+        const inClause = chunk.map(id => `'${id}'`).join(',');
+
+        const result = await rv.RunView<TestRunFeedbackEntity>({
+          EntityName: 'MJ: Test Run Feedbacks',
+          ExtraFilter: `TestRunID IN (${inClause})`,
+          ResultType: 'entity_object'
+        });
+
+        if (result.Success && result.Results) {
+          for (const feedback of result.Results) {
+            // If multiple feedbacks exist for same test run, keep the most recent (last one)
+            feedbackMap.set(feedback.TestRunID, feedback);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load feedbacks:', error);
+    }
+
+    return feedbackMap;
+  }
+
+  getUniqueTestsFromMatrix(): { testId: string; testName: string; sequence: number }[] {
+    const testsMap = new Map<string, { testName: string; sequence: number }>();
 
     for (const runData of this.matrixData) {
       for (const [testId, testResult] of runData.testResults) {
         if (!testsMap.has(testId)) {
-          testsMap.set(testId, testResult.testName);
+          testsMap.set(testId, { testName: testResult.testName, sequence: testResult.sequence });
         }
       }
     }
 
-    return Array.from(testsMap.entries()).map(([testId, testName]) => ({
+    let tests = Array.from(testsMap.entries()).map(([testId, data]) => ({
       testId,
-      testName
+      testName: data.testName,
+      sequence: data.sequence
     }));
+
+    // Apply sorting
+    if (this.matrixSortBy === 'sequence') {
+      tests = tests.sort((a, b) => this.matrixSortAsc ? a.sequence - b.sequence : b.sequence - a.sequence);
+    } else {
+      tests = tests.sort((a, b) => {
+        const cmp = a.testName.localeCompare(b.testName);
+        return this.matrixSortAsc ? cmp : -cmp;
+      });
+    }
+
+    return tests;
+  }
+
+  /**
+   * Toggle matrix sort column
+   */
+  toggleMatrixSort(column: 'sequence' | 'name') {
+    if (this.matrixSortBy === column) {
+      this.matrixSortAsc = !this.matrixSortAsc;
+    } else {
+      this.matrixSortBy = column;
+      this.matrixSortAsc = true;
+    }
+    this.cdr.markForCheck();
   }
 
   getTestResultForRun(runId: string, testId: string): TestResultCell | null {
@@ -534,15 +648,101 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   }
 
   getMatrixCellClass(result: TestResultCell | null): string {
-    if (!result) return 'cell-none';
+    if (!result) return 'cell-none cell-not-run';
     switch (result.status) {
       case 'Passed': return 'cell-passed';
       case 'Failed': return 'cell-failed';
       case 'Error': return 'cell-error';
-      case 'Skipped': return 'cell-skipped';
+      case 'Timeout': return 'cell-timeout';
+      case 'Skipped': return 'cell-skipped cell-not-run';
       case 'Running': return 'cell-running';
       default: return 'cell-pending';
     }
+  }
+
+  /**
+   * Get the count of enabled evaluation types for matrix cell layout
+   */
+  getEvalCount(): number {
+    let count = 0;
+    if (this.evalPreferences.showExecution) count++;
+    if (this.evalPreferences.showHuman) count++;
+    if (this.evalPreferences.showAuto) count++;
+    return count;
+  }
+
+  // ===========================
+  // Matrix Totals Row Methods
+  // ===========================
+
+  /**
+   * Get count of passed tests for a run
+   */
+  getRunPassedCount(run: MatrixDataPoint): number {
+    let count = 0;
+    run.testResults.forEach(result => {
+      if (result.status === 'Passed') count++;
+    });
+    return count;
+  }
+
+  /**
+   * Get total count of tests for a run
+   */
+  getRunTotalCount(run: MatrixDataPoint): number {
+    return run.testResults.size;
+  }
+
+  /**
+   * Get average human rating for a run (only from tests that have ratings)
+   */
+  getRunHumanAvg(run: MatrixDataPoint): number | null {
+    let sum = 0;
+    let count = 0;
+    run.testResults.forEach(result => {
+      if (result.humanRating != null) {
+        sum += result.humanRating;
+        count++;
+      }
+    });
+    return count > 0 ? sum / count : null;
+  }
+
+  /**
+   * Get count of tests with human ratings for a run
+   */
+  getRunHumanCount(run: MatrixDataPoint): number {
+    let count = 0;
+    run.testResults.forEach(result => {
+      if (result.humanRating != null) count++;
+    });
+    return count;
+  }
+
+  /**
+   * Get average auto score for a run (only from tests that have scores)
+   */
+  getRunAutoAvg(run: MatrixDataPoint): number | null {
+    let sum = 0;
+    let count = 0;
+    run.testResults.forEach(result => {
+      if (result.score != null) {
+        sum += result.score;
+        count++;
+      }
+    });
+    return count > 0 ? sum / count : null;
+  }
+
+  /**
+   * Get count of tests with auto scores for a run
+   */
+  getRunAutoCount(run: MatrixDataPoint): number {
+    let count = 0;
+    run.testResults.forEach(result => {
+      if (result.score != null) count++;
+    });
+    return count;
   }
 
   /**
@@ -652,6 +852,9 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
         .attr('stop-color', d3.color(color)?.darker(0.3)?.toString() || color)
         .attr('stop-opacity', 0.95);
     });
+
+    // Draw evaluation legend at top-left corner
+    this.renderChartLegend(chart, margin);
 
     // Draw column headers (run dates) at top
     runs.forEach((run, i) => {
@@ -790,8 +993,10 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
         .attr('stroke-width', 1);
     });
 
-    // Draw cells
+    // Draw cells with evaluation toggle support
     const cellPadding = 3;
+    const evalCount = this.getEvalCount();
+
     runs.forEach((run, runIndex) => {
       tests.forEach((test, testIndex) => {
         const result = run.testResults.get(test.testId);
@@ -822,24 +1027,33 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
           return;
         }
 
+        // Build tooltip content based on evaluation preferences
+        const tooltipParts: string[] = [];
+        if (this.evalPreferences.showExecution) {
+          tooltipParts.push(`<div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${statusColors[result.status]}; color:white; font-size:11px; font-weight:600">${result.status}</div>`);
+        }
+        if (this.evalPreferences.showHuman) {
+          tooltipParts.push(`<div style="margin-top:4px"><span style="color:#f59e0b">👤</span> <strong>Human:</strong> <span style="color:#94a3b8">Needs review</span></div>`);
+        }
+        if (this.evalPreferences.showAuto && result.score != null) {
+          tooltipParts.push(`<div style="margin-top:4px"><span style="color:#3b82f6">🤖</span> <strong>Auto:</strong> ${(result.score * 100).toFixed(1)}%</div>`);
+        }
+        const durationText = result.duration != null ? `<div><strong>Duration:</strong> ${result.duration.toFixed(2)}s</div>` : '';
+
         const cellGroup = chart.append('g')
           .attr('class', 'result-cell')
           .style('cursor', 'pointer')
           .on('click', () => this.openTestRun(result.testRunId))
           .on('mouseover', (event: MouseEvent) => {
-            d3.select(event.currentTarget as Element).select('rect')
+            d3.select(event.currentTarget as Element).select('rect.cell-bg')
               .attr('stroke', '#1e40af')
               .attr('stroke-width', 2);
-
-            const scoreText = result.score != null ? `<div style="margin-top:4px"><strong>Score:</strong> ${(result.score * 100).toFixed(1)}%</div>` : '';
-            const durationText = result.duration != null ? `<div><strong>Duration:</strong> ${result.duration.toFixed(2)}s</div>` : '';
 
             tooltip
               .style('opacity', 1)
               .html(`
                 <div style="font-weight:600; margin-bottom:6px; color:#f1f5f9">${result.testName}</div>
-                <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${statusColors[result.status]}; color:white; font-size:11px; font-weight:600">${result.status}</div>
-                ${scoreText}
+                ${tooltipParts.join('')}
                 ${durationText}
                 <div style="margin-top:6px; color:#94a3b8; font-size:10px">${this.getRelativeTime(run.date)} • Click to view</div>
               `)
@@ -847,54 +1061,156 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
               .style('top', `${event.offsetY - 10}px`);
           })
           .on('mouseout', (event: MouseEvent) => {
-            d3.select(event.currentTarget as Element).select('rect')
+            d3.select(event.currentTarget as Element).select('rect.cell-bg')
               .attr('stroke', 'none')
               .attr('stroke-width', 0);
             tooltip.style('opacity', 0);
           });
 
-        // Cell background with gradient
+        // Determine cell background color based on eval preferences
+        let cellBgColor = '#f1f5f9';
+        let cellBgGradient = '';
+
+        if (this.evalPreferences.showExecution) {
+          // Use status-based gradient
+          cellBgGradient = `url(#gradient-${result.status.toLowerCase()})`;
+        } else if (this.evalPreferences.showAuto && result.score != null) {
+          // Use score-based color
+          const scoreColor = result.score >= 0.8 ? '#22c55e' : result.score >= 0.5 ? '#f97316' : '#ef4444';
+          cellBgColor = scoreColor;
+        } else {
+          // Neutral background when only Human is selected
+          cellBgColor = '#fef3c7';
+        }
+
+        // Cell background
         cellGroup.append('rect')
+          .attr('class', 'cell-bg')
           .attr('x', x)
           .attr('y', y)
           .attr('width', cellWidth)
           .attr('height', cellHeight)
           .attr('rx', 4)
-          .attr('fill', `url(#gradient-${result.status.toLowerCase()})`)
+          .attr('fill', cellBgGradient || cellBgColor)
           .attr('stroke', 'none')
           .attr('stroke-width', 0)
           .style('transition', 'all 0.15s ease');
 
-        // Score bar at bottom of cell
-        if (result.score != null && result.score > 0) {
-          cellGroup.append('rect')
-            .attr('x', x + 2)
-            .attr('y', y + cellHeight - 4)
-            .attr('width', (cellWidth - 4) * result.score)
-            .attr('height', 2)
-            .attr('rx', 1)
-            .attr('fill', 'rgba(255,255,255,0.5)');
+        // Calculate icon positions based on how many eval types are shown
+        const iconSize = evalCount === 1 ? 14 : evalCount === 2 ? 11 : 9;
+        const iconSpacing = evalCount === 1 ? 0 : evalCount === 2 ? 14 : 11;
+        const startX = x + cellWidth / 2 - ((evalCount - 1) * iconSpacing) / 2;
+
+        let iconIndex = 0;
+
+        // Status icon (execution)
+        if (this.evalPreferences.showExecution) {
+          const iconText: Record<string, string> = {
+            'Passed': '✓',
+            'Failed': '✕',
+            'Error': '!',
+            'Skipped': '»',
+            'Running': '●',
+            'Pending': '○'
+          };
+
+          const iconX = startX + iconIndex * iconSpacing;
+
+          // If status is NOT the only thing shown, add a small circular bg
+          if (evalCount > 1) {
+            cellGroup.append('circle')
+              .attr('cx', iconX)
+              .attr('cy', y + cellHeight / 2)
+              .attr('r', iconSize / 2 + 3)
+              .attr('fill', statusColors[result.status])
+              .attr('opacity', 0.9);
+          }
+
+          cellGroup.append('text')
+            .attr('x', iconX)
+            .attr('y', y + cellHeight / 2 + iconSize / 3)
+            .attr('text-anchor', 'middle')
+            .attr('fill', 'white')
+            .attr('font-size', `${iconSize}px`)
+            .attr('font-weight', 'bold')
+            .attr('font-family', 'system-ui, -apple-system, sans-serif')
+            .text(iconText[result.status] || '?');
+
+          iconIndex++;
         }
 
-        // Status icon (using simple text that renders consistently)
-        const iconText: Record<string, string> = {
-          'Passed': '✓',
-          'Failed': '✕',
-          'Error': '!',
-          'Skipped': '»',
-          'Running': '●',
-          'Pending': '○'
-        };
+        // Human icon
+        if (this.evalPreferences.showHuman) {
+          const iconX = startX + iconIndex * iconSpacing;
 
-        cellGroup.append('text')
-          .attr('x', x + cellWidth / 2)
-          .attr('y', y + cellHeight / 2 + 5)
-          .attr('text-anchor', 'middle')
-          .attr('fill', 'white')
-          .attr('font-size', '14px')
-          .attr('font-weight', 'bold')
-          .attr('font-family', 'system-ui, -apple-system, sans-serif')
-          .text(iconText[result.status] || '?');
+          // Human evaluation indicator (clock icon for pending)
+          cellGroup.append('circle')
+            .attr('cx', iconX)
+            .attr('cy', y + cellHeight / 2)
+            .attr('r', iconSize / 2 + 3)
+            .attr('fill', '#fef3c7')
+            .attr('stroke', '#f59e0b')
+            .attr('stroke-width', 1);
+
+          cellGroup.append('text')
+            .attr('x', iconX)
+            .attr('y', y + cellHeight / 2 + iconSize / 3)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#d97706')
+            .attr('font-size', `${iconSize - 2}px`)
+            .attr('font-weight', '500')
+            .text('⏱');
+
+          iconIndex++;
+        }
+
+        // Auto score icon/indicator
+        if (this.evalPreferences.showAuto) {
+          const iconX = startX + iconIndex * iconSpacing;
+
+          if (result.score != null) {
+            const scorePercent = Math.round(result.score * 100);
+            const scoreColor = result.score >= 0.8 ? '#22c55e' : result.score >= 0.5 ? '#f97316' : '#ef4444';
+
+            // Score pill background
+            if (evalCount > 1) {
+              cellGroup.append('rect')
+                .attr('x', iconX - 10)
+                .attr('y', y + cellHeight / 2 - iconSize / 2 - 1)
+                .attr('width', 20)
+                .attr('height', iconSize + 2)
+                .attr('rx', (iconSize + 2) / 2)
+                .attr('fill', scoreColor)
+                .attr('opacity', 0.9);
+            }
+
+            cellGroup.append('text')
+              .attr('x', iconX)
+              .attr('y', y + cellHeight / 2 + iconSize / 3)
+              .attr('text-anchor', 'middle')
+              .attr('fill', evalCount > 1 ? 'white' : 'white')
+              .attr('font-size', `${iconSize - 1}px`)
+              .attr('font-weight', '700')
+              .text(`${scorePercent}`);
+          } else {
+            // No auto score available
+            cellGroup.append('circle')
+              .attr('cx', iconX)
+              .attr('cy', y + cellHeight / 2)
+              .attr('r', iconSize / 2 + 2)
+              .attr('fill', '#e2e8f0')
+              .attr('stroke', '#94a3b8')
+              .attr('stroke-width', 1);
+
+            cellGroup.append('text')
+              .attr('x', iconX)
+              .attr('y', y + cellHeight / 2 + iconSize / 3)
+              .attr('text-anchor', 'middle')
+              .attr('fill', '#94a3b8')
+              .attr('font-size', `${iconSize - 2}px`)
+              .text('—');
+          }
+        }
       });
     });
 
@@ -978,6 +1294,121 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     }
 
     this.chartRendered = true;
+  }
+
+  /**
+   * Renders a legend showing which evaluation types are currently displayed
+   */
+  private renderChartLegend(chart: d3.Selection<SVGGElement, unknown, null, undefined>, margin: { top: number; right: number; bottom: number; left: number }): void {
+    const legendGroup = chart.append('g')
+      .attr('class', 'eval-legend')
+      .attr('transform', `translate(${-margin.left + 10}, ${-margin.top + 15})`);
+
+    // Legend title
+    legendGroup.append('text')
+      .attr('x', 0)
+      .attr('y', 0)
+      .attr('fill', '#64748b')
+      .attr('font-size', '9px')
+      .attr('font-weight', '600')
+      .attr('text-transform', 'uppercase')
+      .text('SHOWING:');
+
+    let xOffset = 55;
+
+    // Status indicator
+    if (this.evalPreferences.showExecution) {
+      const statusGroup = legendGroup.append('g')
+        .attr('transform', `translate(${xOffset}, -4)`);
+
+      statusGroup.append('circle')
+        .attr('cx', 6)
+        .attr('cy', 0)
+        .attr('r', 6)
+        .attr('fill', '#22c55e');
+
+      statusGroup.append('text')
+        .attr('x', 6)
+        .attr('y', 4)
+        .attr('text-anchor', 'middle')
+        .attr('fill', 'white')
+        .attr('font-size', '8px')
+        .attr('font-weight', 'bold')
+        .text('✓');
+
+      statusGroup.append('text')
+        .attr('x', 16)
+        .attr('y', 3)
+        .attr('fill', '#475569')
+        .attr('font-size', '10px')
+        .attr('font-weight', '500')
+        .text('Status');
+
+      xOffset += 60;
+    }
+
+    // Human indicator
+    if (this.evalPreferences.showHuman) {
+      const humanGroup = legendGroup.append('g')
+        .attr('transform', `translate(${xOffset}, -4)`);
+
+      humanGroup.append('circle')
+        .attr('cx', 6)
+        .attr('cy', 0)
+        .attr('r', 6)
+        .attr('fill', '#fef3c7')
+        .attr('stroke', '#f59e0b')
+        .attr('stroke-width', 1);
+
+      humanGroup.append('text')
+        .attr('x', 6)
+        .attr('y', 3)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#d97706')
+        .attr('font-size', '7px')
+        .text('⏱');
+
+      humanGroup.append('text')
+        .attr('x', 16)
+        .attr('y', 3)
+        .attr('fill', '#475569')
+        .attr('font-size', '10px')
+        .attr('font-weight', '500')
+        .text('Human');
+
+      xOffset += 60;
+    }
+
+    // Auto indicator
+    if (this.evalPreferences.showAuto) {
+      const autoGroup = legendGroup.append('g')
+        .attr('transform', `translate(${xOffset}, -4)`);
+
+      autoGroup.append('rect')
+        .attr('x', 0)
+        .attr('y', -6)
+        .attr('width', 18)
+        .attr('height', 12)
+        .attr('rx', 6)
+        .attr('fill', '#3b82f6');
+
+      autoGroup.append('text')
+        .attr('x', 9)
+        .attr('y', 3)
+        .attr('text-anchor', 'middle')
+        .attr('fill', 'white')
+        .attr('font-size', '7px')
+        .attr('font-weight', '700')
+        .text('%');
+
+      autoGroup.append('text')
+        .attr('x', 24)
+        .attr('y', 3)
+        .attr('fill', '#475569')
+        .attr('font-size', '10px')
+        .attr('font-weight', '500')
+        .text('Auto');
+    }
   }
 
   getAveragePassRate(): number {
@@ -1254,6 +1685,58 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     return TagsHelper.parseTags(run.Tags);
   }
 
+  /**
+   * Export matrix view data to CSV
+   */
+  exportMatrixToCSV() {
+    if (this.matrixData.length === 0) {
+      SharedService.Instance.CreateSimpleNotification('No data to export', 'warning', 2000);
+      return;
+    }
+
+    try {
+      const tests = this.getUniqueTestsFromMatrix();
+      const runs = this.matrixData;
+
+      // Build CSV rows
+      const rows: Record<string, string | number>[] = [];
+
+      for (const test of tests) {
+        const row: Record<string, string | number> = {
+          'Seq': test.sequence,
+          'Test Name': test.testName
+        };
+
+        // Add column for each run
+        for (const run of runs) {
+          const result = run.testResults.get(test.testId);
+          const runLabel = run.tags.length > 0
+            ? `${run.tags.slice(0, 2).join('/')} (${this.getRelativeTime(run.date)})`
+            : this.getRelativeTime(run.date);
+
+          if (result) {
+            // Build cell value based on what's shown
+            const parts: string[] = [];
+            if (this.evalPreferences.showExecution) parts.push(result.status);
+            if (this.evalPreferences.showHuman) parts.push(result.humanRating != null ? `H:${result.humanRating}` : 'H:-');
+            if (this.evalPreferences.showAuto) parts.push(result.score != null ? `A:${Math.round(result.score * 100)}%` : 'A:-');
+            row[runLabel] = parts.join(' | ');
+          } else {
+            row[runLabel] = 'Not Run';
+          }
+        }
+
+        rows.push(row);
+      }
+
+      this.downloadAsCSV(rows, `${this.record.Name}_matrix_export.csv`);
+      SharedService.Instance.CreateSimpleNotification('Matrix exported successfully', 'success', 2000);
+    } catch (error) {
+      console.error('Matrix export failed:', error);
+      SharedService.Instance.CreateSimpleNotification('Export failed', 'error', 3000);
+    }
+  }
+
   // ==========================================
   // Keyboard Shortcuts Settings
   // ==========================================
@@ -1277,6 +1760,14 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     } catch (error) {
       console.warn('Failed to load shortcuts setting:', error);
     }
+  }
+
+  /**
+   * Toggle analytics filters visibility
+   */
+  toggleFilters(): void {
+    this.filtersCollapsed = !this.filtersCollapsed;
+    this.cdr.markForCheck();
   }
 
   /**
@@ -1348,6 +1839,8 @@ interface TestResultCell {
   status: string;
   score: number | null;
   duration: number | null;
+  humanRating: number | null;
+  sequence: number;
 }
 
 export function LoadTestSuiteFormComponentExtended() {}

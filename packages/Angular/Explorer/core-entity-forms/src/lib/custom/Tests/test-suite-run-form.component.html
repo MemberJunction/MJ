@@ -36,11 +36,13 @@
         </div>
       </div>
       <div class="header-actions">
-        <button kendoButton (click)="reRunSuite()" themeColor="primary" icon="play" *ngIf="record.SuiteID">
-          Re-run Suite
+        <!-- Evaluation Mode Toggle -->
+        <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
+        <button kendoButton (click)="reRunSuite()" themeColor="primary" *ngIf="record.SuiteID">
+          <i class="fas fa-play"></i> Re-run Suite
         </button>
-        <button kendoButton (click)="refresh()" icon="sync" [disabled]="isRefreshing">
-          <i *ngIf="isRefreshing" class="fas fa-sync fa-spin"></i>
+        <button kendoButton (click)="refresh()" [disabled]="isRefreshing">
+          <i class="fas" [ngClass]="isRefreshing ? 'fa-sync fa-spin' : 'fa-sync'"></i>
           {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
         </button>
       </div>
@@ -249,6 +251,117 @@
         </div>
       </div>
 
+      <!-- Evaluation Metrics Summary -->
+      <div class="evaluation-summary" *ngIf="evaluationMetrics && feedbacksLoaded">
+        <div class="eval-summary-grid">
+          <!-- Human Feedback Card -->
+          <div class="eval-summary-card" *ngIf="evalPreferences.showHuman">
+            <div class="eval-card-header">
+              <i class="fa-solid fa-user"></i>
+              <span>Human Feedback</span>
+            </div>
+            <div class="eval-card-body">
+              <div class="eval-stat-row">
+                <span class="eval-stat-label">Reviewed</span>
+                <span class="eval-stat-value">{{ evaluationMetrics.humanReviewedCount }} / {{ evaluationMetrics.totalRuns }}</span>
+              </div>
+              <div class="eval-stat-row" *ngIf="evaluationMetrics.humanReviewedCount > 0">
+                <span class="eval-stat-label">Avg Rating</span>
+                <span class="eval-stat-value">{{ evaluationMetrics.humanAvgRating.toFixed(1) }}/10</span>
+              </div>
+              <div class="eval-stat-row" *ngIf="evaluationMetrics.humanReviewedCount > 0">
+                <span class="eval-stat-label">Correct</span>
+                <span class="eval-stat-value correct">{{ evaluationMetrics.humanCorrectCount }}</span>
+                <span class="eval-stat-value incorrect" *ngIf="evaluationMetrics.humanIncorrectCount > 0">{{ evaluationMetrics.humanIncorrectCount }} incorrect</span>
+              </div>
+            </div>
+            <div class="eval-card-footer" *ngIf="evaluationMetrics.humanPendingCount > 0">
+              <span class="pending-badge">
+                <i class="fa-solid fa-clock"></i>
+                {{ evaluationMetrics.humanPendingCount }} need review
+              </span>
+            </div>
+          </div>
+
+          <!-- Auto Score Card -->
+          <div class="eval-summary-card" *ngIf="evalPreferences.showAuto">
+            <div class="eval-card-header">
+              <i class="fa-solid fa-robot"></i>
+              <span>Auto Evaluation</span>
+            </div>
+            <div class="eval-card-body">
+              <div class="eval-stat-row">
+                <span class="eval-stat-label">Evaluated</span>
+                <span class="eval-stat-value">{{ evaluationMetrics.autoEvaluatedCount }} / {{ evaluationMetrics.totalRuns }}</span>
+              </div>
+              <div class="eval-stat-row" *ngIf="evaluationMetrics.autoEvaluatedCount > 0">
+                <span class="eval-stat-label">Avg Score</span>
+                <span class="eval-stat-value">{{ (evaluationMetrics.autoAvgScore * 100).toFixed(0) }}%</span>
+              </div>
+              <div class="eval-stat-row" *ngIf="evaluationMetrics.autoEvaluatedCount > 0">
+                <span class="eval-stat-label">Pass Rate</span>
+                <span class="eval-stat-value">{{ evaluationMetrics.autoPassRate.toFixed(0) }}%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Execution Card -->
+          <div class="eval-summary-card" *ngIf="evalPreferences.showExecution">
+            <div class="eval-card-header">
+              <i class="fa-solid fa-circle-check"></i>
+              <span>Execution</span>
+            </div>
+            <div class="eval-card-body">
+              <div class="eval-stat-row">
+                <span class="eval-stat-label">Completed</span>
+                <span class="eval-stat-value">{{ evaluationMetrics.execCompletedCount }} / {{ evaluationMetrics.totalRuns }}</span>
+              </div>
+              <div class="eval-stat-row">
+                <span class="eval-stat-label">Success Rate</span>
+                <span class="eval-stat-value">{{ evaluationMetrics.execSuccessRate.toFixed(0) }}%</span>
+              </div>
+              <div class="eval-stat-row" *ngIf="evaluationMetrics.execErrorCount > 0 || evaluationMetrics.execTimeoutCount > 0">
+                <span class="eval-stat-label">Issues</span>
+                <span class="eval-stat-value error" *ngIf="evaluationMetrics.execErrorCount > 0">{{ evaluationMetrics.execErrorCount }} errors</span>
+                <span class="eval-stat-value timeout" *ngIf="evaluationMetrics.execTimeoutCount > 0">{{ evaluationMetrics.execTimeoutCount }} timeouts</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Needs Review Section -->
+      <div class="needs-review-section" *ngIf="evalPreferences.showHuman && needsReviewItems.length > 0 && feedbacksLoaded">
+        <div class="needs-review-header">
+          <h3><i class="fa-solid fa-user-clock"></i> Needs Review</h3>
+          <span class="review-count">{{ needsReviewItems.length }} items</span>
+        </div>
+        <div class="needs-review-list">
+          <div class="review-item" *ngFor="let item of needsReviewItems.slice(0, 5)"
+               [class.high-priority]="item.priority === 'high'"
+               [class.medium-priority]="item.priority === 'medium'"
+               (click)="toggleRunExpanded(item.run.id)">
+            <div class="review-item-icon">
+              <i class="fa-solid fa-exclamation-triangle" *ngIf="item.priority === 'high'"></i>
+              <i class="fa-solid fa-circle-dot" *ngIf="item.priority === 'medium'"></i>
+              <i class="fa-solid fa-clock" *ngIf="item.priority === 'low'"></i>
+            </div>
+            <div class="review-item-content">
+              <span class="review-item-name">{{ item.run.testName }}</span>
+              <span class="review-item-reason">{{ item.reason }}</span>
+            </div>
+            <div class="review-item-action">
+              <i class="fa-solid fa-chevron-right"></i>
+            </div>
+          </div>
+          <div class="review-more" *ngIf="needsReviewItems.length > 5">
+            <button kendoButton fillMode="flat" (click)="changeTab('runs')">
+              View all {{ needsReviewItems.length }} items
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Progress Ring (when running) -->
       <div class="progress-section" *ngIf="record.Status === 'Running' || record.Status === 'Pending'">
         <div class="progress-info">
@@ -292,8 +405,8 @@
           </button>
         </div>
         <div class="runs-actions">
-          <button kendoButton (click)="exportToCSV()" icon="download">
-            Export CSV
+          <button kendoButton (click)="exportToCSV()">
+            <i class="fas fa-download"></i> Export CSV
           </button>
         </div>
       </div>
@@ -323,18 +436,19 @@
             <div class="run-content">
               <div class="run-header-row">
                 <div class="run-name">{{ run.Test }}</div>
-                <div class="run-feedback-indicator" *ngIf="hasFeedback(run.ID)">
-                  <i class="fas fa-comment-dots"></i>
-                  <span class="feedback-rating">{{ getFeedbackRating(run.ID) }}/10</span>
-                </div>
+                <!-- Evaluation Badge -->
+                <app-evaluation-badge
+                  [executionStatus]="run.Status"
+                  [originalStatus]="run.Status"
+                  [autoScore]="run.Score"
+                  [humanRating]="getFeedbackRating(run.ID) || null"
+                  [humanIsCorrect]="getHumanIsCorrect(run.ID)"
+                  [hasHumanFeedback]="hasFeedback(run.ID)"
+                  [preferences]="evalPreferences"
+                  [mode]="'compact'">
+                </app-evaluation-badge>
               </div>
               <div class="run-meta">
-                <span class="run-status" [style.color]="getRunStatusColor(run.Status)">
-                  {{ run.Status }}
-                </span>
-                <span class="run-score" *ngIf="run.Score != null">
-                  <i class="fas fa-star"></i> {{ run.Score.toFixed(4) }}
-                </span>
                 <span class="run-duration" *ngIf="run.DurationSeconds">
                   <i class="fas fa-clock"></i> {{ run.DurationSeconds.toFixed(1) }}s
                 </span>
@@ -568,8 +682,9 @@
               <tr>
                 <th class="seq-col">#</th>
                 <th class="name-col">Test Name</th>
-                <th class="status-col">Status</th>
-                <th class="score-col">Score</th>
+                <th class="status-col" *ngIf="evalPreferences.showExecution">Status</th>
+                <th class="score-col" *ngIf="evalPreferences.showAuto">Auto Score</th>
+                <th class="feedback-col" *ngIf="evalPreferences.showHuman">Human Score</th>
                 <th class="duration-col">Duration</th>
                 <th class="cost-col">Cost</th>
               </tr>
@@ -591,7 +706,7 @@
                     </div>
                   </div>
                 </td>
-                <td class="status-col">
+                <td class="status-col" *ngIf="evalPreferences.showExecution">
                   <span class="status-badge" [ngClass]="'status-' + run.Status.toLowerCase()">
                     <i class="fas"
                        [class.fa-check-circle]="run.Status === 'Passed'"
@@ -604,7 +719,7 @@
                     {{ run.Status }}
                   </span>
                 </td>
-                <td class="score-col">
+                <td class="score-col" *ngIf="evalPreferences.showAuto">
                   <div class="score-display" *ngIf="run.Score != null">
                     <div class="score-bar-mini">
                       <div class="score-fill"
@@ -616,6 +731,19 @@
                     <span class="score-text">{{ (run.Score * 100).toFixed(0) }}%</span>
                   </div>
                   <span class="na-value" *ngIf="run.Score == null">—</span>
+                </td>
+                <td class="feedback-col" *ngIf="evalPreferences.showHuman">
+                  <div class="feedback-display" *ngIf="hasFeedback(run.ID)">
+                    <span class="feedback-rating" [class.low]="getFeedbackRating(run.ID) <= 3" [class.mid]="getFeedbackRating(run.ID) >= 4 && getFeedbackRating(run.ID) <= 6" [class.high]="getFeedbackRating(run.ID) >= 7">
+                      {{ getFeedbackRating(run.ID) }}/10
+                    </span>
+                    <span class="feedback-correctness" *ngIf="getHumanIsCorrect(run.ID) !== null">
+                      <i class="fas" [class.fa-check]="getHumanIsCorrect(run.ID) === true" [class.fa-times]="getHumanIsCorrect(run.ID) === false" [class.correct]="getHumanIsCorrect(run.ID) === true" [class.incorrect]="getHumanIsCorrect(run.ID) === false"></i>
+                    </span>
+                  </div>
+                  <span class="na-value needs-review" *ngIf="!hasFeedback(run.ID)">
+                    <i class="fas fa-user-clock"></i>
+                  </span>
                 </td>
                 <td class="duration-col">
                   <span *ngIf="run.DurationSeconds">{{ run.DurationSeconds.toFixed(1) }}s</span>

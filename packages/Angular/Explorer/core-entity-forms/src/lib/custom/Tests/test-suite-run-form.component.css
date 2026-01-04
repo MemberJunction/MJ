@@ -2758,3 +2758,323 @@ button:focus-visible {
     border-bottom-width: 4px;
   }
 }
+
+/* ===================================
+   Evaluation Summary
+   =================================== */
+.evaluation-summary {
+  margin-top: 20px;
+}
+
+.eval-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.eval-summary-card {
+  background: var(--suite-run-card);
+  border: 1px solid var(--suite-run-border);
+  border-radius: var(--suite-run-radius);
+  overflow: hidden;
+  transition: var(--suite-run-transition);
+}
+
+.eval-summary-card:hover {
+  box-shadow: var(--suite-run-shadow);
+}
+
+.eval-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--suite-run-neutral-light);
+  border-bottom: 1px solid var(--suite-run-border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--suite-run-text);
+}
+
+.eval-card-header i {
+  color: var(--suite-run-primary);
+}
+
+.eval-card-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.eval-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.eval-stat-label {
+  font-size: 12px;
+  color: var(--suite-run-text-secondary);
+}
+
+.eval-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--suite-run-text);
+}
+
+.eval-stat-value.correct {
+  color: var(--suite-run-success);
+}
+
+.eval-stat-value.incorrect {
+  color: var(--suite-run-danger);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.eval-stat-value.error {
+  color: var(--suite-run-danger);
+}
+
+.eval-stat-value.timeout {
+  color: var(--suite-run-warning);
+}
+
+.eval-card-footer {
+  padding: 10px 16px;
+  background: var(--suite-run-warning-light);
+  border-top: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.pending-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--suite-run-warning);
+}
+
+.pending-badge i {
+  font-size: 11px;
+}
+
+/* ===================================
+   Needs Review Section
+   =================================== */
+.needs-review-section {
+  background: var(--suite-run-card);
+  border: 1px solid var(--suite-run-border);
+  border-radius: var(--suite-run-radius);
+  overflow: hidden;
+}
+
+.needs-review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.needs-review-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.needs-review-header h3 i {
+  font-size: 16px;
+}
+
+.review-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: #92400e;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 2px 10px;
+  border-radius: 12px;
+}
+
+.needs-review-list {
+  padding: 8px;
+}
+
+.review-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--suite-run-transition);
+}
+
+.review-item:hover {
+  background: var(--suite-run-primary-light);
+}
+
+.review-item-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.review-item.high-priority .review-item-icon {
+  background: var(--suite-run-danger-light);
+  color: var(--suite-run-danger);
+}
+
+.review-item.medium-priority .review-item-icon {
+  background: var(--suite-run-warning-light);
+  color: var(--suite-run-warning);
+}
+
+.review-item:not(.high-priority):not(.medium-priority) .review-item-icon {
+  background: var(--suite-run-neutral-light);
+  color: var(--suite-run-neutral);
+}
+
+.review-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.review-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--suite-run-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-item-reason {
+  font-size: 11px;
+  color: var(--suite-run-text-secondary);
+}
+
+.review-item-action {
+  color: var(--suite-run-text-secondary);
+  font-size: 12px;
+}
+
+.review-item:hover .review-item-action {
+  color: var(--suite-run-primary);
+}
+
+.review-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  border-top: 1px solid var(--suite-run-border);
+}
+
+/* Mobile Responsive for Evaluation */
+@media (max-width: 768px) {
+  .eval-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .eval-card-header {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+
+  .eval-card-body {
+    padding: 12px 14px;
+  }
+
+  .needs-review-header {
+    padding: 12px 16px;
+  }
+
+  .needs-review-header h3 {
+    font-size: 13px;
+  }
+
+  .review-item {
+    padding: 10px 12px;
+  }
+
+  .review-item-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+}
+
+/* ===================================
+   Feedback Column in Analytics Table
+   =================================== */
+.feedback-col {
+  width: 90px;
+  text-align: center;
+}
+
+.feedback-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.feedback-rating {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--suite-run-neutral-light);
+}
+
+.feedback-rating.low {
+  background: var(--suite-run-danger-light);
+  color: var(--suite-run-danger);
+}
+
+.feedback-rating.mid {
+  background: var(--suite-run-warning-light);
+  color: var(--suite-run-warning);
+}
+
+.feedback-rating.high {
+  background: var(--suite-run-success-light);
+  color: var(--suite-run-success);
+}
+
+.feedback-correctness i {
+  font-size: 12px;
+}
+
+.feedback-correctness i.correct {
+  color: var(--suite-run-success);
+}
+
+.feedback-correctness i.incorrect {
+  color: var(--suite-run-danger);
+}
+
+.na-value.needs-review {
+  color: var(--suite-run-warning);
+  opacity: 0.7;
+}
+
+.na-value.needs-review i {
+  font-size: 14px;
+}
