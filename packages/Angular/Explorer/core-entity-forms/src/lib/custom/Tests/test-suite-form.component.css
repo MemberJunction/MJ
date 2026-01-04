@@ -806,10 +806,33 @@
 .filter-btn.tag-btn {
   padding: 6px 12px;
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-btn.tag-btn i.fa-check {
+  font-size: 10px;
+}
+
+.filter-btn.tag-btn.all-tags-btn {
+  font-weight: 600;
+}
+
+.filter-btn.tag-btn.all-tags-btn i {
+  font-size: 11px;
+}
+
+.filter-hint {
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--test-primary);
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .tag-filters {
-  max-height: 100px;
+  max-height: 120px;
   overflow-y: auto;
 }
 
@@ -1382,6 +1405,161 @@
 }
 
 .matrix-info i {
+  color: var(--test-primary);
+}
+
+/* ===========================
+   Chart View
+   =========================== */
+.chart-section {
+  background: var(--test-surface);
+  border-radius: var(--test-radius-lg);
+  padding: 24px;
+  box-shadow: var(--test-shadow-sm);
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--test-border);
+}
+
+.chart-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--test-text);
+}
+
+.chart-header h3 i {
+  color: var(--test-primary);
+}
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.chart-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.chart-legend .legend-item.chart-passed {
+  background: #ecfdf5;
+  color: var(--test-success);
+}
+
+.chart-legend .legend-item.chart-failed {
+  background: #fef2f2;
+  color: var(--test-error);
+}
+
+.chart-legend .legend-item.chart-error {
+  background: #fffbeb;
+  color: var(--test-warning);
+}
+
+.chart-legend .legend-item.chart-skipped {
+  background: #f1f5f9;
+  color: var(--test-disabled);
+}
+
+.chart-container {
+  min-height: 500px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #fafbff 0%, #f8fafc 100%);
+  border-radius: var(--test-radius-md);
+  border: 1px solid var(--test-border);
+}
+
+.d3-chart {
+  width: 100%;
+  height: 500px;
+}
+
+.d3-chart svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* D3 Chart Node Styles */
+.d3-chart .node {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.d3-chart .node:hover {
+  transform: scale(1.05);
+}
+
+.d3-chart .node-label {
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--test-text);
+  pointer-events: none;
+}
+
+.d3-chart .link {
+  fill: none;
+  stroke-opacity: 0.4;
+  transition: stroke-opacity 0.2s ease;
+}
+
+.d3-chart .link:hover {
+  stroke-opacity: 0.8;
+}
+
+.d3-chart .tooltip {
+  position: absolute;
+  padding: 10px 14px;
+  background: rgba(30, 41, 59, 0.95);
+  color: white;
+  border-radius: 8px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  max-width: 250px;
+}
+
+.d3-chart .tooltip-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.d3-chart .tooltip-value {
+  opacity: 0.8;
+}
+
+.chart-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--test-text-muted);
+  padding: 12px;
+  background: var(--test-bg);
+  border-radius: var(--test-radius-sm);
+  margin-top: 16px;
+}
+
+.chart-info i {
   color: var(--test-primary);
 }
 

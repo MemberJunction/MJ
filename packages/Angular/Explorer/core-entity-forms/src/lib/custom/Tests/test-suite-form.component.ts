@@ -1,4 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, AfterViewInit, ViewChild } from '@angular/core';
+import * as d3 from 'd3';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
@@ -44,12 +45,16 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   // Analytics data
   analyticsData: AnalyticsDataPoint[] = [];
   uniqueTags: string[] = [];
-  selectedTagFilter: string | null = null;
+  selectedTags: string[] = [];  // Multi-select: empty array means "All Tags"
   analyticsTimeRange: '7d' | '30d' | '90d' | 'all' = '30d';
-  analyticsView: 'summary' | 'matrix' = 'summary';
+  analyticsView: 'summary' | 'matrix' | 'chart' = 'summary';
   matrixData: MatrixDataPoint[] = [];
   loadingMatrix = false;
   matrixLoaded = false;
+
+  // Chart
+  @ViewChild('chartContainer') chartContainer!: ElementRef<HTMLDivElement>;
+  private chartRendered = false;
 
   // Compare data
   compareRunA: TestSuiteRunEntity | null = null;
@@ -374,9 +379,9 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
       data = data.filter(d => d.date >= cutoffDate!);
     }
 
-    // Apply tag filter
-    if (this.selectedTagFilter) {
-      data = data.filter(d => d.tags.includes(this.selectedTagFilter!));
+    // Apply tag filter (multi-select: empty array means all tags)
+    if (this.selectedTags.length > 0) {
+      data = data.filter(d => this.selectedTags.some(tag => d.tags.includes(tag)));
     }
 
     return data;
@@ -384,20 +389,62 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
   setTimeRange(range: '7d' | '30d' | '90d' | 'all') {
     this.analyticsTimeRange = range;
-    this.cdr.markForCheck();
-  }
-
-  setTagFilter(tag: string | null) {
-    this.selectedTagFilter = tag;
-    this.cdr.markForCheck();
-  }
-
-  setAnalyticsView(view: 'summary' | 'matrix') {
-    this.analyticsView = view;
-    if (view === 'matrix' && !this.matrixLoaded) {
-      this.loadMatrixData();
+    // Reload matrix data when time range changes (if currently viewing matrix or chart)
+    if (this.analyticsView === 'matrix' || this.analyticsView === 'chart') {
+      this.reloadMatrixData();
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Toggle a tag in the multi-select filter.
+   * If tag is null, clear all selections (show all tags).
+   */
+  toggleTagFilter(tag: string | null) {
+    if (tag === null) {
+      // Clear all - show all tags
+      this.selectedTags = [];
+    } else {
+      // Toggle the tag
+      const index = this.selectedTags.indexOf(tag);
+      if (index >= 0) {
+        this.selectedTags = this.selectedTags.filter(t => t !== tag);
+      } else {
+        this.selectedTags = [...this.selectedTags, tag];
+      }
+    }
+    // Reload matrix data when tag filter changes (if currently viewing matrix or chart)
+    if (this.analyticsView === 'matrix' || this.analyticsView === 'chart') {
+      this.reloadMatrixData();
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Check if a tag is currently selected in the filter
+   */
+  isTagSelected(tag: string): boolean {
+    return this.selectedTags.includes(tag);
+  }
+
+  setAnalyticsView(view: 'summary' | 'matrix' | 'chart') {
+    this.analyticsView = view;
+    if ((view === 'matrix' || view === 'chart') && !this.matrixLoaded) {
+      this.loadMatrixData();
+    }
+    // Render chart when switching to chart view
+    if (view === 'chart' && this.matrixLoaded) {
+      setTimeout(() => this.renderChart(), 100);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Force reload of matrix data (used when filters change)
+   */
+  private reloadMatrixData() {
+    this.matrixLoaded = false;
+    this.loadMatrixData();
   }
 
   private async loadMatrixData() {
@@ -449,6 +496,11 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
       this.matrixData = matrixData;
       this.matrixLoaded = true;
+
+      // Render chart if currently on chart view
+      if (this.analyticsView === 'chart') {
+        setTimeout(() => this.renderChart(), 100);
+      }
     } catch (error) {
       console.error('Error loading matrix data:', error);
       SharedService.Instance.CreateSimpleNotification('Failed to load matrix data', 'error', 3000);
@@ -508,6 +560,384 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     if (result?.testRunId) {
       this.openTestRun(result.testRunId);
     }
+  }
+
+  // ===========================
+  // D3 Chart Rendering
+  // ===========================
+
+  /**
+   * Renders an interactive heatmap-style chart showing test results across runs
+   * with trend lines and better visual hierarchy
+   */
+  private renderChart(): void {
+    if (!this.chartContainer?.nativeElement || this.matrixData.length === 0) {
+      return;
+    }
+
+    const container = this.chartContainer.nativeElement;
+    const tests = this.getUniqueTestsFromMatrix();
+    const runs = this.matrixData;
+
+    // Dynamic sizing based on content
+    const width = container.clientWidth || 900;
+    const rowHeight = 28;
+    const colWidth = Math.min(80, Math.max(50, (width - 250) / runs.length));
+    const margin = { top: 80, right: 40, bottom: 20, left: 220 };
+    const chartWidth = runs.length * colWidth;
+    const chartHeight = tests.length * rowHeight;
+    const height = chartHeight + margin.top + margin.bottom;
+
+    // Update container height
+    container.style.height = `${Math.max(400, height)}px`;
+
+    // Clear previous chart
+    d3.select(container).selectAll('*').remove();
+
+    // Status colors with better contrast
+    const statusColors: Record<string, string> = {
+      'Passed': '#22c55e',
+      'Failed': '#ef4444',
+      'Error': '#f97316',
+      'Skipped': '#a1a1aa',
+      'Running': '#3b82f6',
+      'Pending': '#d1d5db'
+    };
+
+    // Create SVG
+    const svg = d3.select(container)
+      .append('svg')
+      .attr('width', width)
+      .attr('height', height);
+
+    // Create tooltip div
+    const tooltip = d3.select(container)
+      .append('div')
+      .attr('class', 'chart-tooltip')
+      .style('position', 'absolute')
+      .style('opacity', 0)
+      .style('background', 'rgba(15, 23, 42, 0.95)')
+      .style('color', 'white')
+      .style('padding', '10px 14px')
+      .style('border-radius', '8px')
+      .style('font-size', '12px')
+      .style('pointer-events', 'none')
+      .style('z-index', '1000')
+      .style('box-shadow', '0 4px 20px rgba(0,0,0,0.3)')
+      .style('max-width', '280px');
+
+    // Create chart group
+    const chart = svg.append('g')
+      .attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+    // Add gradient definitions for cells
+    const defs = svg.append('defs');
+
+    // Create gradient for each status
+    Object.entries(statusColors).forEach(([status, color]) => {
+      const gradient = defs.append('linearGradient')
+        .attr('id', `gradient-${status.toLowerCase()}`)
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%');
+
+      gradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', color)
+        .attr('stop-opacity', 0.95);
+
+      gradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', d3.color(color)?.darker(0.3)?.toString() || color)
+        .attr('stop-opacity', 0.95);
+    });
+
+    // Draw column headers (run dates) at top
+    runs.forEach((run, i) => {
+      const x = i * colWidth + colWidth / 2;
+
+      // Date text
+      chart.append('text')
+        .attr('x', x)
+        .attr('y', -45)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#475569')
+        .attr('font-size', '10px')
+        .attr('font-weight', '500')
+        .text(this.getRelativeTime(run.date))
+        .style('cursor', 'pointer')
+        .on('click', () => this.openSuiteRun(run.runId));
+
+      // Pass rate badge
+      const passRateColor = run.passRate >= 80 ? '#22c55e' : run.passRate >= 50 ? '#f97316' : '#ef4444';
+      const badgeWidth = 36;
+      const badgeHeight = 18;
+
+      chart.append('rect')
+        .attr('x', x - badgeWidth / 2)
+        .attr('y', -35)
+        .attr('width', badgeWidth)
+        .attr('height', badgeHeight)
+        .attr('rx', 9)
+        .attr('fill', passRateColor)
+        .attr('opacity', 0.15);
+
+      chart.append('text')
+        .attr('x', x)
+        .attr('y', -22)
+        .attr('text-anchor', 'middle')
+        .attr('fill', passRateColor)
+        .attr('font-size', '11px')
+        .attr('font-weight', '700')
+        .text(`${run.passRate.toFixed(0)}%`);
+
+      // Tags indicator
+      if (run.tags.length > 0) {
+        chart.append('text')
+          .attr('x', x)
+          .attr('y', -55)
+          .attr('text-anchor', 'middle')
+          .attr('fill', '#3b82f6')
+          .attr('font-size', '9px')
+          .text(run.tags.slice(0, 2).join(', '))
+          .style('cursor', 'pointer')
+          .on('click', () => this.openSuiteRun(run.runId));
+      }
+    });
+
+    // Draw row labels (test names) on left
+    tests.forEach((test, i) => {
+      const y = i * rowHeight + rowHeight / 2;
+
+      chart.append('text')
+        .attr('x', -12)
+        .attr('y', y + 4)
+        .attr('text-anchor', 'end')
+        .attr('fill', '#334155')
+        .attr('font-size', '11px')
+        .text(test.testName.length > 28 ? test.testName.substring(0, 28) + '...' : test.testName)
+        .style('cursor', 'pointer')
+        .on('click', () => {
+          SharedService.Instance.OpenEntityRecord('MJ: Tests', CompositeKey.FromID(test.testId));
+        })
+        .on('mouseover', function() {
+          d3.select(this).attr('fill', '#3b82f6').attr('font-weight', '600');
+        })
+        .on('mouseout', function() {
+          d3.select(this).attr('fill', '#334155').attr('font-weight', 'normal');
+        });
+    });
+
+    // Draw grid lines
+    tests.forEach((_, i) => {
+      chart.append('line')
+        .attr('x1', 0)
+        .attr('y1', (i + 1) * rowHeight)
+        .attr('x2', chartWidth)
+        .attr('y2', (i + 1) * rowHeight)
+        .attr('stroke', '#e2e8f0')
+        .attr('stroke-width', 1);
+    });
+
+    runs.forEach((_, i) => {
+      chart.append('line')
+        .attr('x1', (i + 1) * colWidth)
+        .attr('y1', 0)
+        .attr('x2', (i + 1) * colWidth)
+        .attr('y2', chartHeight)
+        .attr('stroke', '#e2e8f0')
+        .attr('stroke-width', 1);
+    });
+
+    // Draw cells
+    const cellPadding = 3;
+    runs.forEach((run, runIndex) => {
+      tests.forEach((test, testIndex) => {
+        const result = run.testResults.get(test.testId);
+        const x = runIndex * colWidth + cellPadding;
+        const y = testIndex * rowHeight + cellPadding;
+        const cellWidth = colWidth - cellPadding * 2;
+        const cellHeight = rowHeight - cellPadding * 2;
+
+        if (!result) {
+          // Empty cell indicator
+          chart.append('rect')
+            .attr('x', x)
+            .attr('y', y)
+            .attr('width', cellWidth)
+            .attr('height', cellHeight)
+            .attr('rx', 4)
+            .attr('fill', '#f8fafc')
+            .attr('stroke', '#e2e8f0')
+            .attr('stroke-width', 1);
+
+          chart.append('text')
+            .attr('x', x + cellWidth / 2)
+            .attr('y', y + cellHeight / 2 + 4)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#cbd5e1')
+            .attr('font-size', '12px')
+            .text('—');
+          return;
+        }
+
+        const cellGroup = chart.append('g')
+          .attr('class', 'result-cell')
+          .style('cursor', 'pointer')
+          .on('click', () => this.openTestRun(result.testRunId))
+          .on('mouseover', (event: MouseEvent) => {
+            d3.select(event.currentTarget as Element).select('rect')
+              .attr('stroke', '#1e40af')
+              .attr('stroke-width', 2);
+
+            const scoreText = result.score != null ? `<div style="margin-top:4px"><strong>Score:</strong> ${(result.score * 100).toFixed(1)}%</div>` : '';
+            const durationText = result.duration != null ? `<div><strong>Duration:</strong> ${result.duration.toFixed(2)}s</div>` : '';
+
+            tooltip
+              .style('opacity', 1)
+              .html(`
+                <div style="font-weight:600; margin-bottom:6px; color:#f1f5f9">${result.testName}</div>
+                <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${statusColors[result.status]}; color:white; font-size:11px; font-weight:600">${result.status}</div>
+                ${scoreText}
+                ${durationText}
+                <div style="margin-top:6px; color:#94a3b8; font-size:10px">${this.getRelativeTime(run.date)} • Click to view</div>
+              `)
+              .style('left', `${event.offsetX + 15}px`)
+              .style('top', `${event.offsetY - 10}px`);
+          })
+          .on('mouseout', (event: MouseEvent) => {
+            d3.select(event.currentTarget as Element).select('rect')
+              .attr('stroke', 'none')
+              .attr('stroke-width', 0);
+            tooltip.style('opacity', 0);
+          });
+
+        // Cell background with gradient
+        cellGroup.append('rect')
+          .attr('x', x)
+          .attr('y', y)
+          .attr('width', cellWidth)
+          .attr('height', cellHeight)
+          .attr('rx', 4)
+          .attr('fill', `url(#gradient-${result.status.toLowerCase()})`)
+          .attr('stroke', 'none')
+          .attr('stroke-width', 0)
+          .style('transition', 'all 0.15s ease');
+
+        // Score bar at bottom of cell
+        if (result.score != null && result.score > 0) {
+          cellGroup.append('rect')
+            .attr('x', x + 2)
+            .attr('y', y + cellHeight - 4)
+            .attr('width', (cellWidth - 4) * result.score)
+            .attr('height', 2)
+            .attr('rx', 1)
+            .attr('fill', 'rgba(255,255,255,0.5)');
+        }
+
+        // Status icon (using simple text that renders consistently)
+        const iconText: Record<string, string> = {
+          'Passed': '✓',
+          'Failed': '✕',
+          'Error': '!',
+          'Skipped': '»',
+          'Running': '●',
+          'Pending': '○'
+        };
+
+        cellGroup.append('text')
+          .attr('x', x + cellWidth / 2)
+          .attr('y', y + cellHeight / 2 + 5)
+          .attr('text-anchor', 'middle')
+          .attr('fill', 'white')
+          .attr('font-size', '14px')
+          .attr('font-weight', 'bold')
+          .attr('font-family', 'system-ui, -apple-system, sans-serif')
+          .text(iconText[result.status] || '?');
+      });
+    });
+
+    // Draw trend line for pass rate across runs
+    if (runs.length > 1) {
+      const trendLineY = chartHeight + 50;
+      const trendHeight = 40;
+
+      // Trend line label
+      chart.append('text')
+        .attr('x', -12)
+        .attr('y', trendLineY + trendHeight / 2)
+        .attr('text-anchor', 'end')
+        .attr('fill', '#64748b')
+        .attr('font-size', '10px')
+        .attr('font-weight', '500')
+        .text('Pass Rate Trend');
+
+      // Create trend line path
+      const lineGenerator = d3.line<MatrixDataPoint>()
+        .x((_, i) => i * colWidth + colWidth / 2)
+        .y(d => trendLineY + trendHeight - (d.passRate / 100) * trendHeight)
+        .curve(d3.curveMonotoneX);
+
+      // Draw area under line
+      const areaGenerator = d3.area<MatrixDataPoint>()
+        .x((_, i) => i * colWidth + colWidth / 2)
+        .y0(trendLineY + trendHeight)
+        .y1(d => trendLineY + trendHeight - (d.passRate / 100) * trendHeight)
+        .curve(d3.curveMonotoneX);
+
+      chart.append('path')
+        .datum(runs)
+        .attr('d', areaGenerator)
+        .attr('fill', 'url(#trendGradient)')
+        .attr('opacity', 0.3);
+
+      // Create gradient for trend area
+      const trendGradient = defs.append('linearGradient')
+        .attr('id', 'trendGradient')
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%');
+
+      trendGradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', '#3b82f6')
+        .attr('stop-opacity', 0.4);
+
+      trendGradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', '#3b82f6')
+        .attr('stop-opacity', 0);
+
+      chart.append('path')
+        .datum(runs)
+        .attr('d', lineGenerator)
+        .attr('fill', 'none')
+        .attr('stroke', '#3b82f6')
+        .attr('stroke-width', 2.5)
+        .attr('stroke-linecap', 'round');
+
+      // Draw dots on trend line
+      runs.forEach((run, i) => {
+        const cx = i * colWidth + colWidth / 2;
+        const cy = trendLineY + trendHeight - (run.passRate / 100) * trendHeight;
+
+        chart.append('circle')
+          .attr('cx', cx)
+          .attr('cy', cy)
+          .attr('r', 4)
+          .attr('fill', 'white')
+          .attr('stroke', '#3b82f6')
+          .attr('stroke-width', 2);
+      });
+
+      // Update container height for trend line
+      container.style.height = `${Math.max(400, height + 80)}px`;
+      svg.attr('height', height + 80);
+    }
+
+    this.chartRendered = true;
   }
 
   getAveragePassRate(): number {

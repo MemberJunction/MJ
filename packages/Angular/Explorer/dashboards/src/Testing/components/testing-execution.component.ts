@@ -907,7 +907,7 @@ export class TestingExecutionComponent implements OnInit, OnDestroy {
   filters: ExecutionFilters = {
     status: 'all',
     suite: 'all',
-    timeRange: 'today',
+    timeRange: 'month',  // Default to "This Month" to show more data
     searchText: ''
   };
 

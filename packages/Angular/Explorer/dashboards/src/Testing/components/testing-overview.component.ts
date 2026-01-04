@@ -11,58 +11,53 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
   selector: 'app-testing-overview',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="testing-overview">
-      <div class="overview-header">
-        <h2>
-          <i class="fa-solid fa-chart-line"></i>
-          Testing Overview
-        </h2>
-        <div class="header-controls">
-          <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
-            <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
-            Refresh
-          </button>
-        </div>
+    <!-- Full-page loading state - show nothing until loaded -->
+    @if (isLoading) {
+      <div class="full-page-loading">
+        <mj-loading text="Loading Testing Dashboard..."></mj-loading>
       </div>
-
-      <!-- KPI Cards -->
-      <div class="kpi-section">
-        @if (isLoading) {
-          <div class="loading-placeholder">
-            <mj-loading text="Loading KPIs..."></mj-loading>
+    } @else {
+      <div class="testing-overview">
+        <div class="overview-header">
+          <h2>
+            <i class="fa-solid fa-chart-line"></i>
+            Testing Overview
+          </h2>
+          <div class="header-controls">
+            <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
+              <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
+              Refresh
+            </button>
           </div>
-        } @else {
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-section">
           @for (kpi of kpiCards$ | async; track kpi.title) {
             <app-kpi-card [data]="kpi"></app-kpi-card>
           }
-        }
-      </div>
-
-      <!-- Main Content Grid -->
-      <div class="content-grid">
-        <!-- Suite Hierarchy -->
-        <div class="grid-item suite-panel">
-          <app-suite-tree
-            [suites]="(suiteHierarchy$ | async) ?? []"
-            [selectedSuiteId]="selectedSuiteId"
-            (suiteSelect)="onSuiteSelect($event)"
-          ></app-suite-tree>
         </div>
 
-        <!-- Recent Test Runs -->
-        <div class="grid-item recent-runs-panel">
-          <div class="panel-header">
-            <h3>
-              <i class="fa-solid fa-history"></i>
-              Recent Test Runs
-            </h3>
+        <!-- Main Content Grid -->
+        <div class="content-grid">
+          <!-- Suite Hierarchy -->
+          <div class="grid-item suite-panel">
+            <app-suite-tree
+              [suites]="(suiteHierarchy$ | async) ?? []"
+              [selectedSuiteId]="selectedSuiteId"
+              (suiteSelect)="onSuiteSelect($event)"
+            ></app-suite-tree>
           </div>
-          <div class="runs-list">
-            @if (isLoading) {
-              <div class="loading-placeholder panel-loading">
-                <mj-loading text="Loading runs..."></mj-loading>
-              </div>
-            } @else {
+
+          <!-- Recent Test Runs -->
+          <div class="grid-item recent-runs-panel">
+            <div class="panel-header">
+              <h3>
+                <i class="fa-solid fa-history"></i>
+                Recent Test Runs
+              </h3>
+            </div>
+            <div class="runs-list">
               @for (run of (recentRuns$ | async) ?? []; track run.id) {
                 <div class="run-item">
                   <div class="run-info" (click)="viewRunDetail(run)">
@@ -81,24 +76,18 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
               } @empty {
                 <div class="no-data">No recent test runs</div>
               }
-            }
+            </div>
           </div>
-        </div>
 
-        <!-- Quick Stats -->
-        <div class="grid-item stats-panel">
-          <div class="panel-header">
-            <h3>
-              <i class="fa-solid fa-chart-bar"></i>
-              Quick Stats
-            </h3>
-          </div>
-          <div class="stats-content">
-            @if (isLoading) {
-              <div class="loading-placeholder panel-loading">
-                <mj-loading text="Loading stats..."></mj-loading>
-              </div>
-            } @else {
+          <!-- Quick Stats -->
+          <div class="grid-item stats-panel">
+            <div class="panel-header">
+              <h3>
+                <i class="fa-solid fa-chart-bar"></i>
+                Quick Stats
+              </h3>
+            </div>
+            <div class="stats-content">
               @if (kpis$ | async; as kpis) {
                 <div class="stat-item">
                   <div class="stat-label">Failed Tests</div>
@@ -113,13 +102,22 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
                   <div class="stat-value">{{ formatDuration(kpis.averageDuration) }}</div>
                 </div>
               }
-            }
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    }
   `,
   styles: [`
+    .full-page-loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      min-height: 400px;
+      background: #f8f9fa;
+    }
+
     .testing-overview {
       padding: 20px;
       height: 100%;
@@ -341,18 +339,6 @@ import { TestEngineBase } from '@memberjunction/testing-engine-base';
       text-align: center;
       color: #999;
       font-size: 13px;
-    }
-
-    .loading-placeholder {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 40px 20px;
-      grid-column: 1 / -1;
-    }
-
-    .loading-placeholder.panel-loading {
-      min-height: 150px;
     }
 
     @media (max-width: 1200px) {
