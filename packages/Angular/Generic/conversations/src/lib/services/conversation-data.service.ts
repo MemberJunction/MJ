@@ -120,6 +120,25 @@ export class ConversationDataService {
     if (this.conversations.length > 0) {
       return;
     }
+    await this.fetchConversations(environmentId, currentUser);
+  }
+
+  /**
+   * Force refresh conversations from the database, ignoring cache.
+   * Use this when user explicitly requests a refresh.
+   * @param environmentId The environment ID to filter by
+   * @param currentUser The current user context
+   */
+  async refreshConversations(environmentId: string, currentUser: UserInfo): Promise<void> {
+    await this.fetchConversations(environmentId, currentUser);
+  }
+
+  /**
+   * Internal method to fetch conversations from the database.
+   * @param environmentId The environment ID to filter by
+   * @param currentUser The current user context
+   */
+  private async fetchConversations(environmentId: string, currentUser: UserInfo): Promise<void> {
     this.isLoading = true;
     try {
       const rv = new RunView();
@@ -131,7 +150,7 @@ export class ConversationDataService {
           ExtraFilter: filter,
           OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
           MaxRows: 1000,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object' 
         },
         currentUser
       );
