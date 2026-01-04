@@ -339,6 +339,80 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 - Implement proper loading states with BehaviorSubject
 - Ensure streams are reactive to parameter changes
 
+### RunView ResultType and Fields Optimization
+
+Understanding when to use `ResultType: 'entity_object'` vs `ResultType: 'simple'` is critical for performance:
+
+#### When to Use `entity_object` (Full BaseEntity Objects)
+- When you need to **mutate and save** the records
+- When you need access to BaseEntity methods (`Save()`, `Delete()`, `Validate()`, etc.)
+- When the records will be stored and used across multiple operations
+- **DO NOT** use `Fields` parameter with `entity_object` - it is **automatically ignored**
+  - `ProviderBase.PreRunView()` ([providerBase.ts:470-477](packages/MJCore/src/generic/providerBase.ts#L470-L477)) overrides `Fields` with ALL entity fields
+  - This is by design: entity objects need all fields to be valid for mutation/validation
+
+```typescript
+// ✅ GOOD - Need to modify and save records
+const rv = new RunView();
+const result = await rv.RunView<UserEntity>({
+    EntityName: 'Users',
+    ExtraFilter: `Status='Active'`,
+    ResultType: 'entity_object'  // Full BaseEntity objects for mutation
+});
+for (const user of result.Results) {
+    user.LastLoginAt = new Date();
+    await user.Save();  // Can save because it's a real entity object
+}
+```
+
+#### When to Use `simple` (Plain JavaScript Objects)
+- When you only need to **read/display** data (no mutation)
+- When doing lookups or validation checks
+- When the results are temporary and won't be stored
+- **USE `Fields` parameter** to narrow the query scope and improve performance
+
+```typescript
+// ✅ GOOD - Read-only lookup, narrow field scope
+const rv = new RunView();
+const result = await rv.RunView<{ID: string; Name: string; Status: string}>({
+    EntityName: 'MJ: AI Agent Runs',
+    Fields: ['ID', 'Name', 'Status', 'ConversationID'],  // Only fields we need
+    ExtraFilter: `Status='Running' AND UserID='${userId}'`,
+    ResultType: 'simple'  // Plain objects, no BaseEntity overhead
+});
+// result.Results is plain objects, cannot call .Save()
+```
+
+#### Performance Impact
+- **`entity_object`**: Creates full BaseEntity subclass instances with getters/setters, validation, dirty tracking
+- **`simple`**: Returns plain JavaScript objects with just the data - much faster for read-only operations
+- **`Fields` parameter**: Reduces data transfer by excluding large columns (JSON blobs, text fields)
+
+#### Anti-Patterns
+```typescript
+// ❌ BAD - Using entity_object when only reading
+const result = await rv.RunView<SomeEntity>({
+    EntityName: 'Some Entity',
+    ResultType: 'entity_object'  // Unnecessary overhead
+});
+const ids = result.Results.map(r => r.ID);  // Only needed IDs!
+
+// ❌ BAD - Using Fields with entity_object (Fields IS IGNORED - ProviderBase overrides it)
+const result = await rv.RunView<SomeEntity>({
+    EntityName: 'Some Entity',
+    Fields: ['ID', 'Name'],  // IGNORED! ProviderBase.PreRunView() overrides with ALL fields
+    ResultType: 'entity_object'
+});
+
+// ✅ GOOD - Simple type for read-only with narrow fields
+const result = await rv.RunView<{ID: string}>({
+    EntityName: 'Some Entity',
+    Fields: ['ID'],
+    ResultType: 'simple'
+});
+const ids = result.Results.map(r => r.ID);
+```
+
 ### Efficient Data Loading with RunViews
 
 #### Batch Multiple Independent Queries
@@ -837,6 +911,12 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Group related components in dedicated directories
 - Export shared components (like dialogs) for reuse
 - Maintain clear separation between container and presentational components
+
+### Dialog Button Placement
+- **Confirm/Submit buttons go on the LEFT**, Cancel buttons on the RIGHT
+- This is the opposite of Windows convention but matches MemberJunction's design system
+- Example: `[Save] [Update] [Cancel]` or `[Submit] [Cancel]`
+- Apply this to all dialogs, modals, and action button groups
 
 ### Input Properties - Use Getter/Setters
 - **ALWAYS** use getter/setter pattern for `@Input()` properties that need reactive behavior

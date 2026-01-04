@@ -401,6 +401,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       try {
         await this.loadMessages(conversationId);
         await this.restoreActiveTasks(conversationId);
+        // TODO: Replace polling with PubSub - see plans/repair-conversations-ui-performance.md
         this.agentStateService.startPolling(this.currentUser, conversationId);
       } catch (error) {
         console.error('Error loading conversation:', error);
@@ -870,6 +871,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Start 1-second timer for smooth agent run UI updates
    * Updates the message list every second to keep elapsed times current
    * Also detects when messages complete and reloads agent runs
+   *
+   * NOTE: This polling approach causes excessive RunView calls (24+ queries per entity).
+   * TODO: Replace with PubSub completion events - see plans/repair-conversations-ui-performance.md
    */
   private startAgentRunUpdateTimer(): void {
     // Don't start if already running

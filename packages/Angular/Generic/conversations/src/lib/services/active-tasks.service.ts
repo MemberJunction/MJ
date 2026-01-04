@@ -218,8 +218,9 @@ export class ActiveTasksService {
       // This matches normal behavior where we only track parent agents, not child agents
       const result = await rv.RunView<AIAgentRunEntity>({
         EntityName: 'MJ: AI Agent Runs',
+        Fields: ["ID", "ConversationID", "AgentID", "Agent", "ConversationDetailID"], // narrow field scope to not pull back JSON blobs - much faster
         ExtraFilter: `Status='Running' AND UserID='${currentUser.ID}' AND ConversationDetailID IS NOT NULL`,
-        ResultType: 'entity_object'
+        ResultType: 'simple' // no need for entity-object here we aren't mutating
       }, currentUser);
 
       if (!result.Success || !result.Results || result.Results.length === 0) {
