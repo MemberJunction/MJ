@@ -43199,6 +43199,9 @@ export class MJTestRun_ {
     @Field({nullable: true, description: `Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.`}) 
     Log?: string;
         
+    @Field({nullable: true, description: `JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.`}) 
+    Tags?: string;
+        
     @Field() 
     @MaxLength(510)
     Test: string;
@@ -43298,6 +43301,9 @@ export class CreateMJTestRunInput {
 
     @Field({ nullable: true })
     Log: string | null;
+
+    @Field({ nullable: true })
+    Tags: string | null;
 }
     
 
@@ -43371,6 +43377,9 @@ export class UpdateMJTestRunInput {
 
     @Field({ nullable: true })
     Log?: string | null;
+
+    @Field({ nullable: true })
+    Tags?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43601,6 +43610,9 @@ export class MJTestSuiteRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).`}) 
+    Tags?: string;
+        
     @Field() 
     @MaxLength(510)
     Suite: string;
@@ -43678,6 +43690,9 @@ export class CreateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    Tags: string | null;
 }
     
 
@@ -43745,6 +43760,9 @@ export class UpdateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    Tags?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

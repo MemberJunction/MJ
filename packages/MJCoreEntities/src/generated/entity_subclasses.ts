@@ -14556,7 +14556,7 @@ export const TestRunSchema = z.object({
         * * Description: Timestamp when the test run completed`),
     DurationSeconds: z.number().nullable().describe(`
         * * Field Name: DurationSeconds
-        * * Display Name: Duration Seconds
+        * * Display Name: Duration (seconds)
         * * SQL Data Type: decimal(10, 3)
         * * Description: Execution time in seconds for this test`),
     InputData: z.string().nullable().describe(`
@@ -14624,6 +14624,11 @@ export const TestRunSchema = z.object({
         * * Display Name: Log
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.`),
+    Tags: z.string().nullable().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.`),
     Test: z.string().describe(`
         * * Field Name: Test
         * * Display Name: Test
@@ -14731,12 +14736,12 @@ export const TestSuiteRunSchema = z.object({
         * * Description: Number of tests that encountered execution errors (different from failing validation)`),
     TotalDurationSeconds: z.number().nullable().describe(`
         * * Field Name: TotalDurationSeconds
-        * * Display Name: Total Duration Seconds
+        * * Display Name: Total Duration (seconds)
         * * SQL Data Type: decimal(10, 3)
         * * Description: Total execution time in seconds for the entire suite`),
     TotalCostUSD: z.number().nullable().describe(`
         * * Field Name: TotalCostUSD
-        * * Display Name: Total Cost USD
+        * * Display Name: Total Cost (USD)
         * * SQL Data Type: decimal(10, 6)
         * * Description: Total cost in USD for running the entire suite (sum of all test costs)`),
     Configuration: z.string().nullable().describe(`
@@ -14764,6 +14769,11 @@ export const TestSuiteRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Tags: z.string().nullable().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).`),
     Suite: z.string().describe(`
         * * Field Name: Suite
         * * Display Name: Suite Name
@@ -56693,7 +56703,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: DurationSeconds
-    * * Display Name: Duration Seconds
+    * * Display Name: Duration (seconds)
     * * SQL Data Type: decimal(10, 3)
     * * Description: Execution time in seconds for this test
     */
@@ -56865,6 +56875,19 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     }
     set Log(value: string | null) {
         this.Set('Log', value);
+    }
+
+    /**
+    * * Field Name: Tags
+    * * Display Name: Tags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.
+    */
+    get Tags(): string | null {
+        return this.Get('Tags');
+    }
+    set Tags(value: string | null) {
+        this.Set('Tags', value);
     }
 
     /**
@@ -57133,7 +57156,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: TotalDurationSeconds
-    * * Display Name: Total Duration Seconds
+    * * Display Name: Total Duration (seconds)
     * * SQL Data Type: decimal(10, 3)
     * * Description: Total execution time in seconds for the entire suite
     */
@@ -57146,7 +57169,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: TotalCostUSD
-    * * Display Name: Total Cost USD
+    * * Display Name: Total Cost (USD)
     * * SQL Data Type: decimal(10, 6)
     * * Description: Total cost in USD for running the entire suite (sum of all test costs)
     */
@@ -57214,6 +57237,19 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tags
+    * * Display Name: Tags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).
+    */
+    get Tags(): string | null {
+        return this.Get('Tags');
+    }
+    set Tags(value: string | null) {
+        this.Set('Tags', value);
     }
 
     /**
