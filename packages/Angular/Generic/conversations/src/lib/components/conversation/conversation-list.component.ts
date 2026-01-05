@@ -35,17 +35,10 @@ import { takeUntil } from 'rxjs/operators';
                     <span>Select Conversations</span>
                   </button>
                   @if (!isMobileView) {
-                    @if (isSidebarPinned) {
-                      <button class="dropdown-item" (click)="onUnpinSidebarClick($event)">
-                        <i class="fas fa-thumbtack-slash"></i>
-                        <span>Unpin Sidebar</span>
-                      </button>
-                    } @else {
-                      <button class="dropdown-item" (click)="onPinSidebarClick($event)">
-                        <i class="fas fa-thumbtack"></i>
-                        <span>Pin Sidebar</span>
-                      </button>
-                    }
+                    <button class="dropdown-item" (click)="onUnpinSidebarClick($event)">
+                      <i class="fas fa-table-columns"></i>
+                      <span>Hide Sidebar</span>
+                    </button>
                   }
                 </div>
               }
