@@ -329,7 +329,14 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
       if (this.analyticsLoaded) {
         this.analyticsLoaded = false;
         this.analyticsData = [];
+        // Also reset matrix data so it reloads with fresh data
+        this.matrixLoaded = false;
+        this.matrixData = [];
         await this.loadAnalytics();
+        // Reload matrix if currently viewing matrix or chart view
+        if (this.analyticsView === 'matrix' || this.analyticsView === 'chart') {
+          await this.loadMatrixData();
+        }
       }
 
       SharedService.Instance.CreateSimpleNotification('Refreshed successfully', 'success', 2000);
