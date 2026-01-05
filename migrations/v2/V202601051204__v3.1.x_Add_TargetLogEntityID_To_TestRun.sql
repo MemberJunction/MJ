@@ -71,8 +71,16 @@ EXEC sp_addextendedproperty
 GO
 
 
+-- Migrate existing TestRun records with TargetType='AI Agent' to use TargetLogEntityID
+-- This updates records to use the proper Entity FK instead of the free-text TargetType
 
-
+UPDATE tr
+SET TargetLogEntityID = e.ID
+FROM ${flyway:defaultSchema}.TestRun tr
+INNER JOIN ${flyway:defaultSchema}.Entity e ON e.Name = 'MJ: AI Agent Runs'
+WHERE tr.TargetType = 'AI Agent'
+  AND tr.TargetLogEntityID IS NULL;
+ 
 
 
 
