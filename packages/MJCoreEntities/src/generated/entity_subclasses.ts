@@ -14523,7 +14523,7 @@ export const TestRunSchema = z.object({
         * * Field Name: TargetType
         * * Display Name: Target Type
         * * SQL Data Type: nvarchar(100)
-        * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.`),
+        * * Description: Optional sub-category or variant label for the test target. Use this to distinguish between different test scenarios within the same entity type (e.g., "Summarization", "Classification", "Code Review" for AI Agent tests). The entity type itself should be specified via TargetLogEntityID.`),
     TargetLogID: z.string().nullable().describe(`
         * * Field Name: TargetLogID
         * * Display Name: Target Log
@@ -14654,6 +14654,12 @@ export const TestRunSchema = z.object({
         * * Display Name: Run Context Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
+    TargetLogEntityID: z.string().nullable().describe(`
+        * * Field Name: TargetLogEntityID
+        * * Display Name: Target Log Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.`),
     Test: z.string().describe(`
         * * Field Name: Test
         * * Display Name: Test
@@ -14666,6 +14672,10 @@ export const TestRunSchema = z.object({
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
+    TargetLogEntity: z.string().nullable().describe(`
+        * * Field Name: TargetLogEntity
+        * * Display Name: Target Log Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type TestRunEntityType = z.infer<typeof TestRunSchema>;
@@ -56680,7 +56690,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     * * Field Name: TargetType
     * * Display Name: Target Type
     * * SQL Data Type: nvarchar(100)
-    * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.
+    * * Description: Optional sub-category or variant label for the test target. Use this to distinguish between different test scenarios within the same entity type (e.g., "Summarization", "Classification", "Code Review" for AI Agent tests). The entity type itself should be specified via TargetLogEntityID.
     */
     get TargetType(): string | null {
         return this.Get('TargetType');
@@ -57006,6 +57016,20 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     }
 
     /**
+    * * Field Name: TargetLogEntityID
+    * * Display Name: Target Log Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.
+    */
+    get TargetLogEntityID(): string | null {
+        return this.Get('TargetLogEntityID');
+    }
+    set TargetLogEntityID(value: string | null) {
+        this.Set('TargetLogEntityID', value);
+    }
+
+    /**
     * * Field Name: Test
     * * Display Name: Test
     * * SQL Data Type: nvarchar(255)
@@ -57030,6 +57054,15 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     */
     get RunByUser(): string {
         return this.Get('RunByUser');
+    }
+
+    /**
+    * * Field Name: TargetLogEntity
+    * * Display Name: Target Log Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetLogEntity(): string | null {
+        return this.Get('TargetLogEntity');
     }
 }
 

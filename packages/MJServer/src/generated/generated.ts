@@ -17161,6 +17161,9 @@ export class MJEntity_ {
     @Field(() => [MJRecordLink_])
     MJ_RecordLinks_TargetEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
     
+    @Field(() => [MJTestRun_])
+    MJ_TestRuns_TargetLogEntityIDArray: MJTestRun_[]; // Link to MJ_TestRuns
+    
 }
 
 //****************************************************************************
@@ -18003,6 +18006,17 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordLinks] WHERE [TargetEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Links', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Links', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTestRun_])
+    async MJ_TestRuns_TargetLogEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Test Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRuns] WHERE [TargetLogEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Test Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -43135,7 +43149,7 @@ export class MJTestRun_ {
     @Field(() => Int, {nullable: true, description: `Execution sequence within the suite run. Indicates order of execution for tests in the same suite.`}) 
     Sequence?: number;
         
-    @Field({nullable: true, description: `Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.`}) 
+    @Field({nullable: true, description: `Optional sub-category or variant label for the test target. Use this to distinguish between different test scenarios within the same entity type (e.g., "Summarization", "Classification", "Code Review" for AI Agent tests). The entity type itself should be specified via TargetLogEntityID.`}) 
     @MaxLength(200)
     TargetType?: string;
         
@@ -43221,6 +43235,10 @@ export class MJTestRun_ {
     @Field({nullable: true, description: `JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`}) 
     RunContextDetails?: string;
         
+    @Field({nullable: true, description: `Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.`}) 
+    @MaxLength(16)
+    TargetLogEntityID?: string;
+        
     @Field() 
     @MaxLength(510)
     Test: string;
@@ -43232,6 +43250,10 @@ export class MJTestRun_ {
     @Field() 
     @MaxLength(200)
     RunByUser: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    TargetLogEntity?: string;
         
     @Field(() => [MJTestRunFeedback_])
     MJ_TestRunFeedbacks_TestRunIDArray: MJTestRunFeedback_[]; // Link to MJ_TestRunFeedbacks
@@ -43338,6 +43360,9 @@ export class CreateMJTestRunInput {
 
     @Field({ nullable: true })
     RunContextDetails: string | null;
+
+    @Field({ nullable: true })
+    TargetLogEntityID: string | null;
 }
     
 
@@ -43429,6 +43454,9 @@ export class UpdateMJTestRunInput {
 
     @Field({ nullable: true })
     RunContextDetails?: string | null;
+
+    @Field({ nullable: true })
+    TargetLogEntityID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
