@@ -69,7 +69,7 @@ export interface TestFeedbackDialogData {
         </div>
 
         <div class="feedback-section">
-          <label class="feedback-label" for="comments">Correction Summary / Comments</label>
+          <label class="feedback-label" for="comments">Correction Summary / Comments <span class="optional-hint">(optional)</span></label>
           <textarea
             id="comments"
             class="feedback-textarea"
@@ -162,6 +162,12 @@ export interface TestFeedbackDialogData {
       font-weight: 600;
       font-size: 14px;
       color: #333;
+    }
+
+    .optional-hint {
+      font-weight: 400;
+      font-size: 12px;
+      color: #94a3b8;
     }
 
     .rating-scale {
@@ -426,7 +432,8 @@ export class TestFeedbackDialogComponent implements OnInit {
   }
 
   canSubmit(): boolean {
-    return this.rating > 0 && this.comments.trim().length > 0;
+    // Rating is required, comments are optional
+    return this.rating > 0;
   }
 
   async onSubmit(): Promise<void> {
