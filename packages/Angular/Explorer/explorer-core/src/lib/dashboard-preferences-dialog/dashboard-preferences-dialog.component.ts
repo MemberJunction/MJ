@@ -46,7 +46,13 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
   private async loadData(): Promise<void> {
     const md = new Metadata();
-    
+
+    // Check if CurrentUser and Type exist
+    if (!md.CurrentUser || !md.CurrentUser.Type) {
+      console.error('No current user or user type available');
+      return;
+    }
+
     // Check if current user is sysadmin
     this.isSysAdmin = md.CurrentUser.Type.trim().toLowerCase() === 'owner';
     console.log('User is sysadmin:', this.isSysAdmin);

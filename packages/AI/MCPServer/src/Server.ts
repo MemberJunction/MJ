@@ -776,12 +776,12 @@ function addEntityRunViewTool(entity: EntityInfo, contextUser: UserInfo) {
     })
     const toolConfig = {
         name: `Run_${entity.ClassName}_View`,
-        description: `Returns data from the ${entity.Name} entity, optionally filtered by extraFilter and ordered by orderBy`,
+        description: `Returns data from the ${entity.Name ?? 'Unknown'} entity, optionally filtered by extraFilter and ordered by orderBy`,
         parameters: paramObject,
         async execute (props: any) {
             const rv = new RunView();
             const result = await rv.RunView({
-                EntityName: entity.Name,
+                EntityName: entity.Name ?? undefined,
                 ExtraFilter: props.extraFilter ? props.extraFilter : undefined,
                 OrderBy: props.orderBy ? props.orderBy : undefined,
                 Fields: props.fields ? props.fields : undefined,
@@ -798,9 +798,12 @@ function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
 
     const toolConfig = {
         name: `Create_${entity.ClassName}_Record`,
-        description: `Creates a new record in the ${entity.Name} entity`,
+        description: `Creates a new record in the ${entity.Name ?? 'Unknown'} entity`,
         parameters: z.object(paramObject),
         async execute (props: any) {
+            if (!entity.Name) {
+                return JSON.stringify({success: false, record: undefined, errorMessage: "Entity name is not defined"});
+            }
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, contextUser);
             record.SetMany(props, true);
@@ -821,17 +824,20 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
 
     const toolConfig = {
         name: `Update_${entity.ClassName}_Record`,
-        description: `Updates the specified record in the ${entity.Name} entity`,
+        description: `Updates the specified record in the ${entity.Name ?? 'Unknown'} entity`,
         parameters: z.object(paramObject),
         async execute (props: any) {
+            if (!entity.Name) {
+                return JSON.stringify({success: false, record: undefined, errorMessage: "Entity name is not defined"});
+            }
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, contextUser);
             const loaded = await record.InnerLoad(new CompositeKey(
                 // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
+                entity.PrimaryKeys.filter(pk => pk.Name !== null).map((pk) => {
                     return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
+                        FieldName: pk.Name!,
+                        Value: props[pk.Name!]
                     };
                 })
             ));
@@ -839,7 +845,9 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
                 // remove the primary keys from the props so we don't try to update them
                 const newProps = { ...props };
                 entity.PrimaryKeys.forEach((pk) => {
-                    delete newProps[pk.Name];
+                    if (pk.Name !== null) {
+                        delete newProps[pk.Name];
+                    }
                 });
                 record.SetMany(newProps, true);
                 const success = await record.Save();
@@ -850,31 +858,34 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    addToolWithFilter(toolConfig);    
+    addToolWithFilter(toolConfig);
 }
 
 function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
     const toolConfig = {
         name: `Delete_${entity.ClassName}_Record`,
-        description: `Deletes the specified record from the ${entity.Name} entity`,
+        description: `Deletes the specified record from the ${entity.Name ?? 'Unknown'} entity`,
         parameters: z.object(pkeyParams),
         async execute (props: any) {
+            if (!entity.Name) {
+                return JSON.stringify({success: false, record: undefined, errorMessage: "Entity name is not defined"});
+            }
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, contextUser);
             const loaded = await record.InnerLoad(new CompositeKey(
                 // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
+                entity.PrimaryKeys.filter(pk => pk.Name !== null).map((pk) => {
                     return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
+                        FieldName: pk.Name!,
+                        Value: props[pk.Name!]
                     };
                 })
             ));
             if (loaded) {
                 const savedRecordJSON = await convertEntityObjectToJSON(record);
                 const success = await record.Delete();
-                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.Message : undefined });    
+                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.Message : undefined });
             }
             else {
                 return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
@@ -919,6 +930,10 @@ function getEntityParamObject(entity: EntityInfo, excludeReadOnlyFields: boolean
 }
 
 function addSingleParamToObject(theObject: any, field: EntityFieldInfo, optional: boolean){
+    if (!field.Name) {
+        return; // Skip fields without names
+    }
+
     let newParam: any;
     switch (field.TSType) {
         case 'Date':
@@ -945,7 +960,7 @@ function addSingleParamToObject(theObject: any, field: EntityFieldInfo, optional
                 }
                 else {
                     newParam = z.union([z.enum(enumList as [string, ...string[]]), z.string()]);
-                }    
+                }
             }
             break;
     }
@@ -972,17 +987,20 @@ function addEntityGetTool(entity: EntityInfo, contextUser: UserInfo) {
 
     const toolConfig = {
         name: `Get_${entity.ClassName}_Record`,
-        description: `Retrieves the specified record from the ${entity.Name} entity`,
+        description: `Retrieves the specified record from the ${entity.Name ?? 'Unknown'} entity`,
         parameters: z.object(pkeyParams),
         async execute (props: any) {
+            if (!entity.Name) {
+                return JSON.stringify({success: false, record: undefined, errorMessage: "Entity name is not defined"});
+            }
             const md = new Metadata();
             const record = await md.GetEntityObject(entity.Name, contextUser);
             await record.InnerLoad(new CompositeKey(
                 // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
+                entity.PrimaryKeys.filter(pk => pk.Name !== null).map((pk) => {
                     return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
+                        FieldName: pk.Name!,
+                        Value: props[pk.Name!]
                     };
                 })
             ));
@@ -1001,8 +1019,8 @@ function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: {
     schemaName?: string | undefined;
 }) {
     const matchingEntities = allEntities.filter((entity) => {
-        const entityName = entity.Name;
-        const schemaName = entity.SchemaName;
+        const entityName = entity.Name ?? '';
+        const schemaName = entity.SchemaName ?? '';
         const toolEntityName = tool.entityName?.trim().toLowerCase() || "*";
         const toolSchemaName = tool.schemaName?.trim().toLowerCase() || "*";
 

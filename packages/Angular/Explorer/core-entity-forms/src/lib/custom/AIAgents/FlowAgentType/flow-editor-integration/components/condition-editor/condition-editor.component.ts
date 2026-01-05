@@ -8,8 +8,6 @@ import { Connection, BooleanCondition } from '../../models/connection.model';
 
 @Component({
   selector: 'app-condition-editor',
-  standalone: true,
-  imports: [CommonModule, FormsModule, DropDownsModule, InputsModule, ButtonsModule],
   template: `
     <div class="condition-editor">
       <div class="editor-header">

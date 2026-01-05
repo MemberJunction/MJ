@@ -864,7 +864,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           let shouldRunView = false;
           // now check each key in the keyToUse to see if it is a pkey
           for (const singleKey of keyToUse.KeyValuePairs) {
-            const field = e.Fields.find(f => f.Name.trim().toLowerCase() === singleKey.FieldName.trim().toLowerCase());
+            const field = e.Fields.find(f => f.Name && f.Name.trim().toLowerCase() === singleKey.FieldName.trim().toLowerCase());
             if (!field) {
               // if we get here this is a problem, the component has given us a non-matching field, this shouldn't ever happen
               // but if it doesn't log warning to console and exit
@@ -891,12 +891,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
               // we have a match, use the first row and update our keyToUse
               const kvPairs: KeyValuePair[] = [];
               e.PrimaryKeys.forEach(pk => {
-                kvPairs.push(
-                  {
-                    FieldName: pk.Name,
-                    Value: result.Results[0][pk.Name]
-                  }
-                )
+                if (pk.Name) {
+                  kvPairs.push(
+                    {
+                      FieldName: pk.Name,
+                      Value: result.Results[0][pk.Name]
+                    }
+                  )
+                }
               })
               keyToUse = CompositeKey.FromKeyValuePairs(kvPairs);
             }

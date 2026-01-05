@@ -268,21 +268,24 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
         if (!this.formattedData[i]) {
           // we have not formatted this row yet, so format it
           const r = this.viewColumns.map((c) => {
-            if (c && c.EntityField && this.viewData[i] && this.viewData[i][c.EntityField.Name]) {
-              if (!c.hidden && c.EntityField.Name !== 'ID') {
+            // Extract field name with null check
+            const fieldName = c?.EntityField?.Name;
+
+            if (c && c.EntityField && fieldName && this.viewData[i] && this.viewData[i][fieldName]) {
+              if (!c.hidden && fieldName !== 'ID') {
                 const ef = c.EntityField;
                 let formattedValue: any = null;
                 if (c.EntityField.TSType === EntityFieldTSType.Boolean) {
-                  formattedValue = this.viewData[i][c.EntityField.Name] ? '✓' : ''; // show a check mark if true, nothing if false
+                  formattedValue = this.viewData[i][fieldName] ? '✓' : ''; // show a check mark if true, nothing if false
                 }
                 else {
-                  formattedValue = ef.FormatValue(this.viewData[i][c.EntityField.Name], 0, undefined, 300);
+                  formattedValue = ef.FormatValue(this.viewData[i][fieldName], 0, undefined, 300);
                 }
 
-                return {field: c.EntityField.Name, value: formattedValue}
+                return {field: fieldName, value: formattedValue}
               }
               else
-                return {field: c.EntityField.Name, value: this.viewData[i][c.EntityField.Name]} // hidden column, so just return the value, don't bother formatting
+                return {field: fieldName, value: this.viewData[i][fieldName]} // hidden column, so just return the value, don't bother formatting
             }
             else
               return {field: c.Name, value: null};
@@ -290,10 +293,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
           // now r is an array of {field: string, value: any} objects, so we need to convert it to an object
           // with the field names as the keys and the values as the values
           const row: { [key: string]: any } = {};
-          for (let j = 0; j < r.length; j++) { 
-            if (r[j] && r[j].field && r[j].field.length > 0)
-              row[r[j].field] = r[j].value;
-          }  
+          for (let j = 0; j < r.length; j++) {
+            const item = r[j];
+            const itemField = item?.field;
+            if (item && itemField && itemField.length > 0)
+              row[itemField] = item.value;
+          }
           this.formattedData[i] = row;
         }
       }
@@ -495,9 +500,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
     
     const compositeKey: CompositeKey = new CompositeKey();
     compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, this.viewData[args.rowIndex]);
+
+    // Extract nullable properties with fallback
+    const entityId = this._entityInfo.ID ?? '';
+    const entityName = this._entityInfo.Name ?? '';
+
     this.rowClicked.emit({
-      entityId: this._entityInfo.ID,
-      entityName: this._entityInfo.Name,
+      entityId,
+      entityName,
       CompositeKey: compositeKey
     });
 
@@ -509,9 +519,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
-    if (this.EditMode ==='None' && this.AutoNavigate) {
+    if (this.EditMode ==='None' && this.AutoNavigate && entityName) {
       // Use NavigationService to open the record
-      this.navigationService.OpenEntityRecord(this._entityInfo!.Name, compositeKey);
+      this.navigationService.OpenEntityRecord(entityName, compositeKey);
     }
   } 
 
@@ -563,9 +573,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
+            const entityName = this._entityInfo.Name;
+            if (!entityName) {
+              LogError("Entity name is null, cannot save record");
+              return;
+            }
             let compositeKey: CompositeKey = new CompositeKey();
             compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
-            record = await md.GetEntityObject(this._entityInfo.Name);
+            record = await md.GetEntityObject(entityName);
             await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
@@ -577,28 +592,33 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
               // match on all columns within the primary key of the entity using the
               // _entityInfo object to get the primary key fields
               const noMatch = this._entityInfo!.PrimaryKeys.some((ef: EntityFieldInfo) => {
-                return r.record.Get(ef.Name) !== dataItem[ef.Name];
+                const fieldName = ef.Name;
+                if (!fieldName) return true; // If field name is null, consider it not matching
+                return r.record.Get(fieldName) !== dataItem[fieldName];
               });
               // noMatch will be true if any of the primary key fields don't match
               return !noMatch;
             })?.record;
-            if (!record) { 
-              // haven't edited this one before 
+            if (!record) {
+              // haven't edited this one before
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
               let compositeKey: CompositeKey = new CompositeKey();
               compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
               await record.InnerLoad(compositeKey);
-              this._pendingRecords.push({record, 
-                                         row: args.rowIndex, 
+              this._pendingRecords.push({record,
+                                         row: args.rowIndex,
                                          dataItem}); // don't save - put the changed record on a queue for saving later by our container
             }
             // now, based on the column that we're in, update the record with the new value
-            record.Set(column.field, formGroup.value[column.field]);
-            // if a boolean value, modify what is in the grid so it is formatted properly
-            if (column.field && column.field.length > 0) {
-              const ef = this._entityInfo.Fields.find(f => f.Name === column.field);
-              if (ef && ef.TSType === EntityFieldTSType.Boolean) {
-                dataItem[column.field] = record.Get(column.field) ? '✓' : '';
+            const fieldName = column.field;
+            if (fieldName) {
+              record.Set(fieldName, formGroup.value[fieldName]);
+              // if a boolean value, modify what is in the grid so it is formatted properly
+              if (fieldName.length > 0) {
+                const ef = this._entityInfo.Fields.find(f => f.Name === fieldName);
+                if (ef && ef.TSType === EntityFieldTSType.Boolean) {
+                  dataItem[fieldName] = record.Get(fieldName) ? '✓' : '';
+                }
               }
             }
           }
@@ -876,7 +896,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   protected LoadEntityActions() {
     if (this._entityInfo) {
-      this.EntityActions = EntityActionEngineBase.Instance.GetActionsByEntityNameAndInvocationType(this._entityInfo.Name, 'View', 'Active');
+      const entityName = this._entityInfo.Name;
+      if (entityName) {
+        this.EntityActions = EntityActionEngineBase.Instance.GetActionsByEntityNameAndInvocationType(entityName, 'View', 'Active');
+      }
     }
   }
 
@@ -890,7 +913,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   GetColumnCellStyle(col: ViewColumnInfo) {
-    switch (col.EntityField?.Type.trim().toLowerCase()) {
+    const fieldType = col.EntityField?.Type?.trim().toLowerCase();
+    switch (fieldType) {
       case "money":
       case 'decimal':
       case 'real':
@@ -974,8 +998,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this._entityInfo && this.recordCompareComponent) {
         const md = new Metadata();
         const pkeys = this._entityInfo.PrimaryKeys;
+        const entityName = this._entityInfo.Name;
+        if (!entityName) {
+          LogError("Entity name is null, cannot merge records");
+          this.isConfirmDialogOpen = false;
+          return;
+        }
         const result = await md.MergeRecords({
-          EntityName: this._entityInfo.Name,
+          EntityName: entityName,
           RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
             return r.PrimaryKey;
           }).filter((compositeKey: CompositeKey) => {
@@ -1039,7 +1069,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  public async findDuplicateRecords(): Promise<void> 
+  public async findDuplicateRecords(): Promise<void>
   {
     if(!this._entityInfo){
       console.error("Entity Info is not available");
@@ -1048,11 +1078,27 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     const md: Metadata = new Metadata();
+
+    // Check if CurrentUser and ID exist
+    if (!md.CurrentUser || !md.CurrentUser.ID) {
+      console.error('No current user or user ID available');
+      this.closeCompareDialog('duplicate');
+      return;
+    }
+
+    const entityName = this._entityInfo.Name ?? 'Unknown';
+    const entityId = this._entityInfo.ID;
+    if (!entityId) {
+      LogError("Entity ID is null, cannot create duplicate run");
+      this.closeCompareDialog('duplicate');
+      return;
+    }
+
     const list: ListEntity = await md.GetEntityObject<ListEntity>('Lists');
     list.NewRecord();
     list.Name = `Potential Duplicate Run`;
-    list.Description = `Potential Duplicate Run for ${this._entityInfo.Name} Entity`;
-    list.EntityID = this._entityInfo.ID;
+    list.Description = `Potential Duplicate Run for ${entityName} Entity`;
+    list.EntityID = entityId;
     list.UserID = md.CurrentUser.ID;
 
     const saveResult = await list.Save();
@@ -1062,7 +1108,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     let params: PotentialDuplicateRequest = new PotentialDuplicateRequest();
-    params.EntityID = this._entityInfo?.ID;
+    params.EntityID = entityId;
     params.ListID = list.ID;
     params.RecordIDs = [];
 
@@ -1177,13 +1223,18 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // If we have selected records, use SingleRecord type for the first selected record
       if (selectedItems && selectedItems.length > 0) {
+        const entityName = this._entityInfo.Name;
+        if (!entityName) {
+          SharedService.Instance.CreateSimpleNotification("Entity name is not available", "error", 3000);
+          return;
+        }
         invocationType = 'SingleRecord';
-        
+
         // Get the entity object for the first selected record
         const compositeKey = new CompositeKey();
         compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, selectedItems[0]);
-        
-        entityObject = await md.GetEntityObject(this._entityInfo.Name);
+
+        entityObject = await md.GetEntityObject(entityName);
         await entityObject.InnerLoad(compositeKey);
       }
       
@@ -1231,7 +1282,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
       if(!this._entityInfo)
         return false;
 
-      return EntityCommunicationsEngineClient.Instance.EntitySupportsCommunication(this._entityInfo.ID);
+      const entityId = this._entityInfo.ID;
+      if (!entityId) return false;
+
+      return EntityCommunicationsEngineClient.Instance.EntitySupportsCommunication(entityId);
     }
     catch (e){
       LogError (e);
@@ -1250,9 +1304,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
   public async doCreateNewRecord() {
     // creates a new record either using a dialog or with NavigationService
     if (this.UserCanCreateNewRecord && this._entityInfo) {
+      const entityName = this._entityInfo.Name;
+      if (!entityName) {
+        LogError("Entity name is null, cannot create new record");
+        return;
+      }
       if (this.CreateRecordMode === 'Tab') {
         // Use NavigationService to open a new record form, passing initial values if provided
-        this.navigationService.OpenNewEntityRecord(this._entityInfo.Name, {
+        this.navigationService.OpenNewEntityRecord(entityName, {
           newRecordValues: this.NewRecordValues || undefined
         });
       }
@@ -1260,7 +1319,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
         // configured to display a dialog instead, we'll use the entity-form-dialog for this
         if (this.entityFormDialog) {
           const md = new Metadata();
-          const newRecord = await md.GetEntityObject(this._entityInfo.Name);
+          const newRecord = await md.GetEntityObject(entityName);
           if (this.NewRecordValues) {
             // we have new record values in a simple JS object, so grab the key/values from the object and set the values in the new record for non null/undefined values
             Object.keys(this.NewRecordValues).filter((key: string) => this.NewRecordValues[key] !== null && this.NewRecordValues[key] !== undefined).forEach((key: string) => {

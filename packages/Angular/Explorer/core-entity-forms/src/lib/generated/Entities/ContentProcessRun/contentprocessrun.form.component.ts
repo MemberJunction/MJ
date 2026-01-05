@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Content Process Runs') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-contentprocessrun-form',
     templateUrl: './contentprocessrun.form.component.html'
 })

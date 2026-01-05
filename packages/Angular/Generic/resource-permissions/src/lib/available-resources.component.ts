@@ -79,31 +79,36 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
                 throw new Error(`Entity ${rt.EntityID} not found, or no Name field defined`);
             const rv = new RunView(this.RunViewToUse);
             const nameField = entity.NameField;
+            if (!nameField.Name) {
+                throw new Error(`NameField does not have a Name property for entity ${entity.Name ?? 'unknown'}`);
+            }
+            const nameFieldName = nameField.Name;
+
             if (this.ExtraColumns && this.ExtraColumns.length > 0) {
                 /// split the comma delim string and for each item find it in the EntityFields collection
                 const extraColumns = this.ExtraColumns.split(',');
                 this.gridExtraColumns = [];
                 extraColumns.forEach((ec) => {
-                    const field = entity.Fields.find((f) => f.Name.trim().toLowerCase() === ec.trim().toLowerCase());
-                    if (field) 
+                    const field = entity.Fields.find((f) => f.Name && f.Name.trim().toLowerCase() === ec.trim().toLowerCase());
+                    if (field)
                         this.gridExtraColumns.push(field);
                 });
             }
 
             const extraFilter = this.ResourceExtraFilter ? ` AND (${this.ResourceExtraFilter})` : '';
             const result = await rv.RunView({
-                EntityName: entity.Name,
+                EntityName: entity.Name ?? undefined,
                 ExtraFilter: `(ID in (${this.resourcePermissions.map((r) => `'${r.ResourceRecordID}'`).join(',')})${extraFilter})`,
-                OrderBy: nameField.Name
+                OrderBy: nameFieldName ?? undefined
             })
             if (!result || !result.Success)
-                throw new Error(`Error running view for entity ${entity.Name}`);
+                throw new Error(`Error running view for entity ${entity.Name ?? 'unknown'}`);
 
             // only return rows where we have a record in result.Results
             this.resources = result.Results.map((r) => {
                 return new ResourceData({
                     ResourceRecordID: r.ID,
-                    Name: r[nameField.Name],
+                    Name: r[nameFieldName],
                     ResourceTypeID: this.ResourceTypeID,
                     ResourceType: rt.Name,
                     Configuration: r // pass the whole resource record into configuration so it is accessible as desired

@@ -61,7 +61,7 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
   }
 
   public onOpenEntity(): void {
-    if (this.selectedEntity) {
+    if (this.selectedEntity && this.selectedEntity.ID) {
       this.openRecord.emit({
         EntityName: 'Entities',
         RecordID: this.selectedEntity.ID
@@ -92,7 +92,7 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
     
     switch (this.fieldFilter) {
       case 'keys':
-        return fields.filter(f => f.IsPrimaryKey || f.Name.toLowerCase().includes('id'));
+        return fields.filter(f => f.IsPrimaryKey || (f.Name && f.Name.toLowerCase().includes('id')));
       case 'foreign_keys':
         return fields.filter(f => f.RelatedEntityID && !f.IsPrimaryKey);
       case 'regular':
@@ -114,8 +114,8 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
 
     // Get entities that reference this entity
     this.allEntityFields
-      .filter(f => f.RelatedEntityID === entityId)
-      .forEach(f => relatedEntityIds.add(f.EntityID));
+      .filter(f => f.RelatedEntityID === entityId && f.EntityID)
+      .forEach(f => relatedEntityIds.add(f.EntityID!));
 
     // Remove the current entity from the set (don't return self-references)
     relatedEntityIds.delete(entityId);
@@ -134,7 +134,9 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
   }
 
   public onFieldClick(field: EntityFieldInfo): void {
-    this.toggleFieldDetails(field.ID);
+    if (field.ID) {
+      this.toggleFieldDetails(field.ID);
+    }
   }
 
   public toggleFieldDescription(fieldId: string): void {
@@ -179,16 +181,21 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
 
   public getFieldPossibleValues(field: EntityFieldInfo): string[] {
     if (!field.EntityFieldValues) return [];
-    return field.EntityFieldValues.map(v => v.Value).slice(0, 10);
+    return field.EntityFieldValues
+      .map(v => v.Value)
+      .filter((v): v is string => v != null)
+      .slice(0, 10);
   }
 
   public getSortedEntityFieldValues(field: EntityFieldInfo): EntityFieldValueInfo[] {
     if (!field.EntityFieldValues) return [];
     return field.EntityFieldValues.sort((a, b) => {
-      if (a.Sequence !== undefined && b.Sequence !== undefined) {
+      if (a.Sequence != null && b.Sequence != null) {
         return a.Sequence - b.Sequence;
       }
-      return a.Value.localeCompare(b.Value);
+      const aValue = a.Value ?? '';
+      const bValue = b.Value ?? '';
+      return aValue.localeCompare(bValue);
     });
   }
 

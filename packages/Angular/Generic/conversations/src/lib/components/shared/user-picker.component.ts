@@ -14,8 +14,6 @@ export interface UserSearchResult {
 
 @Component({
     selector: 'mj-user-picker',
-    standalone: true,
-    imports: [CommonModule, FormsModule],
     template: `
         <div class="user-picker">
             <div class="search-input-wrapper">

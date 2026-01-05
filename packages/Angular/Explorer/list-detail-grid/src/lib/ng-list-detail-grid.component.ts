@@ -162,21 +162,22 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
         if (!this.formattedData[i]) {
           // we have not formatted this row yet, so format it
           const r = this.viewColumns.map((c) => {
-            if (c && c.EntityField && this.viewData[i] && this.viewData[i][c.EntityField.Name]) {
-              if (!c.hidden && c.EntityField.Name !== 'ID') {
+            const fieldName = c?.EntityField?.Name;
+            if (c && c.EntityField && fieldName && this.viewData[i] && this.viewData[i][fieldName]) {
+              if (!c.hidden && fieldName !== 'ID') {
                 const ef = c.EntityField;
                 let formattedValue: any = null;
                 if (c.EntityField.TSType === EntityFieldTSType.Boolean) {
-                  formattedValue = this.viewData[i][c.EntityField.Name] ? '✓' : ''; // show a check mark if true, nothing if false
+                  formattedValue = this.viewData[i][fieldName] ? '✓' : ''; // show a check mark if true, nothing if false
                 }
                 else {
-                  formattedValue = ef.FormatValue(this.viewData[i][c.EntityField.Name], 0, undefined, 300);
+                  formattedValue = ef.FormatValue(this.viewData[i][fieldName], 0, undefined, 300);
                 }
 
-                return {field: c.EntityField.Name, value: formattedValue}
+                return {field: fieldName, value: formattedValue}
               }
               else
-                return {field: c.EntityField.Name, value: this.viewData[i][c.EntityField.Name]} // hidden column, so just return the value, don't bother formatting
+                return {field: fieldName, value: this.viewData[i][fieldName]} // hidden column, so just return the value, don't bother formatting
             }
             else
               return {field: c.Name, value: null};
@@ -184,10 +185,11 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
           // now r is an array of {field: string, value: any} objects, so we need to convert it to an object
           // with the field names as the keys and the values as the values
           const row: { [key: string]: any } = {};
-          for (let j = 0; j < r.length; j++) { 
-            if (r[j] && r[j].field && r[j].field.length > 0)
-              row[r[j].field] = r[j].value;
-          }  
+          for (let j = 0; j < r.length; j++) {
+            const field = r[j]?.field;
+            if (r[j] && field && field.length > 0)
+              row[field] = r[j].value;
+          }
           this.formattedData[i] = row;
         }
       }
@@ -366,13 +368,20 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
 
   public async cellClickHandler(args: CellClickEvent) {
     if(this.compareMode || this.mergeMode ) return;
-    
+
     if (this._entityInfo) {
+      const entityId = this._entityInfo.ID;
+      const entityName = this._entityInfo.Name;
+      if (!entityId || !entityName) {
+        LogError("Entity ID or Name is null in cellClickHandler");
+        return;
+      }
+
       const compositeKey: CompositeKey = new CompositeKey();
       compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, this.viewData[args.rowIndex]);
       this.rowClicked.emit({
-        entityId: this._entityInfo.ID,
-        entityName: this._entityInfo.Name,
+        entityId: entityId,
+        entityName: entityName,
         CompositeKey: compositeKey
       })
 
@@ -441,8 +450,14 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
           let compositeKey: CompositeKey = new CompositeKey();
           compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
 
+          const entityName = this._entityInfo.Name;
+          if (!entityName) {
+            LogError("Entity Name is null in cellCloseHandler");
+            return;
+          }
+
           if (this.EditMode === "Save") {
-            record = await md.GetEntityObject(this._entityInfo.Name);
+            record = await md.GetEntityObject(entityName);
             await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
@@ -679,7 +694,12 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
   }
 
   GetColumnCellStyle(col: ViewColumnInfo) {
-    switch (col.EntityField.Type.trim().toLowerCase()) {
+    const fieldType = col.EntityField?.Type;
+    if (!fieldType) {
+      return {'text-align': 'left', 'vertical-align': 'top'}; // default to left align if type is null
+    }
+
+    switch (fieldType.trim().toLowerCase()) {
       case "money":
       case 'decimal':
       case 'real':
@@ -754,10 +774,16 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
   async closeConfirmMergeDialog(event: 'cancel' | 'yes' | 'no') {
     if (event === 'yes') {
       if (this._entityInfo && this.recordCompareComponent) {
+        const entityName = this._entityInfo.Name;
+        if (!entityName) {
+          LogError("Entity Name is null in closeConfirmMergeDialog");
+          return;
+        }
+
         const md = new Metadata();
         const pkeys = this._entityInfo.PrimaryKeys;
         const result = await md.MergeRecords({
-          EntityName: this._entityInfo.Name,
+          EntityName: entityName,
           RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
             return r.PrimaryKey;
           }).filter((compositeKey: CompositeKey) => {
@@ -821,7 +847,7 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     }
   }
 
-  public async findDuplicateRecords(): Promise<void> 
+  public async findDuplicateRecords(): Promise<void>
   {
     if(!this._entityInfo){
       console.error("Entity Info is not available");
@@ -829,12 +855,28 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
       return;
     }
 
+    const entityId = this._entityInfo.ID;
+    const entityName = this._entityInfo.Name;
+    if (!entityId || !entityName) {
+      console.error("Entity ID or Name is null in findDuplicateRecords");
+      this.closeCompareDialog('duplicate');
+      return;
+    }
+
     const md: Metadata = new Metadata();
+
+    // Check if CurrentUser and ID exist
+    if (!md.CurrentUser || !md.CurrentUser.ID) {
+      console.error('No current user or user ID available');
+      this.closeCompareDialog('duplicate');
+      return;
+    }
+
     const list: ListEntity = await md.GetEntityObject<ListEntity>('Lists');
     list.NewRecord();
     list.Name = `Potential Duplicate Run`;
-    list.Description = `Potential Duplicate Run for ${this._entityInfo.Name} Entity`;
-    list.EntityID = this._entityInfo.ID;
+    list.Description = `Potential Duplicate Run for ${entityName} Entity`;
+    list.EntityID = entityId;
     list.UserID = md.CurrentUser.ID;
 
     const saveResult = await list.Save();
@@ -844,7 +886,7 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     }
 
     let params: PotentialDuplicateRequest = new PotentialDuplicateRequest();
-    params.EntityID = this._entityInfo?.ID;
+    params.EntityID = entityId;
     params.ListID = list.ID;
     params.RecordIDs = [];
 

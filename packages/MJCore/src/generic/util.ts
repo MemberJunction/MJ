@@ -61,7 +61,8 @@ export function FormatValue(sqlType: string,
             return retVal;
     }
     catch (e) {
-        LogError(`Error formatting value ${value} of type ${sqlType} with decimals ${decimals} and currency ${currency}`, e);
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        LogError(`Error formatting value ${value} of type ${sqlType} with decimals ${decimals} and currency ${currency}`, errorMessage);
         return value; // just return the value as is if we cant format it
     }
 }
@@ -238,19 +239,19 @@ export function Concurrent<V>(concurrency: number, funcs: (() => Promise<V>)[]):
 /**
  * The DBMS may store the default value for a column with extra parens, for example ((1)) or (getdate()) or (('Pending')) or (('Active')) and in addition for unicode characters
  * it may prefix the value with an N, for example N'Active'. This function will strip out the extra parens and the N prefix if it exists and return the actual default value
- * @param storedDefaultValue - The default value as stored in the DBMS 
+ * @param storedDefaultValue - The default value as stored in the DBMS
  */
-export function ExtractActualDefaultValue(storedDefaultValue: string): string {
+export function ExtractActualDefaultValue(storedDefaultValue: string): string | null {
     if (!storedDefaultValue || storedDefaultValue.trim().length === 0)
         return storedDefaultValue;
 
     const noParens = StripContainingParens(storedDefaultValue);
     const unicodeStripped = StripUnicodePrefix(noParens);
 
-    // now, we need to see if the unicodeStripped value is exactly equal to NULL which should be treated 
+    // now, we need to see if the unicodeStripped value is exactly equal to NULL which should be treated
     // as the same as no default value. Without checking this, string data types that have a DEFAULT set to NULL
     // which is the same as no default, will end up with a STRING 'null' in the default value, but that isn't the
-    // intent. 
+    // intent.
     // BY CHECKING this BEFORE we strip the single quotes, we allow for a string of 'NULL', 'null' etc to exist
     // in a string data type's default value. As odd as that might be for a string default value it should be allowed
     if (unicodeStripped.trim().toLowerCase() === 'null') {

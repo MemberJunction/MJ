@@ -112,7 +112,7 @@ export class DataContextComponent implements OnInit {
   public getEntityName(entityId: string | null): string | undefined {
     if (!entityId) return undefined;
     const md = new Metadata();
-    return md.Entities.find(e => e.ID === entityId)?.Name;
+    return md.Entities.find(e => e.ID === entityId)?.Name ?? undefined;
   }
 
   public async getViewName(viewId: string): Promise<string | undefined> {

@@ -136,31 +136,31 @@ export class ResourceBrowserComponent {
   }
 
 
-  private _CategoryIDFieldName: string | undefined;
+  private _CategoryIDFieldName: string | undefined | null;
   /**
    * This is the field name in the Resource Type's Entity that is used to store the CategoryID (e.g. the Folder ID) for the resource. 
    * Not all entities in resource types support a CategoryID concept, so this can be null. This property is read only and
    * is auto-populated during the configuration of the component.
    */
-  public get CategoryIDFieldName(): string | undefined {
+  public get CategoryIDFieldName(): string | undefined | null {
     return this._CategoryIDFieldName;
   }
 
-  private _CategoryParentIDFieldName: string | undefined = undefined;
+  private _CategoryParentIDFieldName: string | undefined | null = undefined;
   /**
    * This is the field name in the Resource type's Category Entity, if a Category Entity was provided, that has the recursive/self-referencing foreign key to the parent category.
    * This field is read only and is auto-populated during the configuration of the component.
    */
-  public get CategoryParentIDFieldName(): string | undefined {
+  public get CategoryParentIDFieldName(): string | undefined | null {
     return this._CategoryParentIDFieldName;
   }
 
-  private _UserIDFieldName: string | undefined = undefined;
+  private _UserIDFieldName: string | undefined | null = undefined;
   /**
    * This is the field name in the Resource Type's Entity that is used to store the UserID of the user that OWNS the resource. Commonly, but not always a field called UserID, but can be 
    * any field in the Resource Type's entity that is a foreign key to the Users entity. This property is read only and is auto-populated during the configuration of the component.
    */
-  public get UserIDFieldName(): string | undefined {
+  public get UserIDFieldName(): string | undefined | null {
     return this._UserIDFieldName;
   }
 

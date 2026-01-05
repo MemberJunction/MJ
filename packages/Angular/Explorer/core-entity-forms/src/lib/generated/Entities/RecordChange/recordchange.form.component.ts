@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Record Changes') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-recordchange-form',
     templateUrl: './recordchange.form.component.html'
 })
@@ -18,7 +17,6 @@ export class RecordChangeFormComponent extends BaseFormComponent {
             { sectionKey: 'recordContext', sectionName: 'Record Context', isExpanded: true },
             { sectionKey: 'changeSummary', sectionName: 'Change Summary', isExpanded: true },
             { sectionKey: 'changeContent', sectionName: 'Change Content', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

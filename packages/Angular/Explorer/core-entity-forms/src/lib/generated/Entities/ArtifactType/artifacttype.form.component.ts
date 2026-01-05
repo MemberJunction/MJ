@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: Artifact Types') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-artifacttype-form',
     templateUrl: './artifacttype.form.component.html'
 })

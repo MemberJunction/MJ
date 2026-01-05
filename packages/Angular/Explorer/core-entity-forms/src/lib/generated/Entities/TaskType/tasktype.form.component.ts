@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: Task Types') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-tasktype-form',
     templateUrl: './tasktype.form.component.html'
 })

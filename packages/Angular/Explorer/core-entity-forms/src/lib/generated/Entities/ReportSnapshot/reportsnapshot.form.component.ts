@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Report Snapshots') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-reportsnapshot-form',
     templateUrl: './reportsnapshot.form.component.html'
 })

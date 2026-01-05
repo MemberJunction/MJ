@@ -49,6 +49,10 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
             ? `(dataLoaded)="SetSectionRowCount('${input.SectionKey.trim()}', $event.totalRowCount)"`
             : '';
 
+        if (!input.RelationshipInfo!.RelatedEntity || !input.RelationshipInfo!.RelatedEntityJoinField) {
+            throw new Error(`Missing required properties for UserViewGrid generation: RelatedEntity=${input.RelationshipInfo!.RelatedEntity}, RelatedEntityJoinField=${input.RelationshipInfo!.RelatedEntityJoinField}`);
+        }
+
         const template = `<mj-user-view-grid
     [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"
     [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}')"

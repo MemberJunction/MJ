@@ -11,8 +11,6 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
  */
 @Component({
   selector: 'mj-task',
-  standalone: true,
-  imports: [CommonModule, SimpleTaskViewerComponent, GanttTaskViewerComponent],
   template: `
     <div class="task-component">
       <!-- Header with View Toggle -->

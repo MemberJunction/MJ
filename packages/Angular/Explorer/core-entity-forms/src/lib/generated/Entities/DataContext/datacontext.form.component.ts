@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Data Contexts') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-datacontext-form',
     templateUrl: './datacontext.form.component.html'
 })

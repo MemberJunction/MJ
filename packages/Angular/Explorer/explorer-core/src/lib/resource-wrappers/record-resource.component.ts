@@ -21,7 +21,7 @@ export class EntityRecordResource extends BaseResourceComponent {
 
     public static GetPrimaryKey(data: ResourceData): CompositeKey {
         const md = new Metadata();
-        const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+        const e = md.Entities.find(e => e.Name?.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
         if (!e){
             throw new Error(`Entity ${data.Configuration.Entity} not found in metadata`);
         }
@@ -44,7 +44,7 @@ export class EntityRecordResource extends BaseResourceComponent {
         }
         else {
             const md = new Metadata();
-            const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+            const e = md.Entities.find(e => e.Name?.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
             if (!e) {
                 console.warn(`[RecordResource.GetResourceDisplayName] Entity ${data.Configuration.Entity} not found in metadata`);
                 return '';
@@ -79,8 +79,8 @@ export class EntityRecordResource extends BaseResourceComponent {
         }
         else {
             const md = new Metadata();
-            const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
-            if (e)
+            const e = md.Entities.find(e => e.Name?.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+            if (e && e.Icon)
                 return e?.Icon;
             else
                 return '';

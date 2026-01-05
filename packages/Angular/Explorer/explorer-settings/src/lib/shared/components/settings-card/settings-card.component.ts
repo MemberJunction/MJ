@@ -7,8 +7,6 @@ import { CommonModule } from '@angular/common';
  */
 @Component({
   selector: 'mj-settings-card',
-  standalone: true,
-  imports: [CommonModule],
   template: `
     <div class="mj-card" 
          [class.mj-card-floating]="floating" 

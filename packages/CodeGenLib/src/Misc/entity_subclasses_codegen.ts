@@ -22,7 +22,7 @@ export class EntitySubClassGeneratorBase {
    */
   public async generateAllEntitySubClasses(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, skipDBUpdate: boolean): Promise<boolean> {
     try {
-      const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
+      const sortedEntities = entities.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
 
       const zodContent: string = sortedEntities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
       let sContent: string = "";
@@ -59,6 +59,9 @@ export const loadModule = () => {
    * @param includeFileHeader
    */
   public async generateEntitySubClass(pool: sql.ConnectionPool, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+    if (!entity.Name || !entity.ClassName) {
+      throw new Error(`Entity has missing required properties: Name=${entity.Name}, ClassName=${entity.ClassName}`);
+    }
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
       return '';
@@ -77,13 +80,16 @@ export const loadModule = () => {
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
+        if (!e.Type) {
+          throw new Error(`Field ${e.Name} missing Type property`);
+        }
         let typeString: string = TypeScriptTypeFromSQLType(e.Type) + (e.AllowsNull ? ' | null' : '');
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort by Sequence to ensure consistent ordering (values are alphabetically ordered in DB)
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
-          typeString = sortedValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
+          typeString = sortedValues.map((v) => `${quotes}${v.Value ?? ''}${quotes}`).join(' | ');
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += ' | ' + TypeScriptTypeFromSQLType(e.Type);
@@ -208,10 +214,14 @@ export const loadModule = () => {
 
     const validateFunction: string | null = await this.LogAndGenerateValidateFunction(pool, entity, skipDBUpdate);
 
+    if (!entity.Status || !entity.SchemaName || !entity.BaseTable || !entity.BaseView) {
+      throw new Error(`Entity ${entity.Name} has missing required properties: Status=${entity.Status}, SchemaName=${entity.SchemaName}, BaseTable=${entity.BaseTable}, BaseView=${entity.BaseView}`);
+    }
+
     const status = entity.Status.trim().toLowerCase();
-    const deprecatedFlag: string = status === 'deprecated' || status === 'disabled' ? 
+    const deprecatedFlag: string = status === 'deprecated' || status === 'disabled' ?
         `\n * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
-    const disabledFlag: string = status === 'disabled' ? 
+    const disabledFlag: string = status === 'disabled' ?
         `\n * @disabled This entity is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
       let sRet: string = `
 
@@ -255,7 +265,7 @@ ${fields}
         const justGenerated = ret.validators.filter((f) => f.wasGenerated);
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
-          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());   
+          const f = entity.Fields.find((f) => f.Name && f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());   
           sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`
           const code = v.functionText.replace(/'/g, "''");
           const source = v.sourceCheckConstraint.replace(/'/g, "''");
@@ -299,8 +309,12 @@ ${fields}
     }
   }
   public GenerateValidateFunction(entity: EntityInfo): null | { code: string, validators: ValidatorResult[] } {
+    if (!entity.Name) {
+      throw new Error('Entity Name is required for GenerateValidateFunction');
+    }
+    const entityName = entity.Name;
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
-    const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
+    const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entityName.trim().toLowerCase());
     const validators = unsortedValidators.sort((a, b) => {
       // sort by field name, then by function name
       if (a.fieldName && b.fieldName) {
@@ -356,6 +370,9 @@ ${validationFunctions}`
 }
 
   public GenerateSchemaAndType(entity: EntityInfo): string {
+    if (!entity.Name || !entity.ClassName) {
+      throw new Error(`Entity has missing required properties for GenerateSchemaAndType: Name=${entity.Name}, ClassName=${entity.ClassName}`);
+    }
     let content: string = '';
     if (entity.PrimaryKeys.length === 0) {
       logStatus(`Entity ${entity.Name} has no primary keys.  Skipping.`);
@@ -370,17 +387,20 @@ ${validationFunctions}`
           // Sort by Sequence to ensure consistent ordering in comments
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
-            (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
+            (v) => `\n    *   * ${v.Value ?? ''}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
+        }
+        if (!e.Type) {
+          throw new Error(`Field ${e.Name} missing Type property`);
         }
         let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullable()' : '');
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort by Sequence to ensure consistent ordering (values are alphabetically ordered in DB)
-          const sortedValues = [...e.EntityFieldValues].sort((a, b) => a.Sequence - b.Sequence);
-          typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
+          const sortedValues = [...e.EntityFieldValues].sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+          typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value ?? ''}${quotes})`).join(', ')}])`;
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += `.or(z.${TypeScriptTypeFromSQLType(e.Type)}()) `;

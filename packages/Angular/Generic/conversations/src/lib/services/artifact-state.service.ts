@@ -43,6 +43,9 @@ export class ArtifactStateService {
    * @returns True if user has read permission
    */
   async canReadArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    if (!currentUser || !currentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
     return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'read', currentUser);
   }
 
@@ -53,6 +56,9 @@ export class ArtifactStateService {
    * @returns True if user has edit permission
    */
   async canEditArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    if (!currentUser || !currentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
     return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
   }
 
@@ -63,6 +69,9 @@ export class ArtifactStateService {
    * @returns True if user has share permission
    */
   async canShareArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    if (!currentUser || !currentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
     return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'share', currentUser);
   }
 
@@ -333,6 +342,10 @@ export class ArtifactStateService {
    * @returns True if successful
    */
   async updateArtifact(id: string, updates: Partial<ArtifactEntity>, currentUser: UserInfo): Promise<boolean> {
+    if (!currentUser || !currentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
+
     // Check edit permission
     const canEdit = await this.artifactPermissionService.checkPermission(id, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {
@@ -365,6 +378,10 @@ export class ArtifactStateService {
    * @returns True if successful
    */
   async deleteArtifact(id: string, currentUser: UserInfo): Promise<boolean> {
+    if (!currentUser || !currentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
+
     // Check edit permission (required for deletion)
     const canEdit = await this.artifactPermissionService.checkPermission(id, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {
@@ -399,6 +416,10 @@ export class ArtifactStateService {
    * @param versionId Optional specific version ID. If not provided, uses latest version
    */
   async addToCollection(artifactId: string, collectionId: string, currentUser: UserInfo, versionId?: string): Promise<void> {
+    if (!currentUser || !currentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
+
     // Check edit permission (required to modify collection membership)
     const canEdit = await this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {
@@ -446,6 +467,10 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    */
   async removeFromCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
+    if (!currentUser || !currentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
+
     // Check edit permission (required to modify collection membership)
     const canEdit = await this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {

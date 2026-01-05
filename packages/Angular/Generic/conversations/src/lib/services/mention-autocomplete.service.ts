@@ -110,13 +110,17 @@ export class MentionAutocompleteService {
     // Add user suggestions (if enabled)
     if (includeUsers) {
       for (const user of this.usersCache) {
-        const score = this.calculateMatchScore(user.Name, lowerQuery);
+        if (!user.Name || !user.ID) continue; // Skip users without names or IDs
+
+        const userName = user.Name as string; // We've checked it's not null above
+        const userId = user.ID as string; // We've checked it's not null above
+        const score = this.calculateMatchScore(userName, lowerQuery);
         if (score > 0 || !lowerQuery) {
           suggestions.push({
             type: 'user',
-            id: user.ID,
-            name: user.Name,
-            displayName: user.Name,
+            id: userId,
+            name: userName,
+            displayName: userName,
             description: user.Email || undefined,
             avatarUrl: undefined // Future: load user avatars
           });

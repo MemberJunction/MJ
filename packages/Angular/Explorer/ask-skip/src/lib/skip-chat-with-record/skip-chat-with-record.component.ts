@@ -44,7 +44,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
     }
   ]
 
-  private _entityName: string | undefined = undefined;
+  private _entityName: string | null | undefined = undefined;
   public get LinkedEntityName(): string {
     if (!this._entityName) {
       const md = new Metadata();
@@ -72,6 +72,14 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
               this.mjChat.ShowWaitingIndicator = true;
               const rv = new RunView();
               const md = new Metadata();
+
+              // Check if CurrentUser and required properties exist
+              if (!md.CurrentUser || !md.CurrentUser.ID || !md.CurrentUser.Name) {
+                  console.error('No current user or required user properties available');
+                  this.mjChat.ShowWaitingIndicator = false;
+                  return;
+              }
+
               const result = await rv.RunView({
                   EntityName: "Conversations",
                   ExtraFilter: "UserID='" + md.CurrentUser.ID + "' AND LinkedEntityID='" + this.LinkedEntityID + "' AND LinkedRecordID='" + this.LinkedPrimaryKey.Values() + "'",

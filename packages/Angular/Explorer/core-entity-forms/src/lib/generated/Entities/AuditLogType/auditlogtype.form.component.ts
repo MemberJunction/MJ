@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Audit Log Types') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-auditlogtype-form',
     templateUrl: './auditlogtype.form.component.html'
 })

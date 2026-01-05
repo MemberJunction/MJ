@@ -17,8 +17,7 @@
   "dependencies": {
     "@memberjunction/ai": "2.127.0",
     "@memberjunction/global": "2.127.0",
-    "axios": "^1.7.7",
-    "elevenlabs": "^1.51.0"
+    "axios": "^1.7.7"
   },
   "repository": {
     "type": "git",

@@ -27,11 +27,13 @@ export class SearchResultsResource extends BaseResourceComponent implements OnIn
         }
         else {
             const md = new Metadata();
-            const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
-            if (e)
+            const e = md.Entities.find(e => e.Name?.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+            if (e && e.Icon) {
                 return e?.Icon;
-            else
+            }
+            else {
                 return '';
+            }
         }
     }
 }

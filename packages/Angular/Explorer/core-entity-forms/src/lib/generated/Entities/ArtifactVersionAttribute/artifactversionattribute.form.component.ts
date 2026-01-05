@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Artifact Version Attributes') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-artifactversionattribute-form',
     templateUrl: './artifactversionattribute.form.component.html'
 })

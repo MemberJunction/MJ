@@ -452,6 +452,13 @@ export class GenericBrowserListComponent implements OnInit{
 
     item.Favorite = !item.Favorite;
     const md: Metadata = new Metadata();
+
+    // Check if CurrentUser and ID exist
+    if (!md.CurrentUser || !md.CurrentUser.ID) {
+      console.error('No current user or user ID available');
+      return;
+    }
+
     let entityName: string = item.Type === ItemType.Folder ? this.CategoryEntityName : this.ItemEntityName;
     let compositeKey: CompositeKey = new CompositeKey([{FieldName: "ID", Value: item.Data.ID}]);
     await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, compositeKey, item.Favorite);

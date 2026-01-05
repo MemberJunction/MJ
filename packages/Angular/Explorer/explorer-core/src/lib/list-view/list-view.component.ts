@@ -26,8 +26,8 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     public lists: ListEntity[] = [];
     public showCreateDialog: boolean = false;
     public entities: EntityInfo[] = [];
-    public sourceEntityNames: string[] = [];
-    public entityNames: string[] = [];
+    public sourceEntityNames: (string | null)[] = [];
+    public entityNames: (string | null)[] = [];
     public dropdownItems: Record<'text', string>[] = [{text: "List"}];
 
     public NewItemOptions: NewItemOption[] = [
@@ -65,10 +65,17 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
         this.entities = md.Entities;
         this.sourceEntityNames = this.entities.map(e => e.Name);
         this.sourceEntityNames = this.entityNames = this.sourceEntityNames.sort(function(a, b){
-            const aName: string = a.toLowerCase();
-            const bName: string = b.toLowerCase();
-            if(aName < bName) { return -1; }
-            if(aName > bName) { return 1; }
+            const aName: string | undefined = a?.toLowerCase();
+            const bName: string | undefined = b?.toLowerCase();
+            if (!aName || !bName) { 
+                return 0 
+            }
+            else if (aName < bName) { 
+                return -1; 
+            }
+            else if (aName > bName) { 
+                return 1; 
+            }
             return 0;
         });
 
@@ -166,10 +173,24 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
         }
 
         const md: Metadata = new Metadata();
+
+        // Check if CurrentUser and ID exist
+        if (!md.CurrentUser || !md.CurrentUser.ID) {
+            this.sharedService.CreateSimpleNotification("No current user or user ID available", "error", 2000);
+            this.showCreateLoader = false;
+            return;
+        }
+
         let listEntity: ListEntity = await md.GetEntityObject("Lists");
         listEntity.Name = this.listName;
         listEntity.Description = this.listDescription;
-        listEntity.EntityID = this.selectedEntity.ID;
+        if (!this.selectedEntity || !this.selectedEntity.ID) {
+            listEntity.EntityID = '';
+        }
+        else {
+            listEntity.EntityID = this.selectedEntity.ID;
+        }
+
         listEntity.UserID = md.CurrentUser.ID;
 
         const saveResult: boolean = await listEntity.Save();
@@ -195,7 +216,7 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     }
 
     public onFilterChange(value: string): void {
-        this.entityNames = this.sourceEntityNames.filter(e => e.toLowerCase().includes(value.toLowerCase()));
+        this.entityNames = this.sourceEntityNames.filter(e => e?.toLowerCase().includes(value.toLowerCase()));
     }
 
     public onSelectionChange(value: string): void {

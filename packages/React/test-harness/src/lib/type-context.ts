@@ -26,7 +26,7 @@ export interface TypeInfo {
   /** For object/dictionary types, the value type (e.g., Object.values() returns array of this) */
   objectValueType?: TypeInfo;
   /** Whether the value can be null/undefined */
-  nullable?: boolean;
+  nullable?: boolean | null;
   /** Whether this type came from metadata (vs inferred) */
   fromMetadata?: boolean;
   /** For constant literals, the actual value (e.g., '' for empty string, '2024-01-01' for date literal) */
@@ -44,7 +44,7 @@ export interface FieldTypeInfo {
   /** Original SQL type if from database */
   sqlType?: string;
   /** Whether the field is nullable */
-  nullable?: boolean;
+  nullable?: boolean | null;
 }
 
 /**
@@ -204,12 +204,14 @@ export class TypeContext {
 
       if (entity) {
         for (const field of entity.Fields) {
-          fields.set(field.Name, {
-            type: mapSQLTypeToJSType(field.Type),
-            fromMetadata: true,
-            sqlType: field.Type,
-            nullable: field.AllowsNull
-          });
+          if (field.Name && field.Type) {
+            fields.set(field.Name, {
+              type: mapSQLTypeToJSType(field.Type),
+              fromMetadata: true,
+              sqlType: field.Type,
+              nullable: field.AllowsNull
+            });
+          }
         }
       }
     } catch (error) {

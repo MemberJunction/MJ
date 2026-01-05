@@ -270,6 +270,12 @@ export class TestFeedbackDialogComponent implements OnInit {
       return;
     }
 
+    // Check if currentUser and ID exist
+    if (!this.data.currentUser || !this.data.currentUser.ID) {
+      this.errorMessage = 'No current user or user ID available';
+      return;
+    }
+
     this.isSaving = true;
     this.errorMessage = '';
 

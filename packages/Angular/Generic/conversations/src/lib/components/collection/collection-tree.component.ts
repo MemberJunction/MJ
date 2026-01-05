@@ -232,6 +232,11 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   async onCreateCollection(parentId: string | null): Promise<void> {
+    if (!this.currentUser.ID) {
+      alert('No current user ID available');
+      return;
+    }
+
     // Validate permission if creating child collection
     if (parentId) {
       const parentCollection = this.collections.find(c => c.ID === parentId);
@@ -284,6 +289,11 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   async onDeleteCollection(collection: CollectionEntity): Promise<void> {
+    if (!this.currentUser.ID) {
+      alert('No current user ID available');
+      return;
+    }
+
     // Validate Delete permission
     if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
       const permission = await this.permissionService.checkPermission(

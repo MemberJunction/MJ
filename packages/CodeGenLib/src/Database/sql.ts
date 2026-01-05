@@ -135,15 +135,22 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
 
    // Initialize entity map and dependency map
    entities.forEach(entity => {
+     if (!entity.Name) {
+       throw new Error('Entity missing Name property');
+     }
      entityMap.set(entity.Name, entity);
      dependencyMap.set(entity.Name, new Set<string>());
    });
 
    // Populate dependency map based on foreign keys
    entities.forEach(entity => {
+     if (!entity.Name) {
+       throw new Error('Entity missing Name property');
+     }
+     const entityName = entity.Name;
      entity.Fields.forEach(field => {
-       if (field.RelatedEntity && field.RelatedEntity !== entity.Name) {
-         dependencyMap.get(entity.Name)?.add(field.RelatedEntity);
+       if (field.RelatedEntity && field.RelatedEntity !== entityName) {
+         dependencyMap.get(entityName)?.add(field.RelatedEntity);
        }
      });
    });
@@ -183,11 +190,17 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
 
      // Remove current level entities from the dependency map and other entities' dependencies
      currentLevel.forEach(entity => {
+       if (!entity.Name) {
+         throw new Error('Entity missing Name property during dependency removal');
+       }
        dependencyMap.delete(entity.Name);
      });
 
      dependencyMap.forEach(dependencies => {
        currentLevel.forEach(entity => {
+         if (!entity.Name) {
+           throw new Error('Entity missing Name property during dependency cleanup');
+         }
          dependencies.delete(entity.Name);
        });
      });
@@ -205,11 +218,12 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
    // Process each level sequentially, but entities within a level in parallel
    for (const level of entityLevelTree) {
       // now filter out each LEVEL to only include entities that are not needed for recompilation
-      const l = level.filter(e => 
-        !excludeSchemas.includes(e.SchemaName) && 
-        e.BaseViewGenerated && 
-        e.IncludeInAPI && 
-        !e.VirtualEntity && 
+      const l = level.filter(e =>
+        e.SchemaName && e.Name &&
+        !excludeSchemas.includes(e.SchemaName) &&
+        e.BaseViewGenerated &&
+        e.IncludeInAPI &&
+        !e.VirtualEntity &&
         !ManageMetadataBase.newEntityList.includes(e.Name));
 
       let sqlCommand: string = '';
@@ -217,7 +231,7 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
       
       for (const entity of l) {
         // if an excludeEntities variable was provided, skip this entity if it's in the list
-        if (!excludeEntities || !excludeEntities.includes(entity.Name)) {
+        if (entity.Name && (!excludeEntities || !excludeEntities.includes(entity.Name))) {
           sqlCommand += ` DECLARE @RefreshError_${entity.CodeName} INT = 0;
                           BEGIN TRY
                               EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';
@@ -263,9 +277,12 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
 
 
  public getBaseViewFiles(entity: EntityInfo): string[] {
+    if (!entity.SchemaName || !entity.BaseView) {
+      throw new Error(`Entity ${entity.Name || 'unknown'} missing SchemaName or BaseView`);
+    }
     const files: string[] = [];
-    const baseViewFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
-    const baseViewPermissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
+    const baseViewFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated ?? false);
+    const baseViewPermissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated ?? false);
     const baseViewFilePath = path.join(outputDir('SQL', true)!, baseViewFile);
     const baseViewPermissionsFilePath = path.join(outputDir('SQL', true)!, baseViewPermissionsFile);
     if (fs.existsSync(baseViewFilePath)) {
@@ -293,14 +310,17 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
  
  public async recompileSingleBaseView(ds: sql.ConnectionPool, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
   // just call EXEC sp_refreshview 'your_schema_name.your_view_name';
+  if (!entity.SchemaName || !entity.BaseView) {
+    throw new Error(`Entity ${entity.Name || 'unknown'} missing SchemaName or BaseView`);
+  }
   try {
     await this.executeSQLScript(ds, `EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';`, false);
-    return true;  
+    return true;
   }
   catch (e) {
     logError(e as string);
     return false;
-  } 
+  }
  }
  
  /**
@@ -311,8 +331,13 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
   */
  private async identifyFailedViewRefreshes(ds: sql.ConnectionPool, entities: EntityInfo[]): Promise<EntityInfo[]> {
    const failedEntities: EntityInfo[] = [];
-   
+
    for (const entity of entities) {
+     if (!entity.SchemaName || !entity.BaseView) {
+       logError(`Entity ${entity.Name || 'unknown'} missing SchemaName or BaseView, skipping validation`);
+       failedEntities.push(entity);
+       continue;
+     }
      try {
        // Try to query the view to see if it's valid
        const testQuery = `SELECT TOP 1 * FROM [${entity.SchemaName}].[${entity.BaseView}]`;

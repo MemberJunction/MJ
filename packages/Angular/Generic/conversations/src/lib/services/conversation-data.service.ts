@@ -163,6 +163,10 @@ export class ConversationDataService {
     description?: string,
     projectId?: string
   ): Promise<ConversationEntity> {
+    if (!currentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
+
     const md = new Metadata();
     const conversation = await md.GetEntityObject<ConversationEntity>('Conversations', currentUser);
 

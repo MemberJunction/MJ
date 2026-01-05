@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Communication Runs') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-communicationrun-form',
     templateUrl: './communicationrun.form.component.html'
 })

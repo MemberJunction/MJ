@@ -124,6 +124,9 @@ export class GraphQLServerGeneratorBase {
    * @returns The base GraphQL type name (without suffix)
    */
   protected getServerGraphQLTypeNameBase(entity: EntityInfo): string {
+    if (!entity.SchemaName || !entity.BaseTable) {
+      throw new Error(`Entity ${entity.Name || 'unknown'} has missing SchemaName or BaseTable`);
+    }
     // Special case for MJ core schema - use "MJ" instead of the schema name
     const schemaPrefix = entity.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
       ? 'MJ'
@@ -174,7 +177,10 @@ export class GraphQLServerGeneratorBase {
 
       for (let j: number = 0; j < sortedRelatedEntities.length; ++j) {
         const r = sortedRelatedEntities[j];
-        const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
+        if (!r.RelatedEntity) {
+          throw new Error(`Related entity name is null for relationship in entity ${entity.Name || 'unknown'}`);
+        }
+        const re = md.Entities.find((e) => e.Name && e.Name.toLowerCase() === r.RelatedEntity!.toLowerCase())!;
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
           if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
@@ -258,7 +264,10 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
 
     for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
       const r = sortedRelatedEntities[i];
-      const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
+      if (!r.RelatedEntity) {
+        throw new Error(`Related entity name is null for relationship in entity ${entity.Name || 'unknown'}`);
+      }
+      const re = md.Entities.find((e) => e.Name && e.Name.toLowerCase() == r.RelatedEntity!.toLowerCase())!;
       if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
         // we only include entities that are in the same schema as the current entity
         // OR if we are not excluding related entities external to the schema
@@ -297,13 +306,19 @@ export class ${serverGraphQLTypeName} {`;
     if (fieldInfo.Description !== null && fieldInfo.Description.trim().length > 0)
       fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: \`${fieldInfo.Description.replace(/`/g, "\\`")}\``;
 
+    if (!fieldInfo.Type) {
+      throw new Error(`Field ${fieldInfo.Name || 'unknown'} has null Type in buildGraphQLField`);
+    }
     return `
-    @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.Length > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.Length + ')' : ''}
+    @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${(fieldInfo.Length ?? 0) > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.Length + ')' : ''}
     ${codeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
         `;
   }
 
   protected getTypeGraphQLFieldString(fieldInfo: EntityFieldInfo): string {
+    if (!fieldInfo.Type) {
+      throw new Error(`Field ${fieldInfo.Name || 'unknown'} has null Type`);
+    }
     switch (fieldInfo.Type.toLowerCase()) {
       case 'text':
       case 'char':
@@ -339,15 +354,24 @@ export class ${serverGraphQLTypeName} {`;
   }
 
   protected generateServerRelationship(md: Metadata, r: EntityRelationshipInfo, isInternal: boolean): string {
-    const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
+    if (!r.RelatedEntity) {
+      throw new Error(`RelatedEntity is null for relationship`);
+    }
+    const re = md.Entities.find((e) => e.Name && e.Name.toLowerCase() === r.RelatedEntity!.toLowerCase())!;
     const classPackagePrefix: string = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
     const relatedTypeName = this.getServerGraphQLTypeName(re);
     const relatedClassName = classPackagePrefix + relatedTypeName;
 
+    if (!r.RelatedEntityCodeName || !r.RelatedEntityJoinField) {
+      throw new Error(`RelatedEntityCodeName or RelatedEntityJoinField is null for relationship to ${r.RelatedEntity}`);
+    }
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
     const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
 
+    if (!r.Type) {
+      throw new Error(`Relationship Type is null for relationship to ${r.RelatedEntity}`);
+    }
     if (r.Type.toLowerCase().trim() == 'one to many') {
       return `
     @Field(() => [${relatedClassName}])
@@ -475,13 +499,19 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
 
       for (let i = 0; i < sortedRelatedEntities.length; i++) {
         const r = sortedRelatedEntities[i];
-        const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
+        if (!r.RelatedEntity) {
+          throw new Error(`RelatedEntity is null for relationship in entity ${entity.Name || 'unknown'}`);
+        }
+        const re = md.Entities.find((e) => e.Name && e.Name.toLowerCase() === r.RelatedEntity!.toLowerCase())!;
 
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
           if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
             // only include the relationship if either we are NOT excluding related entities external to the schema
             // or if the related entity is in the same schema as the current entity
+            if (!r.Type) {
+              throw new Error(`Relationship ${r.RelatedEntity} has null Type`);
+            }
             if (r.Type.toLowerCase().trim() == 'many to many') sRet += this.generateManyToManyFieldResolver(entity, r);
             else sRet += this.generateOneToManyFieldResolver(entity, r, isInternal);
           }
@@ -504,6 +534,9 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
   }
 
   protected schemaName(entity: EntityInfo): string {
+    if (!entity.SchemaName) {
+      throw new Error(`Entity ${entity.Name || 'unknown'} has null SchemaName`);
+    }
     if (entity.SchemaName === mjCoreSchema) {
       return '${Metadata.Provider.ConfigData.MJCoreSchemaName}';
     } else return entity.SchemaName; // put the actual schema name in
@@ -547,11 +580,15 @@ export class ${classPrefix}${typeNameBase}Input {`;
       const fieldUndefined = classPrefix === 'Update' ? 
         nonPKEYFieldsOptional && !f.IsPrimaryKey : 
         (f.IsPrimaryKey && !f.AutoIncrement) || (nonPKEYFieldsOptional && !f.IsPrimaryKey && (!f.AllowsNull || f.HasDefaultValue));
-      const sNull: string = f.AllowsNull || fieldUndefined ? '{ nullable: true }' : '';
+      if (!f.Type) {
+        throw new Error(`Field ${f.Name || 'unknown'} has null Type in CreateUpdateInputField`);
+      }
+      const allowsNull = f.AllowsNull ?? false;
+      const sNull: string = allowsNull || fieldUndefined ? '{ nullable: true }' : '';
       const sFullTypeGraphQLString: string = sTypeGraphQLString + (sNull === '' || sTypeGraphQLString === '' ? '' : ', ') + sNull;
         sRet += `
     @Field(${sFullTypeGraphQLString})
-    ${codeName}${fieldUndefined ? '?' : ''}: ${TypeScriptTypeFromSQLTypeWithNullableOption(f.Type, f.AllowsNull)};
+    ${codeName}${fieldUndefined ? '?' : ''}: ${TypeScriptTypeFromSQLTypeWithNullableOption(f.Type, allowsNull)};
 `;
     }
 
@@ -643,16 +680,25 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
   protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isInternal: boolean): string {
     const md = new Metadata();
+    if (!r.RelatedEntity) {
+      throw new Error(`RelatedEntity is null for relationship in entity ${entity.Name || 'unknown'}`);
+    }
     const re = md.EntityByName(r.RelatedEntity);
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
 
     let filterFieldName: string = '';
     if (!r.EntityKeyField) {
+      if (!entity.FirstPrimaryKey) {
+        throw new Error(`Entity ${entity.Name || 'unknown'} has no primary key`);
+      }
+      if (!entity.FirstPrimaryKey.CodeName) {
+        throw new Error(`Entity ${entity.Name || 'unknown'} primary key has no CodeName`);
+      }
       filterFieldName = entity.FirstPrimaryKey.CodeName;
     } else {
-      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase())!;
-      if (field) {
+      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name && f.Name.trim().toLowerCase() === r.EntityKeyField!.trim().toLowerCase())!;
+      if (field && field.CodeName) {
         filterFieldName = field.CodeName;
       } else {
         logError(
@@ -662,7 +708,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
       }
     }
 
-    const filterField = entity.Fields.find((f) => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
+    const filterField = entity.Fields.find((f) => f.CodeName && f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
     if (!filterField) {
       logError(
         `GenerateOneToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`
@@ -675,6 +721,9 @@ export class ${classPrefix}${typeNameBase}Input {`;
     const relatedTypeName = this.getServerGraphQLTypeName(re);
     const serverClassName = serverPackagePrefix + relatedTypeName;
 
+    if (!r.RelatedEntityCodeName || !r.RelatedEntityJoinField) {
+      throw new Error(`RelatedEntityCodeName or RelatedEntityJoinField is null for relationship to ${r.RelatedEntity}`);
+    }
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
     const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
@@ -695,15 +744,24 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
   protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
     const md = new Metadata();
-    const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
+    if (!r.RelatedEntity) {
+      throw new Error(`RelatedEntity is null for relationship in entity ${entity.Name || 'unknown'}`);
+    }
+    const re = md.Entities.find((e) => e.Name && e.Name.toLowerCase() == r.RelatedEntity!.toLowerCase())!;
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
     let filterFieldName: string = '';
     if (!r.EntityKeyField) {
+      if (!entity.FirstPrimaryKey) {
+        throw new Error(`Entity ${entity.Name || 'unknown'} has no primary key`);
+      }
+      if (!entity.FirstPrimaryKey.CodeName) {
+        throw new Error(`Entity ${entity.Name || 'unknown'} primary key has no CodeName`);
+      }
       filterFieldName = entity.FirstPrimaryKey.CodeName;
     } else {
-      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase())!;
-      if (field) {
+      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name && f.Name.trim().toLowerCase() === r.EntityKeyField!.trim().toLowerCase())!;
+      if (field && field.CodeName) {
         filterFieldName = field.CodeName;
       } else {
         logError(
@@ -713,7 +771,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
       }
     }
 
-    const filterField = entity.Fields.find((f) => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
+    const filterField = entity.Fields.find((f) => f.CodeName && f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
     if (!filterField) {
       logError(
         `GenerateManyToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`
@@ -726,6 +784,9 @@ export class ${classPrefix}${typeNameBase}Input {`;
     const relatedTypeName = this.getServerGraphQLTypeName(re);
     const serverClassName = serverPackagePrefix + relatedTypeName;
 
+    if (!r.RelatedEntityCodeName || !r.JoinEntityJoinField) {
+      throw new Error(`RelatedEntityCodeName or JoinEntityJoinField is null for relationship to ${r.RelatedEntity}`);
+    }
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
     const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');

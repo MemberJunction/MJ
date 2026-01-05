@@ -108,7 +108,7 @@ export class EntityFormDialogComponent {
     // if section, we grab a sub-class of BaseFormSectionComponent, if complete, we grab a sub-class of the BaseForComponent class
     let reg: ClassRegistration;
     if (this.Mode === 'complete') {
-      reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, this.Record?.EntityInfo.Name);
+      reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, this.Record?.EntityInfo.Name ?? undefined);
     } else {
       reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, this.Record?.EntityInfo.Name + '.' + this.SectionName);
     }

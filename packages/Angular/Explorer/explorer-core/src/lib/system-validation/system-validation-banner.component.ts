@@ -5,8 +5,6 @@ import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'mj-system-validation-banner',
-  standalone: true,
-  imports: [CommonModule],
   template: `
     <div *ngIf="issues.length > 0" class="system-validation-wrapper">
       <!-- Dark overlay for serious errors -->

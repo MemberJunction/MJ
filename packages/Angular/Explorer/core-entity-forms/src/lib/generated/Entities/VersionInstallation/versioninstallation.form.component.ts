@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Version Installations') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-versioninstallation-form',
     templateUrl: './versioninstallation.form.component.html'
 })

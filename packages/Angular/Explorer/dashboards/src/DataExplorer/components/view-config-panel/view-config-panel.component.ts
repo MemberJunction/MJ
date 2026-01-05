@@ -182,12 +182,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
     // Initialize columns from entity fields
     this.columns = this.entity.Fields
-      .filter(f => !f.Name.startsWith('__mj_'))
+      .filter(f => f.Name && !f.Name.startsWith('__mj_'))
       .map((field, index) => ({
-        fieldId: field.ID,
-        fieldName: field.Name,
+        fieldId: field.ID!,
+        fieldName: field.Name!,
         displayName: field.DisplayNameOrName,
-        visible: field.DefaultInView,
+        visible: field.DefaultInView ?? false,
         width: field.DefaultColumnWidth || null,
         orderIndex: index,
         field
@@ -286,14 +286,14 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     if (!this.entity) return [];
 
     return this.entity.Fields
-      .filter(f => !f.Name.startsWith('__mj_') && !f.IsBinaryFieldType)
+      .filter(f => f.Name && !f.Name.startsWith('__mj_') && !f.IsBinaryFieldType)
       .map(field => ({
-        name: field.Name,
+        name: field.Name!,
         displayName: field.DisplayNameOrName,
         type: this.mapFieldType(field),
         lookupEntityName: field.RelatedEntity || undefined,
         valueList: field.ValueListType === 'List' && field.EntityFieldValues?.length > 0
-          ? field.EntityFieldValues.map(v => ({ value: v.Value, label: v.Value }))
+          ? field.EntityFieldValues.map(v => ({ value: v.Value ?? '', label: v.Value ?? '' }))
           : undefined
       }));
   }
@@ -308,6 +308,8 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     }
 
     // Map based on SQL type
+    if (!field.Type) return 'string';
+
     const sqlType = field.Type.toLowerCase();
     if (sqlType.includes('bit') || sqlType === 'boolean') {
       return 'boolean';
@@ -459,7 +461,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   get sortableFields(): EntityFieldInfo[] {
     if (!this.entity) return [];
     return this.entity.Fields.filter(f =>
-      !f.Name.startsWith('__mj_') &&
+      f.Name && !f.Name.startsWith('__mj_') &&
       !f.IsBinaryFieldType // Exclude binary fields from sorting
     );
   }

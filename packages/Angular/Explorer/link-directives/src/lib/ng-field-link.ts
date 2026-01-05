@@ -61,8 +61,14 @@ export class FieldLink extends BaseLink implements OnInit {
           // we didn't have the related field mapping info (above), no related entity name field map provided in the entity field metadata, so do a lookup
           // requires a server round trip and hitting the DB, so we try to avoid this
 
+          const primaryKeyName = this._targetEntityInfo.FirstPrimaryKey.Name;
+          if (!primaryKeyName) {
+            LogStatus('Primary key name is null for entity: ' + this._targetEntityInfo.Name);
+            return;
+          }
+
           let compositeKey: CompositeKey = new CompositeKey([{
-            FieldName: this._targetEntityInfo.FirstPrimaryKey.Name, // AT THE MOMENT - we only support foreign keys with a single value
+            FieldName: primaryKeyName, // AT THE MOMENT - we only support foreign keys with a single value
             Value: this.field.Value
           }]);
           md.GetEntityRecordName(relatedEntity, compositeKey).then(recordName => {
@@ -83,9 +89,13 @@ export class FieldLink extends BaseLink implements OnInit {
     if (!this._targetEntityInfo)
       throw new Error('targetEntityInfo not set');
 
+    const primaryKeyName = this._targetEntityInfo.FirstPrimaryKey.Name;
+    if (!primaryKeyName)
+      throw new Error('Primary key name is null for entity: ' + this._targetEntityInfo.Name);
+
     // Create CompositeKey for navigation - we only support foreign keys with a single value at present
     const compositeKey = new CompositeKey([{
-      FieldName: this._targetEntityInfo.FirstPrimaryKey.Name,
+      FieldName: primaryKeyName,
       Value: this._targetRecordID
     }]);
 

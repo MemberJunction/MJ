@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Examples') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-aiagentexample-form',
     templateUrl: './aiagentexample.form.component.html'
 })
@@ -19,7 +18,6 @@ export class AIAgentExampleFormComponent extends BaseFormComponent {
             { sectionKey: 'exampleDetails', sectionName: 'Example Details', isExpanded: true },
             { sectionKey: 'sourceProvenance', sectionName: 'Source Provenance', isExpanded: false },
             { sectionKey: 'semanticIndexing', sectionName: 'Semantic Indexing', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

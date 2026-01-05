@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Vector Indexes') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-vectorindex-form',
     templateUrl: './vectorindex.form.component.html'
 })

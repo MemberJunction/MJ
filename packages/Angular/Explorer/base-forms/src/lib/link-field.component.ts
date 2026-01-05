@@ -128,14 +128,20 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
     public onNewClicked() {
         // user wants to create a new record, double check to make sure we can create a record
         if (this.UserCanCreateNewLinkedRecord && this.RelatedEntityInfo) {
+            const entityName = this.RelatedEntityInfo.Name;
+            if (!entityName) {
+                console.warn('Cannot create new record: No entity name available');
+                return;
+            }
             // Use NavigationService to open a new record form
-            this.navigationService.OpenNewEntityRecord(this.RelatedEntityInfo.Name);
+            this.navigationService.OpenNewEntityRecord(entityName);
         }
         else {
             // user can't create a new record, so let's tell them
             // they shouldn't actually ever get here as we don't show the New button if they can't create a new record but
             // this is an extra safeguard.
-            SharedService.Instance.CreateSimpleNotification(`You do not have permission to create a new ${this.RelatedEntityInfo?.Name} record`, 'info', 2500);
+            const entityName = this.RelatedEntityInfo?.Name ?? 'record';
+            SharedService.Instance.CreateSimpleNotification(`You do not have permission to create a new ${entityName} record`, 'info', 2500);
         }
     }
 
@@ -144,13 +150,22 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
         const md = new Metadata();
         this.RecordLinked = false;
         if (relatedEntityID) {
-            this.RelatedEntityInfo = md.EntityByID(relatedEntityID); 
+            this.RelatedEntityInfo = md.EntityByID(relatedEntityID);
+            if (!this.RelatedEntityInfo) {
+                return;
+            }
+            const entityName = this.RelatedEntityInfo.Name;
+            const pkName = this.RelatedEntityInfo.FirstPrimaryKey.Name;
+            if (!entityName || !pkName) {
+                console.warn('Cannot link value: Missing entity name or primary key name');
+                return;
+            }
             if (!this.RecordName) {
                 if (this.Value) {
                     // at present only support single valued FOREIGN KEYs, will need to upgrade this soon
-                    const pk = new CompositeKey([{FieldName: this.RelatedEntityInfo.FirstPrimaryKey.Name, Value: this.Value}])
-                    this.RecordName = await md.GetEntityRecordName(this.RelatedEntityInfo.Name, pk);
-                    if (!this.RecordName) 
+                    const pk = new CompositeKey([{FieldName: pkName, Value: this.Value}])
+                    this.RecordName = await md.GetEntityRecordName(entityName, pk);
+                    if (!this.RecordName)
                         this.RecordName = this.Value;
 
                     this.RecordLinked = true;
@@ -197,7 +212,13 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
         this.RecordLinked = false;
         this.RelatedEntityRecords = [];
         if (this.RelatedEntityInfo) {
-            this.RelatedEntityNameField = this.RelatedEntityInfo.NameField ? this.RelatedEntityInfo.NameField.Name : '';
+            const pkName = this.RelatedEntityInfo.FirstPrimaryKey.Name;
+            const pkType = this.RelatedEntityInfo.FirstPrimaryKey.Type;
+            if (!pkName) {
+                console.warn('Cannot fetch matching records: Missing primary key name');
+                return;
+            }
+            this.RelatedEntityNameField = this.RelatedEntityInfo.NameField?.Name ?? '';
             const escapedQuery = query.replace(/'/g, "''");
             let filter = '';
 
@@ -211,18 +232,18 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
                     // if we get here it means we either have a RelatedEntityNameField to search on or the query is a number
                     if (!isNaN(Number(query))) {
                         // if the query is a number, then we can search on the pkey
-                        filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = ${query}`;    
+                        filter = `[${pkName}] = ${query}`;
                     }
                 }
             }
-            else if (this.RelatedEntityInfo.FirstPrimaryKey.Type.trim().toLowerCase() !== 'uniqueidentifier') {
+            else if (pkType && pkType.trim().toLowerCase() !== 'uniqueidentifier') {
                 // the pkey is a string that is NOT a unique identifier, so we can search on it no matter what the query is, a number, not a number, whatever
-                filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = '${escapedQuery}'`;
+                filter = `[${pkName}] = '${escapedQuery}'`;
             }
             else {
                 // we can't search on the pkey unless the escapedQuery is a valid GUID, so check that and if so, search on the pkey
                 if (escapedQuery.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
-                    filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = '${escapedQuery}'`;
+                    filter = `[${pkName}] = '${escapedQuery}'`;
                 }
             }
             
@@ -230,20 +251,26 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
                 filter = `[${this.RelatedEntityNameField}] LIKE '${escapedQuery}%'${filter.length > 0 ? ' OR ' + filter : ''}`;
             }
             if (filter && filter.length > 0) {
+                const entityName = this.RelatedEntityInfo.Name;
+                if (!entityName) {
+                    console.warn('Cannot run view: Missing entity name');
+                    return;
+                }
                 const rv = new RunView();
                 const result = await rv.RunView({
-                    EntityName: this.RelatedEntityInfo.Name,
+                    EntityName: entityName,
                     ExtraFilter: filter,
-                    OrderBy: this.RelatedEntityNameField,
+                    OrderBy: this.RelatedEntityNameField ?? undefined,
                     ResultType: 'entity_object',
                     MaxRows: 5
                 })
                 if (result && result.Results?.length > 0) {
                     this.RelatedEntityRecords = result.Results;
-                }    
+                }
             }
             else {
-                this.RelatedEntityRecords = [<BaseEntity><any>{Name: "Can't search on " + this.RelatedEntityInfo.Name + ' records'}]; // this will have the effect of a single record in the list that says "Can't search on..."
+                const entityName = this.RelatedEntityInfo.Name ?? 'entity';
+                this.RelatedEntityRecords = [<BaseEntity><any>{Name: "Can't search on " + entityName + ' records'}]; // this will have the effect of a single record in the list that says "Can't search on..."
             }
         }
     }
@@ -263,15 +290,20 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
 
     protected async populateDropdownList() {
         if (this.RelatedEntityInfo) {
+            const entityName = this.RelatedEntityInfo.Name;
+            if (!entityName) {
+                console.warn('Cannot populate dropdown: Missing entity name');
+                return;
+            }
             this.dropDownColumns = this.RelatedEntityInfo.Fields.filter(f => f.DefaultInView || f.IsPrimaryKey || f.IsNameField);
             this.cdr.detectChanges();
 
             // run a view to get the records
             const rv = new RunView();
             const result = await rv.RunView({
-                EntityName: this.RelatedEntityInfo.Name,
+                EntityName: entityName,
                 ExtraFilter: '',
-                OrderBy: this.RelatedEntityNameField,
+                OrderBy: this.RelatedEntityNameField ?? undefined,
                 ResultType: 'entity_object',
             });
             if (result && result.Success) {
@@ -283,7 +315,7 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
                     this.SelectedRecord = match;
                     this.SetDropdownValue();
                 }
-                
+
                 this.cdr.detectChanges();
             }
         }

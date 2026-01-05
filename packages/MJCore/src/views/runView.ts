@@ -162,14 +162,14 @@ export class RunView  {
      * This property can be overridden on a per-instance basis by passing in the optional Provider parameter to the RunView constructor.
      */
     public static get Provider(): IRunViewProvider {
-        const g = MJGlobal.Instance.GetGlobalObjectStore();
+        const g = MJGlobal.Instance.GetGlobalObjectStore() as Record<string, any>;
         if (g)
             return g[RunView._globalProviderKey];
         else
             throw new Error('No global object store, so we cant get the static provider');
     }
     public static set Provider(value: IRunViewProvider) {
-        const g = MJGlobal.Instance.GetGlobalObjectStore();
+        const g = MJGlobal.Instance.GetGlobalObjectStore() as Record<string, any>;
         if (g)
             g[RunView._globalProviderKey] = value;
         else
@@ -182,7 +182,7 @@ export class RunView  {
      * @param params 
      * @returns 
      */
-    public static async GetEntityNameFromRunViewParams(params: RunViewParams, provider: IMetadataProvider | null = null): Promise<string> {
+    public static async GetEntityNameFromRunViewParams(params: RunViewParams, provider: IMetadataProvider | null = null): Promise<string | null> {
         const p = provider ? provider : <IMetadataProvider><any>RunView.Provider;
 
         if (params.EntityName)
@@ -191,7 +191,8 @@ export class RunView  {
             const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
             const entity = p.Entities.find(e => e.ID === entityID);
             if (entity)
-                return entity.Name
+                return entity.Name;
+            return null; // Entity not found
         }
         else if (params.ViewID || params.ViewName) {
             // we don't have a view entity loaded, so load it up now
@@ -204,6 +205,7 @@ export class RunView  {
             if (result && result.Success && result.Results.length > 0) {
                 return result.Results[0].Entity; // virtual field in the User Views entity called Entity
             }
+            return null; // No matching view found
         }
         else
             return null;

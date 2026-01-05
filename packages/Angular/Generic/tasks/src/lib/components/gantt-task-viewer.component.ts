@@ -9,8 +9,6 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
  */
 @Component({
   selector: 'mj-gantt-task-viewer',
-  standalone: true,
-  imports: [CommonModule, TaskDetailPanelComponent],
   template: `
     <div class="gantt-task-viewer">
       <div *ngIf="!tasks || tasks.length === 0" class="no-tasks">

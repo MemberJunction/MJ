@@ -111,7 +111,7 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
       return '';
     }
 
-    return entityField.EntityFieldInfo.ExtendedType;
+    return entityField.EntityFieldInfo.ExtendedType ?? '';
   }
 
   private _possibleValues: string[] | null = null;
@@ -122,7 +122,12 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   @Input() get PossibleValues(): string[] {
     if (!this._possibleValues) {
       const ef = this.record.Fields.find((f) => f.CodeName == this.FieldName)?.EntityFieldInfo;
-      if (ef && ef.ValueListType !== 'None') this._possibleValues = ef.EntityFieldValues.map((v) => v.Value);
+      if (ef && ef.ValueListType !== 'None') {
+        // Filter out null values from EntityFieldValues
+        this._possibleValues = ef.EntityFieldValues
+          .map((v) => v.Value)
+          .filter((v): v is string => v != null);
+      }
       else this._possibleValues = [];
     }
     return this._possibleValues;

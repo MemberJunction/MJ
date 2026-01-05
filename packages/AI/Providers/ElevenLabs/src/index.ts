@@ -1,6 +1,6 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
-import { ElevenLabsClient } from "elevenlabs";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 @RegisterClass(BaseAudioGenerator, "ElevenLabsAudioGenerator")
 export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
@@ -14,14 +14,13 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
         const speechResult = new SpeechResult();
         try {
-            const audio = await this._elevenLabs.generate(
+            const audio = await this._elevenLabs.textToSpeech.convert(
+                params.voice,
                 {
                     text: params.text,
-                    voice: params.voice,
-                    model_id: params.model_id,
-                    voice_settings: params.voice_settings,
-                    apply_text_normalization: params.apply_text_normalization,
-                    pronunciation_dictionary_locators: params.pronunciation_dictionary_locators,
+                    modelId: params.model_id,
+                    voiceSettings: params.voice_settings,
+                    pronunciationDictionaryLocators: params.pronunciation_dictionary_locators,
                 }
             )
             const chunks: Uint8Array[] = [];
@@ -51,15 +50,15 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             const voices = await this._elevenLabs.voices.getAll();
             for (const voice of voices.voices) {
                 const voiceInfo = new VoiceInfo();
-                voiceInfo.id = voice.voice_id;
+                voiceInfo.id = voice.voiceId;
                 voiceInfo.name = voice.name;
-                voiceInfo.description = voice.labels.description;
+                voiceInfo.description = voice.labels?.description;
                 voiceInfo.labels = [];
                 for (const label in voice.labels) {
                     voiceInfo.labels.push({key: label, value: voice.labels[label]});
                 }
                 voiceInfo.category = voice.category;
-                voiceInfo.previewUrl = voice.preview_url;
+                voiceInfo.previewUrl = voice.previewUrl;
                 result.push(voiceInfo);
             }
         } catch (error) {
@@ -72,19 +71,19 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     public async GetModels(): Promise<AudioModel[]> {
         const result: AudioModel[] = [];
         try {
-            const models = await this._elevenLabs.models.getAll();
+            const models = await this._elevenLabs.models.list();
             for (const model of models) {
                 const audioModel = new AudioModel();
-                audioModel.id = model.model_id;
+                audioModel.id = model.modelId;
                 audioModel.name = model.name;
-                audioModel.supportsTextToSpeech = model.can_do_text_to_speech;
-                audioModel.supportsVoiceConversion = model.can_do_voice_conversion;
-                audioModel.supportsStyle = model.can_use_style;
-                audioModel.supportsSpeakerBoost = model.can_use_speaker_boost;
-                audioModel.supportsFineTuning = model.can_be_finetuned;
+                audioModel.supportsTextToSpeech = model.canDoTextToSpeech;
+                audioModel.supportsVoiceConversion = model.canDoVoiceConversion;
+                audioModel.supportsStyle = model.canUseStyle;
+                audioModel.supportsSpeakerBoost = model.canUseSpeakerBoost;
+                audioModel.supportsFineTuning = model.canBeFinetuned;
                 audioModel.languages = [];
-                for (const language of model.languages) {
-                    audioModel.languages.push({id: language.language_id, name: language.name});
+                for (const language of model.languages || []) {
+                    audioModel.languages.push({id: language.languageId, name: language.name});
                 }
 
                 result.push(audioModel);
@@ -99,15 +98,15 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     public async GetPronounciationDictionaries(): Promise<PronounciationDictionary[]> {
         const result: PronounciationDictionary[] = [];
         try {
-            const pronounciationDictionaries = await this._elevenLabs.pronunciationDictionary.getAll();
-            for (const pronounciationDictionary of pronounciationDictionaries.pronunciation_dictionaries) {
+            const pronounciationDictionaries = await this._elevenLabs.pronunciationDictionaries.list();
+            for (const pronounciationDictionary of pronounciationDictionaries.pronunciationDictionaries) {
                 const dictionary = new PronounciationDictionary();
                 dictionary.id = pronounciationDictionary.id;
                 dictionary.name = pronounciationDictionary.name;
                 dictionary.description = pronounciationDictionary.description;
-                dictionary.latestVersionId = pronounciationDictionary.latest_version_id;
-                dictionary.createdBy = pronounciationDictionary.created_by;
-                dictionary.creationTimeStamp = pronounciationDictionary.creation_time_unix;
+                dictionary.latestVersionId = pronounciationDictionary.latestVersionId;
+                dictionary.createdBy = pronounciationDictionary.createdBy;
+                dictionary.creationTimeStamp = pronounciationDictionary.creationTimeUnix;
                 result.push(dictionary);
             }
         } catch (error) {

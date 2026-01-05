@@ -40,15 +40,6 @@ export interface ComponentFeedback {
  */
 @Component({
   selector: 'skip-component-feedback-panel',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    ButtonModule,
-    InputsModule,
-    DropDownsModule,
-    LayoutModule
-  ],
   templateUrl: './skip-component-feedback-panel.component.html',
   styleUrls: ['./skip-component-feedback-panel.component.css']
 })

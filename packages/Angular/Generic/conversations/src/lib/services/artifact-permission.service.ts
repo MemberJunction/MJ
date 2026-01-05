@@ -297,6 +297,10 @@ export class ArtifactPermissionService {
      * Get all permissions for current user on an artifact (convenience method for UI)
      */
     async getUserPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermissionSet> {
+        if (!currentUser.ID) {
+            throw new Error('No current user or user ID available');
+        }
+
         const [canRead, canEdit, canShare] = await Promise.all([
             this.checkPermission(artifactId, currentUser.ID, 'read', currentUser),
             this.checkPermission(artifactId, currentUser.ID, 'edit', currentUser),

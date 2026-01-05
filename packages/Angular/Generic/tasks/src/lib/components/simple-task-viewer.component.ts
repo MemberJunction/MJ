@@ -8,8 +8,6 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
  */
 @Component({
   selector: 'mj-simple-task-viewer',
-  standalone: true,
-  imports: [CommonModule, TaskDetailPanelComponent],
   template: `
     <div class="simple-task-viewer">
       <div class="list-layout">

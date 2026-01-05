@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Permissions') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-entitypermission-form',
     templateUrl: './entitypermission.form.component.html'
 })

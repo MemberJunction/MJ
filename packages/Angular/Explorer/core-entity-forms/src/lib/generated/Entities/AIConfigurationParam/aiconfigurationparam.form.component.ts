@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Configuration Params') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-aiconfigurationparam-form',
     templateUrl: './aiconfigurationparam.form.component.html'
 })

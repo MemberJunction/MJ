@@ -9,8 +9,6 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
  */
 @Component({
   selector: 'mj-task-detail-panel',
-  standalone: true,
-  imports: [CommonModule],
   template: `
     <div class="task-detail-panel">
       <div class="detail-header">

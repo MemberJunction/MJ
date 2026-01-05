@@ -142,22 +142,25 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     }
 
     // Build batch query params for all relationships
-    const viewParams: RunViewParams[] = relationships.map(rel => ({
-      EntityName: rel.RelatedEntity,
-      ExtraFilter: `${rel.RelatedEntityJoinField}='${pkValue}'`,
-      ResultType: 'count_only'
-    }));
+    const viewParams: RunViewParams[] = relationships
+      .filter(rel => rel.RelatedEntity && rel.RelatedEntityJoinField)
+      .map(rel => ({
+        EntityName: rel.RelatedEntity!,
+        ExtraFilter: `${rel.RelatedEntityJoinField}='${pkValue}'`,
+        ResultType: 'count_only' as const
+      }));
 
     try {
       const rv = new RunView();
       const results = await rv.RunViews(viewParams);
 
-      // Map results back to relationship data
-      this.relatedEntities = relationships.map((rel, index) => {
+      // Map results back to relationship data (only filtered ones that passed)
+      const filteredRelationships = relationships.filter(rel => rel.RelatedEntity && rel.RelatedEntityJoinField);
+      this.relatedEntities = filteredRelationships.map((rel, index) => {
         const result = results[index];
         return {
           relationship: rel,
-          relatedEntityName: rel.RelatedEntity,
+          relatedEntityName: rel.RelatedEntity!,
           count: result.Success ? result.TotalRowCount : 0,
           isExpanded: false,
           records: [],
@@ -166,15 +169,17 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
       });
     } catch (error) {
       console.warn('Failed to load relationship counts:', error);
-      // Initialize with zero counts on error
-      this.relatedEntities = relationships.map(rel => ({
-        relationship: rel,
-        relatedEntityName: rel.RelatedEntity,
-        count: 0,
-        isExpanded: false,
-        records: [],
-        isLoadingRecords: false
-      }));
+      // Initialize with zero counts on error (only for valid relationships)
+      this.relatedEntities = relationships
+        .filter(rel => rel.RelatedEntity && rel.RelatedEntityJoinField)
+        .map(rel => ({
+          relationship: rel,
+          relatedEntityName: rel.RelatedEntity!,
+          count: 0,
+          isExpanded: false,
+          records: [],
+          isLoadingRecords: false
+        }));
     } finally {
       this.isLoadingRelationships = false;
       this.cdr.detectChanges();
@@ -191,8 +196,10 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     const excludePatterns = ['__mj_', 'password', 'secret', 'token'];
 
     for (const field of this.entity.Fields) {
+      // Skip fields without names
+      if (!field.Name) continue;
       // Skip system fields and sensitive fields
-      if (excludePatterns.some(p => field.Name.toLowerCase().includes(p))) continue;
+      if (excludePatterns.some(p => field.Name!.toLowerCase().includes(p))) continue;
       // Skip very long text fields (but not FK fields which are usually GUIDs)
       if (field.Length && field.Length > 500 && !field.RelatedEntityID) continue;
 
@@ -230,7 +237,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
 
       fields.push({
         type: isEnum ? 'enum' : 'regular',
-        name: field.Name,
+        name: field.Name!,
         label: this.formatFieldLabel(field),
         value: this.formatFieldValue(value, field.Name)
       });
@@ -265,15 +272,15 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
       if (mappedField) {
         label = mappedField.DisplayNameOrName;
       }
-    } else {
+    } else if (field.Name) {
       // Fallback: try to find a virtual field with the same name minus "ID" suffix
       // e.g., for "TemplateID", look for "Template" field
       const baseName = field.Name.replace(/ID$/i, '');
       if (baseName !== field.Name) {
         const virtualField = this.entity!.Fields.find(f =>
-          f.Name.toLowerCase() === baseName.toLowerCase() && f.IsVirtual
+          f.Name && f.Name.toLowerCase() === baseName.toLowerCase() && f.IsVirtual
         );
-        if (virtualField) {
+        if (virtualField?.Name) {
           const virtualValue = this.record!.Get(virtualField.Name);
           if (virtualValue !== null && virtualValue !== undefined && String(virtualValue).trim() !== '') {
             displayValue = String(virtualValue);
@@ -286,11 +293,11 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
 
     return {
       type: 'foreign-key',
-      name: field.Name,
+      name: field.Name!,
       label: label,
       value: fkValue,
       displayValue: displayValue,
-      relatedEntityName: field.RelatedEntity || undefined,
+      relatedEntityName: field.RelatedEntity ?? undefined,
       relatedRecordId: fkValue
     };
   }
@@ -347,7 +354,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   get recordTitle(): string {
     if (!this.entity || !this.record) return 'Record';
 
-    if (this.entity.NameField) {
+    if (this.entity.NameField?.Name) {
       const name = this.record.Get(this.entity.NameField.Name);
       if (name) return String(name);
     }
@@ -437,7 +444,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     try {
       const rv = new RunView();
       const result = await rv.RunView<BaseEntity>({
-        EntityName: relEntity.relationship.RelatedEntity,
+        EntityName: relEntity.relationship.RelatedEntity ?? undefined,
         ExtraFilter: `${relEntity.relationship.RelatedEntityJoinField}='${pkValue}'`,
         ResultType: 'entity_object',
         MaxRows: 10 // Limit inline display to 10 records
@@ -486,7 +493,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
    */
   getRelatedRecordDisplayName(relEntity: RelatedEntityData, record: BaseEntity): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
-    if (entityInfo?.NameField) {
+    if (entityInfo?.NameField?.Name) {
       const name = record.Get(entityInfo.NameField.Name);
       if (name) return String(name);
     }
@@ -504,9 +511,9 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     const subtitleFieldNames = ['Description', 'Status', 'Type', 'Email', 'Date', 'Amount', 'Total'];
     for (const fieldName of subtitleFieldNames) {
       const field = entityInfo.Fields.find(f =>
-        f.Name.includes(fieldName) && f.Name !== entityInfo.NameField?.Name
+        f.Name && f.Name.includes(fieldName) && f.Name !== entityInfo.NameField?.Name
       );
-      if (field) {
+      if (field?.Name) {
         const value = record.Get(field.Name);
         if (value !== null && value !== undefined) {
           return this.formatFieldValue(value, field.Name);

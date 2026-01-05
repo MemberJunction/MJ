@@ -192,6 +192,9 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
      */
     protected GetForeignKeyName(entityName: string, relatedEntityName: string): string {
         const f = this.GetForeignKey(entityName, relatedEntityName);
+        if (!f.Name) {
+            throw new Error(`Foreign key field has null Name for ${entityName} -> ${relatedEntityName}`);
+        }
         return f.Name;
     }
     /**

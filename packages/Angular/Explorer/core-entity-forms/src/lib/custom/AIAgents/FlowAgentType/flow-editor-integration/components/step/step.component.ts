@@ -6,8 +6,6 @@ import { Step } from '../../models/step.model';
 
 @Component({
   selector: 'app-step',
-  standalone: true,
-  imports: [CommonModule, FormsModule, DropDownsModule],
   template: `
     <div class="step" [class.selected]="selected" [class.executing]="executing" (click)="onStepClick($event)">
       <div class="step-header">

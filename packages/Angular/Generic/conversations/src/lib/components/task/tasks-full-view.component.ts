@@ -12,8 +12,6 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
  */
 @Component({
   selector: 'mj-tasks-full-view',
-  standalone: true,
-  imports: [CommonModule, TaskComponent],
   template: `
     <div class="tasks-full-view">
       @if (!selectedTask) {

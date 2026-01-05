@@ -178,7 +178,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     try {
       const rv = new RunView();
       const result = await rv.RunView({
-        EntityName: this.entity.Name,
+        EntityName: this.entity.Name ?? undefined,
         ResultType: 'entity_object',
         MaxRows: this.pageSize
       });
@@ -222,37 +222,39 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   }
 
   private findTitleField(entity: EntityInfo, fields: EntityFieldInfo[]): string {
-    if (entity.NameField) return entity.NameField.Name;
+    if (entity.NameField?.Name) return entity.NameField.Name;
 
     const nameField = fields.find(f =>
-      f.Name.toLowerCase() === 'name' || f.Name.toLowerCase() === 'title'
+      f.Name && (f.Name.toLowerCase() === 'name' || f.Name.toLowerCase() === 'title')
     );
-    if (nameField) return nameField.Name;
+    if (nameField?.Name) return nameField.Name;
 
     const endsWithName = fields.find(f =>
+      f.Name &&
       f.Name.toLowerCase().endsWith('name') &&
       f.TSType === 'string' &&
       !f.Name.toLowerCase().includes('file') &&
       !f.IsPrimaryKey
     );
-    if (endsWithName) return endsWithName.Name;
+    if (endsWithName?.Name) return endsWithName.Name;
 
     const firstString = fields.find(f =>
+      f.Name &&
       f.TSType === 'string' && !f.IsPrimaryKey && !f.Name.toLowerCase().includes('id')
     );
-    if (firstString) return firstString.Name;
+    if (firstString?.Name) return firstString.Name;
 
     const pk = fields.find(f => f.IsPrimaryKey);
-    return pk?.Name || 'ID';
+    return pk?.Name ?? 'ID';
   }
 
   private findSubtitleField(fields: EntityFieldInfo[]): string | null {
     const keywords = ['status', 'type', 'category', 'state', 'stage'];
     for (const keyword of keywords) {
       const field = fields.find(f =>
-        f.Name.toLowerCase().includes(keyword) && f.TSType === 'string' && !f.IsPrimaryKey
+        f.Name && f.Name.toLowerCase().includes(keyword) && f.TSType === 'string' && !f.IsPrimaryKey
       );
-      if (field) return field.Name;
+      if (field?.Name) return field.Name;
     }
     return null;
   }
@@ -260,8 +262,8 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   private findDescriptionField(fields: EntityFieldInfo[]): string | null {
     const keywords = ['description', 'desc', 'summary', 'notes', 'comments'];
     for (const keyword of keywords) {
-      const field = fields.find(f => f.Name.toLowerCase().includes(keyword) && f.TSType === 'string');
-      if (field) return field.Name;
+      const field = fields.find(f => f.Name && f.Name.toLowerCase().includes(keyword) && f.TSType === 'string');
+      if (field?.Name) return field.Name;
     }
     return null;
   }
@@ -273,12 +275,14 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
                             '__mj_', 'createdat', 'updatedat', 'createdby', 'updatedby'];
 
     const defaultInViewFields = fields.filter(f =>
+      f.Name &&
       f.DefaultInView === true && !f.IsPrimaryKey &&
-      !excludePatterns.some(p => f.Name.toLowerCase().includes(p))
+      !excludePatterns.some(p => f.Name!.toLowerCase().includes(p))
     );
 
     for (const field of defaultInViewFields) {
       if (displayFields.length >= 4) break;
+      if (!field.Name) continue;
       displayFields.push({
         name: field.Name,
         type: this.getFieldType(field),
@@ -291,9 +295,10 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     const metricKeywords = ['amount', 'total', 'count', 'value', 'price', 'cost', 'quantity', 'qty', 'balance', 'revenue', 'score'];
     for (const field of fields) {
       if (displayFields.length >= 4) break;
+      if (!field.Name) continue;
       if (displayFields.some(df => df.name === field.Name)) continue;
 
-      if (metricKeywords.some(kw => field.Name.toLowerCase().includes(kw))) {
+      if (metricKeywords.some(kw => field.Name!.toLowerCase().includes(kw))) {
         displayFields.push({
           name: field.Name,
           type: this.getFieldType(field),
@@ -316,13 +321,16 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
 
     for (const keyword of imageKeywords) {
       const matchingFields = fields.filter(f =>
+        f.Name &&
         f.Name.toLowerCase().includes(keyword) &&
         f.TSType === 'string' &&
         !foundFieldNames.has(f.Name)
       );
       for (const field of matchingFields) {
-        foundFields.push(field.Name);
-        foundFieldNames.add(field.Name);
+        if (field.Name) {
+          foundFields.push(field.Name);
+          foundFieldNames.add(field.Name);
+        }
       }
     }
     return foundFields;
@@ -331,8 +339,8 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
   private findBadgeField(fields: EntityFieldInfo[]): string | null {
     const keywords = ['priority', 'severity', 'importance', 'rating', 'rank', 'level'];
     for (const keyword of keywords) {
-      const field = fields.find(f => f.Name.toLowerCase().includes(keyword));
-      if (field) return field.Name;
+      const field = fields.find(f => f.Name && f.Name.toLowerCase().includes(keyword));
+      if (field?.Name) return field.Name;
     }
     return null;
   }

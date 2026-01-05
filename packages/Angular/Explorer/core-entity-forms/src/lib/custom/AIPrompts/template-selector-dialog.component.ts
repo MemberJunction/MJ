@@ -37,7 +37,6 @@ export interface TemplateSelectorResult {
   selector: 'mj-template-selector-dialog',
   templateUrl: './template-selector-dialog.component.html',
   styleUrls: ['./template-selector-dialog.component.css'],
-  standalone: true,
   imports: [CommonModule, ReactiveFormsModule]
 })
 export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {

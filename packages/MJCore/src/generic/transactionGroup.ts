@@ -256,7 +256,8 @@ export abstract class TransactionGroupBase {
             this._preprocessingItems = []; // clear out the preprocessing items
         }
         catch (e) {
-            LogError(`Error during preprocessing TransactionGroupBase. Error: ${e.message}`)
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            LogError(`Error during preprocessing TransactionGroupBase. Error: ${errorMessage}`)
         }
     }
 
@@ -341,11 +342,12 @@ export abstract class TransactionGroupBase {
         catch (err) {
             console.error(err);
             // it failed, so we have to call the callback functions with the error
+            const errorObj = err instanceof Error ? { message: err.message, stack: err.stack } : { message: String(err) };
             for (let i = 0; i < this._pendingTransactions.length; i++) {
-                await this._pendingTransactions[i].CallBack(err, false);
+                await this._pendingTransactions[i].CallBack(errorObj, false);
             }
 
-            this.NotifyTransactionStatus(false, undefined, err);
+            this.NotifyTransactionStatus(false, undefined, errorObj);
             this._status = 'Failed';
             return false;
         }

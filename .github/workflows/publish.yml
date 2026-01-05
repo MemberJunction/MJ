@@ -79,8 +79,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
-      - name: Pin npm to 11.6.4
-        run: npm install -g npm@11.6.4
+      - name: Pin npm to 11.7.0
+        run: npm install -g npm@11.7.0
 
       - name: Validate package-lock.json case-sensitivity
         run: ./.github/scripts/validate-package-lock-case.sh

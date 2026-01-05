@@ -436,8 +436,13 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     if (workspaces.Success) {
       if (workspaces.Results.length) {
         this.workSpace = workspaces.Results[0]; // by default get the first one, and since we are sorting by __mj_UpdatedAt DESC above, will be most recently modified one. Future feature for multi-workspace support we'll have to adjust this
-      } 
+      }
       else {
+        // Check if CurrentUser and ID exist
+        if (!md.CurrentUser || !md.CurrentUser.ID) {
+          throw new Error('No current user or user ID available');
+        }
+
         // no matching record found, so create a new one
         this.workSpace = await md.GetEntityObject<WorkspaceEntity>('Workspaces');
         this.workSpace.NewRecord();

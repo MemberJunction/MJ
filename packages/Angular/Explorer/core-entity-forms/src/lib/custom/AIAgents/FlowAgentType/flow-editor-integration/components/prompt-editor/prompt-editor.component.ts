@@ -6,8 +6,6 @@ import { PromptManagerService, CustomPrompt } from '../../services/prompt-manage
 
 @Component({
   selector: 'app-prompt-editor',
-  standalone: true,
-  imports: [CommonModule, FormsModule],
   templateUrl: './prompt-editor.component.html',
   styleUrls: ['./prompt-editor.component.scss']
 })

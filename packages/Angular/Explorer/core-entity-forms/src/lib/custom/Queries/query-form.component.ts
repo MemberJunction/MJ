@@ -789,10 +789,13 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
      * Get entity options for dropdown
      */
     getEntityOptions(): Array<{text: string, id: string}> {
-        return Metadata.Provider.Entities.map(e => ({
-            text: e.Name,
-            id: e.ID
-        })).sort((a, b) => a.text.localeCompare(b.text));
+        return Metadata.Provider.Entities
+            .filter(e => e.Name != null && e.ID != null)
+            .map(e => ({
+                text: e.Name!,
+                id: e.ID!
+            }))
+            .sort((a, b) => a.text.localeCompare(b.text));
     }
 
     /**

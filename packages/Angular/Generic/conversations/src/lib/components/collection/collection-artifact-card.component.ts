@@ -102,7 +102,7 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
   }
 
   private async loadPermissions(): Promise<void> {
-    if (!this.artifact || !this.currentUser) return;
+    if (!this.artifact || !this.currentUser || !this.currentUser.ID) return;
 
     try {
       this.canShare = await this.artifactPermissionService.checkPermission(

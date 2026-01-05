@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Action Context Types') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-actioncontexttype-form',
     templateUrl: './actioncontexttype.form.component.html'
 })

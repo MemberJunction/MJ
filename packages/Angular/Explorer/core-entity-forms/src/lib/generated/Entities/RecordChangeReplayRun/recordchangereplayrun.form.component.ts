@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Record Change Replay Runs') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-recordchangereplayrun-form',
     templateUrl: './recordchangereplayrun.form.component.html'
 })

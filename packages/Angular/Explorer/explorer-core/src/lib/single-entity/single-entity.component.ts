@@ -51,7 +51,13 @@ export class SingleEntityComponent implements OnInit {
       if (entity) {
         this.entityDescription = entity.Description;
 
-        this.entityViews = <UserViewEntity[]>await ViewInfo.GetViewsForUser(entity.ID);
+        if (entity.ID) {
+          this.entityViews = <UserViewEntity[]>await ViewInfo.GetViewsForUser(entity.ID);
+        }
+        else {
+          this.entityViews = [];
+        }
+        
         this.showloader = false;
       }
     }

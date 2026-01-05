@@ -99,9 +99,16 @@ export class JoinGridRelatedEntityGenerator extends RelatedEntityDisplayComponen
      * @throws Error if the DisplayComponentConfiguration is invalid JSON
      */
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
+        if (!input.RelationshipInfo!.DisplayComponentConfiguration) {
+            throw new Error(`DisplayComponentConfiguration is null for relationship ${input.RelationshipInfo!.ID}`);
+        }
         const config = SafeJSONParse<JoinGridConfigInfo>(input.RelationshipInfo!.DisplayComponentConfiguration);
         if (!config)
             throw new Error("Invalid configuration for JoinGrid component for relationship " + input.RelationshipInfo!.ID);
+
+        if (!input.RelationshipInfo!.RelatedEntity || !input.Entity!.Name || !input.Entity!.FirstPrimaryKey?.Name) {
+            throw new Error(`Missing required properties for JoinGrid generation: RelatedEntity=${input.RelationshipInfo!.RelatedEntity}, EntityName=${input.Entity!.Name}, PrimaryKeyName=${input.Entity!.FirstPrimaryKey?.Name}`);
+        }
 
         const template = `<mj-join-grid
     [ShowSaveButton]="false"

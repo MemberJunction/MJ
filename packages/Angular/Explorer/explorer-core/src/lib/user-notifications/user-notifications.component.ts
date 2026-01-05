@@ -218,6 +218,13 @@ export class UserNotificationsComponent implements AfterViewInit {
 
   public async TestTransactionGroupVariables() {
     const md = new Metadata();
+
+    // Check if CurrentUser and ID exist
+    if (!md.CurrentUser || !md.CurrentUser.ID) {
+      this.sharedService.CreateSimpleNotification('No current user or user ID available', 'error', 5000);
+      return;
+    }
+
     const transGroup = await md.CreateTransactionGroup();
 
     const conversation = await md.GetEntityObject<ConversationEntity>('Conversations');

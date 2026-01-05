@@ -231,7 +231,7 @@ export class UserViewResource extends BaseResourceComponent {
      */
     private async loadDynamicView(entityName: string, _extraFilter?: string): Promise<void> {
         const entity = this.metadata.Entities.find(
-            e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase()
+            e => e.Name?.trim().toLowerCase() === entityName.trim().toLowerCase()
         );
 
         if (!entity) {
@@ -251,7 +251,9 @@ export class UserViewResource extends BaseResourceComponent {
      */
     public onRecordOpened(event: RecordOpenedEvent): void {
         if (event && event.entity && event.compositeKey) {
-            this.navigationService.OpenEntityRecord(event.entity.Name, event.compositeKey);
+            if (event.entity.Name) {
+                this.navigationService.OpenEntityRecord(event.entity.Name, event.compositeKey);
+            }
         }
     }
 

@@ -78,6 +78,13 @@ export class RecentAccessService {
   ): Promise<void> {
     try {
       const md = new Metadata();
+
+      // Check if CurrentUser and ID exist
+      if (!md.CurrentUser || !md.CurrentUser.ID) {
+        console.warn('RecentAccessService: No current user or user ID available');
+        return;
+      }
+
       const entityInfo = md.Entities.find(e => e.Name === entityName);
       if (!entityInfo) {
         console.warn(`RecentAccessService: Entity "${entityName}" not found in metadata`);
@@ -114,6 +121,12 @@ export class RecentAccessService {
           console.error('RecentAccessService: Failed to update log entry');
         }
       } else {
+        // Check if entityInfo.ID exists
+        if (!entityInfo.ID) {
+          console.error('RecentAccessService: Entity ID is null');
+          return;
+        }
+
         // Create new entry
         const newLog = await md.GetEntityObject<UserRecordLogEntity>('User Record Logs');
         newLog.UserID = md.CurrentUser.ID;
@@ -170,7 +183,7 @@ export class RecentAccessService {
 
       for (const log of result.Results || []) {
         const entityInfo = md.Entities.find(e => e.ID === log.EntityID);
-        if (!entityInfo) continue;
+        if (!entityInfo || !entityInfo.Name) continue;
 
         // Determine resource type based on entity name
         const resourceType = this.determineResourceType(entityInfo.Name);

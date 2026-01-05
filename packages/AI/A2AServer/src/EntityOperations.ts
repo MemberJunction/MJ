@@ -41,11 +41,13 @@ export class EntityOperations {
      */
     public findEntity(entityName: string): EntityInfo | null {
         if (!entityName) return null;
-        
-        return this.metadata.Entities.find(e => 
-            e.Name.toLowerCase() === entityName.toLowerCase() ||
-            e.ClassName.toLowerCase() === entityName.toLowerCase()
-        ) || null;
+
+        return this.metadata.Entities.find(e => {
+            const name = e.Name;
+            const className = e.ClassName;
+            return (name && name.toLowerCase() === entityName.toLowerCase()) ||
+                   (className && className.toLowerCase() === entityName.toLowerCase());
+        }) || null;
     }
 
     /**
@@ -74,13 +76,17 @@ export class EntityOperations {
     private createKeyPairsForLoading(entity: EntityInfo, parameters: OperationParameters) {
         const keyPairs = [];
         for (const pk of entity.PrimaryKeys) {
-            if (parameters[pk.Name] !== undefined) {
+            const pkName = pk.Name;
+            if (!pkName) {
+                throw new Error(`Primary key has no name`);
+            }
+            if (parameters[pkName] !== undefined) {
                 keyPairs.push({
-                    FieldName: pk.Name,
-                    Value: parameters[pk.Name]
+                    FieldName: pkName,
+                    Value: parameters[pkName]
                 });
             } else {
-                throw new Error(`Missing primary key value for ${pk.Name}`);
+                throw new Error(`Missing primary key value for ${pkName}`);
             }
         }
         return keyPairs;
@@ -96,15 +102,23 @@ export class EntityOperations {
         try {
             const entity = this.findEntity(entityName);
             if (!entity) {
-                return { 
-                    success: false, 
-                    errorMessage: `Entity not found: ${entityName}` 
+                return {
+                    success: false,
+                    errorMessage: `Entity not found: ${entityName}`
                 };
             }
 
-            const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
+            const name = entity.Name;
+            if (!name) {
+                return {
+                    success: false,
+                    errorMessage: `Entity has no name`
+                };
+            }
+
+            const record = await this.metadata.GetEntityObject(name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
-            
+
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
             if (loaded) {
                 const result = await this.convertEntityObjectToJSON(record);
@@ -113,9 +127,9 @@ export class EntityOperations {
                 return { success: false, errorMessage: "Record not found" };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                errorMessage: error instanceof Error ? error.message : String(error) 
+            return {
+                success: false,
+                errorMessage: error instanceof Error ? error.message : String(error)
             };
         }
     }
@@ -130,15 +144,23 @@ export class EntityOperations {
         try {
             const entity = this.findEntity(entityName);
             if (!entity) {
-                return { 
-                    success: false, 
-                    errorMessage: `Entity not found: ${entityName}` 
+                return {
+                    success: false,
+                    errorMessage: `Entity not found: ${entityName}`
                 };
             }
 
-            const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
+            const name = entity.Name;
+            if (!name) {
+                return {
+                    success: false,
+                    errorMessage: `Entity has no name`
+                };
+            }
+
+            const record = await this.metadata.GetEntityObject(name, this.contextUser);
             record.SetMany(parameters, true);
-            
+
             const success = await record.Save();
             if (success) {
                 const result = await this.convertEntityObjectToJSON(record);
@@ -147,9 +169,9 @@ export class EntityOperations {
                 return { success: false, errorMessage: "Failed to create record" };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                errorMessage: error instanceof Error ? error.message : String(error) 
+            return {
+                success: false,
+                errorMessage: error instanceof Error ? error.message : String(error)
             };
         }
     }
@@ -164,26 +186,37 @@ export class EntityOperations {
         try {
             const entity = this.findEntity(entityName);
             if (!entity) {
-                return { 
-                    success: false, 
-                    errorMessage: `Entity not found: ${entityName}` 
+                return {
+                    success: false,
+                    errorMessage: `Entity not found: ${entityName}`
                 };
             }
 
-            const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
+            const name = entity.Name;
+            if (!name) {
+                return {
+                    success: false,
+                    errorMessage: `Entity has no name`
+                };
+            }
+
+            const record = await this.metadata.GetEntityObject(name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
-            
+
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
             if (loaded) {
                 // Remove primary keys from update parameters
                 const updateParams = { ...parameters };
                 entity.PrimaryKeys.forEach(pk => {
-                    delete updateParams[pk.Name];
+                    const pkName = pk.Name;
+                    if (pkName) {
+                        delete updateParams[pkName];
+                    }
                 });
-                
+
                 record.SetMany(updateParams, true);
                 const success = await record.Save();
-                
+
                 if (success) {
                     const result = await this.convertEntityObjectToJSON(record);
                     return { success: true, result };
@@ -194,9 +227,9 @@ export class EntityOperations {
                 return { success: false, errorMessage: "Record not found" };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                errorMessage: error instanceof Error ? error.message : String(error) 
+            return {
+                success: false,
+                errorMessage: error instanceof Error ? error.message : String(error)
             };
         }
     }
@@ -211,19 +244,27 @@ export class EntityOperations {
         try {
             const entity = this.findEntity(entityName);
             if (!entity) {
-                return { 
-                    success: false, 
-                    errorMessage: `Entity not found: ${entityName}` 
+                return {
+                    success: false,
+                    errorMessage: `Entity not found: ${entityName}`
                 };
             }
 
-            const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
+            const name = entity.Name;
+            if (!name) {
+                return {
+                    success: false,
+                    errorMessage: `Entity has no name`
+                };
+            }
+
+            const record = await this.metadata.GetEntityObject(name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
-            
+
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
             if (loaded) {
                 const success = await record.Delete();
-                
+
                 if (success) {
                     return { success: true };
                 } else {
@@ -233,9 +274,9 @@ export class EntityOperations {
                 return { success: false, errorMessage: "Record not found" };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                errorMessage: error instanceof Error ? error.message : String(error) 
+            return {
+                success: false,
+                errorMessage: error instanceof Error ? error.message : String(error)
             };
         }
     }
@@ -250,25 +291,33 @@ export class EntityOperations {
         try {
             const entity = this.findEntity(entityName);
             if (!entity) {
-                return { 
-                    success: false, 
-                    errorMessage: `Entity not found: ${entityName}` 
+                return {
+                    success: false,
+                    errorMessage: `Entity not found: ${entityName}`
+                };
+            }
+
+            const name = entity.Name;
+            if (!name) {
+                return {
+                    success: false,
+                    errorMessage: `Entity has no name`
                 };
             }
 
             const rv = new RunView();
             const queryResult = await rv.RunView({
-                EntityName: entity.Name,
-                ExtraFilter: parameters.extraFilter,
+                EntityName: name,
+                ExtraFilter: parameters.extraFilter ?? undefined,
                 OrderBy: parameters.orderBy,
                 Fields: parameters.fields,
             }, this.contextUser);
-            
+
             return { success: true, result: queryResult };
         } catch (error) {
-            return { 
-                success: false, 
-                errorMessage: error instanceof Error ? error.message : String(error) 
+            return {
+                success: false,
+                errorMessage: error instanceof Error ? error.message : String(error)
             };
         }
     }

@@ -111,7 +111,7 @@ export class CompareRecordsComponent {
     // and if not, we have to go to the DB and load the data, but to do that efficiently, we do it in one fell swoop via the RunView object
 
     const md = new Metadata();
-    const entity = md.Entities.find(e => e.Name.trim().toLowerCase() === this.entityName.trim().toLowerCase());
+    const entity = md.Entities.find(e => e.Name && e.Name.trim().toLowerCase() === this.entityName.trim().toLowerCase());
     const loadFromDatabase: {rawObject: any, replacementObject?: BaseEntity}[] = [];
     if (!entity)
       throw new Error('Entity not found: ' + this.entityName);
@@ -125,7 +125,7 @@ export class CompareRecordsComponent {
         // it's not an entity object, so we need to see how many fields it has
         const fields = Object.keys(r);
         // now make sure that we have every field within our fields array that exists in the entity.fields array
-        const entityFields = entity.Fields.map(f => f.Name);
+        const entityFields = entity.Fields.filter(f => f.Name).map(f => f.Name!);
         const missingFields = entityFields.filter(f => !fields.includes(f));
         if (missingFields.length === 0) {
           // we have all the fields, so we can create a new BaseEntity object and load the data
@@ -151,6 +151,7 @@ export class CompareRecordsComponent {
 
         let innerFilter = '';
         for (const pkey of entity.PrimaryKeys) {
+          if (!pkey.Name) continue; // Skip if Name is null
           if (innerFilter.length > 0)
             innerFilter += ' AND ';
           const quotes = pkey.NeedsQuotes ? "'" : '';
@@ -168,6 +169,7 @@ export class CompareRecordsComponent {
           const index = loadFromDatabase.findIndex(l => {
             // check all of the primary key fields to see if they match
             for (const pkey of entity.PrimaryKeys) {
+              if (!pkey.Name) continue; // Skip if Name is null
               if (rec.Get(pkey.Name) !== l.rawObject[pkey.Name]) {
                 return false;
               }
@@ -191,7 +193,7 @@ export class CompareRecordsComponent {
       this.isLoading = true;
       this.viewData = [];
       const md = new Metadata();
-      this.entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === this.entityName.trim().toLowerCase());
+      this.entityInfo = md.Entities.find(e => e.Name && e.Name.trim().toLowerCase() === this.entityName.trim().toLowerCase());
       if (!this.entityInfo)
         throw new Error('Entity not found: ' + this.entityName);
 
@@ -369,10 +371,10 @@ export class CompareRecordsComponent {
   }
 
   public IsCellReadOnly(dataItem: any, column: any): boolean {
-    if (dataItem && column) {  
+    if (dataItem && column) {
       // dataItem.Fields contains the name of the field that we are showing in this row, check if that is read only
       const fieldName = dataItem.Fields;
-      const field = this.entityInfo?.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+      const field = this.entityInfo?.Fields.find(f => f.Name && f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
       if (field && field.ReadOnly)
         return true;
     }

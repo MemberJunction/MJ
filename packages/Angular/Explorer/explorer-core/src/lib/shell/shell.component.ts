@@ -127,6 +127,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       throw new Error('No current user found');
     }
 
+    // Check if user and ID exist
+    if (!user || !user.ID) {
+      console.error('No user or user ID available');
+      return;
+    }
+
     // Check the current URL to determine if we're loading from a URL-based navigation
     const currentUrl = this.router.url;
     this.urlBasedNavigation = currentUrl.includes('/app/') || currentUrl.includes('/resource/');
@@ -273,8 +279,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Check for deep link parameters on initialization
     this.handleDeepLink();
 
-    // Load user avatar
-    await this.loadUserAvatar(user);
+    // Load user avatar - pass required properties
+    if (user.ID) {
+      await this.loadUserAvatar({
+        ID: user.ID,
+        FirstLast: user.FirstLast || undefined,
+        Name: user.Name || undefined
+      });
+    }
 
     // Listen for avatar updates from settings page
     this.subscriptions.push(

@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Action Invocations') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-entityactioninvocation-form',
     templateUrl: './entityactioninvocation.form.component.html'
 })
@@ -17,7 +16,6 @@ export class EntityActionInvocationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'invocationConfiguration', sectionName: 'Invocation Configuration', isExpanded: true },
             { sectionKey: 'invocationStatus', sectionName: 'Invocation Status', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

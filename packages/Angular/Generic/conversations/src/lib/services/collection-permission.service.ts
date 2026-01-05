@@ -373,6 +373,10 @@ export class CollectionPermissionService {
                 continue;
             }
 
+            if (!currentUser.ID) {
+                throw new Error('No current user ID available');
+            }
+
             await this.grantPermission(
                 childCollectionId,
                 perm.userId,

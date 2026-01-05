@@ -80,11 +80,11 @@ export async function generateCommand(options: Record<string, unknown>): Promise
 
     if (config.includeEntities.length > 0) {
       // Allowlist: only include specified entities
-      filteredEntities = filteredEntities.filter(e => config.includeEntities.includes(e.Name));
+      filteredEntities = filteredEntities.filter(e => e.Name != null && config.includeEntities.includes(e.Name));
       spinner.info(chalk.dim(`Including only ${config.includeEntities.length} specified entities`));
     } else if (config.excludeEntities.length > 0) {
       // Denylist: exclude specified entities
-      filteredEntities = filteredEntities.filter(e => !config.excludeEntities.includes(e.Name));
+      filteredEntities = filteredEntities.filter(e => e.Name != null && !config.excludeEntities.includes(e.Name));
       spinner.info(chalk.dim(`Excluded ${config.excludeEntities.length} entities`));
     }
 
@@ -115,7 +115,8 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     for (const group of entityGroups) {
       const category = buildQueryCategory(config, group);
       // Use primary entity name as key for lookup during query generation
-      categoryMap.set(group.primaryEntity.Name, category);
+      const primaryEntityName = group.primaryEntity.Name ?? 'Unknown';
+      categoryMap.set(primaryEntityName, category);
     }
     const uniqueCategories = extractUniqueCategories(Array.from(categoryMap.values()));
     spinner.succeed(chalk.green(`Created ${uniqueCategories.length} ${uniqueCategories.length === 1 ? 'category' : 'categories'}`));
@@ -202,9 +203,10 @@ export async function generateCommand(options: Record<string, unknown>): Promise
           );
 
           // Get pre-built category from map
-          const category = categoryMap.get(group.primaryEntity.Name);
+          const primaryEntityName = group.primaryEntity.Name ?? 'Unknown';
+          const category = categoryMap.get(primaryEntityName);
           if (!category) {
-            throw new Error(`Category not found for entity group: ${group.primaryEntity.Name}`);
+            throw new Error(`Category not found for entity group: ${primaryEntityName}`);
           }
 
           allValidatedQueries.push({

@@ -67,7 +67,7 @@ export class DBSchemaGeneratorBase {
             // first, get a list of all of the distinct schemas within the entities array
             const schemas: string[] = [];
             entities.forEach(e => {
-                if (!schemas.includes(e.SchemaName) && (excludeSchemas === null || !excludeSchemas.includes(e.SchemaName)))
+                if (e.SchemaName && !schemas.includes(e.SchemaName) && (excludeSchemas === null || !excludeSchemas.includes(e.SchemaName)))
                     schemas.push(e.SchemaName);
             });
         
@@ -168,10 +168,15 @@ export class DBSchemaGeneratorBase {
         // first create a copy of the entities array and sort it by name
         let outputCount: number = 0;
         const sortedEntities = [...entities];
-        sortedEntities.sort((a, b) => a.Name.localeCompare(b.Name));
+        sortedEntities.sort((a, b) => {
+            if (!a.Name || !b.Name) {
+                throw new Error('Entity missing Name property during sort');
+            }
+            return a.Name.localeCompare(b.Name);
+        });
         for (let i:number = 0; i < sortedEntities.length; ++i) {
             const entity = sortedEntities[i];
-            if (!excludeEntities || !excludeEntities.includes(entity.Name)) {
+            if (entity.Name && (!excludeEntities || !excludeEntities.includes(entity.Name))) {
                 if (outputCount > 0) sOutput += ',';
                     outputCount++;
                 sOutput += this.generateEntityJSON(entity, simpleVersion);

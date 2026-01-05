@@ -107,7 +107,12 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                                         if (!a || !b) {
                                             return 0;
                                         }
-                                        return a.Name.localeCompare(b.Name);
+                                        else if (!a.Name || !b.Name) {
+                                            return 0;
+                                        }
+                                        else {
+                                            return a.Name?.localeCompare(b.Name);
+                                        }
                                      }); // sort by name
 
                 // store the entire list of POSSIBLE app entities in this list
@@ -360,6 +365,13 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         if (okClicked) {
             const resources = this.availableResourcesComponent.SelectedResources;
             const md = new Metadata();
+
+            // Check if currentUser and ID exist
+            if (!this.currentUser || !this.currentUser.ID) {
+                LogError('No current user or user ID available');
+                return;
+            }
+
             let success = true;
             for (const r of resources) {
                 const newResourceLink = await md.GetEntityObject<ResourceLinkEntity>('Resource Links');

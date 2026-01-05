@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Roles') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-role-form',
     templateUrl: './role.form.component.html'
 })

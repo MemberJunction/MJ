@@ -376,6 +376,11 @@ export class DashboardResource extends BaseResourceComponent {
             stateObject = stateResult.Results[0];
         }
         else {
+            // Check if CurrentUser and ID exist
+            if (!md.CurrentUser || !md.CurrentUser.ID) {
+                throw new Error('No current user or user ID available');
+            }
+
             stateObject = await md.GetEntityObject<DashboardUserStateEntity>('MJ: Dashboard User States');
             stateObject.DashboardID = dashboardId;
             stateObject.UserID = md.CurrentUser.ID;

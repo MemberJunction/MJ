@@ -310,24 +310,31 @@ export class EntityGrouper {
     // Build adjacency map
     const adjacency = new Map<string, Set<string>>();
     for (const entity of entities) {
-      adjacency.set(entity.Name, new Set());
+      const entityName = entity.Name ?? '';
+      if (entityName) {
+        adjacency.set(entityName, new Set());
+      }
     }
 
     for (const rel of relationships) {
       const entityName = entities.find(e =>
         e.RelatedEntities.includes(rel)
       )?.Name;
+      const relatedEntityName = rel.RelatedEntity;
 
-      if (entityName) {
-        adjacency.get(entityName)?.add(rel.RelatedEntity);
-        adjacency.get(rel.RelatedEntity)?.add(entityName); // Bidirectional
+      if (entityName && relatedEntityName) {
+        adjacency.get(entityName)?.add(relatedEntityName);
+        adjacency.get(relatedEntityName)?.add(entityName); // Bidirectional
       }
     }
 
     // BFS from first entity
     const visited = new Set<string>();
-    const queue = [entities[0].Name];
-    visited.add(entities[0].Name);
+    const firstEntityName = entities[0].Name ?? '';
+    if (!firstEntityName) return false;
+
+    const queue = [firstEntityName];
+    visited.add(firstEntityName);
 
     while (queue.length > 0) {
       const current = queue.shift()!;

@@ -139,12 +139,16 @@ export class QuestionGenerator {
     // Also map BaseView names to correct entity names (in case LLM returns view names)
     const entityNameLookup = new Map<string, string>();
     for (const entity of entityGroup.entities) {
+      const entityName = entity.Name ?? '';
+      if (!entityName) continue;
+
       // Map entity name (case-insensitive)
-      entityNameLookup.set(entity.Name.toLowerCase(), entity.Name);
+      entityNameLookup.set(entityName.toLowerCase(), entityName);
 
       // Map base view name to entity name (case-insensitive) as backup
-      if (entity.BaseView) {
-        entityNameLookup.set(entity.BaseView.toLowerCase(), entity.Name);
+      const baseView = entity.BaseView;
+      if (baseView) {
+        entityNameLookup.set(baseView.toLowerCase(), entityName);
       }
     }
 

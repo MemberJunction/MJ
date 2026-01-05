@@ -254,7 +254,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
       }
 
       const result = await rv.RunView({
-        EntityName: this.entity.Name,
+        EntityName: this.entity.Name ?? undefined,
         ResultType: 'entity_object',
         MaxRows: this.pageSize,
         OrderBy: orderBy
@@ -366,9 +366,9 @@ export class EntityGridComponent implements OnInit, OnChanges {
       const col = columnState[i];
       const field = this.entity.Fields.find(f => f.Name === col.colId);
 
-      if (field) {
+      if (field?.Name) {
         columnSettings.push({
-          ID: field.ID,
+          ID: field.ID ?? undefined,
           Name: field.Name,
           DisplayName: field.DisplayNameOrName,
           hidden: col.hide ?? false,
@@ -478,10 +478,10 @@ export class EntityGridComponent implements OnInit, OnChanges {
 
       // Find the corresponding entity field
       const field = this.entity.Fields.find(f =>
-        f.Name.toLowerCase() === colConfig.Name.toLowerCase()
+        f.Name && f.Name.toLowerCase() === colConfig.Name.toLowerCase()
       );
 
-      if (!field) continue;
+      if (!field || !field.Name) continue;
 
       const colDef: ColDef = {
         field: field.Name,
@@ -532,6 +532,8 @@ export class EntityGridComponent implements OnInit, OnChanges {
     const visibleFields = entity.Fields.filter(f => this.shouldShowField(f));
 
     for (const field of visibleFields) {
+      if (!field.Name) continue;
+
       const colDef: ColDef = {
         field: field.Name,
         headerName: field.DisplayNameOrName,
@@ -571,7 +573,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
    */
   private shouldShowField(field: EntityFieldInfo): boolean {
     // Skip internal MJ fields
-    if (field.Name.startsWith('__mj_')) return false;
+    if (field.Name && field.Name.startsWith('__mj_')) return false;
 
     // Skip primary key if it's a GUID (usually not useful to display)
     if (field.IsPrimaryKey && field.SQLFullType?.toLowerCase() === 'uniqueidentifier') {
@@ -582,7 +584,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
     if (field.DefaultInView === true) return true;
 
     // Skip large text fields by default
-    if (field.Length > 500) return false;
+    if (field.Length && field.Length > 500) return false;
 
     return true;
   }
@@ -594,14 +596,14 @@ export class EntityGridComponent implements OnInit, OnChanges {
     if (field.TSType === 'boolean') return 100;
     if (field.TSType === 'number') return 120;
     if (field.TSType === 'Date') return 150;
-    if (field.Name.toLowerCase().includes('id')) return 100;
-    if (field.Name.toLowerCase().includes('email')) return 200;
-    if (field.Name.toLowerCase().includes('name')) return 180;
+    if (field.Name && field.Name.toLowerCase().includes('id')) return 100;
+    if (field.Name && field.Name.toLowerCase().includes('email')) return 200;
+    if (field.Name && field.Name.toLowerCase().includes('name')) return 180;
 
     // Default based on length
     const charWidth = 8;
     const padding = 20;
-    const estimatedWidth = Math.min(Math.max(field.Length * charWidth / 2, 100), 300) + padding;
+    const estimatedWidth = Math.min(Math.max((field.Length ?? 100) * charWidth / 2, 100), 300) + padding;
 
     return estimatedWidth;
   }
@@ -631,7 +633,7 @@ export class EntityGridComponent implements OnInit, OnChanges {
     }
 
     if (field.TSType === 'number') {
-      const fieldNameLower = field.Name.toLowerCase();
+      const fieldNameLower = field.Name?.toLowerCase() ?? '';
       const isCurrency = fieldNameLower.includes('amount') ||
                          fieldNameLower.includes('price') ||
                          fieldNameLower.includes('cost') ||
@@ -667,7 +669,9 @@ export class EntityGridComponent implements OnInit, OnChanges {
 
       // Copy all field values
       for (const field of this.entity!.Fields) {
-        row[field.Name] = record.Get(field.Name);
+        if (field.Name) {
+          row[field.Name] = record.Get(field.Name);
+        }
       }
 
       return row;

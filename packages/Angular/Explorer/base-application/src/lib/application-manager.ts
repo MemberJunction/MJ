@@ -263,6 +263,12 @@ export class ApplicationManager {
    * Orders apps by their DefaultSequence field.
    */
   private async createDefaultUserApplications(md: Metadata, appInfoList: ApplicationInfo[]): Promise<UserApplicationEntity[]> {
+    // Check if CurrentUser and ID exist
+    if (!md.CurrentUser || !md.CurrentUser.ID) {
+      LogError('ApplicationManager: No current user or user ID available');
+      return [];
+    }
+
     // Filter to Active apps with DefaultForNewUser=true, sorted by DefaultSequence
     const defaultApps = appInfoList
       .filter(a => a.DefaultForNewUser && a.Status === 'Active')

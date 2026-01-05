@@ -133,7 +133,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     const md = new Metadata();
     const entity = md.EntityByName(entityName);
     this.findRecordDialog.EntityName = entityName;
-    this.findRecordDialog.DisplayFields = entity.Fields.filter((f: EntityFieldInfo) => fields.includes(f.Name));
+    this.findRecordDialog.DisplayFields = entity.Fields.filter((f: EntityFieldInfo) => f.Name && fields.includes(f.Name));
     this.findRecordDialog.DialogVisible = true;
   }
 
@@ -294,7 +294,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     // we go through our EntityFields and add any that aren't already in the columnSettings
     // this is so that we can add new columns to the view that were not previously used in this view
     const unusedFields = this.ViewEntityInfo?.Fields.filter(f => {
-      if (gridState.columnSettings.find((col: any) => col.Name.trim().toLowerCase() === f.Name.trim().toLowerCase())) 
+      if (!f.Name) return false; // Skip fields with null names
+      if (gridState.columnSettings.find((col: any) => col.Name.trim().toLowerCase() === f.Name!.trim().toLowerCase()))
         return false; // this entity field is already in the columnSettings
       else
         return true; // this entity field is not in the columnSettings

@@ -138,15 +138,21 @@ export class MJNotificationService {
 
   /**
    * Creates a user notification in the database and refreshes the UI. Returns the notification object.
-   * @param title 
-   * @param message 
-   * @param resourceTypeId 
-   * @param resourceRecordId 
+   * @param title
+   * @param message
+   * @param resourceTypeId
+   * @param resourceRecordId
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
-   * @returns 
+   * @returns
    */
   public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser: boolean = true): Promise<UserNotificationEntity> {
     const md = new Metadata();
+
+    // Check if CurrentUser and ID exist
+    if (!md.CurrentUser || !md.CurrentUser.ID) {
+      throw new Error('NotificationService: No current user or user ID available');
+    }
+
     const notification = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
     notification.Title = title;
     notification.Message = message;
@@ -156,7 +162,7 @@ export class MJNotificationService {
       notification.ResourceRecordID = resourceRecordId;
     if (resourceConfiguration)
       notification.ResourceConfiguration = JSON.stringify(resourceConfiguration);
-  
+
     notification.UserID = md.CurrentUser.ID;
     notification.Unread = true;
     const result = await notification.Save();

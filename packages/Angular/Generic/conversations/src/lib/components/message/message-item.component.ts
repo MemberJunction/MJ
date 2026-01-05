@@ -278,7 +278,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
 
     // Fallback to current user name (for backwards compatibility)
-    return this.currentUser.Name;
+    return this.currentUser.Name || 'Unknown User';
   }
 
   /**

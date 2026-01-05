@@ -60,6 +60,10 @@ export class ArtifactUseTrackingService {
                 return;
             }
 
+            if (!currentUser.ID) {
+                return;
+            }
+
             const md = new Metadata();
             const usage = await md.GetEntityObject<ArtifactUseEntity>('MJ: Artifact Uses');
 

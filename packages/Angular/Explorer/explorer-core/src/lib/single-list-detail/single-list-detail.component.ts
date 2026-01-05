@@ -131,7 +131,13 @@ export class SingleListDetailComponent implements OnInit {
             return aOrder - bOrder;
         });
 
-        const primaryKeyName: string = this.sourceEntityInfo.FirstPrimaryKey.Name;
+        const primaryKeyName: string | null = this.sourceEntityInfo.FirstPrimaryKey.Name;
+        if (!primaryKeyName) {
+            LogError("Error loading list: Primary key name is null");
+            this.showLoader = false;
+            return;
+        }
+
         const rvResult: RunViewResult<Record<string, any>> = await rv.RunView<Record<string, any>>({
             EntityName: this.listRecord.Entity,
             ExtraFilter: `${primaryKeyName} IN (SELECT [RecordID] FROM ${md.ConfigData.MJCoreSchemaName}.[vwListDetails] WHERE ListID = '${this.listRecord.ID}')`
@@ -190,7 +196,7 @@ export class SingleListDetailComponent implements OnInit {
             return {'text-align': 'left', 'vertical-align': 'top'};
         }
 
-        const fieldType: string = col.EntityField.Type.trim().toLowerCase();
+        const fieldType: string | undefined = col.EntityField.Type?.trim().toLowerCase();
         switch (fieldType) {
             case "money":
             case 'decimal':
@@ -337,8 +343,13 @@ export class SingleListDetailComponent implements OnInit {
         }
 
         this.filteredGridData = this.sourceGridData.filter((data: Record<string, any>) => {
-            const name: string = data[nameField.Name];
-            return name.toLowerCase().includes(toLower);
+            if (nameField && nameField.Name) {
+                const name: string = data[nameField.Name];
+                return name.toLowerCase().includes(toLower);
+            }
+            else {
+                return '';
+            }
         });
     }
 
@@ -381,11 +392,16 @@ export class SingleListDetailComponent implements OnInit {
 
         this.fetchingListRecords = true;
 
-        const primaryKeyName: string = this.sourceEntityInfo.FirstPrimaryKey.Name;
+        const primaryKeyName: string | null = this.sourceEntityInfo.FirstPrimaryKey.Name;
+        if (!primaryKeyName) {
+            LogError("Error loading list records: Primary key name is null");
+            this.fetchingListRecords = false;
+            return;
+        }
 
         let filter: string | undefined = undefined;
         const nameField: EntityFieldInfo | undefined = this.sourceEntityInfo.Fields.find((field: EntityFieldInfo) => field.IsNameField);
-        if(nameField && this.searchFilter){
+        if(nameField && nameField.Name && this.searchFilter){
             filter = `${nameField.Name} LIKE '%${this.searchFilter}%'`;
         }
 
@@ -406,8 +422,13 @@ export class SingleListDetailComponent implements OnInit {
             const alreadyExits: boolean = this.sourceGridData.some((selectedRecord: Record<'ID' | 'Name', string>) => selectedRecord.ID === record[primaryKeyName]);
             return !alreadyExits;
         }).map((record: Record<string, any>) => {
-            let result = { ID: record[primaryKeyName], Name: record[nameField!.Name] };
-            return result;
+            if (nameField && nameField.Name) {
+                let result = { ID: record[primaryKeyName], Name: record[nameField.Name] };
+                return result;
+            }
+            else {
+                return { ID: record[primaryKeyName], Name: '' };
+            }
         });
 
         this.fetchingListRecords = false;

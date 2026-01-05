@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Audit Logs') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-auditlog-form',
     templateUrl: './auditlog.form.component.html'
 })

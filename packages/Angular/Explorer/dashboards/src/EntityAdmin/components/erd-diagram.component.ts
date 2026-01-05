@@ -204,27 +204,29 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
   }
 
   private createNodes(): void {
-    this.nodes = this.filteredEntities.map(entity => {
-      const entityFields = this.allEntityFields.filter(f => f.EntityID === entity.ID);
-      const primaryKeys = entityFields.filter(f => f.IsPrimaryKey);
-      const foreignKeys = entityFields.filter(f => f.RelatedEntityID && !f.IsPrimaryKey);
+    this.nodes = this.filteredEntities
+      .filter(entity => entity.ID != null)
+      .map(entity => {
+        const entityFields = this.allEntityFields.filter(f => f.EntityID === entity.ID);
+        const primaryKeys = entityFields.filter(f => f.IsPrimaryKey);
+        const foreignKeys = entityFields.filter(f => f.RelatedEntityID && !f.IsPrimaryKey);
 
-      const fieldCount = Math.max(1, primaryKeys.length + foreignKeys.length);
-      const baseHeight = 60;
-      const fieldHeight = 20;
-      const maxHeight = 300;
-      const calculatedHeight = Math.min(baseHeight + (fieldCount * fieldHeight), maxHeight);
+        const fieldCount = Math.max(1, primaryKeys.length + foreignKeys.length);
+        const baseHeight = 60;
+        const fieldHeight = 20;
+        const maxHeight = 300;
+        const calculatedHeight = Math.min(baseHeight + (fieldCount * fieldHeight), maxHeight);
 
-      return {
-        id: entity.ID,
-        name: entity.Name || entity.SchemaName || 'Unknown',
-        entity: entity,
-        width: 180,
-        height: calculatedHeight,
-        primaryKeys: primaryKeys,
-        foreignKeys: foreignKeys
-      };
-    });
+        return {
+          id: entity.ID!,
+          name: entity.Name || entity.SchemaName || 'Unknown',
+          entity: entity,
+          width: 180,
+          height: calculatedHeight,
+          primaryKeys: primaryKeys,
+          foreignKeys: foreignKeys
+        };
+      });
   }
 
   private createLinks(): void {
@@ -232,7 +234,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     const entityMap = new Map(this.nodes.map(node => [node.id, node]));
 
     this.allEntityFields.forEach(field => {
-      if (field.RelatedEntityID && !field.IsPrimaryKey) {
+      if (field.RelatedEntityID && !field.IsPrimaryKey && field.EntityID) {
         const sourceNode = entityMap.get(field.EntityID);
         const targetNode = entityMap.get(field.RelatedEntityID);
 
@@ -508,8 +510,8 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
           const currentTransform = d3.zoomTransform(this.svg.node()!);
           const currentRenderedWidth = d.width * currentTransform.k;
           const shouldAutoZoom = currentRenderedWidth < 20;
-          
-          if (shouldAutoZoom) {
+
+          if (shouldAutoZoom && d.entity.ID) {
             this.zoomToEntity(d.entity.ID);
           }
         }

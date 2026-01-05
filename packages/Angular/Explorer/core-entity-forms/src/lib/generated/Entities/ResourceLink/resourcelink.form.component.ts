@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Resource Links') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-resourcelink-form',
     templateUrl: './resourcelink.form.component.html'
 })

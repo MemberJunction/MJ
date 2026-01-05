@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Library Items') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-libraryitem-form',
     templateUrl: './libraryitem.form.component.html'
 })

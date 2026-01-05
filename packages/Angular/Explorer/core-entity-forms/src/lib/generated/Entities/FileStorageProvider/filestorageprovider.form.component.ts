@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'File Storage Providers') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-filestorageprovider-form',
     templateUrl: './filestorageprovider.form.component.html'
 })

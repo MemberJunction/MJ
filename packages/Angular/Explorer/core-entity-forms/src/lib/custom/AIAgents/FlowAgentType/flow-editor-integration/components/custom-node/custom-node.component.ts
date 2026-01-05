@@ -5,8 +5,6 @@ import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-custom-node',
-  standalone: true,
-  imports: [CommonModule],
   template: `
     <div class="custom-node" [class.selected]="selected" (click)="onNodeClick()">
       <div class="node-header">

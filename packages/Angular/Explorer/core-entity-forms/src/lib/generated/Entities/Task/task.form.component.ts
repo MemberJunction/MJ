@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: Tasks') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-task-form',
     templateUrl: './task.form.component.html'
 })
@@ -19,7 +18,6 @@ export class TaskFormComponent extends BaseFormComponent {
             { sectionKey: 'relationshipsOwnership', sectionName: 'Relationships & Ownership', isExpanded: true },
             { sectionKey: 'taskDetails', sectionName: 'Task Details', isExpanded: true },
             { sectionKey: 'timelineMilestones', sectionName: 'Timeline & Milestones', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTaskDependencies', sectionName: 'MJ: Task Dependencies', isExpanded: false },
             { sectionKey: 'mJTaskDependencies1', sectionName: 'MJ: Task Dependencies', isExpanded: false },

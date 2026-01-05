@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Dashboards') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-dashboard-form',
     templateUrl: './dashboard.form.component.html'
 })

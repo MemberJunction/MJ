@@ -274,7 +274,7 @@ export class MembersModalComponent {
           id: 'owner-' + this.conversation.ID,
           userId: this.conversation.UserID || '',
           userName: 'Owner',
-          userEmail: this.currentUser.Email,
+          userEmail: this.currentUser.Email || '',
           role: 'owner',
           addedAt: this.conversation.__mj_CreatedAt
         }

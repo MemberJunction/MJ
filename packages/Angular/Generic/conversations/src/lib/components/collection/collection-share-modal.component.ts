@@ -15,8 +15,6 @@ interface PermissionDisplay extends CollectionPermission {
 
 @Component({
     selector: 'mj-collection-share-modal',
-    standalone: true,
-    imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
     template: `
         @if (isOpen && collection) {
             <kendo-window
@@ -310,7 +308,9 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
 
     getExcludedUserIds(): string[] {
         const ids = this.permissions.map(p => p.userId);
-        ids.push(this.currentUser.ID); // Can't share with yourself
+        if (this.currentUser.ID) {
+            ids.push(this.currentUser.ID); // Can't share with yourself
+        }
         if (this.collection?.OwnerID) {
             ids.push(this.collection.OwnerID); // Owner already has all permissions
         }
@@ -334,7 +334,7 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
     }
 
     async onAddUser(): Promise<void> {
-        if (!this.selectedUser || !this.collection) return;
+        if (!this.selectedUser || !this.collection || !this.currentUser.ID) return;
 
         try {
             // User is owner if OwnerID is null (old collections) or matches current user

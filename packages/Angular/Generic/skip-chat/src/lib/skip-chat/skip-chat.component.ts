@@ -1169,6 +1169,13 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
   public async CreateNewConversation() {
     const p = this.ProviderToUse;
+
+    // Check if CurrentUser and ID exist
+    if (!p.CurrentUser || !p.CurrentUser.ID) {
+      console.error('No current user or user ID available');
+      return;
+    }
+
     const convo = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
     convo.NewRecord();
     convo.Name = 'New Chat'; // default value
@@ -1921,6 +1928,13 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       // need to create a data context
       // add to the new data context a single item for the passed in linked record, which could be a query, view, or something else
       const p = this.ProviderToUse;
+
+      // Check if CurrentUser and ID exist
+      if (!p.CurrentUser || !p.CurrentUser.ID) {
+        console.error('No current user or user ID available');
+        return '';
+      }
+
       const dc = await p.GetEntityObject<DataContextEntity>('Data Contexts', p.CurrentUser);
       dc.NewRecord();
       const e = p.Entities.find((e) => e.Name === this.LinkedEntity);
@@ -1936,7 +1950,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         await convo.Save(); // save to the database
         this.SelectedConversation.DataContextID = dc.ID; // update the in-memory object
 
-        if (this.LinkedEntity && this.CompositeKeyIsPopulated() && e) {
+        if (this.LinkedEntity && this.CompositeKeyIsPopulated() && e && e.Name) {
           // now create a single data context item for the new data context
           let type: 'view' | 'sql' | 'query' | 'single_record' | 'full_entity';
           switch (e.Name.trim().toLowerCase()) {

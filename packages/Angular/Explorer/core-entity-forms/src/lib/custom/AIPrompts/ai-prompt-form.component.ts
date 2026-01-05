@@ -410,7 +410,12 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         try {
             // First, clean up any pending changes related to the old template
             this.cleanupOldTemplateRecords();
-            
+
+            // Check if CurrentUser and ID exist
+            if (!this._metadata.CurrentUser || !this._metadata.CurrentUser.ID) {
+                throw new Error('No current user or user ID available');
+            }
+
             const newTemplate = await this._metadata.GetEntityObject<TemplateEntity>('Templates');
             console.log("Record Name:", this.record.Name);
             newTemplate.NewRecord();

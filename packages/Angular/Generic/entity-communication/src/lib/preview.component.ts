@@ -83,13 +83,16 @@ export class EntityCommunicationsPreviewComponent implements OnInit  {
     if (!this.selectedTemplate)
       throw new Error("No template selected");
 
+    if (!this.entityInfo || !this.entityInfo.ID)
+      throw new Error("Entity info or entity ID not available");
+
     msg.MessageType = email;
 
     msg.HTMLBodyTemplate =  this.selectedTemplate;
     msg.SubjectTemplate = TemplateEngineBase.Instance.FindTemplate('Test Subject Template')
-    
+
     const commParams: EntityCommunicationParams = {
-      EntityID: this.entityInfo!.ID, 
+      EntityID: this.entityInfo.ID, 
       RunViewParams: this.runViewParams!, 
       ProviderName: "SendGrid", 
       ProviderMessageTypeName: "Email", 

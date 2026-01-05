@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'List Details') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-listdetail-form',
     templateUrl: './listdetail.form.component.html'
 })

@@ -65,7 +65,7 @@ export class NavigationPanelComponent {
     }
     const term = this.entitySearchTerm.toLowerCase();
     return this.entities.filter(e =>
-      e.Name.toLowerCase().includes(term) ||
+      (e.Name && e.Name.toLowerCase().includes(term)) ||
       (e.Description && e.Description.toLowerCase().includes(term))
     );
   }

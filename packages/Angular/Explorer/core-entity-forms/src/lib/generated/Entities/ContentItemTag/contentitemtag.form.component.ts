@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Content Item Tags') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-contentitemtag-form',
     templateUrl: './contentitemtag.form.component.html'
 })

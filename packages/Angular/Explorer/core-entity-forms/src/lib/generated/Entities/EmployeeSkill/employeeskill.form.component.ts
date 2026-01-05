@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Employee Skills') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-employeeskill-form',
     templateUrl: './employeeskill.form.component.html'
 })
@@ -16,7 +15,6 @@ export class EmployeeSkillFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'skillAssignment', sectionName: 'Skill Assignment', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -399,6 +399,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     for (const field of this.entity.Fields) {
       if (!this.shouldSearchField(field)) continue;
 
+      if (!field.Name) continue;
       const value = record.Get(field.Name);
       if (value == null) continue;
 
@@ -423,6 +424,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Determine if a field should be included in search
    */
   private shouldSearchField(field: EntityFieldInfo): boolean {
+    if (!field.Name) return false;
     if (field.Name.startsWith('__mj_')) return false;
     if (field.TSType === 'Date') return false;
     if (field.SQLFullType?.trim().toLowerCase() === 'uniqueidentifier') return false;
@@ -457,12 +459,12 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.entity) return visible;
 
     for (const field of this.entity.Fields) {
-      if (field.DefaultInView === true) {
+      if (field.DefaultInView === true && field.Name) {
         visible.add(field.Name);
       }
     }
 
-    if (this.entity.NameField) {
+    if (this.entity.NameField?.Name) {
       visible.add(this.entity.NameField.Name);
     }
 
@@ -731,7 +733,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       const extraFilter = this.viewEntity?.WhereClause || undefined;
 
       const result = await rv.RunView({
-        EntityName: this.entity.Name,
+        EntityName: this.entity.Name ?? '',
         ResultType: 'entity_object',
         MaxRows: config.pageSize,
         StartRow: startRow,
@@ -1032,8 +1034,8 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * 2. Other date fields, sorted by Sequence (lowest first)
    */
   private sortDateFieldsByPriority(dateFields: EntityFieldInfo[]): EntityFieldInfo[] {
-    const defaultInView = dateFields.filter(f => f.DefaultInView).sort((a, b) => a.Sequence - b.Sequence);
-    const others = dateFields.filter(f => !f.DefaultInView).sort((a, b) => a.Sequence - b.Sequence);
+    const defaultInView = dateFields.filter(f => f.DefaultInView).sort((a, b) => (a.Sequence ?? Number.MAX_SAFE_INTEGER) - (b.Sequence ?? Number.MAX_SAFE_INTEGER));
+    const others = dateFields.filter(f => !f.DefaultInView).sort((a, b) => (a.Sequence ?? Number.MAX_SAFE_INTEGER) - (b.Sequence ?? Number.MAX_SAFE_INTEGER));
     return [...defaultInView, ...others];
   }
 
@@ -1069,13 +1071,13 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     // If we have a config with a specific date field, use it if valid
     if (this.timelineConfig?.dateFieldName) {
       const configField = this.availableDateFields.find(f => f.Name === this.timelineConfig!.dateFieldName);
-      if (configField) {
+      if (configField?.Name) {
         return configField.Name;
       }
     }
 
     // Otherwise use the first available date field (already sorted by priority)
-    return this.availableDateFields[0].Name;
+    return this.availableDateFields[0]?.Name ?? 'ID';
   }
 
   /**
@@ -1096,9 +1098,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     group.DataSourceType = 'array';
     group.EntityObjects = this.filteredRecords;
     group.TitleFieldName = titleField;
-    group.DateFieldName = this.selectedTimelineDateField;
+    group.DateFieldName = this.selectedTimelineDateField ?? undefined;
     group.IdFieldName = 'ID';
-    group.GroupLabel = this.entity.Name;
+    group.GroupLabel = this.entity.Name ?? '';
 
     // Find a suitable description field
     const descField = this.findDescriptionField();
@@ -1130,23 +1132,23 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.entity) return 'ID';
 
     // Prefer the entity's NameField
-    if (this.entity.NameField) {
+    if (this.entity.NameField?.Name) {
       return this.entity.NameField.Name;
     }
 
     // Look for common name patterns in DefaultInView string fields
     const stringFields = this.entity.Fields.filter(
-      f => f.TSType === EntityFieldTSType.String && f.DefaultInView && !f.Name.startsWith('__mj_')
-    ).sort((a, b) => a.Sequence - b.Sequence);
+      f => f.Name && f.TSType === EntityFieldTSType.String && f.DefaultInView && !f.Name.startsWith('__mj_')
+    ).sort((a, b) => (a.Sequence ?? Number.MAX_SAFE_INTEGER) - (b.Sequence ?? Number.MAX_SAFE_INTEGER));
 
     const namePatterns = ['name', 'title', 'subject', 'label'];
     for (const pattern of namePatterns) {
-      const match = stringFields.find(f => f.Name.toLowerCase().includes(pattern));
-      if (match) return match.Name;
+      const match = stringFields.find(f => f.Name && f.Name.toLowerCase().includes(pattern));
+      if (match?.Name) return match.Name;
     }
 
     // Fall back to first string field
-    return stringFields.length > 0 ? stringFields[0].Name : 'ID';
+    return stringFields.length > 0 && stringFields[0].Name ? stringFields[0].Name : 'ID';
   }
 
   /**
@@ -1158,12 +1160,12 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     // Look for common description patterns
     const descPatterns = ['description', 'notes', 'summary', 'content', 'body', 'details'];
     const textFields = this.entity.Fields.filter(
-      f => (f.TSType === EntityFieldTSType.String) && !f.Name.startsWith('__mj_')
+      f => f.Name && (f.TSType === EntityFieldTSType.String) && !f.Name.startsWith('__mj_')
     );
 
     for (const pattern of descPatterns) {
-      const match = textFields.find(f => f.Name.toLowerCase().includes(pattern));
-      if (match) return match.Name;
+      const match = textFields.find(f => f.Name && f.Name.toLowerCase().includes(pattern));
+      if (match?.Name) return match.Name;
     }
 
     return null;
@@ -1178,19 +1180,20 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     // Look for status, type, category, or other short classification fields
     const patterns = ['status', 'type', 'category', 'state', 'priority'];
     const fields = this.entity.Fields.filter(
-      f => f.TSType === EntityFieldTSType.String &&
+      f => f.Name &&
+           f.TSType === EntityFieldTSType.String &&
            f.DefaultInView &&
            f.Name !== excludeField &&
            !f.Name.startsWith('__mj_')
-    ).sort((a, b) => a.Sequence - b.Sequence);
+    ).sort((a, b) => (a.Sequence ?? Number.MAX_SAFE_INTEGER) - (b.Sequence ?? Number.MAX_SAFE_INTEGER));
 
     for (const pattern of patterns) {
-      const match = fields.find(f => f.Name.toLowerCase().includes(pattern));
-      if (match) return match.Name;
+      const match = fields.find(f => f.Name && f.Name.toLowerCase().includes(pattern));
+      if (match?.Name) return match.Name;
     }
 
     // Use the first string field that's not the title field
     const firstOther = fields.find(f => f.Name !== excludeField);
-    return firstOther?.Name || null;
+    return firstOther?.Name ?? null;
   }
 }

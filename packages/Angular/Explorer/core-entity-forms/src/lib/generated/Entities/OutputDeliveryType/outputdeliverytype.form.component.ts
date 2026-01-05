@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Output Delivery Types') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-outputdeliverytype-form',
     templateUrl: './outputdeliverytype.form.component.html'
 })

@@ -100,6 +100,12 @@ export class DataBrowserComponent extends BaseNavigationComponent {
           existing.Sequence = index;
           userAppsToSave.push(existing);
         } else {
+          // Check if CurrentUser and ID exist
+          if (!md.CurrentUser || !md.CurrentUser.ID) {
+            console.error('No current user or user ID available');
+            continue;
+          }
+
           // this is a new app that the user has selected
           const newApp = await md.GetEntityObject<UserApplicationEntity>("User Applications");
           newApp.ApplicationID = app.ID;

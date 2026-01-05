@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Entity Action Filters') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-entityactionfilter-form',
     templateUrl: './entityactionfilter.form.component.html'
 })
@@ -17,7 +16,6 @@ export class EntityActionFilterFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identifierKeys', sectionName: 'Identifier Keys', isExpanded: true },
             { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

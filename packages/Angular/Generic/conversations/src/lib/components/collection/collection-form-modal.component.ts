@@ -170,6 +170,12 @@ export class CollectionFormModalComponent implements OnChanges {
     this.errorMessage = '';
 
     try {
+      if (!this.currentUser.ID) {
+        this.errorMessage = 'No current user ID available';
+        this.isSaving = false;
+        return;
+      }
+
       // Validate permissions before saving
       if (this.collection) {
         // Editing existing collection - need Edit permission
@@ -239,11 +245,13 @@ export class CollectionFormModalComponent implements OnChanges {
             );
           } else {
             // Root collection - create owner permission for current user
-            await this.permissionService.createOwnerPermission(
-              collection.ID,
-              this.currentUser.ID,
-              this.currentUser
-            );
+            if (this.currentUser.ID) {
+              await this.permissionService.createOwnerPermission(
+                collection.ID,
+                this.currentUser.ID,
+                this.currentUser
+              );
+            }
           }
         }
 

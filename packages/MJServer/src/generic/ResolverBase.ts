@@ -47,7 +47,7 @@ export class ResolverBase {
     return g[ResolverBase._eventSubscriptionKey];
   }
 
-  protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
+  protected MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo) {
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
     // fields, iterate through the dataObject and REPLACE the property that has the field name
@@ -73,7 +73,7 @@ export class ResolverBase {
     return dataObject;
   }
 
-  protected ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[]) {
+  protected ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo) {
     // iterate through the array and call MapFieldNamesToCodeNames for each element
     if (dataObjectArray && dataObjectArray.length > 0) {
       dataObjectArray.forEach((element) => {

@@ -4,8 +4,6 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 @Component({
   selector: 'mj-custom-icon',
-  standalone: true,
-  imports: [CommonModule],
   templateUrl: './custom-icon.component.html',
   styleUrls: ['./custom-icon.component.css']
 })

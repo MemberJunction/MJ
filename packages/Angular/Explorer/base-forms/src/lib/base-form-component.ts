@@ -78,11 +78,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       }
       const md: Metadata = new Metadata();
 
-      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
+      // Check if CurrentUser and ID exist before getting favorite status
+      const entityName = this.record.EntityInfo.Name;
+      if (md.CurrentUser && md.CurrentUser.ID && entityName) {
+        this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, entityName, this.record.PrimaryKey);
+      }
       this.FavoriteInitDone = true;
 
-      // Initialize form state from User Settings
-      const entityName = this.getEntityName();
+      // Initialize form state from User Settings (reuse entityName from above)
       if (entityName) {
         await this.formStateService.initializeState(entityName);
 
@@ -103,11 +106,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           omitEmptyStrings: false,
           omitNullValues: false,
           excludeFields: [],
-          relatedEntityList: this.record.EntityInfo.RelatedEntities.map(x => {
-            return {
-              relatedEntityName: x.RelatedEntity
-            }
-          })
+          relatedEntityList: this.record.EntityInfo.RelatedEntities
+            .filter(x => x.RelatedEntity != null)
+            .map(x => {
+              return {
+                relatedEntityName: x.RelatedEntity!
+              }
+            })
         })
         const end = new Date().getTime();
         console.log(dataObject);
@@ -227,7 +232,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async SetFavoriteStatus(isFavorite: boolean) {
     const md: Metadata = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite)
+
+    // Check if CurrentUser, ID, and EntityInfo.Name exist
+    const entityName = this.record.EntityInfo.Name;
+    if (!md.CurrentUser || !md.CurrentUser.ID || !entityName) {
+      console.warn('Cannot set favorite status: No current user, user ID, or entity name available');
+      return;
+    }
+
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, this.record.PrimaryKey, isFavorite)
     this._isFavorite = isFavorite;
   }
 
@@ -317,10 +330,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string, relatedEntityJoinField?: string): EntityRelationshipInfo | undefined {
     if (this.record) {
       const r = <BaseEntity>this.record;
-      const ret = r.EntityInfo.RelatedEntities.filter(x => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase());
+      const ret = r.EntityInfo.RelatedEntities.filter(x =>
+        x.RelatedEntity != null && x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase()
+      );
       // now if ret.length > 1, we need to find the one that matches the foreign key field name
       if (ret.length > 1 && relatedEntityJoinField) {
-        const ret2 = ret.find(x => x.RelatedEntityJoinField.trim().toLowerCase() === relatedEntityJoinField.trim().toLowerCase());
+        const ret2 = ret.find(x =>
+          x.RelatedEntityJoinField != null && x.RelatedEntityJoinField.trim().toLowerCase() === relatedEntityJoinField.trim().toLowerCase()
+        );
         if (ret2)
           return ret2;
       }
@@ -354,7 +371,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.record) {
       const eri = (<BaseEntity>this.record).EntityInfo.RelatedEntities.find(x => x.RelatedEntity === relatedEntityName);
       if (eri)
-        return eri.DisplayName;
+        return eri.DisplayName ?? relatedEntityName;
     }
     return relatedEntityName;
   }
@@ -589,8 +606,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public async ShowDependencies() {
     // for now dump to console
     const md = new Metadata();
-    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey)
-    console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString());
+    const entityName = this.record.EntityInfo.Name;
+    if (!entityName) {
+      console.warn('Cannot show dependencies: No entity name available');
+      return;
+    }
+    const dep = await md.GetRecordDependencies(entityName, this.record.PrimaryKey)
+    console.log('Dependencies for: ' + entityName + ' ' + this.record.PrimaryKey.ToString());
     console.log(dep);
 
     // if (confirm('Do you want to merge records test?') == true) {
@@ -628,7 +650,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async GetRecordDependencies(): Promise<RecordDependency[]> {
     const md = new Metadata();
-    const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
+    const entityName = this.record.EntityInfo.Name;
+    if (!entityName) {
+      LogError('Cannot get record dependencies: No entity name available');
+      return [];
+    }
+    const dependencies: RecordDependency[] = await md.GetRecordDependencies(entityName, this.record.PrimaryKey);
     return dependencies;
   }
 

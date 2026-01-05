@@ -177,9 +177,14 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       const md = new Metadata();
       
       // Create template entity
+      // Check if CurrentUser and ID exist
+      if (!md.CurrentUser || !md.CurrentUser.ID) {
+        throw new Error('No current user or user ID available');
+      }
+
       this.templateEntity = await md.GetEntityObject<TemplateEntity>('Templates');
       this.templateEntity.NewRecord();
-      
+
       const promptName = this.promptForm.get('name')?.value || 'New Prompt';
       this.templateEntity.Name = `${promptName} Template`;
       this.templateEntity.Description = `Template for ${promptName}`;

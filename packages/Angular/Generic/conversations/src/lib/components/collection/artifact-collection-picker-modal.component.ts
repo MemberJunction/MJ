@@ -28,15 +28,6 @@ interface CollectionNode {
  */
 @Component({
   selector: 'mj-artifact-collection-picker-modal',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    DialogModule,
-    ButtonsModule,
-    InputsModule,
-    SharedGenericModule
-  ],
   template: `
     <kendo-dialog
       *ngIf="isOpen"
@@ -590,6 +581,10 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   }
 
   private async loadUserPermissions(): Promise<void> {
+    if (!this.currentUser.ID) {
+      return;
+    }
+
     // Load permissions for collections not owned by current user
     const nonOwnedCollections = this.allCollections.filter(
       c => c.OwnerID && c.OwnerID !== this.currentUser.ID
@@ -739,6 +734,11 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   async createCollection(): Promise<void> {
     if (!this.newCollectionName.trim()) {
       this.toastService.warning('Please enter a collection name');
+      return;
+    }
+
+    if (!this.currentUser.ID) {
+      this.toastService.error('No current user ID available');
       return;
     }
 

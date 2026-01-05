@@ -32,9 +32,17 @@ export class AddItemComponent implements OnInit {
     this.resourceType = this.selectedResource || SharedService.Instance.ViewResourceType;
     this.onResourceTypeChange(this.resourceType);
     // Sort entities alphabetically by name
-    this.Entities = [...this.md.Entities].sort((a, b) => 
-      a.Name.localeCompare(b.Name)
-    );
+    this.Entities = [...this.md.Entities].sort((a, b) => {
+        if (!a || !b) {
+            return 0;
+        }
+        else if (!a.Name || !b.Name) {
+            return 0;
+        }
+        else {
+            return a.Name?.localeCompare(b.Name);
+        }
+    }); // sort by name
   }
 
   async onResourceTypeChange(event: any) {

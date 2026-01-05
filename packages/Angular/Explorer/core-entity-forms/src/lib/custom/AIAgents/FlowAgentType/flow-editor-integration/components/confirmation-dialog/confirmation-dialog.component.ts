@@ -4,8 +4,6 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 
 @Component({
   selector: 'app-confirmation-dialog',
-  standalone: true,
-  imports: [CommonModule, ButtonsModule],
   template: `
     <div class="dialog-backdrop" (click)="onCancel()">
       <div class="dialog-container" (click)="$event.stopPropagation()">

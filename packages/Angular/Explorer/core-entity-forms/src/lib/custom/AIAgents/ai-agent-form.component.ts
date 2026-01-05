@@ -1837,6 +1837,12 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         try {
                             // Get current user using proper MJ pattern
                             const md = new Metadata();
+
+                            // Check if CurrentUser and ID exist
+                            if (!md.CurrentUser || !md.CurrentUser.ID) {
+                                throw new Error('No current user or user ID available');
+                            }
+
                             const currentUserId = md.CurrentUser.ID;
 
                             // Add the prompt to PendingRecords (will be saved with agent)

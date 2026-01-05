@@ -7,8 +7,6 @@ import { Step, StepOption, StepProperty, STEP_CONFIGS } from '../../models/step.
 
 @Component({
   selector: 'app-properties-panel',
-  standalone: true,
-  imports: [CommonModule, FormsModule],
   templateUrl: './properties-panel.component.html',
   styles: [`
     :host {

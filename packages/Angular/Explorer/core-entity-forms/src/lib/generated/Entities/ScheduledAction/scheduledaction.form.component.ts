@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Scheduled Actions') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-scheduledaction-form',
     templateUrl: './scheduledaction.form.component.html'
 })

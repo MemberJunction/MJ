@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Conversation Details') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-conversationdetail-form',
     templateUrl: './conversationdetail.form.component.html'
 })
@@ -20,6 +19,7 @@ export class ConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'userFeedbackInsights', sectionName: 'User Feedback & Insights', isExpanded: true },
             { sectionKey: 'relatedEntities', sectionName: 'Related Entities', isExpanded: false },
             { sectionKey: 'interactiveElements', sectionName: 'Interactive Elements', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
             { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'MJ: Conversation Detail Artifacts', isExpanded: false },

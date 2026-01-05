@@ -5,8 +5,6 @@ import { FlowExecutorService, ExecutionStatus, ExecutionLog } from '../../servic
 
 @Component({
   selector: 'app-execution-panel',
-  standalone: true,
-  imports: [CommonModule],
   templateUrl: './execution-panel.component.html',
   styleUrls: ['./execution-panel.component.scss']
 })

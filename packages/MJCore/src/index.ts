@@ -3,6 +3,7 @@ import { Metadata } from "./generic/metadata";
 import { RunQuery } from "./generic/runQuery";
 import { RunReport } from "./generic/runReport";
 import { RunView } from "./views/runView";
+import { IMetadataProvider, IEntityDataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider } from "./generic/interfaces";
 
 export * from "./generic/metadata";
 export * from "./generic/baseInfo";
@@ -34,7 +35,7 @@ export * from "./generic/authTypes";
 
 export * from "./generic/databaseProviderBase";
 
-export function SetProvider(provider) {
+export function SetProvider(provider: IMetadataProvider & IEntityDataProvider & IRunViewProvider & IRunReportProvider & IRunQueryProvider) {
     Metadata.Provider = provider;
     BaseEntity.Provider = provider;
     RunView.Provider = provider;

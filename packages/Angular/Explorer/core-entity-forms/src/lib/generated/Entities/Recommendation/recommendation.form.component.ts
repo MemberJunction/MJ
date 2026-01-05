@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Recommendations') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-recommendation-form',
     templateUrl: './recommendation.form.component.html'
 })
@@ -17,7 +16,6 @@ export class RecommendationFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'recommendationCore', sectionName: 'Recommendation Core', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'recommendationItems', sectionName: 'Recommendation Items', isExpanded: false }
         ]);

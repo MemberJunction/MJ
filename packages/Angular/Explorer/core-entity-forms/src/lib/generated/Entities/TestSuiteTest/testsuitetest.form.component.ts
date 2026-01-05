@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Suite Tests') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-testsuitetest-form',
     templateUrl: './testsuitetest.form.component.html'
 })

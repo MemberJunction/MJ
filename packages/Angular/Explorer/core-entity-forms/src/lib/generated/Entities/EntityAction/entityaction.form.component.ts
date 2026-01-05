@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Entity Actions') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-entityaction-form',
     templateUrl: './entityaction.form.component.html'
 })

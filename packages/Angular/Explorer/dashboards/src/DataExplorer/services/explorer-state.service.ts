@@ -630,7 +630,7 @@ export class ExplorerStateService {
 
       // Get the Entities entity ID for favoriting
       const entitiesEntity = this.metadata.Entities.find(e => e.Name === 'Entities');
-      if (!entitiesEntity) return false;
+      if (!entitiesEntity || !entitiesEntity.ID) return false;
 
       // Create User Favorite record
       const md = new Metadata();
@@ -746,7 +746,7 @@ export class ExplorerStateService {
         for (const fav of result.Results) {
           // Look up entity name from RecordID (which is the Entity.ID)
           const entity = this.metadata.Entities.find(e => e.ID === fav.RecordID);
-          if (entity) {
+          if (entity && entity.Name) {
             favoriteEntities.push({
               userFavoriteId: fav.ID,
               entityName: entity.Name,
@@ -786,7 +786,7 @@ export class ExplorerStateService {
         for (const log of result.Results) {
           // Look up entity name from EntityID
           const entity = this.metadata.Entities.find(e => e.ID === log.EntityID);
-          if (entity) {
+          if (entity && entity.Name && entity.ID) {
             // Filter by application context if applicable
             if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === log.EntityID)) {
               continue; // Skip records from entities not in this application
@@ -803,7 +803,7 @@ export class ExplorerStateService {
             recentRecords.push(recordAccess);
 
             // Build composite key for batch name lookup
-            const compositeKey = this.buildCompositeKeyForEntity(entity, log.RecordID);
+            const compositeKey = this.buildCompositeKeyForEntity({ Name: entity.Name, ID: entity.ID }, log.RecordID);
             if (compositeKey) {
               recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
               recordIndexMap.set(`${entity.Name}|${log.RecordID}`, index);
@@ -849,6 +849,9 @@ export class ExplorerStateService {
 
       const pkFields = entityInfo.PrimaryKeys;
       if (pkFields.length === 0) return null;
+
+      // Check that the primary key field has a name
+      if (!pkFields[0].Name) return null;
 
       const compositeKey = new CompositeKey();
       // For single PK, use the recordId directly
@@ -955,7 +958,7 @@ export class ExplorerStateService {
         for (const fav of result.Results) {
           // Look up entity info from the EntityID
           const entity = this.metadata.Entities.find(e => e.ID === fav.EntityID);
-          if (entity) {
+          if (entity && entity.Name && entity.ID) {
             // Filter by application context if applicable
             if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === fav.EntityID)) {
               continue; // Skip records from entities not in this application
@@ -971,7 +974,7 @@ export class ExplorerStateService {
             favoriteRecords.push(favoriteRecord);
 
             // Build composite key for batch name lookup
-            const compositeKey = this.buildCompositeKeyForEntity(entity, fav.RecordID);
+            const compositeKey = this.buildCompositeKeyForEntity({ Name: entity.Name, ID: entity.ID }, fav.RecordID);
             if (compositeKey) {
               recordNameInputs.push({ EntityName: entity.Name, CompositeKey: compositeKey });
               recordIndexMap.set(`${entity.Name}|${fav.RecordID}`, index);

@@ -164,6 +164,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const favoriteEntityIds = new Set(this.state.favoriteEntities.map(f => f.entityId));
 
     let result = this.entities.filter(e => {
+      if (!e.ID) return false;
+
       // Exclude entities shown in recent or favorites sections
       if (recentEntityIds.has(e.ID) || favoriteEntityIds.has(e.ID)) {
         return false;
@@ -183,7 +185,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (this.entityFilterText && this.entityFilterText.trim() !== '') {
       const filter = this.entityFilterText.toLowerCase().trim();
       result = result.filter(e =>
-        e.Name.toLowerCase().includes(filter) ||
+        (e.Name && e.Name.toLowerCase().includes(filter)) ||
         (e.Description && e.Description.toLowerCase().includes(filter))
       );
     }
@@ -229,7 +231,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Count of common (DefaultForNewUser) entities
    */
   get commonEntitiesCount(): number {
-    return this.entities.filter(e => this.stateService.DefaultEntityIds.has(e.ID)).length;
+    return this.entities.filter(e => e.ID && this.stateService.DefaultEntityIds.has(e.ID)).length;
   }
 
   /**
@@ -346,15 +348,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get availableDateFields(): { name: string; displayName: string }[] {
     if (!this.selectedEntity) return [];
     return this.selectedEntity.Fields
-      .filter(f => f.TSType === EntityFieldTSType.Date)
+      .filter(f => f.Name != null && f.TSType === EntityFieldTSType.Date)
       .sort((a, b) => {
         // Prioritize DefaultInView fields, then by Sequence
         if (a.DefaultInView && !b.DefaultInView) return -1;
         if (!a.DefaultInView && b.DefaultInView) return 1;
-        return a.Sequence - b.Sequence;
+        const aSeq = a.Sequence ?? 0;
+        const bSeq = b.Sequence ?? 0;
+        return aSeq - bSeq;
       })
       .map(f => ({
-        name: f.Name,
+        name: f.Name!,
         displayName: f.DisplayNameOrName
       }));
   }
@@ -675,7 +679,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           const perms = e.GetUserPermisions(this.metadata.CurrentUser);
           return perms.CanRead && e.IncludeInAPI;
         })
-        .sort((a, b) => a.Name.localeCompare(b.Name));
+        .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
 
       // If we have an applicationId filter, load the application entities
       if (this.entityFilter?.applicationId) {
@@ -726,6 +730,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     return entities.filter(entity => {
+      if (!entity.ID || !entity.Name) return false;
+
       // Filter by application (via ApplicationEntities)
       if (this.entityFilter!.applicationId) {
         if (!this.applicationEntityIds.has(entity.ID)) {
@@ -735,7 +741,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       // Filter by schema names
       if (this.entityFilter!.schemaNames && this.entityFilter!.schemaNames.length > 0) {
-        if (!this.entityFilter!.schemaNames.includes(entity.SchemaName)) {
+        if (!entity.SchemaName || !this.entityFilter!.schemaNames.includes(entity.SchemaName)) {
           return false;
         }
       }
@@ -764,6 +770,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle entity selection from navigation panel or home screen
    */
   public onEntitySelected(entity: EntityInfo): void {
+    if (!entity.Name || !entity.ID) return;
+
     this.resetRecordCounts();
     this.selectedEntity = entity;
     // Reset grid state when entity changes - grid state is entity-specific
@@ -954,6 +962,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     try {
       const md = new Metadata();
 
+      // Check if CurrentUser and ID exist
+      if (!md.CurrentUser || !md.CurrentUser.ID) {
+        console.error('No current user or user ID available');
+        return;
+      }
+
       // Build GridState in Kendo-compatible format
       const gridState = this.buildGridState(event);
 
@@ -962,6 +976,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       if (event.saveAsNew || !this.selectedViewEntity) {
         // Create new view
+        if (!this.selectedEntity.ID) {
+          throw new Error('Selected entity has no ID');
+        }
+
         const newView = await md.GetEntityObject<UserViewEntityExtended>('User Views');
         newView.Name = event.name || 'Custom';
         newView.Description = event.description;
@@ -1172,7 +1190,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.stateService.selectRecord(event.record.PrimaryKey.ToConcatenatedString(), recordName);
 
     // Add to recent items (local state for navigation panel)
-    if (this.selectedEntity) {
+    if (this.selectedEntity && this.selectedEntity.Name && this.selectedEntity.ID) {
       this.stateService.addRecentItem({
         entityName: this.selectedEntity.Name,
         compositeKeyString: event.record.PrimaryKey.ToConcatenatedString(),
@@ -1189,11 +1207,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       );
 
       // Log to User Record Logs for persistence (fire-and-forget)
-      this.recentAccessService.logAccess(
-        this.selectedEntity.Name,
-        event.record.PrimaryKey.Values(),
-        'record'
-      );
+      if (this.selectedEntity.Name) {
+        this.recentAccessService.logAccess(
+          this.selectedEntity.Name,
+          event.record.PrimaryKey.Values(),
+          'record'
+        );
+      }
     }
   }
 
@@ -1201,10 +1221,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle record opened from mj-entity-viewer (double-click or open button)
    */
   public onViewerRecordOpened(event: RecordOpenedEvent): void {
-    this.OpenEntityRecord.emit({
-      EntityName: event.entity.Name,
-      RecordPKey: event.compositeKey
-    });
+    if (event.entity.Name) {
+      this.OpenEntityRecord.emit({
+        EntityName: event.entity.Name,
+        RecordPKey: event.compositeKey
+      });
+    }
   }
 
   /**
@@ -1278,7 +1300,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Uses detailPanelEntity since the panel may be showing a different entity than the grid
    */
   public onOpenRecord(record: BaseEntity): void {
-    if (!this.detailPanelEntity) return;
+    if (!this.detailPanelEntity || !this.detailPanelEntity.Name) return;
 
     this.OpenEntityRecord.emit({
       EntityName: this.detailPanelEntity.Name,
@@ -1445,10 +1467,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // Navigate to entity if specified
     if (deepLink.entity) {
       const entity = this.entities.find(e =>
-        e.Name.toLowerCase() === deepLink.entity!.toLowerCase()
+        e.Name && e.Name.toLowerCase() === deepLink.entity!.toLowerCase()
       );
 
-      if (entity) {
+      if (entity && entity.Name) {
         // Reset counts before setting entity to prevent stale data display
         this.resetRecordCounts();
         this.selectedEntity = entity;
@@ -1509,7 +1531,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (!this.entityFilter) {
       return null;
     }
-    return new Set(this.entities.map(e => e.Name));
+    return new Set(this.entities.map(e => e.Name).filter((n): n is string => n != null));
   }
 
   /**
@@ -1518,7 +1540,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private getRecordDisplayName(record: BaseEntity): string {
     if (!this.selectedEntity) return 'Unknown';
 
-    if (this.selectedEntity.NameField) {
+    if (this.selectedEntity.NameField && this.selectedEntity.NameField.Name) {
       const nameValue = record.Get(this.selectedEntity.NameField.Name);
       if (nameValue) return String(nameValue);
     }
@@ -1608,10 +1630,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // Navigate to entity if specified
     if (urlState.entity) {
       const entity = this.entities.find(e =>
-        e.Name.toLowerCase() === urlState.entity!.toLowerCase()
+        e.Name && e.Name.toLowerCase() === urlState.entity!.toLowerCase()
       );
 
-      if (entity) {
+      if (entity && entity.Name) {
         const entityChanged = this.selectedEntity?.Name !== entity.Name;
 
         if (entityChanged) {
@@ -1795,6 +1817,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public async toggleEntityFavorite(entity: EntityInfo, event: Event): Promise<void> {
     event.stopPropagation(); // Prevent card click
+    if (!entity.Name || !entity.ID) return;
+
     if (this.stateService.isEntityFavorited(entity.ID)) {
       await this.stateService.removeEntityFromFavorites(entity.ID);
     } else {
@@ -1807,7 +1831,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Check if entity is favorited (for template)
    */
   public isEntityFavorited(entity: EntityInfo): boolean {
-    return this.stateService.isEntityFavorited(entity.ID);
+    return entity.ID ? this.stateService.isEntityFavorited(entity.ID) : false;
   }
 
   /**

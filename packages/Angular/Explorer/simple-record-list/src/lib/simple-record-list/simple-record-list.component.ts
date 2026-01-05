@@ -102,13 +102,13 @@ export class SimpleRecordListComponent implements OnInit {
       const e = md.Entities.find(e => e.Name === this.EntityName);
       if (e) {
         if (e.Fields.length < 10)
-          this.Columns = e.Fields.map(f => f.Name);
+          this.Columns = e.Fields.map(f => f.Name).filter((n): n is string => n != null);
         else {
           const defaultInViewColumns = e.Fields.filter(c => c.DefaultInView);
           if (defaultInViewColumns.length > 0)
-            this.Columns = defaultInViewColumns.map(f => f.Name);
+            this.Columns = defaultInViewColumns.map(f => f.Name).filter((n): n is string => n != null);
           else
-            this.Columns = e.Fields.slice(0, 10).map(f => f.Name);
+            this.Columns = e.Fields.slice(0, 10).map(f => f.Name).filter((n): n is string => n != null);
         }
       }
     }
@@ -256,7 +256,7 @@ export class SimpleRecordListComponent implements OnInit {
       throw new Error('Entity not found: ' + this.EntityName);
 
     const nameField = e.Fields.find(c => c.IsNameField);
-    if (nameField)
+    if (nameField && nameField.Name)
       return r.Get(nameField.Name);
     else {
       const nameField = e.Fields.find(c => c.Name === 'Name');

@@ -29,16 +29,19 @@ export function generateRelationshipGraph(entities: EntityInfo[]): string {
   const lines: string[] = [];
 
   for (const entity of entities) {
+    const entityName = entity.Name ?? 'Unknown';
+
     if (entity.RelatedEntities.length === 0) {
-      lines.push(`${entity.Name}: (no relationships)`);
+      lines.push(`${entityName}: (no relationships)`);
       continue;
     }
 
     const relations = entity.RelatedEntities
+      .filter(rel => rel.RelatedEntity != null)
       .map(rel => `→ ${rel.RelatedEntity}`)
       .join(', ');
 
-    lines.push(`${entity.Name}: ${relations}`);
+    lines.push(`${entityName}: ${relations}`);
   }
 
   return lines.join('\n');
@@ -60,14 +63,17 @@ export function generateMermaidDiagram(entities: EntityInfo[]): string {
   const processedPairs = new Set<string>();
 
   for (const entity of entities) {
-    const safeEntityName = entity.Name.replace(/\s/g, '_');
+    const entityName = entity.Name ?? 'Unknown';
+    const safeEntityName = entityName.replace(/\s/g, '_');
 
     for (const rel of entity.RelatedEntities) {
+      if (rel.RelatedEntity == null) continue;
+
       const safeRelatedName = rel.RelatedEntity.replace(/\s/g, '_');
       const pairKey = [safeEntityName, safeRelatedName].sort().join('|');
 
       if (!processedPairs.has(pairKey)) {
-        lines.push(`  ${safeEntityName}[${entity.Name}] --> ${safeRelatedName}[${rel.RelatedEntity}]`);
+        lines.push(`  ${safeEntityName}[${entityName}] --> ${safeRelatedName}[${rel.RelatedEntity}]`);
         processedPairs.add(pairKey);
       }
     }
@@ -87,13 +93,15 @@ export function generateMermaidDiagram(entities: EntityInfo[]): string {
  */
 export function formatEntitiesForPrompt(entities: EntityInfo[]): EntityMetadataForPrompt[] {
   return entities.map(entity => ({
-    Name: entity.Name,
-    Description: entity.Description || 'No description available',
-    SchemaName: entity.SchemaName || 'dbo',
+    Name: entity.Name ?? '',
+    Description: entity.Description ?? 'No description available',
+    SchemaName: entity.SchemaName ?? 'dbo',
     FieldCount: entity.Fields.length,
-    RelatedEntities: entity.RelatedEntities.map(rel => ({
-      name: rel.RelatedEntity,
-      type: rel.Type
-    }))
+    RelatedEntities: entity.RelatedEntities
+      .filter(rel => rel.RelatedEntity != null && rel.Type != null)
+      .map(rel => ({
+        name: rel.RelatedEntity!,
+        type: rel.Type!
+      }))
   }));
 }

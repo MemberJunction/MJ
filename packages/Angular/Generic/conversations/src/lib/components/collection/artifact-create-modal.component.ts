@@ -239,6 +239,12 @@ export class ArtifactCreateModalComponent implements OnChanges {
       const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
       await collection.Load(this.collectionId);
 
+      if (!this.currentUser.ID) {
+        this.errorMessage = 'No current user ID available';
+        this.isSaving = false;
+        return;
+      }
+
       // Check if user has Edit permission on collection
       if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
         const permission = await this.permissionService.checkPermission(

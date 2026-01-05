@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'AI Agent Note Types') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-aiagentnotetype-form',
     templateUrl: './aiagentnotetype.form.component.html'
 })

@@ -740,11 +740,13 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             const entityMatch = md.EntityByName(entityName);
             if (!entityMatch) {
                 // couldn't find it, but sometimes the AI uses a table name or a view name, let's check for that
-                const altMatch = md.Entities.filter(e => e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
-                                                        e.BaseView.toLowerCase() === entityName.toLowerCase() || 
-                                                        e.SchemaName.toLowerCase() + '.' + e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
-                                                        e.SchemaName.toLowerCase() + '.' + e.BaseView.toLowerCase() === entityName.toLowerCase());
-                if (altMatch && altMatch.length === 1) { 
+                const altMatch = md.Entities.filter(e =>
+                    (e.BaseTable && e.BaseTable.toLowerCase() === entityName.toLowerCase()) ||
+                    (e.BaseView && e.BaseView.toLowerCase() === entityName.toLowerCase()) ||
+                    (e.SchemaName && e.BaseTable && (e.SchemaName.toLowerCase() + '.' + e.BaseTable.toLowerCase()) === entityName.toLowerCase()) ||
+                    (e.SchemaName && e.BaseView && (e.SchemaName.toLowerCase() + '.' + e.BaseView.toLowerCase()) === entityName.toLowerCase())
+                );
+                if (altMatch && altMatch.length === 1 && altMatch[0].Name) {
                     entityName = altMatch[0].Name;
                 }
             }

@@ -78,6 +78,10 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 
 @NgModule({
   declarations: [
+    AppComponent,
+    NavigationItemDemoComponent,
+    HelloDashboardComponent,
+    SystemValidationBannerComponent,
   ],
   imports: [
     BrowserModule,
@@ -104,11 +108,6 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     ReactiveFormsModule,
     AuthServicesModule.forRoot(environment),
     ShellModule,
-    // Import standalone components
-    SystemValidationBannerComponent,
-    AppComponent,
-    NavigationItemDemoComponent,
-    HelloDashboardComponent,
   ],
   providers: [
     SharedService,

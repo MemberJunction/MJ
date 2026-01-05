@@ -145,6 +145,7 @@ import { AIAgentStepFormComponent, LoadAIAgentStepFormComponent } from "./Entiti
 import { AIAgentTypeFormComponent, LoadAIAgentTypeFormComponent } from "./Entities/AIAgentType/aiagenttype.form.component";
 import { AIConfigurationParamFormComponent, LoadAIConfigurationParamFormComponent } from "./Entities/AIConfigurationParam/aiconfigurationparam.form.component";
 import { AIConfigurationFormComponent, LoadAIConfigurationFormComponent } from "./Entities/AIConfiguration/aiconfiguration.form.component";
+import { AICredentialBindingFormComponent, LoadAICredentialBindingFormComponent } from "./Entities/AICredentialBinding/aicredentialbinding.form.component";
 import { AIModelCostFormComponent, LoadAIModelCostFormComponent } from "./Entities/AIModelCost/aimodelcost.form.component";
 import { AIModelPriceTypeFormComponent, LoadAIModelPriceTypeFormComponent } from "./Entities/AIModelPriceType/aimodelpricetype.form.component";
 import { AIModelPriceUnitTypeFormComponent, LoadAIModelPriceUnitTypeFormComponent } from "./Entities/AIModelPriceUnitType/aimodelpriceunittype.form.component";
@@ -173,8 +174,14 @@ import { ConversationArtifactVersionFormComponent, LoadConversationArtifactVersi
 import { ConversationArtifactFormComponent, LoadConversationArtifactFormComponent } from "./Entities/ConversationArtifact/conversationartifact.form.component";
 import { ConversationDetailArtifactFormComponent, LoadConversationDetailArtifactFormComponent } from "./Entities/ConversationDetailArtifact/conversationdetailartifact.form.component";
 import { ConversationDetailRatingFormComponent, LoadConversationDetailRatingFormComponent } from "./Entities/ConversationDetailRating/conversationdetailrating.form.component";
+import { CredentialCategoryFormComponent, LoadCredentialCategoryFormComponent } from "./Entities/CredentialCategory/credentialcategory.form.component";
+import { CredentialTypeFormComponent, LoadCredentialTypeFormComponent } from "./Entities/CredentialType/credentialtype.form.component";
+import { CredentialFormComponent, LoadCredentialFormComponent } from "./Entities/Credential/credential.form.component";
 import { DashboardUserPreferenceFormComponent, LoadDashboardUserPreferenceFormComponent } from "./Entities/DashboardUserPreference/dashboarduserpreference.form.component";
 import { DashboardUserStateFormComponent, LoadDashboardUserStateFormComponent } from "./Entities/DashboardUserState/dashboarduserstate.form.component";
+import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent } from "./Entities/EncryptionAlgorithm/encryptionalgorithm.form.component";
+import { EncryptionKeySourceFormComponent, LoadEncryptionKeySourceFormComponent } from "./Entities/EncryptionKeySource/encryptionkeysource.form.component";
+import { EncryptionKeyFormComponent, LoadEncryptionKeyFormComponent } from "./Entities/EncryptionKey/encryptionkey.form.component";
 import { EnvironmentFormComponent, LoadEnvironmentFormComponent } from "./Entities/Environment/environment.form.component";
 import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
 import { PublicLinkFormComponent, LoadPublicLinkFormComponent } from "./Entities/PublicLink/publiclink.form.component";
@@ -503,7 +510,7 @@ declarations: [
     AIAgentTypeFormComponent,
     AIConfigurationParamFormComponent,
     AIConfigurationFormComponent,
-    AIModelCostFormComponent],
+    AICredentialBindingFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -529,6 +536,7 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    AIModelCostFormComponent,
     AIModelPriceTypeFormComponent,
     AIModelPriceUnitTypeFormComponent,
     AIModelVendorFormComponent,
@@ -547,8 +555,7 @@ declarations: [
     CollectionPermissionFormComponent,
     CollectionFormComponent,
     ComponentDependencyFormComponent,
-    ComponentLibraryFormComponent,
-    ComponentLibraryLinkFormComponent],
+    ComponentLibraryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -574,6 +581,7 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    ComponentLibraryLinkFormComponent,
     ComponentRegistryFormComponent,
     ComponentFormComponent,
     ConversationArtifactPermissionFormComponent,
@@ -581,19 +589,18 @@ declarations: [
     ConversationArtifactFormComponent,
     ConversationDetailArtifactFormComponent,
     ConversationDetailRatingFormComponent,
+    CredentialCategoryFormComponent,
+    CredentialTypeFormComponent,
+    CredentialFormComponent,
     DashboardUserPreferenceFormComponent,
     DashboardUserStateFormComponent,
+    EncryptionAlgorithmFormComponent,
+    EncryptionKeySourceFormComponent,
+    EncryptionKeyFormComponent,
     EnvironmentFormComponent,
     ProjectFormComponent,
     PublicLinkFormComponent,
-    QueryParameterFormComponent,
-    RecordLinkFormComponent,
-    ReportUserStateFormComponent,
-    ReportVersionFormComponent,
-    ScheduledJobRunFormComponent,
-    ScheduledJobTypeFormComponent,
-    ScheduledJobFormComponent,
-    TaskDependencyFormComponent],
+    QueryParameterFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -619,6 +626,13 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    RecordLinkFormComponent,
+    ReportUserStateFormComponent,
+    ReportVersionFormComponent,
+    ScheduledJobRunFormComponent,
+    ScheduledJobTypeFormComponent,
+    ScheduledJobFormComponent,
+    TaskDependencyFormComponent,
     TaskTypeFormComponent,
     TaskFormComponent,
     TestRubricFormComponent,
@@ -631,14 +645,7 @@ declarations: [
     TestFormComponent,
     UserSettingFormComponent,
     OutputDeliveryTypeFormComponent,
-    OutputFormatTypeFormComponent,
-    OutputTriggerTypeFormComponent,
-    QueryFormComponent,
-    QueryCategoryFormComponent,
-    QueryEntityFormComponent,
-    QueryFieldFormComponent,
-    QueryPermissionFormComponent,
-    QueueTaskFormComponent],
+    OutputFormatTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -664,6 +671,13 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    OutputTriggerTypeFormComponent,
+    QueryFormComponent,
+    QueryCategoryFormComponent,
+    QueryEntityFormComponent,
+    QueryFieldFormComponent,
+    QueryPermissionFormComponent,
+    QueueTaskFormComponent,
     QueueTypeFormComponent,
     QueueFormComponent,
     RecommendationItemFormComponent,
@@ -676,14 +690,7 @@ declarations: [
     RecordMergeLogFormComponent,
     ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
-    ReportFormComponent,
-    ResourceLinkFormComponent,
-    ResourcePermissionFormComponent,
-    ResourceTypeFormComponent,
-    RoleFormComponent,
-    RowLevelSecurityFilterFormComponent,
-    ScheduledActionParamFormComponent,
-    ScheduledActionFormComponent],
+    ReportFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -709,6 +716,13 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    ResourceLinkFormComponent,
+    ResourcePermissionFormComponent,
+    ResourceTypeFormComponent,
+    RoleFormComponent,
+    RowLevelSecurityFilterFormComponent,
+    ScheduledActionParamFormComponent,
+    ScheduledActionFormComponent,
     SchemaInfoFormComponent,
     SkillFormComponent,
     TaggedItemFormComponent,
@@ -721,14 +735,7 @@ declarations: [
     UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
-    UserNotificationFormComponent,
-    UserRecordLogFormComponent,
-    UserRoleFormComponent,
-    UserViewCategoryFormComponent,
-    UserViewRunDetailFormComponent,
-    UserViewRunFormComponent,
-    UserViewFormComponent,
-    UserFormComponent],
+    UserNotificationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -754,6 +761,13 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    UserRecordLogFormComponent,
+    UserRoleFormComponent,
+    UserViewCategoryFormComponent,
+    UserViewRunDetailFormComponent,
+    UserViewRunFormComponent,
+    UserViewFormComponent,
+    UserFormComponent,
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
@@ -930,6 +944,7 @@ export function LoadCoreGeneratedForms() {
     LoadAIAgentTypeFormComponent();
     LoadAIConfigurationParamFormComponent();
     LoadAIConfigurationFormComponent();
+    LoadAICredentialBindingFormComponent();
     LoadAIModelCostFormComponent();
     LoadAIModelPriceTypeFormComponent();
     LoadAIModelPriceUnitTypeFormComponent();
@@ -958,8 +973,14 @@ export function LoadCoreGeneratedForms() {
     LoadConversationArtifactFormComponent();
     LoadConversationDetailArtifactFormComponent();
     LoadConversationDetailRatingFormComponent();
+    LoadCredentialCategoryFormComponent();
+    LoadCredentialTypeFormComponent();
+    LoadCredentialFormComponent();
     LoadDashboardUserPreferenceFormComponent();
     LoadDashboardUserStateFormComponent();
+    LoadEncryptionAlgorithmFormComponent();
+    LoadEncryptionKeySourceFormComponent();
+    LoadEncryptionKeyFormComponent();
     LoadEnvironmentFormComponent();
     LoadProjectFormComponent();
     LoadPublicLinkFormComponent();

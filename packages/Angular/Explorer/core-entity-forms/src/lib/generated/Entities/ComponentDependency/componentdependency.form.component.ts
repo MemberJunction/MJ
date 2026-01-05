@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Component Dependencies') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-componentdependency-form',
     templateUrl: './componentdependency.form.component.html'
 })

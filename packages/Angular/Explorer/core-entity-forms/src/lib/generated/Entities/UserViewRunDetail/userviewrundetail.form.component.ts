@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'User View Run Details') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-userviewrundetail-form',
     templateUrl: './userviewrundetail.form.component.html'
 })

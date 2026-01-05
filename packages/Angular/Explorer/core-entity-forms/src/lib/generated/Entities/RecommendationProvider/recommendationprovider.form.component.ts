@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Recommendation Providers') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-recommendationprovider-form',
     templateUrl: './recommendationprovider.form.component.html'
 })

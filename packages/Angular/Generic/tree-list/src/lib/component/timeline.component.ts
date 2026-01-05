@@ -67,7 +67,8 @@ export class TimelineGroup {
     params.ResultType = 'entity_object'; // this might be already set but we want to make sure of it
     const result = await rv.RunView<BaseEntity>(params);
     if (result && result.Success) {
-      group.EntityName = await RunView.GetEntityNameFromRunViewParams(params);
+      const entityName = await RunView.GetEntityNameFromRunViewParams(params);
+      group.EntityName = entityName || ''; // Handle null case with empty string
       group.EntityObjects = result.Results;
     }
     return group;

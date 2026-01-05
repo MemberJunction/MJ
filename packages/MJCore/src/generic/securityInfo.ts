@@ -9,93 +9,93 @@ export class UserInfo extends BaseInfo {
     /**
      * Unique identifier for the user
      */
-    ID: string = null;
+    ID: string | null = null;
 
     /**
      * Name of the user that is used in various places in UIs/etc, can be anything including FirstLast, Email, a Handle, etc
      */
-    Name: string = null
-    
+    Name: string | null = null
+
     /**
      * User's first name or given name
      */
-    FirstName: string = null
-    
+    FirstName: string | null = null
+
     /**
      * User's last name or surname
      */
-    LastName: string = null
-    
+    LastName: string | null = null
+
     /**
      * User's professional title or salutation
      */
-    Title: string = null
-    
+    Title: string | null = null
+
     /**
      * Unique email address for the user. This field must be unique across all users in the system
      */
-    Email: string = null
-    
+    Email: string | null = null
+
     /**
      * User account type (User, Owner)
      */
-    Type: string = null
-    
+    Type: string | null = null
+
     /**
      * Whether this user account is currently active and can log in
      */
-    IsActive: boolean = null
-    
+    IsActive: boolean | null = null
+
     /**
      * Type of record this user is linked to (None, Employee, Contact, etc.)
      */
-    LinkedRecordType: 'None' | 'Employee' | 'Other' = null
-    
+    LinkedRecordType: 'None' | 'Employee' | 'Other' | null = null
+
     /**
      * Foreign key reference to the Employee entity
      */
-    EmployeeID: number = null
-    
+    EmployeeID: number | null = null
+
     /**
      * Foreign key reference to the Entities table
      */
-    LinkedEntityID: number = null
-    
+    LinkedEntityID: number | null = null
+
     /**
      * ID of the specific record this user is linked to
      */
-    LinkedEntityRecordID: number = null
-    
+    LinkedEntityRecordID: number | null = null
+
     /**
      * Timestamp when the user record was created
      */
-    __mj_CreatedAt: Date = null
-    
+    __mj_CreatedAt: Date | null = null
+
     /**
      * Timestamp when the user record was last updated
      */
-    __mj_UpdatedAt: Date = null
+    __mj_UpdatedAt: Date | null = null
 
     // virtual fields - returned by the database VIEW
     /**
      * Concatenated first and last name
      */
-    FirstLast: string = null
-    
+    FirstLast: string | null = null
+
     /**
      * Employee's concatenated first and last name
      */
-    EmployeeFirstLast: string = null
-    
+    EmployeeFirstLast: string | null = null
+
     /**
      * Employee's email address
      */
-    EmployeeEmail: string = null
-    
+    EmployeeEmail: string | null = null
+
     /**
      * Employee's job title
      */
-    EmployeeTitle: string = null
+    EmployeeTitle: string | null = null
     
     /**
      * Name of the employee's supervisor
@@ -287,48 +287,48 @@ export class AuthorizationInfo extends BaseInfo {
     /**
      * Unique identifier for the authorization
      */
-    ID: string = null
-    
+    ID: string | null = null
+
     /**
      * The unique identifier for the parent authorization, if applicable
      */
-    ParentID: string = null
-    
+    ParentID: string | null = null
+
     /**
      * Name of the authorization
      */
-    Name: string = null
-    
+    Name: string | null = null
+
     /**
      * Indicates whether this authorization is currently active and can be granted to users or roles
      */
-    IsActive: boolean = null
-    
+    IsActive: boolean | null = null
+
     /**
      * When set to 1, Audit Log records are created whenever this authorization is invoked for a user
      */
-    UseAuditLog: boolean = null
+    UseAuditLog: boolean | null = null
 
     /**
      * Description of the authorization
      */
-    Description: string = null
-    
+    Description: string | null = null
+
     /**
      * Timestamp when the authorization was created
      */
-    __mj_CreatedAt: Date = null
-    
+    __mj_CreatedAt: Date | null = null
+
     /**
      * Timestamp when the authorization was last updated
      */
-    __mj_UpdatedAt: Date = null
+    __mj_UpdatedAt: Date | null = null
 
     // virtual fields from base view
     /**
      * Name of the parent authorization
      */
-    Parent: string
+    Parent: string | null = null
 
     private _AuthorizationRoles: AuthorizationRoleInfo[] = []
     get Roles(): AuthorizationRoleInfo[] {
@@ -410,45 +410,45 @@ export class AuthorizationRoleInfo extends BaseInfo {
     /**
      * Unique identifier for the authorization-role mapping
      */
-    ID: string = null
-    
+    ID: string | null = null
+
     /**
      * Foreign key reference to the Authorizations table
      */
-    AuthorizationID: string = null
-    
+    AuthorizationID: string | null = null
+
     /**
      * Foreign key reference to the Roles table
      */
-    RoleID: string = null
-    
+    RoleID: string | null = null
+
     /**
      * Specifies whether this authorization is granted to ('Allow') or explicitly denied ('Deny') for the role. Deny overrides Allow from all other roles a user may be part of
      */
-    Type: string = null
-    
+    Type: string | null = null
+
     /**
      * Timestamp when the authorization-role mapping was created
      */
-    __mj_CreatedAt: Date = null
-    
+    __mj_CreatedAt: Date | null = null
+
     /**
      * Timestamp when the authorization-role mapping was last updated
      */
-    __mj_UpdatedAt: Date = null
+    __mj_UpdatedAt: Date | null = null
 
     // virtual fields from base view
     /**
      * Name of the authorization
      */
-    Authorization: string
-    
+    Authorization: string | null = null
+
     /**
      * Name of the role
      */
-    Role: string
+    Role: string | null = null
 
-    private _RoleInfo: RoleInfo = null
+    private _RoleInfo: RoleInfo | null = null
     public get RoleInfo(): RoleInfo {
         return this._RoleInfo
     }
@@ -475,43 +475,43 @@ export class AuditLogTypeInfo extends BaseInfo {
     /**
      * Unique identifier for the audit log type
      */
-    ID: string = null
-    
+    ID: string | null = null
+
     /**
      * Foreign key reference to the parent Audit Log Type
      */
-    ParentID: string = null
-    
+    ParentID: string | null = null
+
     /**
      * Name of the audit log type
      */
-    Name: string = null
-    
+    Name: string | null = null
+
     /**
      * Description of the audit log type
      */
-    Description: string = null
-    
+    Description: string | null = null
+
     /**
      * Name of the associated authorization
      */
-    AuthorizationName: string = null
-    
+    AuthorizationName: string | null = null
+
     /**
      * Timestamp when the audit log type was created
      */
-    __mj_CreatedAt: Date = null
-    
+    __mj_CreatedAt: Date | null = null
+
     /**
      * Timestamp when the audit log type was last updated
      */
-    __mj_UpdatedAt: Date = null
+    __mj_UpdatedAt: Date | null = null
 
     // virtual fields from base view
     /**
      * Name of the parent audit log type
      */
-    Parent: string
+    Parent: string | null = null
 
     constructor (initData: any) {
         super();

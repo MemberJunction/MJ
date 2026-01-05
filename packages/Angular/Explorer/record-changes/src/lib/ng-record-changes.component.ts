@@ -40,7 +40,7 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
   constructor(private renderer: Renderer2, private mjNotificationService: MJNotificationService, private sanitizer: DomSanitizer) { }
 
   ngOnInit(): void {
-    if(this.record){
+    if(this.record && this.record.EntityInfo.Name){
       this.showloader = true;
       this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
     }
@@ -220,8 +220,8 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
       // Get field display names
       const fieldNames = fields.map(fieldKey => {
         const changeInfo = changesJson[fieldKey];
-        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) => 
-          f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
+        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) =>
+          f.Name && f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
         );
         return field?.DisplayNameOrName || changeInfo.field;
       });
@@ -251,8 +251,8 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
       
       return fields.map(fieldKey => {
         const changeInfo = changesJson[fieldKey];
-        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) => 
-          f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
+        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) =>
+          f.Name && f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
         );
         
         const isBooleanField = field?.TSType === EntityFieldTSType.Boolean;
@@ -291,11 +291,11 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
       const fields = this.record.EntityInfo.Fields;
       
       return fields
-        .filter((field: EntityFieldInfo) => record[field.Name] !== null && record[field.Name] !== undefined && record[field.Name] !== '')
+        .filter((field: EntityFieldInfo) => field.Name && record[field.Name!] !== null && record[field.Name!] !== undefined && record[field.Name!] !== '')
         .map((field: EntityFieldInfo) => ({
-          name: field.Name,
+          name: field.Name!,
           displayName: field.DisplayNameOrName,
-          value: record[field.Name]
+          value: record[field.Name!]
         }));
     } catch {
       return [];

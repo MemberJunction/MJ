@@ -23,12 +23,13 @@ import {
  * @returns Formatted entity metadata ready for AI prompts
  */
 export function formatEntityMetadataForPrompt(entity: EntityInfo, allEntities: EntityInfo[]): EntityMetadataForPrompt {
+  const entityName = entity.Name ?? '';
   return {
-    entityName: entity.Name,
-    description: entity.Description || '',
-    schemaName: entity.SchemaName || 'dbo',
-    baseTable: entity.BaseTable || entity.Name,
-    baseView: entity.BaseView || `vw${entity.Name}`,
+    entityName,
+    description: entity.Description ?? '',
+    schemaName: entity.SchemaName ?? 'dbo',
+    baseTable: entity.BaseTable ?? entityName,
+    baseView: entity.BaseView ?? `vw${entityName}`,
     fields: formatEntityFields(entity),
     relationships: formatEntityRelationships(entity, allEntities),
   };
@@ -40,40 +41,45 @@ export function formatEntityMetadataForPrompt(entity: EntityInfo, allEntities: E
  * Labels internal (__mj_*) and virtual fields appropriately
  */
 function formatEntityFields(entity: EntityInfo): EntityFieldMetadata[] {
-  return entity.Fields.map((field) => {
-    const isInternalField = field.Name.startsWith('__mj_');
-    const isVirtualField = field.IsVirtual || false;
+  return entity.Fields
+    .filter(field => field.Name != null) // Filter out fields with null names
+    .map((field) => {
+      const fieldName = field.Name!; // Safe to assert non-null after filter
+      const isInternalField = fieldName.startsWith('__mj_');
+      const isVirtualField = field.IsVirtual || false;
 
-    let description = field.Description || '';
+      let description = field.Description ?? '';
 
-    // Add labels for special fields
-    if (isInternalField) {
-      description = `[INTERNAL] ${description}`;
-    } else if (isVirtualField) {
-      description = `[VIRTUAL] ${description}`;
-    }
+      // Add labels for special fields
+      if (isInternalField) {
+        description = `[INTERNAL] ${description}`;
+      } else if (isVirtualField) {
+        description = `[VIRTUAL] ${description}`;
+      }
 
-    // Extract possible values from EntityFieldValues if available
-    const possibleValues = field.EntityFieldValues && field.EntityFieldValues.length > 0
-      ? field.EntityFieldValues.map(efv => efv.Value)
-      : undefined;
+      // Extract possible values from EntityFieldValues if available
+      const possibleValues = field.EntityFieldValues && field.EntityFieldValues.length > 0
+        ? field.EntityFieldValues
+            .map(efv => efv.Value)
+            .filter((value): value is string => value != null)
+        : undefined;
 
-    return {
-      name: field.Name,
-      displayName: field.DisplayName || field.Name,
-      type: field.Type,
-      sqlFullType: field.SQLFullType,
-      description,
-      isPrimaryKey: field.IsPrimaryKey || false,
-      isForeignKey: field.RelatedEntityID != null && field.RelatedEntityID.trim().length > 0,
-      isVirtual: isVirtualField,
-      allowsNull: field.AllowsNull,
-      relatedEntity: field.RelatedEntity || undefined,
-      isRequired: !field.AllowsNull,
-      defaultValue: field.DefaultValue || undefined,
-      possibleValues,
-    };
-  });
+      return {
+        name: fieldName,
+        displayName: field.DisplayName ?? fieldName,
+        type: field.Type ?? '',
+        sqlFullType: field.SQLFullType,
+        description,
+        isPrimaryKey: field.IsPrimaryKey || false,
+        isForeignKey: field.RelatedEntityID != null && field.RelatedEntityID.trim().length > 0,
+        isVirtual: isVirtualField,
+        allowsNull: field.AllowsNull ?? false,
+        relatedEntity: field.RelatedEntity ?? undefined,
+        isRequired: !field.AllowsNull,
+        defaultValue: field.DefaultValue ?? undefined,
+        possibleValues,
+      };
+    });
 }
 
 /**
@@ -84,27 +90,29 @@ function formatEntityFields(entity: EntityInfo): EntityFieldMetadata[] {
  */
 function formatEntityRelationships(entity: EntityInfo, allEntities: EntityInfo[]): EntityRelationshipMetadata[] {
   // Create set of entity names in the group for filtering
-  const entityNamesInGroup = new Set(allEntities.map(e => e.Name));
+  const entityNamesInGroup = new Set(allEntities.map(e => e.Name).filter((name): name is string => name != null));
 
   // Use entity.RelatedEntities getter which returns EntityRelationshipInfo[]
   return entity.RelatedEntities
-    .filter(rel => entityNamesInGroup.has(rel.RelatedEntity))  // Only include relationships within the group
+    .filter(rel => rel.RelatedEntity != null && entityNamesInGroup.has(rel.RelatedEntity))  // Only include relationships within the group
     .map(rel => {
-      const relatedEntity = findEntityById(rel.RelatedEntityID, allEntities);
+      const relatedEntityName = rel.RelatedEntity!; // Safe to assert non-null after filter
+      const relatedEntity = findEntityById(rel.RelatedEntityID ?? '', allEntities);
 
       // Determine the foreign key field based on relationship type and available fields
       let foreignKeyField: string;
       let joinDescription: string;
 
-      const currentSchema = entity.SchemaName || 'dbo';
-      const currentView = entity.BaseView || `vw${entity.Name}`;
-      const relatedSchema = relatedEntity?.SchemaName || 'dbo';
-      const relatedView = relatedEntity?.BaseView || `vw${rel.RelatedEntity}`;
+      const entityName = entity.Name ?? '';
+      const currentSchema = entity.SchemaName ?? 'dbo';
+      const currentView = entity.BaseView ?? `vw${entityName}`;
+      const relatedSchema = relatedEntity?.SchemaName ?? 'dbo';
+      const relatedView = relatedEntity?.BaseView ?? `vw${relatedEntityName}`;
 
       if (rel.EntityKeyField && rel.EntityKeyField.trim() !== '') {
         // Current entity has the foreign key
         foreignKeyField = rel.EntityKeyField;
-        const relatedJoinField = rel.RelatedEntityJoinField || 'ID';
+        const relatedJoinField = rel.RelatedEntityJoinField ?? 'ID';
         joinDescription = `${currentSchema}.${currentView}.${foreignKeyField} = ${relatedSchema}.${relatedView}.${relatedJoinField}`;
       } else if (rel.RelatedEntityJoinField && rel.RelatedEntityJoinField.trim() !== '') {
         // Related entity has the foreign key pointing back to this entity
@@ -113,14 +121,14 @@ function formatEntityRelationships(entity: EntityInfo, allEntities: EntityInfo[]
       } else {
         // No foreign key field specified (possibly many-to-many through join table)
         foreignKeyField = '';
-        joinDescription = `Related via ${rel.JoinView || 'join table'}`;
+        joinDescription = `Related via ${rel.JoinView ?? 'join table'}`;
       }
 
       return {
-        type: mapRelationshipType(rel.Type),
-        relatedEntity: rel.RelatedEntity,
-        relatedEntityView: relatedEntity?.BaseView || `vw${rel.RelatedEntity}`,
-        relatedEntitySchema: relatedEntity?.SchemaName || 'dbo',
+        type: mapRelationshipType(rel.Type ?? ''),
+        relatedEntity: relatedEntityName,
+        relatedEntityView: relatedEntity?.BaseView ?? `vw${relatedEntityName}`,
+        relatedEntitySchema: relatedEntity?.SchemaName ?? 'dbo',
         foreignKeyField,
         description: joinDescription,
       };

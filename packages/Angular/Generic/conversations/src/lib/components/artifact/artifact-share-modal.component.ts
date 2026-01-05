@@ -15,8 +15,6 @@ interface PermissionDisplay extends ArtifactPermission {
 
 @Component({
     selector: 'mj-artifact-share-modal',
-    standalone: true,
-    imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
     template: `
         @if (isOpen && artifact) {
             <kendo-window
@@ -257,7 +255,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
     }
 
     private async updateAvailablePermissions(): Promise<void> {
-        if (!this.artifact) return;
+        if (!this.artifact || !this.currentUser || !this.currentUser.ID) return;
 
         // Check if current user is owner
         const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
@@ -298,7 +296,9 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
 
     getExcludedUserIds(): string[] {
         const ids = this.permissions.map(p => p.userId);
-        ids.push(this.currentUser.ID); // Can't share with yourself
+        if (this.currentUser.ID) {
+            ids.push(this.currentUser.ID); // Can't share with yourself
+        }
         if (this.artifact?.UserID) {
             ids.push(this.artifact.UserID); // Owner already has all permissions
         }
@@ -321,7 +321,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
     }
 
     async onAddUser(): Promise<void> {
-        if (!this.selectedUser || !this.artifact) return;
+        if (!this.selectedUser || !this.artifact || !this.currentUser.ID) return;
 
         try {
             // Check if user is owner
@@ -384,7 +384,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
     }
 
     async onSavePermission(permission: PermissionDisplay): Promise<void> {
-        if (!this.artifact) return;
+        if (!this.artifact || !this.currentUser.ID) return;
 
         try {
             // Check if user is owner

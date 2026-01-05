@@ -198,10 +198,13 @@ export class ManageMetadataBase {
             // we have 1+ fields, now loop through them and process each one
             // first though, remove any fields that are no longer in the view
             const md = new Metadata();
+            if (!virtualEntity.Name) {
+               throw new Error('Virtual entity missing Name property');
+            }
             const entity = md.EntityByName(virtualEntity.Name)
             if (entity) {
                const removeList = [];
-               const fieldsToRemove = entity.Fields.filter(f => !veFields.find((vf: any) => vf.FieldName === f.Name));
+               const fieldsToRemove = entity.Fields.filter(f => f.Name && !veFields.find((vf: any) => vf.FieldName === f.Name));
                for (const f of fieldsToRemove) {
                   removeList.push(f.ID);
                }
@@ -254,9 +257,12 @@ export class ManageMetadataBase {
       let newEntityFieldUUID = null;
       let didUpdate: boolean = false;
       if (entity) {
-         const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === veField.FieldName.trim().toLowerCase());
+         const field = entity.Fields.find(f => f.Name && f.Name.trim().toLowerCase() === veField.FieldName.trim().toLowerCase());
          if (field) {
             // have a match, so the field exists in the entity definition, now check to see if it needs to be updated
+            if (!field.Type) {
+               throw new Error(`Field ${field.Name} missing Type property`);
+            }
             if (makePrimaryKey ||
                 field.Type.trim().toLowerCase() !== veField.Type.trim().toLowerCase() ||
                 field.Length !== veField.Length ||
@@ -436,11 +442,11 @@ export class ManageMetadataBase {
 
                   // next up we need to remove the spCreate, spDelete, spUpdate, BaseView, and FullTextSearchFunction, if provided.
                   // We only remoe these artifcacts when they are generated which is info we have in the BaseViewGenerated, spCreateGenerated, etc. fields
-                  await this.checkDropSQLObject(pool, e.BaseViewGenerated, 'view', e.SchemaName, e.BaseView);
-                  await this.checkDropSQLObject(pool, e.spCreateGenerated, 'procedure', e.SchemaName, e.spCreate ? e.spCreate : `spCreate${e.BaseTableCodeName}`);
-                  await this.checkDropSQLObject(pool, e.spDeleteGenerated, 'procedure', e.SchemaName, e.spDelete ? e.spDelete : `spDelete${e.BaseTableCodeName}`);
-                  await this.checkDropSQLObject(pool, e.spUpdateGenerated, 'procedure', e.SchemaName, e.spUpdate ? e.spUpdate : `spUpdate${e.BaseTableCodeName}`);
-                  await this.checkDropSQLObject(pool, e.FullTextSearchFunctionGenerated, 'function', e.SchemaName, e.FullTextSearchFunction);
+                  await this.checkDropSQLObject(pool, e.BaseViewGenerated ?? false, 'view', e.SchemaName ?? 'dbo', e.BaseView ?? '');
+                  await this.checkDropSQLObject(pool, e.spCreateGenerated ?? false, 'procedure', e.SchemaName ?? 'dbo', e.spCreate ? e.spCreate : `spCreate${e.BaseTableCodeName}`);
+                  await this.checkDropSQLObject(pool, e.spDeleteGenerated ?? false, 'procedure', e.SchemaName ?? 'dbo', e.spDelete ? e.spDelete : `spDelete${e.BaseTableCodeName}`);
+                  await this.checkDropSQLObject(pool, e.spUpdateGenerated ?? false, 'procedure', e.SchemaName ?? 'dbo', e.spUpdate ? e.spUpdate : `spUpdate${e.BaseTableCodeName}`);
+                  await this.checkDropSQLObject(pool, e.FullTextSearchFunctionGenerated ?? false, 'function', e.SchemaName ?? 'dbo', e.FullTextSearchFunction ?? '');
                }
                catch (ex) {
                   logError(`Error removing metadata for entity ${(ex as any).Name}, error: ${ex}`);
@@ -1781,7 +1787,7 @@ NumberedRows AS (
             const newEntityDisplayName = this.createNewEntityDisplayName(newEntity, newEntityName);
 
             let suffix = '';
-            const existingEntity = md.Entities.find(e => e.Name.toLowerCase() === newEntityName.toLowerCase());
+            const existingEntity = md.Entities.find(e => e.Name && e.Name.toLowerCase() === newEntityName.toLowerCase());
             const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
             if (existingEntity || existingEntityInNewEntityList) {
                // the generated name is already in place, so we need another name
@@ -1851,7 +1857,7 @@ NumberedRows AS (
                // we are asked to add permissions for new entities, so do that by looping through the permissions and adding them
                const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
                for (const p of permissions) {
-                  const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
+                  const RoleID = md.Roles.find(r => r.Name && r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
                   if (RoleID) {
                      const sSQLInsertPermission = `INSERT INTO ${mj_core_schema()}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES

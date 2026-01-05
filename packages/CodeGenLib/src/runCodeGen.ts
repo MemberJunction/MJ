@@ -238,10 +238,10 @@ export class RunCodeGenBase {
       }
 
       const coreEntities = md.Entities.filter((e) => e.IncludeInAPI).filter(
-        (e) => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
+        (e) => e.SchemaName && e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
       );
       const nonCoreEntities = md.Entities.filter((e) => e.IncludeInAPI).filter(
-        (e) => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
+        (e) => e.SchemaName && e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
       );
 
       // Check if we're in verbose mode to determine spinner behavior

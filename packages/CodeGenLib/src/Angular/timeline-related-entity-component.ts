@@ -100,12 +100,22 @@ export class TimelineRelatedEntityGenerator extends RelatedEntityDisplayComponen
      * @throws Error if the DisplayComponentConfiguration is invalid JSON
      */
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
+        if (!input.RelationshipInfo!.DisplayComponentConfiguration) {
+            throw new Error(`DisplayComponentConfiguration is null for relationship ${input.RelationshipInfo!.ID}`);
+        }
         const config = SafeJSONParse<TimelineConfigInfo>(input.RelationshipInfo!.DisplayComponentConfiguration);
         if (!config)
             throw new Error("Invalid configuration for component for relationship " + input.RelationshipInfo!.ID);
 
+        if (!input.RelationshipInfo!.RelatedEntity || !input.Entity!.Name || !input.Entity!.FirstPrimaryKey?.Name) {
+            throw new Error(`Missing required properties for Timeline generation: RelatedEntity=${input.RelationshipInfo!.RelatedEntity}, EntityName=${input.Entity!.Name}, PrimaryKeyName=${input.Entity!.FirstPrimaryKey?.Name}`);
+        }
+
         // Get the foreign key field that links the related entity back to the parent entity
         const fk = this.GetForeignKey(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name);
+        if (!fk.Name) {
+            throw new Error(`Foreign key field has null Name for ${input.RelationshipInfo!.RelatedEntity} -> ${input.Entity!.Name}`);
+        }
         // Build the filter expression to show only records related to the current parent record
         const filter = `'${fk.Name}=' + record.${input.Entity!.FirstPrimaryKey.Name}`;
         

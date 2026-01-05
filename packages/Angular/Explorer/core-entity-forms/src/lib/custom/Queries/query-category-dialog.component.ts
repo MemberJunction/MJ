@@ -111,9 +111,15 @@ export class QueryCategoryDialogComponent implements OnInit {
         }
         
         this.isCreating = true;
-        
+
         try {
             const md = new Metadata();
+
+            // Check if CurrentUser and ID exist
+            if (!md.CurrentUser || !md.CurrentUser.ID) {
+                throw new Error('No current user or user ID available');
+            }
+
             const newCategory = await md.GetEntityObject<QueryCategoryEntity>('Query Categories');
             newCategory.Name = this.categoryName.trim();
             newCategory.ParentID = this.selectedParentId;

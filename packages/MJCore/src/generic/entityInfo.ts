@@ -24,15 +24,15 @@ export type RecordChangeStatus = typeof RecordChangeStatus[keyof typeof RecordCh
  * Record Change object has information on a change to a record in the Record Changes entity
  */
 export class RecordChange extends BaseInfo {
-    ID: string = null
+    ID: string | null = null
 
-    EntityID: string = null
+    EntityID: string | null = null
     RecordID: any = null
-    ChangedAt: Date = null
-    ChangesJSON: string = null
-    ChangesDescription: string = null
-    FullRecordJSON: string = null
-    Status: string = null
+    ChangedAt: Date | null = null
+    ChangesJSON: string | null = null
+    ChangesDescription: string | null = null
+    FullRecordJSON: string | null = null
+    Status: string | null = null
     
     get StatusValue(): RecordChangeStatus {
         return RecordChangeStatus[this.Status?.trim()]
@@ -61,29 +61,29 @@ export class RecordChange extends BaseInfo {
  * Defines foreign key relationships and how they should be represented in the user interface.
  */
 export class EntityRelationshipInfo extends BaseInfo  {
-    ID: string = null
+    ID: string | null = null
 
-    EntityID: string = null 
-    Sequence: number = null
-    RelatedEntityID: string = null
-    BundleInAPI: boolean = null
-    IncludeInParentAllQuery: boolean = null
-    Type: string = null 
-    EntityKeyField: string = null
-    RelatedEntityJoinField: string = null
-    JoinView: string = null 
-    JoinEntityJoinField: string = null  
-    JoinEntityInverseJoinField: string = null     
-    DisplayInForm: boolean = null
+    EntityID: string | null = null 
+    Sequence: number | null = null
+    RelatedEntityID: string | null = null
+    BundleInAPI: boolean | null = null
+    IncludeInParentAllQuery: boolean | null = null
+    Type: string | null = null 
+    EntityKeyField: string | null = null
+    RelatedEntityJoinField: string | null = null
+    JoinView: string | null = null 
+    JoinEntityJoinField: string | null = null  
+    JoinEntityInverseJoinField: string | null = null     
+    DisplayInForm: boolean | null = null
     DisplayLocation: 'After Field Tabs' | 'Before Field Tabs' = 'After Field Tabs'
-    DisplayName: string = null
+    DisplayName: string | null = null
     DisplayIconType: 'Related Entity Icon'| 'Custom' | 'None' = 'Related Entity Icon'
-    DisplayIcon: string = null
-    DisplayUserViewID: string = null
-    DisplayComponentID: string = null
-    DisplayComponentConfiguration: string = null
-    __mj_CreatedAt: Date = null
-    __mj_UpdatedAt: Date = null
+    DisplayIcon: string | null = null
+    DisplayUserViewID: string | null = null
+    DisplayComponentID: string | null = null
+    DisplayComponentConfiguration: string | null = null
+    __mj_CreatedAt: Date | null = null
+    __mj_UpdatedAt: Date | null = null
 
     /**
     * * Field Name: AutoUpdateFromSchema
@@ -96,17 +96,17 @@ export class EntityRelationshipInfo extends BaseInfo  {
 
 
     // virtual fields - returned by the database VIEW
-    Entity: string = null 
-    EntityBaseTable: string = null 
-    EntityBaseView: string = null 
-    RelatedEntity: string = null  
-    RelatedEntityBaseTable: string = null 
-    RelatedEntityBaseView: string = null 
-    RelatedEntityCodeName: string = null
-    RelatedEntityClassName: string = null
-    RelatedEntityBaseTableCodeName: string = null
-    DisplayUserViewName: string = null
-    DisplayComponent: string = null
+    Entity: string | null = null 
+    EntityBaseTable: string | null = null 
+    EntityBaseView: string | null = null 
+    RelatedEntity: string | null = null  
+    RelatedEntityBaseTable: string | null = null 
+    RelatedEntityBaseView: string | null = null 
+    RelatedEntityCodeName: string | null = null
+    RelatedEntityClassName: string | null = null
+    RelatedEntityBaseTableCodeName: string | null = null
+    DisplayUserViewName: string | null = null
+    DisplayComponent: string | null = null
 
     constructor (initData: any) {
         super();
@@ -125,7 +125,7 @@ export type EntityPermissionType = typeof EntityPermissionType[keyof typeof Enti
 
 
 export class EntityUserPermissionInfo {
-    ID: string = null
+    ID: string | null = null
 
     Entity: EntityInfo;
     User: UserInfo;
@@ -140,29 +140,29 @@ export class EntityUserPermissionInfo {
  * Controls which roles can perform create, read, update, and delete operations.
  */
 export class EntityPermissionInfo extends BaseInfo{
-    ID: string = null
+    ID: string | null = null
 
-    EntityID: string = null
-    RoleID: string = null
-    CanCreate: boolean = null
-    CanRead: boolean = null
-    CanUpdate: boolean = null
-    CanDelete: boolean = null
-    ReadRLSFilterID: string = null
-    CreateRLSFilterID: string = null
-    UpdateRLSFilterID: string = null
-    DeleteRLSFilterID: string = null
-    __mj_CreatedAt: Date = null
-    __mj_UpdatedAt: Date = null
+    EntityID: string | null = null
+    RoleID: string | null = null
+    CanCreate: boolean | null = null
+    CanRead: boolean | null = null
+    CanUpdate: boolean | null = null
+    CanDelete: boolean | null = null
+    ReadRLSFilterID: string | null = null
+    CreateRLSFilterID: string | null = null
+    UpdateRLSFilterID: string | null = null
+    DeleteRLSFilterID: string | null = null
+    __mj_CreatedAt: Date | null = null
+    __mj_UpdatedAt: Date | null = null
 
     // virtual fields - returned by the database VIEW
-    Entity: string = null
-    Role: string = null
-    RoleSQLName: string = null
-    ReadRLSFilter: string = null
-    CreateRLSFilter: string = null
-    UpdateRLSFilter: string = null
-    DeleteRLSFilter: string = null
+    Entity: string | null = null
+    Role: string | null = null
+    RoleSQLName: string | null = null
+    ReadRLSFilter: string | null = null
+    CreateRLSFilter: string | null = null
+    UpdateRLSFilter: string | null = null
+    DeleteRLSFilter: string | null = null
 
     get CreateRLSFilterObject(): RowLevelSecurityFilterInfo {
         return this.RLSFilter(EntityPermissionType.Create)
@@ -238,15 +238,15 @@ export type EntityFieldValueListType = typeof EntityFieldValueListType[keyof typ
  * Supports dropdowns, validations, and data integrity constraints.
  */
 export class EntityFieldValueInfo extends BaseInfo {
-    ID: string = null
+    ID: string | null = null
 
-    EntityFieldID: string = null // EntityFieldID is a uniqueidentifier column
-    Sequence: number = null
-    Value: string = null
-    Code: string = null
-    Description: string = null
-    __mj_CreatedAt: Date = null
-    __mj_UpdatedAt: Date = null
+    EntityFieldID: string | null = null // EntityFieldID is a uniqueidentifier column
+    Sequence: number | null = null
+    Value: string | null = null
+    Code: string | null = null
+    Description: string | null = null
+    __mj_CreatedAt: Date | null = null
+    __mj_UpdatedAt: Date | null = null
 
     constructor (initData: any) {
         super();
@@ -271,61 +271,61 @@ export type GeneratedFormSectionType = typeof GeneratedFormSectionType[keyof typ
  * Includes data types, relationships, defaults, and UI display preferences.
  */
 export class EntityFieldInfo extends BaseInfo {
-    ID: string = null
+    ID: string | null = null
 
     /**
      * Foreign key to the Entities entity.
      */
-    EntityID: string = null
+    EntityID: string | null = null
     /**
      * The sequence of the field within the entity, typically the intended display order
      */
-    Sequence: number = null 
-    Name: string = null 
+    Sequence: number | null = null 
+    Name: string | null = null 
     /**
      * Optional property that provides the display name for the field, if null, use the Name property.
      * The DisplayNameOrName() method is a helper function that does this for you with a single method call.
      */
-    DisplayName: string = null 
-    Description: string = null 
+    DisplayName: string | null = null 
+    Description: string | null = null 
     /**
      * If true, the field is the primary key for the entity. There must be one primary key field per entity.
      */
-    IsPrimaryKey: boolean = null
+    IsPrimaryKey: boolean | null = null
     /**
      * If true, the field is a unique key for the entity. There can be zero to many unique key fields per entity.
      */
-    IsUnique: boolean = null
-    Category: string = null
-    Type: string = null
-    Length: number = null 
-    Precision: number = null 
-    Scale: number = null 
-    AllowsNull: boolean = null
-    DefaultValue: string = null
-    AutoIncrement: boolean = null
-    ValueListType: string = null
-    ExtendedType: string = null
-    DefaultInView: boolean = null 
-    ViewCellTemplate: string = null
-    DefaultColumnWidth: number = null 
-    AllowUpdateAPI: boolean = null
-    AllowUpdateInView: boolean = null
-    IncludeInUserSearchAPI: boolean = null
+    IsUnique: boolean | null = null
+    Category: string | null = null
+    Type: string | null = null
+    Length: number | null = null 
+    Precision: number | null = null 
+    Scale: number | null = null 
+    AllowsNull: boolean | null = null
+    DefaultValue: string | null = null
+    AutoIncrement: boolean | null = null
+    ValueListType: string | null = null
+    ExtendedType: string | null = null
+    DefaultInView: boolean | null = null 
+    ViewCellTemplate: string | null = null
+    DefaultColumnWidth: number | null = null 
+    AllowUpdateAPI: boolean | null = null
+    AllowUpdateInView: boolean | null = null
+    IncludeInUserSearchAPI: boolean | null = null
     FullTextSearchEnabled: boolean = false
-    UserSearchParamFormatAPI: string = null
-    IncludeInGeneratedForm: boolean = null
-    GeneratedFormSection: string = null
-    IsVirtual: boolean = null 
-    IsNameField: boolean = null 
-    RelatedEntityID: string = null
-    RelatedEntityFieldName: string = null
-    IncludeRelatedEntityNameFieldInBaseView: boolean = null
-    RelatedEntityNameFieldMap: string = null
-    RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
-    EntityIDFieldName: string = null
-    __mj_CreatedAt: Date = null
-    __mj_UpdatedAt: Date = null
+    UserSearchParamFormatAPI: string | null = null
+    IncludeInGeneratedForm: boolean | null = null
+    GeneratedFormSection: string | null = null
+    IsVirtual: boolean | null = null 
+    IsNameField: boolean | null = null 
+    RelatedEntityID: string | null = null
+    RelatedEntityFieldName: string | null = null
+    IncludeRelatedEntityNameFieldInBaseView: boolean | null = null
+    RelatedEntityNameFieldMap: string | null = null
+    RelatedEntityDisplayType: 'Search' | 'Dropdown' | null = null
+    EntityIDFieldName: string | null = null
+    __mj_CreatedAt: Date | null = null
+    __mj_UpdatedAt: Date | null = null
 
     /**
     * * Field Name: ScopeDefault
@@ -468,18 +468,18 @@ export class EntityFieldInfo extends BaseInfo {
 
     // virtual fields - returned by the database VIEW
     FieldCodeName: string =  null
-    Entity: string = null 
-    SchemaName: string = null
-    BaseTable: string = null 
-    BaseView: string = null 
-    EntityCodeName: string = null
-    EntityClassName: string = null
-    RelatedEntity: string = null 
-    RelatedEntitySchemaName: string = null 
-    RelatedEntityBaseTable: string = null 
-    RelatedEntityBaseView: string = null 
-    RelatedEntityCodeName: string = null 
-    RelatedEntityClassName: string = null 
+    Entity: string | null = null 
+    SchemaName: string | null = null
+    BaseTable: string | null = null 
+    BaseView: string | null = null 
+    EntityCodeName: string | null = null
+    EntityClassName: string | null = null
+    RelatedEntity: string | null = null 
+    RelatedEntitySchemaName: string | null = null 
+    RelatedEntityBaseTable: string | null = null 
+    RelatedEntityBaseView: string | null = null 
+    RelatedEntityCodeName: string | null = null 
+    RelatedEntityClassName: string | null = null 
 
 
 
@@ -589,7 +589,7 @@ export class EntityFieldInfo extends BaseInfo {
      * For fields in the database that have characters invalid for SQL identifiers in them, we need to replace those characters with _ in order to create variables for stored procedures. 
      * This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
      */
-    private _codeName: string = null
+    private _codeName: string | null = null
     get CodeName(): string {
         if (this._codeName === null) {
             this._codeName = CodeNameFromString(this.Name);
@@ -814,12 +814,12 @@ export class EntityFieldInfo extends BaseInfo {
  * Supports various output formats for entity records.
  */
 export class EntityDocumentTypeInfo extends BaseInfo {
-    ID: string = null
+    ID: string | null = null
 
-    Name: string = null
-    Description: string = null  
-    __mj_CreatedAt: Date = null
-    __mj_UpdatedAt: Date = null
+    Name: string | null = null
+    Description: string | null = null  
+    __mj_CreatedAt: Date | null = null
+    __mj_UpdatedAt: Date | null = null
 
     constructor (initData: any = null) {
         super()
@@ -836,13 +836,13 @@ export class EntityDocumentTypeInfo extends BaseInfo {
  * Allows customization of how entities function within the system.
  */
 export class EntitySettingInfo extends BaseInfo {   
-    ID: string = null
-    EntityID: string = null
-    Name: string = null
-    Value: string = null
-    Comments: string = null
-    __mj_CreatedAt: Date = null
-    __mj_UpdatedAt: Date = null
+    ID: string | null = null
+    EntityID: string | null = null
+    Name: string | null = null
+    Value: string | null = null
+    Comments: string | null = null
+    __mj_CreatedAt: Date | null = null
+    __mj_UpdatedAt: Date | null = null
 
     constructor (initData: any = null) {
         super()
@@ -860,24 +860,24 @@ export class EntityInfo extends BaseInfo {
     /**
      * Unique identifier for the entity
      */
-    public ID: string = null
+    public ID: string | null = null
 
     /**
      * Reserved for future use - parent entity for hierarchical relationships
      */
-    public ParentID: string = null   
+    public ParentID: string | null = null   
     /**
      * Unique name of the entity used throughout the system
      */
-    public Name: string = null
+    public Name: string | null = null
     /**
      * Optional display name for the entity. If not provided, the entity Name will be used for display purposes.
      */
-    public DisplayName: string = null
+    public DisplayName: string | null = null
     /**
      * Optional suffix appended to entity names for display purposes
      */
-    public NameSuffix: string = null
+    public NameSuffix: string | null = null
     /**
      * Detailed description of the entity's purpose and contents
      */
@@ -893,35 +893,35 @@ export class EntityInfo extends BaseInfo {
     /**
      * The underlying database table name this entity maps to
      */
-    public BaseTable: string = null
+    public BaseTable: string | null = null
     /**
      * The database view used as a "wrapper" for accessing this entity's data
      */
-    public BaseView: string = null
+    public BaseView: string | null = null
     /**
      * Whether the base view is generated by CodeGen (true) or manually created (false)
      */
-    public BaseViewGenerated: boolean = null
+    public BaseViewGenerated: boolean | null = null
     /**
      * Database schema that contains this entity's table and view
      */
-    SchemaName: string = null
+    SchemaName: string | null = null
     /**
      * If true, this is a virtual entity not backed by a physical database table
      */
-    VirtualEntity: boolean = null
+    VirtualEntity: boolean | null = null
     /**
      * Whether to track all changes to records in the RecordChange table
      */
-    TrackRecordChanges: boolean = null
+    TrackRecordChanges: boolean | null = null
     /**
      * Whether to audit when users access records from this entity
      */
-    AuditRecordAccess: boolean = null
+    AuditRecordAccess: boolean | null = null
     /**
      * Whether to audit when views are run against this entity
      */
-    AuditViewRuns: boolean = null
+    AuditViewRuns: boolean | null = null
     /**
      * Whether this entity is available through the GraphQL API
      */
@@ -957,7 +957,7 @@ export class EntityInfo extends BaseInfo {
     /**
      * Name of the SQL Server full-text catalog used for searching
      */
-    FullTextCatalog: string = null
+    FullTextCatalog: string | null = null
     /**
      * Whether the full-text catalog is generated by CodeGen
      */
@@ -965,7 +965,7 @@ export class EntityInfo extends BaseInfo {
     /**
      * Name of the full-text index on this entity
      */
-    FullTextIndex: string = null
+    FullTextIndex: string | null = null
     /**
      * Whether the full-text index is generated by CodeGen
      */
@@ -973,7 +973,7 @@ export class EntityInfo extends BaseInfo {
     /**
      * Name of the function used for full-text searching
      */
-    FullTextSearchFunction: string = null
+    FullTextSearchFunction: string | null = null
     /**
      * Whether the full-text search function is generated by CodeGen
      */
@@ -981,35 +981,35 @@ export class EntityInfo extends BaseInfo {
     /**
      * Maximum number of rows to return in user views to prevent performance issues
      */
-    UserViewMaxRows: number = null
+    UserViewMaxRows: number | null = null
     /**
      * Name of the stored procedure for creating records
      */
-    spCreate: string = null
+    spCreate: string | null = null
     /**
      * Name of the stored procedure for updating records
      */
-    spUpdate: string = null
+    spUpdate: string | null = null
     /**
      * Name of the stored procedure for deleting records
      */
-    spDelete: string = null
+    spDelete: string | null = null
     /**
      * Whether the create stored procedure is generated by CodeGen
      */
-    spCreateGenerated: boolean = null
+    spCreateGenerated: boolean | null = null
     /**
      * Whether the update stored procedure is generated by CodeGen
      */
-    spUpdateGenerated: boolean = null
+    spUpdateGenerated: boolean | null = null
     /**
      * Whether the delete stored procedure is generated by CodeGen
      */
-    spDeleteGenerated: boolean = null
+    spDeleteGenerated: boolean | null = null
     /**
      * Whether to automatically delete related records when a parent is deleted
      */
-    CascadeDeletes: boolean = null
+    CascadeDeletes: boolean | null = null
     /**
      * Type of delete operation: Hard (physical delete) or Soft (mark as deleted)
      */
@@ -1017,43 +1017,43 @@ export class EntityInfo extends BaseInfo {
     /**
      * Whether records in this entity can be merged together
      */
-    AllowRecordMerge: boolean = null
+    AllowRecordMerge: boolean | null = null
     /**
      * Name of the stored procedure used for matching/duplicate detection
      */
-    spMatch: string = null
+    spMatch: string | null = null
     /**
      * Default display type for relationships: Search (type-ahead) or Dropdown
      */
-    RelationshipDefaultDisplayType: 'Search' | 'Dropdown' = null
+    RelationshipDefaultDisplayType: 'Search' | 'Dropdown' | null = null
     /**
      * Whether the user form for this entity is generated by CodeGen
      */
-    UserFormGenerated: boolean = null
+    UserFormGenerated: boolean | null = null
     /**
      * Name of the TypeScript subclass for this entity if custom behavior is needed
      */
-    EntityObjectSubclassName: string = null
+    EntityObjectSubclassName: string | null = null
     /**
      * Import statement for the entity's TypeScript subclass
      */
-    EntityObjectSubclassImport: string = null
+    EntityObjectSubclassImport: string | null = null
     /**
      * Field name that contains the preferred communication method (email, phone, etc.)
      */
-    PreferredCommunicationField: string = null
+    PreferredCommunicationField: string | null = null
     /**
      * CSS class or icon identifier for displaying this entity in the UI
      */
-    Icon: string = null
+    Icon: string | null = null
     /**
      * Date and time when this entity was created
      */
-    __mj_CreatedAt: Date = null
+    __mj_CreatedAt: Date | null = null
     /**
      * Date and time when this entity was last updated
      */
-    __mj_UpdatedAt: Date = null
+    __mj_UpdatedAt: Date | null = null
 
     /**
     * * Field Name: ScopeDefault
@@ -1148,12 +1148,12 @@ export class EntityInfo extends BaseInfo {
     /**
      * CodeName is a unique name that can be used for various programatic purposes, singular version of the entity name but modified from entity name in some cases to remove whitespace and prefix with _ in the event that the entity name begins with a number or other non-alpha character
      */
-    CodeName: string = null
-    ClassName: string = null
-    BaseTableCodeName: string = null
-    ParentEntity: number = null
-    ParentBaseTable: string = null
-    ParentBaseView: string = null 
+    CodeName: string | null = null
+    ClassName: string | null = null
+    BaseTableCodeName: string | null = null
+    ParentEntity: number | null = null
+    ParentBaseTable: string | null = null
+    ParentBaseView: string | null = null 
 
     // These are not in the database view and are added in code
     private _Fields: EntityFieldInfo[] 

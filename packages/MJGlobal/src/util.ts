@@ -182,7 +182,8 @@ export function CleanAndParseJSON<T = any>(inputString: string | null, logErrors
     if (!inputString) {
         return null;
     }
-    return SafeJSONParse<T>(CleanJSON(inputString), logErrors);
+    // inputString is definitely string here after null check
+    return SafeJSONParse<T>(CleanJSON(inputString as string), logErrors);
 }
 
 /**

@@ -607,6 +607,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Called when new messages are created to ensure avatar data is available
    */
   private async ensureCurrentUserInAvatarMap(): Promise<void> {
+    if (!this.currentUser.ID) {
+      console.error('No current user ID available for avatar map');
+      return;
+    }
+
     const userId = this.currentUser.ID;
 
     // If user already in map, skip

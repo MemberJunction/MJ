@@ -292,7 +292,7 @@ export class ResourceResolver implements Resolve<void> {
       const entityName = decodeURIComponent(route.params['entityName']);
       const recordId = route.params['recordId'];
 
-      const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+      const entityInfo = md.Entities.find(e => e.Name?.trim().toLowerCase() === entityName.trim().toLowerCase());
       if (!entityInfo) {
         LogError(`Entity ${entityName} not found in metadata`);
         return;

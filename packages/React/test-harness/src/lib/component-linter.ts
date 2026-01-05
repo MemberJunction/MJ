@@ -6273,9 +6273,9 @@ Correct pattern:
         // Helper to check if a field is nullable in entity metadata
         interface FieldNullabilityResult {
           found: boolean;
-          nullable: boolean;
-          entityName?: string;
-          fieldName?: string;
+          nullable: boolean | null;
+          entityName?: string | null;
+          fieldName?: string | null;
         }
 
         const checkFieldNullability = (propertyName: string): FieldNullabilityResult => {

@@ -86,11 +86,13 @@ export class MentionParserService {
         // Try to match against users
         if (availableUsers) {
           const user = this.findUser(mentionName, availableUsers);
-          if (user) {
+          if (user && user.Name && user.ID) {
+            const userName = user.Name as string; // We've checked it's not null above
+            const userId = user.ID as string; // We've checked it's not null above
             mentions.push({
               type: 'user',
-              id: user.ID,
-              name: user.Name
+              id: userId,
+              name: userName
             });
           }
         }
@@ -144,15 +146,15 @@ export class MentionParserService {
     const lowerName = name.toLowerCase().trim();
 
     // Try exact match first
-    let user = users.find(u => u.Name.toLowerCase() === lowerName);
+    let user = users.find(u => u.Name && u.Name.toLowerCase() === lowerName);
     if (user) return user;
 
     // Try email match
-    user = users.find(u => u.Email?.toLowerCase() === lowerName);
+    user = users.find(u => u.Email && u.Email.toLowerCase() === lowerName);
     if (user) return user;
 
     // Try starts with match
-    user = users.find(u => u.Name.toLowerCase().startsWith(lowerName));
+    user = users.find(u => u.Name && u.Name.toLowerCase().startsWith(lowerName));
     return user || null;
 
     // Note: Removed "contains" match for consistency with agent matching

@@ -123,6 +123,12 @@ export class UserProfileSettingsComponent implements OnInit {
     const md = new Metadata();
     const currentUserInfo = md.CurrentUser;
 
+    // Check if CurrentUser and ID exist
+    if (!currentUserInfo || !currentUserInfo.ID) {
+      console.error('No current user or user ID available');
+      return;
+    }
+
     // Load the full UserEntity to access avatar fields
     this.currentUser = await md.GetEntityObject<UserEntity>('Users');
     await this.currentUser.Load(currentUserInfo.ID);

@@ -311,6 +311,11 @@ export class UserAppConfigComponent {
    * Creates a new UserApplication record
    */
   private async createUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
+    // Check if CurrentUser and ID exist
+    if (!md.CurrentUser || !md.CurrentUser.ID) {
+      throw new Error('No current user or user ID available');
+    }
+
     const userApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
     userApp.NewRecord();
 

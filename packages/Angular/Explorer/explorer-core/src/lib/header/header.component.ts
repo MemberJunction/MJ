@@ -143,6 +143,13 @@ export class HeaderComponent implements OnInit {
 
                 const md = new Metadata();
                 const currentUserInfo = md.CurrentUser;
+
+                // Check if CurrentUser and required properties exist
+                if (!currentUserInfo || !currentUserInfo.ID || !currentUserInfo.FirstLast) {
+                    console.error('No current user or required user properties available');
+                    return;
+                }
+
                 this.userName = currentUserInfo.FirstLast; // Store user name for display
 
                 // Load the full UserEntity to access avatar fields
@@ -231,7 +238,18 @@ export class HeaderComponent implements OnInit {
 
     private async loadSearchableEntities() {
         const md = new Metadata();
-        this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
+        this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => {
+            if (!a || !b) {
+                return 0;
+            }
+            else if (!a.Name || !b.Name) {
+                return 0;
+            }
+            else {
+                return a.Name?.localeCompare(b.Name);
+            }
+         }); // sort by name);
+         
         if (this.searchableEntities.length > 0)
             this.selectedEntity = this.searchableEntities[0];
     }

@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Duplicate Run Details') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-duplicaterundetail-form',
     templateUrl: './duplicaterundetail.form.component.html'
 })
@@ -18,7 +17,6 @@ export class DuplicateRunDetailFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runIdentification', sectionName: 'Run Identification', isExpanded: true },
             { sectionKey: 'processingOutcomes', sectionName: 'Processing Outcomes', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'duplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false }
         ]);

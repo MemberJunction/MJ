@@ -10,8 +10,6 @@ import { Connection, BooleanCondition } from '../../models/connection.model';
 
 @Component({
   selector: 'app-flow-editor',
-  standalone: true,
-  imports: [CommonModule, StepComponent, SimpleConditionEditorComponent, ConfirmationDialogComponent],
   templateUrl: './flow-editor.component.html',
   styleUrls: ['./flow-editor.component.scss']
 })

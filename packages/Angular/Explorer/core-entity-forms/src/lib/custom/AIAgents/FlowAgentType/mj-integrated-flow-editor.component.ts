@@ -23,7 +23,6 @@ import { MJStep, MJConnection } from './flow-editor-integration/models/mj-extend
 
 @Component({
   selector: 'mj-integrated-flow-editor',
-  standalone: true,
   imports: [
     CommonModule,
     FormsModule,

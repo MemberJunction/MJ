@@ -112,7 +112,12 @@ export class AngularClientGeneratorBase {
       
           for (let i:number = 0; i < entities.length; ++i) {
               const entity = entities[i];
-      
+
+              if (!entity.ClassName || !entity.Name) {
+                  logStatus(`   Skipping entity with missing ClassName or Name`);
+                  continue;
+              }
+
               if (entity.PrimaryKeys && entity.PrimaryKeys.length > 0 && entity.IncludeInAPI) {
                   const thisEntityPath = path.join(entityPath, entity.ClassName);
                   if (!fs.existsSync(thisEntityPath))
@@ -373,6 +378,9 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
        * @returns Generated TypeScript component code
        */
       protected generateSingleEntityTypeScriptForAngular(entity: EntityInfo, additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
+        if (!entity.ClassName || !entity.Name || !entity.SchemaName) {
+            throw new Error(`Entity has missing required properties: ClassName=${entity.ClassName}, Name=${entity.Name}, SchemaName=${entity.SchemaName}`);
+        }
         const entityObjectClass: string = entity.ClassName
 
         // next, build a list of distinct imports at the library level and for components within the library
@@ -496,7 +504,10 @@ export function Load${entity.ClassName}FormComponent() {
        * @param name The name of the section
        * @param fieldSequence Optional sequence number of the field (used to track minimum sequence for sorting)
        */
-      protected AddSectionIfNeeded(entity: EntityInfo, sections: AngularFormSectionInfo[], type: GeneratedFormSectionType, name: string, fieldSequence?: number) {
+      protected AddSectionIfNeeded(entity: EntityInfo, sections: AngularFormSectionInfo[], type: GeneratedFormSectionType, name: string, fieldSequence?: number | null) {
+          if (!entity.ClassName) {
+              throw new Error(`Entity ${entity.Name || 'unknown'} has null ClassName`);
+          }
           const section = sections.find(s => s.Name === name && s.Type === type);
           const fName = `${this.sanitizeFilename(name)}.component`
           if (!section) {
@@ -510,7 +521,7 @@ export function Load${entity.ClassName}FormComponent() {
                   Fields: [],
                   EntityClassName: entity.ClassName,
                   FileNameWithoutExtension: fName,
-                  MinSequence: fieldSequence
+                  MinSequence: fieldSequence ?? undefined
               });
           } else if (fieldSequence != null && (section.MinSequence == null || fieldSequence < section.MinSequence)) {
               // Update the minimum sequence if this field has a lower sequence
@@ -527,7 +538,7 @@ export function Load${entity.ClassName}FormComponent() {
       protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number, categoryIcons?: Record<string, string>): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
-          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          const sortedFields = sortBySequenceAndCreatedAt<EntityFieldInfo>(entity.Fields);
           for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm)
@@ -622,7 +633,7 @@ ${indentedFormHTML}
       
           // figure out which fields will be in this section first
           section.Fields = [];
-          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          const sortedFields = sortBySequenceAndCreatedAt<EntityFieldInfo>(entity.Fields);
           for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
                   let bMatch: boolean = false;
@@ -638,7 +649,7 @@ ${indentedFormHTML}
                       // match, include the field in the output
                       bMatch = true;
                   }
-                  if (bMatch && field.Name.toLowerCase() !== 'id') {
+                  if (bMatch && field.Name && field.Name.toLowerCase() !== 'id') {
                       section.Fields.push(field) // add the field to the section fields array
                   }
               }
@@ -670,7 +681,9 @@ ${indentedFormHTML}
                     else if (field.TSType === EntityFieldTSType.Number)
                         editControl = `numerictextbox`
                     else if (field.TSType === EntityFieldTSType.String) {
-                        if (field.Length < 0 || field.MaxLength > 100) // length < 0 means nvarchar(max) or similar, so use textarea
+                        const fieldLength = field.Length ?? 0;
+                        const maxLength = field.MaxLength ?? 0;
+                        if (fieldLength < 0 || maxLength > 100) // length < 0 means nvarchar(max) or similar, so use textarea
                             editControl = `textarea`
                         else
                             editControl = `textbox`
@@ -719,27 +732,36 @@ ${indentedFormHTML}
        * @param sortedRelatedEntities All related entities sorted by sequence
        * @returns The generated tab name
        */
-      protected generateRelatedEntityTabName(relatedEntity: EntityRelationshipInfo, sortedRelatedEntities: EntityRelationshipInfo[]): string {  
+      protected generateRelatedEntityTabName(relatedEntity: EntityRelationshipInfo, sortedRelatedEntities: EntityRelationshipInfo[]): string {
         if (relatedEntity.DisplayName && relatedEntity.DisplayName.length > 0) {
             // the metadata has a display name for the related entity, so use that without any changes
             return relatedEntity.DisplayName;
         }
         else {
+            if (!relatedEntity.RelatedEntity) {
+                throw new Error(`RelatedEntity is null for relationship`);
+            }
             let tabName = relatedEntity.RelatedEntity;
             
-            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID 
+            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID
             const relationships = sortedRelatedEntities.filter(re => re.RelatedEntityID === relatedEntity.RelatedEntityID);
             if (relationships.length > 1) {
                 // we have more than one related entity for this entity, so we need to append the field name to the tab name
                 let fkeyField = relatedEntity.RelatedEntityJoinField;
+                if (!fkeyField) {
+                    throw new Error(`RelatedEntityJoinField is null for relationship to ${relatedEntity.RelatedEntity}`);
+                }
                 if (fkeyField) {
                     // if the fkeyField has wrapping [] then remove them
                     fkeyField = fkeyField.trim().replace('[', '').replace(']', '');
     
                     // let's get the actual entityInfo for the related entity so we can get the field and see if it has a display name
                     const md = new Metadata();
+                    if (!relatedEntity.RelatedEntityID) {
+                        throw new Error(`RelatedEntityID is null for relationship to ${relatedEntity.RelatedEntity}`);
+                    }
                     const re = md.EntityByID(relatedEntity.RelatedEntityID);
-                    const f = re.Fields.find(f => f.Name.trim().toLowerCase() === fkeyField.trim().toLowerCase());
+                    const f = re.Fields.find(f => f.Name && f.Name.trim().toLowerCase() === fkeyField!.trim().toLowerCase());
                     if (f)
                         tabName += ` (${f.DisplayNameOrName})`
                 }
@@ -762,10 +784,12 @@ ${indentedFormHTML}
         const sortedRelatedEntities = entity.RelatedEntities
             .filter(re => re.DisplayInForm)
             .sort((a, b) => {
-                if (a.Sequence !== b.Sequence) {
-                    return a.Sequence - b.Sequence;
+                const aSeq = a.Sequence ?? Number.MAX_SAFE_INTEGER;
+                const bSeq = b.Sequence ?? Number.MAX_SAFE_INTEGER;
+                if (aSeq !== bSeq) {
+                    return aSeq - bSeq;
                 }
-                return a.RelatedEntity.localeCompare(b.RelatedEntity);
+                return (a.RelatedEntity || '').localeCompare(b.RelatedEntity || '');
             });
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
@@ -796,6 +820,9 @@ ${indentedFormHTML}
             const sectionKey = this.camelCase(tabName);
 
             const component = await RelatedEntityDisplayComponentGeneratorBase.GetComponent(relatedEntity, contextUser);
+            if (!relatedEntity.RelatedEntity) {
+                throw new Error(`RelatedEntity is null for relationship`);
+            }
             const generateResults = await component.Generate({
                 Entity: entity,
                 RelationshipInfo: relatedEntity,
@@ -828,11 +855,11 @@ ${componentCodeWithIndent}
             tabs.push({
                 Type: GeneratedFormSectionType.Category,
                 IsRelatedEntity: true,
-                RelatedEntityDisplayLocation: relatedEntity.DisplayLocation,
+                RelatedEntityDisplayLocation: relatedEntity.DisplayLocation ?? undefined,
                 Name: tabName,
                 TabCode: tabCode,
                 GeneratedOutput: generateResults,
-                EntityClassName: entity.ClassName,
+                EntityClassName: entity.ClassName ?? 'UnknownEntity',
             })
             index++;
         }

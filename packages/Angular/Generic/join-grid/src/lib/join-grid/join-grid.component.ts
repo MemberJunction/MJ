@@ -362,11 +362,19 @@ export class JoinGridComponent implements AfterViewInit {
 
     await this.PopulateRowsAndColsData();
 
-    const rowQuotes = this._rowsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
-    let filter = `${this.JoinEntityRowForeignKey} IN (${this._rowsEntityData!.map(obj => `${rowQuotes}${obj.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name)}${rowQuotes}`).join(',')})` 
+    const rowPrimaryKey = this._rowsEntityInfo.FirstPrimaryKey;
+    if (!rowPrimaryKey || !rowPrimaryKey.Name) {
+      throw new Error('Rows entity must have a primary key with a name');
+    }
+    const rowQuotes = rowPrimaryKey.NeedsQuotes ? "'" : "";
+    let filter = `${this.JoinEntityRowForeignKey} IN (${this._rowsEntityData!.map(obj => `${rowQuotes}${obj.Get(rowPrimaryKey.Name!)}${rowQuotes}`).join(',')})`
     if (this.ColumnsMode === 'Entity' && this._columnsEntityInfo) {
-      const colQuotes = this._columnsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
-      filter += ` AND ${this.JoinEntityColumnForeignKey} IN (${this._columnsEntityData!.map(obj => `${colQuotes}${obj.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name)}${colQuotes}`).join(',')})`;
+      const colPrimaryKey = this._columnsEntityInfo.FirstPrimaryKey;
+      if (!colPrimaryKey || !colPrimaryKey.Name) {
+        throw new Error('Columns entity must have a primary key with a name');
+      }
+      const colQuotes = colPrimaryKey.NeedsQuotes ? "'" : "";
+      filter += ` AND ${this.JoinEntityColumnForeignKey} IN (${this._columnsEntityData!.map(obj => `${colQuotes}${obj.Get(colPrimaryKey.Name!)}${colQuotes}`).join(',')})`;
     }
     if (this.JoinEntityExtraFilter) {
       filter = `(${filter}) AND (${this.JoinEntityExtraFilter})`;
@@ -431,27 +439,41 @@ export class JoinGridComponent implements AfterViewInit {
     if (!this._joinEntityData)
       throw new Error('_joinEntityData must be populated before calling PopulateGridData()')
 
+    // Validate primary keys upfront
+    const rowPrimaryKey = this._rowsEntityInfo?.FirstPrimaryKey;
+    if (!rowPrimaryKey || !rowPrimaryKey.Name) {
+      throw new Error('Rows entity must have a primary key with a name');
+    }
+
+    let colPrimaryKey: EntityFieldInfo | undefined;
+    if (this.ColumnsMode === 'Entity') {
+      colPrimaryKey = this._columnsEntityInfo?.FirstPrimaryKey;
+      if (!colPrimaryKey || !colPrimaryKey.Name) {
+        throw new Error('Columns entity must have a primary key with a name');
+      }
+    }
+
     const gridData: any[] = [];
     this._rowsEntityData!.forEach((row, rowIndex) => {
       let rowData: JoinGridRow = new JoinGridRow({
         FirstColValue: row.Get(this.RowsEntityDisplayField),
         JoinExists: false,
-        RowForeignKeyValue: row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name),
+        RowForeignKeyValue: row.Get(rowPrimaryKey.Name!),
         ColumnData: [] // start off with an empty array
       });
 
       // for the mode where we are using columns, do the following
-      if (this.ColumnsMode === 'Entity') {
+      if (this.ColumnsMode === 'Entity' && colPrimaryKey) {
         for (let i = 0; i < this._columnsEntityData!.length; i++) {
           const column = this._columnsEntityData![i];
-          const join = this._joinEntityData!.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name) && 
-                                                j.Get(this.JoinEntityColumnForeignKey) === column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name));
+          const join = this._joinEntityData!.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(rowPrimaryKey.Name!) &&
+                                                j.Get(this.JoinEntityColumnForeignKey) === column.Get(colPrimaryKey.Name!));
           rowData.JoinExists = true;
           rowData.ColumnData.push({
             index: i,
-            ColumnForeignKeyValue: column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name),
+            ColumnForeignKeyValue: column.Get(colPrimaryKey.Name!),
             RowForeignKeyValue: rowData.RowForeignKeyValue,
-            data: join          
+            data: join
           });
         }
       }
@@ -680,7 +702,9 @@ export class JoinGridComponent implements AfterViewInit {
   }
   
   public GetJoinEntityFieldValues(colName: string): string[] {
-    return this.GetJoinEntityField(colName).EntityFieldValues.map(efv => efv.Value)
+    return this.GetJoinEntityField(colName).EntityFieldValues
+      .map(efv => efv.Value)
+      .filter((v): v is string => v != null);
   }
 
   public get EntityFieldTSType() {

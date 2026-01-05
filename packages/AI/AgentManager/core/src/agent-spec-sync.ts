@@ -906,7 +906,7 @@ export class AgentSpecSync {
         agentEntity.DefaultArtifactTypeID = this.spec.DefaultArtifactTypeID || null;
 
         // Set OwnerUserID - always use contextUser if available (user creating/modifying the agent)
-        if (this._contextUser) {
+        if (this._contextUser && this._contextUser.ID) {
             agentEntity.OwnerUserID = this._contextUser.ID;
         } else if (this.spec.OwnerUserID) {
             // Fallback to spec value if no contextUser provided

@@ -1249,6 +1249,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   private async loadUserPermissions(): Promise<void> {
+    if (!this.currentUser.ID) {
+      return;
+    }
+
     this.userPermissions.clear();
 
     for (const collection of this.collections) {
@@ -1265,7 +1269,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   private async loadCurrentCollectionPermission(): Promise<void> {
-    if (!this.currentCollectionId || !this.currentCollection) {
+    if (!this.currentCollectionId || !this.currentCollection || !this.currentUser.ID) {
       return;
     }
 

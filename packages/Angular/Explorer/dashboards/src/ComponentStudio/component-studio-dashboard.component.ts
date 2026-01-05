@@ -1293,6 +1293,12 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     }
 
     try {
+      // Check if CurrentUser and ID exist
+      if (!this.metadata.CurrentUser || !this.metadata.CurrentUser.ID) {
+        console.error('No current user or user ID available');
+        return;
+      }
+
       const artifact = result.artifact;
       let version: ArtifactVersionEntity;
 

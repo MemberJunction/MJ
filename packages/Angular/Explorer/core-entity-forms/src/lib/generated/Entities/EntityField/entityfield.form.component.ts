@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Entity Fields') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-entityfield-form',
     templateUrl: './entityfield.form.component.html'
 })
@@ -21,6 +20,7 @@ export class EntityFieldFormComponent extends BaseFormComponent {
             { sectionKey: 'dataConstraintsValidation', sectionName: 'Data Constraints & Validation', isExpanded: false },
             { sectionKey: 'relationshipsLinking', sectionName: 'Relationships & Linking', isExpanded: false },
             { sectionKey: 'systemAuditMetadata', sectionName: 'System & Audit Metadata', isExpanded: false },
+            { sectionKey: 'securityEncryption', sectionName: 'Security & Encryption', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'entityFieldValues', sectionName: 'Entity Field Values', isExpanded: false }
         ]);

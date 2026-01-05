@@ -232,8 +232,14 @@ function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo)
 
     for (const config of entityCapabilitiesConfig) {
         const matchingEntities = getMatchingEntitiesForConfig(allEntities, config);
-        
+
         for (const entity of matchingEntities) {
+            const entityName = entity.Name;
+            const schemaName = entity.SchemaName;
+
+            // Skip entities without names
+            if (!entityName || !schemaName) continue;
+
             const operations = [];
             if (config.get) operations.push('get');
             if (config.create) operations.push('create');
@@ -243,8 +249,8 @@ function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo)
 
             if (operations.length > 0) {
                 capabilities.push({
-                    name: entity.Name,
-                    schema: entity.SchemaName,
+                    name: entityName,
+                    schema: schemaName,
                     operations: operations
                 });
             }
@@ -327,8 +333,14 @@ async function getAgentCapabilities(contextUser: UserInfo) {
 
 function getMatchingEntitiesForConfig(allEntities: EntityInfo[], config: any) {
     return allEntities.filter((entity) => {
-        const entityName = entity.Name.toLowerCase();
-        const schemaName = entity.SchemaName.toLowerCase();
+        const name = entity.Name;
+        const schema = entity.SchemaName;
+
+        // Skip entities without names or schemas
+        if (!name || !schema) return false;
+
+        const entityName = name.toLowerCase();
+        const schemaName = schema.toLowerCase();
         const configEntityName = config.entityName?.trim().toLowerCase() || "*";
         const configSchemaName = config.schemaName?.trim().toLowerCase() || "*";
 

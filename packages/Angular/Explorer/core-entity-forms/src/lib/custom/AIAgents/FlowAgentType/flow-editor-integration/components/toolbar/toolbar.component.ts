@@ -4,8 +4,6 @@ import { STEP_CONFIGS, StepType } from '../../models/step.model';
 
 @Component({
   selector: 'app-toolbar',
-  standalone: true,
-  imports: [CommonModule],
   templateUrl: './toolbar.component.html',
   styleUrls: ['./toolbar.component.scss']
 })

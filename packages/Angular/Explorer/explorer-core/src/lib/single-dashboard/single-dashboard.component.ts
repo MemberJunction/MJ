@@ -104,6 +104,12 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
         }
       }
       else {
+        // Check if CurrentUser and ID exist
+        if (!md.CurrentUser || !md.CurrentUser.ID) {
+          console.error('No current user or user ID available');
+          return;
+        }
+
         this.dashboardEntity.NewRecord(); // creating a new dashboard
         this.dashboardEntity.UserID = md.CurrentUser.ID;
         

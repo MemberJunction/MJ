@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'MJ: Query Parameters') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-queryparameter-form',
     templateUrl: './queryparameter.form.component.html'
 })

@@ -5,7 +5,6 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 @RegisterClass(BaseFormComponent, 'Schema Info') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-schemainfo-form',
     templateUrl: './schemainfo.form.component.html'
 })

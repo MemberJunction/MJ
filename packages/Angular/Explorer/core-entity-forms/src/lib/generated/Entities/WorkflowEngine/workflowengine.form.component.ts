@@ -6,7 +6,6 @@ import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Workflow Engines') // Tell MemberJunction about this class
 @Component({
-  standalone: false,
     selector: 'gen-workflowengine-form',
     templateUrl: './workflowengine.form.component.html'
 })
