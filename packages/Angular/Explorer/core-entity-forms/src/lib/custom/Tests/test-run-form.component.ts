@@ -280,7 +280,7 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
         {
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `TestRunID='${this.record.ID}'`,
-          OrderBy: 'StartedAt',
+          OrderBy: 'RunAt',
           ResultType: 'entity_object'
         }
       ]);
