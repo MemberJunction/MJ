@@ -3,7 +3,7 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { TestEntity, TestRunEntity, TestSuiteTestEntity, TestSuiteRunEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { TestEntity, TestRunEntity, TestSuiteTestEntity, TestSuiteRunEntity, UserSettingEntity, UserInfoEngine, TestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -76,6 +76,9 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
   // Related data
   testRuns: TestRunEntity[] = [];
   suiteTests: TestSuiteTestEntity[] = [];
+
+  // Human feedback map: testRunId -> feedback entity
+  feedbackMap = new Map<string, TestRunFeedbackEntity>();
 
   // History tab data
   historyLoaded = false;
@@ -187,6 +190,11 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
 
       if (result.Success) {
         this.testRuns = result.Results || [];
+
+        // Load feedbacks for all test runs
+        if (this.testRuns.length > 0) {
+          await this.loadFeedbacksForTestRuns(this.testRuns.map(r => r.ID));
+        }
       }
 
       this.testRunsLoaded = true;
@@ -197,6 +205,71 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
       this.loadingRuns = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Load feedbacks for a batch of test run IDs
+   */
+  private async loadFeedbacksForTestRuns(testRunIds: string[]): Promise<void> {
+    if (testRunIds.length === 0) return;
+
+    try {
+      const rv = new RunView();
+      const chunkSize = 50;
+      for (let i = 0; i < testRunIds.length; i += chunkSize) {
+        const chunk = testRunIds.slice(i, i + chunkSize);
+        const inClause = chunk.map(id => `'${id}'`).join(',');
+
+        const result = await rv.RunView<TestRunFeedbackEntity>({
+          EntityName: 'MJ: Test Run Feedbacks',
+          ExtraFilter: `TestRunID IN (${inClause})`,
+          ResultType: 'entity_object'
+        });
+
+        if (result.Success && result.Results) {
+          for (const feedback of result.Results) {
+            this.feedbackMap.set(feedback.TestRunID, feedback);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load feedbacks:', error);
+    }
+  }
+
+  /**
+   * Get feedback for a specific test run
+   */
+  getFeedbackForRun(testRunId: string): TestRunFeedbackEntity | undefined {
+    return this.feedbackMap.get(testRunId);
+  }
+
+  /**
+   * Get tooltip for status indicator
+   */
+  getStatusTooltip(status: string): string {
+    switch (status) {
+      case 'Passed': return 'Status: Passed - Test completed without error';
+      case 'Failed': return 'Status: Failed - Test assertions did not pass';
+      case 'Error': return 'Status: Error - Test encountered an exception';
+      case 'Timeout': return 'Status: Timeout - Test exceeded time limit';
+      case 'Skipped': return 'Status: Skipped - Test was not executed';
+      case 'Running': return 'Status: Running - Test is currently executing';
+      case 'Pending': return 'Status: Pending - Test waiting to run';
+      default: return `Status: ${status}`;
+    }
+  }
+
+  /**
+   * Get tooltip for human review with rating and optional comments
+   */
+  getHumanTooltip(rating: number, comments: string | null): string {
+    let tooltip = `Human Review: ${rating}/10 rating`;
+    if (comments) {
+      const truncated = comments.length > 200 ? comments.substring(0, 200) + '...' : comments;
+      tooltip += `\n\n"${truncated}"`;
+    }
+    return tooltip;
   }
 
   private async loadSuiteTests() {

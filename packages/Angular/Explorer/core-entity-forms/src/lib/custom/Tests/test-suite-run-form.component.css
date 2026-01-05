@@ -2564,31 +2564,40 @@ button:focus-visible {
   border-bottom: none;
 }
 
-/* Column widths */
+/* Column widths - Fixed columns fit content, name column takes remainder (max 50%) */
 .seq-col {
-  width: 50px;
+  width: 40px;
+  min-width: 40px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .name-col {
-  min-width: 200px;
+  /* Take remaining space, but cap at 50% of table width */
+  width: auto;
+  max-width: 50%;
 }
 
 .status-col {
-  width: 120px;
+  width: 1%; /* Shrink to fit content */
+  white-space: nowrap;
 }
 
 .score-col {
-  width: 150px;
+  width: 1%; /* Shrink to fit content */
+  min-width: 120px; /* Score bar needs some minimum width */
+  white-space: nowrap;
 }
 
 .duration-col {
-  width: 100px;
+  width: 1%; /* Shrink to fit content */
+  white-space: nowrap;
   text-align: right;
 }
 
 .cost-col {
-  width: 100px;
+  width: 1%; /* Shrink to fit content */
+  white-space: nowrap;
   text-align: right;
 }
 
@@ -3024,7 +3033,8 @@ button:focus-visible {
    Feedback Column in Analytics Table
    =================================== */
 .feedback-col {
-  width: 90px;
+  width: 1%; /* Shrink to fit content */
+  white-space: nowrap;
   text-align: center;
 }
 

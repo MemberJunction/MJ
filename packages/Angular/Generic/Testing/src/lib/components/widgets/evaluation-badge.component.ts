@@ -59,7 +59,7 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
     <div class="eval-badge expanded" *ngIf="mode === 'expanded'">
       <!-- Execution status -->
       <div class="eval-row" *ngIf="preferences?.showExecution">
-        <span class="label">Execution</span>
+        <span class="label">Status</span>
         <span class="value-wrap" [class]="getExecClass()">
           <i [class]="getExecIcon()"></i>
           <span class="text">{{ getExecText() }}</span>

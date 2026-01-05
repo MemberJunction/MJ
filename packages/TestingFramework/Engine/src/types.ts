@@ -137,6 +137,11 @@ export interface SuiteRunOptions extends TestRunOptions {
    * Run only specific sequence numbers
    */
   sequence?: number[];
+
+  /**
+   * Tags to apply to the suite run (JSON string array)
+   */
+  tags?: string;
 }
 
 /**

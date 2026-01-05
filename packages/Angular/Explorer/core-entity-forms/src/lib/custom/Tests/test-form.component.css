@@ -728,6 +728,117 @@
   transform: translateX(2px);
 }
 
+/* Run Evaluation Stack */
+.run-eval-stack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* Evaluation Pills */
+.eval-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: var(--test-transition);
+}
+
+.eval-pill i {
+  font-size: 10px;
+}
+
+/* Status pill colors */
+.eval-pill.status-pill.status-passed {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.eval-pill.status-pill.status-failed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.eval-pill.status-pill.status-error {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.eval-pill.status-pill.status-timeout {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.eval-pill.status-pill.status-skipped,
+.eval-pill.status-pill.status-pending {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.eval-pill.status-pill.status-running {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+/* Human feedback pills */
+.eval-pill.human-pill.no-feedback {
+  background: #f1f5f9;
+  color: #94a3b8;
+  padding: 4px 8px;
+}
+
+.eval-pill.human-pill.has-feedback.rating-low {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.eval-pill.human-pill.has-feedback.rating-medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.eval-pill.human-pill.has-feedback.rating-good {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.eval-pill.human-pill.has-feedback.rating-excellent {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+/* Auto score pills */
+.eval-pill.auto-pill.no-score {
+  background: #f1f5f9;
+  color: #94a3b8;
+  padding: 4px 8px;
+}
+
+.eval-pill.auto-pill.has-score.score-low {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.eval-pill.auto-pill.has-score.score-medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.eval-pill.auto-pill.has-score.score-good {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.eval-pill.auto-pill.has-score.score-excellent {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
 /* Run Tags */
 .run-tags {
   display: flex;

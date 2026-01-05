@@ -210,6 +210,7 @@ export class RunTestResolver extends ResolverBase {
         @Arg('verbose', { nullable: true }) verbose: boolean = true,
         @Arg('environment', { nullable: true }) environment?: string,
         @Arg('parallel', { nullable: true }) parallel: boolean = false,
+        @Arg('tags', { nullable: true }) tags?: string,
         @PubSub() pubSub?: PubSubEngine,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<TestSuiteRunResult> {
@@ -235,6 +236,7 @@ export class RunTestResolver extends ResolverBase {
                 verbose,
                 environment,
                 parallel,
+                tags,
                 progressCallback
             };
 

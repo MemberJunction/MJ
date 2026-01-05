@@ -46,6 +46,41 @@ interface ProgressUpdate {
                 }
               </div>
             </div>
+
+            <!-- Tags Section for Preselected Mode -->
+            @if (runMode === 'suite') {
+              <div class="tags-section">
+                <div class="tags-header">
+                  <i class="fa-solid fa-tags"></i>
+                  <span>Run Tags</span>
+                  <span class="tags-hint">(optional)</span>
+                </div>
+                <div class="tags-container">
+                  <div class="tags-chips">
+                    @for (tag of tags; track tag) {
+                      <span class="tag-chip">
+                        {{ tag }}
+                        <button class="tag-remove" (click)="removeTag(tag)">
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      </span>
+                    }
+                  </div>
+                  <div class="tag-input-row">
+                    <input
+                      type="text"
+                      [(ngModel)]="newTag"
+                      placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
+                      (keyup.enter)="addTag()"
+                      class="tag-input"
+                    />
+                    <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
+                      <i class="fa-solid fa-plus"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
           }
 
           <!-- Selection Mode - Full UI -->
@@ -178,6 +213,41 @@ interface ProgressUpdate {
                   </label>
                 }
               </div>
+
+              <!-- Tags Section for Selection Mode -->
+              @if (runMode === 'suite') {
+                <div class="tags-section selection-mode-tags">
+                  <div class="tags-header">
+                    <i class="fa-solid fa-tags"></i>
+                    <span>Run Tags</span>
+                    <span class="tags-hint">(optional)</span>
+                  </div>
+                  <div class="tags-container">
+                    <div class="tags-chips">
+                      @for (tag of tags; track tag) {
+                        <span class="tag-chip">
+                          {{ tag }}
+                          <button class="tag-remove" (click)="removeTag(tag)">
+                            <i class="fa-solid fa-times"></i>
+                          </button>
+                        </span>
+                      }
+                    </div>
+                    <div class="tag-input-row">
+                      <input
+                        type="text"
+                        [(ngModel)]="newTag"
+                        placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
+                        (keyup.enter)="addTag()"
+                        class="tag-input"
+                      />
+                      <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
+                        <i class="fa-solid fa-plus"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              }
             </div>
           }
         }
@@ -974,6 +1044,141 @@ interface ProgressUpdate {
     .error-message span {
       flex: 1;
     }
+
+    /* Tags Section Styles */
+    .tags-section {
+      padding: 16px 20px;
+      background: white;
+      border-radius: 8px;
+      margin: 12px 20px 0 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .tags-section.selection-mode-tags {
+      margin: 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .tags-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .tags-header i {
+      color: #2196f3;
+    }
+
+    .tags-hint {
+      color: #999;
+      font-weight: 400;
+      font-size: 12px;
+    }
+
+    .tags-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tags-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 24px;
+    }
+
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: #e3f2fd;
+      color: #1976d2;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .tag-remove {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: none;
+      background: rgba(0,0,0,0.1);
+      color: #1976d2;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tag-remove:hover {
+      background: rgba(0,0,0,0.2);
+      color: #c62828;
+    }
+
+    .tag-remove i {
+      font-size: 10px;
+    }
+
+    .tag-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tag-input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 2px solid #e0e4e8;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .tag-input:focus {
+      border-color: #2196f3;
+    }
+
+    .tag-input::placeholder {
+      color: #999;
+    }
+
+    .tag-add-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: none;
+      background: #2196f3;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tag-add-btn:hover:not(:disabled) {
+      background: #1976d2;
+    }
+
+    .tag-add-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .tag-add-btn i {
+      font-size: 14px;
+    }
   `]
 })
 export class TestRunDialogComponent implements OnInit, OnDestroy {
@@ -988,6 +1193,10 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   selectedSuiteId: string | null = null;
   verbose = true;
   parallel = false;
+
+  // Tags for suite runs
+  tags: string[] = [];
+  newTag = '';
 
   // Pre-selection mode - when launched from a specific test/suite
   isPreselected = false;
@@ -1195,6 +1404,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
         suiteId: this.selectedSuiteId!,
         verbose: this.verbose,
         parallel: this.parallel,
+        tags: this.tags.length > 0 ? this.tags : undefined,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
           this.progress = progress.percentage ?? 0;
@@ -1325,6 +1535,8 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.selectedTestId = null;
     this.selectedSuiteId = null;
     this.searchText = '';
+    this.tags = [];
+    this.newTag = '';
     this.resetProgressSteps();
     this.filterItems();
     this.cdr.markForCheck();
@@ -1334,5 +1546,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     if (!this.isRunning) {
       this.dialogRef.close();
     }
+  }
+
+  // Tag management methods
+  addTag(): void {
+    const tag = this.newTag.trim();
+    if (tag && !this.tags.includes(tag)) {
+      this.tags = [...this.tags, tag];
+      this.newTag = '';
+      this.cdr.markForCheck();
+    }
+  }
+
+  removeTag(tag: string): void {
+    this.tags = this.tags.filter(t => t !== tag);
+    this.cdr.markForCheck();
   }
 }

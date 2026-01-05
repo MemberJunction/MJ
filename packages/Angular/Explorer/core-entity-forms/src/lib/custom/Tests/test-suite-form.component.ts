@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDete
 import * as d3 from 'd3';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TestSuiteEntity, TestSuiteTestEntity, TestSuiteRunEntity, TestRunEntity, TestRunFeedbackEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -86,6 +86,13 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
   matrixSortBy: 'sequence' | 'name' = 'sequence';
   matrixSortAsc = true;
 
+  // Matrix row selection
+  selectedMatrixTestId: string | null = null;
+
+  // Matrix test name filter
+  matrixTestFilter = '';
+  private matrixFilterSubject$ = new Subject<string>();
+
   constructor(
     elementRef: ElementRef,
     sharedService: SharedService,
@@ -112,6 +119,18 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
         if (this.chartRendered && this.analyticsView === 'chart') {
           this.renderChart();
         }
+      });
+
+    // Subscribe to matrix filter with debounce
+    this.matrixFilterSubject$
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(value => {
+        this.matrixTestFilter = value;
+        this.cdr.markForCheck();
       });
   }
 
@@ -515,6 +534,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
               score: testRun.Score,
               duration: testRun.DurationSeconds,
               humanRating: null, // Will be populated below
+              humanComments: null, // Will be populated below
               sequence: testRun.Sequence ?? 0
             });
           }
@@ -538,8 +558,13 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
         for (const run of matrixData) {
           run.testResults.forEach((cell, _testId) => {
             const feedback = feedbackMap.get(cell.testRunId);
-            if (feedback?.Rating != null) {
-              cell.humanRating = feedback.Rating;
+            if (feedback) {
+              if (feedback.Rating != null) {
+                cell.humanRating = feedback.Rating;
+              }
+              if (feedback.Comments) {
+                cell.humanComments = feedback.Comments;
+              }
             }
           });
         }
@@ -615,6 +640,12 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
       sequence: data.sequence
     }));
 
+    // Apply test name filter if set
+    if (this.matrixTestFilter.trim()) {
+      const filterLower = this.matrixTestFilter.toLowerCase().trim();
+      tests = tests.filter(t => t.testName.toLowerCase().includes(filterLower));
+    }
+
     // Apply sorting
     if (this.matrixSortBy === 'sequence') {
       tests = tests.sort((a, b) => this.matrixSortAsc ? a.sequence - b.sequence : b.sequence - a.sequence);
@@ -641,6 +672,31 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     this.cdr.markForCheck();
   }
 
+  /**
+   * Select/deselect a matrix row for highlighting
+   */
+  selectMatrixRow(testId: string): void {
+    this.selectedMatrixTestId = this.selectedMatrixTestId === testId ? null : testId;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Handle test name filter input - uses Subject for debounce
+   */
+  onMatrixFilterInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.matrixFilterSubject$.next(value);
+  }
+
+  /**
+   * Clear the matrix test name filter
+   */
+  clearMatrixFilter(): void {
+    this.matrixTestFilter = '';
+    this.matrixFilterSubject$.next('');
+    this.cdr.markForCheck();
+  }
+
   getTestResultForRun(runId: string, testId: string): TestResultCell | null {
     const runData = this.matrixData.find(r => r.runId === runId);
     if (!runData) return null;
@@ -658,6 +714,34 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
       case 'Running': return 'cell-running';
       default: return 'cell-pending';
     }
+  }
+
+  /**
+   * Get descriptive tooltip for execution status
+   */
+  getStatusTooltip(status: string): string {
+    switch (status) {
+      case 'Passed': return 'Status: Passed - Test completed without error';
+      case 'Failed': return 'Status: Failed - Test assertions did not pass';
+      case 'Error': return 'Status: Error - Test encountered an exception';
+      case 'Timeout': return 'Status: Timeout - Test exceeded time limit';
+      case 'Skipped': return 'Status: Skipped - Test was not executed';
+      case 'Running': return 'Status: Running - Test is currently executing';
+      case 'Pending': return 'Status: Pending - Test waiting to run';
+      default: return `Status: ${status}`;
+    }
+  }
+
+  /**
+   * Get tooltip for human review with rating and optional comments
+   */
+  getHumanTooltip(rating: number, comments: string | null): string {
+    let tooltip = `Human Review: ${rating}/10 rating`;
+    if (comments) {
+      const truncated = comments.length > 200 ? comments.substring(0, 200) + '...' : comments;
+      tooltip += `\n\n"${truncated}"`;
+    }
+    return tooltip;
   }
 
   /**
@@ -779,10 +863,13 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     const tests = this.getUniqueTestsFromMatrix();
     const runs = this.matrixData;
 
-    // Dynamic sizing based on content
+    // Dynamic sizing based on content and evaluation preferences
     const width = container.clientWidth || 900;
-    const rowHeight = 28;
-    const colWidth = Math.min(80, Math.max(50, (width - 250) / runs.length));
+    const evalCount = this.getEvalCount();
+    // Adjust row height and column width based on how many eval types are shown
+    const rowHeight = evalCount >= 3 ? 34 : evalCount === 2 ? 30 : 28;
+    const minColWidth = evalCount >= 3 ? 65 : evalCount === 2 ? 55 : 50;
+    const colWidth = Math.min(90, Math.max(minColWidth, (width - 250) / runs.length));
     const margin = { top: 80, right: 40, bottom: 20, left: 220 };
     const chartWidth = runs.length * colWidth;
     const chartHeight = tests.length * rowHeight;
@@ -995,7 +1082,6 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
     // Draw cells with evaluation toggle support
     const cellPadding = 3;
-    const evalCount = this.getEvalCount();
 
     runs.forEach((run, runIndex) => {
       tests.forEach((test, testIndex) => {
@@ -1097,8 +1183,9 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
           .style('transition', 'all 0.15s ease');
 
         // Calculate icon positions based on how many eval types are shown
-        const iconSize = evalCount === 1 ? 14 : evalCount === 2 ? 11 : 9;
-        const iconSpacing = evalCount === 1 ? 0 : evalCount === 2 ? 14 : 11;
+        // With wider cells, we can use larger icons and better spacing
+        const iconSize = evalCount === 1 ? 14 : evalCount === 2 ? 12 : 10;
+        const iconSpacing = evalCount === 1 ? 0 : evalCount === 2 ? 16 : 14;
         const startX = x + cellWidth / 2 - ((evalCount - 1) * iconSpacing) / 2;
 
         let iconIndex = 0;
@@ -1840,6 +1927,7 @@ interface TestResultCell {
   score: number | null;
   duration: number | null;
   humanRating: number | null;
+  humanComments: string | null;
   sequence: number;
 }
 

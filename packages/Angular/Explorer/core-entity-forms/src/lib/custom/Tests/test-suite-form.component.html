@@ -425,6 +425,17 @@
             <div class="matrix-header">
               <h3><i class="fas fa-th"></i> Test Results Matrix</h3>
               <div class="matrix-header-right">
+                <div class="matrix-filter-input">
+                  <i class="fas fa-search"></i>
+                  <input type="text"
+                         placeholder="Filter tests..."
+                         [value]="matrixTestFilter"
+                         (input)="onMatrixFilterInput($event)"
+                         class="filter-input">
+                  <button class="clear-filter-btn" *ngIf="matrixTestFilter" (click)="clearMatrixFilter()" title="Clear filter">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
                 <span class="matrix-run-count">{{ matrixData.length }} runs · {{ getUniqueTestsFromMatrix().length }} tests</span>
                 <button kendoButton (click)="exportMatrixToCSV()" [disabled]="matrixData.length === 0" title="Export matrix to CSV">
                   <i class="fas fa-download"></i> Export
@@ -456,10 +467,13 @@
                         </div>
                       </div>
                     </th>
+                    <th class="spacer-header"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let test of getUniqueTestsFromMatrix()">
+                  <tr *ngFor="let test of getUniqueTestsFromMatrix()"
+                      [class.row-selected]="selectedMatrixTestId === test.testId"
+                      (click)="selectMatrixRow(test.testId)">
                     <td class="seq-cell">{{ test.sequence }}</td>
                     <td class="test-name-cell">
                       <span class="test-name" [title]="test.testName">{{ test.testName }}</span>
@@ -476,7 +490,8 @@
                           <!-- Status indicator -->
                           <span class="cell-status" *ngIf="evalPreferences.showExecution"
                                 [ngClass]="'status-' + result.status.toLowerCase()"
-                                [class.cell-skipped-status]="result.status === 'Skipped' || result.status === 'Pending'">
+                                [class.cell-skipped-status]="result.status === 'Skipped' || result.status === 'Pending'"
+                                [title]="getStatusTooltip(result.status)">
                             <i class="fas"
                                [class.fa-check]="result.status === 'Passed'"
                                [class.fa-times]="result.status === 'Failed'"
@@ -487,7 +502,8 @@
                                [class.fa-clock]="result.status === 'Pending'"></i>
                           </span>
                           <!-- Human score - slashed icon if no feedback, colored by rating if has feedback -->
-                          <span class="cell-human no-feedback" *ngIf="evalPreferences.showHuman && !result.humanRating" title="No human review">
+                          <span class="cell-human no-feedback" *ngIf="evalPreferences.showHuman && !result.humanRating"
+                                title="Human Review: No rating submitted yet">
                             <i class="fas fa-user-slash"></i>
                           </span>
                           <span class="cell-human has-feedback" *ngIf="evalPreferences.showHuman && result.humanRating"
@@ -495,7 +511,7 @@
                                 [class.rating-medium]="result.humanRating >= 5 && result.humanRating <= 6"
                                 [class.rating-good]="result.humanRating >= 7 && result.humanRating <= 8"
                                 [class.rating-excellent]="result.humanRating >= 9"
-                                [title]="'Human rating: ' + result.humanRating + '/10'">
+                                [title]="getHumanTooltip(result.humanRating, result.humanComments)">
                             <i class="fas fa-user"></i>
                             <span class="rating-value">{{ result.humanRating }}</span>
                           </span>
@@ -505,11 +521,12 @@
                                 [class.score-medium]="result.score >= 0.5 && result.score < 0.7"
                                 [class.score-good]="result.score >= 0.7 && result.score < 0.85"
                                 [class.score-excellent]="result.score >= 0.85"
-                                [title]="'Auto score: ' + (result.score * 100).toFixed(0) + '%'">
+                                [title]="'Auto Score: ' + (result.score * 100).toFixed(0) + '% automated evaluation'">
                             <i class="fas fa-robot"></i>
                             <span class="score-value">{{ (result.score * 100).toFixed(0) }}</span>
                           </span>
-                          <span class="cell-auto no-score" *ngIf="evalPreferences.showAuto && result.score == null" title="No auto score">
+                          <span class="cell-auto no-score" *ngIf="evalPreferences.showAuto && result.score == null"
+                                title="Auto Score: No automated score available">
                             <i class="fas fa-robot"></i>
                           </span>
                         </div>
@@ -518,6 +535,7 @@
                         <i class="fas fa-minus"></i>
                       </span>
                     </td>
+                    <td class="spacer-cell"></td>
                   </tr>
                 </tbody>
                 <!-- Footer row with totals -->
@@ -545,6 +563,7 @@
                         </span>
                       </div>
                     </td>
+                    <td class="spacer-cell"></td>
                   </tr>
                 </tfoot>
               </table>

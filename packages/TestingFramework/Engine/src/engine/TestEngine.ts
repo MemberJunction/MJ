@@ -28,6 +28,7 @@ import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
 import {
     TestRunOptions,
+    SuiteRunOptions,
     DriverExecutionResult,
     TestRunResult,
     TestSuiteRunResult,
@@ -166,7 +167,7 @@ export class TestEngine extends TestEngineBase {
             }
 
             // Create TestSuiteRun entity
-            const suiteRun = await this.createSuiteRun(suite, contextUser);
+            const suiteRun = await this.createSuiteRun(suite, contextUser, options);
 
             // Execute tests
             const testResults: TestRunResult[] = [];
@@ -377,7 +378,8 @@ export class TestEngine extends TestEngineBase {
      */
     private async createSuiteRun(
         suite: TestSuiteEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: SuiteRunOptions
     ): Promise<TestSuiteRunEntity> {
         const md = new Metadata();
         const suiteRun = await md.GetEntityObject<TestSuiteRunEntity>(
@@ -389,6 +391,11 @@ export class TestEngine extends TestEngineBase {
         suiteRun.RunByUserID = contextUser.ID;
         suiteRun.Status = 'Running';
         suiteRun.StartedAt = new Date();
+
+        // Set tags if provided
+        if (options?.tags) {
+            suiteRun.Tags = options.tags;
+        }
 
         const saved = await suiteRun.Save();
         if (!saved) {
