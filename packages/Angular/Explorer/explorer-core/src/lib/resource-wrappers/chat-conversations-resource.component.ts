@@ -50,14 +50,6 @@ export function LoadChatConversationsResource() {
         </mj-conversation-list>
       </div>
 
-      <!-- Floating toggle button (only visible when sidebar is collapsed and settings loaded) -->
-      <button class="sidebar-floating-toggle"
-              *ngIf="isSidebarCollapsed && isSidebarSettingsLoaded"
-              (click)="expandSidebar()"
-              title="Show conversations">
-        <i class="fas fa-table-columns"></i>
-      </button>
-
       <!-- Resize handle for sidebar (only when expanded and settings loaded) -->
       <div class="sidebar-resize-handle"
            *ngIf="!isSidebarCollapsed && isSidebarSettingsLoaded"
@@ -78,6 +70,8 @@ export function LoadChatConversationsResource() {
           [pendingAttachments]="pendingAttachmentsToSend"
           [pendingArtifactId]="pendingArtifactId"
           [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
+          [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
+          (sidebarToggleClicked)="expandSidebar()"
           (conversationRenamed)="onConversationRenamed($event)"
           (conversationCreated)="onConversationCreated($event)"
           (threadOpened)="onThreadOpened($event)"
@@ -134,42 +128,6 @@ export function LoadChatConversationsResource() {
       min-width: 0;
       border-right: none;
       overflow: hidden;
-    }
-
-    /* Floating toggle button (only visible when sidebar is collapsed) */
-    .sidebar-floating-toggle {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      z-index: 100;
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .sidebar-floating-toggle:hover {
-      background: rgba(0, 0, 0, 0.08);
-    }
-
-    .sidebar-floating-toggle:active {
-      background: rgba(0, 0, 0, 0.12);
-    }
-
-    .sidebar-floating-toggle i {
-      color: #666;
-      font-size: 18px;
-      transition: color 0.15s ease;
-    }
-
-    .sidebar-floating-toggle:hover i {
-      color: #333;
     }
 
     /* Resize handle for sidebar */

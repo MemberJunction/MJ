@@ -1,7 +1,13 @@
 <div class="chat-area">
     <!-- Fixed Header -->
     <div class="chat-header" *ngIf="conversation">
-    <div class="chat-info">
+    <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
+        <button class="sidebar-toggle-btn"
+                *ngIf="showSidebarToggle"
+                (click)="sidebarToggleClicked.emit()"
+                title="Show conversations">
+          <i class="fas fa-table-columns"></i>
+        </button>
         <div class="chat-title">{{ conversation.Name }}</div>
         <button class="project-tag" (click)="openProjectSelector()" title="Assign to project" *ngIf="conversation.ProjectID">
         <i class="fas fa-folder"></i>
@@ -58,6 +64,8 @@
           <mj-conversation-empty-state
             [currentUser]="currentUser"
             [disabled]="isProcessing"
+            [showSidebarToggle]="showSidebarToggle"
+            (sidebarToggleClicked)="sidebarToggleClicked.emit()"
             (messageSent)="onEmptyStateMessageSent($event)">
           </mj-conversation-empty-state>
         } @else if (isLoadingConversation) {

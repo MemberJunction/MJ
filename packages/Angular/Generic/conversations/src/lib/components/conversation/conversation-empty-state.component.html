@@ -1,4 +1,12 @@
 <div class="conversation-empty-state">
+  <!-- Sidebar Toggle Button (top-left when sidebar is collapsed) -->
+  <button class="sidebar-toggle-btn"
+          *ngIf="showSidebarToggle"
+          (click)="sidebarToggleClicked.emit()"
+          title="Show conversations">
+    <i class="fas fa-table-columns"></i>
+  </button>
+
   <!-- Loading Overlay -->
   <div class="loading-overlay" *ngIf="disabled">
     <mj-loading text="Creating your conversation..." size="large"></mj-loading>

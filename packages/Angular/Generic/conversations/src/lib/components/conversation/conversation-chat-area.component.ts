@@ -78,10 +78,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @Input() pendingArtifactId: string | null = null;
   @Input() pendingArtifactVersionNumber: number | null = null;
 
+  // Sidebar toggle - when true, shows toggle button in header to expand sidebar
+  @Input() showSidebarToggle: boolean = false;
+
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() taskClicked = new EventEmitter<TaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
+  @Output() sidebarToggleClicked = new EventEmitter<void>();
 
   // STATE CHANGE OUTPUTS - notify parent of state changes
   // conversationCreated now includes pendingMessage and pendingAttachments to ensure atomic state update

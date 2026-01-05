@@ -10,8 +10,10 @@ import { PendingAttachment } from '../mention/mention-editor.component';
 export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
+  @Input() showSidebarToggle: boolean = false;
 
   @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
+  @Output() sidebarToggleClicked = new EventEmitter<void>();
 
   public messageText: string = '';
 
