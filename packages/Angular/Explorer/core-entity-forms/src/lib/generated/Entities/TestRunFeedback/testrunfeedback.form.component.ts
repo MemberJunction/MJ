@@ -16,7 +16,6 @@ export class TestRunFeedbackFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'reviewContext', sectionName: 'Review Context', isExpanded: true },
             { sectionKey: 'feedbackContent', sectionName: 'Feedback Content', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

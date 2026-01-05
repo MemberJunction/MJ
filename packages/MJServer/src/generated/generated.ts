@@ -43202,6 +43202,25 @@ export class MJTestRun_ {
     @Field({nullable: true, description: `JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.`}) 
     Tags?: string;
         
+    @Field({nullable: true, description: `Hostname of the machine that executed this test. Used for identifying the execution environment and debugging infrastructure-specific issues.`}) 
+    @MaxLength(510)
+    MachineName?: string;
+        
+    @Field({nullable: true, description: `Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of test execution across different machines.`}) 
+    @MaxLength(510)
+    MachineID?: string;
+        
+    @Field({nullable: true, description: `Denormalized user name who ran the test. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.`}) 
+    @MaxLength(510)
+    RunByUserName?: string;
+        
+    @Field({nullable: true, description: `Denormalized email address of the user who ran the test. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.`}) 
+    @MaxLength(510)
+    RunByUserEmail?: string;
+        
+    @Field({nullable: true, description: `JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`}) 
+    RunContextDetails?: string;
+        
     @Field() 
     @MaxLength(510)
     Test: string;
@@ -43304,6 +43323,21 @@ export class CreateMJTestRunInput {
 
     @Field({ nullable: true })
     Tags: string | null;
+
+    @Field({ nullable: true })
+    MachineName: string | null;
+
+    @Field({ nullable: true })
+    MachineID: string | null;
+
+    @Field({ nullable: true })
+    RunByUserName: string | null;
+
+    @Field({ nullable: true })
+    RunByUserEmail: string | null;
+
+    @Field({ nullable: true })
+    RunContextDetails: string | null;
 }
     
 
@@ -43380,6 +43414,21 @@ export class UpdateMJTestRunInput {
 
     @Field({ nullable: true })
     Tags?: string | null;
+
+    @Field({ nullable: true })
+    MachineName?: string | null;
+
+    @Field({ nullable: true })
+    MachineID?: string | null;
+
+    @Field({ nullable: true })
+    RunByUserName?: string | null;
+
+    @Field({ nullable: true })
+    RunByUserEmail?: string | null;
+
+    @Field({ nullable: true })
+    RunContextDetails?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43613,6 +43662,25 @@ export class MJTestSuiteRun_ {
     @Field({nullable: true, description: `JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).`}) 
     Tags?: string;
         
+    @Field({nullable: true, description: `Hostname of the machine that executed this suite. Used for identifying the execution environment and debugging infrastructure-specific issues.`}) 
+    @MaxLength(510)
+    MachineName?: string;
+        
+    @Field({nullable: true, description: `Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of suite execution across different machines.`}) 
+    @MaxLength(510)
+    MachineID?: string;
+        
+    @Field({nullable: true, description: `Denormalized user name who ran the suite. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.`}) 
+    @MaxLength(510)
+    RunByUserName?: string;
+        
+    @Field({nullable: true, description: `Denormalized email address of the user who ran the suite. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.`}) 
+    @MaxLength(510)
+    RunByUserEmail?: string;
+        
+    @Field({nullable: true, description: `JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`}) 
+    RunContextDetails?: string;
+        
     @Field() 
     @MaxLength(510)
     Suite: string;
@@ -43693,6 +43761,21 @@ export class CreateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     Tags: string | null;
+
+    @Field({ nullable: true })
+    MachineName: string | null;
+
+    @Field({ nullable: true })
+    MachineID: string | null;
+
+    @Field({ nullable: true })
+    RunByUserName: string | null;
+
+    @Field({ nullable: true })
+    RunByUserEmail: string | null;
+
+    @Field({ nullable: true })
+    RunContextDetails: string | null;
 }
     
 
@@ -43763,6 +43846,21 @@ export class UpdateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     Tags?: string | null;
+
+    @Field({ nullable: true })
+    MachineName?: string | null;
+
+    @Field({ nullable: true })
+    MachineID?: string | null;
+
+    @Field({ nullable: true })
+    RunByUserName?: string | null;
+
+    @Field({ nullable: true })
+    RunByUserEmail?: string | null;
+
+    @Field({ nullable: true })
+    RunContextDetails?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

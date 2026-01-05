@@ -14481,7 +14481,7 @@ export const TestRunFeedbackSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ReviewerUser: z.string().describe(`
         * * Field Name: ReviewerUser
-        * * Display Name: Reviewer Name
+        * * Display Name: Reviewer User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -14556,7 +14556,7 @@ export const TestRunSchema = z.object({
         * * Description: Timestamp when the test run completed`),
     DurationSeconds: z.number().nullable().describe(`
         * * Field Name: DurationSeconds
-        * * Display Name: Duration (seconds)
+        * * Display Name: Duration Seconds
         * * SQL Data Type: decimal(10, 3)
         * * Description: Execution time in seconds for this test`),
     InputData: z.string().nullable().describe(`
@@ -14596,7 +14596,7 @@ export const TestRunSchema = z.object({
         * * Description: Overall test score from 0.0000 to 1.0000 (0-100%). Calculated by test driver based on passed/failed checks and weights.`),
     CostUSD: z.number().nullable().describe(`
         * * Field Name: CostUSD
-        * * Display Name: Cost (USD)
+        * * Display Name: Cost USD
         * * SQL Data Type: decimal(10, 6)
         * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)`),
     ErrorMessage: z.string().nullable().describe(`
@@ -14629,6 +14629,31 @@ export const TestRunSchema = z.object({
         * * Display Name: Tags
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.`),
+    MachineName: z.string().nullable().describe(`
+        * * Field Name: MachineName
+        * * Display Name: Machine Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Hostname of the machine that executed this test. Used for identifying the execution environment and debugging infrastructure-specific issues.`),
+    MachineID: z.string().nullable().describe(`
+        * * Field Name: MachineID
+        * * Display Name: Machine ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of test execution across different machines.`),
+    RunByUserName: z.string().nullable().describe(`
+        * * Field Name: RunByUserName
+        * * Display Name: Run By User Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized user name who ran the test. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.`),
+    RunByUserEmail: z.string().nullable().describe(`
+        * * Field Name: RunByUserEmail
+        * * Display Name: Run By User Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized email address of the user who ran the test. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.`),
+    RunContextDetails: z.string().nullable().describe(`
+        * * Field Name: RunContextDetails
+        * * Display Name: Run Context Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
     Test: z.string().describe(`
         * * Field Name: Test
         * * Display Name: Test
@@ -14774,13 +14799,38 @@ export const TestSuiteRunSchema = z.object({
         * * Display Name: Tags
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).`),
+    MachineName: z.string().nullable().describe(`
+        * * Field Name: MachineName
+        * * Display Name: Machine Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Hostname of the machine that executed this suite. Used for identifying the execution environment and debugging infrastructure-specific issues.`),
+    MachineID: z.string().nullable().describe(`
+        * * Field Name: MachineID
+        * * Display Name: Machine ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of suite execution across different machines.`),
+    RunByUserName: z.string().nullable().describe(`
+        * * Field Name: RunByUserName
+        * * Display Name: Run By User Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized user name who ran the suite. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.`),
+    RunByUserEmail: z.string().nullable().describe(`
+        * * Field Name: RunByUserEmail
+        * * Display Name: Run By User Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized email address of the user who ran the suite. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.`),
+    RunContextDetails: z.string().nullable().describe(`
+        * * Field Name: RunContextDetails
+        * * Display Name: Run Context Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
     Suite: z.string().describe(`
         * * Field Name: Suite
-        * * Display Name: Suite Name
+        * * Display Name: Suite
         * * SQL Data Type: nvarchar(255)`),
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
-        * * Display Name: Run By User Name
+        * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -56519,7 +56569,7 @@ export class TestRunFeedbackEntity extends BaseEntity<TestRunFeedbackEntityType>
 
     /**
     * * Field Name: ReviewerUser
-    * * Display Name: Reviewer Name
+    * * Display Name: Reviewer User
     * * SQL Data Type: nvarchar(100)
     */
     get ReviewerUser(): string {
@@ -56703,7 +56753,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: DurationSeconds
-    * * Display Name: Duration (seconds)
+    * * Display Name: Duration Seconds
     * * SQL Data Type: decimal(10, 3)
     * * Description: Execution time in seconds for this test
     */
@@ -56807,7 +56857,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: CostUSD
-    * * Display Name: Cost (USD)
+    * * Display Name: Cost USD
     * * SQL Data Type: decimal(10, 6)
     * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)
     */
@@ -56888,6 +56938,71 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     }
     set Tags(value: string | null) {
         this.Set('Tags', value);
+    }
+
+    /**
+    * * Field Name: MachineName
+    * * Display Name: Machine Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Hostname of the machine that executed this test. Used for identifying the execution environment and debugging infrastructure-specific issues.
+    */
+    get MachineName(): string | null {
+        return this.Get('MachineName');
+    }
+    set MachineName(value: string | null) {
+        this.Set('MachineName', value);
+    }
+
+    /**
+    * * Field Name: MachineID
+    * * Display Name: Machine ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of test execution across different machines.
+    */
+    get MachineID(): string | null {
+        return this.Get('MachineID');
+    }
+    set MachineID(value: string | null) {
+        this.Set('MachineID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserName
+    * * Display Name: Run By User Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized user name who ran the test. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.
+    */
+    get RunByUserName(): string | null {
+        return this.Get('RunByUserName');
+    }
+    set RunByUserName(value: string | null) {
+        this.Set('RunByUserName', value);
+    }
+
+    /**
+    * * Field Name: RunByUserEmail
+    * * Display Name: Run By User Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized email address of the user who ran the test. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.
+    */
+    get RunByUserEmail(): string | null {
+        return this.Get('RunByUserEmail');
+    }
+    set RunByUserEmail(value: string | null) {
+        this.Set('RunByUserEmail', value);
+    }
+
+    /**
+    * * Field Name: RunContextDetails
+    * * Display Name: Run Context Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.
+    */
+    get RunContextDetails(): string | null {
+        return this.Get('RunContextDetails');
+    }
+    set RunContextDetails(value: string | null) {
+        this.Set('RunContextDetails', value);
     }
 
     /**
@@ -57253,8 +57368,73 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
     }
 
     /**
+    * * Field Name: MachineName
+    * * Display Name: Machine Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Hostname of the machine that executed this suite. Used for identifying the execution environment and debugging infrastructure-specific issues.
+    */
+    get MachineName(): string | null {
+        return this.Get('MachineName');
+    }
+    set MachineName(value: string | null) {
+        this.Set('MachineName', value);
+    }
+
+    /**
+    * * Field Name: MachineID
+    * * Display Name: Machine ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of suite execution across different machines.
+    */
+    get MachineID(): string | null {
+        return this.Get('MachineID');
+    }
+    set MachineID(value: string | null) {
+        this.Set('MachineID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserName
+    * * Display Name: Run By User Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized user name who ran the suite. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.
+    */
+    get RunByUserName(): string | null {
+        return this.Get('RunByUserName');
+    }
+    set RunByUserName(value: string | null) {
+        this.Set('RunByUserName', value);
+    }
+
+    /**
+    * * Field Name: RunByUserEmail
+    * * Display Name: Run By User Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized email address of the user who ran the suite. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.
+    */
+    get RunByUserEmail(): string | null {
+        return this.Get('RunByUserEmail');
+    }
+    set RunByUserEmail(value: string | null) {
+        this.Set('RunByUserEmail', value);
+    }
+
+    /**
+    * * Field Name: RunContextDetails
+    * * Display Name: Run Context Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.
+    */
+    get RunContextDetails(): string | null {
+        return this.Get('RunContextDetails');
+    }
+    set RunContextDetails(value: string | null) {
+        this.Set('RunContextDetails', value);
+    }
+
+    /**
     * * Field Name: Suite
-    * * Display Name: Suite Name
+    * * Display Name: Suite
     * * SQL Data Type: nvarchar(255)
     */
     get Suite(): string {
@@ -57263,7 +57443,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: RunByUser
-    * * Display Name: Run By User Name
+    * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
     get RunByUser(): string {

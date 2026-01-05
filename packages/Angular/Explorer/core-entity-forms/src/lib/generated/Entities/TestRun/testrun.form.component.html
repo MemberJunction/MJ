@@ -49,6 +49,23 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="RunByUserName"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RunByUserEmail"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Email"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Test"
             Type="textbox"
             [EditMode]="EditMode"
@@ -126,6 +143,30 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="Tags"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MachineName"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MachineID"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RunContextDetails"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
