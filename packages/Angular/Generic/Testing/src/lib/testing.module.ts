@@ -23,6 +23,7 @@ import { TestResultsMatrixComponent } from './components/widgets/test-results-ma
 import { EvaluationBadgeComponent } from './components/widgets/evaluation-badge.component';
 import { EvaluationModeToggleComponent } from './components/widgets/evaluation-mode-toggle.component';
 import { ReviewStatusIndicatorComponent } from './components/widgets/review-status-indicator.component';
+import { ExecutionContextComponent } from './components/widgets/execution-context.component';
 
 // Services
 import { TestingDialogService } from './services/testing-dialog.service';
@@ -39,7 +40,8 @@ import { EvaluationPreferencesService } from './services/evaluation-preferences.
     TestResultsMatrixComponent,
     EvaluationBadgeComponent,
     EvaluationModeToggleComponent,
-    ReviewStatusIndicatorComponent
+    ReviewStatusIndicatorComponent,
+    ExecutionContextComponent
   ],
   imports: [
     CommonModule,
@@ -62,7 +64,8 @@ import { EvaluationPreferencesService } from './services/evaluation-preferences.
     TestResultsMatrixComponent,
     EvaluationBadgeComponent,
     EvaluationModeToggleComponent,
-    ReviewStatusIndicatorComponent
+    ReviewStatusIndicatorComponent,
+    ExecutionContextComponent
   ],
   providers: [
     TestingDialogService,

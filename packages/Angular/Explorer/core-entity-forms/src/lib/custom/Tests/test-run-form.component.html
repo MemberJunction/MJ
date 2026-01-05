@@ -220,8 +220,13 @@
         <span>Feedback</span>
         <span class="tab-badge" *ngIf="feedbackLoaded">{{ feedbacks.length }}</span>
       </button>
+      <button class="tab" [class.active]="activeTab === 'execution'" (click)="changeTab('execution')"
+              role="tab" [attr.aria-selected]="activeTab === 'execution'" title="Press 5">
+        <i class="fas fa-microchip"></i>
+        <span>Execution</span>
+      </button>
       <button class="tab" [class.active]="activeTab === 'log'" (click)="changeTab('log')" *ngIf="record.Log"
-              role="tab" [attr.aria-selected]="activeTab === 'log'" title="Press 5">
+              role="tab" [attr.aria-selected]="activeTab === 'log'" title="Press 6">
         <i class="fas fa-terminal"></i>
         <span>Log</span>
       </button>
@@ -522,6 +527,17 @@
       </div>
     </div>
 
+    <!-- Execution Context Tab -->
+    <div class="execution-tab" *ngIf="activeTab === 'execution'" [@fadeIn]>
+      <mj-execution-context
+        [machineName]="record.MachineName"
+        [machineId]="record.MachineID"
+        [runByUserName]="record.RunByUserName"
+        [runByUserEmail]="record.RunByUserEmail"
+        [runContextDetailsJson]="record.RunContextDetails">
+      </mj-execution-context>
+    </div>
+
     <!-- Execution Log Tab -->
     <div class="log-tab" *ngIf="activeTab === 'log'" [@fadeIn]>
       <div class="log-header">
@@ -553,7 +569,7 @@
     <div class="shortcuts-popup">
       <h4>Keyboard Shortcuts</h4>
       <ul>
-        <li><kbd>1-5</kbd> Switch tabs</li>
+        <li><kbd>1-6</kbd> Switch tabs</li>
         <li><kbd>Cmd+R</kbd> Refresh</li>
         <li><kbd>Cmd+Shift+R</kbd> Re-run test</li>
       </ul>

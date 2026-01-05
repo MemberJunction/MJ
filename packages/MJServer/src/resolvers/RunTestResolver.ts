@@ -104,6 +104,7 @@ export class RunTestResolver extends ResolverBase {
         @Arg('testId') testId: string,
         @Arg('verbose', { nullable: true }) verbose: boolean = true,
         @Arg('environment', { nullable: true }) environment?: string,
+        @Arg('tags', { nullable: true }) tags?: string,
         @PubSub() pubSub?: PubSubEngine,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<TestRunResult> {
@@ -132,6 +133,7 @@ export class RunTestResolver extends ResolverBase {
             const options = {
                 verbose,
                 environment,
+                tags,
                 progressCallback
             };
 

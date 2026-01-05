@@ -19,6 +19,7 @@ export * from './lib/components/widgets/test-results-matrix.component';
 export * from './lib/components/widgets/evaluation-badge.component';
 export * from './lib/components/widgets/evaluation-mode-toggle.component';
 export * from './lib/components/widgets/review-status-indicator.component';
+export * from './lib/components/widgets/execution-context.component';
 
 // Services
 export * from './lib/services/testing-dialog.service';

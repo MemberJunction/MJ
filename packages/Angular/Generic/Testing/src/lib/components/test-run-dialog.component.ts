@@ -48,39 +48,37 @@ interface ProgressUpdate {
             </div>
 
             <!-- Tags Section for Preselected Mode -->
-            @if (runMode === 'suite') {
-              <div class="tags-section">
-                <div class="tags-header">
-                  <i class="fa-solid fa-tags"></i>
-                  <span>Run Tags</span>
-                  <span class="tags-hint">(optional)</span>
+            <div class="tags-section">
+              <div class="tags-header">
+                <i class="fa-solid fa-tags"></i>
+                <span>Run Tags</span>
+                <span class="tags-hint">(optional)</span>
+              </div>
+              <div class="tags-container">
+                <div class="tags-chips">
+                  @for (tag of tags; track tag) {
+                    <span class="tag-chip">
+                      {{ tag }}
+                      <button class="tag-remove" (click)="removeTag(tag)">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </span>
+                  }
                 </div>
-                <div class="tags-container">
-                  <div class="tags-chips">
-                    @for (tag of tags; track tag) {
-                      <span class="tag-chip">
-                        {{ tag }}
-                        <button class="tag-remove" (click)="removeTag(tag)">
-                          <i class="fa-solid fa-times"></i>
-                        </button>
-                      </span>
-                    }
-                  </div>
-                  <div class="tag-input-row">
-                    <input
-                      type="text"
-                      [(ngModel)]="newTag"
-                      placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
-                      (keyup.enter)="addTag()"
-                      class="tag-input"
-                    />
-                    <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
-                      <i class="fa-solid fa-plus"></i>
-                    </button>
-                  </div>
+                <div class="tag-input-row">
+                  <input
+                    type="text"
+                    [(ngModel)]="newTag"
+                    placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
+                    (keyup.enter)="addTag()"
+                    class="tag-input"
+                  />
+                  <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
                 </div>
               </div>
-            }
+            </div>
           }
 
           <!-- Selection Mode - Full UI -->
@@ -215,39 +213,37 @@ interface ProgressUpdate {
               </div>
 
               <!-- Tags Section for Selection Mode -->
-              @if (runMode === 'suite') {
-                <div class="tags-section selection-mode-tags">
-                  <div class="tags-header">
-                    <i class="fa-solid fa-tags"></i>
-                    <span>Run Tags</span>
-                    <span class="tags-hint">(optional)</span>
+              <div class="tags-section selection-mode-tags">
+                <div class="tags-header">
+                  <i class="fa-solid fa-tags"></i>
+                  <span>Run Tags</span>
+                  <span class="tags-hint">(optional)</span>
+                </div>
+                <div class="tags-container">
+                  <div class="tags-chips">
+                    @for (tag of tags; track tag) {
+                      <span class="tag-chip">
+                        {{ tag }}
+                        <button class="tag-remove" (click)="removeTag(tag)">
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      </span>
+                    }
                   </div>
-                  <div class="tags-container">
-                    <div class="tags-chips">
-                      @for (tag of tags; track tag) {
-                        <span class="tag-chip">
-                          {{ tag }}
-                          <button class="tag-remove" (click)="removeTag(tag)">
-                            <i class="fa-solid fa-times"></i>
-                          </button>
-                        </span>
-                      }
-                    </div>
-                    <div class="tag-input-row">
-                      <input
-                        type="text"
-                        [(ngModel)]="newTag"
-                        placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
-                        (keyup.enter)="addTag()"
-                        class="tag-input"
-                      />
-                      <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
-                        <i class="fa-solid fa-plus"></i>
-                      </button>
-                    </div>
+                  <div class="tag-input-row">
+                    <input
+                      type="text"
+                      [(ngModel)]="newTag"
+                      placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
+                      (keyup.enter)="addTag()"
+                      class="tag-input"
+                    />
+                    <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
+                      <i class="fa-solid fa-plus"></i>
+                    </button>
                   </div>
                 </div>
-              }
+              </div>
             </div>
           }
         }
@@ -1194,7 +1190,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   verbose = true;
   parallel = false;
 
-  // Tags for suite runs
+  // Tags for test/suite runs
   tags: string[] = [];
   newTag = '';
 
@@ -1355,6 +1351,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       const result = await this.testingClient.RunTest({
         testId: this.selectedTestId!,
         verbose: this.verbose,
+        tags: this.tags.length > 0 ? this.tags : undefined,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
           this.progress = progress.percentage ?? 0;

@@ -34,6 +34,11 @@ import {
     TestSuiteRunResult,
     TestLogMessage
 } from '../types';
+import {
+    gatherExecutionContext,
+    getMachineName,
+    getMachineIdentifier
+} from '../utils/execution-context';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -123,13 +128,16 @@ export class TestEngine extends TestEngineBase {
                 throw new Error(`Test not found: ${testId}`);
             }
 
+            // Get tags from options
+            const tags = options.tags;
+
             // Check RepeatCount and branch to repeated execution if needed
             if (test.RepeatCount && test.RepeatCount > 1) {
-                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime);
+                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags);
             }
 
             // Single execution - delegate to helper method
-            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime);
+            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags);
 
         } catch (error) {
             this.logError(`Test execution failed: ${testId}`, error as Error);
@@ -141,13 +149,13 @@ export class TestEngine extends TestEngineBase {
      * Run a test suite.
      *
      * @param suiteId - ID of the test suite to run
-     * @param options - Test execution options
+     * @param options - Suite execution options (extends TestRunOptions with suite-specific options)
      * @param contextUser - User context
      * @returns Test suite run result
      */
     public async RunSuite(
         suiteId: string,
-        options: TestRunOptions,
+        options: SuiteRunOptions,
         contextUser: UserInfo
     ): Promise<TestSuiteRunResult> {
         const startTime = Date.now();
@@ -339,7 +347,8 @@ export class TestEngine extends TestEngineBase {
         test: TestEntity,
         contextUser: UserInfo,
         suiteRunId?: string | null,
-        sequence?: number | null
+        sequence?: number | null,
+        tags?: string | null
     ): Promise<TestRunEntity> {
         const md = new Metadata();
         const testRun = await md.GetEntityObject<TestRunEntity>('MJ: Test Runs', contextUser);
@@ -362,6 +371,18 @@ export class TestEngine extends TestEngineBase {
         if (sequence != null) {
             testRun.Sequence = sequence;
         }
+
+        // Set tags if provided
+        if (tags) {
+            testRun.Tags = tags;
+        }
+
+        // Set execution context fields for cross-server aggregation
+        testRun.MachineName = getMachineName();
+        testRun.MachineID = getMachineIdentifier() || null;
+        testRun.RunByUserName = contextUser.Name;
+        testRun.RunByUserEmail = contextUser.Email;
+        testRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
 
         const saved = await testRun.Save();
         if (!saved) {
@@ -396,6 +417,13 @@ export class TestEngine extends TestEngineBase {
         if (options?.tags) {
             suiteRun.Tags = options.tags;
         }
+
+        // Set execution context fields for cross-server aggregation
+        suiteRun.MachineName = getMachineName();
+        suiteRun.MachineID = getMachineIdentifier() || null;
+        suiteRun.RunByUserName = contextUser.Name;
+        suiteRun.RunByUserEmail = contextUser.Email;
+        suiteRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
 
         const saved = await suiteRun.Save();
         if (!saved) {
@@ -494,7 +522,8 @@ export class TestEngine extends TestEngineBase {
         contextUser: UserInfo,
         suiteRunId: string | null | undefined,
         suiteTestSequence: number | null | undefined,
-        startTime: number
+        startTime: number,
+        tags?: string
     ): Promise<TestRunResult[]> {
         const results: TestRunResult[] = [];
 
@@ -509,7 +538,8 @@ export class TestEngine extends TestEngineBase {
                 iteration,
                 options,
                 contextUser,
-                Date.now() // Each iteration gets its own start time
+                Date.now(), // Each iteration gets its own start time
+                tags
             );
 
             results.push(result);
@@ -534,7 +564,8 @@ export class TestEngine extends TestEngineBase {
         sequence: number | null,
         options: TestRunOptions,
         contextUser: UserInfo,
-        startTime: number
+        startTime: number,
+        tags?: string
     ): Promise<TestRunResult> {
         // Get test type
         const testType = this.GetTestTypeByID(test.TypeID);
@@ -567,7 +598,7 @@ export class TestEngine extends TestEngineBase {
         }
 
         // Create TestRun entity
-        const testRun = await this.createTestRun(test, contextUser, suiteRunId, sequence);
+        const testRun = await this.createTestRun(test, contextUser, suiteRunId, sequence, tags);
 
         // Set up log accumulation
         const logMessages: TestLogMessage[] = [];

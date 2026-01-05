@@ -630,14 +630,16 @@ export class AgentEvalDriver extends BaseTestDriver {
             content: params.turn.userMessage
         } as ChatMessage);
 
-        // Build conversation name
-        const conversationName = params.totalTurns > 1
-            ? (params.testRun.Sequence != null
-                ? `[${params.testRun.Sequence}] ${params.test.Name} - Turn ${params.turnNumber}`
-                : `[Test] ${params.test.Name} - Turn ${params.turnNumber}`)
-            : (params.testRun.Sequence != null
-                ? `[${params.testRun.Sequence}] ${params.test.Name}`
-                : `[Test] ${params.test.Name}`);
+        // Build conversation name with format:
+        // - Individual test (no suite): "[Test] TestName" or "[Test][tag1, tag2] TestName"
+        // - Suite test: "[1] TestName" or "[1][tag1, tag2] TestName"
+        const conversationName = this.buildConversationName(
+            params.test.Name,
+            params.testRun.Sequence,
+            params.testRun.Tags,
+            params.turnNumber,
+            params.totalTurns
+        );
 
         // Build execution parameters with cancellation token
         const runParams = {
@@ -983,5 +985,55 @@ export class AgentEvalDriver extends BaseTestDriver {
         const start = new Date(agentRun.StartedAt).getTime();
         const end = new Date(agentRun.CompletedAt).getTime();
         return end - start;
+    }
+
+    /**
+     * Build conversation name with standardized format.
+     *
+     * Format:
+     * - Individual test (no suite): "[Test] TestName" or "[Test][tag1, tag2] TestName"
+     * - Suite test: "[1] TestName" or "[1][tag1, tag2] TestName"
+     * - Multi-turn adds " - Turn N" suffix
+     *
+     * @param testName - Name of the test
+     * @param sequence - Sequence number within suite (null for standalone tests)
+     * @param tagsJson - JSON string array of tags (null if no tags)
+     * @param turnNumber - Current turn number (1-indexed)
+     * @param totalTurns - Total number of turns
+     * @returns Formatted conversation name
+     * @private
+     */
+    private buildConversationName(
+        testName: string,
+        sequence: number | null,
+        tagsJson: string | null,
+        turnNumber: number,
+        totalTurns: number
+    ): string {
+        // Build prefix: [Test] for standalone, [sequence] for suite
+        const sequencePrefix = sequence != null ? `[${sequence}]` : '[Test]';
+
+        // Build tags suffix if tags exist
+        let tagsPrefix = '';
+        if (tagsJson) {
+            try {
+                const tags = JSON.parse(tagsJson) as string[];
+                if (tags && tags.length > 0) {
+                    tagsPrefix = `[${tags.join(', ')}]`;
+                }
+            } catch {
+                // Invalid JSON, skip tags
+            }
+        }
+
+        // Build base name
+        const baseName = `${sequencePrefix}${tagsPrefix} ${testName}`;
+
+        // Add turn suffix for multi-turn tests
+        if (totalTurns > 1) {
+            return `${baseName} - Turn ${turnNumber}`;
+        }
+
+        return baseName;
     }
 }

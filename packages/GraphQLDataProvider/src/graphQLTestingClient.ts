@@ -10,6 +10,7 @@ export interface RunTestParams {
     testId: string;
     verbose?: boolean;
     environment?: string;
+    tags?: string[];
     onProgress?: (progress: TestExecutionProgress) => void;
 }
 
@@ -149,12 +150,14 @@ export class GraphQLTestingClient {
                 mutation RunTest(
                     $testId: String!,
                     $verbose: Boolean,
-                    $environment: String
+                    $environment: String,
+                    $tags: String
                 ) {
                     RunTest(
                         testId: $testId,
                         verbose: $verbose,
-                        environment: $environment
+                        environment: $environment,
+                        tags: $tags
                     ) {
                         success
                         errorMessage
@@ -164,10 +167,14 @@ export class GraphQLTestingClient {
                 }
             `;
 
+            // Serialize tags array to JSON string for GraphQL
+            const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
+
             const variables = {
                 testId: params.testId,
                 verbose: params.verbose,
-                environment: params.environment
+                environment: params.environment,
+                tags: tagsJson
             };
 
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);
