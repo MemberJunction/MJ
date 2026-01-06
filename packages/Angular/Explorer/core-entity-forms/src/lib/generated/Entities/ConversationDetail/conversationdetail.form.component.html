@@ -394,6 +394,27 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- MJ: Conversation Detail Attachments Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJConversationDetailAttachments"
+        sectionName="MJ: Conversation Detail Attachments"
+        icon="fa fa-paperclip"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJConversationDetailAttachments')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Attachments','ConversationDetailID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
+                [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: Conversation Detail Ratings Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJConversationDetailRatings"

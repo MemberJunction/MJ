@@ -75,6 +75,24 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="DefaultStorageProviderID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultStorageRootPath"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="DefaultPromptForContextCompression"
             Type="textbox"
             [EditMode]="EditMode"
@@ -84,6 +102,50 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="DefaultPromptForContextSummarization"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultStorageProvider"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Inheritance Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="inheritanceSettings"
+        sectionName="Inheritance Settings"
+        icon="fa fa-sitemap"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Parent"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -262,6 +324,27 @@
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
                 [EditMode]="GridEditMode()"
                 (dataLoaded)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Configurations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIConfigurations"
+        sectionName="MJ: AI Configurations"
+        icon="fa fa-brain"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIConfigurations')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
+                [AllowLoad]="IsSectionExpanded('mJAIConfigurations')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIConfigurations', $event.totalRowCount)"
                 >
             </mj-user-view-grid>
         </div>

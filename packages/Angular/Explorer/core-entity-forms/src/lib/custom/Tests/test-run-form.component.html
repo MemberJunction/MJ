@@ -1,36 +1,74 @@
-<div class="test-run-form">
+<div class="test-run-form" [class.is-mobile]="false">
+  <!-- Error State -->
+  <div class="error-banner" *ngIf="error" (click)="retryLoad()">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>{{ error }}</span>
+    <button class="retry-btn">
+      <i class="fas fa-redo"></i> Retry
+    </button>
+  </div>
+
   <!-- Header Section -->
-  <div class="test-run-header">
-    <div class="breadcrumb">
-      <a href="javascript:void(0)" (click)="openTest()" *ngIf="test">
-        <i class="fas fa-flask"></i> {{ test.Name }}
-      </a>
-      <i class="fas fa-chevron-right" *ngIf="test"></i>
-      <span>Run #{{ record.ID.substring(0, 8) }}</span>
-    </div>
+  <div class="test-run-header" [class]="getStatusClass()">
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <a href="javascript:void(0)" (click)="navigateToTestingDashboard()">
+            <i class="fas fa-vial"></i>
+            <span class="breadcrumb-text">Testing</span>
+          </a>
+        </li>
+        <li *ngIf="test">
+          <i class="fas fa-chevron-right separator"></i>
+          <a href="javascript:void(0)" (click)="openTest()">
+            <i class="fas fa-flask"></i>
+            <span class="breadcrumb-text">{{ test.Name }}</span>
+          </a>
+        </li>
+        <li class="current">
+          <i class="fas fa-chevron-right separator"></i>
+          <span>Run #{{ record.ID.substring(0, 8) }}</span>
+        </li>
+      </ol>
+    </nav>
 
     <div class="header-content">
       <div class="header-left">
-        <div class="test-run-icon" [style.background-color]="getStatusColor()">
-          <i class="fas fa-flask"></i>
+        <!-- Status Indicator -->
+        <div class="status-indicator" [style.background-color]="getStatusColor()">
+          <i class="fas" [ngClass]="getStatusIcon()"></i>
         </div>
+
         <div class="test-run-info">
-          <h1>Test Run</h1>
+          <h1>
+            Test Run
+            <span class="run-id">#{{ record.ID.substring(0, 8) }}</span>
+          </h1>
           <div class="test-run-meta">
             <span class="status-badge" [style.background-color]="getStatusColor()">
-              <i class="fas" [ngClass]="getStatusIcon()"></i>
               {{ record.Status }}
             </span>
-            <span class="test-type" *ngIf="test">{{ test.Type }}</span>
+            <span class="meta-item" *ngIf="test">
+              <i class="fas fa-flask"></i>
+              {{ test.Type }}
+            </span>
+            <span class="meta-item" *ngIf="autoRefreshEnabled">
+              <i class="fas fa-sync-alt fa-spin"></i>
+              Auto-refreshing
+            </span>
           </div>
         </div>
       </div>
+
       <div class="header-actions">
-        <button kendoButton (click)="reRunTest()" icon="refresh">
-          Re-run Test
+        <button kendoButton (click)="reRunTest()" [disabled]="!record.TestID" title="Re-run this test (Cmd+Shift+R)">
+          <i class="fas fa-redo"></i>
+          <span class="btn-text">Re-run</span>
         </button>
-        <button kendoButton (click)="refresh()" icon="sync">
-          Refresh
+        <button kendoButton (click)="refresh()" [disabled]="isRefreshing" title="Refresh (Cmd+R)">
+          <i class="fas fa-sync-alt" [class.fa-spin]="isRefreshing"></i>
+          <span class="btn-text">Refresh</span>
         </button>
       </div>
     </div>
@@ -38,66 +76,165 @@
     <!-- Metrics Bar -->
     <div class="metrics-bar">
       <div class="metric-card">
-        <div class="metric-label">Started</div>
-        <div class="metric-value">{{ record.StartedAt | date:'short' }}</div>
+        <div class="metric-icon">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Started</div>
+          <div class="metric-value">{{ getRelativeTime(record.StartedAt) }}</div>
+          <div class="metric-detail">{{ record.StartedAt | date:'short' }}</div>
+        </div>
       </div>
+
       <div class="metric-card">
-        <div class="metric-label">Completed</div>
-        <div class="metric-value">{{ record.CompletedAt | date:'short' }}</div>
+        <div class="metric-icon">
+          <i class="fas fa-stopwatch"></i>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Duration</div>
+          <div class="metric-value">{{ calculateDuration() }}</div>
+        </div>
       </div>
+
       <div class="metric-card">
-        <div class="metric-label">Duration</div>
-        <div class="metric-value">{{ calculateDuration() }}</div>
+        <div class="metric-icon">
+          <i class="fas fa-star"></i>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Score</div>
+          <div class="metric-value">{{ formatScore(record.Score) }}</div>
+          <div class="metric-progress" *ngIf="record.Score != null">
+            <div class="progress-bar" [style.width.%]="getScorePercentage()" [style.background-color]="getStatusColor()"></div>
+          </div>
+        </div>
       </div>
+
       <div class="metric-card">
-        <div class="metric-label">Score</div>
-        <div class="metric-value">{{ formatScore(record.Score) }}</div>
+        <div class="metric-icon">
+          <i class="fas fa-check-double"></i>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Checks</div>
+          <div class="metric-value">{{ record.PassedChecks }}/{{ record.TotalChecks }}</div>
+          <div class="metric-progress" *ngIf="record.TotalChecks">
+            <div class="progress-bar" [style.width.%]="getPassRatePercentage()" [style.background-color]="getStatusColor()"></div>
+          </div>
+        </div>
       </div>
+
       <div class="metric-card">
-        <div class="metric-label">Cost</div>
-        <div class="metric-value">{{ formatCost(record.CostUSD) }}</div>
+        <div class="metric-icon">
+          <i class="fas fa-dollar-sign"></i>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Cost</div>
+          <div class="metric-value">{{ formatCost(record.CostUSD) }}</div>
+        </div>
       </div>
     </div>
 
-    <!-- Secondary Metrics -->
-    <div class="secondary-metrics">
-      <div class="metric-item">
-        <span class="metric-label">Checks:</span>
-        <span class="metric-value">{{ record.PassedChecks }}/{{ record.TotalChecks }}</span>
+    <!-- Secondary Info -->
+    <div class="secondary-info" *ngIf="record.RunByUser || testSuiteRun || record.TargetLogEntityID">
+      <span class="info-chip" *ngIf="record.RunByUser">
+        <i class="fas fa-user"></i>
+        {{ record.RunByUser }}
+      </span>
+      <span class="info-chip clickable" *ngIf="testSuiteRun" (click)="openTestSuiteRun()">
+        <i class="fas fa-layer-group"></i>
+        Part of Suite Run (Seq: {{ record.Sequence }})
+      </span>
+      <!-- Target Entity Link Pill -->
+      <mj-entity-link-pill
+        *ngIf="record.TargetLogEntityID && record.TargetLogID"
+        [entityName]="record.TargetLogEntity"
+        [recordId]="record.TargetLogID">
+      </mj-entity-link-pill>
+    </div>
+
+    <!-- Tags Section - Sleek inline design -->
+    <div class="tags-bar" *ngIf="!editingTags">
+      <div class="tags-bar-content">
+        <span class="tags-bar-label"><i class="fas fa-tags"></i></span>
+        <div class="tags-bar-chips" *ngIf="tags.length > 0">
+          <span class="tag-inline" *ngFor="let tag of tags">{{ tag }}</span>
+        </div>
+        <span class="tags-bar-empty" *ngIf="tags.length === 0">No tags</span>
+        <button class="tags-bar-edit" (click)="startEditingTags()" title="Edit tags">
+          <i class="fas fa-plus"></i> Add
+        </button>
       </div>
-      <div class="metric-item">
-        <span class="metric-label">Run By:</span>
-        <span class="metric-value">{{ record.RunByUser }}</span>
+    </div>
+
+    <!-- Tags Editor - Expanded when editing -->
+    <div class="tags-editor-panel" *ngIf="editingTags">
+      <div class="tags-editor-header">
+        <span class="tags-editor-title"><i class="fas fa-tags"></i> Edit Tags</span>
       </div>
-      <div class="metric-item" *ngIf="testSuiteRun">
-        <span class="metric-label">Part of Suite:</span>
-        <a href="javascript:void(0)" (click)="openTestSuiteRun()">
-          {{ testSuiteRun.ID }} (Seq: {{ record.Sequence }})
-        </a>
+      <div class="tags-editor-body">
+        <div class="tags-editor-chips">
+          <span class="tag-editable" *ngFor="let tag of tags">
+            {{ tag }}
+            <button class="tag-remove-btn" (click)="removeTag(tag)" title="Remove tag">
+              <i class="fas fa-times"></i>
+            </button>
+          </span>
+          <span class="tags-empty-hint" *ngIf="tags.length === 0">No tags yet</span>
+        </div>
+        <div class="tags-editor-input">
+          <input type="text"
+                 [(ngModel)]="newTag"
+                 placeholder="Type a tag and press Enter..."
+                 (keyup.enter)="addTag()"
+                 class="tag-text-input" />
+          <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+      </div>
+      <div class="tags-editor-footer">
+        <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
+          <i class="fas fa-spinner fa-spin" *ngIf="savingTags"></i>
+          {{ savingTags ? 'Saving...' : 'Save' }}
+        </button>
+        <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
       </div>
     </div>
   </div>
 
   <!-- Tabs -->
   <div class="tabs-container">
-    <div class="tabs">
-      <button class="tab" [class.active]="activeTab === 'overview'" (click)="changeTab('overview')">
-        <i class="fas fa-th-large"></i>
+    <div class="tabs" role="tablist">
+      <button class="tab" [class.active]="activeTab === 'overview'" (click)="changeTab('overview')"
+              role="tab" [attr.aria-selected]="activeTab === 'overview'" title="Press 1">
+        <i class="fas fa-chart-pie"></i>
         <span>Overview</span>
       </button>
-      <button class="tab" [class.active]="activeTab === 'details'" (click)="changeTab('details')">
-        <i class="fas fa-list"></i>
+      <button class="tab" [class.active]="activeTab === 'details'" (click)="changeTab('details')"
+              role="tab" [attr.aria-selected]="activeTab === 'details'" title="Press 2">
+        <i class="fas fa-info-circle"></i>
         <span>Details</span>
       </button>
-      <button class="tab" [class.active]="activeTab === 'ai-runs'" (click)="changeTab('ai-runs')">
+      <button class="tab" [class.active]="activeTab === 'ai-runs'" (click)="changeTab('ai-runs')"
+              role="tab" [attr.aria-selected]="activeTab === 'ai-runs'" title="Press 3">
         <i class="fas fa-robot"></i>
         <span>AI Runs</span>
         <span class="tab-badge" *ngIf="aiRunsLoaded">{{ aiAgentRuns.length + aiPromptRuns.length }}</span>
       </button>
-      <button class="tab" [class.active]="activeTab === 'feedback'" (click)="changeTab('feedback')">
+      <button class="tab" [class.active]="activeTab === 'feedback'" (click)="changeTab('feedback')"
+              role="tab" [attr.aria-selected]="activeTab === 'feedback'" title="Press 4">
         <i class="fas fa-comments"></i>
         <span>Feedback</span>
         <span class="tab-badge" *ngIf="feedbackLoaded">{{ feedbacks.length }}</span>
+      </button>
+      <button class="tab" [class.active]="activeTab === 'execution'" (click)="changeTab('execution')"
+              role="tab" [attr.aria-selected]="activeTab === 'execution'" title="Press 5">
+        <i class="fas fa-microchip"></i>
+        <span>Execution</span>
+      </button>
+      <button class="tab" [class.active]="activeTab === 'log'" (click)="changeTab('log')" *ngIf="record.Log"
+              role="tab" [attr.aria-selected]="activeTab === 'log'" title="Press 6">
+        <i class="fas fa-terminal"></i>
+        <span>Log</span>
       </button>
     </div>
   </div>
@@ -105,145 +242,208 @@
   <!-- Tab Content -->
   <div class="tab-content">
     <!-- Overview Tab -->
-    <div class="overview-tab" *ngIf="activeTab === 'overview'">
+    <div class="overview-tab" *ngIf="activeTab === 'overview'" [@fadeIn]>
       <!-- Result Hero -->
-      <div class="result-hero" [class.passed]="record.Status === 'Passed'" [class.failed]="record.Status === 'Failed'">
-        <div class="result-icon">
-          <i class="fas" [ngClass]="getStatusIcon()"></i>
+      <div class="result-hero" [class]="getStatusClass()">
+        <div class="result-icon-wrapper">
+          <div class="result-icon">
+            <i class="fas" [ngClass]="getStatusIcon()"></i>
+          </div>
+          <div class="result-pulse" *ngIf="record.Status === 'Running'"></div>
         </div>
         <div class="result-text">
           <h2>TEST {{ record.Status.toUpperCase() }}</h2>
-          <div class="result-score">Score: {{ formatScore(record.Score) }} / 1.0000</div>
-          <div class="result-checks">{{ record.PassedChecks }} of {{ record.TotalChecks }} checks passed</div>
+          <div class="result-details">
+            <span class="result-score">Score: {{ formatScore(record.Score) }}</span>
+            <span class="result-divider">|</span>
+            <span class="result-checks">{{ record.PassedChecks }} of {{ record.TotalChecks }} checks passed</span>
+          </div>
         </div>
       </div>
 
       <!-- Check Results -->
       <div class="check-results" *ngIf="getCheckResults().length > 0">
-        <h3>Check Results</h3>
+        <div class="section-header">
+          <h3><i class="fas fa-tasks"></i> Check Results</h3>
+          <span class="check-summary">{{ record.PassedChecks }} passed, {{ record.FailedChecks }} failed</span>
+        </div>
         <div class="check-list">
-          <div class="check-item" *ngFor="let check of getCheckResults()" [class.passed]="check.passed" [class.failed]="!check.passed">
-            <div class="check-icon">
+          <div class="check-item" *ngFor="let check of getCheckResults(); let i = index"
+               [class.passed]="check.passed" [class.failed]="!check.passed"
+               [style.animation-delay.ms]="i * 50">
+            <div class="check-status">
               <i class="fas" [class.fa-check-circle]="check.passed" [class.fa-times-circle]="!check.passed"></i>
             </div>
             <div class="check-content">
               <div class="check-name">{{ check.name }}</div>
-              <div class="check-details">{{ check.message }}</div>
-              <div class="check-weight" *ngIf="check.weight">Weight: {{ check.weight }}</div>
+              <div class="check-message" *ngIf="check.message">{{ check.message }}</div>
+            </div>
+            <div class="check-weight" *ngIf="check.weight">
+              <span class="weight-label">Weight:</span> {{ check.weight }}
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Input / Expected / Actual Comparison -->
+      <!-- Data Comparison -->
       <div class="comparison-section">
-        <h3>Data Comparison</h3>
+        <div class="section-header">
+          <h3><i class="fas fa-exchange-alt"></i> Data Comparison</h3>
+        </div>
         <div class="comparison-tabs">
           <button class="comparison-tab" [class.active]="comparisonView === 'input'" (click)="setComparisonView('input')">
-            Input
+            <i class="fas fa-sign-in-alt"></i> Input
           </button>
           <button class="comparison-tab" [class.active]="comparisonView === 'expected'" (click)="setComparisonView('expected')">
-            Expected
+            <i class="fas fa-bullseye"></i> Expected
           </button>
           <button class="comparison-tab" [class.active]="comparisonView === 'actual'" (click)="setComparisonView('actual')">
-            Actual
+            <i class="fas fa-check-square"></i> Actual
           </button>
         </div>
         <div class="comparison-content">
-          <pre>{{ getComparisonData() | json }}</pre>
+          <mj-code-editor
+            [value]="getComparisonData()"
+            language="json"
+            [readonly]="true"
+            [toolbar]="jsonToolbar"
+            [lineWrapping]="true">
+          </mj-code-editor>
         </div>
       </div>
     </div>
 
     <!-- Details Tab -->
-    <div class="details-tab" *ngIf="activeTab === 'details'">
+    <div class="details-tab" *ngIf="activeTab === 'details'" [@fadeIn]>
       <div class="details-grid">
-        <div class="detail-item">
-          <div class="detail-label">Test Run ID</div>
-          <div class="detail-value">{{ record.ID }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Test</div>
-          <div class="detail-value">
-            <a href="javascript:void(0)" (click)="openTest()" *ngIf="test">{{ test.Name }}</a>
+        <div class="detail-card">
+          <div class="detail-icon"><i class="fas fa-fingerprint"></i></div>
+          <div class="detail-content">
+            <div class="detail-label">Test Run ID</div>
+            <div class="detail-value monospace">{{ record.ID }}</div>
           </div>
         </div>
-        <div class="detail-item">
-          <div class="detail-label">Status</div>
-          <div class="detail-value">{{ record.Status }}</div>
+
+        <div class="detail-card clickable" *ngIf="test" (click)="openTest()">
+          <div class="detail-icon"><i class="fas fa-flask"></i></div>
+          <div class="detail-content">
+            <div class="detail-label">Test</div>
+            <div class="detail-value link">{{ test.Name }}</div>
+          </div>
+          <i class="fas fa-external-link-alt detail-action"></i>
         </div>
-        <div class="detail-item">
-          <div class="detail-label">Target Type</div>
-          <div class="detail-value">{{ record.TargetType || 'N/A' }}</div>
+
+        <div class="detail-card">
+          <div class="detail-icon"><i class="fas fa-tag"></i></div>
+          <div class="detail-content">
+            <div class="detail-label">Target Type</div>
+            <div class="detail-value">{{ record.TargetType || 'N/A' }}</div>
+          </div>
         </div>
-        <div class="detail-item">
-          <div class="detail-label">Started At</div>
-          <div class="detail-value">{{ record.StartedAt | date:'medium' }}</div>
+
+        <div class="detail-card">
+          <div class="detail-icon"><i class="fas fa-play-circle"></i></div>
+          <div class="detail-content">
+            <div class="detail-label">Started At</div>
+            <div class="detail-value">{{ record.StartedAt | date:'medium' }}</div>
+          </div>
         </div>
-        <div class="detail-item">
-          <div class="detail-label">Completed At</div>
-          <div class="detail-value">{{ record.CompletedAt | date:'medium' }}</div>
+
+        <div class="detail-card">
+          <div class="detail-icon"><i class="fas fa-stop-circle"></i></div>
+          <div class="detail-content">
+            <div class="detail-label">Completed At</div>
+            <div class="detail-value">{{ record.CompletedAt | date:'medium' }}</div>
+          </div>
         </div>
-        <div class="detail-item">
-          <div class="detail-label">Duration</div>
-          <div class="detail-value">{{ calculateDuration() }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Score</div>
-          <div class="detail-value">{{ formatScore(record.Score) }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Cost</div>
-          <div class="detail-value">{{ formatCost(record.CostUSD) }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Passed Checks</div>
-          <div class="detail-value">{{ record.PassedChecks }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Failed Checks</div>
-          <div class="detail-value">{{ record.FailedChecks }}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Total Checks</div>
-          <div class="detail-value">{{ record.TotalChecks }}</div>
+
+        <div class="detail-card">
+          <div class="detail-icon"><i class="fas fa-hourglass-half"></i></div>
+          <div class="detail-content">
+            <div class="detail-label">Duration</div>
+            <div class="detail-value">{{ calculateDuration() }}</div>
+          </div>
         </div>
       </div>
 
-      <div class="error-message" *ngIf="record.ErrorMessage">
-        <h4>Error Message</h4>
-        <pre>{{ record.ErrorMessage }}</pre>
+      <!-- Error Message -->
+      <div class="error-section" *ngIf="record.ErrorMessage">
+        <div class="section-header error">
+          <h3><i class="fas fa-exclamation-triangle"></i> Error Message</h3>
+        </div>
+        <div class="error-content">
+          <mj-code-editor
+            [value]="record.ErrorMessage"
+            [readonly]="true"
+            [toolbar]="jsonToolbar"
+            [lineWrapping]="true">
+          </mj-code-editor>
+        </div>
       </div>
 
-      <div class="result-details-json" *ngIf="record.ResultDetails">
-        <h4>Full Result Details (JSON)</h4>
-        <pre>{{ parsedData.resultDetails | json }}</pre>
+      <!-- Result Details -->
+      <div class="result-details-section" *ngIf="parsedData.resultDetails">
+        <div class="section-header">
+          <h3><i class="fas fa-file-code"></i> Result Details</h3>
+        </div>
+        <div class="result-details-content">
+          <mj-code-editor
+            [value]="getFormattedResultDetails()"
+            language="json"
+            [readonly]="true"
+            [toolbar]="jsonToolbar"
+            [lineWrapping]="true">
+          </mj-code-editor>
+        </div>
       </div>
     </div>
 
     <!-- AI Runs Tab -->
-    <div class="ai-runs-tab" *ngIf="activeTab === 'ai-runs'">
-      <div class="ai-runs-section" *ngIf="aiAgentRuns.length > 0">
-        <h3>AI Agent Runs ({{ aiAgentRuns.length }})</h3>
+    <div class="ai-runs-tab" *ngIf="activeTab === 'ai-runs'" [@fadeIn]>
+      <!-- Loading State -->
+      <div class="loading-state" *ngIf="loadingAIRuns">
+        <div class="skeleton-list">
+          <div class="skeleton-card" *ngFor="let i of [1,2,3]">
+            <div class="skeleton-icon"></div>
+            <div class="skeleton-content">
+              <div class="skeleton-line wide"></div>
+              <div class="skeleton-line narrow"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Agent Runs -->
+      <div class="ai-section" *ngIf="!loadingAIRuns && aiAgentRuns.length > 0">
+        <div class="section-header">
+          <h3><i class="fas fa-robot"></i> AI Agent Runs</h3>
+          <span class="count-badge">{{ aiAgentRuns.length }}</span>
+        </div>
         <div class="ai-run-list">
           <div class="ai-run-card" *ngFor="let run of aiAgentRuns" (click)="openAIAgentRun(run.ID)">
-            <div class="ai-run-icon">
+            <div class="ai-run-icon agent">
               <i class="fas fa-robot"></i>
             </div>
             <div class="ai-run-content">
               <div class="ai-run-name">{{ run.Agent }}</div>
               <div class="ai-run-meta">
-                <span>{{ run.Status }}</span>
-                <span *ngIf="run.TotalCost">${{ run.TotalCost }}</span>
+                <span class="status-chip" [class]="run.Status.toLowerCase()">{{ run.Status }}</span>
+                <span *ngIf="run.TotalCost" class="cost-chip">
+                  <i class="fas fa-dollar-sign"></i> {{ run.TotalCost | number:'1.4-4' }}
+                </span>
               </div>
             </div>
-            <i class="fas fa-external-link-alt"></i>
+            <i class="fas fa-chevron-right ai-run-arrow"></i>
           </div>
         </div>
       </div>
 
-      <div class="ai-runs-section" *ngIf="aiPromptRuns.length > 0">
-        <h3>AI Prompt Runs ({{ aiPromptRuns.length }})</h3>
+      <!-- AI Prompt Runs -->
+      <div class="ai-section" *ngIf="!loadingAIRuns && aiPromptRuns.length > 0">
+        <div class="section-header">
+          <h3><i class="fas fa-comment-dots"></i> AI Prompt Runs</h3>
+          <span class="count-badge">{{ aiPromptRuns.length }}</span>
+        </div>
         <div class="ai-run-list">
           <div class="ai-run-card" *ngFor="let run of aiPromptRuns" (click)="openAIPromptRun(run.ID)">
             <div class="ai-run-icon prompt">
@@ -252,49 +452,133 @@
             <div class="ai-run-content">
               <div class="ai-run-name">{{ run.Prompt || run.Model }}</div>
               <div class="ai-run-meta">
-                <span *ngIf="run.TotalCost">${{ run.TotalCost }}</span>
+                <span *ngIf="run.TotalCost" class="cost-chip">
+                  <i class="fas fa-dollar-sign"></i> {{ run.TotalCost | number:'1.4-4' }}
+                </span>
               </div>
             </div>
-            <i class="fas fa-external-link-alt"></i>
+            <i class="fas fa-chevron-right ai-run-arrow"></i>
           </div>
         </div>
       </div>
 
-      <div class="no-data" *ngIf="aiRunsLoaded && aiAgentRuns.length === 0 && aiPromptRuns.length === 0">
-        <i class="fas fa-inbox"></i>
-        <p>No AI runs associated with this test execution</p>
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="aiRunsLoaded && aiAgentRuns.length === 0 && aiPromptRuns.length === 0">
+        <div class="empty-icon">
+          <i class="fas fa-robot"></i>
+        </div>
+        <h3>No AI Runs</h3>
+        <p>This test execution didn't involve any AI agent or prompt runs.</p>
       </div>
     </div>
 
     <!-- Feedback Tab -->
-    <div class="feedback-tab" *ngIf="activeTab === 'feedback'">
-      <div class="feedback-list" *ngIf="feedbacks.length > 0">
-        <div class="feedback-item" *ngFor="let feedback of feedbacks">
-          <div class="feedback-header">
-            <div class="feedback-user">
-              <i class="fas fa-user"></i>
-              {{ feedback.ReviewerUserID }}
+    <div class="feedback-tab" *ngIf="activeTab === 'feedback'" [@fadeIn]>
+      <!-- Loading State -->
+      <div class="loading-state" *ngIf="loadingFeedback">
+        <div class="skeleton-list">
+          <div class="skeleton-card" *ngFor="let i of [1,2]">
+            <div class="skeleton-avatar"></div>
+            <div class="skeleton-content">
+              <div class="skeleton-line wide"></div>
+              <div class="skeleton-line narrow"></div>
+              <div class="skeleton-line medium"></div>
             </div>
-            <div class="feedback-date">
-              {{ feedback.__mj_CreatedAt | date:'medium' }}
-            </div>
-          </div>
-          <div class="feedback-rating">
-            Rating: {{ feedback.Rating }}/10
-          </div>
-          <div class="feedback-correct" *ngIf="feedback.IsCorrect !== null">
-            Automated Result: {{ feedback.IsCorrect ? 'Correct' : 'Incorrect' }}
-          </div>
-          <div class="feedback-comments" *ngIf="feedback.CorrectionSummary">
-            {{ feedback.CorrectionSummary }}
           </div>
         </div>
       </div>
 
-      <div class="no-data" *ngIf="feedbackLoaded && feedbacks.length === 0">
-        <i class="fas fa-inbox"></i>
-        <p>No feedback submitted for this test run</p>
+      <!-- Feedback List -->
+      <div class="feedback-list" *ngIf="!loadingFeedback && feedbacks.length > 0">
+        <div class="feedback-item" *ngFor="let feedback of feedbacks">
+          <div class="feedback-header">
+            <div class="feedback-user">
+              <div class="user-avatar">
+                <i class="fas fa-user"></i>
+              </div>
+              <span class="user-name">{{ feedback.ReviewerUser }}</span>
+            </div>
+            <div class="feedback-date">
+              {{ getRelativeTime(feedback.__mj_CreatedAt) }}
+            </div>
+          </div>
+          <div class="feedback-body">
+            <div class="feedback-rating">
+              <div class="rating-stars">
+                <i class="fas fa-star" *ngFor="let s of [1,2,3,4,5,6,7,8,9,10]"
+                   [class.filled]="s <= (feedback.Rating || 0)"></i>
+              </div>
+              <span class="rating-value">{{ feedback.Rating }}/10</span>
+            </div>
+            <div class="feedback-verdict" *ngIf="feedback.IsCorrect !== null">
+              <span class="verdict-badge" [class.correct]="feedback.IsCorrect" [class.incorrect]="!feedback.IsCorrect">
+                <i class="fas" [class.fa-check]="feedback.IsCorrect" [class.fa-times]="!feedback.IsCorrect"></i>
+                {{ feedback.IsCorrect ? 'Marked Correct' : 'Marked Incorrect' }}
+              </span>
+            </div>
+            <div class="feedback-comments" *ngIf="feedback.CorrectionSummary">
+              <p>{{ feedback.CorrectionSummary }}</p>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="feedbackLoaded && feedbacks.length === 0">
+        <div class="empty-icon">
+          <i class="fas fa-comments"></i>
+        </div>
+        <h3>No Feedback Yet</h3>
+        <p>No one has reviewed this test run yet. Be the first to provide feedback!</p>
+      </div>
+    </div>
+
+    <!-- Execution Context Tab -->
+    <div class="execution-tab" *ngIf="activeTab === 'execution'" [@fadeIn]>
+      <mj-execution-context
+        [machineName]="record.MachineName"
+        [machineId]="record.MachineID"
+        [runByUserName]="record.RunByUserName"
+        [runByUserEmail]="record.RunByUserEmail"
+        [runContextDetailsJson]="record.RunContextDetails">
+      </mj-execution-context>
+    </div>
+
+    <!-- Execution Log Tab -->
+    <div class="log-tab" *ngIf="activeTab === 'log'" [@fadeIn]>
+      <div class="log-header">
+        <div class="log-title">
+          <i class="fas fa-terminal"></i>
+          <h3>Execution Log</h3>
+        </div>
+        <div class="log-actions">
+          <button kendoButton (click)="copyLogToClipboard()" look="flat">
+            <i class="fas fa-copy"></i>
+            <span class="btn-text">Copy</span>
+          </button>
+        </div>
+      </div>
+      <div class="log-container">
+        <mj-code-editor
+          [value]="record.Log || ''"
+          [readonly]="true"
+          [toolbar]="jsonToolbar"
+          [lineWrapping]="true">
+        </mj-code-editor>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts Help (shown on hover of ? icon) -->
+  <div class="shortcuts-hint" title="Keyboard Shortcuts">
+    <i class="fas fa-keyboard"></i>
+    <div class="shortcuts-popup">
+      <h4>Keyboard Shortcuts</h4>
+      <ul>
+        <li><kbd>1-6</kbd> Switch tabs</li>
+        <li><kbd>Cmd+R</kbd> Refresh</li>
+        <li><kbd>Cmd+Shift+R</kbd> Re-run test</li>
+      </ul>
     </div>
   </div>
 </div>

@@ -38,6 +38,7 @@
     "@memberjunction/ng-action-gallery": "2.129.0",
     "@memberjunction/ng-ai-test-harness": "2.129.0",
     "@memberjunction/ng-base-forms": "2.129.0",
+    "@memberjunction/ng-base-application": "2.129.0",
     "@memberjunction/ng-code-editor": "2.129.0",
     "@memberjunction/ng-container-directives": "2.129.0",
     "@memberjunction/ng-deep-diff": "2.129.0",

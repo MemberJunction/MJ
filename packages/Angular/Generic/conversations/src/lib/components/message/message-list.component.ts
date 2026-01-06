@@ -17,7 +17,7 @@ import {
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MessageItemComponent } from './message-item.component';
+import { MessageItemComponent, MessageAttachment } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { RatingJSON } from '../../models/conversation-complete-query.model';
 import { AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
@@ -41,6 +41,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
+  @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
@@ -53,6 +54,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
+  @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
@@ -229,6 +231,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           // Update ratings from map
           instance.ratings = this.ratingsMap.get(message.ID);
 
+          // Update attachments from map
+          instance.attachments = this.attachmentsMap.get(message.ID) || [];
+
           // Manually trigger change detection in child component when message status changes
           // This is necessary because we're using OnPush change detection and direct property assignment
           // doesn't trigger ngOnChanges (only reference changes do)
@@ -278,6 +283,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           // Pass ratings from map (parsed once per conversation)
           instance.ratings = this.ratingsMap.get(message.ID);
 
+          // Pass attachments from map
+          instance.attachments = this.attachmentsMap.get(message.ID) || [];
+
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));
           instance.editClicked.subscribe((msg: ConversationDetailEntity) => this.editMessage.emit(msg));
@@ -288,6 +296,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.messageEdited.subscribe((msg: ConversationDetailEntity) => this.messageEdited.emit(msg));
           instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
           instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
+          instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
 
           // Handle artifact actions if the output exists
           if (instance.artifactActionPerformed) {

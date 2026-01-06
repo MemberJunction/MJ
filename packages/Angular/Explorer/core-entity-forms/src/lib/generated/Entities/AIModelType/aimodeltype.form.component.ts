@@ -16,6 +16,7 @@ export class AIModelTypeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'modelInformation', sectionName: 'Model Information', isExpanded: true },
+            { sectionKey: 'defaultModality', sectionName: 'Default Modality', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'aIModels', sectionName: 'AI Models', isExpanded: false },
             { sectionKey: 'aIPrompts', sectionName: 'AI Prompts', isExpanded: false }

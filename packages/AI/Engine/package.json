@@ -23,6 +23,7 @@
     "@memberjunction/ai-core-plus": "2.129.0",
     "@memberjunction/ai-engine-base": "2.129.0",
     "@memberjunction/ai-vectors-memory": "2.129.0",
+    "@memberjunction/storage": "2.129.0",
     "dotenv": "^16.4.1",
     "rxjs": "^7.8.1"
   },

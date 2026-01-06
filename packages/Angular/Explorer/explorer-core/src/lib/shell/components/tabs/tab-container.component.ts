@@ -510,6 +510,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       tab.applicationId,
       tab.configuration?.resourceType || '',
       tab.configuration?.driverClass || '',
+      tab.configuration?.Entity || '',  // Include Entity name for Records resource type
       effectiveRecordId,
       tab.configuration?.route || ''
     ];

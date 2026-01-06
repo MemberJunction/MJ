@@ -23,6 +23,7 @@ export class ConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false },
             { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'MJ: Conversation Detail Artifacts', isExpanded: false },
+            { sectionKey: 'mJConversationDetailAttachments', sectionName: 'MJ: Conversation Detail Attachments', isExpanded: false },
             { sectionKey: 'mJConversationDetailRatings', sectionName: 'MJ: Conversation Detail Ratings', isExpanded: false },
             { sectionKey: 'aIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false },
