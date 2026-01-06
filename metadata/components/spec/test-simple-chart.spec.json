@@ -1,0 +1,39 @@
+{
+  "name": "TestSimpleChart",
+  "title": "SimpleChart Test Component",
+  "description": "Test harness for SimpleChart component using MemberJunction entities (Actions and AI Model Costs). Demonstrates single-series charts, stacked charts, different chart types, aggregation methods, and all interactive features. NOT a golden example - purely for testing and validation.",
+  "type": "other",
+  "location": "embedded",
+  "functionalRequirements": "Test component to validate SimpleChart functionality with real MJ data. Multiple test scenarios in tabs: (1) BAR CHART: Actions by Category - count aggregation, auto colors, onClick drill-down. (2) STACKED BAR: Action Params by Action+Type - tests new stackBy feature with secondary grouping. (3) PIE CHART: Top 5 Action Categories - limit feature, percentage display. (4) LINE CHART: AI Model Costs over time - date handling, trend visualization. (5) CUSTOM: User-configurable chart with all prop controls. TESTING FEATURES: Chart type auto-detection and explicit selection; Single-series vs stacked mode; Count, sum, average aggregation methods; Sorting (value, label, preserve order); Top-N limiting; Date field formatting; onClick events with drill-down data grid; Export to PNG; Legend positioning; Data labels; Custom colors; Height adjustment. INTERACTIVE TESTING: Click chart elements to see drill-down data in DataGrid; Toggle controls to test different configurations; View event log for onClick/onChartRendered events; Test stacked mode with real multi-dimensional data.",
+  "technicalDesign": "React component with tabbed interface showing multiple SimpleChart instances with different configurations. State: activeTab (string), clickedData (object | null), eventLog (array), customChartConfig (object for user controls). Layout: Tab navigation (Bar, Stacked, Pie, Line, Custom); Chart display area with SimpleChart instance; DataGrid below showing clicked segment records; Event log panel; Custom tab with live prop controls. Test Scenarios: [Bar Chart] entityName='Actions', groupBy='Category', aggregateMethod='count', chartType='bar', showLegend=true, enableExport=true, onDataPointClick shows records in DataGrid. [Stacked Bar] entityName='Action Params', groupBy='Action' (via ActionID lookup), stackBy='Type', valueField='ID', aggregateMethod='count', tests new stacking feature. [Pie Chart] entityName='Actions', groupBy='Category', limit=5, chartType='pie', tests top-N limiting. [Line Chart] entityName='MJ: AI Model Costs', groupBy='StartedAt', valueField='InputPricePerUnit', aggregateMethod='average', chartType='line', tests date handling. [Custom] All props exposed as form controls for live testing. Components Used: SimpleChart (primary), DataGrid (for drill-down display), Tab navigation, Form controls. Event Handlers: onDataPointClick logs event and displays records in DataGrid; onChartRendered logs to event panel; Export button downloads PNG.",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Uses RunView to load Actions (~217 records, 28 categories) and Action Params (~1800 records) for testing. Also uses AI Model Costs for time-series testing."
+  },
+  "properties": [
+    {
+      "name": "initialTab",
+      "type": "string",
+      "description": "Initial tab to display on load",
+      "required": false,
+      "defaultValue": "bar"
+    }
+  ],
+  "events": [],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry",
+      "description": "Component being tested"
+    },
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry",
+      "description": "Used to display drill-down records from chart clicks"
+    }
+  ],
+  "code": "@file:../code/test-simple-chart.js",
+  "exampleUsage": "// Basic usage for testing\n<TestSimpleChart />\n\n// Start on specific tab\n<TestSimpleChart initialTab=\"stacked\" />\n\n// Testing scenarios:\n// 1. Load component - verify bar chart renders with Actions by Category\n// 2. Click a bar - verify DataGrid shows filtered records for that category\n// 3. Switch to Stacked tab - verify stackBy creates multi-series chart\n// 4. Switch to Pie tab - verify only top 5 categories shown\n// 5. Switch to Line tab - verify date grouping and trend line\n// 6. Switch to Custom tab - adjust props and see live chart updates\n// 7. Test export button - verify PNG download works\n// 8. Check event log - verify all events captured"
+}
