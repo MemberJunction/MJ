@@ -1680,14 +1680,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/ai-insights-panel.spec.json"
+      "Specification": "@file:spec/generic/ai-insights-panel.spec.json"
     },
     "primaryKey": {
       "ID": "89F60F0B-31C3-4676-B6DD-F3D2258C416A"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:37.680Z",
-      "checksum": "6e0b84bb41e32cddf1ebd29b3cd27546d3972d06d630c1823f79c6184e84bcf4"
+      "lastModified": "2026-01-06T18:53:07.110Z",
+      "checksum": "8d796a7bc58541ae01175fb2d3bdfb786ecbffa1dc39d7c053fa8bf7bd055c59"
     }
   },
   {
@@ -1699,14 +1699,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/data-export-panel.spec.json"
+      "Specification": "@file:spec/generic/data-export-panel.spec.json"
     },
     "primaryKey": {
       "ID": "D08BCD9D-B26F-4C96-87E7-436DE63F18FF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:37.681Z",
-      "checksum": "02b22d33eed37e421265faa49013832f4e6cfd15c9db3f9ae7cca14555630171"
+      "lastModified": "2026-01-06T18:53:07.117Z",
+      "checksum": "86bd677cd55ad8d18d7a2db324da4f15b59c71f9ace88d6a055b392ddf3d306e"
     }
   },
   {
@@ -1718,14 +1718,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/data-grid.spec.json"
+      "Specification": "@file:spec/generic/data-grid.spec.json"
     },
     "primaryKey": {
       "ID": "DB1253D8-5B43-4FB1-880D-908EE2E5B37F"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:37.749Z",
-      "checksum": "428047892e5be9edbe7a8949587766e76db322d4cf307bf3b65f9469a8bbbc11"
+      "lastModified": "2026-01-06T18:53:08.723Z",
+      "checksum": "ecc1ff2eac3bfe842e26aeaacb6d5f216c4b997c6ef8b657208f034be02f4042"
     }
   },
   {
@@ -1775,14 +1775,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/simple-chart.spec.json"
+      "Specification": "@file:spec/generic/simple-chart.spec.json"
     },
     "primaryKey": {
       "ID": "21A95BC1-2CCD-4949-A90F-4262F1DBDB62"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:37.823Z",
-      "checksum": "1c8a98ba1381766dcb87bacce3af93d1f485e34941e838a47d9207aafd567df9"
+      "lastModified": "2026-01-06T18:53:08.733Z",
+      "checksum": "d9163177c6fe788fbe3660fdcec770bfa0e16dae020274c1757b4cae0f6c6e2f"
     }
   },
   {
@@ -1794,14 +1794,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/simple-drilldown-chart.spec.json"
+      "Specification": "@file:spec/generic/simple-drilldown-chart.spec.json"
     },
     "primaryKey": {
       "ID": "90293530-7C0B-42B8-B8B1-38FD7D5C97DA"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:37.761Z",
-      "checksum": "11b4f88f5fc65d060fb67eb1f548c6938ad18bb7245a9d6f362a7451f37b05b0"
+      "lastModified": "2026-01-06T18:53:08.744Z",
+      "checksum": "a3e977badad0f2443619532514f1d65af010f725ed3aef0808ce4e758c82e519"
     }
   },
   {
@@ -1813,14 +1813,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/open-record-button.spec.json"
+      "Specification": "@file:spec/generic/open-record-button.spec.json"
     },
     "primaryKey": {
       "ID": "2C0A6E59-3B78-43B3-BF84-446AA9280E86"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:37.763Z",
-      "checksum": "43773fe36e53bc26cb7ad579dc577c5e083df90ccf25cf4b5159af6591d9669f"
+      "lastModified": "2026-01-06T18:53:08.752Z",
+      "checksum": "c4d39684c2fc926460f76b1716833e9933cc660b307797ef649f8a0244ff67bf"
     }
   },
   {
@@ -1832,14 +1832,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/single-record-view.spec.json"
+      "Specification": "@file:spec/generic/single-record-view.spec.json"
     },
     "primaryKey": {
       "ID": "6DABEEC4-803B-4149-9DC4-5A1201AC1EF9"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:37.765Z",
-      "checksum": "9e14a08ad29288c5e087780fe113eac7bf1993f8a70fc729470878f05857b5a9"
+      "lastModified": "2026-01-06T18:53:08.757Z",
+      "checksum": "2b94f4ce03220d7e6bee051e6e3514210f370a41f87a484126a31533cb1738bc"
     }
   },
   {
@@ -1965,14 +1965,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/entity-data-grid.spec.json"
+      "Specification": "@file:spec/generic/entity-data-grid.spec.json"
     },
     "primaryKey": {
       "ID": "BE1FED28-72D1-4F2E-8FAB-77747639732B"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:37.901Z",
-      "checksum": "96df7b087c3e00f0056ccba825b94d4fa73de3b79aeaa61199d91738db147370"
+      "lastModified": "2026-01-06T18:53:09.165Z",
+      "checksum": "5e4fefb6003a81cf98ccf548ab02608762d1ada00a7fe8ace465c5c35b56bdf1"
     }
   },
   {

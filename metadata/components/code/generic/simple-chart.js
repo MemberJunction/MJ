@@ -268,9 +268,9 @@ function SimpleChart({
       return 'line';
     }
     
-    // Use pie/doughnut for small number of categories
+    // Use pie for small number of categories (preferred over doughnut)
     if (processData.categories && processData.categories.length <= 5) {
-      return 'doughnut';
+      return 'pie';
     }
     
     // Default to bar chart
@@ -291,16 +291,16 @@ function SimpleChart({
         datasets: [{
           label: valueField || 'Count',
           data: processData.values,
-          backgroundColor: isPieOrDoughnut 
+          backgroundColor: isPieOrDoughnut
             ? (colors || defaultColors).slice(0, processData.values.length)
-            : isLineOrArea 
+            : isLineOrArea
               ? 'rgba(24, 144, 255, 0.2)'
-              : (colors || defaultColors)[0],
+              : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar
           borderColor: isPieOrDoughnut
             ? undefined
             : isLineOrArea
               ? (colors || defaultColors)[0]
-              : (colors || defaultColors)[0],
+              : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar border
           borderWidth: isLineOrArea ? 2 : 1,
           fill: actualChartType === 'area',
           tension: isLineOrArea ? 0.1 : undefined
@@ -309,10 +309,53 @@ function SimpleChart({
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: {
+          duration: 750, // Initial animation
+          onComplete: () => {
+            // Disable animations after initial render to prevent re-animation on clicks
+            if (chartInstanceRef.current) {
+              chartInstanceRef.current.options.animation = false;
+            }
+          }
+        },
+        hover: {
+          mode: 'nearest',
+          intersect: true
+        },
+        onHover: (event, activeElements) => {
+          // Change cursor to pointer when hovering over data points
+          event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
+        },
         onClick: (_event, elements) => {
           if (elements && elements.length > 0 && onDataPointClick) {
             const index = elements[0].index;
             const clickedData = processData.chartData[index];
+
+            // Highlight the clicked element by temporarily modifying its appearance
+            if (chartInstanceRef.current) {
+              const meta = chartInstanceRef.current.getDatasetMeta(0);
+              const element = meta.data[index];
+              if (element) {
+                // Store original values if not already stored
+                if (!element._originalBorderWidth) {
+                  element._originalBorderWidth = element.options.borderWidth || 1;
+                }
+
+                // Reset all elements to original state
+                meta.data.forEach((el, i) => {
+                  if (el._originalBorderWidth) {
+                    el.options.borderWidth = el._originalBorderWidth;
+                  }
+                });
+
+                // Highlight clicked element with thicker border
+                element.options.borderWidth = element._originalBorderWidth * 3;
+
+                // Update chart without animation
+                chartInstanceRef.current.update('none');
+              }
+            }
+
             onDataPointClick({
               chartType: actualChartType,
               series: valueField || 'Count',
@@ -521,7 +564,7 @@ function SimpleChart({
             }}
             title="Download as PNG"
           >
-            📥 Export
+            ⬇ Export
           </button>
         </div>
       )}

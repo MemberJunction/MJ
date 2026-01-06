@@ -1,11 +1,11 @@
 {
   "name": "AIInsightsPanel",
-  "code": "@file:../code/ai-insights-panel.js",
+  "code": "../../code/generic/ai-insights-panel.js",
   "namespace": "Generic/UI/AI",
   "title": "AI Insights Panel",
   "type": "Widget",
   "version": "1.0.0",
-  "description": "A reusable AI insights panel component with markdown rendering, copy/export functionality, and collapsible UI",
+  "description": "@file:../../descriptions/generic/ai-insights-panel.md",
   "properties": [
     {
       "name": "insights",
@@ -124,10 +124,10 @@
     {
       "name": "marked",
       "version": "11.1.1",
-      "globalVariable": "marked" 
+      "globalVariable": "marked"
     }
   ],
   "usageExample": "// Basic usage\n<AIInsightsPanel\n  insights={aiInsights}\n  loading={loadingInsights}\n  error={insightsError}\n  onGenerate={generateInsights}\n  title=\"Sales Analysis Insights\"\n  iconColor=\"#10B981\"\n/>\n\n// With custom buttons\n<AIInsightsPanel\n  insights={aiInsights}\n  loading={loadingInsights}\n  error={insightsError}\n  onGenerate={generateInsights}\n  onClose={() => setShowInsights(false)}\n  customButtons={[\n    {\n      icon: 'fa-solid fa-share',\n      title: 'Share',\n      onClick: handleShare\n    }\n  ]}\n/>",
-  "functionalRequirements": "• Display AI-generated insights with markdown formatting support\n• Provide collapsible interface with double-click and button toggle\n• Support copy to clipboard with visual feedback\n• Enable export to markdown file with timestamp\n• Show loading and error states appropriately\n• Allow refresh/regeneration of insights\n• Support customizable title, icon, and colors\n• Provide extensibility through custom buttons\n• Maintain responsive design across devices\n• Persist collapsed state during session",
-  "technicalDesign": "The component uses React hooks for state management and provides a flexible, reusable panel for displaying AI insights. It conditionally loads the marked library for markdown rendering with a fallback to plain text. The panel features a header with title/icon and a button bar with collapse, copy, export, refresh, and optional close/custom buttons. Content area supports scrolling with configurable max height. All interactions provide visual feedback through hover states and transitions. The component integrates with the standard MJ component props (utilities, styles, callbacks) while accepting additional configuration props for customization."
+  "functionalRequirements": "@file:../../functional-requirements/generic/ai-insights-panel.md",
+  "technicalDesign": "@file:../../technical-design/generic/ai-insights-panel.md"
 }
