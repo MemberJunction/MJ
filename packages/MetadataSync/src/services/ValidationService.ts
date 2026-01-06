@@ -1043,10 +1043,13 @@ export class ValidationService {
   private async getMatchingFiles(dir: string, pattern: string): Promise<string[]> {
     const files = fs.readdirSync(dir).filter((f) => fs.statSync(path.join(dir, f)).isFile());
 
+    // Strip leading **/ from glob patterns (we only match in current directory)
+    const normalizedPattern = pattern.replace(/^\*\*\//, '');
+
     // Simple glob pattern matching
-    if (pattern === '*.json') {
+    if (normalizedPattern === '*.json') {
       return files.filter((f) => f.endsWith('.json') && !f.startsWith('.mj-'));
-    } else if (pattern === '.*.json') {
+    } else if (normalizedPattern === '.*.json') {
       return files.filter((f) => f.startsWith('.') && f.endsWith('.json') && !f.startsWith('.mj-'));
     }
 

@@ -24,6 +24,9 @@ export class AgentStateService implements OnDestroy {
   private pollSubscription?: Subscription;
   private currentUser?: UserInfo;
   private pollInterval: number = 30000; // Poll every 30 seconds (reduced from 3s to minimize DB load)
+  private currentPollingConversationId: string | undefined = undefined;
+  // Track conversations we've already queried this session to avoid duplicate initial queries
+  private queriedConversationIds = new Set<string>();
 
   // Public observable streams
   public readonly activeAgents$ = this._activeAgents$.asObservable();
@@ -41,12 +44,28 @@ export class AgentStateService implements OnDestroy {
    */
   startPolling(currentUser: UserInfo, conversationId?: string): void {
     this.currentUser = currentUser;
+
+    // If already polling for this exact conversation, skip entirely
+    if (this.pollSubscription && this.currentPollingConversationId === conversationId) {
+      return;
+    }
+
     this.stopPolling();
+    this.currentPollingConversationId = conversationId;
 
-    // Initial load
-    this.loadActiveAgents(conversationId);
+    // Skip initial query if we've already queried this conversation this session
+    // This prevents duplicate queries when navigating back to a previously visited conversation
+    const shouldSkipInitialQuery = conversationId && this.queriedConversationIds.has(conversationId);
 
-    // Start polling
+    if (!shouldSkipInitialQuery) {
+      // Initial load - mark as queried
+      if (conversationId) {
+        this.queriedConversationIds.add(conversationId);
+      }
+      this.loadActiveAgents(conversationId);
+    }
+
+    // Start polling (will handle subsequent checks)
     this.pollSubscription = interval(this.pollInterval)
       .pipe(switchMap(() => this.loadActiveAgents(conversationId)))
       .subscribe();
@@ -60,6 +79,7 @@ export class AgentStateService implements OnDestroy {
       this.pollSubscription.unsubscribe();
       this.pollSubscription = undefined;
     }
+    this.currentPollingConversationId = undefined;
   }
 
   /**
