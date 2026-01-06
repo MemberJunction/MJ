@@ -463,24 +463,57 @@ function SimpleChart({
         },
         onClick: (_event, elements) => {
           if (elements && elements.length > 0 && onDataPointClick) {
-            const index = elements[0].index;
-            const clickedData = processData.chartData[index];
+            const clickedElement = elements[0];
+            const categoryIndex = clickedElement.index;
+            const datasetIndex = clickedElement.datasetIndex;
+            const isStacked = stackBy && processData.datasets && processData.datasets.length > 0;
+
+            let clickedData;
+            let clickedLabel;
+            let clickedRecords;
+            let clickedValue;
+
+            if (isStacked) {
+              // STACKED MODE: Filter by both category and stack value
+              const category = processData.categories[categoryIndex];
+              const stackValue = processData.datasets[datasetIndex].label;
+
+              // Find records matching BOTH category and stack value
+              clickedRecords = data.filter(record => {
+                const recordCategory = record[groupBy] || 'Unknown';
+                const recordStackValue = record[stackBy] || 'Unknown';
+                return String(recordCategory) === String(category) &&
+                       String(recordStackValue) === String(stackValue);
+              });
+
+              clickedValue = processData.datasets[datasetIndex].data[categoryIndex];
+              clickedLabel = `${category} - ${stackValue}`;
+            } else {
+              // NON-STACKED MODE: Use existing logic
+              clickedData = processData.chartData[categoryIndex];
+              clickedLabel = clickedData.label;
+              clickedValue = clickedData.value;
+              clickedRecords = clickedData.records;
+            }
 
             // Highlight the clicked element by temporarily modifying its appearance
             if (chartInstanceRef.current) {
-              const meta = chartInstanceRef.current.getDatasetMeta(0);
-              const element = meta.data[index];
+              const meta = chartInstanceRef.current.getDatasetMeta(datasetIndex);
+              const element = meta.data[categoryIndex];
               if (element) {
                 // Store original values if not already stored
                 if (!element._originalBorderWidth) {
                   element._originalBorderWidth = element.options.borderWidth || 1;
                 }
 
-                // Reset all elements to original state
-                meta.data.forEach((el, i) => {
-                  if (el._originalBorderWidth) {
-                    el.options.borderWidth = el._originalBorderWidth;
-                  }
+                // Reset all elements in all datasets to original state
+                chartInstanceRef.current.data.datasets.forEach((_, dsIndex) => {
+                  const dsMeta = chartInstanceRef.current.getDatasetMeta(dsIndex);
+                  dsMeta.data.forEach((el) => {
+                    if (el._originalBorderWidth) {
+                      el.options.borderWidth = el._originalBorderWidth;
+                    }
+                  });
                 });
 
                 // Highlight clicked element with thicker border
@@ -491,13 +524,23 @@ function SimpleChart({
               }
             }
 
+            // Calculate total for percentage (sum across all datasets)
+            let total;
+            if (isStacked) {
+              total = processData.datasets.reduce((sum, ds) => {
+                return sum + ds.data.reduce((a, b) => a + b, 0);
+              }, 0);
+            } else {
+              total = processData.values.reduce((a, b) => a + b, 0);
+            }
+
             onDataPointClick({
               chartType: actualChartType,
-              series: valueField || 'Count',
-              label: clickedData.label,
-              value: clickedData.value,
-              records: clickedData.records,
-              percentage: (clickedData.value / processData.values.reduce((a, b) => a + b, 0)) * 100
+              series: isStacked ? clickedLabel : (valueField || 'Count'),
+              label: clickedLabel,
+              value: clickedValue,
+              records: clickedRecords,
+              percentage: (clickedValue / total) * 100
             });
           }
         },
