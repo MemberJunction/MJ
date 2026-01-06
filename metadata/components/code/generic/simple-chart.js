@@ -453,9 +453,34 @@ function SimpleChart({
             }
           }
         },
+        interaction: {
+          mode: 'nearest',
+          intersect: true
+        },
         hover: {
           mode: 'nearest',
           intersect: true
+        },
+        elements: {
+          bar: {
+            hoverBackgroundColor: undefined, // Use default color
+            hoverBorderWidth: 3,
+            hoverBorderColor: '#1890ff'
+          },
+          arc: {
+            hoverOffset: 8,
+            hoverBorderWidth: 3,
+            hoverBorderColor: '#1890ff'
+          },
+          line: {
+            hoverBorderWidth: 4,
+            hoverBorderColor: '#1890ff'
+          },
+          point: {
+            hoverRadius: 6,
+            hoverBorderWidth: 3,
+            hoverBorderColor: '#1890ff'
+          }
         },
         onHover: (event, activeElements) => {
           // Change cursor to pointer when hovering over data points
@@ -496,32 +521,18 @@ function SimpleChart({
               clickedRecords = clickedData.records;
             }
 
-            // Highlight the clicked element by temporarily modifying its appearance
+            // Highlight the clicked element using Chart.js active state
             if (chartInstanceRef.current) {
-              const meta = chartInstanceRef.current.getDatasetMeta(datasetIndex);
-              const element = meta.data[categoryIndex];
-              if (element) {
-                // Store original values if not already stored
-                if (!element._originalBorderWidth) {
-                  element._originalBorderWidth = element.options.borderWidth || 1;
+              // Use setActiveElements to highlight without re-rendering the entire chart
+              chartInstanceRef.current.setActiveElements([
+                {
+                  datasetIndex: datasetIndex,
+                  index: categoryIndex
                 }
+              ]);
 
-                // Reset all elements in all datasets to original state
-                chartInstanceRef.current.data.datasets.forEach((_, dsIndex) => {
-                  const dsMeta = chartInstanceRef.current.getDatasetMeta(dsIndex);
-                  dsMeta.data.forEach((el) => {
-                    if (el._originalBorderWidth) {
-                      el.options.borderWidth = el._originalBorderWidth;
-                    }
-                  });
-                });
-
-                // Highlight clicked element with thicker border
-                element.options.borderWidth = element._originalBorderWidth * 3;
-
-                // Update chart without animation
-                chartInstanceRef.current.update('none');
-              }
+              // Only update the visual state (highlights), don't re-render data
+              chartInstanceRef.current.render();
             }
 
             // Calculate total for percentage (sum across all datasets)
@@ -573,6 +584,17 @@ function SimpleChart({
             color: isPieOrDoughnut ? '#fff' : '#666'
           } : undefined,
           tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            titleFont: {
+              size: 14,
+              weight: 'bold'
+            },
+            bodyFont: {
+              size: 13
+            },
+            padding: 12,
+            cornerRadius: 4,
+            displayColors: true,
             callbacks: {
               label: (context) => {
                 const label = context.dataset.label || '';
@@ -600,7 +622,15 @@ function SimpleChart({
           ticks: {
             autoSkip: true,
             maxRotation: 45,
-            minRotation: 0
+            minRotation: 0,
+            maxTicksLimit: 20, // Limit number of ticks to prevent overcrowding
+            font: {
+              size: 11
+            }
+          },
+          // For charts with many categories, use better label management
+          grid: {
+            display: processData.categories.length <= 20
           }
         }
       };
