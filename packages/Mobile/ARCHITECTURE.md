@@ -1,0 +1,1410 @@
+# MemberJunction Mobile App Architecture Proposal
+
+## Executive Summary
+
+This document proposes an architecture for native iOS and Android mobile applications that maximize reuse of MemberJunction's existing TypeScript codebase while delivering mobile-native experiences for features that truly benefit from mobile context.
+
+**Key Recommendations:**
+1. **React Native** for maximum TypeScript/JavaScript code reuse (80%+ of business logic)
+2. **Mobile-first AI assistant** as the primary interaction paradigm
+3. **Offline-first architecture** with intelligent sync
+4. **Voice-enabled interfaces** leveraging existing TTS/STT capabilities
+5. **Progressive feature rollout** starting with high-value mobile scenarios
+
+---
+
+## Part 1: Feature Analysis - What Makes Sense on Mobile
+
+### Tier 1: Perfect Mobile Fit (High Priority)
+
+#### 1. **AI-Powered Assistant (Skip Mobile)**
+The conversational AI interface is ideal for mobile:
+- Voice input using existing OpenAI Whisper integration
+- Voice output using ElevenLabs TTS
+- Quick questions while away from desk
+- Natural language queries for data lookup
+- Agent-assisted task completion
+
+**Mobile Advantages:**
+- Hands-free operation (voice)
+- Contextual awareness (location, time, calendar)
+- Push notifications for agent task completion
+- Quick access without opening laptop
+
+#### 2. **Notifications & Approvals**
+Mobile is the natural home for:
+- Real-time push notifications
+- Quick approval workflows
+- Status updates on running processes
+- Agent execution alerts
+- Record change notifications
+
+**Existing Infrastructure:**
+- WebSocket subscriptions already implemented
+- Notification entity system exists
+- User preferences for notification routing
+
+#### 3. **Quick Data Lookup**
+Mobile-optimized read scenarios:
+- Customer/contact lookup before meetings
+- Quick searches while on the go
+- Barcode/QR scanning for inventory
+- Reference data access
+- Recent items and favorites
+
+#### 4. **Conversation & Chat**
+Existing conversation system translates well:
+- Message threads with artifact sharing
+- Multi-turn AI conversations
+- Collaboration with team members
+- Voice messages (natural for mobile)
+
+#### 5. **Field Data Capture**
+Mobile-native input capabilities:
+- Photo capture with OCR/AI analysis
+- Voice notes transcribed via Whisper
+- GPS/location tagging
+- Signature capture
+- Quick form entry for common tasks
+
+---
+
+### Tier 2: Good Mobile Fit (Medium Priority)
+
+#### 6. **Dashboards (Simplified)**
+Mobile-appropriate dashboard views:
+- KPI cards and key metrics
+- Trend indicators (up/down arrows)
+- Alerts and exceptions
+- Swipeable dashboard cards
+
+**Not for Mobile:**
+- Complex D3.js charts (defer to web)
+- ERD diagrams
+- Multi-pane layouts
+
+#### 7. **Task Management**
+Mobile task workflows:
+- Todo lists from agent runs
+- Quick task completion
+- Reminders and due dates
+- Task assignment notifications
+
+#### 8. **Record Quick Actions**
+Focused entity interactions:
+- Edit frequently-used fields
+- Status changes
+- Adding notes/comments
+- File attachments (photos, documents)
+
+---
+
+### Tier 3: Web-First (Low/No Mobile Priority)
+
+These should remain web-only or link to web:
+
+| Feature | Reason |
+|---------|--------|
+| Complex form editing | Too many fields, complex layouts |
+| Data grids with many columns | Screen real estate |
+| ERD diagrams | Visual complexity |
+| Report building | Complex UI interactions |
+| Admin/configuration | Infrequent, needs precision |
+| Code editing | Keyboard-intensive |
+| Bulk operations | Better with mouse/keyboard |
+
+**Strategy:** Deep link to web app for these features.
+
+---
+
+## Part 2: Technical Architecture
+
+### Recommended Technology: React Native + TypeScript
+
+**Why React Native:**
+1. **Maximum Code Reuse** - All MJ TypeScript packages work directly
+2. **Single Codebase** - iOS + Android from one codebase
+3. **Native Performance** - Bridges to native APIs for voice, camera, etc.
+4. **Type Safety** - Full TypeScript support maintained
+5. **Hot Reload** - Fast development iteration
+6. **Proven at Scale** - Used by Meta, Microsoft, Shopify
+
+### Architecture Layers
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    React Native UI Layer                        │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │ Screens  │ │Components│ │Navigation│ │  Hooks   │           │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
+├─────────────────────────────────────────────────────────────────┤
+│                    State Management Layer                        │
+│  ┌──────────────────┐ ┌────────────────┐ ┌──────────────────┐  │
+│  │   Zustand/Redux  │ │  React Query   │ │  Offline Queue   │  │
+│  │   (App State)    │ │ (Server State) │ │  (Sync Engine)   │  │
+│  └──────────────────┘ └────────────────┘ └──────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                 MemberJunction Core (REUSED)                     │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  @memberjunction/global        - Utilities               │  │
+│  │  @memberjunction/core          - Entity framework        │  │
+│  │  @memberjunction/core-entities - Generated classes       │  │
+│  │  @memberjunction/ai            - LLM abstractions        │  │
+│  │  @memberjunction/credentials   - Auth management         │  │
+│  └──────────────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                    Data Provider Layer                           │
+│  ┌─────────────────────┐    ┌─────────────────────────────┐    │
+│  │  GraphQL Provider   │    │  Mobile Data Provider       │    │
+│  │  (from MJ packages) │    │  (SQLite + Sync Engine)     │    │
+│  └─────────────────────┘    └─────────────────────────────┘    │
+├─────────────────────────────────────────────────────────────────┤
+│                    Native Modules Layer                          │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────────┐   │
+│  │ Voice  │ │ Camera │ │  Push  │ │Biometric│ │  Keychain  │   │
+│  │ Input  │ │  QR/BC │ │ Notif  │ │  Auth   │ │  Storage   │   │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                        Network Layer                             │
+│  ┌────────────────────┐    ┌────────────────────────────────┐  │
+│  │   GraphQL Client   │    │   WebSocket (Subscriptions)    │  │
+│  │   (Apollo/URQL)    │    │   (Real-time updates)          │  │
+│  └────────────────────┘    └────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+                         MJAPI Server
+```
+
+### Package Reuse Strategy
+
+#### Direct Reuse (No Changes Required)
+
+| Package | Use Case |
+|---------|----------|
+| `@memberjunction/global` | Utilities, class factory, caching, validation |
+| `@memberjunction/core` | Entity framework, metadata, RunView |
+| `@memberjunction/core-entities` | All generated entity classes |
+| `@memberjunction/ai` | LLM provider abstraction |
+| `@memberjunction/credentials` | Secure credential storage |
+| `@memberjunction/graphql-dataprovider` | API communication |
+| `@memberjunction/templates-base-types` | Template processing |
+
+---
+
+## Part 2.5: MemberJunction TypeScript Layer Integration (CRITICAL)
+
+The mobile app does **NOT** simply consume raw API responses. It uses the **full MJ entity framework** with `Metadata`, `BaseEntity`, `RunView`, and all generated entity classes. This is the key architectural decision that enables 80%+ code reuse.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Mobile App (React Native)                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   React Components                                              │
+│        │                                                        │
+│        │ Use typed entity objects directly                      │
+│        ▼                                                        │
+│   ┌─────────────────────────────────────────────────────────┐  │
+│   │  MJ TypeScript Layer (FULL REUSE)                       │  │
+│   │  ┌─────────────────────────────────────────────────────┐│  │
+│   │  │ Metadata                                            ││  │
+│   │  │  • GetEntityObject<T>() - creates typed entities    ││  │
+│   │  │  • Entity/Field metadata access                     ││  │
+│   │  │  • Permissions, relationships, validation rules     ││  │
+│   │  └─────────────────────────────────────────────────────┘│  │
+│   │  ┌─────────────────────────────────────────────────────┐│  │
+│   │  │ BaseEntity & Generated Subclasses                   ││  │
+│   │  │  • ContactEntity, CompanyEntity, etc.               ││  │
+│   │  │  • Type-safe property access (getters/setters)      ││  │
+│   │  │  • Zod validation built-in                          ││  │
+│   │  │  • Save(), Load(), Delete() with full validation    ││  │
+│   │  │  • Dirty tracking, change detection                 ││  │
+│   │  └─────────────────────────────────────────────────────┘│  │
+│   │  ┌─────────────────────────────────────────────────────┐│  │
+│   │  │ RunView                                             ││  │
+│   │  │  • Query entities with type-safe results            ││  │
+│   │  │  • Filters, ordering, pagination                    ││  │
+│   │  │  • Returns actual entity objects, not raw JSON      ││  │
+│   │  └─────────────────────────────────────────────────────┘│  │
+│   │  ┌─────────────────────────────────────────────────────┐│  │
+│   │  │ AI Packages                                         ││  │
+│   │  │  • AIPromptRunner - execute prompts                 ││  │
+│   │  │  • BaseAgent - run AI agents                        ││  │
+│   │  │  • LLM abstraction (same code as server)            ││  │
+│   │  └─────────────────────────────────────────────────────┘│  │
+│   └─────────────────────────────────────────────────────────┘  │
+│        │                                                        │
+│        │ Provider interface                                     │
+│        ▼                                                        │
+│   ┌─────────────────────────────────────────────────────────┐  │
+│   │  GraphQLDataProvider (from @memberjunction/graphql-*)   │  │
+│   │  • Implements IEntityDataProvider                       │  │
+│   │  • Implements IMetadataProvider                         │  │
+│   │  • Implements IRunViewProvider                          │  │
+│   │  • Handles network, caching, auth                       │  │
+│   └─────────────────────────────────────────────────────────┘  │
+│        │                                                        │
+│        ▼                                                        │
+│   MJAPI Server (GraphQL)                                        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Concrete Code Examples
+
+#### Example 1: Loading and Displaying a Contact (Mobile Component)
+
+```tsx
+// React Native component using full MJ entity framework
+import { Metadata, RunView } from '@memberjunction/core';
+import { ContactEntity } from '@memberjunction/core-entities';
+import { useEffect, useState } from 'react';
+
+export function ContactDetailScreen({ contactId }: { contactId: string }) {
+  const [contact, setContact] = useState<ContactEntity | null>(null);
+
+  useEffect(() => {
+    async function loadContact() {
+      const md = new Metadata();
+      // Uses the EXACT same pattern as Angular/web code
+      const entity = await md.GetEntityObject<ContactEntity>('Contacts');
+      await entity.Load(contactId);
+      setContact(entity);
+    }
+    loadContact();
+  }, [contactId]);
+
+  if (!contact) return <LoadingSpinner />;
+
+  return (
+    <View>
+      {/* Type-safe property access - same as web */}
+      <Text style={styles.name}>{contact.FirstName} {contact.LastName}</Text>
+      <Text style={styles.email}>{contact.Email}</Text>
+      <Text style={styles.phone}>{contact.Phone}</Text>
+
+      {/* Entity relationships work the same */}
+      <Text>Company: {contact.Company}</Text>
+
+      <Button title="Call" onPress={() => Linking.openURL(`tel:${contact.Phone}`)} />
+    </View>
+  );
+}
+```
+
+#### Example 2: Searching with RunView
+
+```tsx
+// Search screen using RunView - identical pattern to web
+import { RunView } from '@memberjunction/core';
+import { ContactEntity } from '@memberjunction/core-entities';
+
+export function useContactSearch(searchTerm: string) {
+  const [results, setResults] = useState<ContactEntity[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    async function search() {
+      if (!searchTerm) return;
+      setLoading(true);
+
+      const rv = new RunView();
+      const result = await rv.RunView<ContactEntity>({
+        EntityName: 'Contacts',
+        ExtraFilter: `FirstName LIKE '%${searchTerm}%' OR LastName LIKE '%${searchTerm}%'`,
+        OrderBy: 'LastName, FirstName',
+        MaxRows: 50,
+        ResultType: 'entity_object'  // Returns actual ContactEntity objects!
+      });
+
+      if (result.Success) {
+        setResults(result.Results);  // Fully typed ContactEntity[]
+      }
+      setLoading(false);
+    }
+    search();
+  }, [searchTerm]);
+
+  return { results, loading };
+}
+```
+
+#### Example 3: Creating/Updating Records
+
+```tsx
+// Create a new activity note - uses BaseEntity.Save()
+import { Metadata } from '@memberjunction/core';
+import { ActivityEntity } from '@memberjunction/core-entities';
+
+async function createActivityNote(contactId: string, note: string) {
+  const md = new Metadata();
+  const activity = await md.GetEntityObject<ActivityEntity>('Activities');
+
+  // NewRecord() initializes with defaults
+  activity.NewRecord();
+
+  // Type-safe property assignment
+  activity.ContactID = contactId;
+  activity.Type = 'Note';
+  activity.Description = note;
+  activity.ActivityDate = new Date();
+
+  // Save() handles validation, network, everything
+  const success = await activity.Save();
+
+  if (!success) {
+    // Validation errors are on the entity
+    console.error('Save failed:', activity.LatestResult?.Message);
+  }
+
+  return success;
+}
+```
+
+#### Example 4: Using AI Prompts (Same as Server)
+
+```tsx
+// Voice command processing using MJ AI packages
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { Metadata } from '@memberjunction/core';
+
+async function processVoiceCommand(transcribedText: string) {
+  const md = new Metadata();
+
+  // Load the prompt definition (same as web/server)
+  const promptRunner = new AIPromptRunner();
+  const params = new AIPromptParams();
+  params.promptName = 'Mobile Voice Command Parser';
+  params.data = { userInput: transcribedText };
+
+  const result = await promptRunner.ExecutePrompt(params);
+
+  if (result.Success) {
+    // AI parsed the intent and entities
+    const parsed = JSON.parse(result.Output);
+    return handleParsedCommand(parsed);
+  }
+}
+```
+
+#### Example 5: Batch Loading with RunViews (Plural)
+
+```tsx
+// Dashboard data loading - same efficient pattern as web
+import { RunView } from '@memberjunction/core';
+
+async function loadDashboardData(userId: string) {
+  const rv = new RunView();
+
+  // Single call, multiple views - exactly like web
+  const [opportunities, activities, tasks] = await rv.RunViews([
+    {
+      EntityName: 'Opportunities',
+      ExtraFilter: `OwnerID='${userId}' AND Status='Open'`,
+      OrderBy: 'CloseDate',
+      MaxRows: 100,
+      ResultType: 'entity_object'
+    },
+    {
+      EntityName: 'Activities',
+      ExtraFilter: `OwnerID='${userId}' AND ActivityDate >= GETDATE()-7`,
+      OrderBy: 'ActivityDate DESC',
+      MaxRows: 50,
+      ResultType: 'entity_object'
+    },
+    {
+      EntityName: 'Tasks',
+      ExtraFilter: `AssignedToID='${userId}' AND Status='Pending'`,
+      OrderBy: 'DueDate',
+      MaxRows: 20,
+      ResultType: 'entity_object'
+    }
+  ]);
+
+  return {
+    opportunities: opportunities.Results,
+    activities: activities.Results,
+    tasks: tasks.Results
+  };
+}
+```
+
+### Provider Initialization (App Startup)
+
+```tsx
+// App initialization - connects MJ layer to GraphQL backend
+import { setupGraphQLProvider } from '@memberjunction/graphql-dataprovider';
+import { Metadata } from '@memberjunction/core';
+
+async function initializeMJFramework(authToken: string) {
+  // Configure the GraphQL provider - same as web
+  await setupGraphQLProvider({
+    endpoint: 'https://api.yourcompany.com/graphql',
+    token: authToken,
+    wsEndpoint: 'wss://api.yourcompany.com/graphql' // For subscriptions
+  });
+
+  // Initialize metadata cache
+  const md = new Metadata();
+  await md.Refresh(); // Loads entity definitions, permissions, etc.
+
+  console.log('MJ Framework initialized with', md.Entities.length, 'entities');
+}
+```
+
+### What This Enables
+
+| Capability | How It Works |
+|------------|--------------|
+| **Full Type Safety** | All 500+ entity classes work in mobile with IntelliSense |
+| **Validation** | Zod schemas validate data before save attempts |
+| **Dirty Tracking** | `entity.Dirty` knows what changed for efficient sync |
+| **Relationships** | `contact.Company` loads related data automatically |
+| **Computed Fields** | Server-side computed fields work identically |
+| **Permissions** | `entity.GetUserPermissions()` works for UI decisions |
+| **Metadata** | Field labels, descriptions, types all available |
+
+### Key Insight: We're NOT Building a "Client" for an API
+
+Traditional mobile apps treat the server as a black box and parse JSON responses. The MJ mobile app is different:
+
+```
+Traditional Mobile App:
+  API Response (JSON) → Parse → Plain objects → UI
+
+MJ Mobile App:
+  GraphQLDataProvider → MJ Entity Framework → Typed Entities → UI
+                        (same code as web)
+```
+
+The `GraphQLDataProvider` is simply a **transport layer** that plugs into the existing MJ provider interface. The actual business logic, validation, entity relationships, and metadata all come from the shared TypeScript packages.
+
+### Shared Code Percentage Breakdown
+
+| Layer | Shared | Mobile-Specific |
+|-------|--------|-----------------|
+| Entity classes & types | 100% | 0% |
+| Metadata & RunView | 100% | 0% |
+| AI prompts & agents | 100% | 0% |
+| Validation logic | 100% | 0% |
+| Business rules | 100% | 0% |
+| Data provider | 95% | 5% (offline sync) |
+| UI components | 0% | 100% (React Native) |
+| Navigation | 0% | 100% (React Native) |
+
+**Result: ~80% of non-UI code is directly reused from existing MJ packages.**
+
+---
+
+## Part 2.6: React Native Runtime Architecture
+
+Understanding how React Native executes code is essential for confidence in MJ package compatibility.
+
+### TypeScript/JavaScript Execution Model
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     YOUR MJ CODE                                 │
+│  TypeScript (Metadata, BaseEntity, RunView, AI packages)        │
+│                          │                                       │
+│                          │ tsc compile (at build time)           │
+│                          ▼                                       │
+│                     JavaScript                                   │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           │ Bundled by Metro bundler
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  HERMES JAVASCRIPT ENGINE                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Meta's custom JS engine, optimized for React Native    │   │
+│  │  • ES8+ full support (classes, async/await, decorators) │   │
+│  │  • Ahead-of-time bytecode compilation                   │   │
+│  │  • Fast startup, low memory footprint                   │   │
+│  │  • Your MJ code runs here UNCHANGED                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           │ JSI (JavaScript Interface) - synchronous calls
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    NATIVE LAYER                                  │
+│  ┌────────────────────────┐  ┌────────────────────────────┐    │
+│  │      iOS (Swift)       │  │    Android (Kotlin)        │    │
+│  │  • Real UIKit views    │  │  • Real Android views      │    │
+│  │  • AVFoundation audio  │  │  • MediaRecorder           │    │
+│  │  • Keychain storage    │  │  • Keystore storage        │    │
+│  │  • Face ID / Touch ID  │  │  • Fingerprint / Face      │    │
+│  │  • SQLite              │  │  • SQLite                  │    │
+│  │  • Push (APNs)         │  │  • Push (FCM)              │    │
+│  └────────────────────────┘  └────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Threading Model
+
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   JS Thread      │     │   UI Thread      │     │   Background     │
+│                  │     │   (Native)       │     │   Thread(s)      │
+│ • MJ TypeScript  │     │ • View rendering │     │ • Network I/O    │
+│ • React logic    │◄───▶│ • Touch events   │     │ • SQLite queries │
+│ • Business logic │     │ • Animations     │     │ • File I/O       │
+│ • BaseEntity     │     │ • Gestures       │     │ • Heavy compute  │
+│ • Metadata       │     │                  │     │                  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+         ▲                         ▲                       ▲
+         └─────────── JSI Bridge ──┴───────────────────────┘
+```
+
+**Key Insight:** Your MJ TypeScript code runs entirely in the JavaScript thread (Hermes engine). It never needs to know it's on mobile - it's just JavaScript executing in a JavaScript engine, making network calls to your GraphQL API.
+
+### OOP and Classes: Fully Supported
+
+There's a common misconception that React uses "functional programming" and doesn't support classes. **This is incorrect.**
+
+The "functional" trend in React is **only about UI components** (using hooks like `useState`, `useEffect` instead of `class extends Component`). Your business logic, services, and data models remain fully class-based.
+
+```tsx
+// ✅ MJ CLASSES WORK UNCHANGED
+import { Metadata, RunView, BaseEntity } from '@memberjunction/core';
+import { ContactEntity, CompanyEntity } from '@memberjunction/core-entities';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { BaseAgent } from '@memberjunction/ai-agents';
+
+// All of these work exactly as they do in Angular/web:
+const md = new Metadata();                                    // ✅ Class instantiation
+const contact = await md.GetEntityObject<ContactEntity>('Contacts');  // ✅ Generics
+await contact.Load(someId);                                   // ✅ Async methods
+contact.FirstName = 'Updated';                                // ✅ Property setters
+await contact.Save();                                         // ✅ Validation & save
+
+// Your own service classes work too
+class ContactService {
+  private md = new Metadata();
+
+  async getContact(id: string): Promise<ContactEntity> {
+    const entity = await this.md.GetEntityObject<ContactEntity>('Contacts');
+    await entity.Load(id);
+    return entity;
+  }
+}
+
+// Only the UI layer uses functional patterns
+function ContactScreen({ id }: Props) {
+  const [contact, setContact] = useState<ContactEntity | null>(null);
+  const service = useMemo(() => new ContactService(), []);
+
+  useEffect(() => {
+    service.getContact(id).then(setContact);
+  }, [id]);
+
+  return <Text>{contact?.FirstName}</Text>;
+}
+```
+
+**What works unchanged:**
+- `BaseEntity` and all 500+ generated subclasses ✅
+- `Metadata` class ✅
+- `RunView` class ✅
+- `BaseEngine` and all engine classes ✅
+- `AIPromptRunner`, `BaseAgent` ✅
+- Class factory, `@RegisterClass` decorators ✅
+- Inheritance, abstract classes, interfaces ✅
+- Async/await, Promises ✅
+- Zod validation ✅
+
+---
+
+## Part 2.7: Local Storage Adapter Pattern
+
+### The Challenge: IndexedDB vs SQLite
+
+The current `GraphQLDataProvider` uses **IndexedDB** for caching, which is a browser-only API. React Native doesn't have IndexedDB, but has **SQLite** available natively.
+
+### Solution: Storage Adapter Interface
+
+Rather than forking the provider, we introduce a simple adapter interface:
+
+```typescript
+// Abstract storage interface - works on any platform
+interface ILocalStorageProvider {
+  // Key-value operations
+  get<T>(key: string): Promise<T | null>;
+  set<T>(key: string, value: T): Promise<void>;
+  delete(key: string): Promise<void>;
+
+  // Query operations (for entity caching)
+  queryEntities<T>(entityName: string, filter?: string): Promise<T[]>;
+  saveEntity<T>(entityName: string, id: string, data: T): Promise<void>;
+  deleteEntity(entityName: string, id: string): Promise<void>;
+
+  // Bulk operations
+  clear(): Promise<void>;
+  clearEntity(entityName: string): Promise<void>;
+}
+
+// Browser implementation (existing behavior, extracted)
+class IndexedDBStorageProvider implements ILocalStorageProvider {
+  // Uses IndexedDB - works in browsers
+}
+
+// Mobile implementation (new)
+class SQLiteStorageProvider implements ILocalStorageProvider {
+  // Uses react-native-sqlite-storage or expo-sqlite
+  // Available on both iOS and Android
+}
+
+// GraphQLDataProvider accepts the adapter
+class GraphQLDataProvider {
+  constructor(
+    config: GraphQLProviderConfig,
+    storage?: ILocalStorageProvider  // Optional, defaults to IndexedDB
+  ) {
+    this.storage = storage ?? new IndexedDBStorageProvider();
+  }
+}
+```
+
+### Mobile App Initialization
+
+```tsx
+// Mobile app startup
+import { SQLiteStorageProvider } from '@memberjunction/mobile-core';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+
+async function initializeMJ(authToken: string) {
+  // Create mobile-specific storage
+  const storage = new SQLiteStorageProvider();
+  await storage.initialize();  // Opens SQLite database
+
+  // Configure provider with SQLite storage
+  const provider = new GraphQLDataProvider({
+    endpoint: 'https://api.yourcompany.com/graphql',
+    token: authToken,
+  }, storage);  // Pass SQLite adapter
+
+  // Rest of initialization is identical to web
+  const md = new Metadata();
+  await md.Refresh();
+}
+```
+
+### Storage Comparison
+
+| Feature | IndexedDB (Browser) | SQLite (Mobile) |
+|---------|---------------------|-----------------|
+| Query capability | Limited (key-based) | Full SQL |
+| Performance | Good | Excellent |
+| Storage limit | ~50% of disk | Device storage |
+| Encryption | No (use Web Crypto) | Yes (SQLCipher) |
+| React Native | ❌ Not available | ✅ Native support |
+
+### Implementation Effort
+
+This adapter pattern requires **minimal changes** to existing code:
+- Extract current IndexedDB usage into `IndexedDBStorageProvider` class
+- Create `ILocalStorageProvider` interface
+- Add optional constructor parameter to `GraphQLDataProvider`
+- Create `SQLiteStorageProvider` for mobile
+
+**Estimated effort: 1-2 days**
+
+---
+
+## Part 2.8: Production Validation
+
+React Native is not experimental technology. It powers some of the world's most demanding mobile applications.
+
+### Meta (Creator of React Native)
+
+| App | React Native Usage |
+|-----|-------------------|
+| **Facebook** | Many features/surfaces (hybrid approach) |
+| **Facebook Ads Manager** | Built entirely with React Native |
+| **Instagram** | Significant portions (Explore, Push Notifications, many screens) |
+| **Messenger** | Various features |
+| **Meta Quest companion** | React Native |
+
+Meta also developed **Hermes**, the JavaScript engine optimized specifically for React Native performance.
+
+### Other Major Companies
+
+| Company | Apps | Scale |
+|---------|------|-------|
+| **Microsoft** | Outlook, Office, Xbox, Teams, Skype | Billions of users |
+| **Shopify** | Main shopping app, Shop, Point of Sale | Millions of merchants |
+| **Discord** | iOS and Android apps | 150M+ monthly users |
+| **Coinbase** | Main trading app | Millions of daily transactions |
+| **Bloomberg** | Consumer mobile app | Real-time financial data |
+| **Walmart** | Main shopping app | #1 retailer |
+| **Pinterest** | Portions of their app | 450M+ monthly users |
+| **Wix** | Main app | Millions of users |
+
+### Why This Matters for MJ
+
+These are **serious, high-performance, enterprise-scale applications** handling:
+- Millions of concurrent users (Facebook, Instagram)
+- Real-time financial data and trading (Coinbase, Bloomberg)
+- Complex enterprise workflows (Microsoft Office, Shopify POS)
+- E-commerce at scale (Walmart, Shopify)
+
+If React Native handles these use cases, it can absolutely handle MJ's:
+- Entity framework and metadata
+- AI agents and prompts
+- Voice interfaces
+- Offline sync
+- Real-time subscriptions
+
+The architecture we're proposing (TypeScript business logic + React Native UI) is exactly what these companies use in production.
+
+#### Light Adaptation Required
+
+| Package | Adaptation Needed |
+|---------|-------------------|
+| `@memberjunction/ai-prompts` | Works as-is, wrap for mobile UX |
+| `@memberjunction/ai-agents` | Works as-is, add mobile progress UI |
+| `@memberjunction/encryption` | Swap key source for mobile keychain |
+
+#### New Mobile-Specific Packages
+
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/mobile-data-provider` | SQLite caching + offline sync |
+| `@memberjunction/mobile-voice` | Voice recording + Whisper transcription |
+| `@memberjunction/mobile-push` | Push notification handling |
+| `@memberjunction/mobile-auth` | Biometric + secure token storage |
+
+---
+
+## Part 3: Offline-First Architecture
+
+### Sync Strategy
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Sync Engine Architecture                   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐  │
+│   │   Online    │────▶│  Sync Queue │────▶│   Offline   │  │
+│   │   Cache     │◀────│   Engine    │◀────│   Storage   │  │
+│   └─────────────┘     └─────────────┘     └─────────────┘  │
+│         │                    │                   │          │
+│         ▼                    ▼                   ▼          │
+│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐  │
+│   │   GraphQL   │     │  Conflict   │     │   SQLite    │  │
+│   │   Server    │     │  Resolver   │     │   Database  │  │
+│   └─────────────┘     └─────────────┘     └─────────────┘  │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Sync Policies by Entity Type
+
+| Entity Type | Sync Strategy | Offline Behavior |
+|-------------|---------------|------------------|
+| Reference Data | Sync on login, background refresh | Full offline |
+| User's Records | Sync on access, push changes | Full offline |
+| Large Datasets | Page on demand, don't cache | Online only |
+| Conversations | Sync recent, lazy load history | Partial offline |
+| Artifacts | Download on request, cache | Selective offline |
+
+### Conflict Resolution
+
+```typescript
+interface SyncConflict<T extends BaseEntity> {
+  localRecord: T;
+  serverRecord: T;
+  conflictFields: string[];
+  localTimestamp: Date;
+  serverTimestamp: Date;
+}
+
+enum ConflictResolution {
+  ServerWins = 'server_wins',      // Default for most entities
+  LocalWins = 'local_wins',        // For draft content
+  Merge = 'merge',                 // Field-level merge
+  UserDecides = 'user_decides'     // Present UI for complex conflicts
+}
+```
+
+---
+
+## Part 4: Voice-First AI Interface
+
+### Voice Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Voice Interaction Flow                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  User Speaks ──▶ Native Voice ──▶ Audio Stream             │
+│                   Recording         (WAV/M4A)               │
+│                      │                  │                   │
+│                      ▼                  ▼                   │
+│               ┌─────────────────────────────┐               │
+│               │   OpenAI Whisper API        │               │
+│               │   (Speech-to-Text)          │               │
+│               └─────────────────────────────┘               │
+│                           │                                 │
+│                           ▼                                 │
+│               ┌─────────────────────────────┐               │
+│               │   AI Agent / Skip           │               │
+│               │   (Process Intent)          │               │
+│               └─────────────────────────────┘               │
+│                           │                                 │
+│                           ▼                                 │
+│               ┌─────────────────────────────┐               │
+│               │   ElevenLabs / OpenAI TTS   │               │
+│               │   (Text-to-Speech)          │               │
+│               └─────────────────────────────┘               │
+│                           │                                 │
+│                           ▼                                 │
+│  User Hears ◀── Native Audio ◀── Audio Stream              │
+│                   Playback         (MP3/AAC)                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Voice Commands Examples
+
+| Voice Command | AI Action |
+|---------------|-----------|
+| "Find John Smith's contact info" | RunView on Contacts, speak result |
+| "What's my sales pipeline total?" | Execute dashboard query, speak KPI |
+| "Create a note for Acme Corp" | Create entity record with dictation |
+| "What meetings do I have today?" | Query calendar integration |
+| "Approve the pending request from Sarah" | Execute approval workflow |
+| "Remind me to follow up on this tomorrow" | Create task/reminder |
+
+### Wake Word Integration (Optional)
+
+For hands-free operation:
+- "Hey Skip" wake word
+- Continuous listening mode
+- Privacy: Process wake word on-device
+
+---
+
+## Part 5: Feature Specifications
+
+### 5.1 AI Assistant (Primary Feature)
+
+```
+┌─────────────────────────────────────────┐
+│         AI Assistant Screen             │
+├─────────────────────────────────────────┤
+│  ┌───────────────────────────────────┐  │
+│  │      Conversation Thread          │  │
+│  │  ┌─────────────────────────────┐  │  │
+│  │  │ 👤 Find contacts at Acme   │  │  │
+│  │  └─────────────────────────────┘  │  │
+│  │  ┌─────────────────────────────┐  │  │
+│  │  │ 🤖 I found 3 contacts...   │  │  │
+│  │  │    • John Smith (CEO)      │  │  │
+│  │  │    • Jane Doe (CTO)        │  │  │
+│  │  │    • Bob Wilson (Sales)    │  │  │
+│  │  │                            │  │  │
+│  │  │    [View All] [Call John]  │  │  │
+│  │  └─────────────────────────────┘  │  │
+│  │                                   │  │
+│  │  ┌─────────────────────────────┐  │  │
+│  │  │ 🎙️ Listening...            │  │  │
+│  │  └─────────────────────────────┘  │  │
+│  └───────────────────────────────────┘  │
+│  ┌───────────────────────────────────┐  │
+│  │  [🎤]  Type a message...    [📎]  │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+```
+
+**Features:**
+- Voice-first with keyboard fallback
+- Inline action buttons for common operations
+- Artifact preview (documents, code, charts)
+- Agent status indicators (thinking, executing action, waiting)
+- Conversation history with search
+- Share/export capabilities
+
+### 5.2 Notifications Hub
+
+```
+┌─────────────────────────────────────────┐
+│         Notifications                   │
+├─────────────────────────────────────────┤
+│  Today                                  │
+│  ┌───────────────────────────────────┐  │
+│  │ 🔔 Approval Required              │  │
+│  │    Purchase order #1234 - $5,000  │  │
+│  │    From: John Smith               │  │
+│  │    [Approve] [Deny] [View]        │  │
+│  └───────────────────────────────────┘  │
+│  ┌───────────────────────────────────┐  │
+│  │ 🤖 Agent Complete                 │  │
+│  │    Report generation finished     │  │
+│  │    [View Report]                  │  │
+│  └───────────────────────────────────┘  │
+│  ┌───────────────────────────────────┐  │
+│  │ 📝 Record Updated                 │  │
+│  │    Acme Corp opportunity changed  │  │
+│  │    Stage: Proposal → Negotiation  │  │
+│  └───────────────────────────────────┘  │
+│                                         │
+│  Yesterday                              │
+│  ┌───────────────────────────────────┐  │
+│  │ ...                               │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+```
+
+### 5.3 Quick Search
+
+```
+┌─────────────────────────────────────────┐
+│  🔍 Search...                      [🎤] │
+├─────────────────────────────────────────┤
+│  Recent                                 │
+│  ┌───────────────────────────────────┐  │
+│  │ 👤 John Smith - Acme Corp        │  │
+│  │ 📋 Q4 Sales Report               │  │
+│  │ 🏢 Acme Corporation              │  │
+│  └───────────────────────────────────┘  │
+│                                         │
+│  Favorites                              │
+│  ┌───────────────────────────────────┐  │
+│  │ ⭐ My Open Opportunities         │  │
+│  │ ⭐ Key Accounts Dashboard        │  │
+│  │ ⭐ Daily Sales Report            │  │
+│  └───────────────────────────────────┘  │
+│                                         │
+│  Entity Types                           │
+│  ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐       │
+│  │👤│ │🏢│ │📋│ │💼│ │📊│       │
+│  └───┘ └───┘ └───┘ └───┘ └───┘       │
+└─────────────────────────────────────────┘
+```
+
+### 5.4 Record View (Mobile-Optimized)
+
+```
+┌─────────────────────────────────────────┐
+│  ◀ Back        John Smith        ⋮      │
+├─────────────────────────────────────────┤
+│  ┌───────────────────────────────────┐  │
+│  │              👤                   │  │
+│  │         John Smith                │  │
+│  │    CEO at Acme Corporation       │  │
+│  │    📧 john@acme.com              │  │
+│  │    📱 (555) 123-4567             │  │
+│  └───────────────────────────────────┘  │
+│                                         │
+│  Quick Actions                          │
+│  [📞 Call] [✉️ Email] [💬 Message]      │
+│                                         │
+│  ┌───────────────────────────────────┐  │
+│  │ 📋 Related                        │  │
+│  │    └─ 5 Opportunities ($125K)    │  │
+│  │    └─ 12 Activities              │  │
+│  │    └─ 3 Documents                │  │
+│  └───────────────────────────────────┘  │
+│                                         │
+│  ┌───────────────────────────────────┐  │
+│  │ 📝 Recent Activity               │  │
+│  │    Today: Email sent             │  │
+│  │    Yesterday: Call logged        │  │
+│  │    Dec 20: Meeting completed     │  │
+│  └───────────────────────────────────┘  │
+│                                         │
+│  [Edit in Web App]                      │
+└─────────────────────────────────────────┘
+```
+
+### 5.5 KPI Dashboard
+
+```
+┌─────────────────────────────────────────┐
+│  Dashboard              [Refresh] [⚙️]   │
+├─────────────────────────────────────────┤
+│  ┌─────────────────────────────────────┐│
+│  │  📈 Pipeline Value        ▲ 12%    ││
+│  │     $2.5M                          ││
+│  │     ████████████░░░░ 75% to goal   ││
+│  └─────────────────────────────────────┘│
+│  ┌────────────────┐ ┌──────────────────┐│
+│  │ 🎯 Open Deals  │ │ ✅ Won This Mo.  ││
+│  │     47         │ │     12           ││
+│  │   ▲ 5 new     │ │   $450K          ││
+│  └────────────────┘ └──────────────────┘│
+│  ┌────────────────┐ ┌──────────────────┐│
+│  │ 📅 Meetings    │ │ ⚠️ At Risk       ││
+│  │   Today: 3     │ │     5 deals      ││
+│  │   This Week: 8 │ │   Need attention ││
+│  └────────────────┘ └──────────────────┘│
+│                                         │
+│  ┌─────────────────────────────────────┐│
+│  │ 🔔 Alerts                          ││
+│  │ • Large deal closing soon ($500K)  ││
+│  │ • 3 overdue follow-ups             ││
+│  │ • Quota at risk for this quarter   ││
+│  └─────────────────────────────────────┘│
+└─────────────────────────────────────────┘
+```
+
+---
+
+## Part 6: Security Architecture
+
+### Authentication Flow
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Authentication Flow                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. App Launch                                               │
+│     │                                                        │
+│     ▼                                                        │
+│  ┌─────────────────┐     ┌─────────────────┐                │
+│  │ Check Keychain  │────▶│ Valid Token?    │                │
+│  │ for JWT Token   │     │ Not Expired?    │                │
+│  └─────────────────┘     └─────────────────┘                │
+│                                │                             │
+│              ┌─────────────────┴─────────────────┐          │
+│              ▼                                   ▼          │
+│        ┌─────────┐                         ┌─────────┐      │
+│        │   Yes   │                         │   No    │      │
+│        └─────────┘                         └─────────┘      │
+│              │                                   │          │
+│              ▼                                   ▼          │
+│  ┌─────────────────┐              ┌─────────────────────┐  │
+│  │ Optional:       │              │ Show Login Screen   │  │
+│  │ Biometric Auth  │              │ (OAuth Provider)    │  │
+│  │ (Face/Touch ID) │              │                     │  │
+│  └─────────────────┘              └─────────────────────┘  │
+│              │                                   │          │
+│              ▼                                   ▼          │
+│  ┌─────────────────┐              ┌─────────────────────┐  │
+│  │ Resume Session  │              │ OAuth Flow:         │  │
+│  │                 │              │ • Auth0             │  │
+│  │                 │              │ • MSAL (Microsoft)  │  │
+│  │                 │              │ • Google            │  │
+│  └─────────────────┘              └─────────────────────┘  │
+│                                              │              │
+│                                              ▼              │
+│                                   ┌─────────────────────┐  │
+│                                   │ Store JWT + Refresh │  │
+│                                   │ in Secure Keychain  │  │
+│                                   └─────────────────────┘  │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Security Measures
+
+| Layer | Measure |
+|-------|---------|
+| Storage | iOS Keychain / Android Keystore for tokens |
+| Biometric | Face ID / Touch ID for session resume |
+| Network | Certificate pinning for MJAPI |
+| Data at Rest | SQLite encryption (SQLCipher) |
+| Sensitive Fields | Re-auth required for PII access |
+| Session | Auto-logout on inactivity |
+| Device | Jailbreak/root detection |
+
+### Permissions Model
+
+```typescript
+interface MobilePermissions {
+  // Device Permissions
+  camera: boolean;         // For document scanning, photos
+  microphone: boolean;     // For voice input
+  location: boolean;       // For location-tagged records
+  notifications: boolean;  // For push notifications
+  biometrics: boolean;     // For secure authentication
+
+  // MJ Permissions (from server)
+  entityPermissions: Map<string, EntityPermission>;
+  userRoles: string[];
+  applicationAccess: string[];
+}
+```
+
+---
+
+## Part 7: Push Notification System
+
+### Notification Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Push Notification Flow                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  MJAPI Server                                               │
+│       │                                                     │
+│       │ WebSocket Event / Trigger                           │
+│       ▼                                                     │
+│  ┌─────────────────┐                                       │
+│  │ Notification    │                                       │
+│  │ Engine          │                                       │
+│  │ (New Package)   │                                       │
+│  └─────────────────┘                                       │
+│       │                                                     │
+│       │ Route based on user preferences                     │
+│       ▼                                                     │
+│  ┌─────────────────┐     ┌─────────────────┐               │
+│  │ APNs (iOS)      │     │ FCM (Android)   │               │
+│  └─────────────────┘     └─────────────────┘               │
+│       │                         │                          │
+│       ▼                         ▼                          │
+│  ┌─────────────────────────────────────────┐               │
+│  │         Mobile Device                   │               │
+│  │  ┌─────────────────────────────────┐   │               │
+│  │  │ Push Notification Handler       │   │               │
+│  │  │ • Deep link to relevant screen  │   │               │
+│  │  │ • Inline actions (approve/deny) │   │               │
+│  │  │ • Badge count management        │   │               │
+│  │  └─────────────────────────────────┘   │               │
+│  └─────────────────────────────────────────┘               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Notification Types
+
+| Type | Trigger | Actions |
+|------|---------|---------|
+| Approval Required | Workflow reaches approval step | Approve, Deny, View |
+| Agent Complete | AI agent finishes execution | View Result, Dismiss |
+| Record Changed | Entity update (subscribed) | View Record |
+| Mention | User mentioned in conversation | Reply, View |
+| Reminder | Scheduled reminder fires | Complete, Snooze |
+| Alert | KPI threshold breached | View Dashboard |
+
+---
+
+## Part 8: Development Roadmap
+
+### Phase 1: Foundation (8-10 weeks)
+
+**Sprint 1-2: Project Setup**
+- React Native project initialization
+- TypeScript configuration
+- MJ package integration verification
+- CI/CD pipeline (App Store Connect, Play Console)
+- Basic navigation structure
+
+**Sprint 3-4: Authentication**
+- OAuth integration (Auth0/MSAL)
+- Biometric authentication
+- Secure token storage
+- Session management
+- Deep linking setup
+
+**Sprint 5: Core Data Layer**
+- GraphQL client integration
+- MJ entity framework verification
+- Basic offline storage (SQLite)
+- API error handling
+
+### Phase 2: AI Assistant MVP (6-8 weeks)
+
+**Sprint 6-7: Chat Interface**
+- Conversation UI components
+- Message threading
+- Keyboard input
+- Basic AI agent integration
+
+**Sprint 8-9: Voice Integration**
+- Voice recording component
+- Whisper API integration
+- TTS playback
+- Voice command handling
+
+**Sprint 10: Agent Features**
+- Agent status indicators
+- Action buttons in chat
+- Artifact preview
+- History and search
+
+### Phase 3: Core Features (8-10 weeks)
+
+**Sprint 11-12: Notifications**
+- Push notification setup (APNs/FCM)
+- Notification center UI
+- Deep linking handlers
+- Badge management
+
+**Sprint 13-14: Search & Browse**
+- Global search implementation
+- Entity type browsing
+- Recent items
+- Favorites
+
+**Sprint 15-16: Record Views**
+- Mobile-optimized record display
+- Quick actions
+- Related records
+- Activity timeline
+
+### Phase 4: Dashboard & Polish (6-8 weeks)
+
+**Sprint 17-18: Dashboards**
+- KPI cards
+- Metric displays
+- Refresh and caching
+- Alert integration
+
+**Sprint 19-20: Offline & Sync**
+- Sync engine implementation
+- Conflict resolution
+- Offline indicators
+- Background sync
+
+**Sprint 21-22: Polish**
+- Performance optimization
+- Accessibility
+- App Store submission
+- Beta testing
+
+### Total Timeline: ~28-36 weeks (7-9 months)
+
+---
+
+## Part 9: Team Requirements
+
+### Recommended Team Structure
+
+| Role | Count | Responsibilities |
+|------|-------|------------------|
+| Mobile Tech Lead | 1 | Architecture, code review, MJ integration |
+| React Native Developer | 2-3 | Feature development, both platforms |
+| Backend Developer | 1 | MJAPI extensions for mobile (push, etc.) |
+| UI/UX Designer | 1 | Mobile-specific design, prototypes |
+| QA Engineer | 1 | Mobile testing, device coverage |
+
+### Skills Required
+
+**Must Have:**
+- React Native experience
+- TypeScript proficiency
+- GraphQL client experience
+- iOS & Android development basics
+
+**Nice to Have:**
+- MemberJunction familiarity
+- Voice interface experience
+- Offline-first architecture experience
+- App Store submission experience
+
+---
+
+## Part 10: Package Structure
+
+### New Packages to Create
+
+```
+packages/
+├── Mobile/
+│   ├── mobile-core/                    # Mobile-specific utilities
+│   │   ├── src/
+│   │   │   ├── providers/
+│   │   │   │   ├── MobileDataProvider.ts
+│   │   │   │   └── OfflineSyncEngine.ts
+│   │   │   ├── storage/
+│   │   │   │   ├── SecureStorage.ts
+│   │   │   │   └── SQLiteCache.ts
+│   │   │   └── index.ts
+│   │   └── package.json
+│   │
+│   ├── mobile-voice/                   # Voice input/output
+│   │   ├── src/
+│   │   │   ├── VoiceRecorder.ts
+│   │   │   ├── WhisperClient.ts
+│   │   │   ├── TTSPlayer.ts
+│   │   │   └── index.ts
+│   │   └── package.json
+│   │
+│   ├── mobile-push/                    # Push notifications
+│   │   ├── src/
+│   │   │   ├── PushNotificationHandler.ts
+│   │   │   ├── DeepLinkRouter.ts
+│   │   │   └── index.ts
+│   │   └── package.json
+│   │
+│   └── mobile-auth/                    # Mobile authentication
+│       ├── src/
+│       │   ├── BiometricAuth.ts
+│       │   ├── OAuthManager.ts
+│       │   ├── TokenStorage.ts
+│       │   └── index.ts
+│       └── package.json
+│
+├── MJServer/
+│   └── src/
+│       └── mobile/                     # Server-side mobile support
+│           ├── pushNotifications.ts    # APNs/FCM integration
+│           └── mobileConfig.ts         # Mobile-specific settings
+│
+└── apps/
+    └── mobile/                         # React Native app
+        ├── src/
+        │   ├── screens/
+        │   ├── components/
+        │   ├── navigation/
+        │   ├── hooks/
+        │   └── services/
+        ├── ios/
+        ├── android/
+        └── package.json
+```
+
+---
+
+## Part 11: Success Metrics
+
+### Key Performance Indicators
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| App Launch Time | < 2 seconds | Cold start to usable |
+| Voice Response Time | < 3 seconds | Speak to first response |
+| Offline Capability | 80% features | Core features work offline |
+| Crash Rate | < 0.1% | Crash-free sessions |
+| Push Delivery | > 95% | Successful delivery rate |
+| User Adoption | 60% of web users | Within 6 months |
+| Session Duration | > 3 min avg | Time spent in app |
+| Daily Active Users | 40% of mobile users | DAU/MAU ratio |
+
+### User Experience Goals
+
+1. **Voice-first**: Users can complete common tasks without typing
+2. **Instant Access**: Critical info available in < 3 taps
+3. **Notification-driven**: Proactive alerts for important events
+4. **Seamless Handoff**: Easy transition to web for complex tasks
+5. **Offline Resilient**: Core features work without connectivity
+
+---
+
+## Conclusion
+
+This architecture maximizes MemberJunction's existing investment by:
+
+1. **Reusing 80%+ of business logic** through TypeScript package sharing
+2. **Leveraging existing AI infrastructure** for voice-first mobile experience
+3. **Building on proven patterns** (GraphQL, entity framework, auth providers)
+4. **Focusing on mobile-appropriate features** rather than replicating web
+
+The AI assistant with voice capabilities represents the strongest differentiator, turning the mobile app into a productivity multiplier rather than just a scaled-down version of the web experience.
+
+### Next Steps
+
+1. Review and approve this architecture proposal
+2. Validate technical assumptions with proof-of-concept
+3. Finalize team staffing
+4. Begin Phase 1 implementation
