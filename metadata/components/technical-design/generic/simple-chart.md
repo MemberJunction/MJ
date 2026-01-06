@@ -16,9 +16,9 @@ React functional component using Chart.js 4.4.1 for canvas-based chart rendering
 ## Data Processing Pipeline (useMemo)
 
 ### processData Function
-**Dependencies**: `data`, `groupBy`, `valueField`, `aggregateMethod`, `sortBy`, `sortOrder`, `limit`, `entityInfo`
+**Dependencies**: `data`, `groupBy`, `stackBy`, `valueField`, `aggregateMethod`, `sortBy`, `sortOrder`, `limit`, `entityInfo`
 
-**Process**:
+**Process** (non-stacked mode - for stacked mode see "Stacked Mode" section below):
 1. **Validation**:
    ```javascript
    if (!data || data.length === 0) {
@@ -100,6 +100,115 @@ React functional component using Chart.js 4.4.1 for canvas-based chart rendering
      isEmpty: false
    };
    ```
+
+## Stacked Mode (stackBy Property)
+
+When `stackBy` property is provided, the component creates a multi-series stacked bar chart with separate datasets for each unique stack value.
+
+### Stacked Data Processing
+**Dependencies**: `data`, `groupBy`, `stackBy`, `valueField`, `aggregateMethod`, `sortBy`, `sortOrder`, `limit`, `entityInfo`
+
+**Process**:
+1. **Collect primary categories** (X-axis values):
+   ```javascript
+   const categoriesSet = new Set();
+   data.forEach(record => {
+     let key = record[groupBy] || 'Unknown';
+     // Apply date formatting if needed
+     if (isDateField) {
+       key = new Date(key).toISOString().split('T')[0];
+     }
+     categoriesSet.add(key);
+   });
+   let categories = Array.from(categoriesSet);
+   ```
+
+2. **Collect stack values** (series/colors):
+   ```javascript
+   const stackValuesSet = new Set();
+   data.forEach(record => {
+     const stackValue = record[stackBy] || 'Unknown';
+     stackValuesSet.add(stackValue);
+   });
+   const stackValues = Array.from(stackValuesSet).sort();
+   ```
+
+3. **Group by BOTH dimensions**:
+   ```javascript
+   const grouped = {};
+   data.forEach(record => {
+     const categoryKey = record[groupBy] || 'Unknown';
+     const stackValue = record[stackBy] || 'Unknown';
+     const key = `${categoryKey}|||${stackValue}`; // Composite key
+
+     if (!grouped[key]) {
+       grouped[key] = {
+         category: categoryKey,
+         stackValue: stackValue,
+         records: [],
+         value: 0
+       };
+     }
+     grouped[key].records.push(record);
+   });
+   ```
+
+4. **Aggregate each group** (same logic as non-stacked: count/sum/average/min/max)
+
+5. **Create datasets array** - one dataset per stack value:
+   ```javascript
+   const datasets = stackValues.map((stackValue, stackIndex) => {
+     const datasetValues = categories.map(category => {
+       const key = `${category}|||${stackValue}`;
+       return grouped[key] ? grouped[key].value : 0; // Zero if no data
+     });
+
+     return {
+       label: String(stackValue),
+       data: datasetValues,
+       backgroundColor: (colors || defaultColors)[stackIndex % (colors || defaultColors).length],
+       borderColor: (colors || defaultColors)[stackIndex % (colors || defaultColors).length],
+       borderWidth: 1
+     };
+   });
+   ```
+
+6. **Return structure**:
+   ```javascript
+   return {
+     categories: categories.map(c => String(c)),
+     datasets: datasets, // Multiple datasets, one per stack value
+     values: [], // Not used in stacked mode
+     chartData: Object.values(grouped),
+     isEmpty: false
+   };
+   ```
+
+### Stacked Chart Configuration
+When `isStacked` is true (stackBy provided and datasets exist):
+```javascript
+const config = {
+  type: 'bar', // or 'line'
+  data: {
+    labels: processData.categories,
+    datasets: processData.datasets // Use pre-built datasets
+  },
+  options: {
+    scales: {
+      y: {
+        stacked: true, // Enable stacking on Y-axis
+        beginAtZero: true
+      },
+      x: {
+        stacked: true // Enable stacking on X-axis
+      }
+    }
+    // ... other options same as non-stacked
+  }
+};
+```
+
+**Key difference**: In non-stacked mode, there's one dataset with different colors per bar. In stacked mode, each dataset has one color and represents a series across all categories.
 
 ## Auto Chart Type Detection
 

@@ -2,6 +2,7 @@ function SimpleChart({
   entityName,
   data,
   groupBy,
+  stackBy,
   valueField,
   aggregateMethod = 'count',
   chartType = 'auto',
@@ -104,7 +105,7 @@ function SimpleChart({
   // Process and aggregate data
   const processData = React.useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) {
-      return { chartData: [], categories: [], values: [], isEmpty: true };
+      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
     }
 
     try {
@@ -116,20 +117,24 @@ function SimpleChart({
           const error = `Field "${groupBy}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
-          return { chartData: [], categories: [], values: [], isEmpty: true };
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+        }
+
+        if (stackBy && !(stackBy in data[0])) {
+          const error = `Stack field "${stackBy}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
+          console.error(error);
+          setError(error);
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
         }
 
         if (valueField && !(valueField in data[0])) {
           const error = `Value field "${valueField}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
-          return { chartData: [], categories: [], values: [], isEmpty: true };
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
         }
       }
-      
-      // Group data by the specified field
-      const grouped = {};
-      
+
       // Check if groupBy field is a date field using entity metadata
       let isDateField = false;
       if (entityInfo && entityInfo.Fields) {
@@ -145,7 +150,133 @@ function SimpleChart({
           (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue)))
         );
       }
-      
+
+      // STACKED MODE: If stackBy is provided, create multiple datasets
+      if (stackBy) {
+        // Collect all unique primary categories (X-axis)
+        const categoriesSet = new Set();
+        data.forEach(record => {
+          let key = record[groupBy] || 'Unknown';
+          if (isDateField && key !== 'Unknown') {
+            const date = new Date(key);
+            if (!isNaN(date.getTime())) {
+              key = date.toISOString().split('T')[0];
+            }
+          }
+          categoriesSet.add(key);
+        });
+
+        let categories = Array.from(categoriesSet);
+
+        // Sort categories if requested
+        if (sortBy === 'label') {
+          categories.sort((a, b) => {
+            const comparison = String(a).localeCompare(String(b));
+            return sortOrder === 'asc' ? comparison : -comparison;
+          });
+        }
+
+        // Apply limit to categories
+        if (limit && limit > 0) {
+          categories = categories.slice(0, limit);
+        }
+
+        // Collect all unique stack values (series/colors)
+        const stackValuesSet = new Set();
+        data.forEach(record => {
+          const stackValue = record[stackBy] || 'Unknown';
+          stackValuesSet.add(stackValue);
+        });
+        const stackValues = Array.from(stackValuesSet).sort();
+
+        // Group data by both primary category AND stack value
+        const grouped = {};
+        data.forEach(record => {
+          let categoryKey = record[groupBy] || 'Unknown';
+          if (isDateField && categoryKey !== 'Unknown') {
+            const date = new Date(categoryKey);
+            if (!isNaN(date.getTime())) {
+              categoryKey = date.toISOString().split('T')[0];
+            }
+          }
+
+          // Skip if category was filtered out by limit
+          if (!categories.includes(categoryKey)) return;
+
+          const stackValue = record[stackBy] || 'Unknown';
+          const key = `${categoryKey}|||${stackValue}`;
+
+          if (!grouped[key]) {
+            grouped[key] = {
+              category: categoryKey,
+              stackValue: stackValue,
+              records: [],
+              value: 0
+            };
+          }
+          grouped[key].records.push(record);
+        });
+
+        // Aggregate based on method
+        Object.keys(grouped).forEach(key => {
+          const group = grouped[key];
+
+          if (aggregateMethod === 'count') {
+            group.value = group.records.length;
+          } else if (valueField) {
+            const values = group.records
+              .map(r => parseFloat(r[valueField]))
+              .filter(v => !isNaN(v));
+
+            if (values.length > 0) {
+              switch (aggregateMethod) {
+                case 'sum':
+                  group.value = values.reduce((a, b) => a + b, 0);
+                  break;
+                case 'average':
+                  group.value = values.reduce((a, b) => a + b, 0) / values.length;
+                  break;
+                case 'min':
+                  group.value = Math.min(...values);
+                  break;
+                case 'max':
+                  group.value = Math.max(...values);
+                  break;
+                default:
+                  group.value = values.length;
+              }
+            }
+          }
+        });
+
+        // Create datasets array - one dataset per stack value
+        const datasets = stackValues.map((stackValue, stackIndex) => {
+          const datasetValues = categories.map(category => {
+            const key = `${category}|||${stackValue}`;
+            return grouped[key] ? grouped[key].value : 0;
+          });
+
+          return {
+            label: String(stackValue),
+            data: datasetValues,
+            backgroundColor: (colors || defaultColors)[stackIndex % (colors || defaultColors).length],
+            borderColor: (colors || defaultColors)[stackIndex % (colors || defaultColors).length],
+            borderWidth: 1
+          };
+        });
+
+        return {
+          chartData: Object.values(grouped),
+          categories: categories.map(c => String(c)),
+          values: [], // Not used in stacked mode
+          datasets: datasets,
+          isEmpty: false
+        };
+      }
+
+      // NON-STACKED MODE: Original single-series logic
+      const grouped = {};
+
       data.forEach(record => {
         let key = record[groupBy] || 'Unknown';
         
@@ -229,14 +360,15 @@ function SimpleChart({
         chartData: dataArray,
         categories,
         values,
+        datasets: [], // Empty in non-stacked mode
         isEmpty: false
       };
     } catch (err) {
       console.error('Error processing chart data:', err);
       setError(err.message);
-      return { chartData: [], categories: [], values: [], isEmpty: true };
+      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
     }
-  }, [data, groupBy, valueField, aggregateMethod, sortBy, sortOrder, limit, entityInfo]);
+  }, [data, groupBy, stackBy, valueField, aggregateMethod, sortBy, sortOrder, limit, entityInfo]);
 
   // Determine chart type automatically
   const determineChartType = () => {
@@ -283,28 +415,31 @@ function SimpleChart({
   const getChartConfig = () => {
     const isPieOrDoughnut = actualChartType === 'pie' || actualChartType === 'doughnut';
     const isLineOrArea = actualChartType === 'line' || actualChartType === 'area';
-    
+    const isStacked = stackBy && processData.datasets && processData.datasets.length > 0;
+
     const config = {
       type: actualChartType === 'area' ? 'line' : actualChartType,
       data: {
         labels: processData.categories,
-        datasets: [{
-          label: valueField || 'Count',
-          data: processData.values,
-          backgroundColor: isPieOrDoughnut
-            ? (colors || defaultColors).slice(0, processData.values.length)
-            : isLineOrArea
-              ? 'rgba(24, 144, 255, 0.2)'
-              : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar
-          borderColor: isPieOrDoughnut
-            ? undefined
-            : isLineOrArea
-              ? (colors || defaultColors)[0]
-              : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar border
-          borderWidth: isLineOrArea ? 2 : 1,
-          fill: actualChartType === 'area',
-          tension: isLineOrArea ? 0.1 : undefined
-        }]
+        datasets: isStacked
+          ? processData.datasets // Use pre-built datasets for stacked mode
+          : [{
+              label: valueField || 'Count',
+              data: processData.values,
+              backgroundColor: isPieOrDoughnut
+                ? (colors || defaultColors).slice(0, processData.values.length)
+                : isLineOrArea
+                  ? 'rgba(24, 144, 255, 0.2)'
+                  : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar
+              borderColor: isPieOrDoughnut
+                ? undefined
+                : isLineOrArea
+                  ? (colors || defaultColors)[0]
+                  : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar border
+              borderWidth: isLineOrArea ? 2 : 1,
+              fill: actualChartType === 'area',
+              tension: isLineOrArea ? 0.1 : undefined
+            }]
       },
       options: {
         responsive: true,
@@ -412,11 +547,13 @@ function SimpleChart({
       config.options.scales = {
         y: {
           beginAtZero: true,
+          stacked: isStacked, // Enable stacking on Y-axis
           ticks: {
             callback: (value) => formatValue(value)
           }
         },
         x: {
+          stacked: isStacked, // Enable stacking on X-axis
           ticks: {
             autoSkip: true,
             maxRotation: 45,
