@@ -129,6 +129,6 @@
       "description": "Button to open entity records"
     }
   ],
-  "code": "../../code/generic/single-record-view.js",
+  "code": "@file:../../code/generic/single-record-view.js",
   "exampleUsage": "<SingleRecordView\n  record={selectedDeal}\n  entityName=\"Deals\"\n  fields={['DealName', 'Stage', 'Amount', 'CloseDate', 'OwnerID']}\n  layout=\"card\"\n  highlightFields={['Amount', 'Stage']}\n  allowOpenRecord={true}\n  onOpenRecord={(eventData) => {\n    // Example: Cancel if deal is in certain stage\n    if (selectedDeal.Stage === 'Lost') {\n      eventData.cancel = true;\n      alert('Cannot open lost deals');\n    }\n  }}\n/>"
 }

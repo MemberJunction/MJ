@@ -1,6 +1,6 @@
 {
   "name": "AIInsightsPanel",
-  "code": "../../code/generic/ai-insights-panel.js",
+  "code": "@file:../../code/generic/ai-insights-panel.js",
   "namespace": "Generic/UI/AI",
   "title": "AI Insights Panel",
   "type": "Widget",

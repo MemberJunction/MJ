@@ -101,6 +101,6 @@
     }
   ],
   "dependencies": [],
-  "code": "../../code/generic/open-record-button.js",
+  "code": "@file:../../code/generic/open-record-button.js",
   "exampleUsage": "<OpenRecordButton\n  record={selectedDeal}\n  entityName=\"Deals\"\n  text=\"View Deal\"\n  variant=\"primary\"\n/>"
 }

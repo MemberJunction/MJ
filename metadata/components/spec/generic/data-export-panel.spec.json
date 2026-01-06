@@ -2,7 +2,7 @@
   "name": "DataExportPanel",
   "namespace": "Generic/UI/Export",
   "location": "embedded",
-  "code": "../../code/generic/data-export-panel.js",
+  "code": "@file:../../code/generic/data-export-panel.js",
   "description": "@file:../../descriptions/generic/data-export-panel.md",
   "category": "Utility",
   "type": "panel",
