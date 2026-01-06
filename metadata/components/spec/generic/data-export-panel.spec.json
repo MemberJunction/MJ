@@ -2,8 +2,8 @@
   "name": "DataExportPanel",
   "namespace": "Generic/UI/Export",
   "location": "embedded",
-  "code": "@file:../code/data-export-panel.js",
-  "description": "Reusable component for exporting data to CSV, Excel (XLSX), and PDF formats with optional UI",
+  "code": "@file:../../code/generic/data-export-panel.js",
+  "description": "@file:../../descriptions/generic/data-export-panel.md",
   "category": "Utility",
   "type": "panel",
   "properties": [
@@ -33,7 +33,11 @@
       "name": "formats",
       "type": "array",
       "description": "Available export formats: ['csv', 'excel', 'pdf']",
-      "default": ["csv", "excel", "pdf"]
+      "default": [
+        "csv",
+        "excel",
+        "pdf"
+      ]
     },
     {
       "name": "position",
@@ -203,6 +207,6 @@
     }
   ],
   "usageExample": "// UI Mode with dropdown\n<DataExportPanel\n  data={tableData}\n  columns={columns}\n  getHtmlElement={() => dashboardRef.current}\n  getAiInsightsElement={() => aiInsightsRef.current}\n  filename=\"sales-report\"\n  formats={['csv', 'excel', 'pdf']}\n  buttonStyle=\"dropdown\"\n/>\n\n// Headless mode for programmatic export\nconst exportPanel = <DataExportPanel\n  mode=\"headless\"\n  data={data}\n  columns={columns}\n/>;\n// Then call: exportPanel.exportToCSV() or exportPanel.exportToPDF()",
-  "functionalRequirements": "• Support CSV, Excel (XLSX), and PDF export formats\n• Provide both UI and headless modes for flexibility\n• Allow column selection and customization\n• Support both data arrays and HTML element capture\n• Handle large datasets efficiently with progress indication\n• Provide format-specific options (PDF orientation, Excel sheet names)\n• Include preview capability before export\n• Support various button styles and positions\n• Fire events for export lifecycle\n• Format dates and numbers consistently",
-  "technicalDesign": "• Uses SheetJS (XLSX) for Excel/CSV generation\n• Uses jsPDF with html2canvas for PDF creation\n• Implements ref-based API for headless mode access\n• Manages export state with React hooks\n• Provides dropdown UI with format selection\n• Handles data transformation and formatting\n• Supports chunked processing for large datasets\n• Implements progress indication for long exports\n• Uses dayjs for date formatting\n• Provides customizable styling options"
+  "functionalRequirements": "@file:../../functional-requirements/generic/data-export-panel.md",
+  "technicalDesign": "@file:../../technical-design/generic/data-export-panel.md"
 }
