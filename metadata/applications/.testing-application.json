@@ -33,7 +33,8 @@
         "Icon": "fa-solid fa-code-compare",
         "ResourceType": "Custom",
         "DriverClass": "TestingVersionResource",
-        "isDefault": false
+        "isDefault": false,
+        "Status": "Pending"
       },
       {
         "Label": "Feedback",
@@ -284,7 +285,7 @@
     "ID": "43029FF9-D1EF-4A22-AE02-4383C0B000F7"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.190Z",
-    "checksum": "59b6b2cb79f62173b1c2100d719d084e9acad0e8f9f9b084af2bef21452b14ed"
+    "lastModified": "2026-01-06T15:18:04.175Z",
+    "checksum": "f150fafe7fcaa7f04eafb3e1a573b416b0601aec5ba6331b5fbfd6fac1605e0c"
   }
 }

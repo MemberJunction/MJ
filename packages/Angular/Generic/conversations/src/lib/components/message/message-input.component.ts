@@ -14,7 +14,9 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
+import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
+import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
@@ -35,10 +37,48 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() disabled: boolean = false;
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
-  @Input() initialMessage: string | null = null; // Message to send automatically when component initializes
+  @Input() enableAttachments: boolean = true; // Whether to show attachment button (based on agent modality support)
+  @Input() maxAttachments: number = 10; // Maximum number of attachments per message
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // Maximum size per attachment (20MB default)
+  @Input() acceptedFileTypes: string = 'image/*'; // Accepted MIME types pattern
   @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
+  @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
+
+  // Initial message to send automatically - using getter/setter for precise control
+  private _initialMessage: string | null = null;
+  private _initialAttachments: PendingAttachment[] | null = null;
+  private _isComponentReady = false; // Track if component is ready to send
+
+  @Input()
+  set initialMessage(value: string | null) {
+    // Handle case where an object with {text, attachments} is passed instead of just a string
+    // This can happen if there's a type mismatch in the binding chain
+    let actualValue = value;
+    if (value && typeof value === 'object' && 'text' in value) {
+      actualValue = (value as { text: string }).text;
+    }
+
+    const previousValue = this._initialMessage;
+    this._initialMessage = actualValue;
+
+    // If component is ready and we have a new non-null message, trigger send
+    if (this._isComponentReady && actualValue && actualValue !== previousValue) {
+      this.triggerInitialSend();
+    }
+  }
+  get initialMessage(): string | null {
+    return this._initialMessage;
+  }
+
+  @Input()
+  set initialAttachments(value: PendingAttachment[] | null) {
+    this._initialAttachments = value;
+  }
+  get initialAttachments(): PendingAttachment[] | null {
+    return this._initialAttachments;
+  }
 
   private _conversationHistory: ConversationDetailEntity[] = [];
   @Input()
@@ -74,6 +114,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
   @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
+  @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
+  @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
 
   @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
 
@@ -81,12 +123,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   public isSending: boolean = false;
   public isProcessing: boolean = false; // True when waiting for agent/naming response
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
+  public isUploadingAttachments: boolean = false; // True when uploading attachments to server
+  public uploadingMessage: string = 'Uploading attachments...'; // Message shown during upload
   public converationManagerAgent: AIAgentEntityExtended | null = null;
 
   // Track completion timestamps to prevent race conditions with late progress updates
   private completionTimestamps = new Map<string, number>();
   // Track registered streaming callbacks for cleanup
   private registeredCallbacks = new Map<string, (progress: MessageProgressUpdate) => Promise<void>>();
+
+  // Track pending attachments from the input box
+  private pendingAttachments: PendingAttachment[] = [];
 
   constructor(
     private dialogService: DialogService,
@@ -97,7 +144,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService
+    private mentionAutocomplete: MentionAutocompleteService,
+    private attachmentService: ConversationAttachmentService
   ) {}
 
   async ngOnInit() {
@@ -115,20 +163,39 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     if (changes['conversationId'] && !changes['conversationId'].firstChange) {
       this.focusInput();
     }
-
-    // Note: inProgressMessageIds now handled by setter, not ngOnChanges
+    // Note: initialMessage/initialAttachments handled by setters, inProgressMessageIds handled by setter
   }
 
   ngAfterViewInit() {
     // Focus input on initial load
     this.focusInput();
 
+    // Mark component as ready
+    this._isComponentReady = true;
+
     // If there's an initial message to send (from empty state), send it automatically
-    if (this.initialMessage) {
-      setTimeout(() => {
-        this.sendMessageWithText(this.initialMessage!);
-      }, 100);
+    if (this._initialMessage || (this._initialAttachments && this._initialAttachments.length > 0)) {
+      this.triggerInitialSend();
     }
+  }
+
+  /**
+   * Triggers sending of initial message and attachments.
+   * Called from setter or ngAfterViewInit when conditions are met.
+   */
+  private triggerInitialSend(): void {
+    const message = this._initialMessage;
+    const attachments = this._initialAttachments;
+
+    // Set pending attachments before sending
+    if (attachments && attachments.length > 0) {
+      this.pendingAttachments = [...attachments];
+    }
+
+    // Use setTimeout to ensure we're outside of change detection cycle
+    setTimeout(() => {
+      this.sendMessageWithText(message || '');
+    }, 100);
   }
 
   ngOnDestroy() {
@@ -258,22 +325,78 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
+   * Handle attachments changed from the input box
+   */
+  onAttachmentsChanged(attachments: PendingAttachment[]): void {
+    this.pendingAttachments = attachments;
+  }
+
+  /**
+   * Handle attachment errors from the input box
+   */
+  onAttachmentError(error: string): void {
+    this.toastService.error(error);
+  }
+
+  /**
    * Handle text submitted from the input box
    */
   async onTextSubmitted(text: string): Promise<void> {
-    // Use the text parameter directly since the box component already cleared its value
-    if (!text || !text.trim()) {
-      console.log('[MessageInput] Empty text, aborting');
+    // Check if we have either text or attachments
+    const hasText = text && text.trim().length > 0;
+    const hasAttachments = this.pendingAttachments.length > 0;
+
+    if (!hasText && !hasAttachments) {
+      return;
+    }
+
+    // In empty state mode, just emit the data and let parent handle conversation creation
+    if (this.emptyStateMode) {
+      const attachmentsToEmit = [...this.pendingAttachments];
+      this.pendingAttachments = [];
+      this.messageText = '';
+      this.emptyStateSubmit.emit({ text: text?.trim() || '', attachments: attachmentsToEmit });
       return;
     }
 
     this.isSending = true;
+
+    // Store attachments locally since we'll clear them after send
+    const attachmentsToSave = [...this.pendingAttachments];
+
     try {
-      const messageDetail = await this.createMessageDetailFromText(text.trim());
+      const messageDetail = await this.createMessageDetailFromText(text?.trim() || '');
 
       const saved = await messageDetail.Save();
 
       if (saved) {
+        // Save attachments if any were pending
+        // Attachments are stored in ConversationDetailAttachment table and loaded
+        // separately when building AI messages - no need to add tokens to Message field
+        if (attachmentsToSave.length > 0) {
+          // Show upload indicator for attachments
+          this.isUploadingAttachments = true;
+          this.uploadingMessage = `Uploading ${attachmentsToSave.length} attachment${attachmentsToSave.length > 1 ? 's' : ''}...`;
+          this.uploadStateChanged.emit({ isUploading: true, message: this.uploadingMessage });
+
+          try {
+            await this.attachmentService.saveAttachments(
+              messageDetail.ID,
+              attachmentsToSave,
+              this.currentUser
+            );
+          } catch (attachmentError) {
+            console.error('Failed to save attachments:', attachmentError);
+            this.toastService.error('Some attachments could not be saved');
+          } finally {
+            this.isUploadingAttachments = false;
+            this.uploadStateChanged.emit({ isUploading: false, message: '' });
+          }
+        }
+
+        // Clear pending attachments after successful send
+        this.pendingAttachments = [];
+
         await this.handleSuccessfulSend(messageDetail);
       } else {
         this.handleSendFailure(messageDetail);
@@ -307,10 +430,14 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
   /**
    * Send a message with custom text WITHOUT modifying the visible messageText input
-   * Used for suggested responses - sends message silently without affecting user's current input
+   * Used for suggested responses and initial messages from empty state.
+   * Also saves any pending attachments.
    */
   public async sendMessageWithText(text: string): Promise<void> {
-    if (!text || !text.trim()) {
+    const hasText = text && text.trim().length > 0;
+    const hasAttachments = this.pendingAttachments.length > 0;
+
+    if (!hasText && !hasAttachments) {
       return;
     }
 
@@ -319,10 +446,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
 
     this.isSending = true;
+    const attachmentsToSave = [...this.pendingAttachments];
+
     try {
       const detail = await this.dataCache.createConversationDetail(this.currentUser);
       detail.ConversationID = this.conversationId;
-      detail.Message = text.trim();
+      detail.Message = text?.trim() || '';
       detail.Role = 'User';
       detail.UserID = this.currentUser.ID; // Set the user who sent the message
 
@@ -333,6 +462,31 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       const saved = await detail.Save();
 
       if (saved) {
+        // Save attachments if any were pending
+        if (attachmentsToSave.length > 0) {
+          // Show upload indicator for attachments
+          this.isUploadingAttachments = true;
+          this.uploadingMessage = `Uploading ${attachmentsToSave.length} attachment${attachmentsToSave.length > 1 ? 's' : ''}...`;
+          this.uploadStateChanged.emit({ isUploading: true, message: this.uploadingMessage });
+
+          try {
+            await this.attachmentService.saveAttachments(
+              detail.ID,
+              attachmentsToSave,
+              this.currentUser
+            );
+          } catch (attachmentError) {
+            console.error('Failed to save attachments:', attachmentError);
+            this.toastService.error('Some attachments could not be saved');
+          } finally {
+            this.isUploadingAttachments = false;
+            this.uploadStateChanged.emit({ isUploading: false, message: '' });
+          }
+        }
+
+        // Clear pending attachments after successful send
+        this.pendingAttachments = [];
+
         this.messageSent.emit(detail);
 
         const mentionResult = this.parseMentionsFromMessage(detail.Message);
@@ -433,7 +587,34 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       return;
     }
 
-    // Priority 3: No context - use Sage
+    // Priority 3: Check if Sage was explicitly @mentioned with a config preset
+    // If so, treat it like agent continuity so the config preset is preserved
+    if (this.converationManagerAgent?.ID) {
+      const sageConfigPreset = this.agentService.findConfigurationPresetFromHistory(
+        this.converationManagerAgent.ID,
+        this.conversationHistory
+      );
+      if (sageConfigPreset) {
+        // User explicitly @mentioned Sage with a config - use the shared execution helper directly
+        // Pass the already-found config preset to avoid redundant history search
+        await this.executeRouteWithNaming(
+          () => this.executeAgentContinuation(
+            messageDetail,
+            this.converationManagerAgent!.ID,
+            this.converationManagerAgent!.Name || 'Sage',
+            this.conversationId,
+            null, // Sage doesn't use payload continuity
+            null, // Sage doesn't use artifact info
+            sageConfigPreset // Pass the already-found config preset
+          ),
+          messageDetail.Message,
+          isFirstMessage
+        );
+        return;
+      }
+    }
+
+    // Priority 4: No context - use Sage with default config
     await this.handleNoAgentContext(messageDetail, mentionResult, isFirstMessage);
   }
 
@@ -1341,6 +1522,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         ? await this.loadPreviousPayloadForAgent(agent.ID)
         : { payload: null, artifactInfo: null };
 
+      // Find configuration preset from previous @mention in conversation history
+      const configurationPresetId = agent?.ID
+        ? this.agentService.findConfigurationPresetFromHistory(agent.ID, this.conversationHistory)
+        : undefined;
+
       // Invoke the sub-agent with progress callback
       const subResult = await this.agentService.invokeSubAgent(
         agentName,
@@ -1352,7 +1538,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         previousPayload, // Pass previous payload for continuity
         this.createProgressCallback(agentResponseMessage, agentName),
         artifactInfo?.artifactId,
-        artifactInfo?.versionId
+        artifactInfo?.versionId,
+        configurationPresetId // Pass configuration from previous @mention for continuity
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -1392,7 +1579,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         // Update the existing agentResponseMessage to show retry status
         await this.updateConversationDetail(agentResponseMessage, "Retrying...", agentResponseMessage.Status);
 
-        // Retry the sub-agent (reuse previously loaded payload from first attempt)
+        // Retry the sub-agent (reuse previously loaded payload and config from first attempt)
         const retryResult = await this.agentService.invokeSubAgent(
           agentName,
           conversationId,
@@ -1403,7 +1590,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           previousPayload, // Pass same payload as first attempt
           this.createProgressCallback(agentResponseMessage, `${agentName} (retry)`),
           artifactInfo?.artifactId,
-          artifactInfo?.versionId
+          artifactInfo?.versionId,
+          configurationPresetId // Pass same config as first attempt
         );
 
         if (retryResult && retryResult.success) {
@@ -1815,18 +2003,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       .reverse()
       .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
 
-    const lastAIMessage = agentMessages.length > 0 ? agentMessages[0] : null;
-
-    // Extract configuration from previous agent run (for configuration continuity)
-    if (lastAIMessage && this.agentRunsByDetailId) {
-      const previousAgentRun = this.agentRunsByDetailId.get(lastAIMessage.ID);
-      if (previousAgentRun?.ConfigurationID) {
-        previousConfigurationId = previousAgentRun.ConfigurationID;
-        console.log(`🎯 Using configuration from previous agent run: ${previousConfigurationId}`);
-      } else {
-        console.log('📝 No configuration found on previous agent run, will use agent default');
-      }
-    }
+    // Extract configuration preset from the User message that @mentioned this agent
+    // Uses the shared helper method in the agent service
+    previousConfigurationId = this.agentService.findConfigurationPresetFromHistory(agentId, this.conversationHistory);
 
     // Fall back to searching through all agent messages for an artifact
     // This ensures payload continuity even after clarifying exchanges without artifacts
@@ -1867,6 +2046,39 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       }
     }
 
+    // Execute the agent with the gathered context
+    await this.executeAgentContinuation(
+      userMessage,
+      agentId,
+      agentName,
+      conversationId,
+      previousPayload,
+      previousArtifactInfo,
+      previousConfigurationId
+    );
+  }
+
+  /**
+   * Executes agent continuation with all context already gathered.
+   * This is the shared execution logic used by both continueWithAgent and direct Sage config path.
+   *
+   * @param userMessage The user's message entity
+   * @param agentId The agent ID to invoke
+   * @param agentName The agent's display name
+   * @param conversationId The conversation ID
+   * @param previousPayload Optional payload from previous artifact
+   * @param previousArtifactInfo Optional artifact info (id, versionId, versionNumber)
+   * @param configurationId Optional configuration preset ID to use
+   */
+  private async executeAgentContinuation(
+    userMessage: ConversationDetailEntity,
+    agentId: string,
+    agentName: string,
+    conversationId: string,
+    previousPayload: Record<string, unknown> | null,
+    previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null,
+    configurationId?: string
+  ): Promise<void> {
     // Add agent to active tasks
     const taskId = this.activeTasks.add({
       agentName: agentName,
@@ -1914,7 +2126,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         this.createProgressCallback(agentResponseMessage, agentName),
         previousArtifactInfo?.artifactId,
         previousArtifactInfo?.versionId,
-        previousConfigurationId // Pass configuration from previous agent run for continuity
+        configurationId // Pass configuration for continuity
       );
 
       // Remove from active tasks
@@ -1985,6 +2197,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         return;
       }
 
+      // Convert message to plain text (strips JSON-encoded mentions like @{"id":"...","name":"Sage"} to @Sage)
+      const plainTextMessage = this.mentionParser.toPlainText(
+        message,
+        this.mentionAutocomplete.getAvailableAgents(),
+        this.mentionAutocomplete.getAvailableUsers()
+      );
+
       const aiClient = new GraphQLAIClient(provider);
 
       // Add 30-second timeout to prevent long delays
@@ -1996,7 +2215,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       const result = await Promise.race([
         aiClient.RunAIPrompt({
           promptId: promptId,
-          messages: [{ role: 'user', content: message }],
+          messages: [{ role: 'user', content: plainTextMessage }],
         }),
         timeoutPromise
       ]);

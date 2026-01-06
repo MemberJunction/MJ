@@ -70,6 +70,7 @@ import { TestSuiteRunFormComponentExtended, LoadTestSuiteRunFormComponentExtende
 import { TestSuiteFormComponentExtended, LoadTestSuiteFormComponentExtended } from "./Tests/test-suite-form.component";
 import { TestRunFeedbackFormComponentExtended, LoadTestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedback-form.component";
 import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
+import { EntityLinkPillComponent, LoadEntityLinkPillComponent } from "./Tests/entity-link-pill.component";
 
 @NgModule({
     declarations: [
@@ -117,6 +118,7 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
         TestSuiteFormComponentExtended,
         TestRunFeedbackFormComponentExtended,
         TestRubricFormComponentExtended,
+        EntityLinkPillComponent,
     ],
     imports: [
         CommonModule,
@@ -188,7 +190,8 @@ import { TestRubricFormComponentExtended, LoadTestRubricFormComponentExtended } 
         TestSuiteRunFormComponentExtended,
         TestSuiteFormComponentExtended,
         TestRunFeedbackFormComponentExtended,
-        TestRubricFormComponentExtended
+        TestRubricFormComponentExtended,
+        EntityLinkPillComponent
     ],
     providers: [
         NewAgentDialogService,
@@ -213,4 +216,5 @@ export function LoadCoreCustomForms() {
     LoadTestSuiteFormComponentExtended();
     LoadTestRunFeedbackFormComponentExtended();
     LoadTestRubricFormComponentExtended();
+    LoadEntityLinkPillComponent();
 }

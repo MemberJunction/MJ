@@ -1,4 +1,12 @@
 <div class="conversation-empty-state">
+  <!-- Sidebar Toggle Button (top-left when sidebar is collapsed) -->
+  <button class="sidebar-toggle-btn"
+          *ngIf="showSidebarToggle"
+          (click)="sidebarToggleClicked.emit()"
+          title="Show conversations">
+    <i class="fas fa-table-columns"></i>
+  </button>
+
   <!-- Loading Overlay -->
   <div class="loading-overlay" *ngIf="disabled">
     <mj-loading text="Creating your conversation..." size="large"></mj-loading>
@@ -36,18 +44,16 @@
       </div>
     </div>
 
-    <!-- Message Input (Centered) -->
+    <!-- Message Input (using full mj-message-input in empty state mode) -->
     <div class="message-input-wrapper">
-      <mj-message-input-box
+      <mj-message-input
         [placeholder]="'Type your message to start a new conversation...'"
         [disabled]="disabled"
-        [showCharacterCount]="true"
-        [enableMentions]="true"
         [currentUser]="currentUser"
-        [rows]="3"
-        [(value)]="messageText"
-        (textSubmitted)="onTextSubmitted($event)">
-      </mj-message-input-box>
+        [emptyStateMode]="true"
+        [enableAttachments]="true"
+        (emptyStateSubmit)="onEmptyStateSubmit($event)">
+      </mj-message-input>
     </div>
 
     <!-- Footer Tips -->

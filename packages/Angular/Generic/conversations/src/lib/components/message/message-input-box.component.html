@@ -6,11 +6,29 @@
       [disabled]="disabled"
       [currentUser]="currentUser"
       [enableMentions]="enableMentions"
+      [enableAttachments]="enableAttachments"
+      [maxAttachments]="maxAttachments"
+      [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+      [acceptedFileTypes]="acceptedFileTypes"
       [(ngModel)]="value"
       (valueChange)="onValueChange($event)"
       (enterPressed)="onEnterPressed($event)"
-      (mentionSelected)="onMentionSelected($event)">
+      (mentionSelected)="onMentionSelected($event)"
+      (attachmentsChanged)="onAttachmentsChanged($event)"
+      (attachmentError)="onAttachmentError($event)"
+      (attachmentClicked)="onAttachmentClicked($event)">
     </mj-mention-editor>
+
+    <!-- Attach Button - Positioned over editor -->
+    <button
+      *ngIf="enableAttachments"
+      class="attach-button-icon"
+      [disabled]="disabled"
+      (click)="openFilePicker(); $event.stopPropagation()"
+      title="Attach file"
+    >
+      <i class="fa-solid fa-paperclip"></i>
+    </button>
 
     <!-- Send Button (Icon Only) - Positioned over editor -->
     <button

@@ -1,16 +1,20 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
-import { AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
+import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
+import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
@@ -45,22 +49,57 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @Input() conversation: ConversationEntity | null = null;
   @Input() threadId: string | null = null;
   @Input() isNewConversation: boolean = false;
-  @Input() pendingMessage: string | null = null;
+
+  // Using getter/setter to ensure correct type handling
+  private _pendingMessage: string | null = null;
+  @Input()
+  set pendingMessage(value: string | null) {
+    // Handle case where an object is incorrectly passed
+    if (value && typeof value === 'object' && 'text' in value) {
+      this._pendingMessage = (value as { text: string }).text;
+    } else {
+      this._pendingMessage = value;
+    }
+  }
+  get pendingMessage(): string | null {
+    return this._pendingMessage;
+  }
+
+  // Using getter/setter to ensure reactivity
+  private _pendingAttachments: PendingAttachment[] | null = null;
+  @Input()
+  set pendingAttachments(value: PendingAttachment[] | null) {
+    this._pendingAttachments = value;
+  }
+  get pendingAttachments(): PendingAttachment[] | null {
+    return this._pendingAttachments;
+  }
+
   @Input() pendingArtifactId: string | null = null;
   @Input() pendingArtifactVersionNumber: number | null = null;
+
+  // Sidebar toggle - when true, shows toggle button in header to expand sidebar
+  @Input() showSidebarToggle: boolean = false;
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() taskClicked = new EventEmitter<TaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
+  @Output() sidebarToggleClicked = new EventEmitter<void>();
 
   // STATE CHANGE OUTPUTS - notify parent of state changes
-  @Output() conversationCreated = new EventEmitter<ConversationEntity>();
+  // conversationCreated now includes pendingMessage and pendingAttachments to ensure atomic state update
+  @Output() conversationCreated = new EventEmitter<{
+    conversation: ConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+  }>();
   @Output() threadOpened = new EventEmitter<string>();
   @Output() threadClosed = new EventEmitter<void>();
   @Output() pendingArtifactConsumed = new EventEmitter<void>();
   @Output() pendingMessageConsumed = new EventEmitter<void>();
-  @Output() pendingMessageRequested = new EventEmitter<string>();
+  // pendingMessageRequested is deprecated - use conversationCreated with pendingMessage instead
+  @Output() pendingMessageRequested = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
@@ -133,6 +172,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public ratingsByDetailId = new Map<string, RatingJSON[]>();
 
   /**
+   * Attachments by conversation detail ID (loaded from ConversationDetailAttachments)
+   */
+  public attachmentsByDetailId = new Map<string, MessageAttachment[]>();
+
+  /**
    * In-progress message IDs for streaming reconnection
    * Passed to message-input component to reconnect PubSub updates
    */
@@ -170,6 +214,24 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   // LocalStorage key
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
+  // Image viewer state
+  public showImageViewer: boolean = false;
+  public selectedImageUrl: string = '';
+  public selectedImageAlt: string = '';
+  public selectedImageFileName: string = '';
+
+  // Upload indicator state (shown centered in conversation area)
+  public isUploadingAttachments: boolean = false;
+  public uploadingMessage: string = '';
+
+  // Attachment support based on agent modalities
+  // Computed from conversation manager (Sage) and any previous agent in conversation
+  public enableAttachments: boolean = false;
+  public maxAttachments: number = 10;
+  public maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB default
+  public acceptedFileTypes: string = 'image/*';
+  private conversationManagerAgent: AIAgentEntityExtended | null = null;
+
   constructor(
     public conversationData: ConversationDataService,
     private agentStateService: AgentStateService,
@@ -178,7 +240,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private cdr: ChangeDetectorRef,
     private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
-    private dialogService: DialogService
+    private dialogService: DialogService,
+    private attachmentService: ConversationAttachmentService
   ) {}
 
   async ngOnInit() {
@@ -191,6 +254,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       console.warn('⚠️ Mention autocomplete not initialized by workspace, initializing now...');
       await this.mentionAutocompleteService.initialize(this.currentUser);
     }
+
+    // Initialize attachment support based on agent modalities
+    await this.initializeAttachmentSupport();
 
     // Load saved artifact pane width
     this.loadArtifactPaneWidth();
@@ -208,6 +274,76 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     window.addEventListener('mouseup', this.onResizeEnd.bind(this));
     window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
     window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
+  }
+
+  /**
+   * Initializes attachment support by checking if the conversation manager agent (Sage)
+   * or any recent agent in the conversation supports non-text input modalities.
+   */
+  private async initializeAttachmentSupport(): Promise<void> {
+    try {
+      // Ensure AIEngineBase is configured with modality data
+      await AIEngineBase.Instance.Config(false);
+
+      // Get the conversation manager agent (Sage)
+      this.conversationManagerAgent = await this.conversationAgentService.getConversationManagerAgent();
+
+      if (this.conversationManagerAgent?.ID) {
+        // Get attachment limits from agent metadata (uses Agent → Model → System → Default cascade)
+        const limits = AIEngineBase.Instance.GetAgentAttachmentLimits(this.conversationManagerAgent.ID);
+        this.enableAttachments = limits.enabled;
+        this.maxAttachments = limits.maxAttachments;
+        this.maxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
+        this.acceptedFileTypes = limits.acceptedFileTypes;
+        LogStatusEx({message: `Attachment support initialized: ${this.enableAttachments} (max ${this.maxAttachments}, ${(this.maxAttachmentSizeBytes / 1024 / 1024).toFixed(0)}MB)`, verboseOnly: true});
+      } else {
+        // Default to false if we can't determine
+        this.enableAttachments = false;
+        LogStatusEx({message: 'Attachment support disabled: conversation manager agent not available', verboseOnly: true});
+      }
+    } catch (error) {
+      console.warn('Failed to initialize attachment support:', error);
+      this.enableAttachments = false;
+    }
+  }
+
+  /**
+   * Updates attachment support based on the current conversation context.
+   * Called when conversation changes to check if any agent in the conversation supports attachments.
+   */
+  private updateAttachmentSupport(): void {
+    // Determine which agent to use for limits - prefer last non-Sage agent, fall back to Sage
+    let agentIdForLimits = this.conversationManagerAgent?.ID || null;
+
+    // Check if any previous non-Sage agent in the conversation supports attachments
+    if (this.messages.length > 0) {
+      const lastNonSageAgent = this.messages
+        .slice()
+        .reverse()
+        .find(msg =>
+          msg.Role === 'AI' &&
+          msg.AgentID &&
+          msg.AgentID !== this.conversationManagerAgent?.ID
+        );
+
+      if (lastNonSageAgent?.AgentID) {
+        // Check if this agent supports attachments
+        if (AIEngineBase.Instance.AgentSupportsAttachments(lastNonSageAgent.AgentID)) {
+          agentIdForLimits = lastNonSageAgent.AgentID;
+        }
+      }
+    }
+
+    // Get limits from the determined agent
+    if (agentIdForLimits) {
+      const limits = AIEngineBase.Instance.GetAgentAttachmentLimits(agentIdForLimits);
+      this.enableAttachments = limits.enabled;
+      this.maxAttachments = limits.maxAttachments;
+      this.maxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
+      this.acceptedFileTypes = limits.acceptedFileTypes;
+    } else {
+      this.enableAttachments = false;
+    }
   }
 
   ngAfterViewChecked() {
@@ -269,6 +405,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       try {
         await this.loadMessages(conversationId);
         await this.restoreActiveTasks(conversationId);
+        // TODO: Replace polling with PubSub - see plans/repair-conversations-ui-performance.md
         this.agentStateService.startPolling(this.currentUser, conversationId);
       } catch (error) {
         console.error('Error loading conversation:', error);
@@ -382,6 +519,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
 
     this.messages = messages;
+
+    // Update attachment support based on agents in this conversation
+    this.updateAttachmentSupport();
 
     // Initialize status tracking to detect message completion
     this.previousMessageStatuses.clear();
@@ -534,11 +674,23 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         }
       }
 
+      // Load attachments for all messages in this conversation
+      // Uses the ConversationAttachmentService to batch-load all attachments
+      this.attachmentsByDetailId.clear();
+      const messageIds = conversationData.map(row => row.ID).filter((id): id is string => !!id);
+      if (messageIds.length > 0) {
+        const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(messageIds, this.currentUser);
+        for (const [detailId, attachments] of attachmentsMap) {
+          this.attachmentsByDetailId.set(detailId, attachments);
+        }
+      }
+
       // Create new Map references to trigger Angular change detection
       this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
       this.artifactsByDetailId = new Map(this.artifactsByDetailId);
       this.ratingsByDetailId = new Map(this.ratingsByDetailId);
       this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
+      this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
 
       // Clear combined cache since we loaded new artifacts
       this._combinedArtifactsMap = null;
@@ -548,7 +700,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       // Debug: Log summary
       const systemArtifactCount = this.systemArtifactsByDetailId.size;
-      LogStatusEx({message: `📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} user artifact mappings, ${systemArtifactCount} system artifact mappings (${this.artifactCount} unique user artifacts)`, verboseOnly: true});
+      const attachmentCount = this.attachmentsByDetailId.size;
+      LogStatusEx({message: `📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} user artifact mappings, ${systemArtifactCount} system artifact mappings (${this.artifactCount} unique user artifacts), ${attachmentCount} messages with attachments`, verboseOnly: true});
 
       // CRITICAL: Trigger message re-render now that agent runs and artifacts are loaded
       // This updates all message components with the newly loaded agent run data
@@ -573,7 +726,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Database tasks are loaded separately by TasksDropdownComponent
   }
 
-  onMessageSent(message: ConversationDetailEntity): void {
+  async onMessageSent(message: ConversationDetailEntity): Promise<void> {
     // Clear pending message if it was sent - notify parent via output
     if (this.pendingMessage) {
       this.pendingMessageConsumed.emit();
@@ -603,10 +756,32 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       if (this.conversationId) {
         this.invalidateConversationCache(this.conversationId);
       }
+
+      // Load attachments for the new message (if any were saved with it)
+      // This ensures attachments are displayed immediately after sending
+      await this.loadAttachmentsForMessage(message.ID);
     }
 
     // Scroll to bottom when new message is sent
     this.scrollToBottom = true;
+  }
+
+  /**
+   * Loads attachments for a single message and adds them to the attachmentsByDetailId map.
+   * Called after a new message is sent to ensure attachments are displayed immediately.
+   */
+  private async loadAttachmentsForMessage(messageId: string): Promise<void> {
+    try {
+      const attachments = await this.attachmentService.loadAttachmentsForMessage(messageId, this.currentUser);
+      if (attachments.length > 0) {
+        this.attachmentsByDetailId.set(messageId, attachments);
+        // Create new map reference to trigger Angular change detection
+        this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+        LogStatusEx({message: `Loaded ${attachments.length} attachment(s) for message ${messageId}`, verboseOnly: true});
+      }
+    } catch (error) {
+      console.warn('Failed to load attachments for message:', error);
+    }
   }
 
   /**
@@ -700,6 +875,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Start 1-second timer for smooth agent run UI updates
    * Updates the message list every second to keep elapsed times current
    * Also detects when messages complete and reloads agent runs
+   *
+   * NOTE: This polling approach causes excessive RunView calls (24+ queries per entity).
+   * TODO: Replace with PubSub completion events - see plans/repair-conversations-ui-performance.md
    */
   private startAgentRunUpdateTimer(): void {
     // Don't start if already running
@@ -1341,7 +1519,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     } else if (!this.conversation || this.isNewConversation) {
       // If no conversation or in new unsaved state, route through empty state handler
       // This will create the conversation and send the message
-      await this.onEmptyStateMessageSent(messageText);
+      await this.onEmptyStateMessageSent({ text: messageText, attachments: [] });
     } else {
       console.error('MessageInputComponent not available and not in a valid state to create conversation');
     }
@@ -1352,6 +1530,39 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // This should find the parent user message and re-trigger the agent invocation
     LogStatusEx({message: 'Retry requested for message', verboseOnly: true, additionalArgs: [message.ID]});
     // For now, just log it - full implementation would require refactoring agent invocation
+  }
+
+  /**
+   * Handle attachment click - opens the image viewer for images
+   */
+  onAttachmentClicked(attachment: MessageAttachment): void {
+    if (attachment.type === 'Image' && attachment.contentUrl) {
+      this.selectedImageUrl = attachment.contentUrl;
+      this.selectedImageAlt = attachment.fileName || 'Image attachment';
+      this.selectedImageFileName = attachment.fileName || 'image';
+      this.showImageViewer = true;
+    } else {
+      // For non-image attachments, could trigger download or other action
+      console.log('Non-image attachment clicked:', attachment);
+    }
+  }
+
+  /**
+   * Handle image viewer close
+   */
+  onImageViewerClosed(): void {
+    this.showImageViewer = false;
+    this.selectedImageUrl = '';
+    this.selectedImageAlt = '';
+    this.selectedImageFileName = '';
+  }
+
+  /**
+   * Handle upload state changes from message input component
+   */
+  onUploadStateChanged(event: {isUploading: boolean; message: string}): void {
+    this.isUploadingAttachments = event.isUploading;
+    this.uploadingMessage = event.message;
   }
 
   async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
@@ -1591,12 +1802,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Handle message sent from empty state component
    * Creates a new conversation and emits to parent to update selection
    */
-  async onEmptyStateMessageSent(messageText: string): Promise<void> {
-    if (!messageText || !messageText.trim()) {
+  async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
+    const { text, attachments } = event;
+    if (!text?.trim() && (!attachments || attachments.length === 0)) {
       return;
     }
 
-    LogStatusEx({message: '📨 Empty state message received', verboseOnly: true, additionalArgs: [messageText]});
+    LogStatusEx({message: '📨 Empty state message received', verboseOnly: true, additionalArgs: [text, `${attachments?.length || 0} attachments`]});
 
     try {
       this.isProcessing = true;
@@ -1609,22 +1821,26 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       );
 
       if (!newConversation) {
-        console.error('❌ Failed to create new conversation');
+        console.error('Failed to create new conversation');
         this.isProcessing = false;
         return;
       }
 
       LogStatusEx({message: '✅ Created new conversation', verboseOnly: true, additionalArgs: [newConversation.ID]});
 
-      // Emit to parent with the new conversation AND the pending message
-      // Parent will update its state and pass back the message via pendingMessage input
-      this.conversationCreated.emit(newConversation);
-
-      // Also emit the pending message to be sent (parent will pass it back via input)
-      this.pendingMessageRequested.emit(messageText.trim());
+      // Emit to parent with the new conversation AND the pending message/attachments in a single event
+      // This ensures atomic state update - workspace sets all state before Angular change detection
+      // creates the new message-input component
+      const pendingMessage = text?.trim() || '';
+      const pendingAttachments = attachments || [];
+      this.conversationCreated.emit({
+        conversation: newConversation,
+        pendingMessage,
+        pendingAttachments
+      });
 
     } catch (error) {
-      console.error('❌ Error creating conversation from empty state:', error);
+      console.error('Error creating conversation from empty state:', error);
     } finally {
       this.isProcessing = false;
     }

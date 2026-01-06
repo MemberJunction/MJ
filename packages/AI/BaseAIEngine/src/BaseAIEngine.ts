@@ -20,12 +20,55 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentNoteType
          AIAgentDataSourceEntity,
          AIAgentConfigurationEntity,
          AIAgentExampleEntity,
-         AICredentialBindingEntity} from "@memberjunction/core-entities";
+         AICredentialBindingEntity,
+         AIModalityEntity,
+         AIAgentModalityEntity,
+         AIModelModalityEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { AIPromptEntityExtended, AIPromptCategoryEntityExtended, AIModelEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
- 
+
+/**
+ * Represents the effective limits for a specific modality (e.g., Image, Audio).
+ * These limits are resolved using the precedence chain: Agent → Model → System → Defaults.
+ */
+export interface ModalityLimits {
+    /** Maximum size in bytes for this modality. Null means no limit. */
+    maxSizeBytes: number | null;
+    /** Maximum count of items per message for this modality. Null means no limit. */
+    maxCountPerMessage: number | null;
+    /** Maximum dimension (width/height for images). Only applicable for image modality. Null means no limit. */
+    maxDimension: number | null;
+    /** Supported formats as a comma-delimited string (e.g., "image/png, image/jpeg"). Null means all formats. */
+    supportedFormats: string | null;
+    /** Indicates whether this modality is allowed/supported. */
+    isAllowed: boolean;
+    /** The source of the limits ('Agent', 'Model', 'System', or 'Default') */
+    source: 'Agent' | 'Model' | 'System' | 'Default';
+}
+
+/**
+ * Aggregated attachment limits for an agent, combining all relevant input modalities.
+ */
+export interface AgentAttachmentLimits {
+    /** Whether attachments are enabled for this agent */
+    enabled: boolean;
+    /** Maximum total attachments per message across all modalities */
+    maxAttachments: number;
+    /** Maximum size in bytes for any single attachment */
+    maxAttachmentSizeBytes: number;
+    /** Accepted file types as a pattern (e.g., "image/*" or "image/*,audio/*") */
+    acceptedFileTypes: string;
+    /** Individual modality limits */
+    modalities: Map<string, ModalityLimits>;
+}
+
+// Default fallback values when no metadata is configured
+const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
+const DEFAULT_MAX_DIMENSION = 4096;
+
 // this class handles execution of AI Actions
 @RegisterForStartup()
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -59,6 +102,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPermissions: AIAgentPermissionEntity[] = [];
     private _agentConfigurations: AIAgentConfigurationEntity[] = [];
     private _credentialBindings: AICredentialBindingEntity[] = [];
+    private _modalities: AIModalityEntity[] = [];
+    private _agentModalities: AIAgentModalityEntity[] = [];
+    private _modelModalities: AIModelModalityEntity[] = [];
+
+    /**
+     * Cache for configuration inheritance chains.
+     * Key: configurationId, Value: array of AIConfigurationEntity from child to root
+     */
+    private _configurationChainCache: Map<string, AIConfigurationEntity[]> = new Map();
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
@@ -212,6 +264,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 PropertyName: '_credentialBindings',
                 EntityName: 'MJ: AI Credential Bindings',
                 CacheLocal: true
+            },
+            {
+                PropertyName: '_modalities',
+                EntityName: 'MJ: AI Modalities',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentModalities',
+                EntityName: 'MJ: AI Agent Modalities',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_modelModalities',
+                EntityName: 'MJ: AI Model Modalities',
+                CacheLocal: true
             }
         ];
 
@@ -222,6 +289,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // Clear the configuration chain cache when data is reloaded
+        this._configurationChainCache.clear();
+
         // handle associating prompts with prompt categories
         //here we're using the underlying data (i.e _promptCategories and _prompts)
         //rather than the getter methods because the engine's Loaded property is still false
@@ -266,15 +336,23 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
         try {
             await AIEngineBase.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
-            const models = AIEngineBase.Instance.Models.filter(m => m.AIModelType?.trim().toLowerCase() === modelType.trim().toLowerCase() && 
-                                                                (vendorName && vendorName.length > 0 ? m.Vendor?.trim().toLowerCase() === vendorName.trim().toLowerCase() : true)); // if vendorname is not provided, then we get all models of the specified type 
+            const models = AIEngineBase.Instance.Models.filter(m => {
+                // Guard against AIModelType/Vendor being non-string (defensive coding for data issues)
+                const mModelType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
+                const mVendor = typeof m.Vendor === 'string' ? m.Vendor.trim().toLowerCase() : '';
+                const targetType = modelType.trim().toLowerCase();
+                const targetVendor = vendorName && vendorName.length > 0 ? vendorName.trim().toLowerCase() : '';
+
+                return mModelType === targetType &&
+                       (targetVendor === '' || mVendor === targetVendor);
+            });
             // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
             models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
-            return models[0];    
+            return models[0];
         }
         catch (e) {
             LogError(e); // force logging to help debug scenario here
-            throw e; 
+            throw e;
         }
     }
 
@@ -592,10 +670,120 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns The parameter entity or null if not found
      */
     public GetConfigurationParam(configurationId: string, paramName: string): AIConfigurationParamEntity | null {
-        return this._configurationParams.find(p => 
-            p.ConfigurationID === configurationId && 
+        return this._configurationParams.find(p =>
+            p.ConfigurationID === configurationId &&
             p.Name.toLowerCase() === paramName.toLowerCase()
         ) || null;
+    }
+
+    /**
+     * Returns the inheritance chain for a configuration, starting with the specified
+     * configuration and walking up through parent configurations to the root.
+     *
+     * The chain is ordered from most-specific (the requested configuration) to
+     * least-specific (the root parent with no ParentID).
+     *
+     * Results are cached for performance. Cache is invalidated when configurations
+     * are reloaded via Config().
+     *
+     * @param configurationId - The ID of the configuration to get the chain for
+     * @returns Array of AIConfigurationEntity objects representing the inheritance chain,
+     *          or empty array if the configuration is not found
+     * @throws Error if a circular reference is detected in the configuration hierarchy
+     *
+     * @example
+     * // Single configuration with no parent
+     * const chain = AIEngine.Instance.GetConfigurationChain('config-a');
+     * // Returns: [ConfigA]
+     *
+     * @example
+     * // Child -> Parent -> Grandparent chain
+     * const chain = AIEngine.Instance.GetConfigurationChain('child-config');
+     * // Returns: [ChildConfig, ParentConfig, GrandparentConfig]
+     *
+     * @example
+     * // Usage in model selection - first config in chain with a match wins
+     * const chain = AIEngine.Instance.GetConfigurationChain(configId);
+     * for (const config of chain) {
+     *   const models = promptModels.filter(pm => pm.ConfigurationID === config.ID);
+     *   if (models.length > 0) return models;
+     * }
+     * // Fall back to null-config models if no match in chain
+     */
+    public GetConfigurationChain(configurationId: string): AIConfigurationEntity[] {
+        // Check cache first
+        if (this._configurationChainCache.has(configurationId)) {
+            return this._configurationChainCache.get(configurationId)!;
+        }
+
+        const chain: AIConfigurationEntity[] = [];
+        const visitedIds = new Set<string>();
+        let currentId: string | null = configurationId;
+
+        while (currentId) {
+            // Cycle detection
+            if (visitedIds.has(currentId)) {
+                const chainNames = chain.map(c => c.Name).join(' -> ');
+                throw new Error(
+                    `Circular reference detected in AI Configuration hierarchy. ` +
+                    `Configuration ID "${currentId}" appears multiple times in the chain: ` +
+                    `${chainNames} -> [CYCLE]`
+                );
+            }
+
+            const config = this._configurations.find(c => c.ID === currentId);
+            if (!config) break;
+
+            visitedIds.add(currentId);
+            chain.push(config);
+            currentId = config.ParentID; // Will be null for root configs
+        }
+
+        // Cache the result
+        this._configurationChainCache.set(configurationId, chain);
+
+        return chain;
+    }
+
+    /**
+     * Returns all configuration parameters for a configuration, including inherited
+     * parameters from parent configurations. Child parameters override parent parameters
+     * with the same name (case-insensitive match).
+     *
+     * The inheritance chain is walked from root to child, so child values take precedence
+     * over parent values for parameters with the same name.
+     *
+     * @param configurationId - The ID of the configuration to get parameters for
+     * @returns Array of AIConfigurationParamEntity objects, with child overrides applied.
+     *          Returns empty array if configuration is not found.
+     *
+     * @example
+     * // Parent has: temperature=0.7, maxTokens=4000
+     * // Child has: temperature=0.9
+     * // Result: temperature=0.9 (child), maxTokens=4000 (inherited from parent)
+     * const params = AIEngine.Instance.GetConfigurationParamsWithInheritance('child-config-id');
+     */
+    public GetConfigurationParamsWithInheritance(configurationId: string): AIConfigurationParamEntity[] {
+        const chain = this.GetConfigurationChain(configurationId);
+
+        if (chain.length === 0) {
+            return [];
+        }
+
+        // Use a map to track params by name (lowercase for case-insensitive matching)
+        // Walk chain in reverse (root first, child last) so child overwrites parent
+        const paramMap = new Map<string, AIConfigurationParamEntity>();
+
+        for (let i = chain.length - 1; i >= 0; i--) {
+            const configParams = this._configurationParams.filter(
+                p => p.ConfigurationID === chain[i].ID
+            );
+            for (const param of configParams) {
+                paramMap.set(param.Name.toLowerCase(), param);
+            }
+        }
+
+        return Array.from(paramMap.values());
     }
 
     public get AgentDataSources(): AIAgentDataSourceEntity[] {
@@ -608,6 +796,330 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentStepPaths(): AIAgentStepPathEntity[] {
         return this._agentStepPaths;
+    }
+
+    // ==========================================
+    // Modality Accessors and Helper Methods
+    // ==========================================
+
+    /**
+     * Gets all AI modalities (Text, Image, Audio, Video, File, Embedding, etc.)
+     */
+    public get Modalities(): AIModalityEntity[] {
+        return this._modalities;
+    }
+
+    /**
+     * Gets all agent-modality mappings
+     */
+    public get AgentModalities(): AIAgentModalityEntity[] {
+        return this._agentModalities;
+    }
+
+    /**
+     * Gets all model-modality mappings
+     */
+    public get ModelModalities(): AIModelModalityEntity[] {
+        return this._modelModalities;
+    }
+
+    /**
+     * Gets a modality by name (case-insensitive)
+     * @param name - The modality name (e.g., 'Text', 'Image', 'Audio', 'Video', 'File')
+     * @returns The modality entity or undefined if not found
+     */
+    public GetModalityByName(name: string): AIModalityEntity | undefined {
+        return this._modalities.find(m => m.Name.toLowerCase() === name.toLowerCase());
+    }
+
+    /**
+     * Gets all modalities supported by an agent for a given direction
+     * @param agentId - The agent ID
+     * @param direction - 'Input' or 'Output'
+     * @returns Array of modality entities the agent supports
+     */
+    public GetAgentModalities(agentId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+        const agentModalityRecords = this._agentModalities.filter(
+            am => am.AgentID === agentId && am.Direction === direction
+        );
+
+        return agentModalityRecords
+            .map(am => this._modalities.find(m => m.ID === am.ModalityID))
+            .filter((m): m is AIModalityEntity => m !== undefined);
+    }
+
+    /**
+     * Gets all modalities supported by a model for a given direction
+     * @param modelId - The model ID
+     * @param direction - 'Input' or 'Output'
+     * @returns Array of modality entities the model supports
+     */
+    public GetModelModalities(modelId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+        const modelModalityRecords = this._modelModalities.filter(
+            mm => mm.ModelID === modelId && mm.Direction === direction
+        );
+
+        return modelModalityRecords
+            .map(mm => this._modalities.find(m => m.ID === mm.ModalityID))
+            .filter((m): m is AIModalityEntity => m !== undefined);
+    }
+
+    /**
+     * Checks if an agent supports a specific modality for a given direction.
+     * If no agent modalities are configured, defaults to text-only.
+     * @param agentId - The agent ID
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio')
+     * @param direction - 'Input' or 'Output'
+     * @returns True if the agent supports this modality
+     */
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        // Check if agent has explicit modality records
+        const agentModalities = this.GetAgentModalities(agentId, direction);
+
+        if (agentModalities.length > 0) {
+            // Agent has explicit modality configuration - check it
+            return agentModalities.some(m => m.Name.toLowerCase() === modalityName.toLowerCase());
+        }
+
+        // No explicit agent modalities configured - default to text-only
+        return modalityName.toLowerCase() === 'text';
+    }
+
+    /**
+     * Checks if a model supports a specific modality for a given direction
+     * @param modelId - The model ID
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio')
+     * @param direction - 'Input' or 'Output'
+     * @returns True if the model supports this modality
+     */
+    public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        const modelModalities = this.GetModelModalities(modelId, direction);
+
+        if (modelModalities.length > 0) {
+            return modelModalities.some(m => m.Name.toLowerCase() === modalityName.toLowerCase());
+        }
+
+        // No explicit model modalities - assume text-only (default for LLMs)
+        return modalityName.toLowerCase() === 'text';
+    }
+
+    /**
+     * Checks if an agent supports any non-text input modalities (images, audio, video, files).
+     * This is used to determine if attachment upload should be enabled in the UI.
+     * @param agentId - The agent ID
+     * @returns True if the agent supports at least one non-text input modality
+     */
+    public AgentSupportsAttachments(agentId: string): boolean {
+        const nonTextModalities = ['image', 'audio', 'video', 'file'];
+        return nonTextModalities.some(modalityName =>
+            this.AgentSupportsModality(agentId, modalityName, 'Input')
+        );
+    }
+
+    /**
+     * Gets all input modality names supported by an agent (for UI display/filtering)
+     * @param agentId - The agent ID
+     * @returns Array of modality names the agent accepts as input
+     */
+    public GetAgentSupportedInputModalities(agentId: string): string[] {
+        // Check explicit agent modalities
+        const agentModalities = this.GetAgentModalities(agentId, 'Input');
+
+        if (agentModalities.length > 0) {
+            return agentModalities.map(m => m.Name);
+        }
+
+        // No explicit modalities configured - default to text-only
+        return ['Text'];
+    }
+
+    // ==========================================
+    // Modality Limit Resolution Methods
+    // ==========================================
+
+    /**
+     * Resolves the effective limits for a specific modality for an agent.
+     * Uses precedence chain: Agent → Model → System → Defaults.
+     *
+     * @param agentId - The ID of the agent
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio', 'Video', 'File')
+     * @param modelId - Optional model ID to check model-specific limits (falls back to system defaults if not provided)
+     * @returns The resolved modality limits with source information
+     */
+    public GetAgentModalityLimits(agentId: string, modalityName: string, modelId?: string): ModalityLimits {
+        // Get the base modality record
+        const modality = this.GetModalityByName(modalityName);
+        if (!modality) {
+            // Modality doesn't exist - return defaults indicating not allowed
+            return {
+                maxSizeBytes: null,
+                maxCountPerMessage: null,
+                maxDimension: null,
+                supportedFormats: null,
+                isAllowed: false,
+                source: 'Default'
+            };
+        }
+
+        // Check agent-specific modality settings first (highest priority)
+        const agentModality = this._agentModalities.find(
+            am => am.AgentID === agentId && am.ModalityID === modality.ID && am.Direction === 'Input'
+        );
+
+        if (agentModality) {
+            // Agent has explicit modality configuration
+            return {
+                maxSizeBytes: agentModality.MaxSizeBytes,
+                maxCountPerMessage: agentModality.MaxCountPerMessage,
+                maxDimension: null, // Agent modality doesn't have MaxDimension
+                supportedFormats: null, // Agent modality doesn't have SupportedFormats
+                isAllowed: agentModality.IsAllowed,
+                source: 'Agent'
+            };
+        }
+
+        // Check model-specific modality settings (second priority)
+        if (modelId) {
+            const modelLimits = this.GetModelModalityLimits(modelId, modalityName);
+            if (modelLimits.source === 'Model') {
+                return modelLimits;
+            }
+        }
+
+        // Fall back to system-wide modality defaults
+        return {
+            maxSizeBytes: modality.DefaultMaxSizeBytes,
+            maxCountPerMessage: modality.DefaultMaxCountPerMessage,
+            maxDimension: null, // System modality doesn't have MaxDimension
+            supportedFormats: null, // System modality doesn't have SupportedFormats by default
+            isAllowed: true, // If modality exists at system level, it's generally allowed
+            source: 'System'
+        };
+    }
+
+    /**
+     * Resolves the effective limits for a specific modality for a model.
+     * Uses precedence chain: Model → System → Defaults.
+     *
+     * @param modelId - The ID of the model
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio', 'Video', 'File')
+     * @returns The resolved modality limits with source information
+     */
+    public GetModelModalityLimits(modelId: string, modalityName: string): ModalityLimits {
+        // Get the base modality record
+        const modality = this.GetModalityByName(modalityName);
+        if (!modality) {
+            return {
+                maxSizeBytes: null,
+                maxCountPerMessage: null,
+                maxDimension: null,
+                supportedFormats: null,
+                isAllowed: false,
+                source: 'Default'
+            };
+        }
+
+        // Check model-specific modality settings
+        const modelModality = this._modelModalities.find(
+            mm => mm.ModelID === modelId && mm.ModalityID === modality.ID && mm.Direction === 'Input'
+        );
+
+        if (modelModality && modelModality.IsSupported) {
+            return {
+                maxSizeBytes: modelModality.MaxSizeBytes,
+                maxCountPerMessage: modelModality.MaxCountPerMessage,
+                maxDimension: modelModality.MaxDimension,
+                supportedFormats: modelModality.SupportedFormats,
+                isAllowed: modelModality.IsSupported,
+                source: 'Model'
+            };
+        }
+
+        // Fall back to system-wide modality defaults
+        return {
+            maxSizeBytes: modality.DefaultMaxSizeBytes,
+            maxCountPerMessage: modality.DefaultMaxCountPerMessage,
+            maxDimension: null,
+            supportedFormats: null,
+            isAllowed: true,
+            source: 'System'
+        };
+    }
+
+    /**
+     * Gets aggregated attachment limits for an agent, suitable for passing to UI components.
+     * Combines limits from all supported input modalities (Image, Audio, Video, File).
+     * Uses the most restrictive limits across all modalities for the aggregate values.
+     *
+     * @param agentId - The ID of the agent
+     * @param modelId - Optional model ID to include model-specific limits in the resolution
+     * @returns Aggregated attachment limits ready for UI component configuration
+     */
+    public GetAgentAttachmentLimits(agentId: string, modelId?: string): AgentAttachmentLimits {
+        const attachmentModalityNames = ['Image', 'Audio', 'Video', 'File'];
+        const modalityLimitsMap = new Map<string, ModalityLimits>();
+
+        let hasAnyAllowed = false;
+        let minMaxSize = DEFAULT_MAX_SIZE_BYTES;
+        let minMaxCount = DEFAULT_MAX_COUNT_PER_MESSAGE;
+        const acceptedTypes: string[] = [];
+
+        for (const modalityName of attachmentModalityNames) {
+            const limits = this.GetAgentModalityLimits(agentId, modalityName, modelId);
+            modalityLimitsMap.set(modalityName, limits);
+
+            if (limits.isAllowed) {
+                hasAnyAllowed = true;
+
+                // Track the most restrictive size limit
+                if (limits.maxSizeBytes != null && limits.maxSizeBytes < minMaxSize) {
+                    minMaxSize = limits.maxSizeBytes;
+                }
+
+                // Track the most restrictive count limit
+                if (limits.maxCountPerMessage != null && limits.maxCountPerMessage < minMaxCount) {
+                    minMaxCount = limits.maxCountPerMessage;
+                }
+
+                // Build accepted file types based on allowed modalities
+                const mimePattern = this.getModalityMimePattern(modalityName, limits.supportedFormats);
+                if (mimePattern) {
+                    acceptedTypes.push(mimePattern);
+                }
+            }
+        }
+
+        return {
+            enabled: hasAnyAllowed,
+            maxAttachments: minMaxCount,
+            maxAttachmentSizeBytes: minMaxSize,
+            acceptedFileTypes: acceptedTypes.length > 0 ? acceptedTypes.join(',') : 'image/*',
+            modalities: modalityLimitsMap
+        };
+    }
+
+    /**
+     * Helper to get MIME type pattern for a modality
+     */
+    private getModalityMimePattern(modalityName: string, supportedFormats: string | null): string | null {
+        // If specific formats are provided, use them
+        if (supportedFormats) {
+            return supportedFormats;
+        }
+
+        // Default MIME patterns by modality
+        switch (modalityName.toLowerCase()) {
+            case 'image':
+                return 'image/*';
+            case 'audio':
+                return 'audio/*';
+            case 'video':
+                return 'video/*';
+            case 'file':
+                return '*/*'; // Accept all file types
+            default:
+                return null;
+        }
     }
 
     /**

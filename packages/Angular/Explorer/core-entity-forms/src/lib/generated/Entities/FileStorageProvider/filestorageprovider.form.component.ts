@@ -19,7 +19,9 @@ export class FileStorageProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'driverConfiguration', sectionName: 'Driver Configuration', isExpanded: true },
             { sectionKey: 'selectionAvailability', sectionName: 'Selection & Availability', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'files', sectionName: 'Files', isExpanded: false }
+            { sectionKey: 'files', sectionName: 'Files', isExpanded: false },
+            { sectionKey: 'mJAIConfigurations', sectionName: 'MJ: AI Configurations', isExpanded: false },
+            { sectionKey: 'aIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }
 }

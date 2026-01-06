@@ -1,8 +1,8 @@
 import { Anthropic } from "@anthropic-ai/sdk";
 import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
-    GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
-    SummarizeResult, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
+    GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
+    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
@@ -42,43 +42,126 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * Format a text message with optional caching
+     * Format message content for Anthropic API with optional caching.
+     * Supports both text and image content blocks.
      * @param content The message content (string or content blocks)
      * @param enableCaching Whether to enable caching
-     * @returns Formatted content object
+     * @returns Array of formatted content blocks for Anthropic API
      */
-    private formatContentWithCaching(content: any, enableCaching: boolean = true): any {
-        let text: string;
-        
-        // Convert content to string if it's an array of content blocks
+    private formatContentWithCaching(content: ChatMessageContent, enableCaching: boolean = true): any[] {
+        const formattedBlocks: any[] = [];
+
         if (typeof content === 'string') {
-            text = content;
+            // Simple string content - wrap in text block
+            const textBlock: any = {
+                type: "text",
+                text: content
+            };
+            if (enableCaching) {
+                textBlock.cache_control = { type: "ephemeral" };
+            }
+            formattedBlocks.push(textBlock);
         } else if (Array.isArray(content)) {
-            // Process array of content blocks - for now only text is supported
-            text = content
-                .filter(block => block.type === 'text')
-                .map(block => block.content)
-                .join('\n\n');
+            // Process array of content blocks
+            for (let i = 0; i < content.length; i++) {
+                const block = content[i];
+                const isLastBlock = i === content.length - 1;
+
+                if (block.type === 'text') {
+                    const textBlock: any = {
+                        type: "text",
+                        text: block.content
+                    };
+                    // Apply caching only to the last block
+                    if (enableCaching && isLastBlock) {
+                        textBlock.cache_control = { type: "ephemeral" };
+                    }
+                    formattedBlocks.push(textBlock);
+                } else if (block.type === 'image_url') {
+                    // Convert to Anthropic's image format
+                    const imageBlock = this.formatImageBlock(block);
+                    if (imageBlock) {
+                        formattedBlocks.push(imageBlock);
+                    }
+                }
+                // Other types (video_url, audio_url, file_url) are not yet supported by Anthropic
+            }
         } else {
             // Fallback for any other type
-            text = String(content);
+            const textBlock: any = {
+                type: "text",
+                text: String(content)
+            };
+            if (enableCaching) {
+                textBlock.cache_control = { type: "ephemeral" };
+            }
+            formattedBlocks.push(textBlock);
         }
-        
-        const formattedContent: any = {
-            type: "text",
-            text: text
-        };
-        
-        // Add cache_control if caching is enabled (default to true)
-        if (enableCaching) {
-            formattedContent.cache_control = { type: "ephemeral" };
-        }
-        
-        return formattedContent;
+
+        return formattedBlocks;
     }
 
     /**
-     * Format messages for Anthropic API with caching support
+     * Format an image content block for Anthropic's API.
+     * Anthropic expects images in the format:
+     * { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "..." } }
+     * @param block The image content block
+     * @returns Formatted image block for Anthropic, or null if invalid
+     */
+    private formatImageBlock(block: ChatMessageContentBlock): any | null {
+        const content = block.content;
+
+        // Check if it's a data URL (data:image/png;base64,...)
+        const parsed = parseBase64DataUrl(content);
+        if (parsed) {
+            return {
+                type: "image",
+                source: {
+                    type: "base64",
+                    media_type: parsed.mediaType,
+                    data: parsed.data
+                }
+            };
+        }
+
+        // Check if it's raw base64 with mimeType provided
+        if (block.mimeType && !content.startsWith('http')) {
+            return {
+                type: "image",
+                source: {
+                    type: "base64",
+                    media_type: block.mimeType,
+                    data: content
+                }
+            };
+        }
+
+        // Check if it's a URL
+        if (content.startsWith('http://') || content.startsWith('https://')) {
+            return {
+                type: "image",
+                source: {
+                    type: "url",
+                    url: content
+                }
+            };
+        }
+
+        // If we can't determine the format, try to use it as base64 with a default type
+        console.warn('Image content block has unknown format, attempting to use as base64 JPEG');
+        return {
+            type: "image",
+            source: {
+                type: "base64",
+                media_type: "image/jpeg",
+                data: content
+            }
+        };
+    }
+
+    /**
+     * Format messages for Anthropic API with caching support.
+     * Handles both text and multi-modal content (images).
      * @param messages Messages to format
      * @param enableCaching Whether to enable caching
      * @returns Formatted messages
@@ -86,7 +169,7 @@ export class AnthropicLLM extends BaseLLM {
     protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
         const result: any[] = [];
         let lastRole = "assistant";
-        
+
         for (let i = 0; i < messages.length; i++) {
             // If we have two messages with the same role back-to-back, insert an assistant message
             if (messages[i].role === lastRole) {
@@ -95,48 +178,53 @@ export class AnthropicLLM extends BaseLLM {
                     content: [{ type: "text", text: "OK" }]
                 });
             }
-            
-            const formattedMsg: any = {
-                content: [],
-                role: this.ConvertMJToAnthropicRole(messages[i].role)
-            };
-            
+
             // Apply caching only to the last message
             const isLastMessage = i === (messages.length - 1);
-            
-            // Format the content with or without caching based on message position
-            // Add caching to the last message
-            formattedMsg.content.push(
-                this.formatContentWithCaching(messages[i].content, enableCaching && isLastMessage)
-            );
-            
-            result.push(formattedMsg);
 
+            // Format the content - now returns an array of content blocks
+            const contentBlocks = this.formatContentWithCaching(
+                messages[i].content,
+                enableCaching && isLastMessage
+            );
+
+            const formattedMsg: any = {
+                role: this.ConvertMJToAnthropicRole(messages[i].role),
+                content: contentBlocks
+            };
+
+            result.push(formattedMsg);
             lastRole = messages[i].role;
         }
-        
+
         return result;
     }
 
 
     /**
-     * Format messages for Anthropic API with caching support
+     * Format system messages for Anthropic API with caching support.
+     * System messages support multi-modal content (images).
      * @param messages Messages to format
      * @param enableCaching Whether to enable caching
-     * @returns Formatted messages
+     * @returns Flattened array of formatted content blocks
      */
     protected formatSystemMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
         const result: any[] = [];
-        
+
         for (let i = 0; i < messages.length; i++) {
             // Apply caching only to the last message
             const isLastMessage = i === (messages.length - 1);
-            
-            // Format the content with or without caching based on message position
-            // Add caching to the last message
-            result.push(this.formatContentWithCaching(messages[i].content, enableCaching && isLastMessage));
+
+            // Format the content - returns an array of content blocks
+            const contentBlocks = this.formatContentWithCaching(
+                messages[i].content,
+                enableCaching && isLastMessage
+            );
+
+            // Spread the content blocks into the result array
+            result.push(...contentBlocks);
         }
-        
+
         return result;
     }
 
