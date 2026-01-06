@@ -140,11 +140,12 @@ export class ConversationMessageRatingComponent implements OnInit {
     }
 
     async ngOnInit() {
-        if (this.ratingsData) {
+        if (this.ratingsData !== undefined) {
             // Use pre-loaded ratings (no database query needed)
+            // Empty array means "no ratings" - don't query
             this.ProcessRatings(this.ratingsData);
         } else {
-            // Fallback to loading ratings if not provided
+            // Fallback to loading ratings if not provided (undefined means not pre-loaded)
             await this.LoadRatings();
         }
     }
