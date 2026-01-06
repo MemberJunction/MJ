@@ -1,5 +1,5 @@
 ---
-"@memberjunction/ng-auth-services": major
+"@memberjunction/ng-auth-services": minor
 "@memberjunction/ng-explorer-core": patch
 ---
 
