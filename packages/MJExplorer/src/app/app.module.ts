@@ -17,6 +17,7 @@ LoadCoreGeneratedForms(); // prevent tree shaking - dynamic loaded components do
 LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
 
 import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjunction/ng-auth-services';
+import { WorkspaceInitializerModule } from '@memberjunction/ng-workspace-initializer';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -106,6 +107,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     NotificationModule,
     ReactiveFormsModule,
     AuthServicesModule.forRoot(environment),
+    WorkspaceInitializerModule,
     ShellModule,
     // Import standalone components
     SystemValidationBannerComponent,

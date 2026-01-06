@@ -71,7 +71,7 @@
     "fast-glob": "^3.3.2",
     "figlet": "^1.7.0",
     "fs-extra": "^11.2.0",
-    "node-flyway": "0.0.11",
+    "node-flyway": "0.0.13",
     "ora-classic": "^5.4.2",
     "recast": "^0.23.9",
     "simple-git": "^3.27.0",
