@@ -1,7 +1,6 @@
 ---
 "@memberjunction/ng-auth-services": major
 "@memberjunction/ng-explorer-core": patch
-"mj_explorer": patch
 ---
 
 Refactor authentication system to v3.0 with proper encapsulation and eliminate leaky abstractions. This is a breaking change as the authentication provider API has been completely redesigned.
