@@ -98,6 +98,45 @@
   opacity: 0.7;
 }
 
+/* Conversation Link Pill */
+.conversation-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, rgba(156, 39, 176, 0.08), rgba(171, 71, 188, 0.08));
+  border: 1px solid rgba(156, 39, 176, 0.2);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #9c27b0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.conversation-pill:hover {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 0.15), rgba(171, 71, 188, 0.15));
+  border-color: rgba(156, 39, 176, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(156, 39, 176, 0.15);
+}
+
+.conversation-pill i:first-child {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.conversation-pill .pill-action {
+  font-size: 9px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.conversation-pill:hover .pill-action {
+  opacity: 1;
+}
+
 .header-right {
   display: flex;
   align-items: center;

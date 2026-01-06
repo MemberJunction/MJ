@@ -465,6 +465,11 @@
                 <span class="run-cost" *ngIf="run.CostUSD">
                   <i class="fas fa-dollar-sign"></i> {{ run.CostUSD.toFixed(6) }}
                 </span>
+                <mj-entity-link-pill
+                  *ngIf="run.TargetLogEntityID && run.TargetLogID"
+                  [entityName]="run.TargetLogEntity"
+                  [recordId]="run.TargetLogID">
+                </mj-entity-link-pill>
               </div>
               <div class="run-tags" *ngIf="getRunTags(run).length > 0">
                 <span class="tag-chip" *ngFor="let tag of getRunTags(run)">{{ tag }}</span>

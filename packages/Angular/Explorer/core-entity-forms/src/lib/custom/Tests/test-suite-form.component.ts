@@ -569,8 +569,10 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
               if (feedback.Rating != null) {
                 cell.humanRating = feedback.Rating;
               }
-              if (feedback.Comments) {
-                cell.humanComments = feedback.Comments;
+              // Use CorrectionSummary if available (from inline feedback), fallback to Comments
+              const commentText = feedback.CorrectionSummary || feedback.Comments;
+              if (commentText) {
+                cell.humanComments = commentText;
               }
             }
           });

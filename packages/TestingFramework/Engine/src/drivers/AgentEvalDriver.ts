@@ -3,7 +3,7 @@
  * @module @memberjunction/testing-engine
  */
 
-import { UserInfo, Metadata } from '@memberjunction/core';
+import { UserInfo, Metadata, EntityInfo } from '@memberjunction/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { AIAgentEntity, AIAgentRunEntity, TestEntity, TestRunEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
@@ -209,11 +209,39 @@ export interface AgentEvalExpectedOutcomes {
 @RegisterClass(BaseTestDriver, 'AgentEvalDriver')
 export class AgentEvalDriver extends BaseTestDriver {
     /**
+     * Entity name for AI Agent Runs - used for proper FK linkage in TestRun
+     */
+    private static readonly AI_AGENT_RUNS_ENTITY_NAME = 'MJ: AI Agent Runs';
+
+    /**
+     * Cached Entity ID for AI Agent Runs
+     */
+    private _aiAgentRunsEntityId: string | null = null;
+
+    /**
      * Returns true as this driver supports cancellation via AbortSignal.
      * When timeout occurs, the AbortController signals the agent to stop execution.
      */
     public override supportsCancellation(): boolean {
         return true;
+    }
+
+    /**
+     * Get the Entity ID for "MJ: AI Agent Runs" for proper FK linkage.
+     * Caches the result after first lookup.
+     * @private
+     */
+    private getAIAgentRunsEntityId(): string | null {
+        if (this._aiAgentRunsEntityId === null) {
+            const entityInfo = this._metadata.Entities.find(
+                e => e.Name === AgentEvalDriver.AI_AGENT_RUNS_ENTITY_NAME
+            );
+            this._aiAgentRunsEntityId = entityInfo?.ID || null;
+            if (!this._aiAgentRunsEntityId) {
+                this.logError(`Could not find Entity ID for ${AgentEvalDriver.AI_AGENT_RUNS_ENTITY_NAME}`);
+            }
+        }
+        return this._aiAgentRunsEntityId;
     }
 
     /**
@@ -266,6 +294,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                 // Build timeout result with partial data if available
                 const result: DriverExecutionResult = {
                     targetType: 'AI Agent',
+                    targetLogEntityId: this.getAIAgentRunsEntityId() || undefined,
                     targetLogId: agentRuns.length > 0 ? agentRuns[agentRuns.length - 1].ID : '',
                     status: 'Timeout',
                     score: 0,
@@ -284,16 +313,11 @@ export class AgentEvalDriver extends BaseTestDriver {
                     allAgentRunIds: agentRuns.length > 0 ? agentRuns.map(ar => ar.ID) : undefined
                 };
 
-                // Still try to link any completed agent runs
-                if (agentRuns.length > 0) {
-                    await this.linkTestRunToAgentRuns(context.testRun, agentRuns);
-                }
-
+                // Note: Linking already happened via onAgentRunCreated callback for completed turns
                 return result;
             }
 
-            // Create bidirectional links for all agent runs
-            await this.linkTestRunToAgentRuns(context.testRun, agentRuns);
+            // Note: Bidirectional linking already happened via onAgentRunCreated callback
 
             // Get final agent run and output
             const finalAgentRun = agentRuns[agentRuns.length - 1];
@@ -327,6 +351,7 @@ export class AgentEvalDriver extends BaseTestDriver {
             // Build result
             const result: DriverExecutionResult = {
                 targetType: 'AI Agent',
+                targetLogEntityId: this.getAIAgentRunsEntityId() || undefined,
                 targetLogId: finalAgentRun.ID,
                 status,
                 score,
@@ -641,7 +666,10 @@ export class AgentEvalDriver extends BaseTestDriver {
             params.totalTurns
         );
 
-        // Build execution parameters with cancellation token
+        // Get Entity ID for AI Agent Runs for proper FK linkage
+        const aiAgentRunsEntityId = this.getAIAgentRunsEntityId();
+
+        // Build execution parameters with cancellation token and onAgentRunCreated callback
         const runParams = {
             agent: params.agent as any,
             conversationId: params.conversationId,  // Continue same conversation for multi-turn
@@ -651,12 +679,32 @@ export class AgentEvalDriver extends BaseTestDriver {
             override: params.turn.executionParams?.modelOverride ? {
                 modelId: params.turn.executionParams.modelOverride
             } : undefined,
-            cancellationToken: params.cancellationToken  // Pass cancellation token to agent
+            cancellationToken: params.cancellationToken,  // Pass cancellation token to agent
+            // Callback to immediately link TestRun <-> AgentRun when AgentRun is created
+            onAgentRunCreated: async (agentRunId: string) => {
+                // For the first turn (or single-turn tests), link TestRun.TargetLogID to this AgentRun
+                // Subsequent turns still get TestRunID set on their AgentRun (via testRunId param below)
+                // but the TestRun only points to the first/primary AgentRun
+                if (params.turnNumber === 1) {
+                    params.testRun.TargetLogID = agentRunId;
+                    if (aiAgentRunsEntityId) {
+                        params.testRun.TargetLogEntityID = aiAgentRunsEntityId;
+                    }
+                    const saved = await params.testRun.Save();
+                    if (saved) {
+                        this.log(`✓ Linked TestRun ${params.testRun.ID} -> AgentRun ${agentRunId}`, true);
+                    } else {
+                        this.logError(`Failed to link TestRun to AgentRun: ${params.testRun.LatestResult?.Message}`);
+                    }
+                }
+                // Note: AgentRun.TestRunID is set by BaseAgent via the testRunId param passed to RunAgentInConversation
+            }
         };
 
         const startTime = Date.now();
 
         // Execute agent - cancellation is handled via AbortSignal, not Promise.race
+        // Note: BaseAgent already sets AgentRun.TestRunID from the testRunId param and invokes onAgentRunCreated callback
         const runResult = await runner.RunAgentInConversation(runParams, {
             userMessage: params.turn.userMessage,
             createArtifacts: true,
@@ -711,37 +759,6 @@ export class AgentEvalDriver extends BaseTestDriver {
         return finalPayloadObject || {};
     }
 
-    /**
-     * Create bidirectional links between TestRun and multiple AgentRuns.
-     * @private
-     */
-    private async linkTestRunToAgentRuns(
-        testRun: TestRunEntity,
-        agentRuns: AIAgentRunEntity[]
-    ): Promise<void> {
-        // Link each AgentRun to TestRun with TurnNumber
-        for (let i = 0; i < agentRuns.length; i++) {
-            const agentRun = agentRuns[i];
-            const turnNumber = i + 1;
-
-            // Update AgentRun with hard FK to TestRun
-            agentRun.TestRunID = testRun.ID;
-
-            // Set turn number if field exists (check dynamically)
-            if ('TurnNumber' in agentRun) {
-                (agentRun as any).TurnNumber = turnNumber;
-            }
-
-            const saved = await agentRun.Save();
-
-            if (!saved) {
-                this.logError(
-                    `Failed to link AgentRun (Turn ${turnNumber}) to TestRun`,
-                    new Error(agentRun.LatestResult?.Message)
-                );
-            }
-        }
-    }
 
     /**
      * Extract agent output from agent run.

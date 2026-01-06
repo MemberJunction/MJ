@@ -33,6 +33,21 @@ export interface RunTestSuiteParams {
     environment?: string;
     parallel?: boolean;
     tags?: string[];
+    /**
+     * Run only specific tests by their IDs.
+     * If provided, only tests with matching IDs will be executed.
+     */
+    selectedTestIds?: string[];
+    /**
+     * Start execution from this sequence number (inclusive).
+     * Tests with sequence numbers less than this value will be skipped.
+     */
+    sequenceStart?: number;
+    /**
+     * Stop execution at this sequence number (inclusive).
+     * Tests with sequence numbers greater than this value will be skipped.
+     */
+    sequenceEnd?: number;
     onProgress?: (progress: TestExecutionProgress) => void;
 }
 
@@ -246,14 +261,20 @@ export class GraphQLTestingClient {
                     $verbose: Boolean,
                     $environment: String,
                     $parallel: Boolean,
-                    $tags: String
+                    $tags: String,
+                    $selectedTestIds: String,
+                    $sequenceStart: Int,
+                    $sequenceEnd: Int
                 ) {
                     RunTestSuite(
                         suiteId: $suiteId,
                         verbose: $verbose,
                         environment: $environment,
                         parallel: $parallel,
-                        tags: $tags
+                        tags: $tags,
+                        selectedTestIds: $selectedTestIds,
+                        sequenceStart: $sequenceStart,
+                        sequenceEnd: $sequenceEnd
                     ) {
                         success
                         errorMessage
@@ -265,13 +286,20 @@ export class GraphQLTestingClient {
 
             // Serialize tags array to JSON string for GraphQL
             const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
+            // Serialize selectedTestIds array to JSON string for GraphQL
+            const selectedTestIdsJson = params.selectedTestIds && params.selectedTestIds.length > 0
+                ? JSON.stringify(params.selectedTestIds)
+                : undefined;
 
             const variables = {
                 suiteId: params.suiteId,
                 verbose: params.verbose,
                 environment: params.environment,
                 parallel: params.parallel,
-                tags: tagsJson
+                tags: tagsJson,
+                selectedTestIds: selectedTestIdsJson,
+                sequenceStart: params.sequenceStart,
+                sequenceEnd: params.sequenceEnd
             };
 
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);

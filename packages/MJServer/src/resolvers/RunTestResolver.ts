@@ -213,6 +213,9 @@ export class RunTestResolver extends ResolverBase {
         @Arg('environment', { nullable: true }) environment?: string,
         @Arg('parallel', { nullable: true }) parallel: boolean = false,
         @Arg('tags', { nullable: true }) tags?: string,
+        @Arg('selectedTestIds', { nullable: true }) selectedTestIds?: string,
+        @Arg('sequenceStart', () => Int, { nullable: true }) sequenceStart?: number,
+        @Arg('sequenceEnd', () => Int, { nullable: true }) sequenceEnd?: number,
         @PubSub() pubSub?: PubSubEngine,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<TestSuiteRunResult> {
@@ -234,11 +237,24 @@ export class RunTestResolver extends ResolverBase {
                 this.createProgressCallback(pubSub, userPayload, suiteId) :
                 undefined;
 
+            // Parse selectedTestIds from JSON string if provided
+            let parsedSelectedTestIds: string[] | undefined;
+            if (selectedTestIds) {
+                try {
+                    parsedSelectedTestIds = JSON.parse(selectedTestIds);
+                } catch (e) {
+                    LogError(`[RunTestResolver] Failed to parse selectedTestIds: ${selectedTestIds}`);
+                }
+            }
+
             const options = {
                 verbose,
                 environment,
                 parallel,
                 tags,
+                selectedTestIds: parsedSelectedTestIds,
+                sequenceStart,
+                sequenceEnd,
                 progressCallback
             };
 

@@ -4,8 +4,15 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { TestEntity, TestSuiteEntity } from '@memberjunction/core-entities';
+import { TestEntity, TestSuiteEntity, TestSuiteTestEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
+
+interface SuiteTestItem {
+  testId: string;
+  testName: string;
+  sequence: number;
+  selected: boolean;
+}
 
 interface ProgressUpdate {
   step: string;
@@ -23,6 +30,7 @@ interface ProgressUpdate {
         @if (!isRunning && !hasCompleted) {
           <!-- Pre-selected Mode - Compact Header -->
           @if (isPreselected) {
+            <div class="dialog-scroll-content">
             <div class="preselected-header">
               <div class="preselected-info">
                 <div class="preselected-icon">
@@ -78,6 +86,114 @@ interface ProgressUpdate {
                   </button>
                 </div>
               </div>
+            </div>
+
+            <!-- Advanced Options for Preselected Suite Mode -->
+            @if (runMode === 'suite' && suiteTests.length > 0) {
+              <div class="advanced-options-section preselected-advanced">
+                <button class="advanced-toggle" (click)="toggleAdvancedOptions()">
+                  <i class="fa-solid" [class.fa-chevron-right]="!showAdvancedOptions" [class.fa-chevron-down]="showAdvancedOptions"></i>
+                  <span>Advanced Options</span>
+                  <span class="test-count-badge">{{ suiteTests.length }} tests</span>
+                </button>
+
+                @if (showAdvancedOptions) {
+                  <div class="advanced-content">
+                    <!-- Selection Mode Tabs -->
+                    <div class="selection-mode-tabs">
+                      <button
+                        class="selection-tab"
+                        [class.active]="!useSequenceRange"
+                        (click)="useSequenceRange = false"
+                      >
+                        <i class="fa-solid fa-check-square"></i>
+                        Select Tests
+                      </button>
+                      <button
+                        class="selection-tab"
+                        [class.active]="useSequenceRange"
+                        (click)="useSequenceRange = true"
+                      >
+                        <i class="fa-solid fa-arrows-left-right"></i>
+                        Sequence Range
+                      </button>
+                    </div>
+
+                    <!-- Select Individual Tests Mode -->
+                    @if (!useSequenceRange) {
+                      <div class="test-selection-panel">
+                        <div class="selection-header">
+                          <label class="checkbox-label select-all">
+                            <input
+                              type="checkbox"
+                              [checked]="allTestsSelected"
+                              [indeterminate]="someTestsSelected"
+                              (change)="toggleAllTests($any($event.target).checked)"
+                            />
+                            <span>Select All</span>
+                          </label>
+                          <span class="selection-count">{{ selectedTestCount }} of {{ suiteTests.length }} selected</span>
+                        </div>
+                        <div class="test-list">
+                          @for (test of suiteTests; track test.testId) {
+                            <label class="test-item" [class.selected]="test.selected">
+                              <input
+                                type="checkbox"
+                                [checked]="test.selected"
+                                (change)="toggleTest(test.testId)"
+                              />
+                              <span class="test-sequence">#{{ test.sequence }}</span>
+                              <span class="test-name">{{ test.testName }}</span>
+                            </label>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                    <!-- Sequence Range Mode -->
+                    @if (useSequenceRange) {
+                      <div class="sequence-range-panel">
+                        <div class="range-inputs">
+                          <div class="range-field">
+                            <label>Start at sequence</label>
+                            <input
+                              type="number"
+                              [(ngModel)]="sequenceStart"
+                              [min]="1"
+                              [max]="suiteTests.length"
+                              class="sequence-input"
+                            />
+                          </div>
+                          <div class="range-separator">
+                            <i class="fa-solid fa-arrow-right"></i>
+                          </div>
+                          <div class="range-field">
+                            <label>End at sequence</label>
+                            <input
+                              type="number"
+                              [(ngModel)]="sequenceEnd"
+                              [min]="1"
+                              [max]="suiteTests.length"
+                              class="sequence-input"
+                            />
+                          </div>
+                        </div>
+                        @if (sequenceRangeValid) {
+                          <div class="range-summary">
+                            Will run {{ testsInSequenceRange }} test(s) from sequence {{ sequenceStart }} to {{ sequenceEnd }}
+                          </div>
+                        } @else {
+                          <div class="range-error">
+                            <i class="fa-solid fa-exclamation-triangle"></i>
+                            Invalid range: start must be less than or equal to end
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
             </div>
           }
 
@@ -197,6 +313,113 @@ interface ProgressUpdate {
                   }
                 </div>
               </div>
+
+              <!-- Advanced Options - Progressive Disclosure -->
+              @if (selectedSuiteId && suiteTests.length > 0) {
+                <div class="advanced-options-section">
+                  <button class="advanced-toggle" (click)="toggleAdvancedOptions()">
+                    <i class="fa-solid" [class.fa-chevron-right]="!showAdvancedOptions" [class.fa-chevron-down]="showAdvancedOptions"></i>
+                    <span>Advanced Options</span>
+                    <span class="test-count-badge">{{ suiteTests.length }} tests</span>
+                  </button>
+
+                  @if (showAdvancedOptions) {
+                    <div class="advanced-content">
+                      <!-- Selection Mode Tabs -->
+                      <div class="selection-mode-tabs">
+                        <button
+                          class="selection-tab"
+                          [class.active]="!useSequenceRange"
+                          (click)="useSequenceRange = false"
+                        >
+                          <i class="fa-solid fa-check-square"></i>
+                          Select Tests
+                        </button>
+                        <button
+                          class="selection-tab"
+                          [class.active]="useSequenceRange"
+                          (click)="useSequenceRange = true"
+                        >
+                          <i class="fa-solid fa-arrows-left-right"></i>
+                          Sequence Range
+                        </button>
+                      </div>
+
+                      <!-- Select Individual Tests Mode -->
+                      @if (!useSequenceRange) {
+                        <div class="test-selection-panel">
+                          <div class="selection-header">
+                            <label class="checkbox-label select-all">
+                              <input
+                                type="checkbox"
+                                [checked]="allTestsSelected"
+                                [indeterminate]="someTestsSelected"
+                                (change)="toggleAllTests($any($event.target).checked)"
+                              />
+                              <span>Select All</span>
+                            </label>
+                            <span class="selection-count">{{ selectedTestCount }} of {{ suiteTests.length }} selected</span>
+                          </div>
+                          <div class="test-list">
+                            @for (test of suiteTests; track test.testId) {
+                              <label class="test-item" [class.selected]="test.selected">
+                                <input
+                                  type="checkbox"
+                                  [checked]="test.selected"
+                                  (change)="toggleTest(test.testId)"
+                                />
+                                <span class="test-sequence">#{{ test.sequence }}</span>
+                                <span class="test-name">{{ test.testName }}</span>
+                              </label>
+                            }
+                          </div>
+                        </div>
+                      }
+
+                      <!-- Sequence Range Mode -->
+                      @if (useSequenceRange) {
+                        <div class="sequence-range-panel">
+                          <div class="range-inputs">
+                            <div class="range-field">
+                              <label>Start at sequence</label>
+                              <input
+                                type="number"
+                                [(ngModel)]="sequenceStart"
+                                [min]="1"
+                                [max]="suiteTests.length"
+                                class="sequence-input"
+                              />
+                            </div>
+                            <div class="range-separator">
+                              <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                            <div class="range-field">
+                              <label>End at sequence</label>
+                              <input
+                                type="number"
+                                [(ngModel)]="sequenceEnd"
+                                [min]="1"
+                                [max]="suiteTests.length"
+                                class="sequence-input"
+                              />
+                            </div>
+                          </div>
+                          @if (sequenceRangeValid) {
+                            <div class="range-summary">
+                              Will run {{ testsInSequenceRange }} test(s) from sequence {{ sequenceStart }} to {{ sequenceEnd }}
+                            </div>
+                          } @else {
+                            <div class="range-error">
+                              <i class="fa-solid fa-exclamation-triangle"></i>
+                              Invalid range: start must be less than or equal to end
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
             }
 
               <div class="options-panel">
@@ -376,6 +599,16 @@ interface ProgressUpdate {
       flex-direction: column;
       height: 100%;
       background: #f8f9fa;
+      overflow: hidden;
+    }
+
+    .dialog-scroll-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
     .dialog-actions {
@@ -430,30 +663,29 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 20px;
+      padding: 12px;
       background: white;
       border-radius: 8px;
-      margin: 20px 20px 0 20px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .preselected-info {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       flex: 1;
     }
 
     .preselected-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 8px;
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
       background: linear-gradient(135deg, #2196f3, #21cbf3);
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
-      font-size: 20px;
+      font-size: 16px;
       flex-shrink: 0;
     }
 
@@ -1043,15 +1275,13 @@ interface ProgressUpdate {
 
     /* Tags Section Styles */
     .tags-section {
-      padding: 16px 20px;
+      padding: 10px 12px;
       background: white;
       border-radius: 8px;
-      margin: 12px 20px 0 20px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .tags-section.selection-mode-tags {
-      margin: 0;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
@@ -1059,8 +1289,8 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 12px;
-      font-size: 14px;
+      margin-bottom: 8px;
+      font-size: 13px;
       font-weight: 500;
       color: #333;
     }
@@ -1078,14 +1308,14 @@ interface ProgressUpdate {
     .tags-container {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 6px;
     }
 
     .tags-chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      min-height: 24px;
+      gap: 6px;
+      min-height: 20px;
     }
 
     .tag-chip {
@@ -1132,10 +1362,10 @@ interface ProgressUpdate {
 
     .tag-input {
       flex: 1;
-      padding: 8px 12px;
-      border: 2px solid #e0e4e8;
-      border-radius: 6px;
-      font-size: 13px;
+      padding: 6px 10px;
+      border: 1px solid #e0e4e8;
+      border-radius: 4px;
+      font-size: 12px;
       outline: none;
       transition: border-color 0.2s ease;
     }
@@ -1152,13 +1382,13 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 36px;
-      height: 36px;
+      width: 28px;
+      height: 28px;
       padding: 0;
       border: none;
       background: #2196f3;
       color: white;
-      border-radius: 6px;
+      border-radius: 4px;
       cursor: pointer;
       transition: all 0.2s ease;
     }
@@ -1174,6 +1404,240 @@ interface ProgressUpdate {
 
     .tag-add-btn i {
       font-size: 14px;
+    }
+
+    /* Advanced Options - Progressive Disclosure */
+    .advanced-options-section {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .advanced-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      text-align: left;
+      transition: background 0.2s ease;
+    }
+
+    .advanced-toggle:hover {
+      background: #f5f7fa;
+    }
+
+    .advanced-toggle i {
+      color: #999;
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .test-count-badge {
+      margin-left: auto;
+      padding: 2px 8px;
+      background: #e3f2fd;
+      color: #1976d2;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .advanced-content {
+      padding: 0 12px 12px 12px;
+      border-top: 1px solid #eee;
+    }
+
+    .selection-mode-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 8px 0;
+    }
+
+    .selection-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border: 1px solid #e0e4e8;
+      background: white;
+      color: #666;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .selection-tab:hover {
+      border-color: #90caf9;
+      color: #2196f3;
+    }
+
+    .selection-tab.active {
+      border-color: #2196f3;
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .selection-tab i {
+      font-size: 14px;
+    }
+
+    /* Test Selection Panel */
+    .test-selection-panel {
+      border: 1px solid #e0e4e8;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .selection-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e4e8;
+    }
+
+    .select-all {
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .selection-count {
+      font-size: 11px;
+      color: #666;
+    }
+
+    .test-list {
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .test-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .test-item:last-child {
+      border-bottom: none;
+    }
+
+    .test-item:hover {
+      background: #f5f7fa;
+    }
+
+    .test-item.selected {
+      background: #e8f4fd;
+    }
+
+    .test-item input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .test-sequence {
+      font-size: 11px;
+      font-weight: 600;
+      color: #999;
+      min-width: 24px;
+    }
+
+    .test-name {
+      flex: 1;
+      font-size: 12px;
+      color: #333;
+    }
+
+    /* Sequence Range Panel */
+    .sequence-range-panel {
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+
+    .range-inputs {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .range-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .range-field label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #666;
+    }
+
+    .sequence-input {
+      padding: 8px 10px;
+      border: 1px solid #e0e4e8;
+      border-radius: 4px;
+      font-size: 13px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .sequence-input:focus {
+      border-color: #2196f3;
+    }
+
+    .range-separator {
+      padding-bottom: 8px;
+      color: #999;
+    }
+
+    .range-summary {
+      margin-top: 8px;
+      padding: 8px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-radius: 4px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .range-error {
+      margin-top: 8px;
+      padding: 8px;
+      background: #ffebee;
+      color: #c62828;
+      border-radius: 4px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .range-error i {
+      font-size: 12px;
+    }
+
+    .preselected-advanced {
+      /* No extra margin - handled by dialog-scroll-content gap */
     }
   `]
 })
@@ -1203,6 +1667,13 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   allSuites: TestSuiteEntity[] = [];
   filteredTests: TestEntity[] = [];
   filteredSuites: TestSuiteEntity[] = [];
+
+  // Selective test execution for suites (progressive disclosure)
+  showAdvancedOptions = false;
+  suiteTests: SuiteTestItem[] = [];
+  useSequenceRange = false;
+  sequenceStart: number | null = null;
+  sequenceEnd: number | null = null;
 
   // Execution state
   isRunning = false;
@@ -1255,12 +1726,16 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     // Check if we have a pre-selected test or suite
     if (this.selectedTestId) {
       this.isPreselected = true;
+      this.runMode = 'test';
       const test = this.allTests.find(t => t.ID === this.selectedTestId);
       this.preselectedName = test ? test.Name : 'Test';
     } else if (this.selectedSuiteId) {
       this.isPreselected = true;
+      this.runMode = 'suite';
       const suite = this.allSuites.find(s => s.ID === this.selectedSuiteId);
       this.preselectedName = suite ? suite.Name : 'Test Suite';
+      // Load suite tests for selective execution
+      this.loadSuiteTests(this.selectedSuiteId);
     }
 
     this.filterItems();
@@ -1311,7 +1786,105 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
   selectSuite(suiteId: string): void {
     this.selectedSuiteId = suiteId;
+    this.loadSuiteTests(suiteId);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Load tests for a selected suite to enable selective execution
+   */
+  private loadSuiteTests(suiteId: string): void {
+    const suiteTestLinks = this.engine.TestSuiteTests.filter(st => st.SuiteID === suiteId);
+
+    // Build list of tests with their sequence numbers
+    this.suiteTests = suiteTestLinks
+      .map(st => {
+        const test = this.allTests.find(t => t.ID === st.TestID);
+        if (!test) return null;
+        return {
+          testId: st.TestID,
+          testName: test.Name,
+          sequence: st.Sequence,
+          selected: true // All selected by default
+        };
+      })
+      .filter((item): item is SuiteTestItem => item !== null)
+      .sort((a, b) => a.sequence - b.sequence);
+
+    // Reset sequence range
+    this.useSequenceRange = false;
+    this.sequenceStart = this.suiteTests.length > 0 ? this.suiteTests[0].sequence : null;
+    this.sequenceEnd = this.suiteTests.length > 0 ? this.suiteTests[this.suiteTests.length - 1].sequence : null;
+  }
+
+  toggleAdvancedOptions(): void {
+    this.showAdvancedOptions = !this.showAdvancedOptions;
+    this.cdr.markForCheck();
+  }
+
+  toggleAllTests(selectAll: boolean): void {
+    this.suiteTests.forEach(t => t.selected = selectAll);
+    this.cdr.markForCheck();
+  }
+
+  toggleTest(testId: string): void {
+    const test = this.suiteTests.find(t => t.testId === testId);
+    if (test) {
+      test.selected = !test.selected;
+      this.cdr.markForCheck();
+    }
+  }
+
+  get selectedTestCount(): number {
+    return this.suiteTests.filter(t => t.selected).length;
+  }
+
+  get allTestsSelected(): boolean {
+    return this.suiteTests.length > 0 && this.suiteTests.every(t => t.selected);
+  }
+
+  get someTestsSelected(): boolean {
+    const selected = this.selectedTestCount;
+    return selected > 0 && selected < this.suiteTests.length;
+  }
+
+  get sequenceRangeValid(): boolean {
+    if (!this.useSequenceRange) return true;
+    if (this.sequenceStart == null || this.sequenceEnd == null) return false;
+    return this.sequenceStart <= this.sequenceEnd;
+  }
+
+  get testsInSequenceRange(): number {
+    if (!this.useSequenceRange || this.sequenceStart == null || this.sequenceEnd == null) {
+      return this.suiteTests.length;
+    }
+    return this.suiteTests.filter(t =>
+      t.sequence >= this.sequenceStart! && t.sequence <= this.sequenceEnd!
+    ).length;
+  }
+
+  /**
+   * Get IDs of selected tests for execution
+   */
+  private getSelectedTestIds(): string[] {
+    if (!this.showAdvancedOptions) {
+      // If advanced options not shown, run all tests
+      return this.suiteTests.map(t => t.testId);
+    }
+    return this.suiteTests.filter(t => t.selected).map(t => t.testId);
+  }
+
+  /**
+   * Get sequence range parameters if enabled
+   */
+  private getSequenceRangeParams(): { start: number | undefined; end: number | undefined } {
+    if (!this.showAdvancedOptions || !this.useSequenceRange) {
+      return { start: undefined, end: undefined };
+    }
+    return {
+      start: this.sequenceStart ?? undefined,
+      end: this.sequenceEnd ?? undefined
+    };
   }
 
   canRun(): boolean {
@@ -1397,11 +1970,18 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
   private async executeSuite(): Promise<void> {
     try {
+      // Build selective execution parameters
+      const selectedTestIds = this.getSelectedTestIds();
+      const sequenceParams = this.getSequenceRangeParams();
+
       const result = await this.testingClient.RunTestSuite({
         suiteId: this.selectedSuiteId!,
         verbose: this.verbose,
         parallel: this.parallel,
         tags: this.tags.length > 0 ? this.tags : undefined,
+        selectedTestIds: selectedTestIds.length < this.suiteTests.length ? selectedTestIds : undefined,
+        sequenceStart: sequenceParams.start,
+        sequenceEnd: sequenceParams.end,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
           this.progress = progress.percentage ?? 0;

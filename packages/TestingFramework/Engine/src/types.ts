@@ -111,9 +111,18 @@ export interface TurnResult {
  */
 export interface DriverExecutionResult {
   /**
-   * Target entity type (e.g., "AI Agent")
+   * Optional sub-category or variant label for the test target.
+   * Use for ad-hoc labeling or to distinguish test scenarios within the same entity type.
+   * Examples: "Summarization", "Classification", "Code Review", "Multi-turn Chat"
    */
   targetType: string;
+
+  /**
+   * Entity ID identifying the type of target being tested.
+   * References Entity.ID (e.g., Entity ID for "MJ: AI Agent Runs").
+   * This is the proper FK reference for entity linkage.
+   */
+  targetLogEntityId?: string;
 
   /**
    * Target entity ID (final AgentRun ID for single/multi-turn)

@@ -129,9 +129,27 @@ export interface SuiteRunOptions extends TestRunOptions {
   maxParallel?: number;
 
   /**
-   * Run only specific sequence numbers
+   * Run only specific sequence numbers (e.g., [1, 3, 5] runs tests at those positions)
    */
   sequence?: number[];
+
+  /**
+   * Run only specific tests by their IDs.
+   * If provided, only tests with matching IDs will be executed.
+   */
+  selectedTestIds?: string[];
+
+  /**
+   * Start execution from this sequence number (inclusive).
+   * Tests with sequence numbers less than this value will be skipped.
+   */
+  sequenceStart?: number;
+
+  /**
+   * Stop execution at this sequence number (inclusive).
+   * Tests with sequence numbers greater than this value will be skipped.
+   */
+  sequenceEnd?: number;
 }
 
 /**
@@ -214,9 +232,17 @@ export interface TestRunResult {
   oracleResults: OracleResult[];
 
   /**
-   * Target entity type (e.g., "AI Agent")
+   * Optional sub-category or variant label for the test target.
+   * Use for ad-hoc labeling or to distinguish test scenarios within the same entity type.
+   * Examples: "Summarization", "Classification", "Code Review", "Multi-turn Chat"
    */
   targetType: string;
+
+  /**
+   * Entity ID identifying the type of target being tested.
+   * References Entity.ID (e.g., Entity ID for "MJ: AI Agent Runs").
+   */
+  targetLogEntityId?: string;
 
   /**
    * Target entity ID (e.g., AIAgentRun.ID)

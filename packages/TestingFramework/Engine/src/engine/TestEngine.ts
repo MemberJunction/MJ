@@ -169,10 +169,18 @@ export class TestEngine extends TestEngineBase {
             }
 
             // Load suite tests from cache
-            const tests = await this.loadSuiteTests(suiteId);
+            let tests = await this.loadSuiteTests(suiteId);
             if (tests.length === 0) {
                 throw new Error(`No tests found in suite: ${suiteId}`);
             }
+
+            // Apply test selection filters
+            tests = this.filterTestsForExecution(suiteId, tests, options);
+            if (tests.length === 0) {
+                throw new Error(`No tests match the selection criteria for suite: ${suiteId}`);
+            }
+
+            this.log(`Running ${tests.length} tests (after filtering)`, options.verbose);
 
             // Create TestSuiteRun entity
             const suiteRun = await this.createSuiteRun(suite, contextUser, options);
@@ -340,6 +348,64 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
+     * Filter tests based on suite run options.
+     * Supports filtering by:
+     * - selectedTestIds: Run only specific tests by ID
+     * - sequenceStart/sequenceEnd: Run tests within a sequence range
+     * - sequence: Run tests at specific sequence positions
+     * @private
+     */
+    private filterTestsForExecution(
+        suiteId: string,
+        tests: TestEntity[],
+        options: SuiteRunOptions
+    ): TestEntity[] {
+        // Get suite test mappings to access sequence numbers
+        const suiteTests = this.TestSuiteTests.filter(st => st.SuiteID === suiteId);
+
+        // Create a map of testId -> sequence for efficient lookup
+        const testSequenceMap = new Map<string, number>();
+        for (const st of suiteTests) {
+            testSequenceMap.set(st.TestID, st.Sequence);
+        }
+
+        let filteredTests = [...tests];
+
+        // Filter by selectedTestIds if provided
+        if (options.selectedTestIds && options.selectedTestIds.length > 0) {
+            const selectedIds = new Set(options.selectedTestIds);
+            filteredTests = filteredTests.filter(t => selectedIds.has(t.ID));
+            this.log(`Filtered to ${filteredTests.length} tests by selectedTestIds`, options.verbose);
+        }
+
+        // Filter by sequence range if provided
+        if (options.sequenceStart != null || options.sequenceEnd != null) {
+            const start = options.sequenceStart ?? 1;
+            const end = options.sequenceEnd ?? Number.MAX_SAFE_INTEGER;
+
+            filteredTests = filteredTests.filter(test => {
+                const seq = testSequenceMap.get(test.ID);
+                if (seq == null) return false;
+                return seq >= start && seq <= end;
+            });
+            this.log(`Filtered to ${filteredTests.length} tests by sequence range [${start}-${end}]`, options.verbose);
+        }
+
+        // Filter by specific sequence numbers if provided
+        if (options.sequence && options.sequence.length > 0) {
+            const sequenceSet = new Set(options.sequence);
+            filteredTests = filteredTests.filter(test => {
+                const seq = testSequenceMap.get(test.ID);
+                if (seq == null) return false;
+                return sequenceSet.has(seq);
+            });
+            this.log(`Filtered to ${filteredTests.length} tests by sequence numbers [${options.sequence.join(', ')}]`, options.verbose);
+        }
+
+        return filteredTests;
+    }
+
+    /**
      * Create TestRun entity.
      * @private
      */
@@ -451,6 +517,10 @@ export class TestEngine extends TestEngineBase {
         testRun.TotalChecks = result.totalChecks;
         testRun.TargetType = result.targetType;
         testRun.TargetLogID = result.targetLogId;
+        // Set the proper Entity FK for target linkage
+        if (result.targetLogEntityId) {
+            testRun.TargetLogEntityID = result.targetLogEntityId;
+        }
         testRun.InputData = result.inputData ? JSON.stringify(result.inputData) : null;
         testRun.ExpectedOutputData = result.expectedOutput ? JSON.stringify(result.expectedOutput) : null;
         testRun.ActualOutputData = result.actualOutput ? JSON.stringify(result.actualOutput) : null;
@@ -679,6 +749,7 @@ export class TestEngine extends TestEngineBase {
             totalChecks: driverResult.totalChecks,
             oracleResults: driverResult.oracleResults,
             targetType: driverResult.targetType,
+            targetLogEntityId: driverResult.targetLogEntityId,
             targetLogId: driverResult.targetLogId,
             durationMs: Date.now() - startTime,
             totalCost: driverResult.totalCost || 0,

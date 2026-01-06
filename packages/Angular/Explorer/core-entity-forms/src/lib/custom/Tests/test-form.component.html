@@ -321,6 +321,11 @@
               <span><i class="fas fa-calendar"></i> {{ getRelativeTime(run.StartedAt) }}</span>
               <span *ngIf="run.DurationSeconds"><i class="fas fa-clock"></i> {{ formatDuration(run.DurationSeconds) }}</span>
               <span *ngIf="run.CostUSD"><i class="fas fa-dollar-sign"></i> {{ formatCost(run.CostUSD) }}</span>
+              <mj-entity-link-pill
+                *ngIf="run.TargetLogEntityID && run.TargetLogID"
+                [entityName]="run.TargetLogEntity"
+                [recordId]="run.TargetLogID">
+              </mj-entity-link-pill>
             </div>
             <!-- Evaluation indicators -->
             <div class="run-eval-stack">
@@ -349,7 +354,7 @@
                       [class.rating-medium]="rating >= 5 && rating <= 6"
                       [class.rating-good]="rating >= 7 && rating <= 8"
                       [class.rating-excellent]="rating >= 9"
-                      [title]="getHumanTooltip(rating, getFeedbackForRun(run.ID)?.Comments || null)">
+                      [title]="getHumanTooltip(rating, getFeedbackForRun(run.ID)?.CorrectionSummary || getFeedbackForRun(run.ID)?.Comments || null)">
                   <i class="fas fa-user"></i>
                   <span>{{ rating }}</span>
                 </span>
