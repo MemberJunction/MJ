@@ -8,13 +8,39 @@ import {
   AfterViewInit,
   forwardRef,
   OnInit,
-  ViewEncapsulation
+  ViewEncapsulation,
+  ChangeDetectorRef
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentConfigurationEntity } from '@memberjunction/core-entities';
+import { ChatMessageContentBlock } from '@memberjunction/ai';
+
+/**
+ * Represents a pending attachment that hasn't been uploaded yet
+ */
+export interface PendingAttachment {
+  /** Local ID for tracking */
+  id: string;
+  /** Original File object */
+  file: File;
+  /** Base64 data URL for display */
+  dataUrl: string;
+  /** MIME type */
+  mimeType: string;
+  /** Original filename */
+  fileName: string;
+  /** File size in bytes */
+  sizeBytes: number;
+  /** Width in pixels (for images) */
+  width?: number;
+  /** Height in pixels (for images) */
+  height?: number;
+  /** Small thumbnail URL for preview */
+  thumbnailUrl?: string;
+}
 
 /**
  * ContentEditable-based mention editor with visual chips/pills
@@ -40,9 +66,22 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   @Input() currentUser?: UserInfo;
   @Input() enableMentions: boolean = true;
 
+  // Attachment settings
+  @Input() enableAttachments: boolean = true;
+  @Input() maxAttachments: number = 10;
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB default
+  @Input() acceptedFileTypes: string = 'image/*'; // MIME types to accept
+
   @Output() valueChange = new EventEmitter<string>();
   @Output() mentionSelected = new EventEmitter<MentionSuggestion>();
   @Output() enterPressed = new EventEmitter<string>();
+  @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
+  @Output() attachmentError = new EventEmitter<string>();
+  @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
+
+  // Pending attachments state
+  public pendingAttachments: PendingAttachment[] = [];
+  public isDragOver: boolean = false;
 
   // Mention dropdown state
   public showMentionDropdown: boolean = false;
@@ -55,7 +94,10 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   private onChange: (value: string) => void = () => {};
   public onTouched: () => void = () => {};
 
-  constructor(private mentionAutocomplete: MentionAutocompleteService) {}
+  constructor(
+    private mentionAutocomplete: MentionAutocompleteService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   async ngOnInit(): Promise<void> {
     if (this.enableMentions && this.currentUser) {
@@ -124,16 +166,35 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // Use setTimeout to allow mousedown events on dropdown to fire first
     setTimeout(() => {
       if (this.showMentionDropdown) {
-        console.log('[MentionEditor] Closing dropdown on blur');
         this.closeMentionDropdown();
       }
     }, 200);
   }
 
   /**
-   * Handle paste event - strip HTML and paste as plain text only
+   * Handle paste event - images or plain text
    */
   onPaste(event: ClipboardEvent): void {
+    // Check for image data in clipboard
+    if (this.enableAttachments && event.clipboardData?.items) {
+      const items = Array.from(event.clipboardData.items);
+      const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+      if (imageItems.length > 0) {
+        event.preventDefault();
+
+        // Process each image
+        for (const item of imageItems) {
+          const file = item.getAsFile();
+          if (file) {
+            this.processFile(file);
+          }
+        }
+        return;
+      }
+    }
+
+    // No images - handle as plain text
     event.preventDefault();
 
     // Get plain text from clipboard
@@ -279,7 +340,6 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Handle mention selection from dropdown
    */
   onMentionSelected(suggestion: MentionSuggestion): void {
-    console.log('[MentionEditor] Mention selected:', suggestion);
     this.insertMentionChip(suggestion);
     this.closeMentionDropdown();
     this.mentionSelected.emit(suggestion);
@@ -798,13 +858,14 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   }
 
   /**
-   * Clear the editor content
+   * Clear the editor content and pending attachments
    */
   public clear(): void {
     if (this.editorRef?.nativeElement) {
       this.editorRef.nativeElement.textContent = '';
       this.onInput();
     }
+    this.clearPendingAttachments();
   }
 
   /**
@@ -895,5 +956,262 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     }
 
     return plainText;
+  }
+
+  // ==================== Attachment Handling Methods ====================
+
+  /**
+   * Handle drag over event
+   */
+  onDragOver(event: DragEvent): void {
+    if (!this.enableAttachments) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = true;
+  }
+
+  /**
+   * Handle drag leave event
+   */
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = false;
+  }
+
+  /**
+   * Handle drop event
+   */
+  onDrop(event: DragEvent): void {
+    if (!this.enableAttachments) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = false;
+
+    if (event.dataTransfer?.files) {
+      const files = Array.from(event.dataTransfer.files);
+      for (const file of files) {
+        if (this.isAcceptedFile(file)) {
+          this.processFile(file);
+        }
+      }
+    }
+  }
+
+  /**
+   * Handle file input change (from file picker)
+   */
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files) {
+      const files = Array.from(input.files);
+      for (const file of files) {
+        this.processFile(file);
+      }
+      // Reset input so same file can be selected again
+      input.value = '';
+    }
+  }
+
+  /**
+   * Process a file for attachment
+   */
+  private async processFile(file: File): Promise<void> {
+    // Validate file
+    const validation = this.validateFile(file);
+    if (!validation.valid) {
+      this.attachmentError.emit(validation.error!);
+      return;
+    }
+
+    // Read file as data URL
+    const dataUrl = await this.readFileAsDataUrl(file);
+    if (!dataUrl) {
+      this.attachmentError.emit('Failed to read file');
+      return;
+    }
+
+    // Get image dimensions if applicable
+    let width: number | undefined;
+    let height: number | undefined;
+
+    if (file.type.startsWith('image/')) {
+      const dimensions = await this.getImageDimensions(dataUrl);
+      width = dimensions.width;
+      height = dimensions.height;
+    }
+
+    // Create pending attachment
+    const attachment: PendingAttachment = {
+      id: this.generateAttachmentId(),
+      file,
+      dataUrl,
+      mimeType: file.type,
+      fileName: file.name,
+      sizeBytes: file.size,
+      width,
+      height,
+      thumbnailUrl: file.type.startsWith('image/') ? dataUrl : undefined
+    };
+
+    // Add to pending attachments
+    this.pendingAttachments.push(attachment);
+    this.attachmentsChanged.emit([...this.pendingAttachments]);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Validate a file against settings
+   */
+  private validateFile(file: File): { valid: boolean; error?: string } {
+    // Check count limit
+    if (this.pendingAttachments.length >= this.maxAttachments) {
+      return {
+        valid: false,
+        error: `Maximum ${this.maxAttachments} attachments allowed`
+      };
+    }
+
+    // Check size limit
+    if (file.size > this.maxAttachmentSizeBytes) {
+      const maxMB = (this.maxAttachmentSizeBytes / (1024 * 1024)).toFixed(1);
+      const fileMB = (file.size / (1024 * 1024)).toFixed(1);
+      return {
+        valid: false,
+        error: `File size (${fileMB}MB) exceeds maximum (${maxMB}MB)`
+      };
+    }
+
+    // Check file type
+    if (!this.isAcceptedFile(file)) {
+      return {
+        valid: false,
+        error: `File type ${file.type || 'unknown'} not accepted`
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Check if file type is accepted
+   */
+  private isAcceptedFile(file: File): boolean {
+    if (this.acceptedFileTypes === '*' || this.acceptedFileTypes === '*/*') {
+      return true;
+    }
+
+    const acceptedTypes = this.acceptedFileTypes.split(',').map(t => t.trim());
+
+    for (const accepted of acceptedTypes) {
+      // Handle wildcard MIME types like "image/*"
+      if (accepted.endsWith('/*')) {
+        const category = accepted.slice(0, -2);
+        if (file.type.startsWith(category + '/')) {
+          return true;
+        }
+      } else if (accepted.startsWith('.')) {
+        // Handle file extensions like ".png"
+        if (file.name.toLowerCase().endsWith(accepted.toLowerCase())) {
+          return true;
+        }
+      } else if (file.type === accepted) {
+        // Exact MIME type match
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Read file as data URL
+   */
+  private readFileAsDataUrl(file: File): Promise<string | null> {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Get image dimensions
+   */
+  private getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = () => {
+        resolve({ width: 0, height: 0 });
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  /**
+   * Generate unique attachment ID
+   */
+  private generateAttachmentId(): string {
+    return `att_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Remove a pending attachment by ID
+   */
+  public removeAttachment(id: string): void {
+    const index = this.pendingAttachments.findIndex(a => a.id === id);
+    if (index !== -1) {
+      this.pendingAttachments.splice(index, 1);
+      this.attachmentsChanged.emit([...this.pendingAttachments]);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Get all pending attachments
+   */
+  public getPendingAttachments(): PendingAttachment[] {
+    return [...this.pendingAttachments];
+  }
+
+  /**
+   * Clear all pending attachments
+   */
+  public clearPendingAttachments(): void {
+    this.pendingAttachments = [];
+    this.attachmentsChanged.emit([]);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle click on an attachment thumbnail
+   */
+  public onAttachmentClick(attachment: PendingAttachment): void {
+    this.attachmentClicked.emit(attachment);
+  }
+
+  /**
+   * Check if there are any pending attachments
+   */
+  public hasAttachments(): boolean {
+    return this.pendingAttachments.length > 0;
+  }
+
+  /**
+   * Trigger file picker programmatically
+   */
+  public openFilePicker(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = this.acceptedFileTypes;
+    input.multiple = true;
+    input.onchange = (e) => this.onFileSelected(e);
+    input.click();
   }
 }

@@ -33,11 +33,13 @@ export class AppNavComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Get navigation items for current app
+   * Get navigation items for current app.
+   * Filters out items that are not Active (Pending or Disabled).
    */
   get navItems(): NavItem[] {
     const items = this.app?.GetNavItems() || [];
-    return items;
+    // Only show items with Status 'Active' or undefined (default to Active)
+    return items.filter(item => !item.Status || item.Status === 'Active');
   }
 
   /**

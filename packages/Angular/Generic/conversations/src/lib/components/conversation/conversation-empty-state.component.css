@@ -15,6 +15,42 @@
   overflow-y: auto;
   position: relative;
 }
+
+/* Sidebar toggle button - positioned in top-left */
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 10;
+}
+
+.sidebar-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.sidebar-toggle-btn:active {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.sidebar-toggle-btn i {
+  color: #666;
+  font-size: 18px;
+  transition: color 0.15s ease;
+}
+
+.sidebar-toggle-btn:hover i {
+  color: #333;
+}
 @media (max-width: 768px) {
   .conversation-empty-state {
     align-items: flex-start;

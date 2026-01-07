@@ -1,7 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import Groq from 'groq-sdk';
-import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam } from 'groq-sdk/resources/chat/completions';
+import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam, ChatCompletionContentPart } from 'groq-sdk/resources/chat/completions';
 
 /**
  * Groq implementation of the BaseLLM class
@@ -79,16 +79,61 @@ export class GroqLLM extends BaseLLM {
     }
 
     /**
+     * Convert MJ messages to Groq-compatible format with proper multimodal support
+     * Groq uses OpenAI-compatible format: { type: "image_url", image_url: { url: "..." } }
+     */
+    private convertToGroqMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
+        const groqMessages: ChatCompletionMessageParam[] = [];
+
+        for (const msg of messages) {
+            // Simple string content
+            if (typeof msg.content === 'string') {
+                groqMessages.push({
+                    role: msg.role as 'system' | 'user' | 'assistant',
+                    content: msg.content
+                });
+                continue;
+            }
+
+            // Array of content blocks - convert to Groq format
+            const contentBlocks = msg.content as ChatMessageContentBlock[];
+            const groqContent: ChatCompletionContentPart[] = [];
+
+            for (const block of contentBlocks) {
+                if (block.type === 'text') {
+                    groqContent.push({
+                        type: 'text',
+                        text: block.content
+                    });
+                } else if (block.type === 'image_url') {
+                    groqContent.push({
+                        type: 'image_url',
+                        image_url: {
+                            url: block.content
+                        }
+                    });
+                }
+                // Note: audio_url, video_url, file_url not yet supported by Groq
+            }
+
+            // If we have converted content blocks, use them; otherwise fall back to empty text
+            groqMessages.push({
+                role: msg.role as 'system' | 'user' | 'assistant',
+                content: groqContent.length > 0 ? groqContent : ''
+            } as ChatCompletionMessageParam);
+        }
+
+        return groqMessages;
+    }
+
+    /**
      * Implementation of non-streaming chat completion for Groq
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
-        // Need to convert to Groq-compatible message format
-        const messages = params.messages.map(m => ({
-            role: m.role,
-            content: m.content,
-        }))  
+        // Convert to Groq-compatible message format with proper multimodal support
+        const messages = this.convertToGroqMessages(params.messages);
 
         // Groq requires the last message to be a user message
         if (messages.length > 0 && messages[messages.length - 1].role !== 'user') {
@@ -100,17 +145,7 @@ export class GroqLLM extends BaseLLM {
 
         const groqParams: ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
-            messages: messages.map(m => {
-                return {
-                    role: m.role,
-                    content: Array.isArray(m.content) ? m.content.map(block => {
-                        return {
-                            content: block.content,
-                            type: block.type,
-                        }
-                    }) : m.content,
-                };
-            }) as Array<ChatCompletionMessageParam>, 
+            messages: messages,
             max_tokens: params.maxOutputTokens,
             temperature: params.temperature
         };
@@ -226,11 +261,9 @@ export class GroqLLM extends BaseLLM {
         if (this.supportsThinkingModels()) {
             this.initializeThinkingStreamState();
         }
-        // Need to convert to Groq-compatible message format
-        const messages = params.messages.map(m => ({
-            role: m.role,
-            content: m.content,
-        })) as any; // Use any to bypass type checking
+
+        // Convert to Groq-compatible message format with proper multimodal support
+        const messages = this.convertToGroqMessages(params.messages);
 
         const groqParams: ChatCompletionCreateParamsStreaming = {
             model: params.model,

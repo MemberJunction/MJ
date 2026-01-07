@@ -1,6 +1,6 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse } from 'ollama';
+import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse, Message } from 'ollama';
 
 /**
  * Ollama implementation of the BaseLLM class for local LLM inference
@@ -64,28 +64,82 @@ export class OllamaLLM extends BaseLLM {
     }
 
     /**
+     * Convert MJ messages to Ollama format with proper image handling
+     * Ollama expects images in a separate 'images' array as base64 strings
+     */
+    private convertToOllamaMessages(messages: ChatMessage[]): Message[] {
+        return messages.map(msg => {
+            const role = msg.role as 'system' | 'user' | 'assistant';
+
+            // Simple string content
+            if (typeof msg.content === 'string') {
+                return { role, content: msg.content };
+            }
+
+            // Array of content blocks - extract text and images separately
+            const contentBlocks = msg.content as ChatMessageContentBlock[];
+            const textParts: string[] = [];
+            const images: string[] = [];
+
+            for (const block of contentBlocks) {
+                if (block.type === 'text') {
+                    textParts.push(block.content);
+                } else if (block.type === 'image_url') {
+                    // Extract base64 image data for Ollama
+                    const imageData = this.extractBase64ForOllama(block);
+                    if (imageData) {
+                        images.push(imageData);
+                    }
+                }
+                // Note: audio_url, video_url, file_url not yet supported by Ollama
+            }
+
+            const result: Message = {
+                role,
+                content: textParts.join('\n')
+            };
+
+            // Add images array if we have any
+            if (images.length > 0) {
+                result.images = images;
+            }
+
+            return result;
+        });
+    }
+
+    /**
+     * Extract base64 image data for Ollama API
+     * Ollama expects raw base64 strings (not data URLs)
+     */
+    private extractBase64ForOllama(block: ChatMessageContentBlock): string | null {
+        const content = block.content;
+
+        // Check if it's a data URL (data:image/png;base64,...)
+        const parsed = parseBase64DataUrl(content);
+        if (parsed) {
+            return parsed.data; // Return just the base64 data, not the full data URL
+        }
+
+        // If it doesn't start with http, assume it's already base64
+        if (!content.startsWith('http://') && !content.startsWith('https://')) {
+            return content;
+        }
+
+        // Ollama doesn't support image URLs - only base64
+        console.warn('Ollama does not support image URLs, only base64. Skipping image.');
+        return null;
+    }
+
+    /**
      * Implementation of non-streaming chat completion for Ollama
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
         try {
-            // Convert MJ messages to Ollama format
-            const messages = params.messages.map(m => ({
-                role: m.role as 'system' | 'user' | 'assistant',
-                content: Array.isArray(m.content) ? 
-                    m.content.map(block => {
-                        if (typeof block === 'string') {
-                            return block;
-                        } else if (block.type === 'text') {
-                            return block.content;
-                        } else {
-                            // For other content types including images
-                            return block.content;
-                        }
-                    }).join('\n') : 
-                    m.content
-            }));
+            // Convert MJ messages to Ollama format with proper image handling
+            const messages = this.convertToOllamaMessages(params.messages);
 
             // Create chat request parameters
             const chatRequest: ChatRequest & { stream?: false } = {
@@ -239,21 +293,8 @@ export class OllamaLLM extends BaseLLM {
             this.initializeThinkingStreamState();
         }
 
-        // Convert MJ messages to Ollama format
-        const messages = params.messages.map(m => ({
-            role: m.role as 'system' | 'user' | 'assistant',
-            content: Array.isArray(m.content) ? 
-                m.content.map(block => {
-                    if (typeof block === 'string') {
-                        return block;
-                    } else if (block.type === 'text') {
-                        return block.content;
-                    } else {
-                        return block.content;
-                    }
-                }).join('\n') : 
-                m.content
-        }));
+        // Convert MJ messages to Ollama format with proper image handling
+        const messages = this.convertToOllamaMessages(params.messages);
 
         // Create streaming chat request parameters
         const chatRequest: ChatRequest = {

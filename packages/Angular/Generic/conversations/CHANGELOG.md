@@ -1,5 +1,31 @@
 # @memberjunction/ng-conversations
 
+## 2.130.0
+
+### Patch Changes
+
+- 83d81ad: Fix conversation UI performance
+- f4e1f05: Fix Conversation UI issue after browser refresh
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/ai-engine-base@2.130.0
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/ai-core-plus@2.130.0
+  - @memberjunction/graphql-dataprovider@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/ng-tasks@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/ng-testing@2.130.0
+  - @memberjunction/ng-notifications@2.130.0
+  - @memberjunction/ng-artifacts@2.130.0
+  - @memberjunction/ng-base-types@2.130.0
+  - @memberjunction/ng-code-editor@2.130.0
+  - @memberjunction/ng-container-directives@2.130.0
+  - @memberjunction/ng-shared-generic@2.130.0
+  - @memberjunction/ng-markdown@2.130.0
+  - @memberjunction/global@2.130.0
+
 ## 2.129.0
 
 ### Patch Changes
