@@ -779,7 +779,37 @@ MetadataSync preserves the original order of keys in your JSON files. When you r
 
 ## Resolution Tracking with `__mj_sync_notes`
 
-When you use `@lookup` or `@parent` references in your metadata files, MetadataSync automatically tracks how these references were resolved during push operations. This information is written to a `__mj_sync_notes` key in each record, providing transparency into the resolution process.
+When you use `@lookup` or `@parent` references in your metadata files, MetadataSync can track how these references were resolved during push operations. This information is written to a `__mj_sync_notes` key in each record, providing transparency into the resolution process.
+
+**Note:** This feature is **disabled by default** to keep metadata files clean. Enable it when you need to debug lookup resolutions or understand how references are being resolved.
+
+### Enabling Resolution Tracking
+
+To enable `__mj_sync_notes`, add the `emitSyncNotes` setting to your `.mj-sync.json` configuration:
+
+**Root-level configuration** (applies to all entity directories):
+```json
+{
+  "version": "1.0",
+  "emitSyncNotes": true,
+  "directoryOrder": ["..."]
+}
+```
+
+**Entity-level override** (in an entity directory's `.mj-sync.json`):
+```json
+{
+  "entity": "AI Prompts",
+  "emitSyncNotes": true
+}
+```
+
+The inheritance works as follows:
+- Entity-level `emitSyncNotes` takes precedence if explicitly set
+- If not set at entity level, inherits from root `.mj-sync.json`
+- Defaults to `false` if not set anywhere
+
+This allows you to enable tracking globally and disable it for specific entities, or vice versa.
 
 ### Purpose
 
@@ -845,9 +875,9 @@ Each resolution note contains:
 ### System-Managed Key
 
 The `__mj_sync_notes` key uses a double underscore prefix (`__`) to clearly indicate it is system-managed:
-- **Do not manually edit** this section - it is regenerated on each push
-- **Do not delete** it - it will be recreated automatically
-- The key is automatically removed if a record has no `@lookup` or `@parent` references
+- **Do not manually edit** this section - it is regenerated on each push when `emitSyncNotes` is enabled
+- When `emitSyncNotes` is disabled (the default), existing `__mj_sync_notes` keys are automatically removed on push
+- When enabled, the key is automatically removed if a record has no `@lookup` or `@parent` references
 - Key ordering is preserved - `__mj_sync_notes` appears after `sync` in the file
 
 ### Example: Parent Reference Resolution
