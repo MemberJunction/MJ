@@ -173,24 +173,26 @@ export interface IAngularAuthProvider {
   /**
    * Refresh the current authentication token
    *
-   * This method attempts to get a new token without user interaction.
-   * It should handle refresh tokens internally if the provider supports them.
+   * Attempts to obtain a fresh authentication token using the provider's
+   * refresh mechanism. If silent refresh fails due to session expiry, the
+   * provider will handle re-authentication automatically (which may involve
+   * redirecting to the auth provider's login page).
    *
-   * @returns Promise resolving to TokenRefreshResult indicating success/failure
+   * Returns a fresh token on success, or throws on complete failure.
+   *
+   * IMPORTANT: If the provider requires interactive re-authentication (redirect
+   * or popup), this method may never return. The app will reload after
+   * authentication completes and re-initialize with a fresh token.
+   *
+   * @returns Promise resolving to StandardAuthToken or throws on failure
    *
    * @example
    * ```typescript
-   * const result = await this.authBase.refreshToken();
-   * if (result.success && result.token) {
-   *   const newToken = result.token.idToken;
-   *   // Use new token
-   * } else {
-   *   // Handle refresh failure (might need re-login)
-   *   console.error(result.error?.message);
-   * }
+   * const token = await this.authBase.refreshToken();
+   * return token.idToken; // Always succeeds or throws
    * ```
    */
-  refreshToken(): Promise<TokenRefreshResult>;
+  refreshToken(): Promise<StandardAuthToken>;
 
   // ============================================================================
   // ERROR HANDLING (v3.0.0 - Fixes Error Type Leakage)

@@ -44,14 +44,11 @@ export class AppComponent implements OnInit {
         const start = Date.now();
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
           // v3.0 API - clean abstraction, no provider-specific logic!
-          const result = await this.authBase.refreshToken();
-
-          if (!result.success || !result.token) {
-            console.error('[GraphQL] Token refresh failed:', result.error?.message);
-            throw new Error(result.error?.userMessage || 'Failed to refresh authentication token');
-          }
-
-          return result.token.idToken;
+          // refreshToken() handles all provider differences internally:
+          // - Auth0/Okta: Silent refresh with refresh tokens
+          // - MSAL: Silent refresh, falls back to redirect if needed
+          const token = await this.authBase.refreshToken();
+          return token.idToken;
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
         const end = Date.now();
