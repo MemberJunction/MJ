@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 2.130.0
+
+### Minor Changes
+
+- 83ae347: migrations
+
+### Patch Changes
+
+- @memberjunction/global@2.130.0
+
 ## 2.129.0
 
 ### Patch Changes

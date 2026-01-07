@@ -1,10 +1,8 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Subscription, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription, firstValueFrom } from 'rxjs';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { ActiveTasksService } from './active-tasks.service';
 import { DataCacheService } from './data-cache.service';
-import { ConversationDetailEntity } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
 
 /**
  * Metadata structure for message progress updates
@@ -70,6 +68,25 @@ export class ConversationStreamingService implements OnDestroy {
   // Registry of callbacks per conversation detail ID
   // Multiple callbacks can be registered for the same message (e.g., different components)
   private callbackRegistry = new Map<string, MessageProgressCallback[]>();
+
+  // Track recent completions for late-arriving components (e.g., after navigation)
+  // Key: conversationDetailId, Value: completion info with timestamp
+  private recentCompletions = new Map<string, {
+    conversationDetailId: string;
+    agentRunId: string;
+    timestamp: Date;
+  }>();
+
+  // Observable for components to subscribe to completion events in real-time
+  public completionEvents$ = new Subject<{
+    conversationDetailId: string;
+    agentRunId: string;
+  }>();
+
+  // Reverse lookup: agentRunId → conversationDetailId
+  // Built during progress updates (which have agentRun.ConversationDetailID)
+  // Used during completion (which only has agentRunId, NOT agentRun object)
+  private agentRunIdToDetailId = new Map<string, string>();
 
   // Subject to emit connection status changes
   private connectionStatus$ = new BehaviorSubject<StreamingConnectionStatus>('disconnected');
@@ -307,23 +324,63 @@ export class ConversationStreamingService implements OnDestroy {
       // Extract progress information from RunAIAgentResolver message
       const { agentRun, progress, type } = statusObj.data || {};
 
-      // Handle completion messages - these don't have progress.message
-      // Backend sends type: 'complete' when agent finishes
+      // Handle completion messages - backend sends type: 'complete' when agent finishes
+      // we broadcast completions AND invoke callbacks
       if (type === 'complete') {
         const agentRunId = statusObj.data?.agentRunId;
+        // Try direct lookup first, fall back to reverse lookup map
+        // (completion messages often only have agentRunId, not full agentRun object)
+        let conversationDetailId = agentRun?.ConversationDetailID;
+        if (!conversationDetailId && agentRunId) {
+          conversationDetailId = this.agentRunIdToDetailId.get(agentRunId);
+        }
+
+        // Remove from active tasks (clears spinner in conversation list)
         if (agentRunId) {
           const removed = this.activeTasks.removeByAgentRunId(agentRunId);
           if (removed) {
             console.log(`[ConversationStreamingService] ✅ Agent run ${agentRunId} completed, removed from active tasks`);
           }
+          // Cleanup the reverse lookup map entry
+          this.agentRunIdToDetailId.delete(agentRunId);
         }
-        return;
+
+        // Store completion for late-arriving components (e.g., after navigation back to conversation)
+        if (conversationDetailId) {
+          this.recentCompletions.set(conversationDetailId, {
+            conversationDetailId,
+            agentRunId: agentRunId || '',
+            timestamp: new Date()
+          });
+
+          // Broadcast completion event for real-time listeners
+          this.completionEvents$.next({
+            conversationDetailId,
+            agentRunId: agentRunId || ''
+          });
+
+          // Cleanup old completions to prevent memory leak
+          this.cleanupOldCompletions();
+
+          console.log(`[ConversationStreamingService] 📢 Broadcasted completion for message ${conversationDetailId}`);
+        } else {
+          console.warn(`[ConversationStreamingService] ⚠️ Completion received but could not resolve conversationDetailId for agentRunId: ${agentRunId}`);
+        }
+
+        // Fall through to invoke callbacks - don't return early
+        // This allows onMessageComplete callbacks to be invoked
       }
 
       const conversationDetailId = agentRun?.ConversationDetailID;
       const message = progress?.message;
       const percentComplete = progress?.percentage;
       const stepCount = progress?.stepCount;
+
+      // Build reverse lookup map: agentRunId → conversationDetailId
+      // This is used during completion when the agentRun object isn't available
+      if (agentRun?.ID && conversationDetailId) {
+        this.agentRunIdToDetailId.set(agentRun.ID, conversationDetailId);
+      }
 
       if (!message) {
         console.warn('[ConversationStreamingService] ⚠️  No message content in agent progress update');
@@ -370,6 +427,36 @@ export class ConversationStreamingService implements OnDestroy {
   }
 
   /**
+   * Get a recent completion event for a message (used when component initializes after completion)
+   * @param conversationDetailId - The message ID to check
+   * @returns Completion info if found, undefined otherwise
+   */
+  public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+    const completion = this.recentCompletions.get(conversationDetailId);
+    return completion ? { agentRunId: completion.agentRunId } : undefined;
+  }
+
+  /**
+   * Clear a recent completion after it has been handled
+   * @param conversationDetailId - The message ID to clear
+   */
+  public clearRecentCompletion(conversationDetailId: string): void {
+    this.recentCompletions.delete(conversationDetailId);
+  }
+
+  /**
+   * Cleanup completions older than 5 minutes to prevent memory leak
+   */
+  private cleanupOldCompletions(): void {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    for (const [id, data] of this.recentCompletions) {
+      if (data.timestamp.getTime() < fiveMinutesAgo) {
+        this.recentCompletions.delete(id);
+      }
+    }
+  }
+
+  /**
    * Schedule a reconnection attempt after a delay
    */
   private scheduleReconnection(): void {
@@ -400,6 +487,9 @@ export class ConversationStreamingService implements OnDestroy {
     }
 
     this.callbackRegistry.clear();
+    this.recentCompletions.clear();
+    this.agentRunIdToDetailId.clear();
+    this.completionEvents$.complete();
     this.connectionStatus$.complete();
     this.initialized = false;
   }

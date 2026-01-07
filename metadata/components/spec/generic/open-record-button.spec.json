@@ -1,11 +1,11 @@
 {
   "name": "OpenRecordButton",
   "title": "Open Record Button",
-  "description": "A simple button component that intelligently opens entity records using metadata to determine primary keys",
+  "description": "@file:../../descriptions/generic/open-record-button.md",
   "type": "navigation",
   "location": "embedded",
-  "functionalRequirements": "Button that opens entity records using metadata-determined primary keys. Requires only entity name and record object. Auto-detects single/composite primary keys from metadata, extracts values from record. Configurable text, style, size. Uses: grid row actions, record cards, drill-down navigation, dashboard quick links.",
-  "technicalDesign": "Looks up entity in utilities.md.Entities → finds primary key fields → extracts values from record → calls OpenEntityRecord with field/value pairs. Handles single and composite keys automatically. Minimal props: just entityName and record. Error handling for missing metadata or key values.",
+  "functionalRequirements": "@file:../../functional-requirements/generic/open-record-button.md",
+  "technicalDesign": "@file:../../technical-design/generic/open-record-button.md",
   "dataRequirements": {
     "mode": "props",
     "description": "Receives record data through props, uses metadata for key information"
@@ -36,7 +36,12 @@
       "description": "Button style variant",
       "required": false,
       "defaultValue": "default",
-      "possibleValues": ["primary", "default", "text", "link"]
+      "possibleValues": [
+        "primary",
+        "default",
+        "text",
+        "link"
+      ]
     },
     {
       "name": "size",
@@ -44,7 +49,11 @@
       "description": "Button size",
       "required": false,
       "defaultValue": "medium",
-      "possibleValues": ["small", "medium", "large"]
+      "possibleValues": [
+        "small",
+        "medium",
+        "large"
+      ]
     },
     {
       "name": "icon",
@@ -92,6 +101,6 @@
     }
   ],
   "dependencies": [],
-  "code": "@file:../code/open-record-button.js",
+  "code": "@file:../../code/generic/open-record-button.js",
   "exampleUsage": "<OpenRecordButton\n  record={selectedDeal}\n  entityName=\"Deals\"\n  text=\"View Deal\"\n  variant=\"primary\"\n/>"
 }

@@ -10,6 +10,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
+import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
@@ -19,6 +20,7 @@ import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'mj-conversation-chat-area',
@@ -108,7 +110,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public messages: ConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
   private scrollToBottom = false;
-  private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
+  private loadedPeripheralConversationIds = new Set<string>(); // Track ALL conversations whose peripheral data was loaded
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   public isProcessing: boolean = false;
   private intentCheckMessage: ConversationDetailEntity | null = null; // Temporary message shown during intent checking
@@ -182,12 +184,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   public inProgressMessageIds: string[] = [];
 
-  // Timer for smooth agent run UI updates (updates every second while agent runs)
-  private agentRunUpdateTimer: any = null;
-
-  // Track previous message statuses to detect completions after navigation
-  private previousMessageStatuses = new Map<string, string>();
-
   // Cache of message-input metadata for rendering multiple instances
   // Prevents destruction/recreation when switching conversations for performance
   private messageInputMetadataCache = new Map<string, {conversationId: string; conversationName: string | null}>();
@@ -202,6 +198,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   // Subject to trigger artifact viewer refresh when new version is created
   public artifactViewerRefresh$ = new Subject<{artifactId: string; versionNumber: number}>();
+
+  // Subject for component destruction cleanup
+  private destroy$ = new Subject<void>();
 
   // Track initialization state to prevent loading messages before agents are ready
   private isInitialized: boolean = false;
@@ -241,7 +240,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
     private dialogService: DialogService,
-    private attachmentService: ConversationAttachmentService
+    private attachmentService: ConversationAttachmentService,
+    private streamingService: ConversationStreamingService
   ) {}
 
   async ngOnInit() {
@@ -260,6 +260,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Load saved artifact pane width
     this.loadArtifactPaneWidth();
+
+    // Subscribe to completion events from streaming service (PubSub-based, replaces polling)
+    // This handles real-time completion notifications without timer-based polling
+    this.streamingService.completionEvents$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(async (event) => {
+        // Only handle if it's for a message in our current conversation
+        const message = this.messages.find(m => m.ID === event.conversationDetailId);
+        if (message) {
+          LogStatusEx({message: `🎉 Received completion event for message ${event.conversationDetailId}`, verboseOnly: true});
+          await this.handleMessageCompletion(message, event.agentRunId);
+        }
+      });
 
     // Mark as initialized so setter can trigger conversation changes
     this.isInitialized = true;
@@ -361,11 +374,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   ngOnDestroy() {
+    // Complete the destroy$ Subject to clean up subscriptions
+    this.destroy$.next();
+    this.destroy$.complete();
+
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
-
-    // Stop agent run update timer
-    this.stopAgentRunUpdateTimer();
 
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
@@ -384,7 +398,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Do NOT clear activeTasks - they are workspace-level and persist across conversations
     // Clearing causes bugs: global tasks panel blanks out, no notifications when switching
 
-    this.previousMessageStatuses.clear();
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
 
@@ -523,14 +536,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Update attachment support based on agents in this conversation
     this.updateAttachmentSupport();
 
-    // Initialize status tracking to detect message completion
-    this.previousMessageStatuses.clear();
-    for (const message of messages) {
-      if (message.ID && message.Status) {
-        this.previousMessageStatuses.set(message.ID, message.Status);
-      }
-    }
-
     // Detect in-progress messages for streaming reconnection
     // Always create NEW array reference to trigger Input setter in message-input component
     this.inProgressMessageIds = [...messages
@@ -539,7 +544,26 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     if (this.inProgressMessageIds.length > 0) {
       LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
-      this.startAgentRunUpdateTimer();
+
+      // Check for missed completions - handle the "navigate away then back" scenario
+      // The streaming service caches recent completions for components that initialize late
+      for (const message of messages) {
+        if (message.Status === 'In-Progress' && message.ID) {
+          const recentCompletion = this.streamingService.getRecentCompletion(message.ID);
+          if (recentCompletion) {
+            LogStatusEx({message: `🔄 Found missed completion for message ${message.ID}, processing...`, verboseOnly: true});
+            // Process the completion asynchronously (don't await to avoid blocking)
+            this.handleMessageCompletion(message, recentCompletion.agentRunId)
+              .then(() => {
+                // Clear the cached completion after handling
+                this.streamingService.clearRecentCompletion(message.ID);
+              })
+              .catch(error => {
+                console.error(`Failed to handle missed completion for message ${message.ID}:`, error);
+              });
+          }
+        }
+      }
     }
 
     this.scrollToBottom = true;
@@ -586,13 +610,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     const timestamp = new Date().toISOString();
 
     // Skip if we've already processed peripheral data for this conversation
-    if (this.lastLoadedConversationId === conversationId) {
+    if (this.loadedPeripheralConversationIds.has(conversationId)) {
       LogStatusEx({message: `[${timestamp}] ⏭️ Skipping peripheral data processing - already processed for conversation ${conversationId}`, verboseOnly: true});
       return;
     }
 
     // Mark this conversation as processed to prevent duplicate processing
-    this.lastLoadedConversationId = conversationId;
+    this.loadedPeripheralConversationIds.add(conversationId);
     LogStatusEx({message: `[${timestamp}] 📊 Processing peripheral data for conversation ${conversationId} from cache`, verboseOnly: true});
 
     try {
@@ -668,10 +692,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
           }
         }
 
-        // Build ratings map
-        if (parsed.ratings.length > 0) {
-          this.ratingsByDetailId.set(row.ID, parsed.ratings);
-        }
+        // Build ratings map - always set (empty array if no ratings)
+        // This tells the rating component not to query the database
+        this.ratingsByDetailId.set(row.ID, parsed.ratings);
       }
 
       // Load attachments for all messages in this conversation
@@ -711,8 +734,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       LogStatusEx({message: `✅ Peripheral data processed successfully for conversation ${conversationId} from cache`, verboseOnly: true});
     } catch (error) {
       console.error('Failed to process peripheral data:', error);
-      // Don't set lastLoadedConversationId on error so we can retry
-      this.lastLoadedConversationId = null;
+      // Remove from loaded set on error so we can retry
+      this.loadedPeripheralConversationIds.delete(conversationId);
     }
   }
 
@@ -832,9 +855,66 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Trigger re-render to show updated status
       this.messages = [...this.messages];
       this.cdr.detectChanges();
+    }
+  }
 
-      // Stop timer since agent completed
-      this.stopAgentRunUpdateTimer();
+  /**
+   * Handle message completion from PubSub streaming service.
+   * This is the primary completion handler that replaces timer-based polling.
+   * Called when the streaming service receives a completion event from the backend.
+   *
+   * @param message The message entity that completed
+   * @param agentRunId The agent run ID from the completion event
+   */
+  private async handleMessageCompletion(message: ConversationDetailEntity, agentRunId: string): Promise<void> {
+    try {
+      LogStatusEx({message: `🔄 Handling completion for message ${message.ID}`, verboseOnly: true});
+
+      // 1. Reload message from database to get final content
+      await message.Load(message.ID);
+
+      // 2. Reload agent run to get final status/timestamps
+      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      if (agentRun?.ID) {
+        await agentRun.Load(agentRun.ID);
+      }
+
+      // 3. Reload artifacts for this completed message
+      await this.reloadArtifactsForMessage(message.ID);
+
+      // 4. Reload messages to discover newly delegated agent messages
+      // When Sage delegates to Marketing Agent, a new message is created
+      await this.reloadMessagesForActiveConversation();
+
+      // 5. Update inProgressMessageIds to track any new delegated agents
+      this.inProgressMessageIds = [...this.messages
+        .filter(m => m.Status === 'In-Progress')
+        .map(m => m.ID)];
+
+      // 6. Auto-open artifact panel if message has artifacts and no artifact is currently shown
+      if (this.artifactsByDetailId.has(message.ID) && !this.showArtifactPanel) {
+        const artifactList = this.artifactsByDetailId.get(message.ID);
+        if (artifactList && artifactList.length > 0) {
+          // Show the LAST (most recent) artifact
+          this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
+          this.showArtifactPanel = true;
+          await this.loadArtifactPermissions(this.selectedArtifactId);
+        }
+      }
+
+      // 7. Remove task from ActiveTasksService (clears spinner in conversation list)
+      const task = this.activeTasks.getByConversationDetailId(message.ID);
+      if (task) {
+        this.activeTasks.remove(task.id);
+      }
+
+      // 8. Trigger re-render with updated data
+      this.messages = [...this.messages];
+      this.cdr.detectChanges();
+
+      LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
+    } catch (error) {
+      console.error(`Failed to handle completion for message ${message.ID}:`, error);
     }
   }
 
@@ -844,86 +924,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Provides real-time updates of status, timestamps, tokens, cost during execution
    */
   async onAgentRunUpdate(event: {conversationDetailId: string; agentRun?: AIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
-    let run: AIAgentRunEntityExtended;
     if (event.agentRun) {
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
       this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
-      run = event.agentRun;
     }
     else {
       // no agent run, should have agentRunId
-      run = await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId!);
+      await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId!);
     }
 
     // Force message list to re-render with updated agent run
     // This ensures message components receive the fresh agent run data
     this.messages = [...this.messages];
     this.cdr.detectChanges();
-
-    // Start 1-second update timer for smooth UI updates (if not already running)
-    this.startAgentRunUpdateTimer();
-
-    // If agent completed or failed, stop the timer
-    const status = run.Status?.toLowerCase();
-    if (status === 'complete' || status === 'completed' || status === 'failed' || status === 'error') {
-      this.stopAgentRunUpdateTimer();
-    }
-  }
-
-  /**
-   * Start 1-second timer for smooth agent run UI updates
-   * Updates the message list every second to keep elapsed times current
-   * Also detects when messages complete and reloads agent runs
-   *
-   * NOTE: This polling approach causes excessive RunView calls (24+ queries per entity).
-   * TODO: Replace with PubSub completion events - see plans/repair-conversations-ui-performance.md
-   */
-  private startAgentRunUpdateTimer(): void {
-    // Don't start if already running
-    if (this.agentRunUpdateTimer !== null) {
-      return;
-    }
-
-    LogStatusEx({message: '⏱️ Starting agent run update timer (1-second interval)', verboseOnly: true});
-
-    this.agentRunUpdateTimer = setInterval(async () => {
-      // Check for messages that changed from In-Progress to Complete
-      // This handles the navigation scenario where onMessageComplete isn't called
-      await this.detectAndHandleCompletedMessages();
-
-      // Check if we have any active agent runs
-      let hasActiveRuns = false;
-      for (const agentRun of this.agentRunsByDetailId.values()) {
-        const status = agentRun.Status?.toLowerCase();
-        if (status === 'in-progress' || status === 'running') {
-          hasActiveRuns = true;
-          break;
-        }
-      }
-
-      // Keep timer running if we have active runs OR tracking messages for completion
-      // This ensures we detect completions even before agent runs are fully loaded
-      if (hasActiveRuns || this.previousMessageStatuses.size > 0) {
-        // Force message list to re-render so timers update
-        this.messages = [...this.messages];
-        this.cdr.detectChanges();
-      } else {
-        // Stop only if nothing to monitor
-        this.stopAgentRunUpdateTimer();
-      }
-    }, 1000);
-  }
-
-  /**
-   * Stop the agent run update timer
-   */
-  private stopAgentRunUpdateTimer(): void {
-    if (this.agentRunUpdateTimer !== null) {
-      LogStatusEx({message: '⏹️ Stopping agent run update timer', verboseOnly: true});
-      clearInterval(this.agentRunUpdateTimer);
-      this.agentRunUpdateTimer = null;
-    }
   }
 
   /**
@@ -984,92 +998,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
   }
 
-  /**
-   * Detect messages that changed from In-Progress to Complete and reload their agent runs
-   * This handles the navigation scenario where onMessageComplete event isn't fired
-   */
-  private async detectAndHandleCompletedMessages(): Promise<void> {
-    try {
-      for (const message of this.messages) {
-        if (!message.ID) continue;
-
-        const previousStatus = this.previousMessageStatuses.get(message.ID);
-
-        // CRITICAL FIX: If message was tracked as In-Progress, reload from database to get actual current status.
-        // This handles the navigation scenario where local state becomes stale while we're away.
-        // The database has the real status and content (updated by streaming callbacks or agent completion).
-        if (previousStatus === 'In-Progress') {
-          try {
-            await message.Load(message.ID);
-          } catch (loadError) {
-            console.error(`Failed to reload message ${message.ID}:`, loadError);
-            continue;
-          }
-        }
-
-        const currentStatus = message.Status;
-
-        // Detect completion: was In-Progress, now Complete
-        if (previousStatus === 'In-Progress' && currentStatus === 'Complete') {
-          // Get the agent run for this message
-          const agentRun = this.agentRunsByDetailId.get(message.ID);
-          if (agentRun?.ID) {
-            try {
-              // Reload agent run from database to get updated Status
-              await agentRun.Load(agentRun.ID);
-
-              // Reload artifacts for this completed message
-              await this.reloadArtifactsForMessage(message.ID);
-
-              // CRITICAL: Reload messages to pick up newly delegated agent messages
-              // When Sage delegates to Marketing Agent, a new message is created
-              // We need to discover and register callbacks for these new messages
-              await this.reloadMessagesForActiveConversation();
-
-              // Update inProgressMessageIds to include new delegated agents
-              // This triggers callback registration via the setter in message-input
-              this.inProgressMessageIds = [...this.messages
-                .filter(m => m.Status === 'In-Progress')
-                .map(m => m.ID)];
-
-              // Auto-open artifact panel if this message has artifacts and no artifact is currently shown
-              if (this.artifactsByDetailId.has(message.ID) && !this.showArtifactPanel) {
-                const artifactList = this.artifactsByDetailId.get(message.ID);
-                if (artifactList && artifactList.length > 0) {
-                  // Show the LAST (most recent) artifact - uses display data, no lazy load needed
-                  this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
-                  this.showArtifactPanel = true;
-                  // Load permissions for the new artifact
-                  await this.loadArtifactPermissions(this.selectedArtifactId);
-                }
-              }
-
-              // Force re-render with updated agent run and artifacts
-              this.messages = [...this.messages];
-              this.cdr.detectChanges();
-
-              // Remove from tracking map so timer can stop when all messages complete
-              this.previousMessageStatuses.delete(message.ID);
-
-              // Remove task from ActiveTasksService (clears spinner in conversation list)
-              const task = this.activeTasks.getByConversationDetailId(message.ID);
-              if (task) {
-                this.activeTasks.remove(task.id);
-              }
-            } catch (error) {
-              console.error('Failed to reload agent run on completion:', error);
-            }
-          }
-        } else if (currentStatus === 'In-Progress') {
-          // Only track In-Progress messages - don't re-add Complete messages
-          this.previousMessageStatuses.set(message.ID, currentStatus);
-        }
-      }
-    } catch (error) {
-      console.error('Error in detectAndHandleCompletedMessages:', error);
-    }
-  }
-
   async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
@@ -1114,6 +1042,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   private invalidateConversationCache(conversationId: string): void {
     this.conversationDataCache.delete(conversationId);
+    this.loadedPeripheralConversationIds.delete(conversationId);
     LogStatusEx({message: `🗑️ Invalidated cache for conversation ${conversationId}`, verboseOnly: true});
   }
 
