@@ -10,6 +10,7 @@ export interface RunTestParams {
     testId: string;
     verbose?: boolean;
     environment?: string;
+    tags?: string[];
     onProgress?: (progress: TestExecutionProgress) => void;
 }
 
@@ -31,6 +32,22 @@ export interface RunTestSuiteParams {
     verbose?: boolean;
     environment?: string;
     parallel?: boolean;
+    tags?: string[];
+    /**
+     * Run only specific tests by their IDs.
+     * If provided, only tests with matching IDs will be executed.
+     */
+    selectedTestIds?: string[];
+    /**
+     * Start execution from this sequence number (inclusive).
+     * Tests with sequence numbers less than this value will be skipped.
+     */
+    sequenceStart?: number;
+    /**
+     * Stop execution at this sequence number (inclusive).
+     * Tests with sequence numbers greater than this value will be skipped.
+     */
+    sequenceEnd?: number;
     onProgress?: (progress: TestExecutionProgress) => void;
 }
 
@@ -148,12 +165,14 @@ export class GraphQLTestingClient {
                 mutation RunTest(
                     $testId: String!,
                     $verbose: Boolean,
-                    $environment: String
+                    $environment: String,
+                    $tags: String
                 ) {
                     RunTest(
                         testId: $testId,
                         verbose: $verbose,
-                        environment: $environment
+                        environment: $environment,
+                        tags: $tags
                     ) {
                         success
                         errorMessage
@@ -163,10 +182,14 @@ export class GraphQLTestingClient {
                 }
             `;
 
+            // Serialize tags array to JSON string for GraphQL
+            const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
+
             const variables = {
                 testId: params.testId,
                 verbose: params.verbose,
-                environment: params.environment
+                environment: params.environment,
+                tags: tagsJson
             };
 
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);
@@ -237,13 +260,21 @@ export class GraphQLTestingClient {
                     $suiteId: String!,
                     $verbose: Boolean,
                     $environment: String,
-                    $parallel: Boolean
+                    $parallel: Boolean,
+                    $tags: String,
+                    $selectedTestIds: String,
+                    $sequenceStart: Int,
+                    $sequenceEnd: Int
                 ) {
                     RunTestSuite(
                         suiteId: $suiteId,
                         verbose: $verbose,
                         environment: $environment,
-                        parallel: $parallel
+                        parallel: $parallel,
+                        tags: $tags,
+                        selectedTestIds: $selectedTestIds,
+                        sequenceStart: $sequenceStart,
+                        sequenceEnd: $sequenceEnd
                     ) {
                         success
                         errorMessage
@@ -253,11 +284,22 @@ export class GraphQLTestingClient {
                 }
             `;
 
+            // Serialize tags array to JSON string for GraphQL
+            const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
+            // Serialize selectedTestIds array to JSON string for GraphQL
+            const selectedTestIdsJson = params.selectedTestIds && params.selectedTestIds.length > 0
+                ? JSON.stringify(params.selectedTestIds)
+                : undefined;
+
             const variables = {
                 suiteId: params.suiteId,
                 verbose: params.verbose,
                 environment: params.environment,
-                parallel: params.parallel
+                parallel: params.parallel,
+                tags: tagsJson,
+                selectedTestIds: selectedTestIdsJson,
+                sequenceStart: params.sequenceStart,
+                sequenceEnd: params.sequenceEnd
             };
 
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);

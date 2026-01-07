@@ -19,7 +19,8 @@ export class FileFormComponent extends BaseFormComponent {
             { sectionKey: 'classificationStatus', sectionName: 'Classification & Status', isExpanded: true },
             { sectionKey: 'storageDetails', sectionName: 'Storage Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'fileEntityRecordLinks', sectionName: 'File Entity Record Links', isExpanded: false }
+            { sectionKey: 'fileEntityRecordLinks', sectionName: 'File Entity Record Links', isExpanded: false },
+            { sectionKey: 'mJConversationDetailAttachments', sectionName: 'MJ: Conversation Detail Attachments', isExpanded: false }
         ]);
     }
 }

@@ -35,4 +35,12 @@ export interface NavItem {
 
   /** Whether this is the default nav item for the application */
   isDefault?: boolean;
+
+  /**
+   * Status of the nav item. Only 'Active' items are displayed.
+   * - 'Active': Displayed and functional (default if not specified)
+   * - 'Pending': Hidden, reserved for features in development
+   * - 'Disabled': Hidden, explicitly disabled
+   */
+  Status?: 'Active' | 'Pending' | 'Disabled';
 }

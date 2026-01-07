@@ -26,22 +26,19 @@ import { takeUntil } from 'rxjs/operators';
               </button>
               @if (isHeaderMenuOpen) {
                 <div class="header-dropdown-menu">
+                  <button class="dropdown-item" (click)="onRefreshConversationsClick($event)" [disabled]="isRefreshing">
+                    <i class="fas fa-sync-alt" [class.fa-spin]="isRefreshing"></i>
+                    <span>{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
+                  </button>
                   <button class="dropdown-item" (click)="onSelectConversationsClick($event)">
                     <i class="fas fa-check-square"></i>
                     <span>Select Conversations</span>
                   </button>
                   @if (!isMobileView) {
-                    @if (isSidebarPinned) {
-                      <button class="dropdown-item" (click)="onUnpinSidebarClick($event)">
-                        <i class="fas fa-thumbtack-slash"></i>
-                        <span>Unpin Sidebar</span>
-                      </button>
-                    } @else {
-                      <button class="dropdown-item" (click)="onPinSidebarClick($event)">
-                        <i class="fas fa-thumbtack"></i>
-                        <span>Pin Sidebar</span>
-                      </button>
-                    }
+                    <button class="dropdown-item" (click)="onUnpinSidebarClick($event)">
+                      <i class="fas fa-table-columns"></i>
+                      <span>Hide Sidebar</span>
+                    </button>
                   }
                 </div>
               }
@@ -739,6 +736,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   public selectedConversationIds = new Set<string>();
   public searchQuery: string = '';
   public isHeaderMenuOpen: boolean = false;
+  public isRefreshing: boolean = false;
 
   private destroy$ = new Subject<void>();
 
@@ -811,6 +809,22 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     event.stopPropagation();
     this.toggleSelectionMode();
     this.closeHeaderMenu();
+  }
+
+  public async onRefreshConversationsClick(event: Event): Promise<void> {
+    event.stopPropagation();
+    if (this.isRefreshing) return;
+
+    this.isRefreshing = true;
+    try {
+      await this.conversationData.refreshConversations(this.environmentId, this.currentUser);
+    } catch (error) {
+      console.error('Error refreshing conversations:', error);
+      await this.dialogService.alert('Error', 'Failed to refresh conversations. Please try again.');
+    } finally {
+      this.isRefreshing = false;
+      this.closeHeaderMenu();
+    }
   }
 
   public onPinSidebarClick(event: Event): void {

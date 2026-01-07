@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/testing-engine",
-  "version": "2.129.0",
+  "version": "2.130.0",
   "description": "MemberJunction Testing Framework Engine - Core test execution and evaluation engine supporting multiple test types",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,15 +20,15 @@
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.129.0",
-    "@memberjunction/ai-agents": "2.129.0",
-    "@memberjunction/ai-core-plus": "2.129.0",
-    "@memberjunction/ai-prompts": "2.129.0",
-    "@memberjunction/aiengine": "2.129.0",
-    "@memberjunction/core": "2.129.0",
-    "@memberjunction/core-entities": "2.129.0",
-    "@memberjunction/global": "2.129.0",
-    "@memberjunction/testing-engine-base": "2.129.0",
+    "@memberjunction/ai": "2.130.0",
+    "@memberjunction/ai-agents": "2.130.0",
+    "@memberjunction/ai-core-plus": "2.130.0",
+    "@memberjunction/ai-prompts": "2.130.0",
+    "@memberjunction/aiengine": "2.130.0",
+    "@memberjunction/core": "2.130.0",
+    "@memberjunction/core-entities": "2.130.0",
+    "@memberjunction/global": "2.130.0",
+    "@memberjunction/testing-engine-base": "2.130.0",
     "debug": "^4.4.0",
     "rxjs": "^7.8.1",
     "zod": "^3.23.8"

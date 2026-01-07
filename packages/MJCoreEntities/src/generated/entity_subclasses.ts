@@ -1239,7 +1239,7 @@ export const AIAgentSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.`),
@@ -1278,7 +1278,7 @@ export const AIAgentSchema = z.object({
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt ID
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
@@ -1288,7 +1288,7 @@ export const AIAgentSchema = z.object({
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
@@ -1441,13 +1441,13 @@ if this limit is exceeded.`),
         * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
     DefaultArtifactTypeID: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactTypeID
-        * * Display Name: Default Artifact Type ID
+        * * Display Name: Default Artifact Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User ID
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -1553,13 +1553,29 @@ if this limit is exceeded.`),
         * * Display Name: Max Messages
         * * SQL Data Type: int
         * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
+    AttachmentStorageProviderID: z.string().nullable().describe(`
+        * * Field Name: AttachmentStorageProviderID
+        * * Display Name: Attachment Storage Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.`),
+    AttachmentRootPath: z.string().nullable().describe(`
+        * * Field Name: AttachmentRootPath
+        * * Display Name: Attachment Root Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
+    InlineStorageThresholdBytes: z.number().nullable().describe(`
+        * * Field Name: InlineStorageThresholdBytes
+        * * Display Name: Inline Storage Threshold (Bytes)
+        * * SQL Data Type: int
+        * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt
+        * * Display Name: Context Compression Prompt Text
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -1573,9 +1589,13 @@ if this limit is exceeded.`),
         * * Field Name: OwnerUser
         * * Display Name: Owner User
         * * SQL Data Type: nvarchar(100)`),
+    AttachmentStorageProvider: z.string().nullable().describe(`
+        * * Field Name: AttachmentStorageProvider
+        * * Display Name: Attachment Storage Provider Name
+        * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -1655,6 +1675,26 @@ export const AIModelTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultInputModalityID: z.string().describe(`
+        * * Field Name: DefaultInputModalityID
+        * * Display Name: Default Input Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+        * * Description: Default input modality for this model type. Models of this type inherit this as their primary input modality unless overridden.`),
+    DefaultOutputModalityID: z.string().describe(`
+        * * Field Name: DefaultOutputModalityID
+        * * Display Name: Default Output Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+        * * Description: Default output modality for this model type. Models of this type inherit this as their primary output modality unless overridden.`),
+    DefaultInputModality: z.string().describe(`
+        * * Field Name: DefaultInputModality
+        * * Display Name: Default Input Modality
+        * * SQL Data Type: nvarchar(50)`),
+    DefaultOutputModality: z.string().describe(`
+        * * Field Name: DefaultOutputModality
+        * * Display Name: Default Output Modality
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIModelTypeEntityType = z.infer<typeof AIModelTypeSchema>;
@@ -1678,7 +1718,7 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AIModelTypeID: z.string().describe(`
         * * Field Name: AIModelTypeID
-        * * Display Name: AI Model Type ID
+        * * Display Name: AI Model Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)`),
     PowerRank: z.number().nullable().describe(`
@@ -1689,7 +1729,7 @@ export const AIModelSchema = z.object({
         * * Description: Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Controls whether this AI model is available for use in the system.`),
@@ -1720,9 +1760,21 @@ export const AIModelSchema = z.object({
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
         * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
+    InheritTypeModalities: z.boolean().describe(`
+        * * Field Name: InheritTypeModalities
+        * * Display Name: Inherit Type Modalities
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When TRUE (default), the model inherits default input/output modalities from its AIModelType AND can extend with additional modalities via AIModelModality records. When FALSE, only modalities explicitly defined in AIModelModality are used.`),
+    PriorVersionID: z.string().nullable().describe(`
+        * * Field Name: PriorVersionID
+        * * Display Name: Prior Version
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        * * Description: Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
-        * * Display Name: AIModel Type
+        * * Display Name: AI Model Type
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -1738,7 +1790,7 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     APIName: z.string().nullable().describe(`
         * * Field Name: APIName
-        * * Display Name: APIName
+        * * Display Name: API Name
         * * SQL Data Type: nvarchar(100)`),
     InputTokenLimit: z.number().nullable().describe(`
         * * Field Name: InputTokenLimit
@@ -6385,7 +6437,7 @@ export const EntityFieldValueSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityFieldID: z.string().describe(`
         * * Field Name: EntityFieldID
-        * * Display Name: Entity Field ID
+        * * Display Name: Entity Field
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)`),
     Sequence: z.number().describe(`
@@ -6427,7 +6479,7 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -8709,6 +8761,72 @@ export const AIAgentExampleSchema = z.object({
 export type AIAgentExampleEntityType = z.infer<typeof AIAgentExampleSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Modalities
+ */
+export const AIAgentModalitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    Direction: z.union([z.literal('Input'), z.literal('Output')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+        * * Description: Whether this is an Input or Output modality for the agent.`),
+    IsAllowed: z.boolean().describe(`
+        * * Field Name: IsAllowed
+        * * Display Name: Allowed
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this modality is allowed for this agent. Set to FALSE to disable a modality even if the underlying model supports it.`),
+    MaxSizeBytes: z.number().nullable().describe(`
+        * * Field Name: MaxSizeBytes
+        * * Display Name: Max Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: Agent-specific maximum size in bytes. Overrides model and system defaults. Must be less than or equal to model limit.`),
+    MaxCountPerMessage: z.number().nullable().describe(`
+        * * Field Name: MaxCountPerMessage
+        * * Display Name: Max Count Per Message
+        * * SQL Data Type: int
+        * * Description: Agent-specific maximum count per message. Overrides model and system defaults. Must be less than or equal to model limit.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type AIAgentModalityEntityType = z.infer<typeof AIAgentModalitySchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Permissions
  */
 export const AIAgentPermissionSchema = z.object({
@@ -9739,6 +9857,73 @@ export const AIAgentTypeSchema = z.object({
 export type AIAgentTypeEntityType = z.infer<typeof AIAgentTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Architectures
+ */
+export const AIArchitectureSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Architecture Name
+        * * SQL Data Type: nvarchar(100)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Category: z.union([z.literal('Core'), z.literal('Hybrid'), z.literal('Optimization'), z.literal('Specialized')]).describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Core
+    *   * Hybrid
+    *   * Optimization
+    *   * Specialized`),
+    ParentArchitectureID: z.string().nullable().describe(`
+        * * Field Name: ParentArchitectureID
+        * * Display Name: Parent Architecture ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)
+        * * Description: Hierarchical relationship to parent architecture. Used for variants like Sparse Transformer being a child of Transformer.`),
+    WikipediaURL: z.string().nullable().describe(`
+        * * Field Name: WikipediaURL
+        * * Display Name: Wikipedia URL
+        * * SQL Data Type: nvarchar(500)`),
+    YearIntroduced: z.number().nullable().describe(`
+        * * Field Name: YearIntroduced
+        * * Display Name: Year Introduced
+        * * SQL Data Type: int`),
+    KeyPaper: z.string().nullable().describe(`
+        * * Field Name: KeyPaper
+        * * Display Name: Key Paper
+        * * SQL Data Type: nvarchar(500)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ParentArchitecture: z.string().nullable().describe(`
+        * * Field Name: ParentArchitecture
+        * * Display Name: Parent Architecture
+        * * SQL Data Type: nvarchar(100)`),
+    RootParentArchitectureID: z.string().nullable().describe(`
+        * * Field Name: RootParentArchitectureID
+        * * Display Name: Root Parent Architecture ID
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type AIArchitectureEntityType = z.infer<typeof AIArchitectureSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Configuration Params
  */
 export const AIConfigurationParamSchema = z.object({
@@ -9837,13 +10022,13 @@ export const AIConfigurationSchema = z.object({
         * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.`),
     DefaultPromptForContextCompressionID: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextCompressionID
-        * * Display Name: Default Prompt For Context Compression ID
+        * * Display Name: Default Prompt For Context Compression
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt to use for context compression when not specified at the agent level.`),
     DefaultPromptForContextSummarizationID: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextSummarizationID
-        * * Display Name: Default Prompt For Context Summarization ID
+        * * Display Name: Default Prompt For Context Summarization
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt to use for context summarization when not specified at the agent level.`),
@@ -9857,6 +10042,23 @@ export const AIConfigurationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultStorageProviderID: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageProviderID
+        * * Display Name: Default Storage Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: Default file storage provider for agent attachments. Used when an agent does not specify its own AttachmentStorageProviderID.`),
+    DefaultStorageRootPath: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageRootPath
+        * * Display Name: Default Storage Root Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Default root path within the storage provider for agent attachments. Used when an agent does not specify its own AttachmentRootPath.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.`),
     DefaultPromptForContextCompression: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextCompression
         * * Display Name: Default Prompt For Context Compression
@@ -9865,6 +10067,18 @@ export const AIConfigurationSchema = z.object({
         * * Field Name: DefaultPromptForContextSummarization
         * * Display Name: Default Prompt For Context Summarization
         * * SQL Data Type: nvarchar(255)`),
+    DefaultStorageProvider: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageProvider
+        * * Display Name: Default Storage Provider
+        * * SQL Data Type: nvarchar(50)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIConfigurationEntityType = z.infer<typeof AIConfigurationSchema>;
@@ -9953,6 +10167,140 @@ export const AICredentialBindingSchema = z.object({
 });
 
 export type AICredentialBindingEntityType = z.infer<typeof AICredentialBindingSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Modalities
+ */
+export const AIModalitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Display name of the modality (e.g., Text, Image, Audio, Video, File, Embedding).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Detailed description of this modality and its use cases.`),
+    ContentBlockType: z.union([z.literal('audio_url'), z.literal('embedding'), z.literal('file_url'), z.literal('image_url'), z.literal('text'), z.literal('video_url')]).describe(`
+        * * Field Name: ContentBlockType
+        * * Display Name: Content Block Type
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio_url
+    *   * embedding
+    *   * file_url
+    *   * image_url
+    *   * text
+    *   * video_url
+        * * Description: Maps to ChatMessageContentBlock.type values: text, image_url, video_url, audio_url, file_url, embedding. Must match the TypeScript type definition.`),
+    MIMETypePattern: z.string().nullable().describe(`
+        * * Field Name: MIMETypePattern
+        * * Display Name: MIME Type Pattern
+        * * SQL Data Type: nvarchar(100)
+        * * Description: MIME type pattern for this modality (e.g., image/*, audio/*, video/*, text/*, application/*). Used for file type validation.`),
+    Type: z.union([z.literal('Binary'), z.literal('Content'), z.literal('Structured')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Content
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Binary
+    *   * Content
+    *   * Structured
+        * * Description: Classification type: Content (human-readable text), Structured (JSON/embeddings), Binary (media files like images, audio, video).`),
+    DefaultMaxSizeBytes: z.number().nullable().describe(`
+        * * Field Name: DefaultMaxSizeBytes
+        * * Display Name: Default Max Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: System-wide default maximum size in bytes for this modality. Can be overridden at model or agent level. NULL means no size limit.`),
+    DefaultMaxCountPerMessage: z.number().nullable().describe(`
+        * * Field Name: DefaultMaxCountPerMessage
+        * * Display Name: Default Max Count Per Message
+        * * SQL Data Type: int
+        * * Description: System-wide default maximum count per message for this modality. Can be overridden at model or agent level. NULL means no count limit.`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order for UI presentation. Lower numbers appear first.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIModalityEntityType = z.infer<typeof AIModalitySchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Architectures
+ */
+export const AIModelArchitectureSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
+    ArchitectureID: z.string().describe(`
+        * * Field Name: ArchitectureID
+        * * Display Name: Architecture
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Ranking of this architecture for the model. 1=Primary architecture, 2=Secondary, etc. Lower numbers indicate more dominant role.`),
+    Weight: z.number().nullable().describe(`
+        * * Field Name: Weight
+        * * Display Name: Weight
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Optional weight (0.0-1.0) indicating the mix ratio for hybrid architectures. E.g., 0.7 for 70% contribution.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(500)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    Architecture: z.string().describe(`
+        * * Field Name: Architecture
+        * * Display Name: Architecture Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIModelArchitectureEntityType = z.infer<typeof AIModelArchitectureSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Costs
@@ -10063,6 +10411,93 @@ export const AIModelCostSchema = z.object({
 });
 
 export type AIModelCostEntityType = z.infer<typeof AIModelCostSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Modalities
+ */
+export const AIModelModalitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    Direction: z.union([z.literal('Input'), z.literal('Output')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+        * * Description: Whether this is an Input or Output modality for the model.`),
+    IsSupported: z.boolean().describe(`
+        * * Field Name: IsSupported
+        * * Display Name: Is Supported
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this modality is supported. Can be set to FALSE to explicitly disable an inherited modality.`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: For input modalities: whether this modality is required (e.g., text is usually required for LLMs). For outputs: not typically applicable.`),
+    SupportedFormats: z.string().nullable().describe(`
+        * * Field Name: SupportedFormats
+        * * Display Name: Supported Formats
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-separated list of supported file formats/extensions (e.g., png,jpg,webp,gif for images or mp3,wav,m4a for audio).`),
+    MaxSizeBytes: z.number().nullable().describe(`
+        * * Field Name: MaxSizeBytes
+        * * Display Name: Maximum Size (Bytes)
+        * * SQL Data Type: int
+        * * Description: Model-specific maximum size in bytes. Overrides AIModality.DefaultMaxSizeBytes. NULL means use system default.`),
+    MaxCountPerMessage: z.number().nullable().describe(`
+        * * Field Name: MaxCountPerMessage
+        * * Display Name: Maximum Count per Message
+        * * SQL Data Type: int
+        * * Description: Model-specific maximum count per message. Overrides AIModality.DefaultMaxCountPerMessage. NULL means use system default.`),
+    MaxDimension: z.number().nullable().describe(`
+        * * Field Name: MaxDimension
+        * * Display Name: Maximum Dimension (px)
+        * * SQL Data Type: int
+        * * Description: For image/video modalities: maximum dimension (width or height) in pixels supported by this model.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Additional notes or documentation about this model-modality configuration.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type AIModelModalityEntityType = z.infer<typeof AIModelModalitySchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Model Price Types
@@ -12312,6 +12747,104 @@ export const ConversationDetailArtifactSchema = z.object({
 export type ConversationDetailArtifactEntityType = z.infer<typeof ConversationDetailArtifactSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Conversation Detail Attachments
+ */
+export const ConversationDetailAttachmentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationDetailID: z.string().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+        * * Description: The modality type of this attachment (Image, Audio, Video, File, etc.). References the AIModality table.`),
+    MimeType: z.string().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: MIME type of the attachment (e.g., image/png, video/mp4, audio/mp3).`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(4000)
+        * * Description: Original filename of the attachment. Supports long cloud storage paths up to 4000 characters.`),
+    FileSizeBytes: z.number().describe(`
+        * * Field Name: FileSizeBytes
+        * * Display Name: File Size (bytes)
+        * * SQL Data Type: int
+        * * Description: Size of the attachment in bytes.`),
+    Width: z.number().nullable().describe(`
+        * * Field Name: Width
+        * * Display Name: Width (px)
+        * * SQL Data Type: int
+        * * Description: Width in pixels for images and videos.`),
+    Height: z.number().nullable().describe(`
+        * * Field Name: Height
+        * * Display Name: Height (px)
+        * * SQL Data Type: int
+        * * Description: Height in pixels for images and videos.`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration (seconds)
+        * * SQL Data Type: int
+        * * Description: Duration in seconds for audio and video files.`),
+    InlineData: z.string().nullable().describe(`
+        * * Field Name: InlineData
+        * * Display Name: Inline Data (Base64)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Base64-encoded file data for small attachments stored inline. Mutually exclusive with FileID - exactly one must be populated.`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Files (vwFiles.ID)
+        * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order for multiple attachments in a message. Lower numbers appear first.`),
+    ThumbnailBase64: z.string().nullable().describe(`
+        * * Field Name: ThumbnailBase64
+        * * Display Name: Thumbnail (Base64)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Base64-encoded thumbnail image for quick preview display. Max 200px on longest side.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ConversationDetail: z.string().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Conversation Detail Text
+        * * SQL Data Type: nvarchar(MAX)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality Name
+        * * SQL Data Type: nvarchar(50)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File Reference
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type ConversationDetailAttachmentEntityType = z.infer<typeof ConversationDetailAttachmentSchema>;
+
+/**
  * zod schema definition for the entity MJ: Conversation Detail Ratings
  */
 export const ConversationDetailRatingSchema = z.object({
@@ -14040,7 +14573,7 @@ export const TestRunFeedbackSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ReviewerUser: z.string().describe(`
         * * Field Name: ReviewerUser
-        * * Display Name: Reviewer Name
+        * * Display Name: Reviewer User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -14069,7 +14602,7 @@ export const TestRunSchema = z.object({
         * * Description: Foreign Key - Optional parent suite run if this test was part of a suite execution. NULL for standalone test runs.`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User ID
+        * * Display Name: Run By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: Foreign Key - The user who triggered the test run (could be system user for automated runs)`),
@@ -14082,13 +14615,13 @@ export const TestRunSchema = z.object({
         * * Field Name: TargetType
         * * Display Name: Target Type
         * * SQL Data Type: nvarchar(100)
-        * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.`),
+        * * Description: Optional sub-category or variant label for the test target. Use this to distinguish between different test scenarios within the same entity type (e.g., "Summarization", "Classification", "Code Review" for AI Agent tests). The entity type itself should be specified via TargetLogEntityID.`),
     TargetLogID: z.string().nullable().describe(`
         * * Field Name: TargetLogID
-        * * Display Name: Target Log ID
+        * * Display Name: Target Log
         * * SQL Data Type: uniqueidentifier
         * * Description: ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.`),
-    Status: z.union([z.literal('Error'), z.literal('Failed'), z.literal('Passed'), z.literal('Pending'), z.literal('Running'), z.literal('Skipped')]).describe(`
+    Status: z.union([z.literal('Error'), z.literal('Failed'), z.literal('Passed'), z.literal('Pending'), z.literal('Running'), z.literal('Skipped'), z.literal('Timeout')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -14101,7 +14634,8 @@ export const TestRunSchema = z.object({
     *   * Pending
     *   * Running
     *   * Skipped
-        * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)`),
+    *   * Timeout
+        * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation), Timeout (execution exceeded time limit and was cancelled)`),
     StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
@@ -14114,7 +14648,7 @@ export const TestRunSchema = z.object({
         * * Description: Timestamp when the test run completed`),
     DurationSeconds: z.number().nullable().describe(`
         * * Field Name: DurationSeconds
-        * * Display Name: Duration (seconds)
+        * * Display Name: Duration Seconds
         * * SQL Data Type: decimal(10, 3)
         * * Description: Execution time in seconds for this test`),
     InputData: z.string().nullable().describe(`
@@ -14154,7 +14688,7 @@ export const TestRunSchema = z.object({
         * * Description: Overall test score from 0.0000 to 1.0000 (0-100%). Calculated by test driver based on passed/failed checks and weights.`),
     CostUSD: z.number().nullable().describe(`
         * * Field Name: CostUSD
-        * * Display Name: Cost (USD)
+        * * Display Name: Cost USD
         * * SQL Data Type: decimal(10, 6)
         * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)`),
     ErrorMessage: z.string().nullable().describe(`
@@ -14177,6 +14711,47 @@ export const TestRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Log: z.string().nullable().describe(`
+        * * Field Name: Log
+        * * Display Name: Log
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.`),
+    Tags: z.string().nullable().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.`),
+    MachineName: z.string().nullable().describe(`
+        * * Field Name: MachineName
+        * * Display Name: Machine Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Hostname of the machine that executed this test. Used for identifying the execution environment and debugging infrastructure-specific issues.`),
+    MachineID: z.string().nullable().describe(`
+        * * Field Name: MachineID
+        * * Display Name: Machine ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of test execution across different machines.`),
+    RunByUserName: z.string().nullable().describe(`
+        * * Field Name: RunByUserName
+        * * Display Name: Run By User Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized user name who ran the test. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.`),
+    RunByUserEmail: z.string().nullable().describe(`
+        * * Field Name: RunByUserEmail
+        * * Display Name: Run By User Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized email address of the user who ran the test. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.`),
+    RunContextDetails: z.string().nullable().describe(`
+        * * Field Name: RunContextDetails
+        * * Display Name: Run Context Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
+    TargetLogEntityID: z.string().nullable().describe(`
+        * * Field Name: TargetLogEntityID
+        * * Display Name: Target Log Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.`),
     Test: z.string().describe(`
         * * Field Name: Test
         * * Display Name: Test
@@ -14189,6 +14764,10 @@ export const TestRunSchema = z.object({
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
+    TargetLogEntity: z.string().nullable().describe(`
+        * * Field Name: TargetLogEntity
+        * * Display Name: Target Log Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type TestRunEntityType = z.infer<typeof TestRunSchema>;
@@ -14284,12 +14863,12 @@ export const TestSuiteRunSchema = z.object({
         * * Description: Number of tests that encountered execution errors (different from failing validation)`),
     TotalDurationSeconds: z.number().nullable().describe(`
         * * Field Name: TotalDurationSeconds
-        * * Display Name: Total Duration Seconds
+        * * Display Name: Total Duration (seconds)
         * * SQL Data Type: decimal(10, 3)
         * * Description: Total execution time in seconds for the entire suite`),
     TotalCostUSD: z.number().nullable().describe(`
         * * Field Name: TotalCostUSD
-        * * Display Name: Total Cost USD
+        * * Display Name: Total Cost (USD)
         * * SQL Data Type: decimal(10, 6)
         * * Description: Total cost in USD for running the entire suite (sum of all test costs)`),
     Configuration: z.string().nullable().describe(`
@@ -14317,13 +14896,43 @@ export const TestSuiteRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Tags: z.string().nullable().describe(`
+        * * Field Name: Tags
+        * * Display Name: Tags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).`),
+    MachineName: z.string().nullable().describe(`
+        * * Field Name: MachineName
+        * * Display Name: Machine Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Hostname of the machine that executed this suite. Used for identifying the execution environment and debugging infrastructure-specific issues.`),
+    MachineID: z.string().nullable().describe(`
+        * * Field Name: MachineID
+        * * Display Name: Machine ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of suite execution across different machines.`),
+    RunByUserName: z.string().nullable().describe(`
+        * * Field Name: RunByUserName
+        * * Display Name: Run By User Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized user name who ran the suite. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.`),
+    RunByUserEmail: z.string().nullable().describe(`
+        * * Field Name: RunByUserEmail
+        * * Display Name: Run By User Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Denormalized email address of the user who ran the suite. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.`),
+    RunContextDetails: z.string().nullable().describe(`
+        * * Field Name: RunContextDetails
+        * * Display Name: Run Context Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`),
     Suite: z.string().describe(`
         * * Field Name: Suite
-        * * Display Name: Suite Name
+        * * Display Name: Suite
         * * SQL Data Type: nvarchar(255)`),
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
-        * * Display Name: Run By User Name
+        * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -14405,7 +15014,7 @@ export const TestSuiteSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
         * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.`),
@@ -14450,13 +15059,18 @@ export const TestSuiteSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    MaxExecutionTimeMS: z.number().nullable().describe(`
+        * * Field Name: MaxExecutionTimeMS
+        * * Display Name: Max Execution Time (ms)
+        * * SQL Data Type: int
+        * * Description: Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -14522,7 +15136,7 @@ export const TestSchema = z.object({
         * * Default Value: newsequentialid()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Test Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
         * * Description: Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.`),
@@ -14575,12 +15189,12 @@ export const TestSchema = z.object({
         * * Description: Priority for execution ordering. Lower numbers run first. Useful for dependencies or critical path tests.`),
     EstimatedDurationSeconds: z.number().nullable().describe(`
         * * Field Name: EstimatedDurationSeconds
-        * * Display Name: Estimated Duration Seconds
+        * * Display Name: Estimated Duration (seconds)
         * * SQL Data Type: int
         * * Description: Estimated execution time in seconds. Used for scheduling and timeout calculations.`),
     EstimatedCostUSD: z.number().nullable().describe(`
         * * Field Name: EstimatedCostUSD
-        * * Display Name: Estimated Cost USD
+        * * Display Name: Estimated Cost (USD)
         * * SQL Data Type: decimal(10, 6)
         * * Description: Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.`),
     __mj_CreatedAt: z.date().describe(`
@@ -14598,9 +15212,14 @@ export const TestSchema = z.object({
         * * Display Name: Repeat Count
         * * SQL Data Type: int
         * * Description: Number of times to repeat this test execution. NULL or 1 = single execution. Values > 1 will create multiple test runs for statistical analysis.`),
+    MaxExecutionTimeMS: z.number().nullable().describe(`
+        * * Field Name: MaxExecutionTimeMS
+        * * Display Name: Max Execution Time (ms)
+        * * SQL Data Type: int
+        * * Description: Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Test Type Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -21690,7 +22309,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.
@@ -21777,7 +22396,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt ID
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     */
@@ -21803,7 +22422,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
@@ -22140,7 +22759,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactTypeID
-    * * Display Name: Default Artifact Type ID
+    * * Display Name: Default Artifact Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
     * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.
@@ -22154,7 +22773,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User ID
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -22373,6 +22992,46 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: AttachmentStorageProviderID
+    * * Display Name: Attachment Storage Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.
+    */
+    get AttachmentStorageProviderID(): string | null {
+        return this.Get('AttachmentStorageProviderID');
+    }
+    set AttachmentStorageProviderID(value: string | null) {
+        this.Set('AttachmentStorageProviderID', value);
+    }
+
+    /**
+    * * Field Name: AttachmentRootPath
+    * * Display Name: Attachment Root Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder
+    */
+    get AttachmentRootPath(): string | null {
+        return this.Get('AttachmentRootPath');
+    }
+    set AttachmentRootPath(value: string | null) {
+        this.Set('AttachmentRootPath', value);
+    }
+
+    /**
+    * * Field Name: InlineStorageThresholdBytes
+    * * Display Name: Inline Storage Threshold (Bytes)
+    * * SQL Data Type: int
+    * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
+    */
+    get InlineStorageThresholdBytes(): number | null {
+        return this.Get('InlineStorageThresholdBytes');
+    }
+    set InlineStorageThresholdBytes(value: number | null) {
+        this.Set('InlineStorageThresholdBytes', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -22383,7 +23042,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt
+    * * Display Name: Context Compression Prompt Text
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -22418,8 +23077,17 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: AttachmentStorageProvider
+    * * Display Name: Attachment Storage Provider Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AttachmentStorageProvider(): string | null {
+        return this.Get('AttachmentStorageProvider');
+    }
+
+    /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -22638,6 +23306,52 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: DefaultInputModalityID
+    * * Display Name: Default Input Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    * * Description: Default input modality for this model type. Models of this type inherit this as their primary input modality unless overridden.
+    */
+    get DefaultInputModalityID(): string {
+        return this.Get('DefaultInputModalityID');
+    }
+    set DefaultInputModalityID(value: string) {
+        this.Set('DefaultInputModalityID', value);
+    }
+
+    /**
+    * * Field Name: DefaultOutputModalityID
+    * * Display Name: Default Output Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    * * Description: Default output modality for this model type. Models of this type inherit this as their primary output modality unless overridden.
+    */
+    get DefaultOutputModalityID(): string {
+        return this.Get('DefaultOutputModalityID');
+    }
+    set DefaultOutputModalityID(value: string) {
+        this.Set('DefaultOutputModalityID', value);
+    }
+
+    /**
+    * * Field Name: DefaultInputModality
+    * * Display Name: Default Input Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get DefaultInputModality(): string {
+        return this.Get('DefaultInputModality');
+    }
+
+    /**
+    * * Field Name: DefaultOutputModality
+    * * Display Name: Default Output Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get DefaultOutputModality(): string {
+        return this.Get('DefaultOutputModality');
+    }
 }
 
 
@@ -22765,7 +23479,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: AIModelTypeID
-    * * Display Name: AI Model Type ID
+    * * Display Name: AI Model Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)
     */
@@ -22792,7 +23506,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Controls whether this AI model is available for use in the system.
@@ -22866,8 +23580,36 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
+    * * Field Name: InheritTypeModalities
+    * * Display Name: Inherit Type Modalities
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When TRUE (default), the model inherits default input/output modalities from its AIModelType AND can extend with additional modalities via AIModelModality records. When FALSE, only modalities explicitly defined in AIModelModality are used.
+    */
+    get InheritTypeModalities(): boolean {
+        return this.Get('InheritTypeModalities');
+    }
+    set InheritTypeModalities(value: boolean) {
+        this.Set('InheritTypeModalities', value);
+    }
+
+    /**
+    * * Field Name: PriorVersionID
+    * * Display Name: Prior Version
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.
+    */
+    get PriorVersionID(): string | null {
+        return this.Get('PriorVersionID');
+    }
+    set PriorVersionID(value: string | null) {
+        this.Set('PriorVersionID', value);
+    }
+
+    /**
     * * Field Name: AIModelType
-    * * Display Name: AIModel Type
+    * * Display Name: AI Model Type
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {
@@ -22903,7 +23645,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * * Field Name: APIName
-    * * Display Name: APIName
+    * * Display Name: API Name
     * * SQL Data Type: nvarchar(100)
     */
     get APIName(): string | null {
@@ -34864,7 +35606,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityFieldID
-    * * Display Name: Entity Field ID
+    * * Display Name: Entity Field
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)
     */
@@ -34966,7 +35708,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     */
     get EntityID(): string {
@@ -40687,6 +41429,172 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
 
 
 /**
+ * MJ: AI Agent Modalities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentModality
+ * * Base View: vwAIAgentModalities
+ * * @description Agent-level modality configuration. Allows agents to restrict or customize modality settings beyond what the model supports. Absence of a record means the agent uses model defaults (Text in/out assumed if no records exist).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Modalities')
+export class AIAgentModalityEntity extends BaseEntity<AIAgentModalityEntityType> {
+    /**
+    * Loads the MJ: AI Agent Modalities record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Modalities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentModalityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+    * * Description: Whether this is an Input or Output modality for the agent.
+    */
+    get Direction(): 'Input' | 'Output' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Input' | 'Output') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: IsAllowed
+    * * Display Name: Allowed
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this modality is allowed for this agent. Set to FALSE to disable a modality even if the underlying model supports it.
+    */
+    get IsAllowed(): boolean {
+        return this.Get('IsAllowed');
+    }
+    set IsAllowed(value: boolean) {
+        this.Set('IsAllowed', value);
+    }
+
+    /**
+    * * Field Name: MaxSizeBytes
+    * * Display Name: Max Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: Agent-specific maximum size in bytes. Overrides model and system defaults. Must be less than or equal to model limit.
+    */
+    get MaxSizeBytes(): number | null {
+        return this.Get('MaxSizeBytes');
+    }
+    set MaxSizeBytes(value: number | null) {
+        this.Set('MaxSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: MaxCountPerMessage
+    * * Display Name: Max Count Per Message
+    * * SQL Data Type: int
+    * * Description: Agent-specific maximum count per message. Overrides model and system defaults. Must be less than or equal to model limit.
+    */
+    get MaxCountPerMessage(): number | null {
+        return this.Get('MaxCountPerMessage');
+    }
+    set MaxCountPerMessage(value: number | null) {
+        this.Set('MaxCountPerMessage', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+}
+
+
+/**
  * MJ: AI Agent Permissions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentPermission
@@ -43389,6 +44297,181 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
 
 
 /**
+ * MJ: AI Architectures - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIArchitecture
+ * * Base View: vwAIArchitectures
+ * * @description Master table of AI model architectures (Transformer, Diffusion, MoE, etc.) for model catalog enrichment and eval reporting.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Architectures')
+export class AIArchitectureEntity extends BaseEntity<AIArchitectureEntityType> {
+    /**
+    * Loads the MJ: AI Architectures record from the database
+    * @param ID: string - primary key value to load the MJ: AI Architectures record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIArchitectureEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Architecture Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Core
+    *   * Hybrid
+    *   * Optimization
+    *   * Specialized
+    */
+    get Category(): 'Core' | 'Hybrid' | 'Optimization' | 'Specialized' {
+        return this.Get('Category');
+    }
+    set Category(value: 'Core' | 'Hybrid' | 'Optimization' | 'Specialized') {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: ParentArchitectureID
+    * * Display Name: Parent Architecture ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)
+    * * Description: Hierarchical relationship to parent architecture. Used for variants like Sparse Transformer being a child of Transformer.
+    */
+    get ParentArchitectureID(): string | null {
+        return this.Get('ParentArchitectureID');
+    }
+    set ParentArchitectureID(value: string | null) {
+        this.Set('ParentArchitectureID', value);
+    }
+
+    /**
+    * * Field Name: WikipediaURL
+    * * Display Name: Wikipedia URL
+    * * SQL Data Type: nvarchar(500)
+    */
+    get WikipediaURL(): string | null {
+        return this.Get('WikipediaURL');
+    }
+    set WikipediaURL(value: string | null) {
+        this.Set('WikipediaURL', value);
+    }
+
+    /**
+    * * Field Name: YearIntroduced
+    * * Display Name: Year Introduced
+    * * SQL Data Type: int
+    */
+    get YearIntroduced(): number | null {
+        return this.Get('YearIntroduced');
+    }
+    set YearIntroduced(value: number | null) {
+        this.Set('YearIntroduced', value);
+    }
+
+    /**
+    * * Field Name: KeyPaper
+    * * Display Name: Key Paper
+    * * SQL Data Type: nvarchar(500)
+    */
+    get KeyPaper(): string | null {
+        return this.Get('KeyPaper');
+    }
+    set KeyPaper(value: string | null) {
+        this.Set('KeyPaper', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ParentArchitecture
+    * * Display Name: Parent Architecture
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ParentArchitecture(): string | null {
+        return this.Get('ParentArchitecture');
+    }
+
+    /**
+    * * Field Name: RootParentArchitectureID
+    * * Display Name: Root Parent Architecture ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentArchitectureID(): string | null {
+        return this.Get('RootParentArchitectureID');
+    }
+}
+
+
+/**
  * MJ: AI Configuration Params - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIConfigurationParam
@@ -43640,7 +44723,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
     /**
     * * Field Name: DefaultPromptForContextCompressionID
-    * * Display Name: Default Prompt For Context Compression ID
+    * * Display Name: Default Prompt For Context Compression
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Default prompt to use for context compression when not specified at the agent level.
@@ -43654,7 +44737,7 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
 
     /**
     * * Field Name: DefaultPromptForContextSummarizationID
-    * * Display Name: Default Prompt For Context Summarization ID
+    * * Display Name: Default Prompt For Context Summarization
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Default prompt to use for context summarization when not specified at the agent level.
@@ -43687,6 +44770,47 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     }
 
     /**
+    * * Field Name: DefaultStorageProviderID
+    * * Display Name: Default Storage Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: Default file storage provider for agent attachments. Used when an agent does not specify its own AttachmentStorageProviderID.
+    */
+    get DefaultStorageProviderID(): string | null {
+        return this.Get('DefaultStorageProviderID');
+    }
+    set DefaultStorageProviderID(value: string | null) {
+        this.Set('DefaultStorageProviderID', value);
+    }
+
+    /**
+    * * Field Name: DefaultStorageRootPath
+    * * Display Name: Default Storage Root Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Default root path within the storage provider for agent attachments. Used when an agent does not specify its own AttachmentRootPath.
+    */
+    get DefaultStorageRootPath(): string | null {
+        return this.Get('DefaultStorageRootPath');
+    }
+    set DefaultStorageRootPath(value: string | null) {
+        this.Set('DefaultStorageRootPath', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
     * * Field Name: DefaultPromptForContextCompression
     * * Display Name: Default Prompt For Context Compression
     * * SQL Data Type: nvarchar(255)
@@ -43702,6 +44826,33 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     */
     get DefaultPromptForContextSummarization(): string | null {
         return this.Get('DefaultPromptForContextSummarization');
+    }
+
+    /**
+    * * Field Name: DefaultStorageProvider
+    * * Display Name: Default Storage Provider
+    * * SQL Data Type: nvarchar(50)
+    */
+    get DefaultStorageProvider(): string | null {
+        return this.Get('DefaultStorageProvider');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -44020,6 +45171,390 @@ export class AICredentialBindingEntity extends BaseEntity<AICredentialBindingEnt
     */
     get AIPromptModel(): string | null {
         return this.Get('AIPromptModel');
+    }
+}
+
+
+/**
+ * MJ: AI Modalities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModality
+ * * Base View: vwAIModalities
+ * * @description Master list of AI content modalities (Text, Image, Audio, Video, etc.) that models can accept as input or produce as output. New modalities can be added via INSERT without schema changes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Modalities')
+export class AIModalityEntity extends BaseEntity<AIModalityEntityType> {
+    /**
+    * Loads the MJ: AI Modalities record from the database
+    * @param ID: string - primary key value to load the MJ: AI Modalities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModalityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Display name of the modality (e.g., Text, Image, Audio, Video, File, Embedding).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Detailed description of this modality and its use cases.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ContentBlockType
+    * * Display Name: Content Block Type
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio_url
+    *   * embedding
+    *   * file_url
+    *   * image_url
+    *   * text
+    *   * video_url
+    * * Description: Maps to ChatMessageContentBlock.type values: text, image_url, video_url, audio_url, file_url, embedding. Must match the TypeScript type definition.
+    */
+    get ContentBlockType(): 'audio_url' | 'embedding' | 'file_url' | 'image_url' | 'text' | 'video_url' {
+        return this.Get('ContentBlockType');
+    }
+    set ContentBlockType(value: 'audio_url' | 'embedding' | 'file_url' | 'image_url' | 'text' | 'video_url') {
+        this.Set('ContentBlockType', value);
+    }
+
+    /**
+    * * Field Name: MIMETypePattern
+    * * Display Name: MIME Type Pattern
+    * * SQL Data Type: nvarchar(100)
+    * * Description: MIME type pattern for this modality (e.g., image/*, audio/*, video/*, text/*, application/*). Used for file type validation.
+    */
+    get MIMETypePattern(): string | null {
+        return this.Get('MIMETypePattern');
+    }
+    set MIMETypePattern(value: string | null) {
+        this.Set('MIMETypePattern', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Content
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Binary
+    *   * Content
+    *   * Structured
+    * * Description: Classification type: Content (human-readable text), Structured (JSON/embeddings), Binary (media files like images, audio, video).
+    */
+    get Type(): 'Binary' | 'Content' | 'Structured' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Binary' | 'Content' | 'Structured') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: DefaultMaxSizeBytes
+    * * Display Name: Default Max Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: System-wide default maximum size in bytes for this modality. Can be overridden at model or agent level. NULL means no size limit.
+    */
+    get DefaultMaxSizeBytes(): number | null {
+        return this.Get('DefaultMaxSizeBytes');
+    }
+    set DefaultMaxSizeBytes(value: number | null) {
+        this.Set('DefaultMaxSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: DefaultMaxCountPerMessage
+    * * Display Name: Default Max Count Per Message
+    * * SQL Data Type: int
+    * * Description: System-wide default maximum count per message for this modality. Can be overridden at model or agent level. NULL means no count limit.
+    */
+    get DefaultMaxCountPerMessage(): number | null {
+        return this.Get('DefaultMaxCountPerMessage');
+    }
+    set DefaultMaxCountPerMessage(value: number | null) {
+        this.Set('DefaultMaxCountPerMessage', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order for UI presentation. Lower numbers appear first.
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: AI Model Architectures - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelArchitecture
+ * * Base View: vwAIModelArchitectures
+ * * @description Junction table linking AI models to their underlying architectures. Supports multiple architectures per model with ranking.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Architectures')
+export class AIModelArchitectureEntity extends BaseEntity<AIModelArchitectureEntityType> {
+    /**
+    * Loads the MJ: AI Model Architectures record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Architectures record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelArchitectureEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Architectures entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rank: Rank must be greater than zero, ensuring that every item has a positive ranking value.
+    * * Weight: Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRankGreaterThanZero(result);
+        this.ValidateWeightRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Rank must be greater than zero, ensuring that every item has a positive ranking value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRankGreaterThanZero(result: ValidationResult) {
+    	if (this.Rank <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Rank",
+    			"Rank must be greater than 0.",
+    			this.Rank,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateWeightRange(result: ValidationResult) {
+    	// Ensure Weight is within the allowed range when it is provided
+    	if (this.Weight != null && (this.Weight < 0 || this.Weight > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Weight",
+    			"Weight must be between 0 and 1.",
+    			this.Weight,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: ArchitectureID
+    * * Display Name: Architecture
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)
+    */
+    get ArchitectureID(): string {
+        return this.Get('ArchitectureID');
+    }
+    set ArchitectureID(value: string) {
+        this.Set('ArchitectureID', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Ranking of this architecture for the model. 1=Primary architecture, 2=Secondary, etc. Lower numbers indicate more dominant role.
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: Weight
+    * * Display Name: Weight
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Optional weight (0.0-1.0) indicating the mix ratio for hybrid architectures. E.g., 0.7 for 70% contribution.
+    */
+    get Weight(): number | null {
+        return this.Get('Weight');
+    }
+    set Weight(value: number | null) {
+        this.Set('Weight', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Architecture
+    * * Display Name: Architecture Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Architecture(): string {
+        return this.Get('Architecture');
     }
 }
 
@@ -44359,6 +45894,225 @@ export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
     */
     get UnitType(): string {
         return this.Get('UnitType');
+    }
+}
+
+
+/**
+ * MJ: AI Model Modalities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelModality
+ * * Base View: vwAIModelModalities
+ * * @description Junction table linking AI models to their supported input and output modalities with model-specific configuration. Used to extend beyond the default modalities inherited from AIModelType.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Modalities')
+export class AIModelModalityEntity extends BaseEntity<AIModelModalityEntityType> {
+    /**
+    * Loads the MJ: AI Model Modalities record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Modalities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelModalityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+    * * Description: Whether this is an Input or Output modality for the model.
+    */
+    get Direction(): 'Input' | 'Output' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Input' | 'Output') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: IsSupported
+    * * Display Name: Is Supported
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this modality is supported. Can be set to FALSE to explicitly disable an inherited modality.
+    */
+    get IsSupported(): boolean {
+        return this.Get('IsSupported');
+    }
+    set IsSupported(value: boolean) {
+        this.Set('IsSupported', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: For input modalities: whether this modality is required (e.g., text is usually required for LLMs). For outputs: not typically applicable.
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: SupportedFormats
+    * * Display Name: Supported Formats
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-separated list of supported file formats/extensions (e.g., png,jpg,webp,gif for images or mp3,wav,m4a for audio).
+    */
+    get SupportedFormats(): string | null {
+        return this.Get('SupportedFormats');
+    }
+    set SupportedFormats(value: string | null) {
+        this.Set('SupportedFormats', value);
+    }
+
+    /**
+    * * Field Name: MaxSizeBytes
+    * * Display Name: Maximum Size (Bytes)
+    * * SQL Data Type: int
+    * * Description: Model-specific maximum size in bytes. Overrides AIModality.DefaultMaxSizeBytes. NULL means use system default.
+    */
+    get MaxSizeBytes(): number | null {
+        return this.Get('MaxSizeBytes');
+    }
+    set MaxSizeBytes(value: number | null) {
+        this.Set('MaxSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: MaxCountPerMessage
+    * * Display Name: Maximum Count per Message
+    * * SQL Data Type: int
+    * * Description: Model-specific maximum count per message. Overrides AIModality.DefaultMaxCountPerMessage. NULL means use system default.
+    */
+    get MaxCountPerMessage(): number | null {
+        return this.Get('MaxCountPerMessage');
+    }
+    set MaxCountPerMessage(value: number | null) {
+        this.Set('MaxCountPerMessage', value);
+    }
+
+    /**
+    * * Field Name: MaxDimension
+    * * Display Name: Maximum Dimension (px)
+    * * SQL Data Type: int
+    * * Description: For image/video modalities: maximum dimension (width or height) in pixels supported by this model.
+    */
+    get MaxDimension(): number | null {
+        return this.Get('MaxDimension');
+    }
+    set MaxDimension(value: number | null) {
+        this.Set('MaxDimension', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Additional notes or documentation about this model-modality configuration.
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
     }
 }
 
@@ -50344,6 +52098,290 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
 
 
 /**
+ * MJ: Conversation Detail Attachments - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationDetailAttachment
+ * * Base View: vwConversationDetailAttachments
+ * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Detail Attachments')
+export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationDetailAttachmentEntityType> {
+    /**
+    * Loads the MJ: Conversation Detail Attachments record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Detail Attachments record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ConversationDetailAttachmentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Conversation Detail Attachments entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateInlineDataOrFileIDPresence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInlineDataOrFileIDPresence(result: ValidationResult) {
+    	// Ensure that at least one source of content is supplied
+    	if (this.InlineData == null && this.FileID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"InlineDataOrFileID",
+    			"Either InlineData or FileID must be provided; both cannot be empty.",
+    			null,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+    */
+    get ConversationDetailID(): string {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    * * Description: The modality type of this attachment (Image, Audio, Video, File, etc.). References the AIModality table.
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: MIME type of the attachment (e.g., image/png, video/mp4, audio/mp3).
+    */
+    get MimeType(): string {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(4000)
+    * * Description: Original filename of the attachment. Supports long cloud storage paths up to 4000 characters.
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: FileSizeBytes
+    * * Display Name: File Size (bytes)
+    * * SQL Data Type: int
+    * * Description: Size of the attachment in bytes.
+    */
+    get FileSizeBytes(): number {
+        return this.Get('FileSizeBytes');
+    }
+    set FileSizeBytes(value: number) {
+        this.Set('FileSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width (px)
+    * * SQL Data Type: int
+    * * Description: Width in pixels for images and videos.
+    */
+    get Width(): number | null {
+        return this.Get('Width');
+    }
+    set Width(value: number | null) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height (px)
+    * * SQL Data Type: int
+    * * Description: Height in pixels for images and videos.
+    */
+    get Height(): number | null {
+        return this.Get('Height');
+    }
+    set Height(value: number | null) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration (seconds)
+    * * SQL Data Type: int
+    * * Description: Duration in seconds for audio and video files.
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: InlineData
+    * * Display Name: Inline Data (Base64)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64-encoded file data for small attachments stored inline. Mutually exclusive with FileID - exactly one must be populated.
+    */
+    get InlineData(): string | null {
+        return this.Get('InlineData');
+    }
+    set InlineData(value: string | null) {
+        this.Set('InlineData', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Files (vwFiles.ID)
+    * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order for multiple attachments in a message. Lower numbers appear first.
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: ThumbnailBase64
+    * * Display Name: Thumbnail (Base64)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64-encoded thumbnail image for quick preview display. Max 200px on longest side.
+    */
+    get ThumbnailBase64(): string | null {
+        return this.Get('ThumbnailBase64');
+    }
+    set ThumbnailBase64(value: string | null) {
+        this.Set('ThumbnailBase64', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Conversation Detail Text
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConversationDetail(): string {
+        return this.Get('ConversationDetail');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File Reference
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
+    }
+}
+
+
+/**
  * MJ: Conversation Detail Ratings - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ConversationDetailRating
@@ -54946,7 +56984,7 @@ export class TestRunFeedbackEntity extends BaseEntity<TestRunFeedbackEntityType>
 
     /**
     * * Field Name: ReviewerUser
-    * * Display Name: Reviewer Name
+    * * Display Name: Reviewer User
     * * SQL Data Type: nvarchar(100)
     */
     get ReviewerUser(): string {
@@ -55028,7 +57066,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User ID
+    * * Display Name: Run By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Foreign Key - The user who triggered the test run (could be system user for automated runs)
@@ -55057,7 +57095,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     * * Field Name: TargetType
     * * Display Name: Target Type
     * * SQL Data Type: nvarchar(100)
-    * * Description: Type of the target being tested (e.g., "Agent Run", "Workflow Run", "Code Generation"). Polymorphic discriminator for TargetLogID.
+    * * Description: Optional sub-category or variant label for the test target. Use this to distinguish between different test scenarios within the same entity type (e.g., "Summarization", "Classification", "Code Review" for AI Agent tests). The entity type itself should be specified via TargetLogEntityID.
     */
     get TargetType(): string | null {
         return this.Get('TargetType');
@@ -55068,7 +57106,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: TargetLogID
-    * * Display Name: Target Log ID
+    * * Display Name: Target Log
     * * SQL Data Type: uniqueidentifier
     * * Description: ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.
     */
@@ -55092,12 +57130,13 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     *   * Pending
     *   * Running
     *   * Skipped
-    * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation)
+    *   * Timeout
+    * * Description: Current status of the test run: Pending (queued), Running (in progress), Passed (all checks passed), Failed (at least one check failed), Skipped (not executed), Error (execution error before validation), Timeout (execution exceeded time limit and was cancelled)
     */
-    get Status(): 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' {
+    get Status(): 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' | 'Timeout' {
         return this.Get('Status');
     }
-    set Status(value: 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped') {
+    set Status(value: 'Error' | 'Failed' | 'Passed' | 'Pending' | 'Running' | 'Skipped' | 'Timeout') {
         this.Set('Status', value);
     }
 
@@ -55129,7 +57168,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: DurationSeconds
-    * * Display Name: Duration (seconds)
+    * * Display Name: Duration Seconds
     * * SQL Data Type: decimal(10, 3)
     * * Description: Execution time in seconds for this test
     */
@@ -55233,7 +57272,7 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
 
     /**
     * * Field Name: CostUSD
-    * * Display Name: Cost (USD)
+    * * Display Name: Cost USD
     * * SQL Data Type: decimal(10, 6)
     * * Description: Cost in USD for running this test (e.g., LLM token costs, compute resources)
     */
@@ -55291,6 +57330,111 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     }
 
     /**
+    * * Field Name: Log
+    * * Display Name: Log
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed execution log capturing status messages, diagnostic output, and driver-specific information streamed during test execution. Format is timestamped log lines.
+    */
+    get Log(): string | null {
+        return this.Get('Log');
+    }
+    set Log(value: string | null) {
+        this.Set('Log', value);
+    }
+
+    /**
+    * * Field Name: Tags
+    * * Display Name: Tags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of user-assigned tags/labels for this test run. Used for categorization, filtering, and comparing runs with different configurations. Inherits from parent suite run tags if not explicitly set.
+    */
+    get Tags(): string | null {
+        return this.Get('Tags');
+    }
+    set Tags(value: string | null) {
+        this.Set('Tags', value);
+    }
+
+    /**
+    * * Field Name: MachineName
+    * * Display Name: Machine Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Hostname of the machine that executed this test. Used for identifying the execution environment and debugging infrastructure-specific issues.
+    */
+    get MachineName(): string | null {
+        return this.Get('MachineName');
+    }
+    set MachineName(value: string | null) {
+        this.Set('MachineName', value);
+    }
+
+    /**
+    * * Field Name: MachineID
+    * * Display Name: Machine ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of test execution across different machines.
+    */
+    get MachineID(): string | null {
+        return this.Get('MachineID');
+    }
+    set MachineID(value: string | null) {
+        this.Set('MachineID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserName
+    * * Display Name: Run By User Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized user name who ran the test. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.
+    */
+    get RunByUserName(): string | null {
+        return this.Get('RunByUserName');
+    }
+    set RunByUserName(value: string | null) {
+        this.Set('RunByUserName', value);
+    }
+
+    /**
+    * * Field Name: RunByUserEmail
+    * * Display Name: Run By User Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized email address of the user who ran the test. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.
+    */
+    get RunByUserEmail(): string | null {
+        return this.Get('RunByUserEmail');
+    }
+    set RunByUserEmail(value: string | null) {
+        this.Set('RunByUserEmail', value);
+    }
+
+    /**
+    * * Field Name: RunContextDetails
+    * * Display Name: Run Context Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.
+    */
+    get RunContextDetails(): string | null {
+        return this.Get('RunContextDetails');
+    }
+    set RunContextDetails(value: string | null) {
+        this.Set('RunContextDetails', value);
+    }
+
+    /**
+    * * Field Name: TargetLogEntityID
+    * * Display Name: Target Log Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity table identifying the type of entity referenced by TargetLogID. When populated, TargetLogID is a record ID in this entity. Used for linking test runs to AI Agent Runs, Workflow Runs, or other entity types being tested.
+    */
+    get TargetLogEntityID(): string | null {
+        return this.Get('TargetLogEntityID');
+    }
+    set TargetLogEntityID(value: string | null) {
+        this.Set('TargetLogEntityID', value);
+    }
+
+    /**
     * * Field Name: Test
     * * Display Name: Test
     * * SQL Data Type: nvarchar(255)
@@ -55315,6 +57459,15 @@ export class TestRunEntity extends BaseEntity<TestRunEntityType> {
     */
     get RunByUser(): string {
         return this.Get('RunByUser');
+    }
+
+    /**
+    * * Field Name: TargetLogEntity
+    * * Display Name: Target Log Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetLogEntity(): string | null {
+        return this.Get('TargetLogEntity');
     }
 }
 
@@ -55556,7 +57709,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: TotalDurationSeconds
-    * * Display Name: Total Duration Seconds
+    * * Display Name: Total Duration (seconds)
     * * SQL Data Type: decimal(10, 3)
     * * Description: Total execution time in seconds for the entire suite
     */
@@ -55569,7 +57722,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: TotalCostUSD
-    * * Display Name: Total Cost USD
+    * * Display Name: Total Cost (USD)
     * * SQL Data Type: decimal(10, 6)
     * * Description: Total cost in USD for running the entire suite (sum of all test costs)
     */
@@ -55640,8 +57793,86 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
     }
 
     /**
+    * * Field Name: Tags
+    * * Display Name: Tags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of user-assigned tags/labels for this suite run. Used for categorization, filtering, and comparing runs with different configurations (e.g., ["Opus 4.5", "New Prompt v3", "Production Config"]).
+    */
+    get Tags(): string | null {
+        return this.Get('Tags');
+    }
+    set Tags(value: string | null) {
+        this.Set('Tags', value);
+    }
+
+    /**
+    * * Field Name: MachineName
+    * * Display Name: Machine Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Hostname of the machine that executed this suite. Used for identifying the execution environment and debugging infrastructure-specific issues.
+    */
+    get MachineName(): string | null {
+        return this.Get('MachineName');
+    }
+    set MachineName(value: string | null) {
+        this.Set('MachineName', value);
+    }
+
+    /**
+    * * Field Name: MachineID
+    * * Display Name: Machine ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique machine identifier (typically MAC address) for the execution host. Enables deduplication and tracking of suite execution across different machines.
+    */
+    get MachineID(): string | null {
+        return this.Get('MachineID');
+    }
+    set MachineID(value: string | null) {
+        this.Set('MachineID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserName
+    * * Display Name: Run By User Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized user name who ran the suite. Stored separately from RunByUserID to enable cross-server aggregation where user IDs differ but names remain consistent.
+    */
+    get RunByUserName(): string | null {
+        return this.Get('RunByUserName');
+    }
+    set RunByUserName(value: string | null) {
+        this.Set('RunByUserName', value);
+    }
+
+    /**
+    * * Field Name: RunByUserEmail
+    * * Display Name: Run By User Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Denormalized email address of the user who ran the suite. Primary identifier for cross-server aggregation since email addresses are unique across MemberJunction instances.
+    */
+    get RunByUserEmail(): string | null {
+        return this.Get('RunByUserEmail');
+    }
+    set RunByUserEmail(value: string | null) {
+        this.Set('RunByUserEmail', value);
+    }
+
+    /**
+    * * Field Name: RunContextDetails
+    * * Display Name: Run Context Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.
+    */
+    get RunContextDetails(): string | null {
+        return this.Get('RunContextDetails');
+    }
+    set RunContextDetails(value: string | null) {
+        this.Set('RunContextDetails', value);
+    }
+
+    /**
     * * Field Name: Suite
-    * * Display Name: Suite Name
+    * * Display Name: Suite
     * * SQL Data Type: nvarchar(255)
     */
     get Suite(): string {
@@ -55650,7 +57881,7 @@ export class TestSuiteRunEntity extends BaseEntity<TestSuiteRunEntityType> {
 
     /**
     * * Field Name: RunByUser
-    * * Display Name: Run By User Name
+    * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
     get RunByUser(): string {
@@ -55861,7 +58092,7 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
     * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.
@@ -55965,8 +58196,21 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
     }
 
     /**
+    * * Field Name: MaxExecutionTimeMS
+    * * Display Name: Max Execution Time (ms)
+    * * SQL Data Type: int
+    * * Description: Maximum total execution time in milliseconds for the entire suite. If NULL, no suite-level timeout applies (individual test timeouts still apply). When exceeded, current test is cancelled and remaining tests are skipped.
+    */
+    get MaxExecutionTimeMS(): number | null {
+        return this.Get('MaxExecutionTimeMS');
+    }
+    set MaxExecutionTimeMS(value: number | null) {
+        this.Set('MaxExecutionTimeMS', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -55975,7 +58219,7 @@ export class TestSuiteEntity extends BaseEntity<TestSuiteEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -56185,7 +58429,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Test Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Types (vwTestTypes.ID)
     * * Description: Foreign Key - The type of test (e.g., Agent Eval, Workflow Test). Determines which driver class handles execution.
@@ -56310,7 +58554,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: EstimatedDurationSeconds
-    * * Display Name: Estimated Duration Seconds
+    * * Display Name: Estimated Duration (seconds)
     * * SQL Data Type: int
     * * Description: Estimated execution time in seconds. Used for scheduling and timeout calculations.
     */
@@ -56323,7 +58567,7 @@ export class TestEntity extends BaseEntity<TestEntityType> {
 
     /**
     * * Field Name: EstimatedCostUSD
-    * * Display Name: Estimated Cost USD
+    * * Display Name: Estimated Cost (USD)
     * * SQL Data Type: decimal(10, 6)
     * * Description: Estimated cost in USD for running this test (e.g., LLM token costs, compute resources). Used for budgeting and optimization.
     */
@@ -56368,8 +58612,21 @@ export class TestEntity extends BaseEntity<TestEntityType> {
     }
 
     /**
+    * * Field Name: MaxExecutionTimeMS
+    * * Display Name: Max Execution Time (ms)
+    * * SQL Data Type: int
+    * * Description: Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.
+    */
+    get MaxExecutionTimeMS(): number | null {
+        return this.Get('MaxExecutionTimeMS');
+    }
+    set MaxExecutionTimeMS(value: number | null) {
+        this.Set('MaxExecutionTimeMS', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Test Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {

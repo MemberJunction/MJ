@@ -27,9 +27,30 @@ export type ChatMessageContentBlock = {
     /**
      * The content of the block.
      * This can be a string. In the case of 'image_url', 'video_url', 'audio_url', or 'file_url', it should be a URL to the resource, OR it can be a base64 encoded string.
-     * representing the content of the item.
+     * representing the content of the item. For base64 images, use the data URL format: data:image/png;base64,<data>
      */
     content: string;
+    /**
+     * Optional MIME type for media content (e.g., 'image/png', 'image/jpeg', 'audio/mp3').
+     * When content is a data URL, this can be extracted from the URL. When content is raw base64, this field is required.
+     */
+    mimeType?: string;
+    /**
+     * Optional original filename if the content was uploaded from a file.
+     */
+    fileName?: string;
+    /**
+     * Optional file size in bytes.
+     */
+    fileSize?: number;
+    /**
+     * Optional width in pixels (for images and videos).
+     */
+    width?: number;
+    /**
+     * Optional height in pixels (for images and videos).
+     */
+    height?: number;
 }
 
 /**
@@ -348,17 +369,123 @@ export class ChatResult extends BaseResult {
     data: ChatResultData;
     success: boolean;
     statusText: string;
-    
+
     /**
      * Cache-related metadata if available from the provider
      */
     cacheInfo?: CacheMetadata;
-    
+
     /**
      * Optional provider-specific response metadata and details not captured in standard fields.
      * This is a flexible field that can contain any additional information the AI provider returns.
      * Structure varies by AI provider.
      */
     modelSpecificResponseDetails?: Record<string, any>;
+}
+
+// =============================================================================
+// Content Serialization Utilities
+// =============================================================================
+
+/**
+ * Prefix marker used to identify serialized content blocks in storage.
+ * When a message starts with this prefix, it indicates the content is a JSON array of ChatMessageContentBlock.
+ */
+export const CONTENT_BLOCKS_PREFIX = '$$CONTENT_BLOCKS$$';
+
+/**
+ * Serializes ChatMessageContent for storage in a database text field.
+ * - Plain strings are stored as-is for backward compatibility
+ * - Content block arrays are serialized as JSON with a prefix marker
+ *
+ * @param content The content to serialize
+ * @returns A string suitable for database storage
+ */
+export function serializeMessageContent(content: ChatMessageContent): string {
+    if (typeof content === 'string') {
+        return content;
+    }
+    return CONTENT_BLOCKS_PREFIX + JSON.stringify(content);
+}
+
+/**
+ * Deserializes a stored message back to ChatMessageContent.
+ * - Messages with the content blocks prefix are parsed as JSON arrays
+ * - Other messages are returned as plain strings
+ *
+ * @param message The stored message string
+ * @returns The deserialized ChatMessageContent
+ */
+export function deserializeMessageContent(message: string): ChatMessageContent {
+    if (!message) {
+        return '';
+    }
+    if (message.startsWith(CONTENT_BLOCKS_PREFIX)) {
+        try {
+            return JSON.parse(message.substring(CONTENT_BLOCKS_PREFIX.length)) as ChatMessageContentBlock[];
+        } catch {
+            // If parsing fails, return the original message minus the prefix
+            return message.substring(CONTENT_BLOCKS_PREFIX.length);
+        }
+    }
+    return message;
+}
+
+/**
+ * Checks if the content contains any image blocks.
+ *
+ * @param content The message content to check
+ * @returns True if the content contains at least one image_url block
+ */
+export function hasImageContent(content: ChatMessageContent): boolean {
+    if (typeof content === 'string') {
+        return false;
+    }
+    return content.some(block => block.type === 'image_url');
+}
+
+/**
+ * Extracts just the text content from a ChatMessageContent, ignoring media blocks.
+ * Useful for display or logging purposes.
+ *
+ * @param content The message content
+ * @returns A plain text string with all text blocks joined
+ */
+export function getTextFromContent(content: ChatMessageContent): string {
+    if (typeof content === 'string') {
+        return content;
+    }
+    return content
+        .filter(block => block.type === 'text')
+        .map(block => block.content)
+        .join('\n');
+}
+
+/**
+ * Parses a base64 data URL into its components.
+ *
+ * @param dataUrl A data URL (e.g., "data:image/png;base64,iVBORw...")
+ * @returns An object with mediaType and data, or null if not a valid data URL
+ */
+export function parseBase64DataUrl(dataUrl: string): { mediaType: string; data: string } | null {
+    if (!dataUrl.startsWith('data:')) {
+        return null;
+    }
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+        return { mediaType: match[1], data: match[2] };
+    }
+    return null;
+}
+
+/**
+ * Creates a data URL from raw base64 data and a MIME type.
+ *
+ * @param base64Data The raw base64 encoded data (without the data: prefix)
+ * @param mimeType The MIME type (e.g., 'image/png')
+ * @returns A complete data URL
+ */
+export function createBase64DataUrl(base64Data: string, mimeType: string): string {
+    return `data:${mimeType};base64,${base64Data}`;
 }
  

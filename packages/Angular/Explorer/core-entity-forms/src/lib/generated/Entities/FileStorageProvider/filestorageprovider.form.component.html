@@ -138,5 +138,47 @@
             </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
+
+    <!-- MJ: AI Configurations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIConfigurations"
+        sectionName="MJ: AI Configurations"
+        icon="fa fa-brain"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIConfigurations')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultStorageProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
+                [AllowLoad]="IsSectionExpanded('mJAIConfigurations')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIConfigurations', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- AI Agents Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="aIAgents"
+        sectionName="AI Agents"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('aIAgents')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','AttachmentStorageProviderID')"
+                [NewRecordValues]="NewRecordValues('AI Agents')"
+                [AllowLoad]="IsSectionExpanded('aIAgents')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

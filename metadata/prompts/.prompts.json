@@ -2201,6 +2201,132 @@
               "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
             }
           ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Text",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "386CFA15-068E-4C4A-AF0B-3E73FE65442D"
+          },
+          "sync": {
+            "lastModified": "2026-01-02T21:08:12.724Z",
+            "checksum": "a001e2b6661a397667573840b9105d50cb3ba07b69053ec6eabdbb06314f6bb6"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ConfigurationID",
+              "expression": "@lookup:MJ: AI Configurations.Name=Sage Text",
+              "resolved": "C12390BB-D4F8-433F-B34D-736B24DFBBAA"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Text",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "14AD0B61-10CC-4AC0-AEA9-0CE4A6B43172"
+          },
+          "sync": {
+            "lastModified": "2026-01-02T21:08:12.739Z",
+            "checksum": "413cea5422bc8857362eb80d5aa745d3394ec20095888c9a0570e9d790b10fb8"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
+              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
+              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ConfigurationID",
+              "expression": "@lookup:MJ: AI Configurations.Name=Sage Text",
+              "resolved": "C12390BB-D4F8-433F-B34D-736B24DFBBAA"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Llama 4 Maverick",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Multimodal",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "7C28039D-7911-4926-A4C2-18A4DAB7CD62"
+          },
+          "sync": {
+            "lastModified": "2026-01-02T21:08:12.753Z",
+            "checksum": "89bb6096fcb2edb7cf60614ab2fe370719fe8409403270fe376662b1b1621be1"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.PromptID",
+              "expression": "@parent:ID",
+              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ModelID",
+              "expression": "@lookup:AI Models.Name=Llama 4 Maverick",
+              "resolved": "8A5D433E-F36B-1410-8DA9-00021F8B792E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.VendorID",
+              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
+              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ConfigurationID",
+              "expression": "@lookup:MJ: AI Configurations.Name=Sage Multimodal",
+              "resolved": "2C649582-D3A2-47EC-82BF-CEC89B7D8F15"
+            }
+          ]
         }
       ]
     },
