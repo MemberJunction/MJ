@@ -1,5 +1,29 @@
 # @memberjunction/ng-conversations
 
+## 2.130.1
+
+### Patch Changes
+
+- d01c028: Revert broken conversation UI changes
+- Updated dependencies [8884553]
+- Updated dependencies [0dcb9cb]
+  - @memberjunction/ng-testing@2.130.1
+  - @memberjunction/ng-markdown@2.130.1
+  - @memberjunction/ng-artifacts@2.130.1
+  - @memberjunction/ai-engine-base@2.130.1
+  - @memberjunction/ai@2.130.1
+  - @memberjunction/ai-core-plus@2.130.1
+  - @memberjunction/ng-base-types@2.130.1
+  - @memberjunction/ng-code-editor@2.130.1
+  - @memberjunction/ng-container-directives@2.130.1
+  - @memberjunction/ng-notifications@2.130.1
+  - @memberjunction/ng-shared-generic@2.130.1
+  - @memberjunction/ng-tasks@2.130.1
+  - @memberjunction/graphql-dataprovider@2.130.1
+  - @memberjunction/core@2.130.1
+  - @memberjunction/core-entities@2.130.1
+  - @memberjunction/global@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

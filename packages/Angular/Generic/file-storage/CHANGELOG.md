@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-file-storage
 
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ng-compare-records@2.130.1
+- @memberjunction/ng-shared@2.130.1
+- @memberjunction/ng-container-directives@2.130.1
+- @memberjunction/graphql-dataprovider@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

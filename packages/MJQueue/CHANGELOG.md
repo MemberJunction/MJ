@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/queue
 
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.130.1
+- @memberjunction/aiengine@2.130.1
+- @memberjunction/ai-provider-bundle@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

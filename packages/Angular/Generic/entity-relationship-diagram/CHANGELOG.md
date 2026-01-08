@@ -1,5 +1,11 @@
 # @memberjunction/ng-entity-relationship-diagram
 
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/core@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

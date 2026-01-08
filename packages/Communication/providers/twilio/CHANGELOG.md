@@ -1,5 +1,13 @@
 # @memberjunction/communication-twilio
 
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/global@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

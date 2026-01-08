@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.130.1
+
+### Patch Changes
+
+- ad13807: Fix NewRecordValues support in UI
+- Updated dependencies [8884553]
+- Updated dependencies [d01c028]
+  - @memberjunction/ng-auth-services@2.130.1
+  - @memberjunction/ng-conversations@2.130.1
+  - @memberjunction/ng-dashboards@2.130.1
+  - @memberjunction/ng-base-forms@2.130.1
+  - @memberjunction/ng-artifacts@2.130.1
+  - @memberjunction/ng-entity-form-dialog@2.130.1
+  - @memberjunction/ng-explorer-settings@2.130.1
+  - @memberjunction/ng-user-view-properties@2.130.1
+  - @memberjunction/ng-user-view-grid@2.130.1
+  - @memberjunction/ai-engine-base@2.130.1
+  - @memberjunction/ai-core-plus@2.130.1
+  - @memberjunction/ng-base-application@2.130.1
+  - @memberjunction/ng-compare-records@2.130.1
+  - @memberjunction/ng-entity-permissions@2.130.1
+  - @memberjunction/ng-record-changes@2.130.1
+  - @memberjunction/ng-shared@2.130.1
+  - @memberjunction/ng-ai-test-harness@2.130.1
+  - @memberjunction/ng-container-directives@2.130.1
+  - @memberjunction/ng-entity-viewer@2.130.1
+  - @memberjunction/ng-file-storage@2.130.1
+  - @memberjunction/ng-generic-dialog@2.130.1
+  - @memberjunction/ng-notifications@2.130.1
+  - @memberjunction/ng-query-grid@2.130.1
+  - @memberjunction/ng-record-selector@2.130.1
+  - @memberjunction/ng-resource-permissions@2.130.1
+  - @memberjunction/ng-shared-generic@2.130.1
+  - @memberjunction/ng-tabstrip@2.130.1
+  - @memberjunction/ng-user-avatar@2.130.1
+  - @memberjunction/communication-types@2.130.1
+  - @memberjunction/entity-communications-client@2.130.1
+  - @memberjunction/core@2.130.1
+  - @memberjunction/core-entities@2.130.1
+  - @memberjunction/global@2.130.1
+  - @memberjunction/templates-base-types@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.130.1
+
+### Patch Changes
+
+- 8884553: Complete v3.0 auth abstraction with MSAL token refresh, add Vertex AI support to DBAutoDoc, and fix Run Suite button in tab mode
+  - @memberjunction/core@2.130.1
+  - @memberjunction/global@2.130.1
+
 ## 2.130.0
 
 ### Minor Changes

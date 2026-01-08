@@ -1,5 +1,15 @@
 # @memberjunction/db-auto-doc
 
+## 2.130.1
+
+### Patch Changes
+
+- 8884553: Complete v3.0 auth abstraction with MSAL token refresh, add Vertex AI support to DBAutoDoc, and fix Run Suite button in tab mode
+  - @memberjunction/ai@2.130.1
+  - @memberjunction/ai-provider-bundle@2.130.1
+  - @memberjunction/core@2.130.1
+  - @memberjunction/global@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

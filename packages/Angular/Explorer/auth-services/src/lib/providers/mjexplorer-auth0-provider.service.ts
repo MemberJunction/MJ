@@ -360,6 +360,18 @@ export class MJAuth0Provider extends MJAuthBase {
     }
   }
 
+  /**
+   * Handle session expiry - no-op for Auth0
+   *
+   * Auth0 uses refresh tokens (offline_access scope), so it doesn't need
+   * interactive re-authentication when tokens expire. If refresh fails,
+   * the base class will throw an error and the user must log out/in manually.
+   */
+  protected async handleSessionExpiryInternal(): Promise<void> {
+    // No-op - Auth0 doesn't need interactive re-auth
+    return;
+  }
+
   // ============================================================================
   // CONFIGURATION
   // ============================================================================
