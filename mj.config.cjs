@@ -527,6 +527,8 @@ const config = {
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
+  baselineVersion: '202601071900', // Version to baseline new databases to (skips v2 migrations on blank databases)
+  baselineOnMigrate: true, // Automatically baseline when running against a blank database
 };
 
 module.exports = config;
