@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, AfterViewInit, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, AfterViewInit, ViewChild, ViewContainerRef } from '@angular/core';
 import * as d3 from 'd3';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -100,7 +100,8 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
     route: ActivatedRoute,
     protected cdr: ChangeDetectorRef,
     private testingDialogService: TestingDialogService,
-    private evalPrefsService: EvaluationPreferencesService
+    private evalPrefsService: EvaluationPreferencesService,
+    private viewContainerRef: ViewContainerRef
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -304,7 +305,7 @@ export class TestSuiteFormComponentExtended extends TestSuiteFormComponent imple
 
   async runSuite() {
     if (this.record?.ID) {
-      this.testingDialogService.OpenSuiteDialog(this.record.ID);
+      this.testingDialogService.OpenSuiteDialog(this.record.ID, this.viewContainerRef);
     }
   }
 

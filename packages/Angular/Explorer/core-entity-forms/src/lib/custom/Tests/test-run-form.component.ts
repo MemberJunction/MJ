@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, ViewContainerRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -83,7 +83,8 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
     protected cdr: ChangeDetectorRef,
     private testingDialogService: TestingDialogService,
     private navigationService: NavigationService,
-    private appManager: ApplicationManager
+    private appManager: ApplicationManager,
+    private viewContainerRef: ViewContainerRef
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -472,7 +473,7 @@ export class TestRunFormComponentExtended extends TestRunFormComponent implement
       return;
     }
 
-    this.testingDialogService.OpenTestDialog(this.record.TestID);
+    this.testingDialogService.OpenTestDialog(this.record.TestID, this.viewContainerRef);
   }
 
   async refresh() {

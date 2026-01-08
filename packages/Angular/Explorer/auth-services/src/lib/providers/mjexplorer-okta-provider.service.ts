@@ -485,6 +485,18 @@ export class MJOktaProvider extends MJAuthBase {
     }
   }
 
+  /**
+   * Handle session expiry - no-op for Okta
+   *
+   * Okta uses refresh tokens, so it doesn't need interactive re-authentication
+   * when tokens expire. If refresh fails, the base class will throw an error
+   * and the user must log out/in manually.
+   */
+  protected async handleSessionExpiryInternal(): Promise<void> {
+    // No-op - Okta doesn't need interactive re-auth
+    return;
+  }
+
   // ============================================================================
   // CONFIGURATION
   // ============================================================================

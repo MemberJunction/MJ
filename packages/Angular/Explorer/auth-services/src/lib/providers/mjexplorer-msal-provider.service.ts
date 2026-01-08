@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
-import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take } from 'rxjs';
 import { MsalBroadcastService, MsalService, MSAL_INSTANCE, MSAL_GUARD_CONFIG, MSAL_INTERCEPTOR_CONFIG, MsalGuard } from '@azure/msal-angular';
 import { AccountInfo, AuthenticationResult } from '@azure/msal-common';
 import { CacheLookupPolicy, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType, BrowserAuthError } from '@azure/msal-browser';
@@ -214,12 +214,12 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         return account.idToken;
       }
 
-      // If not in account, try silent token acquisition
-      // Match original getUserClaims: account parameter + no offline_access
+      // If not in account, try silent token acquisition from cache only
+      // Use CacheLookupPolicy.AccessToken to avoid iframe calls
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
-        cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
+        cacheLookupPolicy: CacheLookupPolicy.AccessToken
       });
 
       // MSAL-specific detail: JWT is in idToken property
@@ -244,11 +244,11 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         return null;
       }
 
-      // Match original getUserClaims: account parameter + no offline_access
+      // Use cache-only lookup to avoid iframe timeouts during normal token extraction
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
-        cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
+        cacheLookupPolicy: CacheLookupPolicy.AccessToken
       });
 
       if (!response.idToken) {
@@ -322,7 +322,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       }
 
       // IMPORTANT: Match original code exactly - no account parameter, no offline_access
-      // This allows MSAL to find refresh tokens even without scope information
+      // This allows MSAL to use lenient matching and successfully refresh tokens
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
@@ -353,6 +353,22 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       };
     } catch (error) {
       console.error('[MSAL] Token refresh failed:', error);
+
+      // Check if this is an iframe timeout or interaction required error
+      const errorCode = (error as any)?.errorCode;
+      if (errorCode === 'monitor_window_timeout' || error instanceof InteractionRequiredAuthError) {
+        // Return INTERACTION_REQUIRED error - base class will call handleSessionExpiryInternal
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.INTERACTION_REQUIRED,
+            message: 'Silent token refresh failed - interaction required',
+            userMessage: 'Your session has expired. Redirecting to login...',
+            originalError: error
+          }
+        };
+      }
+
       return {
         success: false,
         error: this.classifyErrorInternal(error)
@@ -505,6 +521,30 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       console.error('[MSAL] Error getting profile picture:', error);
       return null;
     }
+  }
+
+  /**
+   * Handle session expiry by redirecting to Microsoft login
+   *
+   * This method is called by the base class when silent token refresh fails
+   * with INTERACTION_REQUIRED error. It redirects to Microsoft login and never returns.
+   * After authentication, the app will reload and re-initialize with a fresh token.
+   */
+  protected async handleSessionExpiryInternal(): Promise<void> {
+    console.log('[MSAL] Redirecting to Microsoft login for re-authentication...');
+
+    // Initiate redirect authentication - page will navigate away
+    this.auth.loginRedirect({
+      scopes: ['User.Read', 'email', 'profile'],
+      prompt: 'select_account'
+    }).subscribe({
+      error: (redirectError) => {
+        console.error('[MSAL] Redirect initiation failed:', redirectError);
+      }
+    });
+
+    // Return a promise that never resolves - page will navigate before this matters
+    return new Promise<void>(() => {});
   }
 
   // ============================================================================
