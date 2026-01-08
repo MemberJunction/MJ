@@ -1,5 +1,18 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@2.130.1
+- @memberjunction/ai-engine-base@2.130.1
+- @memberjunction/ai-core-plus@2.130.1
+- @memberjunction/actions-base@2.130.1
+- @memberjunction/actions@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

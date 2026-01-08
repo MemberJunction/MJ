@@ -1,5 +1,21 @@
 # @memberjunction/ng-testing
 
+## 2.130.1
+
+### Patch Changes
+
+- 8884553: Complete v3.0 auth abstraction with MSAL token refresh, add Vertex AI support to DBAutoDoc, and fix Run Suite button in tab mode
+  - @memberjunction/ng-shared@2.130.1
+  - @memberjunction/ng-base-types@2.130.1
+  - @memberjunction/ng-code-editor@2.130.1
+  - @memberjunction/ng-container-directives@2.130.1
+  - @memberjunction/ng-notifications@2.130.1
+  - @memberjunction/graphql-dataprovider@2.130.1
+  - @memberjunction/core@2.130.1
+  - @memberjunction/core-entities@2.130.1
+  - @memberjunction/global@2.130.1
+  - @memberjunction/testing-engine-base@2.130.1
+
 ## 2.130.0
 
 ### Patch Changes

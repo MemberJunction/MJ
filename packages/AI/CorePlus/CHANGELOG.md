@@ -1,5 +1,16 @@
 # @memberjunction/ai-core-plus
 
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.130.1
+- @memberjunction/actions-base@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+- @memberjunction/templates-base-types@2.130.1
+
 ## 2.130.0
 
 ### Minor Changes
