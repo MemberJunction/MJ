@@ -137,10 +137,13 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
   /**
    * Refresh token using provider-specific mechanism
    *
-   * Implements the provider's token refresh logic.
-   * - Auth0: Uses getAccessTokenSilently with ignoreCache
-   * - MSAL: Uses acquireTokenSilent with forceRefresh
-   * - Okta: Uses tokenManager.renew
+   * Implements the provider's token refresh logic using whatever mechanism
+   * is appropriate (silent refresh with refresh tokens, iframe-based token
+   * acquisition, etc.).
+   *
+   * Should return success with token if refresh succeeds, or failure with
+   * appropriate error type (TOKEN_EXPIRED, INTERACTION_REQUIRED, etc.) if
+   * refresh fails.
    *
    * @returns Promise resolving to TokenRefreshResult indicating success/failure
    */
@@ -150,10 +153,8 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    * Classify provider-specific error into standard error type
    *
    * Maps provider-specific errors to semantic AuthErrorType values.
-   * Examples:
-   * - Auth0: "jwt expired" → TOKEN_EXPIRED
-   * - MSAL: BrowserAuthError → NO_ACTIVE_SESSION
-   * - MSAL: InteractionRequiredAuthError → INTERACTION_REQUIRED
+   * Examines error objects, error codes, and messages to determine the
+   * appropriate category (TOKEN_EXPIRED, INTERACTION_REQUIRED, NETWORK_ERROR, etc.).
    *
    * @param error The error to classify
    * @returns StandardAuthError with categorized type and user-friendly message
@@ -163,13 +164,28 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
   /**
    * Get profile picture URL from auth provider
    *
-   * Each provider implements its own logic:
-   * - MSAL: Fetches from Microsoft Graph API using access token
-   * - Auth0/Okta: Returns pictureUrl from user claims (already available)
+   * Retrieves the user's profile picture using provider-specific mechanisms.
+   * Some providers include the URL in user claims, others require API calls
+   * to fetch the image.
    *
    * @returns Promise resolving to image URL or null if not available
    */
   protected abstract getProfilePictureUrlInternal(): Promise<string | null>;
+
+  /**
+   * Handle session expiry when silent refresh fails
+   *
+   * Called internally when silent token refresh fails with TOKEN_EXPIRED or
+   * INTERACTION_REQUIRED errors. Providers that support refresh tokens can
+   * implement this as a no-op. Providers that require interactive re-authentication
+   * should initiate the appropriate flow (redirect, popup, etc.).
+   *
+   * Note: If this method redirects the page, it may never return. The app will
+   * reload after authentication completes and re-initialize with a fresh token.
+   *
+   * @returns Promise that resolves if re-auth completed, or never returns if redirected
+   */
+  protected abstract handleSessionExpiryInternal(): Promise<void>;
 
   // ============================================================================
   // PUBLIC API (Concrete implementations using abstract internals)
@@ -244,25 +260,31 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
   /**
    * Refresh authentication token
    *
-   * Attempts to refresh the token without user interaction.
-   * Returns a result object indicating success or failure with details.
+   * Attempts to obtain a fresh authentication token using the provider's
+   * refresh mechanism. If silent refresh fails due to session expiry, the
+   * provider will handle re-authentication automatically (which may involve
+   * redirecting to the auth provider's login page).
+   *
+   * Returns StandardAuthToken on success, or throws on complete failure.
+   *
+   * IMPORTANT: If the provider requires interactive re-authentication (redirect
+   * or popup), this method may never return. The app will reload after
+   * authentication completes and re-initialize with a fresh token.
+   *
+   * @returns Promise resolving to StandardAuthToken or throws on failure
    *
    * @example
    * ```typescript
-   * const result = await this.authBase.refreshToken();
-   * if (result.success && result.token) {
-   *   return result.token.idToken;
-   * } else {
-   *   throw new Error(result.error?.userMessage || 'Refresh failed');
-   * }
+   * const token = await this.authBase.refreshToken();
+   * return token.idToken; // Always succeeds or throws
    * ```
    */
-  async refreshToken(): Promise<TokenRefreshResult> {
+  async refreshToken(): Promise<StandardAuthToken> {
+    // Try silent refresh
     const result = await this.refreshTokenInternal();
 
-    // Update state if refresh succeeded
     if (result.success && result.token) {
-      // Optionally refresh user info to keep it in sync
+      // Update state if refresh succeeded
       try {
         const userInfo = await this.extractUserInfoInternal();
         if (userInfo) {
@@ -272,9 +294,35 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
         // User info update failed, but token refresh succeeded
         // Don't fail the entire refresh for this
       }
+
+      return result.token;
     }
 
-    return result;
+    // Silent refresh failed - check if we can handle session expiry
+    const errorType = result.error?.type;
+    if (errorType === 'TOKEN_EXPIRED' || errorType === 'INTERACTION_REQUIRED') {
+      // Let provider handle session expiry (may redirect and never return)
+      await this.handleSessionExpiryInternal();
+
+      // If we reach here (didn't redirect), retry refresh once
+      const retryResult = await this.refreshTokenInternal();
+      if (retryResult.success && retryResult.token) {
+        // Update state with new token
+        try {
+          const userInfo = await this.extractUserInfoInternal();
+          if (userInfo) {
+            this.updateUserInfo(userInfo);
+          }
+        } catch {
+          // Ignore user info update errors
+        }
+
+        return retryResult.token;
+      }
+    }
+
+    // Complete failure - throw error
+    throw new Error(result.error?.userMessage || 'Token refresh failed');
   }
 
   /**
