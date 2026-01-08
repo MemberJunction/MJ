@@ -18,21 +18,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.433Z",
       "checksum": "6efeedc6715540fde4305092da299adca4df832901c90a71986a10bdc53b264f"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=User Onboarding Agents?create&Description=Prompts for User Onboarding Agent System",
-        "resolved": "315BDCC3-2409-4EEC-B021-AB767D8516E8"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -53,21 +39,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.434Z",
       "checksum": "c6059c2551e2bf5c619e9d4b7fc2bca75caf542a2195a4edf50a236f962e281e"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=User Onboarding Agents?create&Description=Prompts for User Onboarding Agent System",
-        "resolved": "315BDCC3-2409-4EEC-B021-AB767D8516E8"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -87,21 +59,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.432Z",
       "checksum": "5b063dd9b0b342041f3b8cdcf01d1796d4a43dd198a996af50a7455ddd82ce31"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
-        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -122,21 +80,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.435Z",
       "checksum": "ba51005a8676b5a3424eab15ada2f575ea3f665b44916bb698a69d7763a69cde"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
-        "resolved": "315BDCC3-2409-4EEC-B021-AB767D8516E8"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -156,21 +100,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.437Z",
       "checksum": "7f7db1efb92c7cee4838339567e535e72cf19babd46eac34f04495c37d8f6486"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
-        "resolved": "315BDCC3-2409-4EEC-B021-AB767D8516E8"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -190,21 +120,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.438Z",
       "checksum": "168aa80457ae219b8061bd1fb85c26fc5aa13dfbb727ff0217769097366f6a09"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
-        "resolved": "315BDCC3-2409-4EEC-B021-AB767D8516E8"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -224,20 +140,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.439Z",
       "checksum": "2b175471375284ec09b94a73569bfdec2cc2543143694a2078388e7383e50fed"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
-        "resolved": "315BDCC3-2409-4EEC-B021-AB767D8516E8"
-      }
-    ]
+    }
   }
 ]

@@ -28,21 +28,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:38.360Z",
             "checksum": "a493431b7faa8de5ac3c2ff9827aa9fc8b3929e02bbb34a75914702dbb34148f"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.DashboardID",
-              "expression": "@parent:ID",
-              "resolved": "F4C9433E-F36B-1410-8DAB-00021F8B792E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ApplicationID",
-              "expression": "@lookup:Applications.Name=Admin",
-              "resolved": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -52,27 +38,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:38.345Z",
       "checksum": "6c41e581f8a1aa8f0d96e91516b555d1ad421769370a97038ce58fe56a01b977"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ApplicationID",
-        "expression": "@lookup:Applications.Name=Admin",
-        "resolved": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.EnvironmentID",
-        "expression": "@lookup:MJ: Environments.Name=Default",
-        "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -93,27 +59,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:38.346Z",
       "checksum": "9e2990cb8b39d6f19a4796b1fbfd0e03cf99bf2041dd53fe1c07a9f32d0c3ce2"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ApplicationID",
-        "expression": "@lookup:Applications.Name=Admin",
-        "resolved": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.EnvironmentID",
-        "expression": "@lookup:MJ: Environments.Name=Default",
-        "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -134,27 +80,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:38.347Z",
       "checksum": "8d29079d0286d15dd14d0b49f1dbbc832874c3ed4b0a0d9bbefb9d565866fac5"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ApplicationID",
-        "expression": "@lookup:Applications.Name=Admin",
-        "resolved": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.EnvironmentID",
-        "expression": "@lookup:MJ: Environments.Name=Default",
-        "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -175,27 +101,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:38.349Z",
       "checksum": "82ddac7cb98b86e6146d460c507061e6fe5c37b53f3e240cc04da3febbeb88f1"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ApplicationID",
-        "expression": "@lookup:Applications.Name=Admin",
-        "resolved": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.EnvironmentID",
-        "expression": "@lookup:MJ: Environments.Name=Default",
-        "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -216,27 +122,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:38.350Z",
       "checksum": "6fb7479eef62b9797dce960dfde603b78057a9134fb3d8190df78e1032a7ea0b"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ApplicationID",
-        "expression": "@lookup:Applications.Name=Admin",
-        "resolved": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.EnvironmentID",
-        "expression": "@lookup:MJ: Environments.Name=Default",
-        "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -257,27 +143,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:38.351Z",
       "checksum": "2d6d068b9a7791972fa876b440581670618809034431c53b4d8a1f62efb3510a"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ApplicationID",
-        "expression": "@lookup:Applications.Name=Admin",
-        "resolved": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.EnvironmentID",
-        "expression": "@lookup:MJ: Environments.Name=Default",
-        "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -298,26 +164,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:38.352Z",
       "checksum": "b274595c33c369892ab54128c4316e1a5cab281d29ddc7ca0824cb00474ff62d"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ApplicationID",
-        "expression": "@lookup:Applications.Name=Admin",
-        "resolved": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.EnvironmentID",
-        "expression": "@lookup:MJ: Environments.Name=Default",
-        "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
-      }
-    ]
+    }
   }
 ]

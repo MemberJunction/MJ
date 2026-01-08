@@ -32,15 +32,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.901Z",
             "checksum": "22a148b66ef9078c0bab1fe71b6cd3767b2cacbab4b494617d0d5ab9c2c3be3c"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -59,15 +51,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.903Z",
             "checksum": "799b89463bba84114828fb1e01d093bfa347d87b3fe03f1af1d233fb35486a66"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -86,15 +70,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.904Z",
             "checksum": "151029f0dbd9b2e192ab8290271ced5a6f941b61c9c78ed6b875d9d3023c0aef"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -113,15 +89,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.906Z",
             "checksum": "8eda683d0985da0e2d5b7bb6dc476d405e2af2762977a23753d0d562d6c49321"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         }
       ],
       "Action Result Codes": [
@@ -138,15 +106,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.907Z",
             "checksum": "f98d7c4c896d47eb27e58dfa4fcd1135b5a93970c1eed819d0a9d1bee1432f69"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -161,15 +121,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.908Z",
             "checksum": "8ccb4dd46c79239338512063a55c19bcddefff3c0bb70be7d503dee5ffa4b7b3"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -184,15 +136,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.910Z",
             "checksum": "1de789a61739f529846d67b887463e5317ef1954413ccf9ce400a9ac9f5e6d6b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -207,15 +151,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.911Z",
             "checksum": "115f777b785371e41ef8335d9dd1116fb95e53503738d3fc21ef37e5cd17aa08"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -230,15 +166,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.913Z",
             "checksum": "9709e384b5322cf04d2ebe37b79cc027f0fd1f1b7603cfa034910d40b3c020bd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -253,15 +181,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.914Z",
             "checksum": "83a63866f52727c61f8eb87915e7126d56042cc629f950c60fd66aea7a151129"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -276,15 +196,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:55.932Z",
             "checksum": "e0a705cae654ef0dffb12cd5700cdf4e149a2499d8072a12b93b189dd5e07766"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         }
       ]
     },
@@ -294,14 +206,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:55.787Z",
       "checksum": "6ed61857425afe02ba08106abfc40b7874f6f6396534814750fed070b3f84564"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=AI",
-        "resolved": "75DD6103-E7B1-4B83-81C1-B5D135403344"
-      }
-    ]
+    }
   }
 ]

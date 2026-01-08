@@ -16,21 +16,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:14.496Z",
       "checksum": "be6f7717682a19f4d608f02255bac90f3986fc93e6ac96f9483b5a875a31a6ef"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Data&Parent=System",
-        "resolved": "22285832-93AD-427E-81BA-E332F63FC5B9"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Actions.Name=Create Record&Category=Data",
-        "resolved": "2504E288-ADF7-4913-A627-AA14276BAA55"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -49,20 +35,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:14.497Z",
       "checksum": "c409516878d55a87ac7761fc6acc896aebf7a97d8ea054c806d3acbaaacba2fe"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Data&Parent=System",
-        "resolved": "22285832-93AD-427E-81BA-E332F63FC5B9"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Actions.Name=Get Record&Category=Data",
-        "resolved": "49E30665-1A90-45CA-9129-C33959A51B4F"
-      }
-    ]
+    }
   }
 ]
