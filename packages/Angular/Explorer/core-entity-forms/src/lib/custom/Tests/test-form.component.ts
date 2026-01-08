@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ChangeDetectionStrategy, HostListener, ViewContainerRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -114,7 +114,8 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
     route: ActivatedRoute,
     protected cdr: ChangeDetectorRef,
     private testingDialogService: TestingDialogService,
-    private evalPrefsService: EvaluationPreferencesService
+    private evalPrefsService: EvaluationPreferencesService,
+    private viewContainerRef: ViewContainerRef
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -441,7 +442,7 @@ export class TestFormComponentExtended extends TestFormComponent implements OnIn
 
   async runTest() {
     if (this.record?.ID) {
-      this.testingDialogService.OpenTestDialog(this.record.ID);
+      this.testingDialogService.OpenTestDialog(this.record.ID, this.viewContainerRef);
     }
   }
 
