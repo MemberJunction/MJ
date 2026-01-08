@@ -170,7 +170,14 @@ export class MarkdownService {
     }
 
     try {
-      let html = this.marked.parse(markdown) as string;
+      // Preprocess markdown to fix indentation in HTML blocks
+      // This prevents marked from treating indented HTML as code blocks
+      let processedMarkdown = markdown;
+      if (this.currentConfig.enableHtml) {
+        processedMarkdown = this.normalizeHtmlBlockIndentation(markdown);
+      }
+
+      let html = this.marked.parse(processedMarkdown) as string;
 
       // Capture heading list after parsing
       if (this.currentConfig.enableHeadingIds) {
@@ -381,6 +388,12 @@ export class MarkdownService {
       return html;
     }
 
+    // Skip if SVG is present - DOMParser mangles SVG elements like <rect>
+    // when parsing as 'text/html' due to namespace issues
+    if (html.includes('<svg')) {
+      return html;
+    }
+
     try {
       const parser = new DOMParser();
       const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
@@ -467,5 +480,123 @@ export class MarkdownService {
     if (content.includes('&lt;') || content.includes('&gt;')) return false;
 
     return true;
+  }
+
+  /**
+   * Normalize indentation in HTML blocks to prevent marked from treating
+   * indented HTML as code blocks (4 spaces = code block in markdown).
+   *
+   * This finds HTML blocks (starting with common block-level tags) and
+   * removes ALL leading whitespace from lines within those blocks to ensure
+   * marked doesn't interpret any nested content as code blocks.
+   */
+  private normalizeHtmlBlockIndentation(markdown: string): string {
+    // Match HTML blocks that start with common block-level tags
+    // These tags indicate structural HTML that should be rendered, not code
+    const htmlBlockTags = [
+      'div', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
+      'ul', 'ol', 'li', 'p', 'section', 'article', 'header',
+      'footer', 'nav', 'main', 'aside', 'form', 'svg', 'figure'
+    ];
+
+    const tagPattern = htmlBlockTags.join('|');
+    // Match opening tag at start of line (possibly with leading whitespace)
+    const htmlBlockStartRegex = new RegExp(`^[ \\t]*<(${tagPattern})\\b`, 'i');
+
+    const lines = markdown.split('\n');
+    const result: string[] = [];
+    let inHtmlBlock = false;
+    let tagStack: string[] = [];
+
+    for (const line of lines) {
+      const trimmedLine = line.trimStart();
+
+      if (!inHtmlBlock) {
+        // Check if this line starts an HTML block
+        const match = trimmedLine.match(htmlBlockStartRegex);
+        if (match) {
+          inHtmlBlock = true;
+          const tag = match[1].toLowerCase();
+
+          // Push to stack if it's not a self-closing tag on this line
+          if (!this.isSelfClosingLine(trimmedLine, tag)) {
+            tagStack.push(tag);
+          }
+
+          // Remove leading indentation
+          result.push(trimmedLine);
+          continue;
+        }
+        result.push(line);
+      } else {
+        // We're inside an HTML block - remove ALL leading whitespace
+        // to prevent any nested content from being treated as code blocks
+
+        // Track tag stack for proper nesting
+        this.updateTagStack(trimmedLine, tagStack, htmlBlockTags);
+
+        // Remove leading whitespace from this line
+        result.push(trimmedLine);
+
+        // Check if we've closed all HTML blocks
+        if (tagStack.length === 0) {
+          inHtmlBlock = false;
+        }
+      }
+    }
+
+    return result.join('\n');
+  }
+
+  /**
+   * Check if a line contains a self-closing tag or opens and closes the same tag
+   */
+  private isSelfClosingLine(line: string, tag: string): boolean {
+    // Check for self-closing syntax: <tag ... />
+    if (new RegExp(`<${tag}[^>]*/>`,'i').test(line)) {
+      return true;
+    }
+    // Check if tag opens and closes on same line: <tag>...</tag>
+    const openCount = (line.match(new RegExp(`<${tag}\\b`, 'gi')) || []).length;
+    const closeCount = (line.match(new RegExp(`</${tag}>`, 'gi')) || []).length;
+    return openCount > 0 && openCount === closeCount;
+  }
+
+  /**
+   * Update the tag stack based on opening/closing tags in the line
+   */
+  private updateTagStack(line: string, tagStack: string[], validTags: string[]): void {
+    // Find all opening tags
+    const openTagRegex = /<(\w+)\b[^>]*(?<!\/)>/gi;
+    const closeTagRegex = /<\/(\w+)>/gi;
+
+    let match;
+
+    // Process closing tags first (they might close tags opened earlier)
+    while ((match = closeTagRegex.exec(line)) !== null) {
+      const tag = match[1].toLowerCase();
+      const idx = tagStack.lastIndexOf(tag);
+      if (idx !== -1) {
+        tagStack.splice(idx, 1);
+      }
+    }
+
+    // Process opening tags
+    while ((match = openTagRegex.exec(line)) !== null) {
+      const tag = match[1].toLowerCase();
+      // Only track block-level tags we care about
+      if (validTags.includes(tag)) {
+        // Don't add if it's self-closing or closed on same line
+        if (!this.isSelfClosingLine(line, tag)) {
+          // Check if there's a closing tag for this specific opening
+          const closeRegex = new RegExp(`</${tag}>`, 'gi');
+          const opens = (line.match(new RegExp(`<${tag}\\b`, 'gi')) || []).length;
+          const closes = (line.match(closeRegex) || []).length;
+          if (opens > closes) {
+            tagStack.push(tag);
+          }
+        }
+      }
+    }
   }
 }
