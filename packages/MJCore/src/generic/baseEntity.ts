@@ -573,9 +573,13 @@ export class BaseEntityResult {
  */
 export class BaseEntityEvent {
     /**
-     * The type of event that is being raised. transaction_ready is used to indicate that a transaction is ready to be submitted for execution. The TransactionGroup class uses this to know that all async preprocessing is done and it can now submit the transaction.
+     * The type of event that is being raised.
+     * - `save_started`, `delete_started`, `load_started`: Raised when an operation begins
+     * - `save`, `delete`: Raised when an operation completes successfully
+     * - `new_record`: Raised when NewRecord() is called
+     * - `transaction_ready`: Used to indicate that a transaction is ready to be submitted for execution. The TransactionGroup class uses this to know that all async preprocessing is done and it can now submit the transaction.
      */
-    type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'other';
+    type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'other';
 
     /**
      * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
@@ -606,6 +610,8 @@ export abstract class BaseEntity<T = unknown> {
     private _resultHistory: BaseEntityResult[] = [];
     private _provider: IEntityDataProvider | null = null;
     private _everSaved: boolean = false;
+    private _isLoading: boolean = false;
+    private _pendingDelete$: Observable<boolean> | null = null;
 
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
@@ -693,8 +699,9 @@ export abstract class BaseEntity<T = unknown> {
         this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this});
 
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
-        // at the moment we only broadcast save/delete not the others
-        if (type === 'save' || type === 'delete') {
+        // we broadcast save/delete events and their _started counterparts, as well as load_started
+        const globalEventTypes: BaseEntityEvent["type"][] = ['save', 'delete', 'save_started', 'delete_started', 'load_started'];
+        if (globalEventTypes.includes(type)) {
             const event = new BaseEntityEvent();
             event.baseEntity = this;
             event.payload = payload;
@@ -725,6 +732,35 @@ export abstract class BaseEntity<T = unknown> {
      */
     get IsSaved(): boolean {
         return this._everSaved;
+    }
+
+    /**
+     * Returns true if a Save operation is currently in progress. This is useful for UI components to show loading indicators or disable buttons while saving.
+     */
+    get IsSaving(): boolean {
+        return this._pendingSave$ !== null;
+    }
+
+    /**
+     * Returns true if a Delete operation is currently in progress. This is useful for UI components to show loading indicators or disable buttons while deleting.
+     */
+    get IsDeleting(): boolean {
+        return this._pendingDelete$ !== null;
+    }
+
+    /**
+     * Returns true if a Load operation is currently in progress. This is useful for UI components to show loading indicators while data is being fetched.
+     */
+    get IsLoading(): boolean {
+        return this._isLoading;
+    }
+
+    /**
+     * Returns true if any operation (Save, Delete, or Load) is currently in progress. This is a convenience property that combines IsSaving, IsDeleting, and IsLoading.
+     * Useful for disabling UI elements when any database operation is happening.
+     */
+    get IsBusy(): boolean {
+        return this.IsSaving || this.IsDeleting || this.IsLoading;
     }
 
     /**
@@ -1217,6 +1253,9 @@ export abstract class BaseEntity<T = unknown> {
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
 
+            // Raise save_started event before the actual save operation begins
+            this.RaiseEvent('save_started', null, saveSubType);
+
             if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
                 if (!this.ProviderToUse) {    
                     throw new Error('No provider set');
@@ -1426,16 +1465,21 @@ export abstract class BaseEntity<T = unknown> {
      * @returns true if success, false otherwise
      */
     public async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-        if (!this.ProviderToUse) {    
+        if (!this.ProviderToUse) {
             throw new Error('No provider set');
         }
-        else{
-            const valResult = CompositeKey.Validate();
-            if (!valResult || !valResult.IsValid)
-                throw new Error(`Invalid CompositeKey passed to BaseEntity.Load(${this.EntityInfo.Name}): ${valResult.ErrorMessage}`);
 
-            this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
+        const valResult = CompositeKey.Validate();
+        if (!valResult || !valResult.IsValid)
+            throw new Error(`Invalid CompositeKey passed to BaseEntity.Load(${this.EntityInfo.Name}): ${valResult.ErrorMessage}`);
 
+        this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
+
+        // Set loading state and raise load_started event
+        this._isLoading = true;
+        this.RaiseEvent('load_started', { CompositeKey });
+
+        try {
             if (!this.IsSaved){
                 this.init(); // wipe out current data if we're loading on top of existing record
             }
@@ -1460,6 +1504,10 @@ export abstract class BaseEntity<T = unknown> {
             this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
 
             return true;
+        }
+        finally {
+            // Always clear loading state when done, regardless of success or failure
+            this._isLoading = false;
         }
     }
 
@@ -1599,20 +1647,52 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * This method deletes a record from the database. You must call Load() first in order to load the context of the record you are deleting.
-     * @returns
+     *
+     * Debounces multiple calls so that if Delete() is called again while a delete is in progress,
+     * the second call will simply receive the same result as the first.
+     *
+     * @returns Promise<boolean>
      */
     public async Delete(options?: EntityDeleteOptions) : Promise<boolean> {
+        // If a delete is already in progress, return its promise.
+        if (this._pendingDelete$) {
+            return firstValueFrom(this._pendingDelete$);
+        }
+
+        // Create a new observable that debounces duplicative calls, and executes the delete.
+        this._pendingDelete$ = of(options).pipe(
+            // Execute the actual delete logic.
+            switchMap(opts => from(this._InnerDelete(opts))),
+            // When the delete completes (whether successfully or not), clear the pending delete observable.
+            finalize(() => { this._pendingDelete$ = null; }),
+            // Ensure that all subscribers get the same result.
+            shareReplay(1)
+        );
+
+        return firstValueFrom(this._pendingDelete$);
+    }
+
+    /**
+     * Private, internal method to handle deleting a record from the database. This method is called by the public facing Delete() method
+     * and is debounced to prevent multiple calls from being executed simultaneously.
+     * @param options
+     * @returns
+     */
+    private async _InnerDelete(options?: EntityDeleteOptions) : Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
 
         try {
-            if (!this.ProviderToUse) {    
+            if (!this.ProviderToUse) {
                 throw new Error('No provider set');
             }
             else{
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
-                
+
+                // Raise delete_started event before the actual delete operation begins
+                this.RaiseEvent('delete_started', null);
+
                 // stash the old values for the event
                 const oldVals =  await this.GetDataObject({
                     oldValues: false,
@@ -1633,14 +1713,14 @@ export abstract class BaseEntity<T = unknown> {
                         this.NewRecord(); // will trigger a new record event here too
                     }
                     else {
-                        // part of a transaction, wait for the transaction to submit successfully and then 
+                        // part of a transaction, wait for the transaction to submit successfully and then
                         // raise the event
                         this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                             if (success) {
                                 this.RaiseEvent('delete', {OldValues: oldVals});
 
                                 // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
-                                this.NewRecord(); // will trigger a new record event here too    
+                                this.NewRecord(); // will trigger a new record event here too
                             }
                             else {
                                 // transaction failed, so we need to add a new result to the history here
