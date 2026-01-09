@@ -15,8 +15,8 @@ This document outlines a comprehensive roadmap to enhance MemberJunction's agent
 ## Table of Contents
 
 1. [Current State Analysis](#current-state-analysis)
-2. [Phase 1: Critical Bug Fixes](#phase-1-critical-bug-fixes) ✅
-3. [Phase 2: Feature Completions](#phase-2-feature-completions) ✅
+2. [Phase 1: Critical Bug Fixes](#phase-1-critical-bug-fixes) ⚠️ 75%
+3. [Phase 2: Feature Completions](#phase-2-feature-completions) ⚠️ 70%
 4. [Phase 3: Multi-Tenant Scoping](#phase-3-multi-tenant-scoping) ✅
 5. [Phase 4: Reranking Framework](#phase-4-reranking-framework)
 6. [Phase 5: Flexible Vector Configuration](#phase-5-flexible-vector-configuration)
@@ -61,14 +61,17 @@ This document outlines a comprehensive roadmap to enhance MemberJunction's agent
 
 ---
 
-## Phase 1: Critical Bug Fixes
+## Phase 1: Critical Bug Fixes ⚠️ 75%
 
 **Priority:** 🔴 BLOCKING - Must complete before production use
 **Estimated Effort:** 3-5 days
+**Status:** 3/4 items complete, 1 item TODO
 
-### 1.1 Fix Memory Manager noteTypeId Bug
+### 1.1 Fix Memory Manager noteTypeId Bug ✅ COMPLETE
 
 **Problem:** The LLM returns placeholder UUIDs for `noteTypeId` that don't exist in the database, causing `Save()` failures.
+
+**Implementation:** Uses `AIEngine.Instance.AgenteNoteTypeIDByName(extracted.type)` to look up note type by name (case-insensitive) instead of relying on placeholder UUIDs. See `memory-manager-agent.ts:441`.
 
 **File:** `packages/AI/Agents/src/memory-manager-agent.ts:376-381`
 
@@ -95,9 +98,11 @@ note.AgentNoteTypeID = noteTypeId;
 - Update `metadata/prompts/templates/memory-manager/extract-notes.md` to return type names instead of UUIDs
 - Add validation for extracted data structure before processing
 
-### 1.2 Implement PayloadFeedbackManager.queryAgent()
+### 1.2 Implement PayloadFeedbackManager.queryAgent() ❌ TODO
 
 **Problem:** Method is a complete stub returning default acceptance for ALL changes.
+
+**Current Status:** Still a stub at `PayloadFeedbackManager.ts:142-159`. Logs "PayloadFeedbackManager.queryAgent not yet implemented - accepting all changes by default" and returns hardcoded `true` for all feedback questions.
 
 **File:** `packages/AI/Agents/src/PayloadFeedbackManager.ts:150-152`
 
@@ -128,9 +133,11 @@ private async queryAgent(
 }
 ```
 
-### 1.3 Add Error Handling for Vector Service Failures
+### 1.3 Add Error Handling for Vector Service Failures ✅ COMPLETE
 
 **Problem:** When vector services fail to initialize, methods return empty arrays silently.
+
+**Implementation:** `AIEngine.ts` now logs errors via `LogError()` and falls back to `fallbackGetNotesFromCache()` / `fallbackGetExamplesFromCache()` methods that return cached notes filtered by scope, sorted by date. See lines 904-970.
 
 **File:** `packages/AI/Engine/src/AIEngine.ts:903-905, 949-951`
 
@@ -157,14 +164,17 @@ if (!this._noteVectorService) {
 
 ---
 
-## Phase 2: Feature Completions
+## Phase 2: Feature Completions ⚠️ 70%
 
 **Priority:** 🟠 HIGH - Required for robust operation
 **Estimated Effort:** 1-2 weeks
+**Status:** 2/4 items complete, 1 TODO (lifecycle management), 1 partial (logging)
 
-### 2.1 Re-enable Note Priority Ordering
+### 2.1 Re-enable Note Priority Ordering ✅ COMPLETE
 
 **Problem:** Priority-based ordering disabled; only uses date ordering.
+
+**Implementation:** `agent-context-injector.ts:120` - For 'Recent' strategy uses `__mj_CreatedAt DESC`, for other strategies (Relevant, All) uses `AgentNoteType.Priority ASC, __mj_CreatedAt DESC`.
 
 **File:** `packages/AI/Agents/src/agent-context-injector.ts:102-107`
 
@@ -181,9 +191,11 @@ const orderBy = params.strategy === 'Relevant'
     : '__mj_CreatedAt DESC';  // Date only for Recent
 ```
 
-### 2.2 Add Note Deduplication
+### 2.2 Add Note Deduplication ✅ COMPLETE
 
 **Problem:** Examples have LLM-based deduplication; notes don't.
+
+**Implementation:** `memory-manager-agent.ts:270-320` uses semantic search via `FindSimilarAgentNotes()` with 70% similarity threshold, then LLM-based decision via `deduplicate-note.md` prompt. Both `deduplicate-note.md` and `deduplicate-example.md` prompts exist in `metadata/prompts/templates/memory-manager/`.
 
 **File:** `packages/AI/Agents/src/memory-manager-agent.ts`
 
@@ -205,9 +217,17 @@ const orderBy = params.strategy === 'Relevant'
    }
    ```
 
-### 2.3 Add Lifecycle Management for Auto-Generated Data
+### 2.3 Add Lifecycle Management for Auto-Generated Data ❌ NOT IMPLEMENTED
 
 **Problem:** Auto-generated notes/examples accumulate unbounded.
+
+**Current Status:** None of the planned fields have been added:
+- `LastAccessedAt` - NOT ADDED
+- `AccessCount` - NOT ADDED
+- `ExpiresAt` - NOT ADDED
+- `Status = 'Archived'` - NOT ADDED (only Active, Pending, Revoked exist)
+- Memory Cleanup Agent scheduled job - NOT CREATED
+- Per-agent retention configuration - NOT ADDED
 
 **Solution:** Add archival/cleanup scheduled job:
 
@@ -226,9 +246,14 @@ const orderBy = params.strategy === 'Relevant'
    - `ExampleRetentionDays` (default: 180)
    - `AutoArchiveEnabled` (default: true)
 
-### 2.4 Standardize Logging
+### 2.4 Standardize Logging ⚠️ PARTIAL
 
 **Problem:** Mixed console.error and LogError usage.
+
+**Current Status:** Main `AIEngine.ts` uses only `LogError()` (30+ calls, 0 console.error). However, 11 `console.error` calls remain in:
+- `ActionEmbeddingService.ts` (4 occurrences)
+- `AgentEmbeddingService.ts` (4 occurrences)
+- `base-agent.ts` (3 occurrences)
 
 **Files:** `packages/AI/Engine/src/AIEngine.ts` (12+ locations)
 
@@ -1785,8 +1810,8 @@ Phase 7: Advanced Graph (Future)
 
 | Phase | Duration | Dependencies | Status |
 |-------|----------|--------------|--------|
-| Phase 1 | 3-5 days | None | ✅ Complete |
-| Phase 2 | 1-2 weeks | Phase 1 | ✅ Complete |
+| Phase 1 | 3-5 days | None | ⚠️ 75% (PayloadFeedbackManager TODO) |
+| Phase 2 | 1-2 weeks | Phase 1 | ⚠️ 70% (Lifecycle Management TODO) |
 | Phase 3 | 1-2 weeks | Phase 1, 2 | ✅ Complete |
 | Phase 4 | 2-3 weeks | Phase 1 | Planned |
 | Phase 5 | 2-3 weeks | Phase 1, 2 | Planned |
