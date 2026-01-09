@@ -66,6 +66,33 @@ When the agent is used in a multi-tenant SaaS context, determine the appropriate
 
 If the conversation doesn't have clear multi-tenant context, omit the `scopeLevel` field (defaults to most specific).
 
+### Durable vs Ephemeral Detection
+
+Use these phrase patterns to determine appropriate scope level:
+
+**Ephemeral Indicators (→ contact scope or skip entirely):**
+- "this time", "just for now", "today only", "for this call"
+- "temporarily", "one-time", "exception", "just once"
+
+**Durable Indicators (→ organization or global scope):**
+- "always", "never", "company policy", "all customers"
+- "standard practice", "we typically", "our preference"
+- "every time", "by default", "as a rule"
+
+### DO NOT Capture (Extraction Guardrails)
+
+**Never extract examples containing:**
+- **PII**: Social Security numbers, payment info, passwords, health records
+- **Sensitive data**: Confidential business details, legal case specifics
+- **Temporary interactions**: One-off requests not representative of typical usage
+- **Incomplete exchanges**: Partial conversations without clear resolution
+
+**Format Constraints:**
+- exampleInput: Maximum 500 characters
+- exampleOutput: Maximum 1000 characters
+- successScore < 70 → do not extract
+- confidence < 70 → do not extract
+
 ### Success Score Calculation
 
 Base score on:

@@ -77,6 +77,35 @@ When the agent is used in a multi-tenant SaaS context, determine the appropriate
 
 If the conversation doesn't have clear multi-tenant context, omit the `scopeLevel` field (defaults to most specific).
 
+### Durable vs Ephemeral Detection
+
+Use these phrase patterns to determine appropriate scope level:
+
+**Ephemeral Indicators (→ contact scope or skip entirely):**
+- "this time", "just for now", "today only", "for this call"
+- "temporarily", "one-time", "exception", "just once"
+- "this trip", "this session", "right now"
+
+**Durable Indicators (→ organization or global scope):**
+- "always", "never", "company policy", "all customers"
+- "standard practice", "we typically", "our preference"
+- "every time", "by default", "as a rule"
+
+### DO NOT Capture (Extraction Guardrails)
+
+**Never extract notes containing:**
+- **PII**: Social Security numbers, payment card info, passwords, passport numbers, health records, bank account details
+- **Instructions**: Rules or commands directed at the agent itself (e.g., "you should always...", "make sure to...")
+- **Speculation**: Assistant-inferred assumptions not explicitly confirmed by the user
+- **Ephemeral requests**: One-time requests explicitly marked as temporary (e.g., "just this once", "only for today")
+- **Sensitive information**: Legal case details, confidential business data unless clearly meant to be remembered
+
+**Format Constraints:**
+- Maximum 2 sentences per note content
+- Keywords: maximum 3, lowercase only
+- Confidence < 70% → do not extract
+- If unsure whether something should be captured, err on the side of not capturing it
+
 ### Comparison with Existing Notes
 
 For each potential note:

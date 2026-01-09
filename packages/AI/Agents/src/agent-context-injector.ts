@@ -364,21 +364,45 @@ export class AgentContextInjector {
     }
 
     /**
-     * Format notes for injection into agent prompt
+     * Format notes for injection into agent prompt.
+     * Includes memory policy explaining scope precedence for conflict resolution.
+     *
+     * @param notes - Array of notes to format
+     * @param includeMemoryPolicy - Whether to include the memory policy preamble (default: true)
      */
-    FormatNotesForInjection(notes: AIAgentNoteEntity[]): string {
+    FormatNotesForInjection(notes: AIAgentNoteEntity[], includeMemoryPolicy: boolean = true): string {
         if (notes.length === 0) return '';
 
-        const lines: string[] = [
-            `📝 AGENT NOTES (${notes.length})`,
-            ''
-        ];
+        const lines: string[] = [];
+
+        // Add memory policy preamble for LLM understanding of scope precedence
+        if (includeMemoryPolicy) {
+            lines.push('<memory_policy>');
+            lines.push('Precedence (highest to lowest):');
+            lines.push('1) Current user message overrides all stored memory');
+            lines.push('2) Contact-specific notes override organization-level');
+            lines.push('3) Organization notes override global defaults');
+            lines.push('4) When same scope, prefer most recent by date');
+            lines.push('');
+            lines.push('Conflict resolution:');
+            lines.push('- If two notes contradict, prefer the more specific scope');
+            lines.push('- Ask clarifying question only if conflict materially affects response');
+            lines.push('</memory_policy>');
+            lines.push('');
+        }
+
+        lines.push(`📝 AGENT NOTES (${notes.length})`);
+        lines.push('');
 
         for (const note of notes) {
             lines.push(`[${note.Type}] ${note.Note}`);
 
             const scope = this.determineNoteScope(note);
-            if (scope) {
+            const saasScope = this.determineSaaSScope(note);
+
+            if (saasScope) {
+                lines.push(`  Scope: ${saasScope}`);
+            } else if (scope) {
                 lines.push(`  Scope: ${scope}`);
             }
 
@@ -387,6 +411,24 @@ export class AgentContextInjector {
 
         lines.push('---');
         return lines.join('\n');
+    }
+
+    /**
+     * Determine multi-tenant SaaS scope description for a note
+     */
+    private determineSaaSScope(note: AIAgentNoteEntity): string | null {
+        // Check for SaaS scoping (takes precedence over MJ scoping)
+        if (!note.PrimaryScopeRecordID) {
+            return null; // No SaaS scope, fall back to MJ scope
+        }
+
+        const hasSecondary = note.SecondaryScopes && note.SecondaryScopes !== '{}';
+
+        if (hasSecondary) {
+            return 'Contact-specific (most specific)';
+        }
+
+        return 'Organization-level';
     }
 
     /**
