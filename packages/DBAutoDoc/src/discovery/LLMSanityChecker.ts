@@ -5,9 +5,9 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { AIConfig } from '../types/config.js';
+import { createLLMInstance } from '../utils/llm-factory.js';
 
 export interface SanityCheckResult {
   invalidPKs: Array<{
@@ -30,20 +30,8 @@ export class LLMSanityChecker {
   private llm: BaseLLM;
 
   constructor(private aiConfig: AIConfig) {
-    // Create LLM instance using MJ ClassFactory
-    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-      BaseLLM,
-      aiConfig.provider,
-      aiConfig.apiKey
-    );
-
-    if (!llm) {
-      throw new Error(
-        `Failed to create LLM instance for provider: ${aiConfig.provider}`
-      );
-    }
-
-    this.llm = llm;
+    // Create LLM instance using shared factory (DRY principle)
+    this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**

@@ -54,3 +54,40 @@ Manual test cases for verifying conversation and agent run functionality.
 2. **Expected:** No user notification is generated (avoid notification spam)
 
 ---
+
+## Browser Refresh with Multiple Active Conversations
+
+### TC-08: Multiple Conversations with Multiple Agent Runs - Browser Refresh
+**Scenario:** Test browser refresh with multiple active conversations, each having multiple concurrent agent runs.
+
+**Steps:**
+1. Start Conversation A, send 2-3 messages triggering agent runs (e.g., `@ResearchAgent` queries)
+2. Start Conversation B, send 2-3 messages triggering agent runs
+3. While agents are still running in both conversations, perform full browser refresh (F5 / Cmd+R)
+4. Check conversation list UI
+
+**Expected:**
+- Both conversations show active indicator (spinner) in conversation list
+- Opening each conversation shows streaming messages resuming correctly
+- No cross-contamination between conversations (each shows only its own agent messages)
+- When each agent completes, spinner disappears from that conversation in the list
+- Final responses display correctly for all completed agents
+
+### TC-09: Verify Individual Agent Streaming After Multi-Conversation Refresh
+**Scenario:** Ensure each agent run's streaming works independently after browser refresh.
+
+**Steps:**
+1. Start Conversation A with 2 agent runs (e.g., `@ResearchAgent what is X?` then `@ResearchAgent what is Y?`)
+2. Start Conversation B with 2 agent runs
+3. Perform browser refresh while all 4 agents are running
+4. Open Conversation A and watch streaming for both agents
+5. Switch to Conversation B and watch streaming for both agents
+6. Switch back and forth multiple times
+
+**Expected:**
+- Each agent run displays its own streaming progress independently
+- Switching conversations doesn't interrupt or duplicate streaming
+- All 4 agent runs complete successfully with correct final responses
+- Console shows no errors related to callback routing
+
+---

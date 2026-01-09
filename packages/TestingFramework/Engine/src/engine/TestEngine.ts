@@ -28,10 +28,17 @@ import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
 import {
     TestRunOptions,
+    SuiteRunOptions,
     DriverExecutionResult,
     TestRunResult,
-    TestSuiteRunResult
+    TestSuiteRunResult,
+    TestLogMessage
 } from '../types';
+import {
+    gatherExecutionContext,
+    getMachineName,
+    getMachineIdentifier
+} from '../utils/execution-context';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -121,13 +128,16 @@ export class TestEngine extends TestEngineBase {
                 throw new Error(`Test not found: ${testId}`);
             }
 
+            // Get tags from options
+            const tags = options.tags;
+
             // Check RepeatCount and branch to repeated execution if needed
             if (test.RepeatCount && test.RepeatCount > 1) {
-                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime);
+                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags);
             }
 
             // Single execution - delegate to helper method
-            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime);
+            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags);
 
         } catch (error) {
             this.logError(`Test execution failed: ${testId}`, error as Error);
@@ -139,13 +149,13 @@ export class TestEngine extends TestEngineBase {
      * Run a test suite.
      *
      * @param suiteId - ID of the test suite to run
-     * @param options - Test execution options
+     * @param options - Suite execution options (extends TestRunOptions with suite-specific options)
      * @param contextUser - User context
      * @returns Test suite run result
      */
     public async RunSuite(
         suiteId: string,
-        options: TestRunOptions,
+        options: SuiteRunOptions,
         contextUser: UserInfo
     ): Promise<TestSuiteRunResult> {
         const startTime = Date.now();
@@ -159,13 +169,21 @@ export class TestEngine extends TestEngineBase {
             }
 
             // Load suite tests from cache
-            const tests = await this.loadSuiteTests(suiteId);
+            let tests = await this.loadSuiteTests(suiteId);
             if (tests.length === 0) {
                 throw new Error(`No tests found in suite: ${suiteId}`);
             }
 
+            // Apply test selection filters
+            tests = this.filterTestsForExecution(suiteId, tests, options);
+            if (tests.length === 0) {
+                throw new Error(`No tests match the selection criteria for suite: ${suiteId}`);
+            }
+
+            this.log(`Running ${tests.length} tests (after filtering)`, options.verbose);
+
             // Create TestSuiteRun entity
-            const suiteRun = await this.createSuiteRun(suite, contextUser);
+            const suiteRun = await this.createSuiteRun(suite, contextUser, options);
 
             // Execute tests
             const testResults: TestRunResult[] = [];
@@ -330,6 +348,64 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
+     * Filter tests based on suite run options.
+     * Supports filtering by:
+     * - selectedTestIds: Run only specific tests by ID
+     * - sequenceStart/sequenceEnd: Run tests within a sequence range
+     * - sequence: Run tests at specific sequence positions
+     * @private
+     */
+    private filterTestsForExecution(
+        suiteId: string,
+        tests: TestEntity[],
+        options: SuiteRunOptions
+    ): TestEntity[] {
+        // Get suite test mappings to access sequence numbers
+        const suiteTests = this.TestSuiteTests.filter(st => st.SuiteID === suiteId);
+
+        // Create a map of testId -> sequence for efficient lookup
+        const testSequenceMap = new Map<string, number>();
+        for (const st of suiteTests) {
+            testSequenceMap.set(st.TestID, st.Sequence);
+        }
+
+        let filteredTests = [...tests];
+
+        // Filter by selectedTestIds if provided
+        if (options.selectedTestIds && options.selectedTestIds.length > 0) {
+            const selectedIds = new Set(options.selectedTestIds);
+            filteredTests = filteredTests.filter(t => selectedIds.has(t.ID));
+            this.log(`Filtered to ${filteredTests.length} tests by selectedTestIds`, options.verbose);
+        }
+
+        // Filter by sequence range if provided
+        if (options.sequenceStart != null || options.sequenceEnd != null) {
+            const start = options.sequenceStart ?? 1;
+            const end = options.sequenceEnd ?? Number.MAX_SAFE_INTEGER;
+
+            filteredTests = filteredTests.filter(test => {
+                const seq = testSequenceMap.get(test.ID);
+                if (seq == null) return false;
+                return seq >= start && seq <= end;
+            });
+            this.log(`Filtered to ${filteredTests.length} tests by sequence range [${start}-${end}]`, options.verbose);
+        }
+
+        // Filter by specific sequence numbers if provided
+        if (options.sequence && options.sequence.length > 0) {
+            const sequenceSet = new Set(options.sequence);
+            filteredTests = filteredTests.filter(test => {
+                const seq = testSequenceMap.get(test.ID);
+                if (seq == null) return false;
+                return sequenceSet.has(seq);
+            });
+            this.log(`Filtered to ${filteredTests.length} tests by sequence numbers [${options.sequence.join(', ')}]`, options.verbose);
+        }
+
+        return filteredTests;
+    }
+
+    /**
      * Create TestRun entity.
      * @private
      */
@@ -337,7 +413,8 @@ export class TestEngine extends TestEngineBase {
         test: TestEntity,
         contextUser: UserInfo,
         suiteRunId?: string | null,
-        sequence?: number | null
+        sequence?: number | null,
+        tags?: string | null
     ): Promise<TestRunEntity> {
         const md = new Metadata();
         const testRun = await md.GetEntityObject<TestRunEntity>('MJ: Test Runs', contextUser);
@@ -361,6 +438,18 @@ export class TestEngine extends TestEngineBase {
             testRun.Sequence = sequence;
         }
 
+        // Set tags if provided
+        if (tags) {
+            testRun.Tags = tags;
+        }
+
+        // Set execution context fields for cross-server aggregation
+        testRun.MachineName = getMachineName();
+        testRun.MachineID = getMachineIdentifier() || null;
+        testRun.RunByUserName = contextUser.Name;
+        testRun.RunByUserEmail = contextUser.Email;
+        testRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+
         const saved = await testRun.Save();
         if (!saved) {
             const errorMsg = testRun.LatestResult?.Message || 'Unknown error';
@@ -376,7 +465,8 @@ export class TestEngine extends TestEngineBase {
      */
     private async createSuiteRun(
         suite: TestSuiteEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: SuiteRunOptions
     ): Promise<TestSuiteRunEntity> {
         const md = new Metadata();
         const suiteRun = await md.GetEntityObject<TestSuiteRunEntity>(
@@ -388,6 +478,18 @@ export class TestEngine extends TestEngineBase {
         suiteRun.RunByUserID = contextUser.ID;
         suiteRun.Status = 'Running';
         suiteRun.StartedAt = new Date();
+
+        // Set tags if provided
+        if (options?.tags) {
+            suiteRun.Tags = options.tags;
+        }
+
+        // Set execution context fields for cross-server aggregation
+        suiteRun.MachineName = getMachineName();
+        suiteRun.MachineID = getMachineIdentifier() || null;
+        suiteRun.RunByUserName = contextUser.Name;
+        suiteRun.RunByUserEmail = contextUser.Email;
+        suiteRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
 
         const saved = await suiteRun.Save();
         if (!saved) {
@@ -405,7 +507,8 @@ export class TestEngine extends TestEngineBase {
     private async updateTestRun(
         testRun: TestRunEntity,
         result: DriverExecutionResult,
-        startTime: number
+        startTime: number,
+        logMessages?: TestLogMessage[]
     ): Promise<void> {
         testRun.Status = result.status;
         testRun.Score = result.score;
@@ -414,6 +517,10 @@ export class TestEngine extends TestEngineBase {
         testRun.TotalChecks = result.totalChecks;
         testRun.TargetType = result.targetType;
         testRun.TargetLogID = result.targetLogId;
+        // Set the proper Entity FK for target linkage
+        if (result.targetLogEntityId) {
+            testRun.TargetLogEntityID = result.targetLogEntityId;
+        }
         testRun.InputData = result.inputData ? JSON.stringify(result.inputData) : null;
         testRun.ExpectedOutputData = result.expectedOutput ? JSON.stringify(result.expectedOutput) : null;
         testRun.ActualOutputData = result.actualOutput ? JSON.stringify(result.actualOutput) : null;
@@ -422,10 +529,30 @@ export class TestEngine extends TestEngineBase {
         testRun.DurationSeconds = (Date.now() - startTime) / 1000;
         testRun.CompletedAt = new Date();
 
+        // Save accumulated log messages
+        if (logMessages && logMessages.length > 0) {
+            testRun.Log = this.formatLogMessages(logMessages);
+        }
+
+        // Ensure ErrorMessage is populated for timeout and error statuses
+        if ((result.status === 'Timeout' || result.status === 'Error') && result.errorMessage) {
+            testRun.ErrorMessage = result.errorMessage;
+        }
+
         const saved = await testRun.Save();
         if (!saved) {
             this.logError('Failed to update TestRun entity', new Error(testRun.LatestResult?.Message));
         }
+    }
+
+    /**
+     * Format log messages into a single string for storage.
+     * @private
+     */
+    private formatLogMessages(messages: TestLogMessage[]): string {
+        return messages
+            .map(m => `[${m.timestamp.toISOString()}] [${m.level.toUpperCase()}] ${m.message}`)
+            .join('\n');
     }
 
     /**
@@ -465,7 +592,8 @@ export class TestEngine extends TestEngineBase {
         contextUser: UserInfo,
         suiteRunId: string | null | undefined,
         suiteTestSequence: number | null | undefined,
-        startTime: number
+        startTime: number,
+        tags?: string
     ): Promise<TestRunResult[]> {
         const results: TestRunResult[] = [];
 
@@ -480,7 +608,8 @@ export class TestEngine extends TestEngineBase {
                 iteration,
                 options,
                 contextUser,
-                Date.now() // Each iteration gets its own start time
+                Date.now(), // Each iteration gets its own start time
+                tags
             );
 
             results.push(result);
@@ -505,7 +634,8 @@ export class TestEngine extends TestEngineBase {
         sequence: number | null,
         options: TestRunOptions,
         contextUser: UserInfo,
-        startTime: number
+        startTime: number,
+        tags?: string
     ): Promise<TestRunResult> {
         // Get test type
         const testType = this.GetTestTypeByID(test.TypeID);
@@ -527,8 +657,33 @@ export class TestEngine extends TestEngineBase {
         // Get or create driver
         const driver = await this.getDriver(testType, contextUser);
 
+        // Check if driver supports cancellation and log warning if not
+        const supportsCancellation = driver.supportsCancellation();
+        if (!supportsCancellation) {
+            this.log(
+                `Warning: Test type '${testType.Name}' (driver: ${testType.DriverClass}) does not support cancellation. ` +
+                `Timeout will mark test as failed but execution may continue in background.`,
+                options.verbose
+            );
+        }
+
         // Create TestRun entity
-        const testRun = await this.createTestRun(test, contextUser, suiteRunId, sequence);
+        const testRun = await this.createTestRun(test, contextUser, suiteRunId, sequence, tags);
+
+        // Set up log accumulation
+        const logMessages: TestLogMessage[] = [];
+        const originalLogCallback = options.logCallback;
+
+        // Create enhanced options with log accumulation
+        const enhancedOptions: TestRunOptions = {
+            ...options,
+            logCallback: (message: TestLogMessage) => {
+                // Accumulate log messages
+                logMessages.push(message);
+                // Also call original callback if provided
+                originalLogCallback?.(message);
+            }
+        };
 
         // Progress: Executing test
         options.progressCallback?.({
@@ -548,9 +703,24 @@ export class TestEngine extends TestEngineBase {
             test,
             testRun,
             contextUser,
-            options,
+            options: enhancedOptions,
             oracleRegistry: this._oracleRegistry
         });
+
+        // If timeout occurred and driver doesn't support cancellation, add warning to error message
+        if (driverResult.status === 'Timeout' && !supportsCancellation) {
+            const warningMessage = `Test type '${testType.Name}' does not support cancellation - execution may continue in background.`;
+            driverResult.errorMessage = driverResult.errorMessage
+                ? `${driverResult.errorMessage}\n${warningMessage}`
+                : warningMessage;
+
+            // Also add to log
+            logMessages.push({
+                timestamp: new Date(),
+                level: 'warn',
+                message: warningMessage
+            });
+        }
 
         // Progress: Evaluating oracles
         const oracleCount = driverResult.oracleResults?.length || 0;
@@ -564,8 +734,8 @@ export class TestEngine extends TestEngineBase {
             }
         });
 
-        // Update TestRun entity with results
-        await this.updateTestRun(testRun, driverResult, startTime);
+        // Update TestRun entity with results and logs
+        await this.updateTestRun(testRun, driverResult, startTime, logMessages);
 
         // Convert to TestRunResult
         const result: TestRunResult = {
@@ -579,11 +749,13 @@ export class TestEngine extends TestEngineBase {
             totalChecks: driverResult.totalChecks,
             oracleResults: driverResult.oracleResults,
             targetType: driverResult.targetType,
+            targetLogEntityId: driverResult.targetLogEntityId,
             targetLogId: driverResult.targetLogId,
             durationMs: Date.now() - startTime,
             totalCost: driverResult.totalCost || 0,
             startedAt: testRun.StartedAt!,
-            completedAt: testRun.CompletedAt!
+            completedAt: testRun.CompletedAt!,
+            errorMessage: driverResult.errorMessage
         };
 
         // Add sequence if this is a repeated test iteration

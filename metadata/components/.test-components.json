@@ -3,7 +3,6 @@
     "fields": {
       "Name": "TestEntityDataGrid",
       "Namespace": "Testing/DataGrid",
-      "Description": "Test harness for EntityDataGrid component using Action Params entity (~1800 rows). Demonstrates both full cache mode (with filter) and partial cache mode (no filter) for testing pagination, sorting, filtering, and cache behavior.",
       "Title": "EntityDataGrid Test Harness",
       "Type": "Other",
       "Version": "1.0.0",
@@ -15,8 +14,27 @@
       "ID": "88E31796-27C7-481D-9621-8D5D4143A976"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:16:04.670Z",
-      "checksum": "4858ee545cb8ab2c01bdb2227cd5cc091142f06cbdcfe4f5c0a91eb078678d76"
+      "lastModified": "2026-01-08T14:33:08.684Z",
+      "checksum": "a3b878d6c7e066e87a5c252da7544366781b83568f88eac2191782aa7bcb7c28"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TestSimpleChart",
+      "Namespace": "Testing/Chart",
+      "Title": "SimpleChart Test Harness",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/test-simple-chart.spec.json"
+    },
+    "primaryKey": {
+      "ID": "4FA39CF8-F887-4287-859E-DAB2809FC66B"
+    },
+    "sync": {
+      "lastModified": "2026-01-08T14:33:08.685Z",
+      "checksum": "4dad4efe53bf8545e7994c06f0af47f43a03b837c88764c3d908ae7d67eb14cb"
     }
   }
 ]

@@ -8,7 +8,7 @@ import { take } from 'rxjs/operators';
 import { environment } from '../environments/environment';
 import { StartupValidationService } from '@memberjunction/ng-explorer-core';
 import { LoadGeneratedEntities } from 'mj_generatedentities'
-import { MJAuthBase } from '@memberjunction/ng-auth-services';
+import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
 LoadGeneratedEntities(); // forces the generated entities library to load up, sometimes tree shaking in the build process can break this, so this is a workaround that ensures it always happens
 
@@ -35,7 +35,7 @@ export class AppComponent implements OnInit {
     private startupValidationService: StartupValidationService
   ) { }
 
-  async handleLogin(token: string, claims: any) {
+  async handleLogin(token: string, userInfo: StandardUserInfo) {
     if (token) {
       const url: string = environment.GRAPHQL_URI;
       const wsurl: string = environment.GRAPHQL_WS_URI;
@@ -43,17 +43,12 @@ export class AppComponent implements OnInit {
       try {
         const start = Date.now();
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
-          const refresh$ = await this.authBase.refresh();
-          const claims = await lastValueFrom(refresh$);
-          // Auth0 uses __raw, MSAL uses idToken
-          const token = claims?.__raw || claims?.idToken;
-
-          if (!token) {
-            console.error('[GraphQL] Token refresh failed - no token returned');
-            throw new Error('Failed to refresh authentication token');
-          }
-
-          return token;
+          // v3.0 API - clean abstraction, no provider-specific logic!
+          // refreshToken() handles all provider differences internally:
+          // - Auth0/Okta: Silent refresh with refresh tokens
+          // - MSAL: Silent refresh, falls back to redirect if needed
+          const token = await this.authBase.refreshToken();
+          return token.idToken;
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
         const end = Date.now();
@@ -114,12 +109,15 @@ export class AppComponent implements OnInit {
         }
 
         const retriedRecently = lastRetryDateTime && +new Date(lastRetryDateTime) > yesterday;
-        const expiryError = this.authBase.checkExpiredTokenError((err as any)?.response?.errors?.[0]?.message);
 
-        if (!retriedRecently && expiryError) {
+        // v3.0 API - use semantic error classification
+        const authError = this.authBase.classifyError(err);
+        const isTokenExpired = authError.type === AuthErrorType.TOKEN_EXPIRED;
+
+        if (!retriedRecently && isTokenExpired) {
           LogStatus('JWT Expired, retrying once: ' + err);
           localStorage.setItem(retryKey, new Date().toISOString());
-          const login$ = await this.authBase.login({ appState: { target: window.location.pathname } });
+          const login$ = this.authBase.login({ appState: { target: window.location.pathname } });
           await lastValueFrom(login$);
         } else {
           this.HasError = true;
@@ -134,51 +132,53 @@ export class AppComponent implements OnInit {
   async setupAuth() {
     // Auth provider already initialized by APP_INITIALIZER
 
-    // Don't await here - let it run asynchronously to avoid blocking app startup
-    this.authBase.getUserClaims().then(claims => {
-      claims.subscribe((claims: any) => {
-      if (claims) {
-        // Extract ID token - for Auth0, it's in __raw; for MSAL, it's in idToken
-        // This matches pre-refactor behavior
-        const token = claims?.__raw || claims?.idToken;
-        const result = claims.idTokenClaims ?
-                        {...claims, ...claims.idTokenClaims} : // combine the values from the two claims objects because in auth0 and MSAL they have different structures, this pushes them all together into one
-                        claims; // or if idTokenClaims doesn't exist, just use the claims object as is
+    // v3.0 API - Clean abstraction using observables
+    this.authBase.getUserInfo()
+      .pipe(take(1))
+      .subscribe({
+        next: async (userInfo) => {
+          if (userInfo) {
+            // v3.0 API - No more provider-specific logic!
+            const token = await this.authBase.getIdToken();
 
-        this.handleLogin(token, result);
-      }
-    }, (err: any) => {
-      LogError('Error Logging In: ' + err);
-      if(err.name){
-        if(err.name === 'BrowserAuthError') {
-          //if we're using MSAL, then its likely the user has no active accounts
-          //signed in
-          this.subHeaderText = "Welcome back! Please log in to your account.";
-        }
-        else if(err.name === 'InteractionRequiredAuthError'){
-          //if we're using MSAL, then its likely the user has previously
-          //signed in, but the auth token/session has expired
-          this.subHeaderText = "Your session has expired. Please log in to your account.";
-        }
-      }
+            if (token) {
+              this.handleLogin(token, userInfo);
+            } else {
+              console.error('User info available but no token found');
+              // Auth state is managed by the provider itself via observables
+            }
+          }
+        },
+        error: (err: unknown) => {
+          LogError('Error Logging In: ' + err);
 
-      this.authBase.authenticated = false;
+          // v3.0 API - Use semantic error classification
+          const authError = this.authBase.classifyError(err);
+
+          switch (authError.type) {
+            case AuthErrorType.NO_ACTIVE_SESSION:
+              this.subHeaderText = "Welcome back! Please log in to your account.";
+              break;
+            case AuthErrorType.INTERACTION_REQUIRED:
+            case AuthErrorType.TOKEN_EXPIRED:
+              this.subHeaderText = "Your session has expired. Please log in to your account.";
+              break;
+            default:
+              this.subHeaderText = authError.userMessage || "Welcome back! Please log in to your account.";
+          }
+
+          // Auth state is managed by the provider itself via observables
+        }
       });
-    }).catch(err => {
-      console.error('Error getting user claims:', err);
-      this.authBase.authenticated = false;
-    });
-  
-    // Don't await here either - let auth check run async
-    this.authBase.isAuthenticated()
-      .pipe(take(1)) /* only do this for the first message */
-      .subscribe((loggedIn: any) => {
-          if (!loggedIn) {
-          //this.authBase.login(); 
 
-          //Instead of kicking off the login process,
-          //just display the login screen to the user
-          this.authBase.authenticated = false;
+    // Check auth state - the provider manages this internally now
+    this.authBase.isAuthenticated()
+      .pipe(take(1))
+      .subscribe((loggedIn: boolean) => {
+        if (!loggedIn) {
+          // Instead of kicking off the login process,
+          // just display the login screen to the user
+          // Auth state is already false if we're here
         }
       });
 

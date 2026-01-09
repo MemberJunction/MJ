@@ -132,6 +132,14 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="AgentTypePromptParams"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Type"
             Type="textbox"
             [EditMode]="EditMode"
@@ -504,18 +512,44 @@
 
     </mj-collapsible-panel>
 
-    <!-- Scope Configuration Section -->
+    <!-- Attachment Storage Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="scopeConfiguration"
-        sectionName="Scope Configuration"
-        icon="fa fa-sliders-h"
+        sectionKey="attachmentStorage"
+        sectionName="Attachment Storage"
+        icon="fa fa-paperclip"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
-            [ShowLabel]="false"
-            FieldName="ScopeConfig"
+            [ShowLabel]="true"
+            FieldName="AttachmentStorageProviderID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AttachmentRootPath"
             Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="InlineStorageThresholdBytes"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AttachmentStorageProvider"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -672,6 +706,27 @@
                 [AllowLoad]="IsSectionExpanded('mJAIAgentDataSources')"
                 [EditMode]="GridEditMode()"
                 (dataLoaded)="SetSectionRowCount('mJAIAgentDataSources', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: AI Agent Modalities Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentModalities"
+        sectionName="MJ: AI Agent Modalities"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentModalities')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Modalities','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Modalities')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentModalities')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJAIAgentModalities', $event.totalRowCount)"
                 >
             </mj-user-view-grid>
         </div>

@@ -1,5 +1,69 @@
 # @memberjunction/metadata-sync
 
+## 2.131.0
+
+### Patch Changes
+
+- 280a4c7: Add Cerebras as AI inference provider for GLM-4.7 model and improve MetadataSync with recursive @file reference resolution in checksum calculations
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/graphql-dataprovider@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/core-entities-server@2.131.0
+  - @memberjunction/sqlserver-dataprovider@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- cdea2b7: no migration
+  - @memberjunction/graphql-dataprovider@2.130.1
+  - @memberjunction/core@2.130.1
+  - @memberjunction/core-entities@2.130.1
+  - @memberjunction/core-entities-server@2.130.1
+  - @memberjunction/global@2.130.1
+  - @memberjunction/sqlserver-dataprovider@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- 02e84a2: Add GPT Codex models (5.2-codex, 5.1-codex-max, 5.1-codex-mini), implement SimpleChart stackBy property for stacked bar/column charts, add @file: directive support for component code references, reorganize component metadata with comprehensive documentation, and fix metadata-sync validation for glob patterns with \*\*/ prefix
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/graphql-dataprovider@2.130.0
+  - @memberjunction/sqlserver-dataprovider@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/core-entities-server@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- 8e2ec79: migration
+
+### Patch Changes
+
+- 20c360f: Fix metadata sync pull operations to correctly process all records and preserve timestamps when data hasn't changed
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/sqlserver-dataprovider@2.129.0
+  - @memberjunction/graphql-dataprovider@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/core-entities-server@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

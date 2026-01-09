@@ -1,4 +1,31 @@
-<div class="mention-editor-container" (click)="onContainerClick($event)">
+<div class="mention-editor-container"
+     [class.drag-over]="isDragOver"
+     (click)="onContainerClick($event)"
+     (dragover)="onDragOver($event)"
+     (dragleave)="onDragLeave($event)"
+     (drop)="onDrop($event)">
+
+  <!-- Pending Attachments Preview -->
+  <div class="pending-attachments" *ngIf="pendingAttachments.length > 0">
+    <div class="attachment-thumbnail"
+         *ngFor="let attachment of pendingAttachments"
+         (click)="onAttachmentClick(attachment)">
+      <img *ngIf="attachment.thumbnailUrl"
+           [src]="attachment.thumbnailUrl"
+           [alt]="attachment.fileName"
+           class="thumbnail-image">
+      <div *ngIf="!attachment.thumbnailUrl" class="thumbnail-placeholder">
+        <i class="fa-solid fa-file"></i>
+        <span class="file-name">{{ attachment.fileName }}</span>
+      </div>
+      <button class="remove-attachment"
+              (click)="removeAttachment(attachment.id); $event.stopPropagation()"
+              title="Remove attachment">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+  </div>
+
   <div
     #editor
     class="mention-editor"
@@ -10,6 +37,14 @@
     (blur)="onBlur()"
     (paste)="onPaste($event)"
   ></div>
+
+  <!-- Drag & Drop Overlay -->
+  <div class="drop-overlay" *ngIf="isDragOver">
+    <div class="drop-message">
+      <i class="fa-solid fa-cloud-arrow-up"></i>
+      <span>Drop files here</span>
+    </div>
+  </div>
 
   <!-- Mention Dropdown -->
   <mj-mention-dropdown

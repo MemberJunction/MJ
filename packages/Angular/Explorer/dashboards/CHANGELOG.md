@@ -1,5 +1,145 @@
 # @memberjunction/ng-dashboards
 
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ai-engine-base@2.131.0
+  - @memberjunction/ai-core-plus@2.131.0
+  - @memberjunction/ng-base-application@2.131.0
+  - @memberjunction/ng-core-entity-forms@2.131.0
+  - @memberjunction/ng-explorer-settings@2.131.0
+  - @memberjunction/ng-shared@2.131.0
+  - @memberjunction/ng-user-view-grid@2.131.0
+  - @memberjunction/ng-testing@2.131.0
+  - @memberjunction/ng-action-gallery@2.131.0
+  - @memberjunction/ng-ai-test-harness@2.131.0
+  - @memberjunction/ng-code-editor@2.131.0
+  - @memberjunction/ng-container-directives@2.131.0
+  - @memberjunction/ng-entity-relationship-diagram@2.131.0
+  - @memberjunction/ng-entity-viewer@2.131.0
+  - @memberjunction/ng-filter-builder@2.131.0
+  - @memberjunction/ng-notifications@2.131.0
+  - @memberjunction/ng-react@2.131.0
+  - @memberjunction/ng-shared-generic@2.131.0
+  - @memberjunction/graphql-dataprovider@2.131.0
+  - @memberjunction/interactive-component-types@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/skip-types@2.131.0
+  - @memberjunction/templates-base-types@2.131.0
+  - @memberjunction/testing-engine-base@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- Updated dependencies [8884553]
+  - @memberjunction/ng-core-entity-forms@2.130.1
+  - @memberjunction/ng-testing@2.130.1
+  - @memberjunction/ng-explorer-settings@2.130.1
+  - @memberjunction/ng-user-view-grid@2.130.1
+  - @memberjunction/ai-engine-base@2.130.1
+  - @memberjunction/ai-core-plus@2.130.1
+  - @memberjunction/ng-base-application@2.130.1
+  - @memberjunction/ng-shared@2.130.1
+  - @memberjunction/ng-action-gallery@2.130.1
+  - @memberjunction/ng-ai-test-harness@2.130.1
+  - @memberjunction/ng-code-editor@2.130.1
+  - @memberjunction/ng-container-directives@2.130.1
+  - @memberjunction/ng-entity-relationship-diagram@2.130.1
+  - @memberjunction/ng-entity-viewer@2.130.1
+  - @memberjunction/ng-filter-builder@2.130.1
+  - @memberjunction/ng-notifications@2.130.1
+  - @memberjunction/ng-react@2.130.1
+  - @memberjunction/ng-shared-generic@2.130.1
+  - @memberjunction/graphql-dataprovider@2.130.1
+  - @memberjunction/interactive-component-types@2.130.1
+  - @memberjunction/core@2.130.1
+  - @memberjunction/core-entities@2.130.1
+  - @memberjunction/global@2.130.1
+  - @memberjunction/skip-types@2.130.1
+  - @memberjunction/templates-base-types@2.130.1
+  - @memberjunction/testing-engine-base@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+- Updated dependencies [c23d2b7]
+  - @memberjunction/ai-engine-base@2.130.0
+  - @memberjunction/ai-core-plus@2.130.0
+  - @memberjunction/graphql-dataprovider@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/ng-base-application@2.130.0
+  - @memberjunction/ng-core-entity-forms@2.130.0
+  - @memberjunction/ng-shared@2.130.0
+  - @memberjunction/ng-ai-test-harness@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/skip-types@2.130.0
+  - @memberjunction/ng-explorer-settings@2.130.0
+  - @memberjunction/ng-user-view-grid@2.130.0
+  - @memberjunction/ng-testing@2.130.0
+  - @memberjunction/ng-notifications@2.130.0
+  - @memberjunction/ng-react@2.130.0
+  - @memberjunction/ng-action-gallery@2.130.0
+  - @memberjunction/ng-code-editor@2.130.0
+  - @memberjunction/ng-container-directives@2.130.0
+  - @memberjunction/ng-entity-relationship-diagram@2.130.0
+  - @memberjunction/ng-entity-viewer@2.130.0
+  - @memberjunction/ng-filter-builder@2.130.0
+  - @memberjunction/ng-shared-generic@2.130.0
+  - @memberjunction/interactive-component-types@2.130.0
+  - @memberjunction/templates-base-types@2.130.0
+  - @memberjunction/testing-engine-base@2.130.0
+  - @memberjunction/global@2.130.0
+
+## 2.129.0
+
+### Patch Changes
+
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [f7267c3]
+- Updated dependencies [fbae243]
+- Updated dependencies [6ce6e67]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/ng-react@2.129.0
+  - @memberjunction/global@2.129.0
+  - @memberjunction/ai-core-plus@2.129.0
+  - @memberjunction/ng-entity-relationship-diagram@2.129.0
+  - @memberjunction/graphql-dataprovider@2.129.0
+  - @memberjunction/ai-engine-base@2.129.0
+  - @memberjunction/ng-core-entity-forms@2.129.0
+  - @memberjunction/ng-entity-viewer@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/ng-base-application@2.129.0
+  - @memberjunction/ng-explorer-settings@2.129.0
+  - @memberjunction/ng-shared@2.129.0
+  - @memberjunction/ng-user-view-grid@2.129.0
+  - @memberjunction/ng-testing@2.129.0
+  - @memberjunction/ng-action-gallery@2.129.0
+  - @memberjunction/ng-ai-test-harness@2.129.0
+  - @memberjunction/ng-code-editor@2.129.0
+  - @memberjunction/ng-container-directives@2.129.0
+  - @memberjunction/ng-filter-builder@2.129.0
+  - @memberjunction/ng-notifications@2.129.0
+  - @memberjunction/ng-shared-generic@2.129.0
+  - @memberjunction/interactive-component-types@2.129.0
+  - @memberjunction/skip-types@2.129.0
+  - @memberjunction/templates-base-types@2.129.0
+  - @memberjunction/testing-engine-base@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

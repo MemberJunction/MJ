@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity,  TemplateParamEntity, ActionParamEntity, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity,  TemplateParamEntity, ActionParamEntity, AIAgentRelationshipEntity, AIAgentNoteEntity, AIAgentExampleEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -3096,6 +3096,15 @@ The context is now within limits. Please retry your request with the recovered c
             const activeActions = actions.filter(a => a.Status === 'Active');
             this._effectiveActions = activeActions;
 
+            // Build agent type prompt params (merged from schema defaults, agent config, and runtime overrides)
+            const agentType = engine.AgentTypes.find(at => at.ID === agent.TypeID);
+            const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
+            const agentTypePromptParams = this.buildAgentTypePromptParams(
+                agentType,
+                agent,
+                runtimePromptParamOverrides
+            );
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -3106,17 +3115,178 @@ The context is now within limits. Please retry your request with the recovered c
                 actionDetails: this.formatActionDetails(activeActions),
             };
 
+            // Build the final result with __agentTypePromptParams injected
+            // Note: extraData can override contextData properties, but __agentTypePromptParams
+            // is built separately with proper merge precedence (schema < agent < runtime)
+            const result: AgentContextData & Record<string, unknown> = {
+                ...contextData,
+                __agentTypePromptParams: agentTypePromptParams
+            };
+
             if (extraData) {
+                // Spread extraData but don't let it override __agentTypePromptParams
+                // (which was already built with runtime overrides included)
+                const { __agentTypePromptParams: _ignored, ...restExtraData } = extraData;
                 return {
-                    ...contextData,
-                    ...extraData
-                }
+                    ...result,
+                    ...restExtraData
+                };
             }
             else {
-                return contextData;
+                return result;
             }
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
+        }
+    }
+
+    /**
+     * Builds merged agent type prompt params from schema defaults,
+     * agent config, and runtime overrides.
+     *
+     * Merge precedence (lowest to highest):
+     * 1. Schema defaults (from AgentType.PromptParamsSchema)
+     * 2. Agent config (from AIAgent.AgentTypePromptParams)
+     * 3. Runtime overrides (from ExecuteAgentParams.data.__agentTypePromptParams)
+     *
+     * @param agentType - The agent type entity with schema definition
+     * @param agent - The agent entity with configured values
+     * @param runtimeOverrides - Optional runtime overrides from ExecuteAgentParams.data
+     * @returns Merged prompt params object
+     *
+     * @protected
+     * @since 2.131.0
+     */
+    protected buildAgentTypePromptParams(
+        agentType: AIAgentTypeEntity | undefined,
+        agent: AIAgentEntityExtended,
+        runtimeOverrides?: Record<string, unknown>
+    ): Record<string, unknown> {
+        // 1. Extract defaults from schema
+        const schemaJson = agentType?.PromptParamsSchema;
+        const schemaDefaults = this.extractSchemaDefaults(schemaJson);
+
+        // 2. Parse agent-level config
+        const agentParamsJson = agent.AgentTypePromptParams;
+        let agentParams: Record<string, unknown> = {};
+        if (agentParamsJson) {
+            try {
+                agentParams = JSON.parse(agentParamsJson);
+            } catch (e) {
+                LogError(`Failed to parse AgentTypePromptParams for agent ${agent.Name}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
+        // 3. Merge all layers (lowest to highest precedence)
+        const merged = {
+            ...schemaDefaults,
+            ...agentParams,
+            ...(runtimeOverrides || {})
+        };
+
+        // 4. Apply auto-alignment for includeResponseTypeDefinition
+        // Pass in the explicit response type config from agent/runtime (not schema defaults)
+        // to distinguish between explicit user settings and schema defaults
+        const explicitResponseType = (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||
+                                     (agentParams.includeResponseTypeDefinition as Record<string, unknown> | undefined);
+        this.applyResponseTypeAutoAlignment(merged, explicitResponseType);
+
+        return merged;
+    }
+
+    /**
+     * Applies auto-alignment rules to includeResponseTypeDefinition based on other flags.
+     *
+     * When a documentation flag (e.g., includeForEachDocs) is explicitly set to false,
+     * the corresponding response type section (e.g., forEach) should also be excluded
+     * unless explicitly set otherwise.
+     *
+     * Auto-alignment mappings:
+     * - includePayloadInPrompt → includeResponseTypeDefinition.payload
+     * - includeResponseFormDocs → includeResponseTypeDefinition.responseForms
+     * - includeCommandDocs → includeResponseTypeDefinition.commands
+     * - includeForEachDocs → includeResponseTypeDefinition.forEach
+     * - includeWhileDocs → includeResponseTypeDefinition.while
+     *
+     * @param params - The merged params object to modify in place
+     * @param explicitResponseType - The explicitly set response type config from agent/runtime (not schema defaults)
+     * @protected
+     * @since 2.132.0
+     */
+    protected applyResponseTypeAutoAlignment(
+        params: Record<string, unknown>,
+        explicitResponseType?: Record<string, unknown>
+    ): void {
+        // Ensure includeResponseTypeDefinition is an object
+        if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
+            params.includeResponseTypeDefinition = {
+                payload: true,
+                responseForms: true,
+                commands: true,
+                forEach: true,
+                while: true
+            };
+        }
+
+        const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
+
+        // Auto-alignment mappings: docs flag → response type property
+        const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
+            { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },
+            { docsFlag: 'includeResponseFormDocs', responseTypeKey: 'responseForms' },
+            { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
+            { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
+            { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' }
+        ];
+
+        for (const { docsFlag, responseTypeKey } of alignmentMappings) {
+            // Check if the user explicitly set this response type property
+            // (not from schema defaults, which always provide true)
+            const wasExplicitlySet = explicitResponseType &&
+                Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
+
+            // Auto-align: if docs flag is false AND user didn't explicitly set the response type
+            // then auto-align the response type to false
+            if (params[docsFlag] === false && !wasExplicitlySet) {
+                responseType[responseTypeKey] = false;
+            }
+            // If user explicitly set the value, respect it regardless of docs flag
+            // Otherwise default to true if not set
+            else if (responseType[responseTypeKey] === undefined) {
+                responseType[responseTypeKey] = true;
+            }
+        }
+    }
+
+    /**
+     * Extracts default values from a JSON Schema definition.
+     *
+     * @param schemaJson - JSON string containing the schema
+     * @returns Object with property names and their default values
+     *
+     * @protected
+     * @since 2.131.0
+     */
+    protected extractSchemaDefaults(schemaJson: string | null | undefined): Record<string, unknown> {
+        if (!schemaJson) return {};
+
+        try {
+            const schema = JSON.parse(schemaJson);
+            const defaults: Record<string, unknown> = {};
+
+            if (schema.properties) {
+                for (const [key, prop] of Object.entries(schema.properties)) {
+                    const propDef = prop as { default?: unknown };
+                    if (propDef.default !== undefined) {
+                        defaults[key] = propDef.default;
+                    }
+                }
+            }
+
+            return defaults;
+        } catch (e) {
+            LogError(`Failed to parse PromptParamsSchema: ${e instanceof Error ? e.message : String(e)}`);
+            return {};
         }
     }
 
@@ -3756,6 +3926,11 @@ The context is now within limits. Please retry your request with the recovered c
         this._agentRun.AgentID = params.agent.ID;
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
+        }
+        // Use conversationId from data if available (already passed by AgentRunner)
+        // This avoids a redundant network lookup since AgentRunner already loaded this
+        if (params.data?.conversationId) {
+            this._agentRun.ConversationID = params.data.conversationId;
         }
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();

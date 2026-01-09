@@ -1,5 +1,17 @@
 # @memberjunction/ng-markdown
 
+## 2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- 0dcb9cb: no migration
+
+## 2.130.0
+
+## 2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

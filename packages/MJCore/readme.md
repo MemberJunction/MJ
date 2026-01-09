@@ -305,6 +305,257 @@ options.SkipOldValuesCheck = true; // Skip concurrency check (client-side only)
 await entity.Save(options);
 ```
 
+### Entity State Tracking & Events (v2.131.0+)
+
+BaseEntity provides comprehensive state tracking and event notification for all database operations. This enables UI components to show loading indicators, disable buttons during operations, and react to entity lifecycle changes.
+
+#### Operation State Getters
+
+Check if an entity is currently performing a database operation:
+
+```typescript
+const user = await md.GetEntityObject<UserEntity>('Users');
+
+// Check individual operation states
+if (user.IsSaving) {
+    console.log('Save operation in progress...');
+}
+
+if (user.IsDeleting) {
+    console.log('Delete operation in progress...');
+}
+
+if (user.IsLoading) {
+    console.log('Load operation in progress...');
+}
+
+// Convenience getter - true if ANY operation is in progress
+if (user.IsBusy) {
+    disableAllButtons();
+    showSpinner();
+}
+```
+
+#### State Getter Reference
+
+| Getter | Description |
+|--------|-------------|
+| `IsSaving` | Returns `true` when a `Save()` operation is in progress |
+| `IsDeleting` | Returns `true` when a `Delete()` operation is in progress |
+| `IsLoading` | Returns `true` when a `Load()` operation is in progress |
+| `IsBusy` | Returns `true` when any of the above operations is in progress |
+
+#### Operation Lifecycle Events
+
+Subscribe to entity lifecycle events to react when operations start and complete:
+
+```typescript
+import { BaseEntityEvent } from '@memberjunction/core';
+
+const user = await md.GetEntityObject<UserEntity>('Users');
+
+// Subscribe to entity events
+const subscription = user.RegisterEventHandler((event: BaseEntityEvent) => {
+    switch (event.type) {
+        // Operation START events
+        case 'save_started':
+            console.log(`Save started (${event.saveSubType})`); // 'create' or 'update'
+            showSavingIndicator();
+            break;
+        case 'delete_started':
+            console.log('Delete started');
+            showDeletingIndicator();
+            break;
+        case 'load_started':
+            console.log('Load started for key:', event.payload?.CompositeKey);
+            showLoadingIndicator();
+            break;
+
+        // Operation COMPLETE events
+        case 'save':
+            console.log(`Save completed (${event.saveSubType})`);
+            hideSavingIndicator();
+            showSuccessMessage();
+            break;
+        case 'delete':
+            console.log('Delete completed, old values:', event.payload?.OldValues);
+            hideDeletingIndicator();
+            break;
+        case 'load_complete':
+            console.log('Load completed for key:', event.payload?.CompositeKey);
+            hideLoadingIndicator();
+            break;
+
+        // Other events
+        case 'new_record':
+            console.log('NewRecord() was called');
+            break;
+    }
+});
+
+// Later: unsubscribe when done
+subscription.unsubscribe();
+```
+
+#### Event Type Reference
+
+| Event Type | Description | Payload |
+|------------|-------------|---------|
+| `save_started` | Raised when Save() begins (only if entity will actually save) | `null` |
+| `save` | Raised when Save() completes successfully | `null` |
+| `delete_started` | Raised when Delete() begins | `null` |
+| `delete` | Raised when Delete() completes successfully | `{ OldValues: object }` |
+| `load_started` | Raised when Load() begins | `{ CompositeKey: CompositeKey }` |
+| `load_complete` | Raised when Load() completes successfully | `{ CompositeKey: CompositeKey }` |
+| `new_record` | Raised when NewRecord() is called | `null` |
+| `transaction_ready` | Internal: signals transaction preprocessing complete | `null` |
+
+#### Global Event Subscription
+
+Subscribe to entity events globally via MJGlobal to monitor all entity operations across your application:
+
+```typescript
+import { MJGlobal, MJEventType, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+
+// Subscribe to all entity events globally
+MJGlobal.Instance.GetEventListener(true).subscribe((event) => {
+    if (event.event === MJEventType.ComponentEvent &&
+        event.eventCode === BaseEntity.BaseEventCode) {
+
+        const entityEvent = event.args as BaseEntityEvent;
+        const entity = entityEvent.baseEntity;
+
+        console.log(`[${entity.EntityInfo.Name}] ${entityEvent.type}`);
+
+        // Global logging, analytics, or audit trail
+        if (entityEvent.type === 'save') {
+            trackEntitySave(entity.EntityInfo.Name, entityEvent.saveSubType);
+        }
+    }
+});
+```
+
+#### Save Debouncing
+
+Multiple rapid calls to `Save()` are automatically debounced - the second call receives the same result as the first:
+
+```typescript
+// These two calls result in only ONE database save
+const promise1 = entity.Save();
+const promise2 = entity.Save(); // Returns same promise, doesn't trigger new save
+
+const [result1, result2] = await Promise.all([promise1, promise2]);
+// result1 === result2 (both get the same result from the single save)
+```
+
+The same debouncing behavior applies to `Delete()` operations.
+
+#### Awaiting In-Progress Operations
+
+BaseEntity provides built-in methods to wait for any in-progress operation to complete. These methods return immediately if no operation is in progress, or wait for the completion event if one is:
+
+```typescript
+// Wait for an in-progress save to complete
+await entity.EnsureSaveComplete();
+
+// Wait for an in-progress delete to complete
+await entity.EnsureDeleteComplete();
+
+// Wait for an in-progress load to complete
+await entity.EnsureLoadComplete();
+```
+
+**Method Reference:**
+
+| Method | Waits For | Event Listened |
+|--------|-----------|----------------|
+| `EnsureSaveComplete()` | `IsSaving` to become false | `save` |
+| `EnsureDeleteComplete()` | `IsDeleting` to become false | `delete` |
+| `EnsureLoadComplete()` | `IsLoading` to become false | `load_complete` |
+
+**Example: Coordinating Dependent Operations**
+
+```typescript
+async function performDependentOperation(entity: BaseEntity) {
+    // Ensure any in-progress save is complete before proceeding
+    await entity.EnsureSaveComplete();
+
+    // Now safe to perform operations that depend on the saved state
+    console.log('Entity is saved, proceeding with dependent operation');
+    await someOperationThatNeedsSavedData(entity);
+}
+```
+
+**Example: Cleanup After Delete**
+
+```typescript
+async function deleteAndNavigate(entity: BaseEntity) {
+    entity.Delete(); // Fire and forget the delete
+
+    // Wait for the delete to complete before navigating
+    await entity.EnsureDeleteComplete();
+
+    // Now safe to navigate away
+    navigateToList();
+}
+```
+
+These methods are useful when:
+- You need to ensure data is persisted before performing a dependent operation
+- You're coordinating between multiple components that might trigger operations
+- You want to avoid race conditions when chaining operations
+- You need to perform cleanup after an operation completes
+
+#### UI Integration Example
+
+A complete example showing state tracking in a UI component:
+
+```typescript
+class EntityFormComponent {
+    private entity: BaseEntity;
+    private subscription: Subscription;
+
+    async loadEntity(id: string) {
+        this.entity = await md.GetEntityObject<UserEntity>('Users');
+
+        // Set up event handlers
+        this.subscription = this.entity.RegisterEventHandler((event) => {
+            this.updateUI(event);
+        });
+
+        await this.entity.Load(id);
+    }
+
+    updateUI(event: BaseEntityEvent) {
+        // Update loading states
+        this.saveButton.disabled = this.entity.IsBusy;
+        this.deleteButton.disabled = this.entity.IsBusy;
+
+        // Show operation-specific indicators
+        this.savingSpinner.visible = this.entity.IsSaving;
+        this.deletingSpinner.visible = this.entity.IsDeleting;
+        this.loadingSpinner.visible = this.entity.IsLoading;
+
+        // React to completion events
+        if (event.type === 'save') {
+            this.showToast('Saved successfully!');
+        } else if (event.type === 'delete') {
+            this.navigateToList();
+        }
+    }
+
+    async save() {
+        // IsBusy automatically becomes true during save
+        await this.entity.Save();
+        // IsBusy automatically becomes false when done
+    }
+
+    destroy() {
+        this.subscription?.unsubscribe();
+    }
+}
+```
+
 ### RunView Class
 
 The `RunView` class provides powerful view execution capabilities for both stored views and dynamic queries.
@@ -1002,6 +1253,12 @@ await provider2.Config(config2); // Reuses metadata from provider1
 This optimization is particularly beneficial in server environments where each request gets its own provider instance.
 
 ## Breaking Changes
+
+### v2.131.0
+- **Entity State Tracking**: New `IsSaving`, `IsDeleting`, `IsLoading`, and `IsBusy` getters on BaseEntity to track in-progress operations.
+- **Operation Lifecycle Events**: New event types `save_started`, `delete_started`, `load_started`, and `load_complete` raised during entity operations. The `save_started` event now only fires when the entity will actually be saved (not skipped due to clean state).
+- **Delete Debouncing**: `Delete()` now has the same debouncing behavior as `Save()` - multiple rapid calls return the same promise.
+- **Global Event Broadcasting**: All operation events (start and complete) are now broadcast globally via MJGlobal for application-wide monitoring.
 
 ### v2.59.0
 - **Enhanced Logging Functions**: New `LogStatusEx` and `LogErrorEx` functions provide structured logging with metadata, categories, and severity levels. The existing `LogStatus` and `LogError` functions now internally use the enhanced versions, maintaining full backward compatibility.

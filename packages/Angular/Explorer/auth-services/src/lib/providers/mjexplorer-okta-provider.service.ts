@@ -4,13 +4,24 @@ import { Observable, BehaviorSubject, from } from 'rxjs';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
 import OktaAuth, { OktaAuthOptions, IDToken, AccessToken } from '@okta/okta-auth-js';
+import {
+  StandardUserInfo,
+  StandardAuthToken,
+  StandardAuthError,
+  AuthErrorType,
+  TokenRefreshResult
+} from '../auth-types';
 
 // Prevent tree-shaking by explicitly referencing the class
 export function LoadMJOktaProvider() {
 }
 
 /**
- * Okta authentication provider for MemberJunction Explorer
+ * Okta authentication provider implementation - v3.0.0
+ *
+ * Implements the abstract methods from MJAuthBase to hide Okta-specific details.
+ * The key abstraction is that Okta stores the JWT in IDToken.idToken,
+ * but consumers never need to know this detail.
  */
 @Injectable({
   providedIn: 'root'
@@ -18,36 +29,35 @@ export function LoadMJOktaProvider() {
 @RegisterClass(MJAuthBase, 'okta')
 export class MJOktaProvider extends MJAuthBase {
   static readonly PROVIDER_TYPE = 'okta';
-  type = MJOktaProvider.PROVIDER_TYPE;
+  readonly type = MJOktaProvider.PROVIDER_TYPE;
   private oktaAuth: OktaAuth;
-  private userClaims$ = new BehaviorSubject<any>(null);
-  private isRefreshing = false; // Flag to prevent re-triggering during refresh
-  
+  private isRefreshing = false;
+
   /**
    * Factory function to provide Angular dependencies required by Okta
    * Stored as a static property for the factory to access without instantiation
    */
-  static angularProviderFactory = (environment: any) => [
+  static angularProviderFactory = (environment: Record<string, unknown>) => [
     {
       provide: 'oktaConfig',
       useValue: {
-        clientId: environment.OKTA_CLIENTID,
-        domain: environment.OKTA_DOMAIN,
-        issuer: environment.OKTA_ISSUER || `https://${environment.OKTA_DOMAIN}/oauth2/default`,
-        redirectUri: environment.OKTA_REDIRECT_URI || window.location.origin,
-        scopes: environment.OKTA_SCOPES || ['openid', 'profile', 'email']
+        clientId: environment['OKTA_CLIENTID'],
+        domain: environment['OKTA_DOMAIN'],
+        issuer: environment['OKTA_ISSUER'] || `https://${environment['OKTA_DOMAIN']}/oauth2/default`,
+        redirectUri: environment['OKTA_REDIRECT_URI'] || window.location.origin,
+        scopes: environment['OKTA_SCOPES'] || ['openid', 'profile', 'email']
       }
     }
   ];
-  
+
   constructor(@Inject('oktaConfig') private oktaConfig: OktaAuthOptions & { domain?: string }) {
-    const config: AngularAuthProviderConfig = { 
-      name: MJOktaProvider.PROVIDER_TYPE, 
-      type: MJOktaProvider.PROVIDER_TYPE 
+    const config: AngularAuthProviderConfig = {
+      name: MJOktaProvider.PROVIDER_TYPE,
+      type: MJOktaProvider.PROVIDER_TYPE
     };
     super(config);
-    
-    // Build configuration with defaults first, then spread oktaConfig to override
+
+    // Build configuration with defaults
     const oktaAuthConfig: OktaAuthOptions = {
       clientId: this.oktaConfig.clientId,
       redirectUri: this.oktaConfig.redirectUri || window.location.origin + '/callback',
@@ -57,117 +67,90 @@ export class MJOktaProvider extends MJAuthBase {
       // Set issuer after spread to ensure it's not overwritten if not present in config
       issuer: this.oktaConfig.issuer || (this.oktaConfig.domain ? `https://${this.oktaConfig.domain}/oauth2/default` : '')
     };
-    
+
     this.oktaAuth = new OktaAuth(oktaAuthConfig);
 
     // Listen for token events
-    this.oktaAuth.authStateManager.subscribe((authState: any) => {
-      this.updateAuthState(authState.isAuthenticated || false);
-      
-      // Don't update claims if we're in the middle of a refresh operation
-      // to avoid triggering handleLogin in app.component
+    this.oktaAuth.authStateManager.subscribe((authState: unknown) => {
+      const state = authState as { isAuthenticated?: boolean; idToken?: IDToken };
+      this.updateAuthState(state.isAuthenticated || false);
+
+      // Don't update user info if we're in the middle of a refresh
       if (!this.isRefreshing) {
-        if (authState.isAuthenticated && authState.idToken) {
-          this.userClaims$.next(authState.idToken as IDToken);
+        if (state.isAuthenticated && state.idToken) {
+          const userInfo = this.mapOktaTokenToStandard(state.idToken);
+          this.updateUserInfo(userInfo);
         } else {
-          this.userClaims$.next(null);
+          this.updateUserInfo(null);
         }
       }
     });
-    
-    // Initialize Okta authentication state
-    this.initializeOkta();
   }
-  
-  private async initializeOkta() {
-    // Start with unauthenticated state
-    this.authenticated = false;
-    this.updateAuthState(false);
-    
+
+  // ============================================================================
+  // LIFECYCLE METHODS
+  // ============================================================================
+
+  async initialize(): Promise<void> {
     // Check URL for logout indicator
     const urlParams = new URLSearchParams(window.location.search);
     const isPostLogout = urlParams.has('logout');
-    
+
     if (isPostLogout) {
       // We're returning from a logout, clear the URL and stay logged out
       window.history.replaceState({}, document.title, window.location.pathname);
       return;
     }
-    
+
     // Check if we're returning from a login redirect
     if (this.oktaAuth.isLoginRedirect()) {
       try {
         await this.oktaAuth.handleLoginRedirect();
-        
+
         // After handling redirect, check if we're authenticated
         const authState = await this.oktaAuth.authStateManager.getAuthState();
-        
+
         if (authState?.isAuthenticated) {
           this.updateAuthState(true);
-          this.authenticated = true;
-          this.isAuthenticated$.next(true);
-          
-          // Get and emit the ID token with proper format
+
+          // Get and update user info
           const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
-          const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
           if (idToken) {
-            const claims = {
-              ...idToken.claims,
-              idToken: idToken.idToken, // The actual token string
-              accessToken: accessToken?.accessToken,
-            };
-            this.userClaims$.next(claims);
+            const userInfo = this.mapOktaTokenToStandard(idToken);
+            this.updateUserInfo(userInfo);
           }
         }
       } catch (error) {
-        console.error('Okta initialization redirect handling error:', error);
+        console.error('[Okta] Initialization redirect handling error:', error);
       }
       return; // Don't check for existing session after handling redirect
     }
-    
+
     // Only check for existing session if not a redirect
-    // This prevents auto-login after logout
     try {
-      const isAuthenticated = this.oktaAuth ? await this.oktaAuth.isAuthenticated() : false;
-      
-      if (isAuthenticated && this.oktaAuth) {
+      const isAuthenticated = await this.oktaAuth.isAuthenticated();
+
+      if (isAuthenticated) {
         // Double-check we actually have valid tokens
         const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
-        const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
-        
-        if (idToken && idToken.idToken) {
-          // Format claims to match what app.component expects
-          const claims = {
-            ...idToken.claims,
-            idToken: idToken.idToken, // The actual token string
-            accessToken: accessToken?.accessToken,
-          };
-          this.userClaims$.next(claims);
-          
-          // Ensure the authenticated state is properly set
-          this.authenticated = true;
+
+        if (idToken?.idToken) {
           this.updateAuthState(true);
-          
-          // Force the BehaviorSubject to emit the new value
-          this.isAuthenticated$.next(true);
+
+          // Update user info from cached token
+          const userInfo = this.mapOktaTokenToStandard(idToken);
+          this.updateUserInfo(userInfo);
         } else {
           // No valid tokens, stay logged out
-          this.authenticated = false;
           this.updateAuthState(false);
         }
       }
     } catch (error) {
-      // If there's an error checking authentication, stay logged out
-      console.warn('Error checking Okta authentication status:', error);
+      console.warn('[Okta] Error checking authentication status:', error);
     }
   }
 
-  override login(options?: any): Observable<void> {
-    // Convert Promise to Observable
-    return from(this.loginAsync(options));
-  }
-
-  private async loginAsync(options?: any): Promise<void> {
+  protected async loginInternal(options?: Record<string, unknown>): Promise<void> {
     try {
       // Check if we're in a redirect callback
       if (this.oktaAuth.isLoginRedirect()) {
@@ -177,283 +160,352 @@ export class MJOktaProvider extends MJAuthBase {
 
       // Start the login flow
       await this.oktaAuth.signInWithRedirect({
-        originalUri: options?.targetUrl || '/',
+        originalUri: (options?.['targetUrl'] as string) || '/',
         ...options
       });
     } catch (error) {
-      console.error('Okta login error:', error);
+      console.error('[Okta] Login error:', error);
       throw error;
     }
   }
 
-  async logout(): Promise<any> {
+  async logout(): Promise<void> {
     try {
       // Clear the local authentication state immediately
       this.updateAuthState(false);
-      this.authenticated = false;
-      this.isAuthenticated$.next(false);
-      this.userClaims$.next(null);
-      
+      this.updateUserInfo(null);
+
       // Clear all tokens from local storage
       await this.oktaAuth.tokenManager.clear();
-      
-      // Get the ID token to pass to logout (needed for proper logout)
-      let idToken: string | undefined;
-      try {
-        const token = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
-        idToken = token?.idToken;
-      } catch {
-        // Token might already be cleared
-      }
-      
+
       // Sign out from Okta completely
-      // The clearTokensBeforeRedirect ensures tokens are cleared before redirect
       await this.oktaAuth.signOut({
         postLogoutRedirectUri: window.location.origin,
         clearTokensBeforeRedirect: true
       });
-      
+
       // Note: The signOut call will redirect the browser, so code after this won't execute
     } catch (error) {
-      console.error('Okta logout error:', error);
+      console.error('[Okta] Logout error:', error);
       // If logout fails, at least clear local state and reload
       window.location.href = window.location.origin;
     }
   }
 
-  async refresh(): Promise<Observable<any>> {
-    try {
-      // Set flag to prevent authStateManager from updating userClaims$
-      this.isRefreshing = true;
-      
-      // First check if we're authenticated
-      const isAuthenticated = await this.oktaAuth.isAuthenticated();
-      
-      if (!isAuthenticated) {
-        // Not authenticated, can't refresh - return empty observable
-        console.warn('Cannot refresh tokens - user is not authenticated');
-        this.isRefreshing = false;
-        // Don't update the claims observable to avoid triggering handleLogin
-        return from([null]);
-      }
-      
-      // Check if tokens exist and are not expired
-      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
-      const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
-      
-      if (!idToken || !accessToken) {
-        console.warn('No tokens available to refresh');
-        this.isRefreshing = false;
-        // Don't update the claims observable to avoid triggering handleLogin
-        return from([null]);
-      }
-      
-      // Attempt to renew tokens using the refresh token if available
-      // Note: For PKCE flow (which we're using), Okta will try to use refresh tokens if configured
-      // If refresh tokens aren't available, it will attempt silent authentication via iframe
-      const renewedTokens = await this.oktaAuth.token.renewTokens();
-      
-      // Store the renewed tokens - this will trigger authStateManager but we'll ignore it
-      if (renewedTokens.idToken) {
-        this.oktaAuth.tokenManager.setTokens(renewedTokens);
-        
-        // Update user claims with renewed token - but DON'T emit to userClaims$ 
-        // to avoid triggering handleLogin in app.component
-        const newIdToken = renewedTokens.idToken as IDToken;
-        const claims = {
-          ...newIdToken.claims,
-          idToken: newIdToken.idToken,
-          accessToken: renewedTokens.accessToken?.accessToken,
-        };
-        
-        // Wait a moment before resetting the flag to ensure authStateManager event is handled
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Reset flag after tokens are set
-        this.isRefreshing = false;
-        
-        // Return the claims directly without updating the BehaviorSubject
-        // This prevents the app component from re-initializing GraphQL
-        return from([claims]);
-      }
-      
-      this.isRefreshing = false;
-      return from([null]);
-    } catch (error: any) {
-      console.error('Okta token refresh error:', error);
-      this.isRefreshing = false; // Reset flag on error
-      
-      // Check if the error is due to expired session or no prompt allowed
-      if (error?.errorCode === 'login_required' || 
-          error?.message?.includes('not to prompt') ||
-          error?.message?.includes('login_required')) {
-        // Session has expired, user needs to re-authenticate
-        console.warn('Session expired - user needs to re-authenticate');
-        
-        // Don't update the claims observable to avoid triggering handleLogin
-        return from([null]);
-      }
-      
-      // For other errors, still throw
-      throw error;
-    }
-  }
-
-  override isAuthenticated(): Observable<boolean> {
-    // Return the BehaviorSubject as an observable to ensure consistency
-    // This way all consumers get the same state
-    return this.isAuthenticated$.asObservable();
-  }
-
-  async getUser(): Promise<any> {
-    try {
-      const isAuth = await this.oktaAuth.isAuthenticated();
-      if (!isAuth) {
-        return null;
-      }
-
-      // Get user info from Okta
-      const user = await this.oktaAuth.getUser();
-      return user;
-    } catch (error) {
-      console.error('Okta get user error:', error);
-      return null;
-    }
-  }
-
-  async getUserClaims(): Promise<Observable<any>> {
-    try {
-      const authState = await this.oktaAuth.authStateManager.getAuthState();
-      
-      if (authState?.isAuthenticated && authState.idToken) {
-        const idToken = authState.idToken as IDToken;
-        // Format the claims to match what the app expects
-        // The app.component expects claims.idToken to contain the actual token string
-        const claims = {
-          ...idToken.claims,
-          idToken: idToken.idToken, // Add the actual token string
-          accessToken: authState.accessToken?.accessToken,
-        };
-        this.userClaims$.next(claims);
-      } else {
-        this.userClaims$.next(null);
-      }
-      
-      return this.userClaims$.asObservable();
-    } catch (error) {
-      console.error('Okta get user claims error:', error);
-      return from([null]);
-    }
-  }
-
-  checkExpiredTokenError(error: string): boolean {
-    // Check for Okta-specific token expiration errors
-    if (!error || typeof error !== 'string') {
-      return false;
-    }
-    const errorLower = error.toLowerCase();
-    return errorLower.includes('token expired') ||
-           errorLower.includes('invalid_token') ||
-           errorLower.includes('token_expired') ||
-           errorLower.includes('unauthorized');
-  }
-
-  /**
-   * Handle callback after redirect from Okta
-   */
   async handleCallback(): Promise<void> {
     try {
       if (this.oktaAuth.isLoginRedirect()) {
         await this.oktaAuth.handleLoginRedirect();
-        
+
         // After handling redirect, check if we're authenticated
         const authState = await this.oktaAuth.authStateManager.getAuthState();
         if (authState?.isAuthenticated) {
           // Do a controlled reload after successful login
-          // This ensures the app fully reinitializes with the authenticated state
           setTimeout(() => {
             window.location.href = window.location.origin;
           }, 100);
         }
       }
     } catch (error) {
-      console.error('Okta callback handling error:', error);
+      console.error('[Okta] Callback handling error:', error);
       throw error;
     }
   }
 
-  /**
-   * Get the access token for API calls
-   */
-  async getAccessToken(): Promise<string | undefined> {
-    try {
-      const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
-      return accessToken?.accessToken;
-    } catch (error) {
-      console.error('Error getting access token:', error);
-      return undefined;
-    }
-  }
+  // ============================================================================
+  // ABSTRACT METHOD IMPLEMENTATIONS (v3.0.0)
+  // ============================================================================
 
   /**
-   * Get the ID token
+   * Extract ID token from Okta's storage
+   *
+   * Okta stores the JWT in IDToken.idToken
+   * This is the key abstraction - consumers never need to know about Okta's structure!
    */
-  async getIdToken(): Promise<string | undefined> {
+  protected async extractIdTokenInternal(): Promise<string | null> {
     try {
       const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
-      return idToken?.idToken;
+      // Okta-specific detail: JWT is in idToken property
+      return idToken?.idToken || null;
     } catch (error) {
-      console.error('Error getting ID token:', error);
-      return undefined;
+      console.error('[Okta] Error extracting ID token:', error);
+      return null;
     }
   }
 
-  // Add required methods for the new interface
-  async initialize(): Promise<void> {
-    // Check if we're returning from a redirect
-    if (this.oktaAuth.isLoginRedirect()) {
-      try {
-        await this.oktaAuth.handleLoginRedirect();
-        
-        // After handling redirect, check if we're authenticated
-        const authState = await this.oktaAuth.authStateManager.getAuthState();
-        if (authState?.isAuthenticated) {
-          this.updateAuthState(true);
-          
-          // Do a controlled reload after successful login
-          // This ensures the app fully reinitializes with the authenticated state
-          setTimeout(() => {
-            window.location.href = window.location.origin;
-          }, 100);
-          return; // Exit early since we're reloading
-        }
-      } catch (error) {
-        console.error('Okta initialization redirect handling error:', error);
+  /**
+   * Extract complete token info from Okta
+   *
+   * Maps Okta's token structure to StandardAuthToken
+   */
+  protected async extractTokenInfoInternal(): Promise<StandardAuthToken | null> {
+    try {
+      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+      const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
+
+      if (!idToken?.idToken) {
+        return null;
       }
+
+      return {
+        idToken: idToken.idToken,
+        accessToken: accessToken?.accessToken,
+        expiresAt: idToken.expiresAt ? idToken.expiresAt * 1000 : 0, // Convert to milliseconds
+        scopes: idToken.scopes
+      };
+    } catch (error) {
+      console.error('[Okta] Error extracting token info:', error);
+      return null;
     }
-    
-    // Check authentication status
-    const isAuthenticated = this.oktaAuth ? await this.oktaAuth.isAuthenticated() : false;
-    this.updateAuthState(isAuthenticated);
   }
 
-  protected async loginInternal(options?: any): Promise<void> {
-    await this.loginAsync(options);
+  /**
+   * Extract user info from Okta claims
+   *
+   * Maps Okta's IDToken structure to StandardUserInfo
+   */
+  protected async extractUserInfoInternal(): Promise<StandardUserInfo | null> {
+    try {
+      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+      if (!idToken) {
+        return null;
+      }
+
+      return this.mapOktaTokenToStandard(idToken);
+    } catch (error) {
+      console.error('[Okta] Error extracting user info:', error);
+      return null;
+    }
   }
 
-  async getToken(): Promise<string | null> {
-    // For Okta, we need to return the ID token (not access token) for backend authentication
-    // The ID token contains the user claims that the backend expects
-    const idToken = await this.getIdToken();
-    return idToken || null;
+  /**
+   * Refresh token using Okta's token renewal
+   *
+   * Uses renewTokens() to get new tokens silently
+   */
+  protected async refreshTokenInternal(): Promise<TokenRefreshResult> {
+    try {
+      console.log('[Okta] Attempting to refresh token...');
+
+      // Set flag to prevent authStateManager from triggering updates
+      this.isRefreshing = true;
+
+      // First check if we're authenticated
+      const isAuthenticated = await this.oktaAuth.isAuthenticated();
+
+      if (!isAuthenticated) {
+        this.isRefreshing = false;
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.NO_ACTIVE_SESSION,
+            message: 'User is not authenticated',
+            userMessage: 'You need to log in to continue.'
+          }
+        };
+      }
+
+      // Check if tokens exist
+      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+      const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
+
+      if (!idToken || !accessToken) {
+        this.isRefreshing = false;
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.NO_ACTIVE_SESSION,
+            message: 'No tokens available to refresh',
+            userMessage: 'Session not found. Please log in again.'
+          }
+        };
+      }
+
+      // Attempt to renew tokens
+      const renewedTokens = await this.oktaAuth.token.renewTokens();
+
+      if (renewedTokens.idToken) {
+        // Store the renewed tokens
+        this.oktaAuth.tokenManager.setTokens(renewedTokens);
+
+        // Wait a moment before resetting the flag
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        this.isRefreshing = false;
+
+        const newIdToken = renewedTokens.idToken as IDToken;
+        console.log('[Okta] Token refresh successful', {
+          expiresAt: newIdToken.expiresAt ? new Date(newIdToken.expiresAt * 1000).toISOString() : 'N/A'
+        });
+
+        const token: StandardAuthToken = {
+          idToken: newIdToken.idToken || '',
+          accessToken: renewedTokens.accessToken?.accessToken,
+          expiresAt: newIdToken.expiresAt ? newIdToken.expiresAt * 1000 : 0,
+          scopes: newIdToken.scopes
+        };
+
+        return {
+          success: true,
+          token
+        };
+      }
+
+      this.isRefreshing = false;
+      return {
+        success: false,
+        error: {
+          type: AuthErrorType.NO_ACTIVE_SESSION,
+          message: 'Token renewal succeeded but no ID token returned',
+          userMessage: 'Session refresh failed. Please log in again.'
+        }
+      };
+    } catch (error) {
+      console.error('[Okta] Token refresh failed:', error);
+      this.isRefreshing = false;
+
+      return {
+        success: false,
+        error: this.classifyErrorInternal(error)
+      };
+    }
   }
 
-  getRequiredConfig(): string[] {
+  /**
+   * Classify Okta-specific errors into semantic types
+   *
+   * Maps Okta error patterns to AuthErrorType enum
+   */
+  protected classifyErrorInternal(error: unknown): StandardAuthError {
+    const errorObj = error as Record<string, unknown>;
+    const message = errorObj?.['message'] as string || 'Unknown error';
+    const errorCode = errorObj?.['errorCode'] as string || '';
+
+    // Check for specific Okta error patterns
+    if (errorCode === 'login_required' || message.includes('login_required')) {
+      return {
+        type: AuthErrorType.NO_ACTIVE_SESSION,
+        message,
+        originalError: error,
+        userMessage: 'You need to log in to continue.'
+      };
+    }
+
+    if (message.includes('not to prompt') || message.includes('consent_required')) {
+      return {
+        type: AuthErrorType.INTERACTION_REQUIRED,
+        message,
+        originalError: error,
+        userMessage: 'Additional authentication is required. Please log in again.'
+      };
+    }
+
+    if (errorCode === 'user_cancelled' || message.includes('user cancelled')) {
+      return {
+        type: AuthErrorType.USER_CANCELLED,
+        message,
+        originalError: error,
+        userMessage: 'Login was cancelled.'
+      };
+    }
+
+    if (message.includes('token expired') || message.includes('invalid_token') || message.includes('unauthorized')) {
+      return {
+        type: AuthErrorType.TOKEN_EXPIRED,
+        message,
+        originalError: error,
+        userMessage: 'Your session has expired. Please log in again.'
+      };
+    }
+
+    if (message.includes('network') || message.includes('fetch')) {
+      return {
+        type: AuthErrorType.NETWORK_ERROR,
+        message,
+        originalError: error,
+        userMessage: 'Network error. Please check your connection and try again.'
+      };
+    }
+
+    // Default to unknown error
+    return {
+      type: AuthErrorType.UNKNOWN_ERROR,
+      message,
+      originalError: error,
+      userMessage: 'An unexpected error occurred. Please try again.'
+    };
+  }
+
+  // ============================================================================
+  // HELPER METHODS
+  // ============================================================================
+
+  /**
+   * Map Okta IDToken to StandardUserInfo
+   */
+  private mapOktaTokenToStandard(idToken: IDToken): StandardUserInfo {
+    const claims = idToken.claims;
+
+    return {
+      id: claims.sub || '',
+      email: claims.email as string || '',
+      name: claims.name as string || '',
+      givenName: claims.given_name as string,
+      familyName: claims.family_name as string,
+      preferredUsername: claims.preferred_username as string,
+      emailVerified: claims.email_verified as boolean
+    };
+  }
+
+  /**
+   * Get profile picture URL from Okta
+   *
+   * Okta may include picture URL in user claims, similar to Auth0.
+   * If available, we can also fetch from Okta's /userinfo endpoint.
+   */
+  protected async getProfilePictureUrlInternal(): Promise<string | null> {
+    try {
+      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+      if (!idToken) {
+        return null;
+      }
+
+      // Check if picture is in claims
+      const pictureUrl = idToken.claims.picture as string;
+      if (pictureUrl) {
+        return pictureUrl;
+      }
+
+      // Alternatively, fetch from userinfo endpoint
+      const user = await this.oktaAuth.getUser();
+      return (user?.picture as string) || null;
+    } catch (error) {
+      console.error('[Okta] Error getting profile picture:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Handle session expiry - no-op for Okta
+   *
+   * Okta uses refresh tokens, so it doesn't need interactive re-authentication
+   * when tokens expire. If refresh fails, the base class will throw an error
+   * and the user must log out/in manually.
+   */
+  protected async handleSessionExpiryInternal(): Promise<void> {
+    // No-op - Okta doesn't need interactive re-auth
+    return;
+  }
+
+  // ============================================================================
+  // CONFIGURATION
+  // ============================================================================
+
+  override getRequiredConfig(): string[] {
     return ['clientId', 'domain'];
   }
 
-  validateConfig(_config: any): boolean {
-    // Prefix with underscore to indicate intentionally unused
-    return _config.clientId && (_config.domain || _config.issuer);
+  override validateConfig(config: Record<string, unknown>): boolean {
+    return !!(config['clientId'] && (config['domain'] || config['issuer']));
   }
 }

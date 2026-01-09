@@ -113,6 +113,15 @@ export class RecordDependencyAnalyzer {
       const recordId = `${entityName}_${this.recordCounter++}`;
       const path = pathPrefix ? `${pathPrefix}/${entityName}[${i}]` : `${entityName}[${i}]`;
 
+      // Validate that the record has a 'fields' property (required)
+      if (!record.fields) {
+        const hint = 'field' in record ? ' Did you mean "fields" instead of "field"?' : '';
+        throw new Error(
+          `Record at ${path} is missing required "fields" property.${hint} ` +
+          `Each record must have a "fields" object containing the entity field values.`
+        );
+      }
+
       const flattenedRecord: FlattenedRecord = {
         record,
         entityName,
@@ -608,6 +617,12 @@ export class RecordDependencyAnalyzer {
     for (const record of records) {
       // For each dependency this record has...
       for (const depId of record.dependencies) {
+        // Skip undefined or null dependency IDs (defensive check)
+        if (!depId) {
+          console.warn(`Warning: Record ${record.id} has undefined/null dependency, skipping`);
+          continue;
+        }
+
         // Add this record as a dependent of that dependency
         if (!reverseMap.has(depId)) {
           reverseMap.set(depId, []);

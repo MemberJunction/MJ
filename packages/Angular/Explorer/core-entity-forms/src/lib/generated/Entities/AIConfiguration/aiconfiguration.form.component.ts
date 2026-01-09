@@ -17,6 +17,7 @@ export class AIConfigurationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'basicInformation', sectionName: 'Basic Information', isExpanded: true },
             { sectionKey: 'configurationSettings', sectionName: 'Configuration Settings', isExpanded: true },
+            { sectionKey: 'inheritanceSettings', sectionName: 'Inheritance Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentConfigurations', sectionName: 'MJ: AI Agent Configurations', isExpanded: false },
             { sectionKey: 'mJAIAgentPrompts', sectionName: 'MJ: AI Agent Prompts', isExpanded: false },
@@ -24,7 +25,8 @@ export class AIConfigurationFormComponent extends BaseFormComponent {
             { sectionKey: 'aIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJAIPromptModels', sectionName: 'MJ: AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
-            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false }
+            { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
+            { sectionKey: 'mJAIConfigurations', sectionName: 'MJ: AI Configurations', isExpanded: false }
         ]);
     }
 }
