@@ -1,5 +1,19 @@
 # @memberjunction/metadata-sync
 
+## 2.131.0
+
+### Patch Changes
+
+- 280a4c7: Add Cerebras as AI inference provider for GLM-4.7 model and improve MetadataSync with recursive @file reference resolution in checksum calculations
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/graphql-dataprovider@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/core-entities-server@2.131.0
+  - @memberjunction/sqlserver-dataprovider@2.131.0
+  - @memberjunction/global@2.131.0
+
 ## 2.130.1
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 2.131.0
+
+### Minor Changes
+
+- 280a4c7: Add Cerebras as AI inference provider for GLM-4.7 model and improve MetadataSync with recursive @file reference resolution in checksum calculations
+
+### Patch Changes
+
+- 81598e3: no migration just code
+  - @memberjunction/global@2.131.0
+
 ## 2.130.1
 
 ### Patch Changes

@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [3604aa1]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ng-conversations@2.131.0
+  - @memberjunction/ai-engine-base@2.131.0
+  - @memberjunction/ai-core-plus@2.131.0
+  - @memberjunction/ng-auth-services@2.131.0
+  - @memberjunction/ng-base-application@2.131.0
+  - @memberjunction/ng-base-forms@2.131.0
+  - @memberjunction/ng-compare-records@2.131.0
+  - @memberjunction/ng-dashboards@2.131.0
+  - @memberjunction/ng-entity-form-dialog@2.131.0
+  - @memberjunction/ng-entity-permissions@2.131.0
+  - @memberjunction/ng-explorer-settings@2.131.0
+  - @memberjunction/ng-record-changes@2.131.0
+  - @memberjunction/ng-shared@2.131.0
+  - @memberjunction/ng-user-view-grid@2.131.0
+  - @memberjunction/ng-user-view-properties@2.131.0
+  - @memberjunction/ng-ai-test-harness@2.131.0
+  - @memberjunction/ng-artifacts@2.131.0
+  - @memberjunction/ng-container-directives@2.131.0
+  - @memberjunction/ng-entity-viewer@2.131.0
+  - @memberjunction/ng-file-storage@2.131.0
+  - @memberjunction/ng-notifications@2.131.0
+  - @memberjunction/ng-query-grid@2.131.0
+  - @memberjunction/ng-record-selector@2.131.0
+  - @memberjunction/ng-resource-permissions@2.131.0
+  - @memberjunction/ng-shared-generic@2.131.0
+  - @memberjunction/ng-user-avatar@2.131.0
+  - @memberjunction/communication-types@2.131.0
+  - @memberjunction/entity-communications-client@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/templates-base-types@2.131.0
+  - @memberjunction/ng-tabstrip@2.131.0
+  - @memberjunction/ng-generic-dialog@2.131.0
+  - @memberjunction/global@2.131.0
+
 ## 2.130.1
 
 ### Patch Changes

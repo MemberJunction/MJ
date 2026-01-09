@@ -1,5 +1,27 @@
 # @memberjunction/ai-agents
 
+## 2.131.0
+
+### Minor Changes
+
+- d3d2926: migration
+
+### Patch Changes
+
+- 3604aa1: Fix Conversations Performance: Replace Timer Polling with PubSub + Fix Race Conditions
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ai-engine-base@2.131.0
+  - @memberjunction/ai-core-plus@2.131.0
+  - @memberjunction/aiengine@2.131.0
+  - @memberjunction/ai-prompts@2.131.0
+  - @memberjunction/actions-base@2.131.0
+  - @memberjunction/actions@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/ai@2.131.0
+  - @memberjunction/global@2.131.0
+
 ## 2.130.1
 
 ### Patch Changes
