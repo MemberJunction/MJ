@@ -12,6 +12,72 @@
  */
 
 /**
+ * Granular control over which parts of the response type definition to include.
+ * When specified as an object, enables fine-grained control over type sections.
+ * Sections auto-align with their corresponding documentation flags unless explicitly overridden.
+ *
+ * @example
+ * ```typescript
+ * // Minimal response type - only core fields
+ * const minimal: ResponseTypeInclusionRules = {
+ *     payload: false,
+ *     responseForms: false,
+ *     commands: false,
+ *     forEach: false,
+ *     while: false
+ * };
+ * ```
+ */
+export interface ResponseTypeInclusionRules {
+    /**
+     * Include payloadChangeRequest type definition in the response interface.
+     * Auto-aligns with includePayloadInPrompt unless explicitly set.
+     * @default true
+     */
+    payload?: boolean;
+
+    /**
+     * Include responseForm type definition in the response interface.
+     * Auto-aligns with includeResponseFormDocs unless explicitly set.
+     * @default true
+     */
+    responseForms?: boolean;
+
+    /**
+     * Include actionableCommands/automaticCommands type definitions.
+     * Auto-aligns with includeCommandDocs unless explicitly set.
+     * @default true
+     */
+    commands?: boolean;
+
+    /**
+     * Include ForEach operation in nextStep.type union and forEach property.
+     * Auto-aligns with includeForEachDocs unless explicitly set.
+     * @default true
+     */
+    forEach?: boolean;
+
+    /**
+     * Include While operation in nextStep.type union and while property.
+     * Auto-aligns with includeWhileDocs unless explicitly set.
+     * @default true
+     */
+    while?: boolean;
+}
+
+/**
+ * Default values for ResponseTypeInclusionRules.
+ * All sections default to true (include).
+ */
+export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusionRules> = {
+    payload: true,
+    responseForms: true,
+    commands: true,
+    forEach: true,
+    while: true
+};
+
+/**
  * Prompt parameters for Loop Agent Type.
  * Controls which sections are included in the system prompt to optimize token usage.
  *
@@ -47,17 +113,37 @@
  *     }
  * });
  * ```
+ *
+ * @example
+ * ```typescript
+ * // Minimal response type with granular control
+ * const minimalConfig: LoopAgentTypePromptParams = {
+ *     includeResponseTypeDefinition: {
+ *         payload: true,        // Keep payload in type
+ *         responseForms: false, // Exclude responseForm from type
+ *         commands: false,      // Exclude commands from type
+ *         forEach: false,       // Exclude ForEach from nextStep.type
+ *         while: false          // Exclude While from nextStep.type
+ *     },
+ *     includeForEachDocs: false,
+ *     includeWhileDocs: false
+ * };
+ * ```
  */
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
 
     /**
-     * Include full LoopAgentResponse TypeScript definition.
-     * Disable if agent has custom examples that cover the response format,
-     * or if you want to provide a simplified response structure.
-     * @default true
+     * Control response type definition inclusion in the prompt.
+     *
+     * - `undefined` or object with all defaults: Include full type definition
+     * - Object with granular rules: Include specific sections based on rules
+     *   - Sections auto-align with their corresponding docs flags unless explicitly set
+     *   - e.g., if includeForEachDocs=false and forEach not set, forEach type is excluded
+     *
+     * @default { payload: true, responseForms: true, commands: true, forEach: true, while: true }
      */
-    includeResponseTypeDefinition?: boolean;
+    includeResponseTypeDefinition?: ResponseTypeInclusionRules;
 
     /**
      * Include ForEach operation documentation and examples.
@@ -150,7 +236,7 @@ export interface LoopAgentTypePromptParams {
  * All section flags default to true (include), and limits default to -1 (include all).
  */
 export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParams> = {
-    includeResponseTypeDefinition: true,
+    includeResponseTypeDefinition: { ...DEFAULT_RESPONSE_TYPE_INCLUSION_RULES },
     includeForEachDocs: true,
     includeWhileDocs: true,
     includeResponseFormDocs: true,

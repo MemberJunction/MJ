@@ -11,7 +11,7 @@
  * @since 2.131.0
  */
 
-import { LoopAgentTypePromptParams, DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
+import { LoopAgentTypePromptParams, DEFAULT_LOOP_AGENT_PROMPT_PARAMS, ResponseTypeInclusionRules, DEFAULT_RESPONSE_TYPE_INCLUSION_RULES } from '../agent-types/loop-agent-prompt-params';
 
 // ============================================================================
 // Test Helpers - Standalone implementations of the methods for testing
@@ -93,7 +93,62 @@ function buildAgentTypePromptParams(
         ...(runtimeOverrides || {})
     };
 
+    // 4. Apply auto-alignment for includeResponseTypeDefinition
+    // Pass the explicit config (from agent or runtime) to distinguish from schema defaults
+    const explicitResponseType = (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||
+                                 (agentParams.includeResponseTypeDefinition as Record<string, unknown> | undefined);
+    applyResponseTypeAutoAlignment(merged, explicitResponseType);
+
     return merged;
+}
+
+/**
+ * Applies auto-alignment rules to includeResponseTypeDefinition based on other flags.
+ * Mirrors BaseAgent.applyResponseTypeAutoAlignment()
+ */
+function applyResponseTypeAutoAlignment(
+    params: Record<string, unknown>,
+    explicitResponseType?: Record<string, unknown>
+): void {
+    // Ensure includeResponseTypeDefinition is an object
+    if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
+        params.includeResponseTypeDefinition = {
+            payload: true,
+            responseForms: true,
+            commands: true,
+            forEach: true,
+            while: true
+        };
+    }
+
+    const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
+
+    // Auto-alignment mappings: docs flag → response type property
+    const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
+        { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },
+        { docsFlag: 'includeResponseFormDocs', responseTypeKey: 'responseForms' },
+        { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
+        { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
+        { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' }
+    ];
+
+    for (const { docsFlag, responseTypeKey } of alignmentMappings) {
+        // Check if the user explicitly set this response type property
+        // (not from schema defaults, which always provide true)
+        const wasExplicitlySet = explicitResponseType &&
+            Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
+
+        // Auto-align: if docs flag is false AND user didn't explicitly set the response type
+        // then auto-align the response type to false
+        if (params[docsFlag] === false && !wasExplicitlySet) {
+            responseType[responseTypeKey] = false;
+        }
+        // If user explicitly set the value, respect it regardless of docs flag
+        // Otherwise default to true if not set
+        else if (responseType[responseTypeKey] === undefined) {
+            responseType[responseTypeKey] = true;
+        }
+    }
 }
 
 // ============================================================================
@@ -142,9 +197,22 @@ const LOOP_AGENT_TYPE_SCHEMA = JSON.stringify({
     "description": "Prompt parameters for Loop Agent Type.",
     "properties": {
         "includeResponseTypeDefinition": {
-            "type": "boolean",
-            "default": true,
-            "description": "Include full LoopAgentResponse TypeScript definition."
+            "type": "object",
+            "description": "Control response type definition inclusion.",
+            "default": {
+                "payload": true,
+                "responseForms": true,
+                "commands": true,
+                "forEach": true,
+                "while": true
+            },
+            "properties": {
+                "payload": { "type": "boolean", "default": true },
+                "responseForms": { "type": "boolean", "default": true },
+                "commands": { "type": "boolean", "default": true },
+                "forEach": { "type": "boolean", "default": true },
+                "while": { "type": "boolean", "default": true }
+            }
         },
         "includeForEachDocs": {
             "type": "boolean",
@@ -275,7 +343,16 @@ testGroup('extractSchemaDefaults - schema with defaults', () => {
 testGroup('extractSchemaDefaults - Loop Agent Type schema', () => {
     const defaults = extractSchemaDefaults(LOOP_AGENT_TYPE_SCHEMA);
 
-    assert(defaults.includeResponseTypeDefinition === true, 'includeResponseTypeDefinition defaults to true');
+    // includeResponseTypeDefinition is now an object with nested defaults
+    const responseTypeDef = defaults.includeResponseTypeDefinition as ResponseTypeInclusionRules;
+    assert(responseTypeDef !== undefined, 'includeResponseTypeDefinition has default object');
+    assert(responseTypeDef.payload === true, 'includeResponseTypeDefinition.payload defaults to true');
+    assert(responseTypeDef.responseForms === true, 'includeResponseTypeDefinition.responseForms defaults to true');
+    assert(responseTypeDef.commands === true, 'includeResponseTypeDefinition.commands defaults to true');
+    assert(responseTypeDef.forEach === true, 'includeResponseTypeDefinition.forEach defaults to true');
+    assert(responseTypeDef.while === true, 'includeResponseTypeDefinition.while defaults to true');
+
+    // Other boolean defaults
     assert(defaults.includeForEachDocs === true, 'includeForEachDocs defaults to true');
     assert(defaults.includeWhileDocs === true, 'includeWhileDocs defaults to true');
     assert(defaults.includeResponseFormDocs === true, 'includeResponseFormDocs defaults to true');
@@ -306,7 +383,14 @@ testGroup('buildAgentTypePromptParams - no schema, no agent config, no runtime o
 
     const result = buildAgentTypePromptParams(agentType, agent, undefined);
 
-    assertDeepEqual(result, {}, 'returns empty object when nothing is configured');
+    // Even with no config, auto-alignment creates the includeResponseTypeDefinition object
+    const responseTypeDef = result.includeResponseTypeDefinition as ResponseTypeInclusionRules;
+    assert(responseTypeDef !== undefined, 'includeResponseTypeDefinition is created by auto-alignment');
+    assert(responseTypeDef.payload === true, 'payload defaults to true');
+    assert(responseTypeDef.responseForms === true, 'responseForms defaults to true');
+    assert(responseTypeDef.commands === true, 'commands defaults to true');
+    assert(responseTypeDef.forEach === true, 'forEach defaults to true');
+    assert(responseTypeDef.while === true, 'while defaults to true');
 });
 
 testGroup('buildAgentTypePromptParams - schema defaults only', () => {
@@ -468,11 +552,32 @@ testGroup('buildAgentTypePromptParams - merge precedence (schema < agent < runti
 testGroup('DEFAULT_LOOP_AGENT_PROMPT_PARAMS matches schema defaults', () => {
     const schemaDefaults = extractSchemaDefaults(LOOP_AGENT_TYPE_SCHEMA);
 
-    // Verify the constant matches what we'd extract from the schema
+    // Verify includeResponseTypeDefinition object structure matches
+    const defaultResponseType = DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeResponseTypeDefinition;
+    const schemaResponseType = schemaDefaults.includeResponseTypeDefinition as ResponseTypeInclusionRules;
+
     assert(
-        DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeResponseTypeDefinition === schemaDefaults.includeResponseTypeDefinition,
-        'includeResponseTypeDefinition matches'
+        defaultResponseType.payload === schemaResponseType.payload,
+        'includeResponseTypeDefinition.payload matches'
     );
+    assert(
+        defaultResponseType.responseForms === schemaResponseType.responseForms,
+        'includeResponseTypeDefinition.responseForms matches'
+    );
+    assert(
+        defaultResponseType.commands === schemaResponseType.commands,
+        'includeResponseTypeDefinition.commands matches'
+    );
+    assert(
+        defaultResponseType.forEach === schemaResponseType.forEach,
+        'includeResponseTypeDefinition.forEach matches'
+    );
+    assert(
+        defaultResponseType.while === schemaResponseType.while,
+        'includeResponseTypeDefinition.while matches'
+    );
+
+    // Verify other boolean defaults
     assert(
         DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeForEachDocs === schemaDefaults.includeForEachDocs,
         'includeForEachDocs matches'
@@ -558,7 +663,6 @@ testGroup('Backward compatibility: empty params includes all sections', () => {
 
     // All boolean flags should be true (include all sections)
     const booleanFlags = [
-        'includeResponseTypeDefinition',
         'includeForEachDocs',
         'includeWhileDocs',
         'includeResponseFormDocs',
@@ -574,6 +678,88 @@ testGroup('Backward compatibility: empty params includes all sections', () => {
             `${flag} should be true for backward compatibility`
         );
     }
+
+    // includeResponseTypeDefinition is now an object - verify all properties are true
+    const responseTypeDef = result.includeResponseTypeDefinition as ResponseTypeInclusionRules;
+    assert(responseTypeDef.payload === true, 'includeResponseTypeDefinition.payload should be true');
+    assert(responseTypeDef.responseForms === true, 'includeResponseTypeDefinition.responseForms should be true');
+    assert(responseTypeDef.commands === true, 'includeResponseTypeDefinition.commands should be true');
+    assert(responseTypeDef.forEach === true, 'includeResponseTypeDefinition.forEach should be true');
+    assert(responseTypeDef.while === true, 'includeResponseTypeDefinition.while should be true');
+});
+
+// ============================================================================
+// Tests for Auto-Alignment Logic
+// ============================================================================
+
+testGroup('Auto-alignment: docs flags auto-align response type sections', () => {
+    // When docs flags are set to false, the corresponding response type sections
+    // should also be false (unless explicitly overridden)
+
+    const agentType: MockAgentType = {
+        ID: 'type-1',
+        Name: 'Loop',
+        PromptParamsSchema: LOOP_AGENT_TYPE_SCHEMA
+    };
+    const agent: MockAgent = {
+        ID: 'agent-1',
+        Name: 'Minimal Agent',
+        TypeID: 'type-1',
+        AgentTypePromptParams: JSON.stringify({
+            includeForEachDocs: false,
+            includeWhileDocs: false,
+            includeResponseFormDocs: false,
+            includeCommandDocs: false
+            // includePayloadInPrompt is not set, so payload should stay true
+        })
+    };
+
+    const result = buildAgentTypePromptParams(agentType, agent, undefined);
+    const responseTypeDef = result.includeResponseTypeDefinition as ResponseTypeInclusionRules;
+
+    // Auto-aligned to false based on docs flags
+    assert(responseTypeDef.forEach === false, 'forEach auto-aligned to false');
+    assert(responseTypeDef.while === false, 'while auto-aligned to false');
+    assert(responseTypeDef.responseForms === false, 'responseForms auto-aligned to false');
+    assert(responseTypeDef.commands === false, 'commands auto-aligned to false');
+
+    // Not auto-aligned (includePayloadInPrompt not set, defaults to true)
+    assert(responseTypeDef.payload === true, 'payload stays true (not auto-aligned)');
+});
+
+testGroup('Auto-alignment: explicit response type overrides auto-alignment', () => {
+    // When response type sections are explicitly set, they should not be auto-aligned
+
+    const agentType: MockAgentType = {
+        ID: 'type-1',
+        Name: 'Loop',
+        PromptParamsSchema: LOOP_AGENT_TYPE_SCHEMA
+    };
+    const agent: MockAgent = {
+        ID: 'agent-1',
+        Name: 'Override Agent',
+        TypeID: 'type-1',
+        AgentTypePromptParams: JSON.stringify({
+            includeResponseTypeDefinition: {
+                forEach: true,  // Explicitly keep forEach even though docs are disabled
+                while: false    // Explicitly set while to false
+            },
+            includeForEachDocs: false,
+            includeWhileDocs: false
+        })
+    };
+
+    const result = buildAgentTypePromptParams(agentType, agent, undefined);
+    const responseTypeDef = result.includeResponseTypeDefinition as ResponseTypeInclusionRules;
+
+    // Explicit settings override auto-alignment
+    assert(responseTypeDef.forEach === true, 'forEach explicitly set to true');
+    assert(responseTypeDef.while === false, 'while explicitly set to false');
+
+    // Other properties get auto-aligned or default values
+    assert(responseTypeDef.payload === true, 'payload defaults to true');
+    assert(responseTypeDef.responseForms === true, 'responseForms defaults to true');
+    assert(responseTypeDef.commands === true, 'commands defaults to true');
 });
 
 // ============================================================================

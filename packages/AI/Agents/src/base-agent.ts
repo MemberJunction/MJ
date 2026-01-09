@@ -3163,13 +3163,11 @@ The context is now within limits. Please retry your request with the recovered c
         runtimeOverrides?: Record<string, unknown>
     ): Record<string, unknown> {
         // 1. Extract defaults from schema
-        // Note: PromptParamsSchema property added in v2.131.0, use Get() for backward compatibility
-        const schemaJson = agentType?.Get('PromptParamsSchema') as string | null | undefined;
+        const schemaJson = agentType?.PromptParamsSchema;
         const schemaDefaults = this.extractSchemaDefaults(schemaJson);
 
         // 2. Parse agent-level config
-        // Note: AgentTypePromptParams property added in v2.131.0, use Get() for backward compatibility
-        const agentParamsJson = agent.Get('AgentTypePromptParams') as string | null | undefined;
+        const agentParamsJson = agent.AgentTypePromptParams;
         let agentParams: Record<string, unknown> = {};
         if (agentParamsJson) {
             try {
@@ -3186,7 +3184,78 @@ The context is now within limits. Please retry your request with the recovered c
             ...(runtimeOverrides || {})
         };
 
+        // 4. Apply auto-alignment for includeResponseTypeDefinition
+        // Pass in the explicit response type config from agent/runtime (not schema defaults)
+        // to distinguish between explicit user settings and schema defaults
+        const explicitResponseType = (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||
+                                     (agentParams.includeResponseTypeDefinition as Record<string, unknown> | undefined);
+        this.applyResponseTypeAutoAlignment(merged, explicitResponseType);
+
         return merged;
+    }
+
+    /**
+     * Applies auto-alignment rules to includeResponseTypeDefinition based on other flags.
+     *
+     * When a documentation flag (e.g., includeForEachDocs) is explicitly set to false,
+     * the corresponding response type section (e.g., forEach) should also be excluded
+     * unless explicitly set otherwise.
+     *
+     * Auto-alignment mappings:
+     * - includePayloadInPrompt → includeResponseTypeDefinition.payload
+     * - includeResponseFormDocs → includeResponseTypeDefinition.responseForms
+     * - includeCommandDocs → includeResponseTypeDefinition.commands
+     * - includeForEachDocs → includeResponseTypeDefinition.forEach
+     * - includeWhileDocs → includeResponseTypeDefinition.while
+     *
+     * @param params - The merged params object to modify in place
+     * @param explicitResponseType - The explicitly set response type config from agent/runtime (not schema defaults)
+     * @protected
+     * @since 2.132.0
+     */
+    protected applyResponseTypeAutoAlignment(
+        params: Record<string, unknown>,
+        explicitResponseType?: Record<string, unknown>
+    ): void {
+        // Ensure includeResponseTypeDefinition is an object
+        if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
+            params.includeResponseTypeDefinition = {
+                payload: true,
+                responseForms: true,
+                commands: true,
+                forEach: true,
+                while: true
+            };
+        }
+
+        const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
+
+        // Auto-alignment mappings: docs flag → response type property
+        const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
+            { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },
+            { docsFlag: 'includeResponseFormDocs', responseTypeKey: 'responseForms' },
+            { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
+            { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
+            { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' }
+        ];
+
+        for (const { docsFlag, responseTypeKey } of alignmentMappings) {
+            // Check if the user explicitly set this response type property
+            // (not from schema defaults, which always provide true)
+            const wasExplicitlySet = explicitResponseType &&
+                Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
+
+            // Auto-align: if docs flag is false AND user didn't explicitly set the response type
+            // then auto-align the response type to false
+            if (params[docsFlag] === false && !wasExplicitlySet) {
+                responseType[responseTypeKey] = false;
+            }
+            // If user explicitly set the value, respect it regardless of docs flag
+            // Otherwise default to true if not set
+            else if (responseType[responseTypeKey] === undefined) {
+                responseType[responseTypeKey] = true;
+            }
+        }
     }
 
     /**

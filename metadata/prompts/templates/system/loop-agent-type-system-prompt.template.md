@@ -4,9 +4,74 @@ You operate in a continuous loop pattern, working iteratively to complete the us
 
 # Response Format
 Return ONLY JSON adhering to the interface `LoopAgentResponse`
-{% if __agentTypePromptParams.includeResponseTypeDefinition != false %}
 ```ts
-{@include ../../../../packages/AI/Agents/src/agent-types/loop-agent-response-type.ts }
+interface LoopAgentResponse {
+    /** Task completion status. true = terminate loop, false = continue */
+    taskComplete?: boolean;
+    /** Plain text message (<100 words). Required for 'Chat' type, omit for others */
+    message?: string;
+{% if __agentTypePromptParams.includeResponseTypeDefinition.responseForms != false %}
+    /** Optional response form to collect structured user input */
+    responseForm?: AgentResponseForm;
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.commands != false %}
+    /** Optional actionable commands shown as clickable buttons/links */
+    actionableCommands?: ActionableCommand[];
+    /** Optional automatic commands executed immediately when received */
+    automaticCommands?: AutomaticCommand[];
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.payload != false %}
+    /** Payload changes. Omit if no changes needed */
+    payloadChangeRequest?: AgentPayloadChangeRequest;
+{% endif %}
+    /** Internal reasoning for debugging */
+    reasoning?: string;
+    /** Confidence level (0.0-1.0) */
+    confidence?: number;
+    /** Next action. Required when taskComplete=false */
+    nextStep?: {
+        /** Operation type */
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %};
+        /** Actions to execute (when type='Actions') */
+        actions?: Array<{ name: string; params: Record<string, unknown> }>;
+        /** Sub-agent details (when type='Sub-Agent') */
+        subAgent?: { name: string; message: string; terminateAfter: boolean };
+        /** Message index to expand (when type='Retry' and expanding a compacted message) */
+        messageIndex?: number;
+{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %}
+        /** ForEach operation details (when type='ForEach') */
+        forEach?: ForEachOperation;
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %}
+        /** While operation details (when type='While') */
+        while?: WhileOperation;
+{% endif %}
+    };
+}
+```
+{% if __agentTypePromptParams.includeResponseTypeDefinition.payload != false %}
+```ts
+{@include ../../../../packages/AI/CorePlus/src/agent-payload-change-request.ts}
+```
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.responseForms != false %}
+```ts
+{@include ../../../../packages/AI/CorePlus/src/response-forms.ts}
+```
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.commands != false %}
+```ts
+{@include ../../../../packages/AI/CorePlus/src/ui-commands.ts}
+```
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %}
+```ts
+{@include ../../../../packages/AI/CorePlus/src/foreach-operation.ts}
+```
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %}
+```ts
+{@include ../../../../packages/AI/CorePlus/src/while-operation.ts}
 ```
 {% endif %}
 
@@ -39,7 +104,7 @@ Execute one at a time. Their completion ≠ your task completion.
 {{ subAgentDetails | safe }}
 {%- endif -%}
 
-{%- if actionCount > 0 -%}
+{%- if actionCount > 0 %}
 ## Actions ({{actionCount}} available)
 Execute multiple in parallel if independent. Retry failed actions up to 3x with adjusted parameters.
 {{ actionDetails | safe }}

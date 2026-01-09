@@ -1231,7 +1231,7 @@ export const AIAgentSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
         * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.`),
@@ -1280,7 +1280,7 @@ export const AIAgentSchema = z.object({
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Agent Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
@@ -1558,16 +1558,21 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold (Bytes)
+        * * Display Name: Inline Storage Threshold Bytes
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
+    AgentTypePromptParams: z.string().nullable().describe(`
+        * * Field Name: AgentTypePromptParams
+        * * Display Name: Agent Type Prompt Params
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt Text
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -1583,11 +1588,11 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
-        * * Display Name: Attachment Storage Provider Name
+        * * Display Name: Attachment Storage Provider
         * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -6385,7 +6390,7 @@ export const EntityFieldValueSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityFieldID: z.string().describe(`
         * * Field Name: EntityFieldID
-        * * Display Name: Entity Field
+        * * Display Name: Entity Field ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)`),
     Sequence: z.number().describe(`
@@ -6409,12 +6414,12 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
+        * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
+        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EntityField: z.string().describe(`
@@ -6427,7 +6432,7 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -9722,13 +9727,13 @@ export const AIAgentTypeSchema = z.object({
         * * Description: Detailed description of the agent type, its purpose, and typical use cases`),
     SystemPromptID: z.string().nullable().describe(`
         * * Field Name: SystemPromptID
-        * * Display Name: System Prompt ID
+        * * Display Name: System Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.`),
@@ -9768,6 +9773,11 @@ export const AIAgentTypeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
+    PromptParamsSchema: z.string().nullable().describe(`
+        * * Field Name: PromptParamsSchema
+        * * Display Name: Prompt Params Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -22155,7 +22165,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.
@@ -22268,7 +22278,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Agent Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
@@ -22866,7 +22876,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold (Bytes)
+    * * Display Name: Inline Storage Threshold Bytes
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -22875,6 +22885,19 @@ if this limit is exceeded.
     }
     set InlineStorageThresholdBytes(value: number | null) {
         this.Set('InlineStorageThresholdBytes', value);
+    }
+
+    /**
+    * * Field Name: AgentTypePromptParams
+    * * Display Name: Agent Type Prompt Params
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.
+    */
+    get AgentTypePromptParams(): string | null {
+        return this.Get('AgentTypePromptParams');
+    }
+    set AgentTypePromptParams(value: string | null) {
+        this.Set('AgentTypePromptParams', value);
     }
 
     /**
@@ -22888,7 +22911,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt Text
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -22924,7 +22947,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProvider
-    * * Display Name: Attachment Storage Provider Name
+    * * Display Name: Attachment Storage Provider
     * * SQL Data Type: nvarchar(50)
     */
     get AttachmentStorageProvider(): string | null {
@@ -22933,7 +22956,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -35353,7 +35376,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityFieldID
-    * * Display Name: Entity Field
+    * * Display Name: Entity Field ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)
     */
@@ -35417,7 +35440,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
+    * * Display Name: __mj _Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35427,7 +35450,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
+    * * Display Name: __mj _Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35455,7 +35478,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     */
     get EntityID(): string {
@@ -43795,7 +43818,7 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
 
     /**
     * * Field Name: SystemPromptID
-    * * Display Name: System Prompt ID
+    * * Display Name: System Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.
@@ -43809,7 +43832,7 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.
@@ -43905,6 +43928,19 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     }
     set UIFormSectionExpandedByDefault(value: boolean) {
         this.Set('UIFormSectionExpandedByDefault', value);
+    }
+
+    /**
+    * * Field Name: PromptParamsSchema
+    * * Display Name: Prompt Params Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.
+    */
+    get PromptParamsSchema(): string | null {
+        return this.Get('PromptParamsSchema');
+    }
+    set PromptParamsSchema(value: string | null) {
+        this.Set('PromptParamsSchema', value);
     }
 
     /**
