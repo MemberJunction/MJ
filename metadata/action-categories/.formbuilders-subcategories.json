@@ -12,15 +12,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.720Z",
       "checksum": "f7c8f2627be801761a6a5b31f1db67fc47f1cce9f772d59fe93692baae5b6301"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
-        "resolved": "F0209686-E477-4C06-A082-B8FC1C9AD338"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -35,15 +27,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.722Z",
       "checksum": "1368534e6f7a93109393b655f08817478c8a82132fb9025585f9325a6ae82c35"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
-        "resolved": "F0209686-E477-4C06-A082-B8FC1C9AD338"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -58,15 +42,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.723Z",
       "checksum": "0973d97ac675149f124139d28d9f652c4ed36c34d7602f5e24eeff71ab2343b2"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
-        "resolved": "F0209686-E477-4C06-A082-B8FC1C9AD338"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -81,14 +57,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.724Z",
       "checksum": "c1ac09c952bf5750dcc530adf7e0ef577262928223b894c55db04b67126b8771"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
-        "resolved": "F0209686-E477-4C06-A082-B8FC1C9AD338"
-      }
-    ]
+    }
   }
 ]

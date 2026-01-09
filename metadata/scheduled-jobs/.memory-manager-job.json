@@ -18,14 +18,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:36.251Z",
       "checksum": "2d0d73b6ffb3c0c6a4b99900c900a54b979ec03220c3609d3fc1c612fea56645"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.JobTypeID",
-        "expression": "@lookup:MJ: Scheduled Job Types.DriverClass=AgentScheduledJobDriver",
-        "resolved": "89F3E309-66AF-4F03-BCE6-189733D91152"
-      }
-    ]
+    }
   }
 ]

@@ -29,21 +29,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.871Z",
             "checksum": "eee48159a5e01a6573678e03dced15bda27c6ce8e73f6f7d37648038a3bc0070"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Codesmith Agent Prompt",
-              "resolved": "A948FDCD-CB38-49EA-8480-6CC8AAFC0BE8"
-            }
-          ]
+          }
         }
       ],
       "AI Agent Actions": [
@@ -59,21 +45,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.873Z",
             "checksum": "0cc749ba8ac80e0804109db9bd315c0f0079001dcd341c4386f77b157eb188b0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Execute Code",
-              "resolved": "F3BA81B8-1D89-4B13-A417-B32D8E8A6F88"
-            }
-          ]
+          }
         }
       ]
     },
@@ -83,14 +55,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:34.847Z",
       "checksum": "2d8fdcb5f5a92ccfbc5f86ab07f185714d6a25dada9155b21e8cd64fad196ba5"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+    }
   }
 ]

@@ -805,21 +805,30 @@ export class SyncEngine {
           if (await fs.pathExists(fullPath)) {
             let processedContent: string;
             
-            // Check if this is a JSON file that might contain @include directives
+            // Check if this is a JSON file that might contain @include directives or nested @file references
             if (fullPath.endsWith('.json')) {
               try {
                 const jsonContent = await fs.readJson(fullPath);
                 const jsonString = JSON.stringify(jsonContent);
                 const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
-                
+
+                let resolvedJsonContent: any;
                 if (hasIncludes) {
-                  // Process @include directives
+                  // Process @include directives first
                   const preprocessor = new JsonPreprocessor();
-                  const processedJson = await preprocessor.processFile(fullPath);
-                  processedContent = JSON.stringify(processedJson, null, 2);
+                  resolvedJsonContent = await preprocessor.processFile(fullPath);
                 } else {
-                  processedContent = JSON.stringify(jsonContent, null, 2);
+                  resolvedJsonContent = jsonContent;
                 }
+
+                // Recursively resolve any nested @file references in the loaded JSON
+                // Use the JSON file's directory as the base for resolving relative paths
+                const fullyResolvedContent = await this.resolveFileReferencesForChecksum(
+                  resolvedJsonContent,
+                  path.dirname(fullPath)
+                );
+
+                processedContent = JSON.stringify(fullyResolvedContent, null, 2);
               } catch {
                 // Not valid JSON, process as text
                 const content = await fs.readFile(fullPath, 'utf-8');
