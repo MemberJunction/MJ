@@ -4,9 +4,10 @@
       "Name": "Demo Loop Agent",
       "Description": "Simple demo agent showcasing loop agent capabilities. Can perform web searches, retrieve stock prices, get weather forecasts, look up census data, and fetch web page content. The AI dynamically determines the pathway and can execute multiple actions in parallel with no predetermined sequence.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Disabled",
+      "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
+      "AgentTypePromptParams": {},
       "IconClass": "fa-solid fa-infinity"
     },
     "relatedEntities": {
@@ -104,9 +105,234 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:34.112Z",
-      "checksum": "465bc754049ca0c71f2c147b4a10410ce3e48342252a343c3e6b87502d972405"
-    }
+      "lastModified": "2026-01-09T16:45:05.949Z",
+      "checksum": "4e6ba270e3e5aaee45782893694f05173e5701569a67c4c5fc41f16f994efefe"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
+        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Demo Minimal Loop Agent",
+      "Description": "Minimal prompt demo agent to showcase AgentTypePromptParams. Same capabilities as Demo Loop Agent but with most optional prompt sections disabled to demonstrate token savings.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-compress",
+      "AgentTypePromptParams": {
+        "includeResponseTypeDefinition": {
+          "payload": true,
+          "responseForms": false,
+          "commands": false,
+          "forEach": false,
+          "while": false
+        },
+        "includeForEachDocs": false,
+        "includeWhileDocs": false,
+        "includeResponseFormDocs": false,
+        "includeCommandDocs": false,
+        "includeMessageExpansionDocs": false,
+        "includeVariableRefsDocs": false,
+        "includePayloadInPrompt": true
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Demo Loop Agent - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "314D935F-FB5D-44C8-9313-53B82208BFFE"
+          },
+          "sync": {
+            "lastModified": "2026-01-09T15:58:31.466Z",
+            "checksum": "190e14f0054ee207119af2bb57cffaed577309060bf51e53592511b44f79609f"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.PromptID",
+              "expression": "@lookup:AI Prompts.Name=Demo Loop Agent - Main Prompt",
+              "resolved": "B4053E4F-165C-4AED-8E14-3A0A25A28EFE"
+            }
+          ]
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Page Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F86B788E-9C1C-48AF-8A20-5803F1878073"
+          },
+          "sync": {
+            "lastModified": "2026-01-09T15:58:31.488Z",
+            "checksum": "30f48cfb26d2fb19c34d0a41517878505125f9b353be953ed0e2a1c53d5a497b"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Web Page Content",
+              "resolved": "81F96534-03F5-49E9-81B0-D8902A7645A3"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Weather",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B9E1C278-737D-497D-BB1E-C2BBE4D3061C"
+          },
+          "sync": {
+            "lastModified": "2026-01-09T15:58:31.499Z",
+            "checksum": "17d7614228d7e2f5ce80810575133660c35db80dcb32b3f537f68b96a059460b"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Get Weather",
+              "resolved": "6C88FED2-679A-4FDD-A31A-7F38D0457F22"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Census Data Lookup",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CBB12825-75FF-418D-8801-1BE940185894"
+          },
+          "sync": {
+            "lastModified": "2026-01-09T15:58:31.508Z",
+            "checksum": "f89b0d7a54774f26d45c072763c26eb19ae3c1c3d631847b2a684bd5ca4ee81a"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Census Data Lookup",
+              "resolved": "08E0742A-5DB9-4A5F-BA47-ED39374EE213"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Stock Price",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E8F1B1F7-424F-4F2A-AF54-A0E796E41C35"
+          },
+          "sync": {
+            "lastModified": "2026-01-09T15:58:31.568Z",
+            "checksum": "8ec5d97365120861b846e7441ffbe9cb4f6b65ad68fb40592b11269a9fec5f77"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Get Stock Price",
+              "resolved": "296E03AE-6EDC-4C5E-9506-BC98ACCDA2E1"
+            }
+          ]
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8E73256D-4189-4B55-AF76-2C6DF7C2C832"
+          },
+          "sync": {
+            "lastModified": "2026-01-09T15:58:31.577Z",
+            "checksum": "0403f4da572b53521f8f8b0dd07677b94e0e79a0069456e704a51bde27bd6c5e"
+          },
+          "__mj_sync_notes": [
+            {
+              "type": "parent",
+              "field": "fields.AgentID",
+              "expression": "@parent:ID",
+              "resolved": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
+            },
+            {
+              "type": "lookup",
+              "field": "fields.ActionID",
+              "expression": "@lookup:Actions.Name=Web Search",
+              "resolved": "82169F64-8566-4AE7-9C87-190A885C98A9"
+            }
+          ]
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
+    },
+    "sync": {
+      "lastModified": "2026-01-09T16:26:08.092Z",
+      "checksum": "26f66d6e188f1574583da9316ca4c34552d9bceebe6ea8736ccaa6093599a4cb"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.TypeID",
+        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
+        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
+      }
+    ]
   },
   {
     "fields": {
