@@ -1,5 +1,16 @@
 # @memberjunction/react-runtime
 
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/graphql-dataprovider@2.132.0
+  - @memberjunction/interactive-component-types@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/global@2.132.0
+
 ## 2.131.0
 
 ### Patch Changes
