@@ -1,6 +1,7 @@
 import { Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { AIAgentNoteEntity, AIAgentExampleEntity } from "@memberjunction/core-entities";
 import { AIEngine } from "@memberjunction/aiengine";
+import { UserScope } from "@memberjunction/ai-core-plus";
 
 /**
  * Parameters for retrieving notes in a specific context
@@ -13,6 +14,14 @@ export interface GetNotesParams {
     strategy: 'Relevant' | 'Recent' | 'All';
     maxNotes: number;
     contextUser: UserInfo;
+    /**
+     * Optional user scope for multi-tenant SaaS deployments.
+     * When provided, enables hierarchical scope filtering:
+     * - Global notes (no scope)
+     * - Primary-scope notes (e.g., org-level)
+     * - Fully-scoped notes (e.g., contact-level)
+     */
+    userScope?: UserScope;
 }
 
 /**
@@ -26,6 +35,11 @@ export interface GetExamplesParams {
     strategy: 'Semantic' | 'Recent' | 'Rated';
     maxExamples: number;
     contextUser: UserInfo;
+    /**
+     * Optional user scope for multi-tenant SaaS deployments.
+     * When provided, enables hierarchical scope filtering.
+     */
+    userScope?: UserScope;
 }
 
 /**
@@ -99,12 +113,11 @@ export class AgentContextInjector {
      */
     private async queryNotesWithScoping(params: GetNotesParams): Promise<AIAgentNoteEntity[]> {
         const filter = this.buildNotesScopingFilter(params);
-        // const orderBy = params.strategy === 'Recent'
-        //     ? '__mj_CreatedAt DESC'
-        //     : 'AgentNoteType.Priority ASC, __mj_CreatedAt DESC';
-
-        // temporarily only use createdAt DESC
-        const orderBy = '__mj_CreatedAt DESC';
+        // For 'Recent' strategy, sort by creation date only
+        // For other strategies (including 'All'), sort by priority first, then date
+        const orderBy = params.strategy === 'Recent'
+            ? '__mj_CreatedAt DESC'
+            : 'AgentNoteType.Priority ASC, __mj_CreatedAt DESC';
 
         const rv = new RunView();
         const result = await rv.RunView<AIAgentNoteEntity>({
@@ -136,12 +149,14 @@ export class AgentContextInjector {
     }
 
     /**
-     * Build filter with 8-level scoping priority for notes
+     * Build filter with 8-level scoping priority for notes.
+     * Combines MJ-internal scoping (AgentID, UserID, CompanyID) with
+     * multi-tenant SaaS scoping (PrimaryScopeEntityID, PrimaryScopeRecordID, SecondaryScopes).
      */
     private buildNotesScopingFilter(params: GetNotesParams): string {
         const filters: string[] = ['Status = \'Active\''];
 
-        // Build scoping filter using OR conditions with priority
+        // Build MJ-internal scoping filter using OR conditions with priority
         const scopeConditions: string[] = [];
 
         // Priority 1: AgentID + UserID + CompanyID
@@ -186,12 +201,52 @@ export class AgentContextInjector {
             filters.push(`(${scopeConditions.join(' OR ')})`);
         }
 
+        // Add multi-tenant SaaS scoping if userScope is provided
+        if (params.userScope) {
+            const saasScopes = this.buildSaasScopeFilter(params.userScope);
+            filters.push(`(${saasScopes})`);
+        }
+
         return filters.join(' AND ');
+    }
+
+    /**
+     * Build filter for multi-tenant SaaS scoping with hierarchical inheritance.
+     * Returns notes at all applicable scope levels (global → primary → full).
+     */
+    private buildSaasScopeFilter(userScope: UserScope): string {
+        const conditions: string[] = [];
+
+        // Always include global notes (no scope set)
+        conditions.push('PrimaryScopeRecordID IS NULL');
+
+        if (userScope.primaryRecordId) {
+            // Include primary-scope-only notes (matches org, no secondary scopes)
+            conditions.push(`(
+                PrimaryScopeRecordID = '${userScope.primaryRecordId}'
+                AND (SecondaryScopes IS NULL OR SecondaryScopes = '{}')
+            )`);
+
+            // Include fully-scoped notes if secondary scopes are provided
+            if (userScope.secondary && Object.keys(userScope.secondary).length > 0) {
+                const secondaryConditions = Object.entries(userScope.secondary)
+                    .map(([key, val]) => `JSON_VALUE(SecondaryScopes, '$.${key}') = '${val}'`)
+                    .join(' AND ');
+
+                conditions.push(`(
+                    PrimaryScopeRecordID = '${userScope.primaryRecordId}'
+                    AND ${secondaryConditions}
+                )`);
+            }
+        }
+
+        return conditions.join(' OR ');
     }
 
     /**
      * Filter examples using multi-dimensional scoping priority.
      * Implements 4-level scoping hierarchy for examples (examples are always agent-specific).
+     * Also handles multi-tenant SaaS scoping when userScope is provided.
      */
     private filterExamplesByScoping(examples: AIAgentExampleEntity[], params: GetExamplesParams): AIAgentExampleEntity[] {
         return examples.filter(example => {
@@ -205,7 +260,7 @@ export class AgentContextInjector {
                 return false;
             }
 
-            // Check scoping priority (any of these conditions can match)
+            // Check MJ-internal scoping priority (any of these conditions can match)
             const matchesPriority1 = params.userId && params.companyId &&
                 example.UserID === params.userId && example.CompanyID === params.companyId;
 
@@ -217,8 +272,61 @@ export class AgentContextInjector {
 
             const matchesPriority4 = example.UserID == null && example.CompanyID == null;
 
-            return matchesPriority1 || matchesPriority2 || matchesPriority3 || matchesPriority4;
+            const matchesMJScoping = matchesPriority1 || matchesPriority2 || matchesPriority3 || matchesPriority4;
+            if (!matchesMJScoping) {
+                return false;
+            }
+
+            // Check multi-tenant SaaS scoping if userScope is provided
+            if (params.userScope) {
+                return this.matchesSaasScope(example, params.userScope);
+            }
+
+            return true;
         });
+    }
+
+    /**
+     * Check if an example matches the SaaS scope criteria (hierarchical).
+     * Returns true for: global, primary-only, or fully-scoped matches.
+     */
+    private matchesSaasScope(example: AIAgentExampleEntity, userScope: UserScope): boolean {
+        // Global examples (no scope) always match
+        if (!example.PrimaryScopeRecordID) {
+            return true;
+        }
+
+        // No primary scope provided - only global examples match
+        if (!userScope.primaryRecordId) {
+            return false;
+        }
+
+        // Primary scope must match
+        if (example.PrimaryScopeRecordID !== userScope.primaryRecordId) {
+            return false;
+        }
+
+        // If example has no secondary scopes, it's an org-level example - matches
+        const exampleSecondary = example.SecondaryScopes;
+        if (!exampleSecondary || exampleSecondary === '{}') {
+            return true;
+        }
+
+        // Example has secondary scopes - check if they match
+        if (!userScope.secondary || Object.keys(userScope.secondary).length === 0) {
+            // User has no secondary scope but example does - no match
+            return false;
+        }
+
+        // Parse and match secondary scopes
+        try {
+            const parsedSecondary = JSON.parse(exampleSecondary);
+            return Object.entries(parsedSecondary).every(([key, val]) =>
+                userScope.secondary?.[key] === val
+            );
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -256,21 +364,45 @@ export class AgentContextInjector {
     }
 
     /**
-     * Format notes for injection into agent prompt
+     * Format notes for injection into agent prompt.
+     * Includes memory policy explaining scope precedence for conflict resolution.
+     *
+     * @param notes - Array of notes to format
+     * @param includeMemoryPolicy - Whether to include the memory policy preamble (default: true)
      */
-    FormatNotesForInjection(notes: AIAgentNoteEntity[]): string {
+    FormatNotesForInjection(notes: AIAgentNoteEntity[], includeMemoryPolicy: boolean = true): string {
         if (notes.length === 0) return '';
 
-        const lines: string[] = [
-            `📝 AGENT NOTES (${notes.length})`,
-            ''
-        ];
+        const lines: string[] = [];
+
+        // Add memory policy preamble for LLM understanding of scope precedence
+        if (includeMemoryPolicy) {
+            lines.push('<memory_policy>');
+            lines.push('Precedence (highest to lowest):');
+            lines.push('1) Current user message overrides all stored memory');
+            lines.push('2) Contact-specific notes override organization-level');
+            lines.push('3) Organization notes override global defaults');
+            lines.push('4) When same scope, prefer most recent by date');
+            lines.push('');
+            lines.push('Conflict resolution:');
+            lines.push('- If two notes contradict, prefer the more specific scope');
+            lines.push('- Ask clarifying question only if conflict materially affects response');
+            lines.push('</memory_policy>');
+            lines.push('');
+        }
+
+        lines.push(`📝 AGENT NOTES (${notes.length})`);
+        lines.push('');
 
         for (const note of notes) {
             lines.push(`[${note.Type}] ${note.Note}`);
 
             const scope = this.determineNoteScope(note);
-            if (scope) {
+            const saasScope = this.determineSaaSScope(note);
+
+            if (saasScope) {
+                lines.push(`  Scope: ${saasScope}`);
+            } else if (scope) {
                 lines.push(`  Scope: ${scope}`);
             }
 
@@ -279,6 +411,24 @@ export class AgentContextInjector {
 
         lines.push('---');
         return lines.join('\n');
+    }
+
+    /**
+     * Determine multi-tenant SaaS scope description for a note
+     */
+    private determineSaaSScope(note: AIAgentNoteEntity): string | null {
+        // Check for SaaS scoping (takes precedence over MJ scoping)
+        if (!note.PrimaryScopeRecordID) {
+            return null; // No SaaS scope, fall back to MJ scope
+        }
+
+        const hasSecondary = note.SecondaryScopes && note.SecondaryScopes !== '{}';
+
+        if (hasSecondary) {
+            return 'Contact-specific (most specific)';
+        }
+
+        return 'Organization-level';
     }
 
     /**

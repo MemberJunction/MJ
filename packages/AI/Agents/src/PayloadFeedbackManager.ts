@@ -1,16 +1,19 @@
 /**
  * @fileoverview Feedback mechanism for validating suspicious payload changes with LLMs
- * 
+ *
  * This module provides a standardized way to query AI agents about potentially
  * unintended changes and receive structured yes/no confirmations.
- * 
+ *
  * @module @memberjunction/ai-agents
  * @author MemberJunction.com
  * @since 3.1.0
  */
 
-import { LogStatus } from '@memberjunction/core';
+import { LogStatus, LogError, UserInfo } from '@memberjunction/core';
 import { PayloadWarning } from './PayloadChangeAnalyzer';
+import { AIEngine } from '@memberjunction/aiengine';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
 /**
  * Represents a single feedback question about a payload change
@@ -131,31 +134,103 @@ export class PayloadFeedbackManager {
     }
     
     /**
-     * Query the AI agent about suspicious changes
-     * 
-     * @todo Implement using MemberJunction AI Prompts system with stored prompts
-     * This should:
-     * 1. Load the feedback prompt from database using feedbackPromptId
-     * 2. Use AIPromptRunner to execute with proper template parameters
-     * 3. Parse structured response from the agent
+     * Query the AI agent about suspicious changes using MemberJunction AI Prompts system.
+     *
+     * @param questions - Array of feedback questions to ask about payload changes
+     * @param conversationContext - Context from the conversation (for reference)
+     * @param contextUser - User context for the prompt execution
+     * @returns Array of responses indicating whether each change was intended
      */
     public async queryAgent(
         questions: PayloadFeedbackQuestion[],
-        conversationContext: any
+        conversationContext: Record<string, unknown>,
+        contextUser?: UserInfo
     ): Promise<PayloadFeedbackResponse[]> {
         if (questions.length === 0) {
             return [];
         }
-        
-        // TODO: Implement using MemberJunction prompt system
-        // For now, return default acceptance
-        LogStatus('PayloadFeedbackManager.queryAgent not yet implemented - accepting all changes by default');
-        
-        return questions.map(q => ({
-            questionId: q.id,
-            intended: true,
-            explanation: 'Accepted by default (feedback system not yet implemented)'
-        }));
+
+        // Find the payload feedback prompt
+        const promptName = 'Payload Change Feedback Query';
+        const prompt = AIEngine.Instance.Prompts.find(
+            p => p.Name.trim().toLowerCase() === promptName.toLowerCase() &&
+                 p.Category?.trim().toLowerCase() === 'mj: system'
+        );
+
+        if (!prompt) {
+            // Fallback: accept all changes if prompt not configured
+            LogStatus(`PayloadFeedbackManager: Prompt "${promptName}" not found in MJ: System category. Accepting all changes by default.`);
+            return questions.map(q => ({
+                questionId: q.id,
+                intended: true,
+                explanation: 'Accepted by default (feedback prompt not configured)'
+            }));
+        }
+
+        try {
+            // Build template parameters
+            const templateData = this.buildFeedbackTemplateParams(questions);
+
+            // Execute the prompt
+            const runner = new AIPromptRunner();
+            const promptParams = new AIPromptParams();
+            promptParams.prompt = prompt;
+            promptParams.data = templateData;
+            if (contextUser) {
+                promptParams.contextUser = contextUser;
+            }
+
+            const result = await runner.ExecutePrompt<{ responses: Array<{ questionNumber: number; intended: boolean; explanation?: string }> }>(promptParams);
+
+            if (!result.success || !result.result?.responses) {
+                LogError('PayloadFeedbackManager: Failed to get valid response from feedback prompt', undefined, result.errorMessage);
+                // Fallback to accepting all changes
+                return questions.map(q => ({
+                    questionId: q.id,
+                    intended: true,
+                    explanation: 'Accepted by default (prompt execution failed)'
+                }));
+            }
+
+            // Map LLM responses back to our format
+            return this.mapLLMResponsesToFeedback(questions, result.result.responses);
+        } catch (error) {
+            LogError('PayloadFeedbackManager: Error querying agent for feedback', undefined, error);
+            // Fallback to accepting all changes
+            return questions.map(q => ({
+                questionId: q.id,
+                intended: true,
+                explanation: 'Accepted by default (error during feedback query)'
+            }));
+        }
+    }
+
+    /**
+     * Map LLM responses back to PayloadFeedbackResponse format
+     */
+    private mapLLMResponsesToFeedback(
+        questions: PayloadFeedbackQuestion[],
+        llmResponses: Array<{ questionNumber: number; intended: boolean; explanation?: string }>
+    ): PayloadFeedbackResponse[] {
+        return questions.map((q, index) => {
+            const questionNumber = index + 1;
+            const llmResponse = llmResponses.find(r => r.questionNumber === questionNumber);
+
+            if (llmResponse) {
+                return {
+                    questionId: q.id,
+                    intended: llmResponse.intended,
+                    explanation: llmResponse.explanation
+                };
+            }
+
+            // Default to intended if no matching response found
+            return {
+                questionId: q.id,
+                intended: true,
+                explanation: 'No explicit response from LLM - assuming intended'
+            };
+        });
     }
     
     /**

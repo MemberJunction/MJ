@@ -62,6 +62,50 @@ Determine the appropriate scope for each note:
 - **Global** (all null): System-wide best practices or constraints
 - **Combined** (multiple IDs): More specific scoping (e.g., user + agent)
 
+### Multi-Tenant Scope Level (for SaaS deployments)
+
+When the agent is used in a multi-tenant SaaS context, determine the appropriate scope level using the `scopeLevel` field:
+
+- **"global"**: Applies to ALL users and organizations (e.g., "Always greet politely", "Use professional tone")
+- **"organization"**: Applies to all contacts within an organization (e.g., "This org uses metric units", "Company policy requires formal salutations")
+- **"contact"**: Specific to one individual contact (e.g., "John prefers email over phone", "Sarah is on vacation until Jan 15")
+
+**Hints for determining scope level:**
+- Keywords like "always", "all customers", "everyone" → `global`
+- Keywords like "company", "organization", "all users here", "our policy" → `organization`
+- Specific person names, individual preferences, personal context → `contact`
+
+If the conversation doesn't have clear multi-tenant context, omit the `scopeLevel` field (defaults to most specific).
+
+### Durable vs Ephemeral Detection
+
+Use these phrase patterns to determine appropriate scope level:
+
+**Ephemeral Indicators (→ contact scope or skip entirely):**
+- "this time", "just for now", "today only", "for this call"
+- "temporarily", "one-time", "exception", "just once"
+- "this trip", "this session", "right now"
+
+**Durable Indicators (→ organization or global scope):**
+- "always", "never", "company policy", "all customers"
+- "standard practice", "we typically", "our preference"
+- "every time", "by default", "as a rule"
+
+### DO NOT Capture (Extraction Guardrails)
+
+**Never extract notes containing:**
+- **PII**: Social Security numbers, payment card info, passwords, passport numbers, health records, bank account details
+- **Instructions**: Rules or commands directed at the agent itself (e.g., "you should always...", "make sure to...")
+- **Speculation**: Assistant-inferred assumptions not explicitly confirmed by the user
+- **Ephemeral requests**: One-time requests explicitly marked as temporary (e.g., "just this once", "only for today")
+- **Sensitive information**: Legal case details, confidential business data unless clearly meant to be remembered
+
+**Format Constraints:**
+- Maximum 2 sentences per note content
+- Keywords: maximum 3, lowercase only
+- Confidence < 70% → do not extract
+- If unsure whether something should be captured, err on the side of not capturing it
+
 ### Comparison with Existing Notes
 
 For each potential note:
@@ -85,12 +129,25 @@ Return **only high-confidence notes (≥70)** in this JSON structure:
   "notes": [
     {
       "type": "Preference",
-      "noteTypeId": "44444444-4444-4444-4444-444444444444",
       "agentId": null,
       "userId": "user-uuid-here",
       "companyId": null,
       "content": "User prefers responses with bullet points and concise summaries",
       "confidence": 85,
+      "scopeLevel": "contact",
+      "sourceConversationId": "conv-uuid-here",
+      "sourceConversationDetailId": "detail-uuid-here",
+      "sourceAgentRunId": null,
+      "mergeWithExistingId": null
+    },
+    {
+      "type": "Context",
+      "agentId": null,
+      "userId": null,
+      "companyId": "company-uuid-here",
+      "content": "Company uses metric units for all measurements",
+      "confidence": 90,
+      "scopeLevel": "organization",
       "sourceConversationId": "conv-uuid-here",
       "sourceConversationDetailId": "detail-uuid-here",
       "sourceAgentRunId": null,
@@ -99,6 +156,10 @@ Return **only high-confidence notes (≥70)** in this JSON structure:
   ]
 }
 ```
+
+**Important**:
+- The `type` field must be exactly one of: `Preference`, `Constraint`, `Context`, `Example`, or `Issue`. The system will automatically look up the corresponding note type ID.
+- The `scopeLevel` field is optional and only applies for multi-tenant SaaS deployments. Valid values: `"global"`, `"organization"`, `"contact"`. If omitted, defaults to most specific (contact-level).
 
 ## Quality Standards
 

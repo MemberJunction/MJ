@@ -2,6 +2,7 @@ import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-mem
 import { AIAgentEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentMatchResult, AgentEmbeddingMetadata } from '../types/AgentMatchResult';
 import { EmbedTextResult } from '@memberjunction/ai';
+import { LogError } from '@memberjunction/core';
 
 /**
  * Utility service for agent embedding operations.
@@ -50,7 +51,7 @@ export class AgentEmbeddingService {
                 const embeddingResult = await embedFunction(embeddingText);
 
                 if (!embeddingResult || !embeddingResult.result || embeddingResult.result.vector.length === 0) {
-                    console.error(`Failed to generate embedding for agent ${agent.Name}`);
+                    LogError(`Failed to generate embedding for agent ${agent.Name}`);
                     continue;
                 }
 
@@ -70,7 +71,7 @@ export class AgentEmbeddingService {
                     }
                 });
             } catch (error) {
-                console.error(`Error generating embedding for agent ${agent.Name}: ${error instanceof Error ? error.message : String(error)}`);
+                LogError(`Error generating embedding for agent ${agent.Name}: ${error instanceof Error ? error.message : String(error)}`);
                 // Continue with other agents
             }
         }
@@ -140,7 +141,7 @@ export class AgentEmbeddingService {
             }));
 
         } catch (error) {
-            console.error(`Error finding similar agents: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`Error finding similar agents: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -187,7 +188,7 @@ export class AgentEmbeddingService {
             }));
 
         } catch (error) {
-            console.error(`Error finding related agents: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`Error finding related agents: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
