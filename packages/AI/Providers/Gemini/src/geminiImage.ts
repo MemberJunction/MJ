@@ -12,8 +12,13 @@ import {
 } from "@memberjunction/ai";
 
 /**
- * Google Gemini/Imagen implementation of the BaseImageGenerator class.
- * Supports Gemini models with native image generation capabilities.
+ * Google Gemini 3 Pro Image (Nano Banana Pro) implementation of the BaseImageGenerator class.
+ * Supports Google's most advanced image generation model with 2K/4K resolution support.
+ *
+ * Model: gemini-3-pro-image-preview (November 2025)
+ * - Native multimodal image generation
+ * - High resolution output (up to 4K)
+ * - Advanced style control and prompt understanding
  */
 @RegisterClass(BaseImageGenerator, 'GeminiImageGenerator')
 export class GeminiImageGenerator extends BaseImageGenerator {
@@ -49,14 +54,14 @@ export class GeminiImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Generate image(s) from a text prompt using Gemini's image generation.
+     * Generate image(s) from a text prompt using Gemini 3 Pro Image (Nano Banana Pro).
      */
     public async GenerateImage(params: ImageGenerationParams): Promise<ImageGenerationResult> {
         const startTime = new Date();
 
         try {
             const client = await this.ensureGeminiClient();
-            const modelName = params.model || 'gemini-2.0-flash-exp';
+            const modelName = params.model || 'gemini-3-pro-image-preview';
 
             // Build the generation config
             const generateConfig = this.buildGenerationConfig(params);
@@ -65,7 +70,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
             const images: GeneratedImage[] = [];
             const numImages = params.n || 1;
 
-            // Gemini may not support batch image generation, so generate one at a time
+            // Generate images one at a time for consistency
             for (let i = 0; i < numImages; i++) {
                 const response = await client.models.generateContent({
                     model: modelName,
@@ -91,14 +96,14 @@ export class GeminiImageGenerator extends BaseImageGenerator {
 
     /**
      * Edit an existing image using Gemini's multimodal capabilities.
-     * This uses image-to-image generation with the original image as context.
+     * Uses image-to-image generation with the original image as context.
      */
     public async EditImage(params: ImageEditParams): Promise<ImageGenerationResult> {
         const startTime = new Date();
 
         try {
             const client = await this.ensureGeminiClient();
-            const modelName = params.model || 'gemini-2.0-flash-exp';
+            const modelName = params.model || 'gemini-3-pro-image-preview';
 
             // Normalize the input image
             const imageInput = await this.normalizeImageInput(params.image);
@@ -147,12 +152,12 @@ export class GeminiImageGenerator extends BaseImageGenerator {
 
         try {
             const client = await this.ensureGeminiClient();
-            const modelName = params.model || 'gemini-2.0-flash-exp';
+            const modelName = params.model || 'gemini-3-pro-image-preview';
 
             // Normalize the input image
             const imageInput = await this.normalizeImageInput(params.image);
 
-            const variationPrompt = params.prompt || 'Create a variation of this image with similar style and content but with subtle differences';
+            const variationPrompt = params.prompt || 'Create a variation of this image with similar style and content but with subtle creative differences';
 
             // Build multimodal content with the image and variation prompt
             const content = [
@@ -204,24 +209,13 @@ export class GeminiImageGenerator extends BaseImageGenerator {
     public async GetModels(): Promise<ImageModelInfo[]> {
         return [
             {
-                id: 'gemini-2.0-flash-exp',
-                name: 'Gemini 2.0 Flash Experimental',
-                description: 'Fast, experimental model with native image generation capabilities',
-                supportedSizes: ['1024x1024', '1536x1024', '1024x1536'],
+                id: 'gemini-3-pro-image-preview',
+                name: 'Gemini 3 Pro Image (Nano Banana Pro)',
+                description: 'Google\'s most advanced image generation model (November 2025). Supports up to 4K resolution with exceptional quality and style control.',
+                supportedSizes: ['1024x1024', '1536x1024', '1024x1536', '2048x2048', '3840x2160', '2160x3840'],
                 maxImages: 4,
                 supportsEditing: true,
                 supportsVariations: true,
-                supportsNegativePrompt: true,
-                supportsSeed: false
-            },
-            {
-                id: 'imagen-3.0-generate-001',
-                name: 'Imagen 3',
-                description: 'Google\'s most capable image generation model',
-                supportedSizes: ['1024x1024', '1536x1024', '1024x1536'],
-                maxImages: 4,
-                supportsEditing: false,
-                supportsVariations: false,
                 supportsNegativePrompt: true,
                 supportsSeed: true
             }
@@ -248,7 +242,10 @@ export class GeminiImageGenerator extends BaseImageGenerator {
         if (params.size) {
             const [width, height] = params.size.split('x').map(Number);
             if (!isNaN(width) && !isNaN(height)) {
-                // Gemini uses aspect ratio rather than explicit size
+                // Gemini 3 Pro Image supports explicit dimensions
+                config.imageSize = { width, height };
+
+                // Also set aspect ratio for compatibility
                 if (width > height) {
                     config.aspectRatio = '16:9';
                 } else if (height > width) {
@@ -271,6 +268,16 @@ export class GeminiImageGenerator extends BaseImageGenerator {
         // Add seed for reproducibility
         if (params.seed !== undefined) {
             config.seed = params.seed;
+        }
+
+        // Quality setting
+        if (params.quality) {
+            config.quality = params.quality;
+        }
+
+        // Style setting
+        if (params.style) {
+            config.style = params.style;
         }
 
         // Merge any provider-specific options

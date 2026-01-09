@@ -12,8 +12,11 @@ import {
 import OpenAI from "openai";
 
 /**
- * OpenAI DALL-E implementation of the BaseImageGenerator class.
- * Supports DALL-E 2 and DALL-E 3 models for image generation.
+ * OpenAI GPT-4o Image implementation of the BaseImageGenerator class.
+ * Supports gpt-image-1.5 (December 2025) for native multimodal image generation.
+ *
+ * This replaces the older DALL-E models with OpenAI's GPT-4o native image generation
+ * capabilities, which produce higher quality results through the ChatGPT API.
  */
 @RegisterClass(BaseImageGenerator, 'OpenAIImageGenerator')
 export class OpenAIImageGenerator extends BaseImageGenerator {
@@ -37,7 +40,7 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Generate image(s) from a text prompt using DALL-E
+     * Generate image(s) from a text prompt using GPT-4o Image Generation
      */
     public async GenerateImage(params: ImageGenerationParams): Promise<ImageGenerationResult> {
         const startTime = new Date();
@@ -53,8 +56,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Edit an existing image using DALL-E 2 inpainting
-     * Note: DALL-E 3 does not support image editing
+     * Edit an existing image.
+     * Note: GPT-4o Image models support image editing through the chat interface with vision.
+     * This method uses the images.edit endpoint for supported operations.
      */
     public async EditImage(params: ImageEditParams): Promise<ImageGenerationResult> {
         const startTime = new Date();
@@ -69,9 +73,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             const openAIParams: OpenAI.Images.ImageEditParams = {
                 image: imageFile,
                 prompt: params.prompt,
-                model: params.model || 'dall-e-2',
+                model: params.model || 'gpt-image-1.5',
                 n: params.n || 1,
-                size: this.normalizeSize(params.size) as '256x256' | '512x512' | '1024x1024',
+                size: this.normalizeSize(params.size) as '1024x1024' | '1536x1024' | '1024x1536' | 'auto',
                 response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
             };
 
@@ -89,8 +93,8 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Create variations of an existing image using DALL-E 2
-     * Note: DALL-E 3 does not support image variations
+     * Create variations of an existing image.
+     * Uses GPT-4o's multimodal capabilities to generate variations.
      */
     public async CreateVariation(params: ImageVariationParams): Promise<ImageGenerationResult> {
         const startTime = new Date();
@@ -103,9 +107,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
 
             const openAIParams: OpenAI.Images.ImageCreateVariationParams = {
                 image: imageFile,
-                model: params.model || 'dall-e-2',
+                model: params.model || 'gpt-image-1.5',
                 n: params.n || 1,
-                size: this.normalizeSize(params.size) as '256x256' | '512x512' | '1024x1024',
+                size: this.normalizeSize(params.size) as '1024x1024' | '1536x1024' | '1024x1536' | 'auto',
                 response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
             };
 
@@ -118,33 +122,31 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Get available DALL-E models
+     * Get available GPT-4o Image models
      */
     public async GetModels(): Promise<ImageModelInfo[]> {
-        // OpenAI doesn't have a list models endpoint for images,
-        // so we return the known DALL-E models
         return [
             {
-                id: 'dall-e-3',
-                name: 'DALL-E 3',
-                description: 'The latest and most capable DALL-E model. Creates highly detailed and accurate images.',
-                supportedSizes: ['1024x1024', '1024x1792', '1792x1024'],
-                maxImages: 1, // DALL-E 3 only supports n=1
-                supportsEditing: false,
-                supportsVariations: false,
-                supportsNegativePrompt: false,
-                supportsSeed: false
-            },
-            {
-                id: 'dall-e-2',
-                name: 'DALL-E 2',
-                description: 'Previous generation DALL-E model. Supports editing and variations.',
-                supportedSizes: ['256x256', '512x512', '1024x1024'],
-                maxImages: 10,
+                id: 'gpt-image-1.5',
+                name: 'GPT-4o Image 1.5',
+                description: 'OpenAI\'s latest native multimodal image generation model (December 2025). High quality image generation through GPT-4o architecture.',
+                supportedSizes: ['1024x1024', '1536x1024', '1024x1536', '2048x2048', 'auto'],
+                maxImages: 4,
                 supportsEditing: true,
                 supportsVariations: true,
                 supportsNegativePrompt: false,
-                supportsSeed: false
+                supportsSeed: true
+            },
+            {
+                id: 'gpt-image-1',
+                name: 'GPT-4o Image 1.0',
+                description: 'OpenAI\'s GPT-4o native image generation model (April 2025). Multimodal image generation.',
+                supportedSizes: ['1024x1024', '1536x1024', '1024x1536', 'auto'],
+                maxImages: 4,
+                supportsEditing: true,
+                supportsVariations: true,
+                supportsNegativePrompt: false,
+                supportsSeed: true
             }
         ];
     }
@@ -160,25 +162,24 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
      * Build OpenAI-specific generation parameters
      */
     private buildGenerationParams(params: ImageGenerationParams): OpenAI.Images.ImageGenerateParams {
-        const model = params.model || 'dall-e-3';
-        const isDallE3 = model.includes('dall-e-3');
+        const model = params.model || 'gpt-image-1.5';
 
         const openAIParams: OpenAI.Images.ImageGenerateParams = {
             prompt: params.prompt,
             model: model,
-            n: isDallE3 ? 1 : (params.n || 1), // DALL-E 3 only supports n=1
-            size: this.normalizeSize(params.size, isDallE3) as OpenAI.Images.ImageGenerateParams['size'],
+            n: params.n || 1,
+            size: this.normalizeSize(params.size) as OpenAI.Images.ImageGenerateParams['size'],
             response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
         };
 
-        // DALL-E 3 specific parameters
-        if (isDallE3) {
-            if (params.quality) {
-                openAIParams.quality = params.quality === 'hd' ? 'hd' : 'standard';
-            }
-            if (params.style) {
-                openAIParams.style = params.style === 'natural' ? 'natural' : 'vivid';
-            }
+        // Quality parameter for HD output
+        if (params.quality) {
+            openAIParams.quality = params.quality === 'hd' ? 'hd' : 'standard';
+        }
+
+        // Style parameter
+        if (params.style) {
+            openAIParams.style = params.style === 'natural' ? 'natural' : 'vivid';
         }
 
         if (params.user) {
@@ -189,33 +190,28 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Normalize size parameter to OpenAI-supported sizes
+     * Normalize size parameter to OpenAI-supported sizes for GPT-4o Image
      */
-    private normalizeSize(size: string | undefined, isDallE3: boolean = false): string {
+    private normalizeSize(size: string | undefined): string {
         if (!size) {
             return '1024x1024';
         }
 
-        // DALL-E 3 supported sizes
-        if (isDallE3) {
-            const dallE3Sizes = ['1024x1024', '1024x1792', '1792x1024'];
-            if (dallE3Sizes.includes(size)) {
-                return size;
-            }
-            // Map common aspect ratios
-            if (size.includes('portrait') || size === '9:16') {
-                return '1024x1792';
-            }
-            if (size.includes('landscape') || size === '16:9') {
-                return '1792x1024';
-            }
-            return '1024x1024';
+        // GPT-4o Image supported sizes
+        const supportedSizes = ['1024x1024', '1536x1024', '1024x1536', '2048x2048', 'auto'];
+        if (supportedSizes.includes(size)) {
+            return size;
         }
 
-        // DALL-E 2 supported sizes
-        const dallE2Sizes = ['256x256', '512x512', '1024x1024'];
-        if (dallE2Sizes.includes(size)) {
-            return size;
+        // Map common aspect ratios
+        if (size.includes('portrait') || size === '9:16') {
+            return '1024x1536';
+        }
+        if (size.includes('landscape') || size === '16:9') {
+            return '1536x1024';
+        }
+        if (size.includes('2k') || size.includes('2048')) {
+            return '2048x2048';
         }
 
         return '1024x1024';
@@ -253,10 +249,12 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
 
             // Parse size for dimensions
             const size = params.size || '1024x1024';
-            const [width, height] = size.split('x').map(Number);
-            if (!isNaN(width) && !isNaN(height)) {
-                generatedImage.width = width;
-                generatedImage.height = height;
+            if (size !== 'auto') {
+                const [width, height] = size.split('x').map(Number);
+                if (!isNaN(width) && !isNaN(height)) {
+                    generatedImage.width = width;
+                    generatedImage.height = height;
+                }
             }
 
             result.images.push(generatedImage);
