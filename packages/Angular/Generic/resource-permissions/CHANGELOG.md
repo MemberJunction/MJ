@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ng-compare-records@2.132.0
+  - @memberjunction/ng-base-types@2.132.0
+  - @memberjunction/ng-container-directives@2.132.0
+  - @memberjunction/ng-notifications@2.132.0
+  - @memberjunction/ng-shared-generic@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/ng-generic-dialog@2.132.0
+  - @memberjunction/global@2.132.0
+
 ## 2.131.0
 
 ### Patch Changes
