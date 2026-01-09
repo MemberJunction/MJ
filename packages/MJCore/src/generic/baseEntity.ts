@@ -764,6 +764,97 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Returns a promise that resolves when the current Save operation completes.
+     * If no Save operation is in progress, resolves immediately.
+     *
+     * This is useful when you need to ensure data is persisted before performing
+     * a dependent operation, or when coordinating between multiple components
+     * that might trigger saves.
+     *
+     * @example
+     * ```typescript
+     * // Ensure any in-progress save is complete before proceeding
+     * await entity.EnsureSaveComplete();
+     * // Now safe to perform operations that depend on the saved state
+     * await someOperationThatNeedsSavedData(entity);
+     * ```
+     */
+    public EnsureSaveComplete(): Promise<void> {
+        if (!this.IsSaving) {
+            return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve) => {
+            const subscription = this.RegisterEventHandler((event: BaseEntityEvent) => {
+                if (event.type === 'save') {
+                    subscription.unsubscribe();
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * Returns a promise that resolves when the current Delete operation completes.
+     * If no Delete operation is in progress, resolves immediately.
+     *
+     * This is useful when you need to ensure a record is deleted before performing
+     * cleanup operations or navigating away from a view.
+     *
+     * @example
+     * ```typescript
+     * // Ensure any in-progress delete is complete before proceeding
+     * await entity.EnsureDeleteComplete();
+     * // Now safe to navigate away or perform cleanup
+     * navigateToList();
+     * ```
+     */
+    public EnsureDeleteComplete(): Promise<void> {
+        if (!this.IsDeleting) {
+            return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve) => {
+            const subscription = this.RegisterEventHandler((event: BaseEntityEvent) => {
+                if (event.type === 'delete') {
+                    subscription.unsubscribe();
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * Returns a promise that resolves when the current Load operation completes.
+     * If no Load operation is in progress, resolves immediately.
+     *
+     * This is useful when you need to ensure data is loaded before accessing
+     * entity properties or performing operations that depend on loaded data.
+     *
+     * @example
+     * ```typescript
+     * // Ensure any in-progress load is complete before proceeding
+     * await entity.EnsureLoadComplete();
+     * // Now safe to access entity data
+     * console.log(entity.Name);
+     * ```
+     */
+    public EnsureLoadComplete(): Promise<void> {
+        if (!this.IsLoading) {
+            return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve) => {
+            const subscription = this.RegisterEventHandler((event: BaseEntityEvent) => {
+                if (event.type === 'load_complete') {
+                    subscription.unsubscribe();
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
      * Transaction Groups are used to group multiple transactions into a single ATOMic transaction in a database. They are also useful even in situations with ATOMicity is less important but you want
      * to submit a group of changes to the API server in a single network call.
      */

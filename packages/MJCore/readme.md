@@ -450,6 +450,62 @@ const [result1, result2] = await Promise.all([promise1, promise2]);
 
 The same debouncing behavior applies to `Delete()` operations.
 
+#### Awaiting In-Progress Operations
+
+BaseEntity provides built-in methods to wait for any in-progress operation to complete. These methods return immediately if no operation is in progress, or wait for the completion event if one is:
+
+```typescript
+// Wait for an in-progress save to complete
+await entity.EnsureSaveComplete();
+
+// Wait for an in-progress delete to complete
+await entity.EnsureDeleteComplete();
+
+// Wait for an in-progress load to complete
+await entity.EnsureLoadComplete();
+```
+
+**Method Reference:**
+
+| Method | Waits For | Event Listened |
+|--------|-----------|----------------|
+| `EnsureSaveComplete()` | `IsSaving` to become false | `save` |
+| `EnsureDeleteComplete()` | `IsDeleting` to become false | `delete` |
+| `EnsureLoadComplete()` | `IsLoading` to become false | `load_complete` |
+
+**Example: Coordinating Dependent Operations**
+
+```typescript
+async function performDependentOperation(entity: BaseEntity) {
+    // Ensure any in-progress save is complete before proceeding
+    await entity.EnsureSaveComplete();
+
+    // Now safe to perform operations that depend on the saved state
+    console.log('Entity is saved, proceeding with dependent operation');
+    await someOperationThatNeedsSavedData(entity);
+}
+```
+
+**Example: Cleanup After Delete**
+
+```typescript
+async function deleteAndNavigate(entity: BaseEntity) {
+    entity.Delete(); // Fire and forget the delete
+
+    // Wait for the delete to complete before navigating
+    await entity.EnsureDeleteComplete();
+
+    // Now safe to navigate away
+    navigateToList();
+}
+```
+
+These methods are useful when:
+- You need to ensure data is persisted before performing a dependent operation
+- You're coordinating between multiple components that might trigger operations
+- You want to avoid race conditions when chaining operations
+- You need to perform cleanup after an operation completes
+
 #### UI Integration Example
 
 A complete example showing state tracking in a UI component:
