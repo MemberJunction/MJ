@@ -29,21 +29,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.829Z",
             "checksum": "ad8327284403e0234f30f46b945af8cd3afb2c65e24ed7bd18b1ddc282a0c4b6"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "6C350E8D-5005-43C5-968C-D535202192CC"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Betty",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         }
       ],
       "MJ: AI Agent Steps": [
@@ -76,21 +62,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.830Z",
             "checksum": "ae03ee286a95d93752dbf2e37740702eef2c4f4c24a146aca99bcd3ae020e75e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "6C350E8D-5005-43C5-968C-D535202192CC"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Betty",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+          }
         }
       ]
     },
@@ -100,14 +72,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:34.803Z",
       "checksum": "66956315e20574ec7bc9ca05a9dc0797205cb4f18e3af339f317ec8e70d2ea0f"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Flow",
-        "resolved": "4F6A189B-C068-4736-9F23-3FF540B40FDD"
-      }
-    ]
+    }
   }
 ]

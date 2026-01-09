@@ -32,21 +32,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:35.056Z",
             "checksum": "20e3548eade4dc96a0e8579ee5d3855c3f77ee888201a78d36ae3deb976ac4e4"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "A1575099-1576-45E9-A6FD-88102FB7E510"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Memory Manager - Extract Notes",
-              "resolved": "38129618-88C2-470F-9A32-A631AFB4371E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -61,21 +47,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:35.057Z",
             "checksum": "53f2ea146d71da50959266683b930c4186816ca486a5efbbd5c427e2507f1566"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "A1575099-1576-45E9-A6FD-88102FB7E510"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Memory Manager - Extract Examples",
-              "resolved": "14BFD6A6-57E0-4A5B-9AE0-579123DA495B"
-            }
-          ]
+          }
         }
       ]
     },
@@ -85,14 +57,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:35.036Z",
       "checksum": "d3b47703def5e9b2624c542db5aa78abe1288bd8795c11ea07cf2ccaa0df2897"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+    }
   }
 ]

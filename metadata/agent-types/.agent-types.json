@@ -108,15 +108,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.554Z",
       "checksum": "cccc01e46a3b6c8a1c4ae7bf0fbdb9d9288af23ded2d014ee7aac7ea9d735e27"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.SystemPromptID",
-        "expression": "@lookup:AI Prompts.Name=Loop Agent Type: System Prompt",
-        "resolved": "FF7D441F-36E1-458A-B548-0FC2208923BE"
-      }
-    ]
+    }
   },
   {
     "fields": {

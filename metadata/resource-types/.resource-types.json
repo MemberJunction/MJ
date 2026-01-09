@@ -15,21 +15,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:45.508Z",
       "checksum": "f79989c05bb9d56f2eda989384329a50e8766f1c63078ca19b509b8afc64efd0"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.EntityID",
-        "expression": "@lookup:Entities.Name=Dashboards",
-        "resolved": "05248F34-2837-EF11-86D4-6045BDEE16E6"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryEntityID",
-        "expression": "@lookup:Entities.Name=Dashboard Categories",
-        "resolved": "26248F34-2837-EF11-86D4-6045BDEE16E6"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -47,21 +33,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:45.509Z",
       "checksum": "19c93e434c89e741bab6645afa2e3f27f46579a7e2e7def817af30400c16d6ea"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.EntityID",
-        "expression": "@lookup:Entities.Name=Queries",
-        "resolved": "1B248F34-2837-EF11-86D4-6045BDEE16E6"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryEntityID",
-        "expression": "@lookup:Entities.Name=Query Categories",
-        "resolved": "1A248F34-2837-EF11-86D4-6045BDEE16E6"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -97,21 +69,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:45.512Z",
       "checksum": "5df95e2b73f38aaace9a1fa50848f701319d5fe083b487c4bf78e8739ba36471"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.EntityID",
-        "expression": "@lookup:Entities.Name=Reports",
-        "resolved": "09248F34-2837-EF11-86D4-6045BDEE16E6"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryEntityID",
-        "expression": "@lookup:Entities.Name=Report Categories",
-        "resolved": "27248F34-2837-EF11-86D4-6045BDEE16E6"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -147,21 +105,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:45.514Z",
       "checksum": "280fad13fab906eae4c4f184dbfdfca2bd82d787bb2d16bd57e9721025f531ef"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.EntityID",
-        "expression": "@lookup:Entities.Name=User Views",
-        "resolved": "E4238F34-2837-EF11-86D4-6045BDEE16E6"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryEntityID",
-        "expression": "@lookup:Entities.Name=User View Categories",
-        "resolved": "25248F34-2837-EF11-86D4-6045BDEE16E6"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -179,21 +123,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:45.515Z",
       "checksum": "2a2a6e10074c3adea5da292fceb8f1a6a509732e866a980d28745bea4cf20d46"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.EntityID",
-        "expression": "@lookup:Entities.Name=Lists",
-        "resolved": "EE238F34-2837-EF11-86D4-6045BDEE16E6"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryEntityID",
-        "expression": "@lookup:Entities.Name=List Categories",
-        "resolved": "42248F34-2837-EF11-86D4-6045BDEE16E6"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -211,15 +141,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:45.477Z",
       "checksum": "69b8d229f0f0b002c7062f5c722dd580b91b05360d1f3cdcbc1e58d0090c6334"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.EntityID",
-        "expression": "@lookup:Entities.Name=Conversations",
-        "resolved": "13248F34-2837-EF11-86D4-6045BDEE16E6"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -237,15 +159,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:45.478Z",
       "checksum": "215a40c8d6e2218c50d7763a60a0cec2fde0a1f4e3ba4936b94e96240c987fa6"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.EntityID",
-        "expression": "@lookup:Entities.Name=MJ: Conversation Artifacts",
-        "resolved": "355ECE47-BC5B-45D7-8B52-967446517137"
-      }
-    ]
+    }
   },
   {
     "fields": {

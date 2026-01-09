@@ -19,21 +19,7 @@
         "sync": {
           "lastModified": "2025-12-30T23:07:38.565Z",
           "checksum": "72b4dc4af08bedda02f34c105afda9f75811f168f891f885363a4a60ccc7e0cc"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.SuiteID",
-            "expression": "@parent:ID",
-            "resolved": "7A0C49E2-B0F0-4764-90E3-CBEEE098AF79"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.TestID",
-            "expression": "@lookup:MJ: Tests.Name=Research Agent - Potato Soup Recipe Comparison",
-            "resolved": "A5189586-8248-4641-98ED-BC1B3B2969B2"
-          }
-        ]
+        }
       },
       {
         "fields": {
@@ -48,21 +34,7 @@
         "sync": {
           "lastModified": "2025-12-30T23:07:38.569Z",
           "checksum": "870df0d4d71e7e2f839ec930a03701da48bf186d5e3df451d7d8f202af08bc6c"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.SuiteID",
-            "expression": "@parent:ID",
-            "resolved": "7A0C49E2-B0F0-4764-90E3-CBEEE098AF79"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.TestID",
-            "expression": "@lookup:MJ: Tests.Name=Research Agent - Mixed DB and Web Question",
-            "resolved": "40736BED-8E59-43F7-BF3A-E64992B4B6C4"
-          }
-        ]
+        }
       }
     ]
   },

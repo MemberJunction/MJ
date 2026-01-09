@@ -12,15 +12,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.466Z",
       "checksum": "08f866bc71b4ef542dc6f201ff9d366664f4966cbf601df99ff0c48737ce4da2"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
-        "resolved": "0DC7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -35,15 +27,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.468Z",
       "checksum": "a574f475f8177be937e3fb36fb46c045a333b275b0531532d0edb93e14e570ac"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -58,15 +42,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.469Z",
       "checksum": "1cdbf9aaa7856a441de450e01dfcae3db353f60ce53adda74f71087cb794f724"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -81,15 +57,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.471Z",
       "checksum": "d406c459849cfc25a492ba151234a618c8cc228ba9ac8649ce85a830b4030e10"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -104,15 +72,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.472Z",
       "checksum": "21c8d70f7da620c5c1c07419e98c343894f9b5eba426adea548774fd70631b4f"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -127,15 +87,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.474Z",
       "checksum": "6e1975c85d4f3f07f8dd9aec5429e326de7c7222a0d39bfb167265317adebe5d"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -150,15 +102,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.475Z",
       "checksum": "b8aae964f4128e1e9f0e4bef68ef1cff44c16ead58325cf40bff4c852501288d"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -173,15 +117,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.476Z",
       "checksum": "302c46a992361c52baec7d5bc58107684b2499406743cfdd4a2c125d413895a3"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -196,14 +132,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.477Z",
       "checksum": "b43b8a483db90b0882a8b986f623ecc2172065a654a254fd20215ed1f8d16714"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Social Media&Parent=Business Apps",
-        "resolved": "7CE1C185-A2DC-4642-A680-B87034BEB439"
-      }
-    ]
+    }
   }
 ]
