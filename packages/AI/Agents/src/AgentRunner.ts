@@ -347,9 +347,9 @@ export class AgentRunner {
             // Step 5: Update agent response detail with final result
             // ALWAYS update status - don't rely on frontend (browser may refresh during execution)
             if (agentResponseDetail && agentResponseDetailId) {
-                // Brief delay to let any in-flight progress saves complete
-                // This prevents race conditions where a progress save was already started
-                await new Promise(resolve => setTimeout(resolve, 100));
+                // Wait for any in-flight progress save to complete
+                // EnsureSaveComplete() resolves immediately if no save in progress
+                await agentResponseDetail.EnsureSaveComplete();
 
                 LogStatus('Updating agent response detail with final result');
 
