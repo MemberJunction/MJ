@@ -27,15 +27,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.613Z",
       "checksum": "20d75db7776bc95b16f2a2117a78533de34767e0fcbf4cdb1d47fd3cebdfcba0"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
-        "resolved": "0DC7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -50,15 +42,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.614Z",
       "checksum": "e3cef6106948e90300ac8d5ce80aa1ef8e19ecd1cd07535501a94dea03de374f"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
-        "resolved": "0DC7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -73,15 +57,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.617Z",
       "checksum": "497c17023fbf96db59202e670e40c68187be7e79fa80f0423eecfb8a52bf958e"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
-        "resolved": "0DC7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -96,15 +72,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.623Z",
       "checksum": "b1ff0f9956c783892d7123998b21f1cd15c7bcf5a10e2af11cbbc41f2410edd3"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=CRM&Parent=Business Apps",
-        "resolved": "19C7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -119,15 +87,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.628Z",
       "checksum": "b2fc2561bb151c39c56a3990b540cac6231bfce205506989b813d010c004d360"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=LMS&Parent=Business Apps",
-        "resolved": "25C7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -142,15 +102,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.630Z",
       "checksum": "57e6c3ac4fabe67e2fef387fa9e60f808d83ba4c9dbe9c96aaf80301049c570a"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Accounting&Parent=Business Apps",
-        "resolved": "31C7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -165,14 +117,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.632Z",
       "checksum": "1d07f2797fe9c3e7180ed2add0cf1f3a769df93c815f0831146402c4aef677f7"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=Accounting&Parent=Business Apps",
-        "resolved": "31C7433E-F36B-1410-8DB6-00021F8B792E"
-      }
-    ]
+    }
   }
 ]

@@ -235,6 +235,7 @@ function DataGrid({
   }, [filterText, filterDebounceTime]);
   
   // Normalize column definitions - support both simple strings and full column definitions
+  // Also handles edge case: LLM might pass Ant Design format (title/dataIndex) instead of DataGrid format (field/header)
   const normalizedColumns = React.useMemo(() => {
     if (!columns || columns.length === 0) {
       // Auto-discover columns from data if none provided
@@ -255,18 +256,51 @@ function DataGrid({
     }
 
     // Normalize columns to standard format
-    return columns.map(col => {
+    const normalized = columns.map(col => {
       if (typeof col === 'string') {
         // Simple string field name - use defaults
         return { field: col };
-      } else if (typeof col === 'object' && col.field) {
-        // Already a column definition object
-        return col;
+      } else if (typeof col === 'object') {
+        // Check if this is Ant Design format (title/dataIndex/key) instead of DataGrid format (field/header)
+        if (!col.field && (col.dataIndex || col.title)) {
+          console.warn('[DataGrid] Detected Ant Design column format - auto-converting to DataGrid format:', col);
+          return {
+            field: col.dataIndex || col.title,
+            header: col.title || col.dataIndex,
+            render: col.render,
+            width: col.width,
+            sortable: col.sortable
+          };
+        } else if (col.field) {
+          // Already correct DataGrid format
+          return col;
+        } else {
+          console.warn('[DataGrid] Invalid column configuration (missing field property):', col);
+          return null;
+        }
       } else {
-        console.warn('Invalid column configuration:', col);
+        console.warn('[DataGrid] Invalid column configuration:', col);
         return null;
       }
     }).filter(Boolean);
+
+    // Fallback: If zero valid columns after normalization, auto-discover from data
+    if (normalized.length === 0 && data && Array.isArray(data) && data.length > 0) {
+      console.warn('[DataGrid] Zero valid columns detected after normalization - falling back to auto-discovery from data');
+      const allKeys = new Set();
+      data.forEach(row => {
+        if (row && typeof row === 'object') {
+          Object.keys(row).forEach(key => {
+            if (key !== 'key') {
+              allKeys.add(key);
+            }
+          });
+        }
+      });
+      return Array.from(allKeys).map(key => ({ field: key }));
+    }
+
+    return normalized;
   }, [columns, data]);
 
   // Extract just the field names for filtering and other operations

@@ -32,21 +32,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.964Z",
             "checksum": "e816448faded6b8d6bda8180e30c976530b1a7b5a0dadd4eb0f3bdcfcd68e7af"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Infographic Agent Prompt",
-              "resolved": "FB0EBBA3-857F-4E02-B12C-22F82B6D52BF"
-            }
-          ]
+          }
         }
       ],
       "AI Agent Actions": [
@@ -62,21 +48,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.965Z",
             "checksum": "017773054aa09786b5f74ab920886a056cdf03e44cae1cb59be41cbf8a328544"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create SVG Chart",
-              "resolved": "88D95CCD-EBAB-4760-80AD-39B12E251175"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -90,21 +62,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.966Z",
             "checksum": "8b98c2634ae3f74b0db43356a707a2e10507926e674a3c8d8d52eda5610b402c"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create SVG Diagram",
-              "resolved": "4FC4DE06-4986-4914-875C-446CE6E7F8AA"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -118,21 +76,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.967Z",
             "checksum": "0ba70a5528f6d5333a949199b5c874ba28300d40250c7e68479c69fdcf812489"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create SVG Word Cloud",
-              "resolved": "F046406A-0F53-4123-B07A-5B109C7D1E98"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -146,21 +90,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.969Z",
             "checksum": "ec7ea85529946cba92e7caf6aa886fa1113345c1a6eb050f417f691f2197ee80"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create SVG Network",
-              "resolved": "6D0BD2B6-CE93-4D6E-BCA4-55972C2C1F93"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -174,21 +104,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.970Z",
             "checksum": "1d422db9fcfecd5e74fba2b8ad075f449951caa9a2546de1daa990519c0e38b0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create SVG Infographic",
-              "resolved": "5C7557FC-493E-4CAC-A759-5FC69CB75D67"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -202,34 +118,12 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:34.971Z",
             "checksum": "ec9f229c2517250eccf2c61e9980cdd79af3d83fe12ee1d4944caec93cc34cda"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create SVG Sketch Diagram",
-              "resolved": "C20BAFF4-022C-41E1-AB23-B2D200A2BE8C"
-            }
-          ]
+          }
         }
       ]
     },
     "primaryKey": {
       "ID": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+    }
   }
 ]

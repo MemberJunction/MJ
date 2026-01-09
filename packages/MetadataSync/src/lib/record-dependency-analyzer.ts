@@ -617,6 +617,12 @@ export class RecordDependencyAnalyzer {
     for (const record of records) {
       // For each dependency this record has...
       for (const depId of record.dependencies) {
+        // Skip undefined or null dependency IDs (defensive check)
+        if (!depId) {
+          console.warn(`Warning: Record ${record.id} has undefined/null dependency, skipping`);
+          continue;
+        }
+
         // Add this record as a dependent of that dependency
         if (!reverseMap.has(depId)) {
           reverseMap.set(depId, []);

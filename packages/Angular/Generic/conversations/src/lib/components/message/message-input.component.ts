@@ -284,18 +284,16 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           }
         }
 
-        // Use safe save to prevent race conditions with completion
-        const saved = await this.safeSaveConversationDetail(message, `StreamingProgress:${progress.taskName || 'Agent'}`);
+        // Server now saves progress - client only updates in-memory and emits for UI
+        // (Prevents race condition where client's late save overwrites server's final Status)
 
-        if (saved) {
-          // CRITICAL: Emit update to trigger UI refresh
-          this.messageSent.emit(message);
+        // CRITICAL: Emit update to trigger UI refresh
+        this.messageSent.emit(message);
 
-          // CRITICAL: Update ActiveTasksService to keep the tasks dropdown in sync
-          this.activeTasks.updateStatusByConversationDetailId(message.ID, progress.message);
+        // CRITICAL: Update ActiveTasksService to keep the tasks dropdown in sync
+        this.activeTasks.updateStatusByConversationDetailId(message.ID, progress.message);
 
-          console.log(`[StreamingCallback] Updated message ${messageId}: ${progress.taskName || 'Agent'}`);
-        }
+        console.log(`[StreamingCallback] Updated message ${messageId}: ${progress.taskName || 'Agent'}`);
       } catch (error) {
         console.error(`[StreamingCallback] Error updating message ${messageId}:`, error);
       }
@@ -805,26 +803,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
-   * Safe save for ConversationDetail - prevents overwrites of completed/errored messages
-   * Use this ONLY in progress update paths to prevent race conditions
-   * @param detail The conversation detail to save
-   * @param context Description of who is saving (for logging)
-   * @returns true if saved, false if blocked
-   */
-  private async safeSaveConversationDetail(
-    detail: ConversationDetailEntity,
-    context: string
-  ): Promise<boolean> {
-    // Never modify completed or errored messages
-    if (detail.Status === 'Complete' || detail.Status === 'Error') {
-      return false;
-    }
-
-    await detail.Save();
-    return true;
-  }
-
-  /**
    * Create a progress callback for agent execution
    * This callback updates both the active task and the ConversationDetail message
    * IMPORTANT: Filters by agentRunId to prevent cross-contamination when multiple agents run in parallel
@@ -893,16 +871,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
           if (conversationDetail.Status === 'In-Progress') {
             conversationDetail.Message = progressText;
-            // Use safe save to prevent race conditions with completion
-            const saved = await this.safeSaveConversationDetail(conversationDetail, `Progress:${agentName}`);
-            if (saved) {
-              // Emit update to trigger UI refresh
-              this.messageSent.emit(conversationDetail);
-            }
+            // Server now saves progress - client only updates in-memory and emits for UI
+            // (Prevents race condition where client's late save overwrites server's final Status)
+            this.messageSent.emit(conversationDetail);
           }
         }
       } catch (error) {
-        console.warn('Failed to save progress update to ConversationDetail:', error);
+        console.warn('Failed to update progress in ConversationDetail:', error);
       }
     };
   }

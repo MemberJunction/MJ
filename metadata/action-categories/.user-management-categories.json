@@ -12,15 +12,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.758Z",
       "checksum": "cd6c339299beaa3760f4c85add5424c7f5438a5d8daec90b995519e8e9395fc8"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=System",
-        "resolved": "15E03732-607E-4125-86F4-8C846EE88749"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -35,14 +27,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:46.759Z",
       "checksum": "6422f1614c4d532cf0c2468c3033842b4ef2a7a6012a227db3d293071020655f"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Action Categories.Name=System",
-        "resolved": "15E03732-607E-4125-86F4-8C846EE88749"
-      }
-    ]
+    }
   }
 ]
