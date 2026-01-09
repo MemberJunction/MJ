@@ -483,6 +483,256 @@ runTest('mapLLMResponsesToFeedback: defaults to intended when no response', () =
 });
 
 // ============================================================================
+// Memory Cleanup Agent Tests
+// ============================================================================
+
+console.log('\n--- Memory Cleanup Agent Tests ---\n');
+
+/**
+ * Calculate cutoff date for retention (mirrors MemoryCleanupAgent)
+ */
+function getCutoffDate(retentionDays: number): string {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - retentionDays);
+    return cutoff.toISOString();
+}
+
+/**
+ * Get note retention days with default (mirrors MemoryCleanupAgent)
+ */
+function getNoteRetentionDays(agent: { NoteRetentionDays?: number | null }): number {
+    const DEFAULT_NOTE_RETENTION_DAYS = 90;
+    if (typeof agent.NoteRetentionDays === 'number' && agent.NoteRetentionDays > 0) {
+        return agent.NoteRetentionDays;
+    }
+    return DEFAULT_NOTE_RETENTION_DAYS;
+}
+
+/**
+ * Get example retention days with default (mirrors MemoryCleanupAgent)
+ */
+function getExampleRetentionDays(agent: { ExampleRetentionDays?: number | null }): number {
+    const DEFAULT_EXAMPLE_RETENTION_DAYS = 180;
+    if (typeof agent.ExampleRetentionDays === 'number' && agent.ExampleRetentionDays > 0) {
+        return agent.ExampleRetentionDays;
+    }
+    return DEFAULT_EXAMPLE_RETENTION_DAYS;
+}
+
+/**
+ * Check if auto-archive is enabled (mirrors MemoryCleanupAgent)
+ */
+function getAutoArchiveEnabled(agent: { AutoArchiveEnabled?: boolean }): boolean {
+    return agent.AutoArchiveEnabled !== false;
+}
+
+/**
+ * Build cleanup summary message (mirrors MemoryCleanupAgent)
+ */
+function buildCleanupSummary(result: {
+    notesArchived: number;
+    examplesArchived: number;
+    notesExpired: number;
+    examplesExpired: number;
+    errors: string[];
+}): string {
+    const parts: string[] = [];
+
+    if (result.notesArchived > 0) {
+        parts.push(`${result.notesArchived} stale notes archived`);
+    }
+    if (result.examplesArchived > 0) {
+        parts.push(`${result.examplesArchived} stale examples archived`);
+    }
+    if (result.notesExpired > 0) {
+        parts.push(`${result.notesExpired} expired notes archived`);
+    }
+    if (result.examplesExpired > 0) {
+        parts.push(`${result.examplesExpired} expired examples archived`);
+    }
+
+    if (parts.length === 0) {
+        parts.push('No items needed archiving');
+    }
+
+    if (result.errors.length > 0) {
+        parts.push(`${result.errors.length} errors encountered`);
+    }
+
+    return parts.join(', ');
+}
+
+runTest('getCutoffDate: calculates correct date for 90 days', () => {
+    const now = new Date();
+    const cutoffStr = getCutoffDate(90);
+    const cutoffDate = new Date(cutoffStr);
+
+    // Should be approximately 90 days ago (allow 1 second tolerance)
+    const expectedDate = new Date(now);
+    expectedDate.setDate(expectedDate.getDate() - 90);
+
+    const diff = Math.abs(cutoffDate.getTime() - expectedDate.getTime());
+    assertTrue(diff < 1000, 'Cutoff date should be approximately 90 days ago');
+});
+
+runTest('getNoteRetentionDays: returns agent value when set', () => {
+    const agent = { NoteRetentionDays: 60 };
+    assertEqual(getNoteRetentionDays(agent), 60);
+});
+
+runTest('getNoteRetentionDays: returns default when null', () => {
+    const agent = { NoteRetentionDays: null };
+    assertEqual(getNoteRetentionDays(agent), 90);
+});
+
+runTest('getNoteRetentionDays: returns default when not set', () => {
+    const agent = {};
+    assertEqual(getNoteRetentionDays(agent), 90);
+});
+
+runTest('getExampleRetentionDays: returns agent value when set', () => {
+    const agent = { ExampleRetentionDays: 120 };
+    assertEqual(getExampleRetentionDays(agent), 120);
+});
+
+runTest('getExampleRetentionDays: returns default when not set', () => {
+    const agent = {};
+    assertEqual(getExampleRetentionDays(agent), 180);
+});
+
+runTest('getAutoArchiveEnabled: returns true by default', () => {
+    const agent = {};
+    assertEqual(getAutoArchiveEnabled(agent), true);
+});
+
+runTest('getAutoArchiveEnabled: returns false when explicitly disabled', () => {
+    const agent = { AutoArchiveEnabled: false };
+    assertEqual(getAutoArchiveEnabled(agent), false);
+});
+
+runTest('getAutoArchiveEnabled: returns true when explicitly enabled', () => {
+    const agent = { AutoArchiveEnabled: true };
+    assertEqual(getAutoArchiveEnabled(agent), true);
+});
+
+runTest('buildCleanupSummary: reports stale notes', () => {
+    const result = { notesArchived: 5, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: [] };
+    const summary = buildCleanupSummary(result);
+    assertContains(summary, '5 stale notes archived');
+});
+
+runTest('buildCleanupSummary: reports expired items', () => {
+    const result = { notesArchived: 0, examplesArchived: 0, notesExpired: 2, examplesExpired: 3, errors: [] };
+    const summary = buildCleanupSummary(result);
+    assertContains(summary, '2 expired notes archived');
+    assertContains(summary, '3 expired examples archived');
+});
+
+runTest('buildCleanupSummary: reports errors', () => {
+    const result = { notesArchived: 1, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: ['error1', 'error2'] };
+    const summary = buildCleanupSummary(result);
+    assertContains(summary, '2 errors encountered');
+});
+
+runTest('buildCleanupSummary: reports nothing needed when all zero', () => {
+    const result = { notesArchived: 0, examplesArchived: 0, notesExpired: 0, examplesExpired: 0, errors: [] };
+    const summary = buildCleanupSummary(result);
+    assertEqual(summary, 'No items needed archiving');
+});
+
+// ============================================================================
+// Extraction Guardrails Tests
+// ============================================================================
+
+console.log('\n--- Extraction Guardrails Tests ---\n');
+
+/**
+ * Check if content contains ephemeral phrases (should not be stored)
+ */
+function containsEphemeralPhrase(content: string): boolean {
+    const ephemeralPatterns = [
+        /this time/i,
+        /just for now/i,
+        /today only/i,
+        /for this call/i,
+        /temporarily/i,
+        /one-time/i,
+        /exception/i,
+        /just once/i
+    ];
+    return ephemeralPatterns.some(pattern => pattern.test(content));
+}
+
+/**
+ * Check if content contains durable phrases (should be stored at org/global scope)
+ */
+function containsDurablePhrase(content: string): boolean {
+    const durablePatterns = [
+        /always/i,
+        /never/i,
+        /company policy/i,
+        /all customers/i,
+        /standard practice/i,
+        /we typically/i,
+        /our preference/i,
+        /every time/i,
+        /by default/i,
+        /as a rule/i
+    ];
+    return durablePatterns.some(pattern => pattern.test(content));
+}
+
+/**
+ * Check if content contains PII that should not be extracted
+ */
+function containsPII(content: string): boolean {
+    const piiPatterns = [
+        /\b\d{3}-\d{2}-\d{4}\b/,  // SSN pattern
+        /\b\d{16}\b/,             // Credit card
+        /password[:\s]+\S+/i,     // Password mention
+        /\bssn\b/i,               // SSN mention
+        /passport\s*#?\s*\d+/i    // Passport
+    ];
+    return piiPatterns.some(pattern => pattern.test(content));
+}
+
+runTest('containsEphemeralPhrase: detects "just for now"', () => {
+    assertTrue(containsEphemeralPhrase('Just for now, use bullet points'));
+});
+
+runTest('containsEphemeralPhrase: detects "this time"', () => {
+    assertTrue(containsEphemeralPhrase('This time I want a shorter response'));
+});
+
+runTest('containsEphemeralPhrase: returns false for durable content', () => {
+    assertTrue(!containsEphemeralPhrase('We always use metric units'));
+});
+
+runTest('containsDurablePhrase: detects "always"', () => {
+    assertTrue(containsDurablePhrase('We always use formal tone'));
+});
+
+runTest('containsDurablePhrase: detects "company policy"', () => {
+    assertTrue(containsDurablePhrase('Company policy requires approval'));
+});
+
+runTest('containsDurablePhrase: returns false for ephemeral content', () => {
+    assertTrue(!containsDurablePhrase('Just this once, skip the greeting'));
+});
+
+runTest('containsPII: detects SSN pattern', () => {
+    assertTrue(containsPII('My SSN is 123-45-6789'));
+});
+
+runTest('containsPII: detects password mention', () => {
+    assertTrue(containsPII('The password is: secret123'));
+});
+
+runTest('containsPII: returns false for safe content', () => {
+    assertTrue(!containsPII('User prefers bullet points'));
+});
+
+// ============================================================================
 // Summary
 // ============================================================================
 

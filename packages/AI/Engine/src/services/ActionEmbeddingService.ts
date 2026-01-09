@@ -3,6 +3,7 @@ import { ActionEntity } from '@memberjunction/core-entities';
 import { ActionMatchResult, ActionEmbeddingMetadata } from '../types/ActionMatchResult';
 import { EmbedTextResult } from '@memberjunction/ai';
 import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { LogError } from '@memberjunction/core';
 
 /**
  * Utility service for action embedding operations.
@@ -53,7 +54,7 @@ export class ActionEmbeddingService {
                 const embeddingResult = await embedFunction(embeddingText);
 
                 if (!embeddingResult || !embeddingResult.result || embeddingResult.result.vector.length === 0) {
-                    console.error(`Failed to generate embedding for action ${action.Name}`);
+                    LogError(`Failed to generate embedding for action ${action.Name}`);
                     continue;
                 }
 
@@ -70,7 +71,7 @@ export class ActionEmbeddingService {
                     }
                 });
             } catch (error) {
-                console.error(`Error generating embedding for action ${action.Name}: ${error instanceof Error ? error.message : String(error)}`);
+                LogError(`Error generating embedding for action ${action.Name}: ${error instanceof Error ? error.message : String(error)}`);
                 // Continue with other actions
             }
         }
@@ -137,7 +138,7 @@ export class ActionEmbeddingService {
             }));
 
         } catch (error) {
-            console.error(`Error finding similar actions: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`Error finding similar actions: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -182,7 +183,7 @@ export class ActionEmbeddingService {
             }));
 
         } catch (error) {
-            console.error(`Error finding related actions: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`Error finding related actions: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
