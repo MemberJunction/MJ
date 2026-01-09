@@ -575,11 +575,11 @@ export class BaseEntityEvent {
     /**
      * The type of event that is being raised.
      * - `save_started`, `delete_started`, `load_started`: Raised when an operation begins
-     * - `save`, `delete`: Raised when an operation completes successfully
+     * - `save`, `delete`, `load_complete`: Raised when an operation completes successfully
      * - `new_record`: Raised when NewRecord() is called
      * - `transaction_ready`: Used to indicate that a transaction is ready to be submitted for execution. The TransactionGroup class uses this to know that all async preprocessing is done and it can now submit the transaction.
      */
-    type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'other';
+    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'other';
 
     /**
      * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
@@ -699,8 +699,8 @@ export abstract class BaseEntity<T = unknown> {
         this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this});
 
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
-        // we broadcast save/delete events and their _started counterparts, as well as load_started
-        const globalEventTypes: BaseEntityEvent["type"][] = ['save', 'delete', 'save_started', 'delete_started', 'load_started'];
+        // we broadcast save/delete/load events and their _started counterparts
+        const globalEventTypes: BaseEntityEvent["type"][] = ['save', 'delete', 'load_complete', 'save_started', 'delete_started', 'load_started'];
         if (globalEventTypes.includes(type)) {
             const event = new BaseEntityEvent();
             event.baseEntity = this;
@@ -1253,11 +1253,11 @@ export abstract class BaseEntity<T = unknown> {
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
 
-            // Raise save_started event before the actual save operation begins
-            this.RaiseEvent('save_started', null, saveSubType);
-
             if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
-                if (!this.ProviderToUse) {    
+                // Raise save_started event only when we're actually going to save
+                this.RaiseEvent('save_started', null, saveSubType);
+
+                if (!this.ProviderToUse) {
                     throw new Error('No provider set');
                 }
                 else  {
@@ -1502,6 +1502,9 @@ export abstract class BaseEntity<T = unknown> {
             this._recordLoaded = true;
             this._everSaved = true; // Mark as saved since we loaded from database
             this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
+
+            // Raise load completion event
+            this.RaiseEvent('load_complete', { CompositeKey });
 
             return true;
         }
