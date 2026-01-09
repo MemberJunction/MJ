@@ -189,5 +189,47 @@
             </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
+
+    <!-- MJ: List Invitations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJListInvitations"
+        sectionName="MJ: List Invitations"
+        icon="fa fa-user-plus"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJListInvitations')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Invitations','ListID')"
+                [NewRecordValues]="NewRecordValues('MJ: List Invitations')"
+                [AllowLoad]="IsSectionExpanded('mJListInvitations')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJListInvitations', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: List Shares Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJListShares"
+        sectionName="MJ: List Shares"
+        icon="fa fa-share-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJListShares')">
+        <div *ngIf="record.IsSaved">
+            <mj-user-view-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Shares','ListID')"
+                [NewRecordValues]="NewRecordValues('MJ: List Shares')"
+                [AllowLoad]="IsSectionExpanded('mJListShares')"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJListShares', $event.totalRowCount)"
+                >
+            </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

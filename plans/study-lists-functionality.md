@@ -251,6 +251,55 @@ export class ListManagementService {
 
 ---
 
+## Part 1.5: List Sharing & Security Model
+
+### 1.5.1 Philosophy
+Instead of a generic system, we are implementing a purpose-built sharing model for Lists to ensure performance and rapid delivery. The `UserID` on the `Lists` entity represents the **Owner**.
+
+### 1.5.2 Schema Additions
+
+#### `__mj.ListShare` -> Entity: `List Shares`
+Tracks active access to lists for other users.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| ID | uniqueidentifier PK | |
+| ListID | uniqueidentifier FK | Target List |
+| UserID | uniqueidentifier FK | User granted access |
+| Role | nvarchar(50) | 'Editor', 'Viewer' |
+| Status | nvarchar(20) | 'Active', 'Pending' |
+| CreatedAt | datetime | |
+
+**Roles:**
+- **Owner**: (Implicit via `Lists.UserID`) Full control, can delete list.
+- **Editor**: Can add/remove items, rename list, manage shares.
+- **Viewer**: Read-only access to list items.
+
+#### `__mj.ListInvitation` -> Entity: `List Invitations`
+Tracks pending invitations (especially for external or non-mapped users).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| ID | uniqueidentifier PK | |
+| ListID | uniqueidentifier FK | Target List |
+| Email | nvarchar(255) | Recipient email |
+| Role | nvarchar(50) | 'Editor', 'Viewer' |
+| Token | nvarchar(100) | Secure access token |
+| ExpiresAt | datetime | Expiration |
+| CreatedByUserID | uniqueidentifier FK | Who sent it |
+
+### 1.5.3 Security Logic
+1. **View Access**:
+   Users can see lists where they are the **Owner** (`Lists.UserID`) OR where they have a record in `ListShares`.
+2. **Edit Access**:
+   Requires **Owner** status OR `ListShares.Role = 'Editor'`.
+3. **Manage Sharing**:
+   Requires **Owner** status OR `ListShares.Role = 'Editor'` (if configured to allow editors to share).
+4. **Delete Access**:
+   Strictly **Owner** only.
+
+---
+
 ## Part 2: List Actions for AI/Workflows
 
 ### 2.1 Action Package Structure
@@ -1172,8 +1221,9 @@ const navItem = {
 
 ### Phase 2: Actions & Backend (Week 2)
 5. Create database batch stored procedures
-6. Implement List Actions in CoreActions package
-7. Add metadata for new stored procedures
+6. Create List Sharing and Lists Invitation entities
+7. Implement List Actions in CoreActions package
+8. Add metadata for new stored procedures
 
 ### Phase 3: UI Integration (Week 3)
 8. Integrate into UserViewGrid (replace existing dialog)

@@ -19,7 +19,9 @@ export class ListFormComponent extends BaseFormComponent {
             { sectionKey: 'associations', sectionName: 'Associations', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'duplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'mJListInvitations', sectionName: 'MJ: List Invitations', isExpanded: false },
+            { sectionKey: 'mJListShares', sectionName: 'MJ: List Shares', isExpanded: false }
         ]);
     }
 }

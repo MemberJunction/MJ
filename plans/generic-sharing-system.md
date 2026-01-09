@@ -1,4 +1,6 @@
-# Generic Sharing System - Complete Proposal
+# Generic Sharing System - Complete Proposal (Future Phase)
+
+> **Note:** This document outlines the long-term vision for a unified sharing system across MemberJunction. For the immediate "Lists" implementation, we are adopting a purpose-built, list-specific sharing model as documented in `plans/study-lists-functionality.md`. This generic system will be revisited in a future phase.
 
 ## Executive Summary
 
