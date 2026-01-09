@@ -7,6 +7,7 @@
       "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
+      "AgentTypePromptParams": {},
       "IconClass": "fa-solid fa-infinity"
     },
     "relatedEntities": {
@@ -188,8 +189,8 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2026-01-09T15:58:28.670Z",
-      "checksum": "03e36c140d1a2ce218dc88317bef411043589622f78574d9aa30ec5da55e0505"
+      "lastModified": "2026-01-09T16:45:05.949Z",
+      "checksum": "4e6ba270e3e5aaee45782893694f05173e5701569a67c4c5fc41f16f994efefe"
     },
     "__mj_sync_notes": [
       {
