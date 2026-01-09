@@ -1,5 +1,13 @@
 # @memberjunction/ai-xai
 
+## 2.132.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.132.0
+- @memberjunction/ai-openai@2.132.0
+- @memberjunction/global@2.132.0
+
 ## 2.131.0
 
 ### Patch Changes

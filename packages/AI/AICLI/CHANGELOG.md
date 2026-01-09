@@ -1,5 +1,27 @@
 # @memberjunction/ai-cli
 
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ai-agents@2.132.0
+  - @memberjunction/ai-core-plus@2.132.0
+  - @memberjunction/ai-prompts@2.132.0
+  - @memberjunction/core-actions@2.132.0
+  - @memberjunction/actions@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/core-entities-server@2.132.0
+  - @memberjunction/sqlserver-dataprovider@2.132.0
+  - @memberjunction/ai@2.132.0
+  - @memberjunction/ai-anthropic@2.132.0
+  - @memberjunction/ai-betty-bot@2.132.0
+  - @memberjunction/ai-cerebras@2.132.0
+  - @memberjunction/ai-groq@2.132.0
+  - @memberjunction/ai-mistral@2.132.0
+  - @memberjunction/ai-openai@2.132.0
+
 ## 2.131.0
 
 ### Patch Changes
