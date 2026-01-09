@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-chat
 
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ng-container-directives@2.132.0
+  - @memberjunction/ng-shared-generic@2.132.0
+  - @memberjunction/ng-markdown@2.132.0
+
 ## 2.131.0
 
 ### Patch Changes
