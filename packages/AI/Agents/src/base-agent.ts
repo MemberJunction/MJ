@@ -3096,6 +3096,15 @@ The context is now within limits. Please retry your request with the recovered c
             const activeActions = actions.filter(a => a.Status === 'Active');
             this._effectiveActions = activeActions;
 
+            // Build agent type prompt params (merged from schema defaults, agent config, and runtime overrides)
+            const agentType = engine.AgentTypes.find(at => at.ID === agent.TypeID);
+            const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
+            const agentTypePromptParams = this.buildAgentTypePromptParams(
+                agentType,
+                agent,
+                runtimePromptParamOverrides
+            );
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -3106,17 +3115,109 @@ The context is now within limits. Please retry your request with the recovered c
                 actionDetails: this.formatActionDetails(activeActions),
             };
 
+            // Build the final result with __agentTypePromptParams injected
+            // Note: extraData can override contextData properties, but __agentTypePromptParams
+            // is built separately with proper merge precedence (schema < agent < runtime)
+            const result: AgentContextData & Record<string, unknown> = {
+                ...contextData,
+                __agentTypePromptParams: agentTypePromptParams
+            };
+
             if (extraData) {
+                // Spread extraData but don't let it override __agentTypePromptParams
+                // (which was already built with runtime overrides included)
+                const { __agentTypePromptParams: _ignored, ...restExtraData } = extraData;
                 return {
-                    ...contextData,
-                    ...extraData
-                }
+                    ...result,
+                    ...restExtraData
+                };
             }
             else {
-                return contextData;
+                return result;
             }
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
+        }
+    }
+
+    /**
+     * Builds merged agent type prompt params from schema defaults,
+     * agent config, and runtime overrides.
+     *
+     * Merge precedence (lowest to highest):
+     * 1. Schema defaults (from AgentType.PromptParamsSchema)
+     * 2. Agent config (from AIAgent.AgentTypePromptParams)
+     * 3. Runtime overrides (from ExecuteAgentParams.data.__agentTypePromptParams)
+     *
+     * @param agentType - The agent type entity with schema definition
+     * @param agent - The agent entity with configured values
+     * @param runtimeOverrides - Optional runtime overrides from ExecuteAgentParams.data
+     * @returns Merged prompt params object
+     *
+     * @protected
+     * @since 2.131.0
+     */
+    protected buildAgentTypePromptParams(
+        agentType: AIAgentTypeEntity | undefined,
+        agent: AIAgentEntityExtended,
+        runtimeOverrides?: Record<string, unknown>
+    ): Record<string, unknown> {
+        // 1. Extract defaults from schema
+        // Note: PromptParamsSchema property added in v2.131.0, use Get() for backward compatibility
+        const schemaJson = agentType?.Get('PromptParamsSchema') as string | null | undefined;
+        const schemaDefaults = this.extractSchemaDefaults(schemaJson);
+
+        // 2. Parse agent-level config
+        // Note: AgentTypePromptParams property added in v2.131.0, use Get() for backward compatibility
+        const agentParamsJson = agent.Get('AgentTypePromptParams') as string | null | undefined;
+        let agentParams: Record<string, unknown> = {};
+        if (agentParamsJson) {
+            try {
+                agentParams = JSON.parse(agentParamsJson);
+            } catch (e) {
+                LogError(`Failed to parse AgentTypePromptParams for agent ${agent.Name}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
+        // 3. Merge all layers (lowest to highest precedence)
+        const merged = {
+            ...schemaDefaults,
+            ...agentParams,
+            ...(runtimeOverrides || {})
+        };
+
+        return merged;
+    }
+
+    /**
+     * Extracts default values from a JSON Schema definition.
+     *
+     * @param schemaJson - JSON string containing the schema
+     * @returns Object with property names and their default values
+     *
+     * @protected
+     * @since 2.131.0
+     */
+    protected extractSchemaDefaults(schemaJson: string | null | undefined): Record<string, unknown> {
+        if (!schemaJson) return {};
+
+        try {
+            const schema = JSON.parse(schemaJson);
+            const defaults: Record<string, unknown> = {};
+
+            if (schema.properties) {
+                for (const [key, prop] of Object.entries(schema.properties)) {
+                    const propDef = prop as { default?: unknown };
+                    if (propDef.default !== undefined) {
+                        defaults[key] = propDef.default;
+                    }
+                }
+            }
+
+            return defaults;
+        } catch (e) {
+            LogError(`Failed to parse PromptParamsSchema: ${e instanceof Error ? e.message : String(e)}`);
+            return {};
         }
     }
 
