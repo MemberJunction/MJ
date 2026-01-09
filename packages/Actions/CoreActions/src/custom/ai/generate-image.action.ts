@@ -97,7 +97,7 @@ export class GenerateImageAction extends BaseAction {
             }
 
             // Get image generator model and create instance
-            const { generator, model } = await this.prepareImageGenerator(
+            const { generator, model, apiName } = await this.prepareImageGenerator(
                 params.ContextUser,
                 modelName
             );
@@ -105,7 +105,7 @@ export class GenerateImageAction extends BaseAction {
             // Build generation parameters
             const genParams: ImageGenerationParams = {
                 prompt: prompt,
-                model: model.APIName,
+                model: apiName,
                 n: numberOfImages,
                 size: size,
                 outputFormat: outputFormat === 'url' ? 'url' : 'b64_json'
@@ -195,12 +195,12 @@ export class GenerateImageAction extends BaseAction {
     }
 
     /**
-     * Prepare an image generator instance
+     * Prepare an image generator instance using proper metadata lookup
      */
     private async prepareImageGenerator(
         contextUser: UserInfo | undefined,
         modelName?: string
-    ): Promise<{ generator: BaseImageGenerator; model: AIModelEntityExtended }> {
+    ): Promise<{ generator: BaseImageGenerator; model: AIModelEntityExtended; apiName: string }> {
         // Ensure AIEngine is loaded
         await AIEngineBase.Instance.Config(false, contextUser);
 
@@ -218,7 +218,7 @@ export class GenerateImageAction extends BaseAction {
         if (modelName) {
             const foundModel = imageGeneratorModels.find(
                 m => m.Name.toLowerCase() === modelName.toLowerCase() ||
-                     m.APIName.toLowerCase() === modelName.toLowerCase()
+                     (m.APIName && m.APIName.toLowerCase() === modelName.toLowerCase())
             );
             if (!foundModel) {
                 throw new Error(`Image generator model '${modelName}' not found`);
@@ -231,23 +231,41 @@ export class GenerateImageAction extends BaseAction {
             );
         }
 
-        // Get API key and create instance
-        const apiKey = GetAIAPIKey(model.DriverClass);
+        // Find the inference provider from ModelVendors (populated by AIEngineBase)
+        // Inference providers have DriverClass set
+        const inferenceProvider = model.ModelVendors.find(mv =>
+            mv.DriverClass && mv.DriverClass.length > 0 && mv.Status === 'Active'
+        );
+
+        if (!inferenceProvider) {
+            throw new Error(`No active inference provider found for model '${model.Name}'`);
+        }
+
+        // Get API key using the vendor's driver class
+        const driverClass = inferenceProvider.DriverClass;
+        const apiName = inferenceProvider.APIName || model.APIName || model.Name;
+        const apiKey = GetAIAPIKey(driverClass);
+
         if (!apiKey) {
-            throw new Error(`No API key found for ${model.DriverClass}`);
+            // Try getting by vendor name as fallback
+            const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === inferenceProvider.VendorID);
+            const vendorApiKey = vendor ? GetAIAPIKey(vendor.Name) : null;
+            if (!vendorApiKey) {
+                throw new Error(`No API key found for ${driverClass} or vendor ${vendor?.Name || 'unknown'}`);
+            }
         }
 
         const generator = MJGlobal.Instance.ClassFactory.CreateInstance<BaseImageGenerator>(
             BaseImageGenerator,
-            model.DriverClass,
+            driverClass,
             apiKey
         );
 
         if (!generator) {
-            throw new Error(`Failed to create image generator instance for ${model.DriverClass}`);
+            throw new Error(`Failed to create image generator instance for ${driverClass}. Ensure the provider is registered.`);
         }
 
-        return { generator, model };
+        return { generator, model, apiName };
     }
 
     /**
