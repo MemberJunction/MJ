@@ -720,3 +720,6 @@ export class GeminiLLM extends BaseLLM {
 export function LoadGeminiLLM() {
     // does nothing, avoid tree shaking that will get rid of this class since there is no static link to this class in the code base as it is loaded dynamically
 }
+
+// Export image generation
+export * from './geminiImage';
