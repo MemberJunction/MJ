@@ -24,7 +24,7 @@ const mjConfigSchema = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional(),
+  baselineVersion: z.string().optional().default('202601071900'),
   baselineOnMigrate: z.boolean().optional().default(true),
 });
 
@@ -40,7 +40,7 @@ const mjConfigSchemaOptional = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional(),
+  baselineVersion: z.string().optional().default('202601071900'),
   baselineOnMigrate: z.boolean().optional().default(true),
 });
 
@@ -89,7 +89,7 @@ export const createFlywayUrl = (mjConfig: MJConfig) => {
 };
 
 export const getFlywayConfig = async (mjConfig: MJConfig, tag?: string): Promise<FlywayConfig> => {
-  let locations: string[];
+  let location = mjConfig.migrationsLocation;
 
   if (tag) {
     // when tag is set, we want to fetch migrations from the github repo using the tag specified
@@ -100,22 +100,14 @@ export const getFlywayConfig = async (mjConfig: MJConfig, tag?: string): Promise
     await git.clone(mjConfig.mjRepoUrl, tmp, ['--sparse', '--depth=1', '--branch', branch]);
     await git.raw(['sparse-checkout', 'set', 'migrations']);
 
-    locations = [`filesystem:${tmp}`];
-  } else {
-    // Flyway doesn't recursively scan subdirectories, so we explicitly add v2 and v3
-    // This allows baseline migrations in v3 to work alongside historical v2 migrations
-    const baseLocation = mjConfig.migrationsLocation.replace('filesystem:', '');
-    locations = [
-      `filesystem:${baseLocation}/v2`,
-      `filesystem:${baseLocation}/v3`,
-    ];
+    location = `filesystem:${tmp}`;
   }
 
   return {
     url: createFlywayUrl(mjConfig),
     user: mjConfig.codeGenLogin,
     password: mjConfig.codeGenPassword,
-    migrationLocations: locations,
+    migrationLocations: [location],
     advanced: {
       schemas: [mjConfig.coreSchema],
       cleanDisabled: mjConfig.cleanDisabled === false ? false : undefined,

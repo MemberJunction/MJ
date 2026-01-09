@@ -208,7 +208,7 @@ const codegenConfig = {
   ],
   SQLOutput: {
     enabled: true,
-    folderPath: './migrations/v2/',
+    folderPath: './migrations/v3/',
     appendToFile: true,
     convertCoreSchemaToFlywayMigrationFile: true,
     omitRecurringScriptsFromLog: true,
@@ -524,11 +524,6 @@ const config = {
   apiKey: process.env.MJ_API_KEY,
   baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
   publicUrl: process.env.MJAPI_PUBLIC_URL, // Public URL for callbacks (e.g., ngrok URL when developing)
-
-  // Used only for MJCLI
-  migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
-  baselineVersion: '202601071900', // Version to baseline new databases to (skips v2 migrations on blank databases)
-  baselineOnMigrate: true, // Automatically baseline when running against a blank database
 };
 
 module.exports = config;

@@ -6437,7 +6437,7 @@ export const EntityFieldValueSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityFieldID: z.string().describe(`
         * * Field Name: EntityFieldID
-        * * Display Name: Entity Field
+        * * Display Name: Entity Field ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)`),
     Sequence: z.number().describe(`
@@ -6461,12 +6461,12 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
+        * * Display Name: __mj _Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
+        * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     EntityField: z.string().describe(`
@@ -6479,7 +6479,7 @@ export const EntityFieldValueSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -20760,7 +20760,7 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     /**
     * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactLength: This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
-    * * CompactMode: If a Compact Mode value is provided, it must be either "AI Summary" or "First N Chars"; otherwise the field must be left empty.
+    * * CompactMode: Compact Mode can be left empty, but if a value is provided it must be either "AI Summary" or "First N Chars".
     * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
     * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
     * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
@@ -20801,17 +20801,16 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     }
 
     /**
-    * If a Compact Mode value is provided, it must be either "AI Summary" or "First N Chars"; otherwise the field must be left empty.
+    * Compact Mode can be left empty, but if a value is provided it must be either "AI Summary" or "First N Chars".
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateCompactModeAllowedValues(result: ValidationResult) {
-    	// CompactMode can be null, or one of the allowed values
     	if (this.CompactMode != null && this.CompactMode !== 'AI Summary' && this.CompactMode !== 'First N Chars') {
     		result.Errors.push(new ValidationErrorInfo(
-    			"CompactMode",
-    			"Compact mode must be either \"AI Summary\" or \"First N Chars\", or left empty.",
+    			'CompactMode',
+    			'Compact Mode must be either "AI Summary" or "First N Chars" when specified.',
     			this.CompactMode,
     			ValidationErrorType.Failure
     		));
@@ -35606,7 +35605,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityFieldID
-    * * Display Name: Entity Field
+    * * Display Name: Entity Field ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)
     */
@@ -35670,7 +35669,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
+    * * Display Name: __mj _Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35680,7 +35679,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
+    * * Display Name: __mj _Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -35708,7 +35707,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     */
     get EntityID(): string {
@@ -40691,7 +40690,7 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
 
     /**
     * Validate() method override for MJ: AI Agent Data Sources entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * ResultType: Result Type can be left empty, but if a value is provided it must be either 'entity_object' or 'simple'. This ensures that only recognized result types are stored.
+    * * ResultType: Result Type can be left blank, but if a value is provided it must be either 'entity_object' or 'simple'. This ensures only supported result types are stored.
     * * Table-Level: This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
     * * Table-Level: This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
     * * Table-Level: This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
@@ -40711,17 +40710,17 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
     }
 
     /**
-    * Result Type can be left empty, but if a value is provided it must be either 'entity_object' or 'simple'. This ensures that only recognized result types are stored.
+    * Result Type can be left blank, but if a value is provided it must be either 'entity_object' or 'simple'. This ensures only supported result types are stored.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateResultTypeAllowedValues(result: ValidationResult) {
-    	// ResultType is optional; if set it must be one of the allowed values
+    	// If ResultType is set, it must be one of the allowed values
     	if (this.ResultType != null && this.ResultType !== 'entity_object' && this.ResultType !== 'simple') {
     		result.Errors.push(new ValidationErrorInfo(
     			"ResultType",
-    			"Result Type must be either 'entity_object' or 'simple' when specified.",
+    			"Result Type must be either 'entity_object' or 'simple' when provided.",
     			this.ResultType,
     			ValidationErrorType.Failure
     		));
@@ -42334,7 +42333,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * FinalPayloadValidationResult: FinalPayloadValidationResult must be either empty (null) or one of the allowed status values: Warn, Fail, Retry, or Pass. This ensures that only recognized validation outcomes are stored, keeping the data consistent and meaningful for downstream processing.
+    * * FinalPayloadValidationResult: The FinalPayloadValidationResult field must either be empty or contain one of the approved status values – Warn, Fail, Retry, or Pass – ensuring only recognized validation outcomes are stored.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -42350,19 +42349,22 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     }
 
     /**
-    * FinalPayloadValidationResult must be either empty (null) or one of the allowed status values: Warn, Fail, Retry, or Pass. This ensures that only recognized validation outcomes are stored, keeping the data consistent and meaningful for downstream processing.
+    * The FinalPayloadValidationResult field must either be empty or contain one of the approved status values – Warn, Fail, Retry, or Pass – ensuring only recognized validation outcomes are stored.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
-    	if (this.FinalPayloadValidationResult != null && !['Warn', 'Fail', 'Retry', 'Pass'].includes(this.FinalPayloadValidationResult)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FinalPayloadValidationResult",
-    			"FinalPayloadValidationResult must be null or one of: Warn, Fail, Retry, or Pass.",
-    			this.FinalPayloadValidationResult,
-    			ValidationErrorType.Failure
-    		));
+    	if (this.FinalPayloadValidationResult != null) {
+    		const allowed = ['Warn', 'Fail', 'Retry', 'Pass'];
+    		if (!allowed.includes(this.FinalPayloadValidationResult)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalPayloadValidationResult",
+    				"Final payload validation result must be one of: Warn, Fail, Retry, Pass, or left empty.",
+    				this.FinalPayloadValidationResult,
+    				ValidationErrorType.Failure
+    			));
+    		}
     	}
     }
 
@@ -42755,7 +42757,7 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     /**
     * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
-    * * FinalStep: The FinalStep field may be left empty, but if it has a value it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This guarantees that only recognised final steps are recorded, keeping the data consistent and meaningful.
+    * * FinalStep: Final Step must be either empty or one of the predefined values: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures the step recorded for a run is valid and recognizable.
     * @public
     * @method
     * @override
@@ -42782,19 +42784,18 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
 
     /**
-    * The FinalStep field may be left empty, but if it has a value it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This guarantees that only recognised final steps are recorded, keeping the data consistent and meaningful.
+    * Final Step must be either empty or one of the predefined values: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures the step recorded for a run is valid and recognizable.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateFinalStepAllowedValues(result: ValidationResult) {
-    	// If FinalStep has a value, ensure it matches one of the permitted options
     	if (this.FinalStep != null) {
     		const allowed = ["While", "ForEach", "Chat", "Sub-Agent", "Actions", "Retry", "Failed", "Success"];
     		if (!allowed.includes(this.FinalStep)) {
     			result.Errors.push(new ValidationErrorInfo(
     				"FinalStep",
-    				"FinalStep must be one of: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, Success",
+    				"Final Step must be one of: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, Success, or left blank.",
     				this.FinalStep,
     				ValidationErrorType.Failure
     			));

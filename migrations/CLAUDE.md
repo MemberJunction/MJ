@@ -12,8 +12,8 @@ Starting with v3.0, MemberJunction uses a **baseline migration** approach to str
 
 1. **Fresh Installation (Blank Database)**:
    - Flyway detects blank database and baselines at version `202601071900`
-   - Runs `B202601071900__v3.0_Baseline.sql` (complete v3.0 schema)
-   - Runs `R__RefreshMetadata.sql` from v2 (repeatable migration)
+   - Runs `B202601071900__v3.0_Baseline.sql` from v3 (complete v3.0 schema)
+   - Runs `R__RefreshMetadata.sql` from root (repeatable migration, always runs after versioned migrations)
    - Skips all v2 versioned migrations (V202407171600... through V202601062149)
    - Runs any future v3 migrations with versions > 202601071900
 
@@ -33,13 +33,11 @@ Starting with v3.0, MemberJunction uses a **baseline migration** approach to str
 The baseline is configured in `mj.config.cjs`:
 ```javascript
 {
-  migrationsLocation: 'filesystem:./migrations',
-  baselineVersion: '202601071900',  // Baseline version (v2.130.0 equivalent)
-  baselineOnMigrate: true            // Auto-baseline blank databases
+  migrationsLocation: 'filesystem:./migrations',  // Flyway recursively scans v2/ and v3/ subdirectories
+  baselineVersion: '202601071900',                // Baseline version (v2.130.0 equivalent)
+  baselineOnMigrate: true                         // Auto-baseline blank databases
 }
 ```
-
-The MJCLI automatically scans both `migrations/v2/` and `migrations/v3/` directories.
 
 ### Version Numbering for v3+
 
