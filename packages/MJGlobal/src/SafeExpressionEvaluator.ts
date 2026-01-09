@@ -311,7 +311,7 @@ export class SafeExpressionEvaluator {
             return value.map(item => this.cloneValue(item));
         }
 
-        // Plain objects
+        // Plain objects - clone by copying enumerable own properties
         if (type === 'object' && value.constructor === Object) {
             const cloned: Record<string, any> = {};
             for (const [key, val] of Object.entries(value)) {
@@ -327,8 +327,27 @@ export class SafeExpressionEvaluator {
             return new Date(value);
         }
 
-        // For other types, return a safe representation
-        return String(value);
+        // Class instances - shallow clone enumerable properties without recursion
+        // to avoid issues with circular references or complex nested objects
+        if (type === 'object' && typeof value.constructor === 'function') {
+            const cloned: Record<string, any> = {};
+            for (const [key, val] of Object.entries(value)) {
+                if (!this.isDangerousPropertyName(key)) {
+                    // Don't recursively clone class instance properties
+                    // Just copy them directly for safe shallow access
+                    cloned[key] = val;
+                }
+            }
+            return cloned;
+        }
+
+        // For other types, try safe string conversion
+        try {
+            return String(value);
+        } catch {
+            // If String() fails, return a placeholder
+            return '[Object]';
+        }
     }
 
     /**

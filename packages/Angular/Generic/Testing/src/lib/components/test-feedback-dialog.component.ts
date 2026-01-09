@@ -15,23 +15,38 @@ export interface TestFeedbackDialogData {
     <kendo-dialog
       [title]="existingFeedback ? 'Update Test Feedback' : 'Provide Test Feedback'"
       [width]="600"
-      [height]="680"
+      [minHeight]="500"
+      [autoFocusedElement]="'none'"
       (close)="onCancel()">
 
       <div class="feedback-dialog-content" *ngIf="!isLoading">
         <div class="feedback-section">
           <label class="feedback-label">Overall Rating</label>
-          <div class="star-rating">
-            <span *ngFor="let star of [1,2,3,4,5]"
-                  class="star"
-                  [class.selected]="star <= rating"
-                  [class.hover]="star <= hoverRating"
-                  (click)="setRating(star)"
-                  (mouseenter)="hoverRating = star"
-                  (mouseleave)="hoverRating = 0">
-              <i class="fas fa-star"></i>
-            </span>
-            <span class="rating-text" *ngIf="rating > 0">{{ rating }} / 5</span>
+          <div class="rating-scale">
+            <div class="rating-numbers">
+              <button *ngFor="let num of [1,2,3,4,5,6,7,8,9,10]"
+                      type="button"
+                      class="rating-button"
+                      [class.selected]="num === rating"
+                      [class.hover]="num === hoverRating"
+                      [class.low]="num <= 3"
+                      [class.mid]="num >= 4 && num <= 6"
+                      [class.high]="num >= 7"
+                      (click)="setRating(num)"
+                      (mouseenter)="hoverRating = num"
+                      (mouseleave)="hoverRating = 0">
+                {{ num }}
+              </button>
+            </div>
+            <div class="rating-labels">
+              <span class="label-low">Poor</span>
+              <span class="label-mid">Average</span>
+              <span class="label-high">Excellent</span>
+            </div>
+            <div class="rating-description" *ngIf="rating > 0">
+              <span class="rating-value">{{ rating }}</span> / 10
+              <span class="rating-label">{{ getRatingLabel() }}</span>
+            </div>
           </div>
         </div>
 
@@ -54,13 +69,13 @@ export interface TestFeedbackDialogData {
         </div>
 
         <div class="feedback-section">
-          <label class="feedback-label" for="comments">Correction Summary / Comments</label>
+          <label class="feedback-label" for="comments">Correction Summary / Comments <span class="optional-hint">(optional)</span></label>
           <textarea
             id="comments"
             class="feedback-textarea"
             [(ngModel)]="comments"
             placeholder="Provide detailed feedback, corrections, or comments about this test execution..."
-            rows="10"></textarea>
+            rows="6"></textarea>
         </div>
 
         <div class="feedback-info" *ngIf="isSaving">
@@ -81,8 +96,7 @@ export interface TestFeedbackDialogData {
         </div>
       </div>
 
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()" [disabled]="isSaving || isLoading">Cancel</button>
+      <kendo-dialog-actions layout="start">
         <button kendoButton
                 [primary]="true"
                 (click)="onSubmit()"
@@ -90,15 +104,52 @@ export interface TestFeedbackDialogData {
           <i class="fas" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-check'"></i>
           {{ isSaving ? 'Saving...' : (existingFeedback ? 'Update Feedback' : 'Submit Feedback') }}
         </button>
+        <button kendoButton (click)="onCancel()" [disabled]="isSaving || isLoading">Cancel</button>
       </kendo-dialog-actions>
     </kendo-dialog>
   `,
   styles: [`
+    :host {
+      display: block;
+    }
+
+    /* Smooth fade-in for dialog content to prevent flash */
+    ::ng-deep .k-dialog-wrapper {
+      animation: dialogFadeIn 0.15s ease-out;
+    }
+
+    @keyframes dialogFadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    /* Prevent dialog content from scrolling */
+    ::ng-deep .k-dialog-content {
+      overflow: visible !important;
+    }
+
     .feedback-dialog-content {
       padding: 20px;
       display: flex;
       flex-direction: column;
       gap: 24px;
+      animation: contentFadeIn 0.2s ease-out;
+      overflow: visible;
+    }
+
+    @keyframes contentFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .feedback-section {
@@ -113,33 +164,123 @@ export interface TestFeedbackDialogData {
       color: #333;
     }
 
-    .star-rating {
+    .optional-hint {
+      font-weight: 400;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .rating-scale {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .rating-numbers {
+      display: flex;
+      gap: 6px;
+    }
+
+    .rating-button {
+      width: 40px;
+      height: 40px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+      color: #64748b;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .rating-button:hover,
+    .rating-button.hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .rating-button.low:hover,
+    .rating-button.low.hover {
+      border-color: #ef4444;
+      background: #fef2f2;
+      color: #ef4444;
+    }
+
+    .rating-button.mid:hover,
+    .rating-button.mid.hover {
+      border-color: #f59e0b;
+      background: #fffbeb;
+      color: #f59e0b;
+    }
+
+    .rating-button.high:hover,
+    .rating-button.high.hover {
+      border-color: #10b981;
+      background: #ecfdf5;
+      color: #10b981;
+    }
+
+    .rating-button.selected {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .rating-button.selected.low {
+      border-color: #ef4444;
+      background: #ef4444;
+      color: white;
+    }
+
+    .rating-button.selected.mid {
+      border-color: #f59e0b;
+      background: #f59e0b;
+      color: white;
+    }
+
+    .rating-button.selected.high {
+      border-color: #10b981;
+      background: #10b981;
+      color: white;
+    }
+
+    .rating-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 0 4px;
+    }
+
+    .label-low { color: #ef4444; }
+    .label-mid { color: #f59e0b; }
+    .label-high { color: #10b981; }
+
+    .rating-description {
       display: flex;
       align-items: center;
       gap: 8px;
-    }
-
-    .star {
-      font-size: 28px;
-      color: #ddd;
-      cursor: pointer;
-      transition: color 0.2s ease;
-    }
-
-    .star.selected,
-    .star.hover {
-      color: #ffa500;
-    }
-
-    .star:hover {
-      transform: scale(1.1);
-    }
-
-    .rating-text {
+      padding: 10px 14px;
+      background: #f1f5f9;
+      border-radius: 8px;
       font-size: 14px;
+      color: #64748b;
+    }
+
+    .rating-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .rating-label {
+      margin-left: auto;
       font-weight: 600;
-      color: #666;
-      margin-left: 8px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
     }
 
     .correctness-options {
@@ -204,7 +345,21 @@ export interface TestFeedbackDialogData {
   `]
 })
 export class TestFeedbackDialogComponent implements OnInit {
-  @Input() data!: TestFeedbackDialogData;
+  private _data!: TestFeedbackDialogData;
+  private dataLoaded = false;
+
+  @Input()
+  set data(value: TestFeedbackDialogData) {
+    this._data = value;
+    // When data is set after component creation (via DialogService),
+    // trigger loading since ngOnInit already ran
+    if (value && !this.dataLoaded) {
+      this.initializeWithData();
+    }
+  }
+  get data(): TestFeedbackDialogData {
+    return this._data;
+  }
 
   rating = 0;
   hoverRating = 0;
@@ -220,10 +375,16 @@ export class TestFeedbackDialogComponent implements OnInit {
   constructor(private dialogRef: DialogRef) {}
 
   async ngOnInit(): Promise<void> {
-    if (!this.data) {
-      this.errorMessage = 'Invalid dialog data';
-      return;
+    // If data was set via template binding (not DialogService), load here
+    if (this._data && !this.dataLoaded) {
+      await this.initializeWithData();
     }
+    // If data not set yet (DialogService pattern), the setter will trigger loading
+  }
+
+  private async initializeWithData(): Promise<void> {
+    if (this.dataLoaded) return;
+    this.dataLoaded = true;
 
     // Load existing feedback if it exists
     await this.loadExistingFeedback();
@@ -256,12 +417,23 @@ export class TestFeedbackDialogComponent implements OnInit {
     }
   }
 
-  setRating(star: number): void {
-    this.rating = star;
+  setRating(value: number): void {
+    this.rating = value;
+  }
+
+  getRatingLabel(): string {
+    if (this.rating <= 3) return 'Poor';
+    if (this.rating <= 5) return 'Below Average';
+    if (this.rating <= 6) return 'Average';
+    if (this.rating <= 7) return 'Good';
+    if (this.rating <= 8) return 'Very Good';
+    if (this.rating <= 9) return 'Excellent';
+    return 'Outstanding';
   }
 
   canSubmit(): boolean {
-    return this.rating > 0 && this.comments.trim().length > 0;
+    // Rating is required, comments are optional
+    return this.rating > 0;
   }
 
   async onSubmit(): Promise<void> {

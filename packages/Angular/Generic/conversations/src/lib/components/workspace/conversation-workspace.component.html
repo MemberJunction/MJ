@@ -50,13 +50,13 @@
       </mj-conversation-sidebar>
     </div>
 
-    <!-- Sidebar expand handle (only visible when collapsed and settings loaded) -->
+    <!-- Floating toggle button (only visible when sidebar is collapsed and settings loaded) -->
     @if (activeTab !== 'collections' && activeTab !== 'tasks' && isSidebarCollapsed && isSidebarSettingsLoaded) {
-      <div class="sidebar-expand-handle"
-           (click)="expandSidebar()"
-           title="Expand sidebar">
-        <i class="fas fa-chevron-right"></i>
-      </div>
+      <button class="sidebar-floating-toggle"
+              (click)="expandSidebar()"
+              title="Show conversations">
+        <i class="fas fa-table-columns"></i>
+      </button>
     }
 
     <!-- Resize handle for sidebar (only when expanded and settings loaded) -->
@@ -94,6 +94,7 @@
         [threadId]="selectedThreadId"
         [isNewConversation]="isNewUnsavedConversation"
         [pendingMessage]="pendingMessageToSend"
+        [pendingAttachments]="pendingAttachmentsToSend"
         [pendingArtifactId]="pendingArtifactId"
         [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
         (conversationRenamed)="onConversationRenamed($event)"
@@ -104,8 +105,8 @@
         (threadOpened)="onThreadOpened($event)"
         (threadClosed)="onThreadClosed()"
         (pendingArtifactConsumed)="pendingArtifactId = null; pendingArtifactVersionNumber = null"
-        (pendingMessageConsumed)="pendingMessageToSend = null"
-        (pendingMessageRequested)="pendingMessageToSend = $event">
+        (pendingMessageConsumed)="pendingMessageToSend = null; pendingAttachmentsToSend = null"
+        (pendingMessageRequested)="onPendingMessageRequested($event)">
       </mj-conversation-chat-area>
     </div>
 

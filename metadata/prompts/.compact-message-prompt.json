@@ -21,29 +21,9 @@
           "ID": "03776E9C-BA83-4511-89FE-D8317F1D4FD7"
         },
         "sync": {
-          "lastModified": "2025-10-17T18:33:44.046Z",
-          "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.PromptID",
-            "expression": "@parent:ID",
-            "resolved": "F6A4FA96-180F-4E14-ADB1-E00E4FE2BBCF"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.ModelID",
-            "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-            "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.VendorID",
-            "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-            "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:29.825Z",
+          "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+        }
       },
       {
         "fields": {
@@ -56,29 +36,9 @@
           "ID": "2D1DBFFE-0A9E-4AE6-8F39-ED17EA1150C9"
         },
         "sync": {
-          "lastModified": "2025-10-17T18:33:44.057Z",
-          "checksum": "2f484cacbf7dd09c5d5d85128757626fbdd971275c06c75142f6f69e5709c25b"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.PromptID",
-            "expression": "@parent:ID",
-            "resolved": "F6A4FA96-180F-4E14-ADB1-E00E4FE2BBCF"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.ModelID",
-            "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-            "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.VendorID",
-            "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:29.826Z",
+          "checksum": "0358a3313172e346679f86333fa90506da62892127bf3add67a34e1ee89b36cd"
+        }
       },
       {
         "fields": {
@@ -91,29 +51,9 @@
           "ID": "1E84423B-2AEB-4C86-BCF3-F23367A0704A"
         },
         "sync": {
-          "lastModified": "2025-10-17T18:33:44.068Z",
-          "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.PromptID",
-            "expression": "@parent:ID",
-            "resolved": "F6A4FA96-180F-4E14-ADB1-E00E4FE2BBCF"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.ModelID",
-            "expression": "@lookup:AI Models.Name=GPT 5-nano",
-            "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.VendorID",
-            "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:29.827Z",
+          "checksum": "0d12a1a58f9ac2190b7a23f315dcf580fbbc10fce0515c5a4d86462c05cb2c48"
+        }
       }
     ]
   },
@@ -121,21 +61,7 @@
     "ID": "F6A4FA96-180F-4E14-ADB1-E00E4FE2BBCF"
   },
   "sync": {
-    "lastModified": "2025-10-17T18:33:43.978Z",
-    "checksum": "2ba565f63defc80d0d081b2845cbfca03ad313589f2170d1d0e93cb20bf60e1c"
-  },
-  "__mj_sync_notes": [
-    {
-      "type": "lookup",
-      "field": "fields.TypeID",
-      "expression": "@lookup:AI Prompt Types.Name=Chat",
-      "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-    },
-    {
-      "type": "lookup",
-      "field": "fields.CategoryID",
-      "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
-      "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
-    }
-  ]
+    "lastModified": "2025-12-30T23:07:29.784Z",
+    "checksum": "16fd3afdcfc36162bb464fc79d2a1c147a4d2ad078b2ef36e62cf832df563fb5"
+  }
 }

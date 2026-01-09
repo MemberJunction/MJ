@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/global
 
+## 2.131.0
+
+## 2.130.1
+
+## 2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- fbae243: migration
+- c7e38aa: migration
+
 ## 2.128.0
 
 ## 2.127.0

@@ -3,7 +3,7 @@ import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector } from '../lib/sync-engine';
-import { loadEntityConfig, loadSyncConfig, EntityConfig } from '../config';
+import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
@@ -88,7 +88,7 @@ export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
   private warnings: string[] = [];
-  private syncConfig: any;
+  private syncConfig: SyncConfig | null = null;
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   private deferredRecords: DeferredRecord[] = [];
 
@@ -96,7 +96,22 @@ export class PushService {
     this.syncEngine = syncEngine;
     this.contextUser = contextUser;
   }
-  
+
+  /**
+   * Determines whether to emit __mj_sync_notes based on config hierarchy.
+   * Entity config takes precedence over root config. Defaults to false.
+   * @param entityConfig - The entity-specific configuration (if available)
+   * @returns true if sync notes should be emitted, false otherwise
+   */
+  private shouldEmitSyncNotes(entityConfig?: EntityConfig): boolean {
+    // Entity config takes precedence if explicitly set
+    if (entityConfig?.emitSyncNotes !== undefined) {
+      return entityConfig.emitSyncNotes;
+    }
+    // Fall back to root config, default to false
+    return this.syncConfig?.emitSyncNotes ?? false;
+  }
+
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
 
@@ -156,25 +171,25 @@ export class PushService {
         if (provider && typeof provider.CreateSqlLogger === 'function') {
           // Generate filename with timestamp
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const filename = this.syncConfig.sqlLogging?.formatAsMigration 
+          const filename = this.syncConfig?.sqlLogging?.formatAsMigration
             ? `MetadataSync_Push_${timestamp}.sql`
             : `push_${timestamp}.sql`;
-          
+
           // Use .sql-log-push directory in the config directory (where sync was initiated)
           const outputDir = path.join(configDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
           const filepath = path.join(outputDir, filename);
-          
+
           // Ensure the directory exists
           await fs.ensureDir(path.dirname(filepath));
-          
+
           // Create the SQL logging session
           sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
-            formatAsMigration: this.syncConfig.sqlLogging?.formatAsMigration || false,
+            formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
             description: 'MetadataSync push operation',
             statementTypes: "mutations",
             prettyPrint: true,
-            filterPatterns: this.syncConfig.sqlLogging?.filterPatterns,
-            filterType: this.syncConfig.sqlLogging?.filterType,
+            filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
+            filterType: this.syncConfig?.sqlLogging?.filterType,
           });
           
           if (options.verbose) {
@@ -1140,19 +1155,25 @@ export class PushService {
     // Restore original field values to preserve @ references
     record.fields = originalFields;
 
-    // Only update __mj_sync_notes if the record was actually dirty (changed)
-    // For unchanged records, preserve existing notes to maintain stability
-    if (isNew || isDirty) {
-      // Update __mj_sync_notes with resolution information
-      // This helps users understand how @lookup and @parent references were resolved
-      // Use type assertion through unknown to handle the dynamic property
-      const recordWithNotes = record as unknown as Record<string, unknown>;
-      if (resolutionCollector.notes.length > 0) {
-        recordWithNotes.__mj_sync_notes = resolutionCollector.notes;
-      } else {
-        // Remove existing notes if no resolutions were tracked
-        delete recordWithNotes.__mj_sync_notes;
+    // Handle __mj_sync_notes based on emitSyncNotes config setting
+    // Use type assertion through unknown to handle the dynamic property
+    const recordWithNotes = record as unknown as Record<string, unknown>;
+    const emitNotes = this.shouldEmitSyncNotes(entityConfig);
+
+    if (emitNotes) {
+      // Only update __mj_sync_notes if the record was actually dirty (changed)
+      // For unchanged records, preserve existing notes to maintain stability
+      if (isNew || isDirty) {
+        if (resolutionCollector.notes.length > 0) {
+          recordWithNotes.__mj_sync_notes = resolutionCollector.notes;
+        } else {
+          // Remove existing notes if no resolutions were tracked
+          delete recordWithNotes.__mj_sync_notes;
+        }
       }
+    } else {
+      // emitSyncNotes is disabled - always remove existing notes
+      delete recordWithNotes.__mj_sync_notes;
     }
 
     // Return appropriate status

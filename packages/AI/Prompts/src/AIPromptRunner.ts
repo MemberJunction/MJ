@@ -1754,15 +1754,21 @@ export class AIPromptRunner {
 
   /**
    * Helper: Filter prompt models by configuration matching rules.
+   * Supports configuration inheritance - includes models from the entire inheritance chain.
    */
   private filterPromptModelsByConfiguration(
     allPromptModels: AIPromptModelEntity[],
     configurationId?: string
   ): AIPromptModelEntity[] {
     if (configurationId) {
-      // Include both config-matching AND null-config (universal fallback) models
+      // Get the configuration inheritance chain
+      const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
+      const chainIds = new Set(chain.map(c => c.ID));
+
+      // Include models matching any config in the chain, plus null-config (universal fallback)
       return allPromptModels.filter(
-        pm => pm.ConfigurationID === configurationId || pm.ConfigurationID === null
+        pm => (pm.ConfigurationID && chainIds.has(pm.ConfigurationID)) ||
+              pm.ConfigurationID === null
       );
     } else {
       // No config specified - only include null-config models
@@ -1772,21 +1778,32 @@ export class AIPromptRunner {
 
   /**
    * Helper: Sort prompt models for 'Specific' strategy.
-   * Config-specific models first, then universal models, by priority DESC within each group.
+   * Respects configuration inheritance chain - child configs first, then parents, then null-config.
+   * Within each config level, sorts by priority DESC.
    */
   private sortPromptModelsForSpecificStrategy(
     promptModels: AIPromptModelEntity[],
     configurationId?: string
   ): AIPromptModelEntity[] {
+    if (!configurationId) {
+      // No config specified - just sort by priority
+      return promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
+    }
+
+    // Get the configuration inheritance chain and create position map
+    const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
+    const chainOrder = new Map(chain.map((c, index) => [c.ID, index]));
+
     return promptModels.sort((a, b) => {
-      // Primary: Config-specific models before null-config models
-      const aIsConfigMatch = configurationId && a.ConfigurationID === configurationId ? 1 : 0;
-      const bIsConfigMatch = configurationId && b.ConfigurationID === configurationId ? 1 : 0;
-      if (aIsConfigMatch !== bIsConfigMatch) {
-        return bIsConfigMatch - aIsConfigMatch;  // Config matches first
+      // Primary: Chain position (lower index = higher priority, null config = last)
+      const aChainPos = a.ConfigurationID ? (chainOrder.get(a.ConfigurationID) ?? 999) : 1000;
+      const bChainPos = b.ConfigurationID ? (chainOrder.get(b.ConfigurationID) ?? 999) : 1000;
+
+      if (aChainPos !== bChainPos) {
+        return aChainPos - bChainPos; // Lower chain position first (child before parent)
       }
 
-      // Secondary: Higher priority first within same config group
+      // Secondary: Higher priority first within same config level
       return (b.Priority || 0) - (a.Priority || 0);
     });
   }
@@ -1897,36 +1914,41 @@ export class AIPromptRunner {
   }
 
   /**
-   * Helper: Get prompt models for configuration with fallback logic.
+   * Helper: Get prompt models for configuration with inheritance chain fallback.
+   * Walks the configuration inheritance chain looking for prompt models.
+   * Returns models from the first config in the chain that has any, or falls back to null-config.
    */
   private getPromptModelsForConfiguration(
     prompt: AIPromptEntityExtended,
     configurationId?: string
   ): AIPromptModelEntity[] {
     if (configurationId) {
-      const promptModels = AIEngine.Instance.PromptModels.filter(
-        pm => pm.PromptID === prompt.ID &&
-              (pm.Status === 'Active' || pm.Status === 'Preview') &&
-              pm.ConfigurationID === configurationId
-      );
+      // Get the configuration inheritance chain (child -> parent -> grandparent -> ...)
+      const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
 
-      if (promptModels.length === 0) {
-        LogStatus(`No models found for configuration "${configurationId}", falling back to default models`);
-        return AIEngine.Instance.PromptModels.filter(
+      // Walk the chain looking for prompt models
+      for (const config of chain) {
+        const promptModels = AIEngine.Instance.PromptModels.filter(
           pm => pm.PromptID === prompt.ID &&
                 (pm.Status === 'Active' || pm.Status === 'Preview') &&
-                !pm.ConfigurationID
+                pm.ConfigurationID === config.ID
         );
+
+        if (promptModels.length > 0) {
+          return promptModels;
+        }
       }
 
-      return promptModels;
-    } else {
-      return AIEngine.Instance.PromptModels.filter(
-        pm => pm.PromptID === prompt.ID &&
-              (pm.Status === 'Active' || pm.Status === 'Preview') &&
-              !pm.ConfigurationID
-      );
+      // No match in chain, fall back to NULL config models
+      LogStatus(`No models found in configuration chain for "${configurationId}", falling back to default models`);
     }
+
+    // Return null-config (universal) models
+    return AIEngine.Instance.PromptModels.filter(
+      pm => pm.PromptID === prompt.ID &&
+            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+            !pm.ConfigurationID
+    );
   }
 
   /**
@@ -1953,7 +1975,8 @@ export class AIPromptRunner {
   }
 
   /**
-   * Helper: Add configuration fallback candidates (null-config models).
+   * Helper: Add configuration fallback candidates from the inheritance chain.
+   * Adds models from parent configs (with decreasing priority) and null-config models as final fallback.
    */
   private addConfigurationFallbackCandidates(
     candidates: ModelVendorCandidate[],
@@ -1962,6 +1985,39 @@ export class AIPromptRunner {
     preferredVendorId?: string,
     verbose?: boolean
   ): void {
+    const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
+
+    // Add models from parent configs (skip index 0 which is the direct config, already handled)
+    for (let i = 1; i < chain.length; i++) {
+      const parentConfig = chain[i];
+      const parentModels = AIEngine.Instance.PromptModels.filter(
+        pm => pm.PromptID === prompt.ID &&
+              (pm.Status === 'Active' || pm.Status === 'Preview') &&
+              pm.ConfigurationID === parentConfig.ID
+      );
+
+      if (parentModels.length > 0 && verbose) {
+        LogStatus(`Adding ${parentModels.length} models from parent config "${parentConfig.Name}" as fallback`);
+      }
+
+      for (const pm of parentModels) {
+        const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+        if (model && model.IsActive) {
+          // Decrease base priority for each level up the chain (3000, 2500, 2000, etc.)
+          const basePriority = 3000 - (i * 500);
+          const modelCandidates = this.createCandidatesForModel(
+            model,
+            basePriority,
+            'prompt-model',
+            preferredVendorId,
+            pm.Priority
+          );
+          candidates.push(...modelCandidates);
+        }
+      }
+    }
+
+    // Finally add NULL config models (universal fallback) with lowest priority
     const nullConfigModels = AIEngine.Instance.PromptModels.filter(
       pm => pm.PromptID === prompt.ID &&
             (pm.Status === 'Active' || pm.Status === 'Preview') &&
@@ -1969,16 +2025,15 @@ export class AIPromptRunner {
     );
 
     if (nullConfigModels.length > 0 && verbose) {
-      LogStatus(`Adding ${nullConfigModels.length} NULL configuration models as fallback candidates`);
+      LogStatus(`Adding ${nullConfigModels.length} NULL configuration models as universal fallback`);
     }
 
     for (const pm of nullConfigModels) {
       const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
       if (model && model.IsActive) {
-        // Use lower base priority (2000 instead of 5000) so config-specific models are tried first
         const modelCandidates = this.createCandidatesForModel(
           model,
-          2000,
+          1000, // Lowest priority tier
           'prompt-model',
           preferredVendorId,
           pm.Priority
@@ -2763,9 +2818,12 @@ export class AIPromptRunner {
       }
       
       // Get all models of this specific type
-      allModels = aiEngine.Models.filter(m => 
-        m.AIModelType?.trim().toLowerCase() === modelType.Name.trim().toLowerCase()
-      );
+      const targetTypeName = modelType.Name.trim().toLowerCase();
+      allModels = aiEngine.Models.filter(m => {
+        // Guard against AIModelType being non-string (defensive coding for data issues)
+        const mType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
+        return mType === targetTypeName;
+      });
     } else {
       // No type restriction - get all models
       allModels = aiEngine.Models;

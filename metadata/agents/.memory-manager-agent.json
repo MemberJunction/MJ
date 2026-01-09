@@ -30,23 +30,9 @@
             "ID": "F2BCE847-E5A4-437E-8BF3-1C9C79D4A813"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:26:34.541Z",
-            "checksum": "f7e1ee64ed5b73c278126d029ec3817b4780114094dc2d185248c17f771acadf"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "A1575099-1576-45E9-A6FD-88102FB7E510"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Memory Manager - Extract Notes",
-              "resolved": "38129618-88C2-470F-9A32-A631AFB4371E"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.056Z",
+            "checksum": "20e3548eade4dc96a0e8579ee5d3855c3f77ee888201a78d36ae3deb976ac4e4"
+          }
         },
         {
           "fields": {
@@ -59,23 +45,9 @@
             "ID": "D71FB930-97A5-4BFB-B1D0-AAFA98AA542F"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:26:34.551Z",
-            "checksum": "13a21f95ec7bbeda831806e35f3711572920e071e4f50a0e0dcbe36458707335"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "A1575099-1576-45E9-A6FD-88102FB7E510"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Memory Manager - Extract Examples",
-              "resolved": "14BFD6A6-57E0-4A5B-9AE0-579123DA495B"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.057Z",
+            "checksum": "53f2ea146d71da50959266683b930c4186816ca486a5efbbd5c427e2507f1566"
+          }
         }
       ]
     },
@@ -83,16 +55,8 @@
       "ID": "A1575099-1576-45E9-A6FD-88102FB7E510"
     },
     "sync": {
-      "lastModified": "2025-10-29T15:26:34.470Z",
-      "checksum": "24b4a46ac81e863546399cdeb22bb37d533bf3501e5559e99d283d0fbc9e7c67"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:35.036Z",
+      "checksum": "d3b47703def5e9b2624c542db5aa78abe1288bd8795c11ea07cf2ccaa0df2897"
+    }
   }
 ]

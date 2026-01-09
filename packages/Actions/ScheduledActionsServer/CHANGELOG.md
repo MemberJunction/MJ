@@ -1,5 +1,89 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ai-vectors-pinecone@2.131.0
+  - @memberjunction/ai-vector-sync@2.131.0
+  - @memberjunction/actions-apollo@2.131.0
+  - @memberjunction/actions-content-autotag@2.131.0
+  - @memberjunction/actions@2.131.0
+  - @memberjunction/scheduled-actions@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/sqlserver-dataprovider@2.131.0
+  - @memberjunction/ai@2.131.0
+  - @memberjunction/ai-mistral@2.131.0
+  - @memberjunction/ai-openai@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.130.1
+- @memberjunction/ai-mistral@2.130.1
+- @memberjunction/ai-openai@2.130.1
+- @memberjunction/ai-vectors-pinecone@2.130.1
+- @memberjunction/ai-vector-sync@2.130.1
+- @memberjunction/actions-apollo@2.130.1
+- @memberjunction/actions-content-autotag@2.130.1
+- @memberjunction/actions@2.130.1
+- @memberjunction/scheduled-actions@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/sqlserver-dataprovider@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/sqlserver-dataprovider@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/ai-mistral@2.130.0
+  - @memberjunction/ai-openai@2.130.0
+  - @memberjunction/ai-vector-sync@2.130.0
+  - @memberjunction/actions@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/ai-vectors-pinecone@2.130.0
+  - @memberjunction/scheduled-actions@2.130.0
+  - @memberjunction/actions-apollo@2.130.0
+  - @memberjunction/actions-content-autotag@2.130.0
+
+## 2.129.0
+
+### Minor Changes
+
+- c7e38aa: migration
+
+### Patch Changes
+
+- Updated dependencies [c391d7d]
+- Updated dependencies [8c412cf]
+- Updated dependencies [fbae243]
+- Updated dependencies [0fb62af]
+- Updated dependencies [7d42aa5]
+- Updated dependencies [c7e38aa]
+- Updated dependencies [7a39231]
+  - @memberjunction/core@2.129.0
+  - @memberjunction/sqlserver-dataprovider@2.129.0
+  - @memberjunction/ai-openai@2.129.0
+  - @memberjunction/ai-vectors-pinecone@2.129.0
+  - @memberjunction/core-entities@2.129.0
+  - @memberjunction/ai-vector-sync@2.129.0
+  - @memberjunction/actions-apollo@2.129.0
+  - @memberjunction/actions-content-autotag@2.129.0
+  - @memberjunction/actions@2.129.0
+  - @memberjunction/scheduled-actions@2.129.0
+  - @memberjunction/ai@2.129.0
+  - @memberjunction/ai-mistral@2.129.0
+
 ## 2.128.0
 
 ### Patch Changes

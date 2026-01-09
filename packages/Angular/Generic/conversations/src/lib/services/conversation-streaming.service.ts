@@ -1,10 +1,41 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Subscription, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription, firstValueFrom } from 'rxjs';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { ActiveTasksService } from './active-tasks.service';
 import { DataCacheService } from './data-cache.service';
 import { ConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
+
+/**
+ * Completion event structure broadcast when an agent finishes
+ */
+export interface CompletionEvent {
+  conversationDetailId: string;
+  agentRunId: string;
+}
+
+/**
+ * Metadata structure for message progress updates
+ */
+export interface MessageProgressMetadata {
+  /** Progress details (from RunAIAgentResolver) */
+  progress?: {
+    hierarchicalStep?: string;
+    percentage?: number;
+    message?: string;
+    stepCount?: number;
+    agentName?: string;
+    agentType?: string;
+  };
+  /** Agent run information (from RunAIAgentResolver) */
+  agentRun?: {
+    Agent?: string;
+    ConversationDetailID?: string;
+    ID?: string;
+  };
+  /** Agent run ID (alternative to agentRun.ID) */
+  agentRunId?: string;
+}
 
 /**
  * Message progress update structure
@@ -14,8 +45,10 @@ export interface MessageProgressUpdate {
   percentComplete?: number;
   taskName?: string;
   conversationDetailId: string;
-  metadata?: any;
+  metadata?: MessageProgressMetadata;
   stepCount?: number;
+  /** Identifies which backend resolver published this update */
+  resolver?: 'TaskOrchestrator' | 'RunAIAgentResolver' | string;
 }
 
 /**
@@ -45,6 +78,17 @@ export class ConversationStreamingService implements OnDestroy {
   // Registry of callbacks per conversation detail ID
   // Multiple callbacks can be registered for the same message (e.g., different components)
   private callbackRegistry = new Map<string, MessageProgressCallback[]>();
+
+  // Track recent completions for late-arriving components (e.g., after navigation)
+  // Key: conversationDetailId, Value: completion info with timestamp
+  private recentCompletions = new Map<string, {
+    conversationDetailId: string;
+    agentRunId: string;
+    timestamp: Date;
+  }>();
+
+  // Observable for components to subscribe to completion events in real-time
+  public completionEvents$ = new Subject<CompletionEvent>();
 
   // Subject to emit connection status changes
   private connectionStatus$ = new BehaviorSubject<StreamingConnectionStatus>('disconnected');
@@ -251,7 +295,8 @@ export class ConversationStreamingService implements OnDestroy {
         percentComplete,
         taskName,
         conversationDetailId,
-        metadata
+        metadata,
+        resolver: 'TaskOrchestrator'
       };
 
       // Invoke all registered callbacks for this specific message
@@ -274,11 +319,53 @@ export class ConversationStreamingService implements OnDestroy {
   /**
    * Route agent progress updates (from RunAIAgentResolver) to registered callbacks.
    * Uses conversationDetailID from agentRun data for direct routing.
+   * Also handles completion messages to remove tasks from ActiveTasksService.
    */
   private async routeAgentProgress(statusObj: any): Promise<void> {
     try {
       // Extract progress information from RunAIAgentResolver message
-      const { agentRun, progress } = statusObj.data || {};
+      const { agentRun, progress, type } = statusObj.data || {};
+
+      // Handle completion messages - backend sends type: 'complete' when agent finishes
+      // Now includes conversationDetailId directly from backend (no reverse lookup needed)
+      if (type === 'complete') {
+        const agentRunId = statusObj.data?.agentRunId;
+        const conversationDetailId = statusObj.data?.conversationDetailId;
+
+        // Remove from active tasks (clears spinner in conversation list)
+        if (agentRunId) {
+          const removed = this.activeTasks.removeByAgentRunId(agentRunId);
+          if (removed) {
+            console.log(`[ConversationStreamingService] ✅ Agent run ${agentRunId} completed, removed from active tasks`);
+          }
+        }
+
+        // Broadcast completion event if we have the conversationDetailId
+        if (conversationDetailId) {
+          // Store for late-arriving components (navigation scenario)
+          this.recentCompletions.set(conversationDetailId, {
+            conversationDetailId,
+            agentRunId: agentRunId || '',
+            timestamp: new Date()
+          });
+
+          // Broadcast to all subscribers
+          this.completionEvents$.next({
+            conversationDetailId,
+            agentRunId: agentRunId || ''
+          });
+
+          // Cleanup old completions to prevent memory leak
+          this.cleanupOldCompletions();
+
+          console.log(`[ConversationStreamingService] 📢 Completion broadcast for message ${conversationDetailId}`);
+        } else {
+          console.warn(`[ConversationStreamingService] ⚠️ Completion received without conversationDetailId for agentRunId: ${agentRunId}`);
+        }
+
+        return;
+      }
+
       const conversationDetailId = agentRun?.ConversationDetailID;
       const message = progress?.message;
       const percentComplete = progress?.percentage;
@@ -308,8 +395,9 @@ export class ConversationStreamingService implements OnDestroy {
         percentComplete,
         taskName: agentRun?.Agent || 'Agent',
         conversationDetailId,
-        metadata: { agentRun, progress },
-        stepCount
+        metadata: { agentRun, progress } as MessageProgressMetadata,
+        stepCount,
+        resolver: 'RunAIAgentResolver'
       };
 
       // Invoke all registered callbacks for this specific message
@@ -345,6 +433,37 @@ export class ConversationStreamingService implements OnDestroy {
   }
 
   /**
+   * Get a recent completion event for a message (used when component initializes after completion)
+   * This handles the navigation scenario: user navigates away, agent completes, user returns.
+   * @param conversationDetailId - The message ID to check
+   * @returns Completion info if found within the last 5 minutes, undefined otherwise
+   */
+  public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+    const completion = this.recentCompletions.get(conversationDetailId);
+    return completion ? { agentRunId: completion.agentRunId } : undefined;
+  }
+
+  /**
+   * Clear a recent completion after it has been handled
+   * @param conversationDetailId - The message ID to clear
+   */
+  public clearRecentCompletion(conversationDetailId: string): void {
+    this.recentCompletions.delete(conversationDetailId);
+  }
+
+  /**
+   * Cleanup completions older than 5 minutes to prevent memory leak
+   */
+  private cleanupOldCompletions(): void {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    for (const [id, data] of this.recentCompletions) {
+      if (data.timestamp.getTime() < fiveMinutesAgo) {
+        this.recentCompletions.delete(id);
+      }
+    }
+  }
+
+  /**
    * Cleanup when service is destroyed
    */
   ngOnDestroy(): void {
@@ -358,6 +477,8 @@ export class ConversationStreamingService implements OnDestroy {
     }
 
     this.callbackRegistry.clear();
+    this.recentCompletions.clear();
+    this.completionEvents$.complete();
     this.connectionStatus$.complete();
     this.initialized = false;
   }

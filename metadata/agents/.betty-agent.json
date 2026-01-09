@@ -27,23 +27,9 @@
             "ID": "31D8A409-A68B-4A91-8B9D-40808EFFC7A8"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:02.642Z",
-            "checksum": "4a74f856f8ccd261f812a1bdb071a8233d5aa741002e478d748a8026132d9be8"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "6C350E8D-5005-43C5-968C-D535202192CC"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Betty",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:34.829Z",
+            "checksum": "ad8327284403e0234f30f46b945af8cd3afb2c65e24ed7bd18b1ddc282a0c4b6"
+          }
         }
       ],
       "MJ: AI Agent Steps": [
@@ -74,23 +60,9 @@
             "ID": "254A75AF-2D6C-4DC0-BA42-F0B3D03F5788"
           },
           "sync": {
-            "lastModified": "2025-11-10T00:29:02.666Z",
-            "checksum": "2eea0a56c3befffdd4aafe95315d2e458489bfd1927c7d0fb6ec7bc309c9a6c9"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "6C350E8D-5005-43C5-968C-D535202192CC"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Betty",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:34.830Z",
+            "checksum": "ae03ee286a95d93752dbf2e37740702eef2c4f4c24a146aca99bcd3ae020e75e"
+          }
         }
       ]
     },
@@ -98,16 +70,8 @@
       "ID": "6C350E8D-5005-43C5-968C-D535202192CC"
     },
     "sync": {
-      "lastModified": "2025-11-10T00:29:02.594Z",
-      "checksum": "3a2d719db82897f57d47227af963964a6074c181d4a149ab1b13faf6d90c878c"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Flow",
-        "resolved": "4F6A189B-C068-4736-9F23-3FF540B40FDD"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:34.803Z",
+      "checksum": "66956315e20574ec7bc9ca05a9dc0797205cb4f18e3af339f317ec8e70d2ea0f"
+    }
   }
 ]

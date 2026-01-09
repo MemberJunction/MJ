@@ -25,17 +25,9 @@
             "ID": "AB5E2040-46F0-458E-BEDB-760386D2860F"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.507Z",
-            "checksum": "eb84f8371cf63b901ed539c063de04bb9e63f3e1947b3fe35c08ad8af6756b70"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.307Z",
+            "checksum": "0a591c60abdbc1099f65a1359638228cbe9c1da6f43935ed18a8ad10f698bb2d"
+          }
         },
         {
           "fields": {
@@ -51,17 +43,9 @@
             "ID": "48A15F77-4767-424C-AAA2-07FC1C3896F0"
           },
           "sync": {
-            "lastModified": "2025-10-29T20:15:27.549Z",
-            "checksum": "e52a6d9b8b3cc771b0b9569aee1f2dd009224d409621f22c2433e8fa1b745f2c"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.310Z",
+            "checksum": "3767f71fdc40c606d7176ccbc949ebdf7c4c66bea89c6c60b966386c327fbe91"
+          }
         },
         {
           "fields": {
@@ -77,17 +61,9 @@
             "ID": "63388B53-9E79-4D48-8725-B71C1481AA0B"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.519Z",
-            "checksum": "09c50433224afaf4422f34720db3f8356e437d936f6820816a0e5bb6ac8b44f5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.311Z",
+            "checksum": "0a683320baa5984c44b981ba3d85429911ff066c0dac4736868dc5877b03a0dd"
+          }
         },
         {
           "fields": {
@@ -103,17 +79,9 @@
             "ID": "8740650D-B25A-4878-8BBD-A835D48D1BA2"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.530Z",
-            "checksum": "1f08db53b11bfe26fc2c3dc40ef342b5384f8ea4ea14b5782625ce190dc07d11"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.313Z",
+            "checksum": "9cd8d5563a69f5e9908358476444f09f8cb8c79fe5ecf7cb24ee21857456566d"
+          }
         },
         {
           "fields": {
@@ -129,17 +97,9 @@
             "ID": "2C39B3B3-EBD5-40D7-B53B-C4CE438694E0"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.543Z",
-            "checksum": "29af6bf6effd7942a4710b8c66946a7b27336bfd249e7f60fcc4c302814c60b8"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.315Z",
+            "checksum": "a3feebb7dad0e9c7fba3629053a7f2212af0c1a143070798813882f49efe9d79"
+          }
         },
         {
           "fields": {
@@ -155,17 +115,9 @@
             "ID": "3EE9DB2B-6B82-4161-A708-3585EC785921"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.556Z",
-            "checksum": "09140d0ed68093a78681f4c434014bd1a092ea92b76f57751dd34179e24d2237"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.316Z",
+            "checksum": "b942e555f831af1f1f341efe5cdff29d637bc4c743caa40a9d020388b2707dd8"
+          }
         },
         {
           "fields": {
@@ -181,17 +133,9 @@
             "ID": "15F969E7-9B18-4253-BF78-AA74395827B0"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.569Z",
-            "checksum": "d43c5b85fc4bd564f192c39e2e5e30a12068fc79f8fc70c78784b8f81e480624"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.318Z",
+            "checksum": "1ae3fc164ff5a3d6645ffd76b9b2748f024c91eb6363d76004e8fe0038435ff4"
+          }
         },
         {
           "fields": {
@@ -206,17 +150,9 @@
             "ID": "3D4631ED-A764-4572-9CFC-F9E0C45BA5A1"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.581Z",
-            "checksum": "6064d5af538581c8a608cd32efbf1855ab61fa09193b8175bc699a5cecde7576"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.319Z",
+            "checksum": "47b0352904473cf792ebc81276cc0cf2fdd1cf466d957bcb1e0ba0b6f6ff538e"
+          }
         },
         {
           "fields": {
@@ -231,17 +167,9 @@
             "ID": "A7EF1ED6-C270-4980-BB0A-517795875FF8"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.592Z",
-            "checksum": "abf12b9b265b33b0e8a578da0cc0e5e5dd0780f33bd7dd929805294e61701695"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.321Z",
+            "checksum": "3a8625965dbb3e8a6ae56e85c4c166748c4c6388241a3b6e34c9f43efbe8cbb4"
+          }
         },
         {
           "fields": {
@@ -256,17 +184,9 @@
             "ID": "13951823-5854-49ED-96D5-8190AECC66F9"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.602Z",
-            "checksum": "7df94b6d1ab7585cf1e0b2069a79c3cbe6c968a4e7372e4037a3a5b248db3a16"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.322Z",
+            "checksum": "f84dbb59df72295b161af2e885b3e51030596926cc40073a97197a2edc6f6adf"
+          }
         },
         {
           "fields": {
@@ -281,17 +201,9 @@
             "ID": "61128E1D-B31B-434B-B496-9EAAADAB835D"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.692Z",
-            "checksum": "353731b04ff6b21a84750120581bab6102cd8dbc6caa1fd1c5c0d31e8f526b10"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.388Z",
+            "checksum": "604825d7f4c3be7179cf8f6989b2b5d5fdf45e99a7d5cfbf3697468166b866af"
+          }
         },
         {
           "fields": {
@@ -306,17 +218,9 @@
             "ID": "3897A0BD-F01C-41AD-B3E5-53E30FD96E09"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.704Z",
-            "checksum": "05a210fb4188738be6606f58ef0dd81405e687680064d7513e5a1fedbeaa5b88"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.389Z",
+            "checksum": "8863a94c25f7780ce62d1ee7f3ef15e0de48a6c6aba57611c061ac75b68d6924"
+          }
         }
       ],
       "Action Result Codes": [
@@ -331,17 +235,9 @@
             "ID": "3BF5AA7E-4F2C-45DB-84F2-39ED3D397D6B"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.723Z",
-            "checksum": "6d7425989c7e2050d4cf2d0575030acd828f5afaf539f412f37bd7359cef5784"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.390Z",
+            "checksum": "76843f6e25cb24b4077fa9f540865cfc35b0e5a3a499eb72f217958b9e38fef4"
+          }
         },
         {
           "fields": {
@@ -354,17 +250,9 @@
             "ID": "867E5CED-F346-4C68-A635-3F75E51F9E88"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.735Z",
-            "checksum": "e2719603ce9c7ef41562a6dde4c97c6b6e512b6b0762b9f62c539eb7407413ff"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.392Z",
+            "checksum": "51d315ce43929dac9181171d10ad93849694c7eac140a7f93a55edcefc4fe5ec"
+          }
         },
         {
           "fields": {
@@ -377,17 +265,9 @@
             "ID": "663E70AD-C2E8-45DF-AF79-B9699219A818"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.745Z",
-            "checksum": "2bcd2e57933939b6358aa10949b447f425311060d0eef5703bc9280879352c8a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.393Z",
+            "checksum": "c3f4428a14f14c3ed0e55dbcf2ebb017378a04922f6656ebffd9e2f8044eae4a"
+          }
         },
         {
           "fields": {
@@ -400,17 +280,9 @@
             "ID": "6F2FFC89-6735-403E-AB07-A7AFC55C0DB6"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.755Z",
-            "checksum": "e6da9697b39b9dd3bb3c24427af521f574f95aadb571196a353fcd9d6466d6b6"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.394Z",
+            "checksum": "2ab02b50975b84d4d738f8e76d8efc68280c4c0ef11240d24249e04acd3d1248"
+          }
         },
         {
           "fields": {
@@ -423,17 +295,9 @@
             "ID": "F7666C40-833E-4764-B80A-487C482F1D56"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.765Z",
-            "checksum": "a099d766f40d1e3ff833a497305fbf3138b1d911cd891047c04b5f4ae1b09be5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.395Z",
+            "checksum": "dcc9cfe45452fd74af75e0ac3d0bae2404cb737534a3c5b2260c68bdb467e4e6"
+          }
         },
         {
           "fields": {
@@ -446,17 +310,9 @@
             "ID": "AB295506-06ED-4A7D-99B2-27BF8EF85A39"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.775Z",
-            "checksum": "1aee58cb408547aa08a1eb4c95ba74b8fa226f065a4d6e7a9ae24c5ff4a15c04"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.397Z",
+            "checksum": "3716a5d61e27412603b28380c9a32421a4c54a268fef2eec5f5d82b9c7e38d5d"
+          }
         },
         {
           "fields": {
@@ -469,17 +325,9 @@
             "ID": "7E37F924-08E6-484A-AEFE-2A88ECC731A1"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.786Z",
-            "checksum": "9fa164963ec946abd76f0f76febb88d448a44f584ae39b4f48b7c0348f8f46bd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.398Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
         }
       ]
     },
@@ -487,17 +335,9 @@
       "ID": "36A70BE7-6F27-4006-9F30-C3AC8880B8DF"
     },
     "sync": {
-      "lastModified": "2025-10-29T15:25:20.346Z",
-      "checksum": "176cf7be4d4f3e045ebf43a09281d080e55b1f3b543af0ccfda828420751e644"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
-        "resolved": "B2CB33A5-28E9-4356-90A5-B102BADD071C"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:18.197Z",
+      "checksum": "f8041036f9b0abe0b3940eada914a42d09667d0676f646928a41893bba432d09"
+    }
   },
   {
     "fields": {
@@ -525,17 +365,9 @@
             "ID": "AE1A059C-134C-4249-A05D-071AF99E7AF5"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.796Z",
-            "checksum": "eb84f8371cf63b901ed539c063de04bb9e63f3e1947b3fe35c08ad8af6756b70"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.399Z",
+            "checksum": "0a591c60abdbc1099f65a1359638228cbe9c1da6f43935ed18a8ad10f698bb2d"
+          }
         },
         {
           "fields": {
@@ -551,17 +383,9 @@
             "ID": "58777343-8808-4F8D-9686-025441CECB1C"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.889Z",
-            "checksum": "878ab329fafecaf001b586a07efd9fee3a31f0c2a666e1493be7ff742599006a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.463Z",
+            "checksum": "d980db2663d633ae53326ff21b2577b531c72094f8645c044dbd761fd8344de3"
+          }
         },
         {
           "fields": {
@@ -577,17 +401,9 @@
             "ID": "F1FDF659-CB32-4F63-81A4-A74788FCD110"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.904Z",
-            "checksum": "869b4e0c74616ae8b5ef94f6f5ceb5f5b251e9d41ed0c1e86050c49bd0ad91f2"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.464Z",
+            "checksum": "8152de887d6e9b89bf9b922a64e1eed863042786010372264afe4f5fea2818c4"
+          }
         },
         {
           "fields": {
@@ -602,17 +418,9 @@
             "ID": "8FECFD6A-C4EC-497C-8E2C-AE5A8D29F5E6"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.916Z",
-            "checksum": "1ee913f639f498b4735b65be5ae83312f6d26de7f466c1c24c0a8db922071b9c"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.465Z",
+            "checksum": "13459c2ced1413049bd8ec337bb0e1120cbd10624d5abef5ebcf3483c69d41d8"
+          }
         },
         {
           "fields": {
@@ -627,17 +435,9 @@
             "ID": "B3813745-18C7-4C72-A90C-4B7BA7AC24D2"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.927Z",
-            "checksum": "d71781c7538ac4fd080580489547d3ab23b41d411825dddbe8a09dfea9cad92b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.466Z",
+            "checksum": "f2d770dc8326a173b20878c5d5ff22c957f251480a388366388d1f19caf55572"
+          }
         },
         {
           "fields": {
@@ -652,17 +452,9 @@
             "ID": "E2FEDC6A-7345-48C4-96C0-DA404291455F"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.940Z",
-            "checksum": "717c1174be243c4bcdfd1e0287f0c1b5645cf5f146a9f5ba1f2f7d70e15b78e8"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.468Z",
+            "checksum": "f75e87f8141f9e4a676fd978aca6667895c930e9b0d94a564cb3fddb4a67e936"
+          }
         },
         {
           "fields": {
@@ -677,17 +469,9 @@
             "ID": "568D516F-BD63-463E-855F-AFE705769DB5"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.950Z",
-            "checksum": "a31b3a034afa0a0ed0176eda3b1813aa371c8d6dd1ba7e1db2ca4eafb1f9ea71"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.469Z",
+            "checksum": "2066ef14080ee880082f4159195c557f1df8aec67c129df39192bf210d6eaa02"
+          }
         },
         {
           "fields": {
@@ -702,17 +486,9 @@
             "ID": "FAB63EF4-E838-473B-BDA7-36723DAA0247"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.961Z",
-            "checksum": "b325a7d2f36a86a80181e9aaf660e9e8d419661a23398fa68ab708e41f4df98d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.470Z",
+            "checksum": "724a02c08d09ffd947ef342d52f803b1bd0eb86893c60d2354cd1113e0867169"
+          }
         }
       ],
       "Action Result Codes": [
@@ -727,17 +503,9 @@
             "ID": "1BED91E4-3E05-4C75-B061-606CBF8EF982"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.970Z",
-            "checksum": "27579166969394cf03e693788169b1cf1f9677ba63ee54f87887156d517008fa"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.471Z",
+            "checksum": "15a1db5bfd6df9a0c269d96b064eb5d9c84456b69224893d873c2a9895ecb39e"
+          }
         },
         {
           "fields": {
@@ -750,17 +518,9 @@
             "ID": "77CB60FF-D791-453B-87F5-FCFE1DAC723C"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.981Z",
-            "checksum": "e2719603ce9c7ef41562a6dde4c97c6b6e512b6b0762b9f62c539eb7407413ff"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.472Z",
+            "checksum": "51d315ce43929dac9181171d10ad93849694c7eac140a7f93a55edcefc4fe5ec"
+          }
         },
         {
           "fields": {
@@ -773,17 +533,9 @@
             "ID": "6192ED58-3123-448D-A7D0-8E844DCDF36C"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:20.991Z",
-            "checksum": "512c9293c62f810988c3ea18d50f5a553b6623d4b677c0f5d4198d4f8e629533"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.473Z",
+            "checksum": "cd00f170a2b533009a2793e2f6f1b317b3dc7d4ad2af067d4345524cfa923a29"
+          }
         },
         {
           "fields": {
@@ -796,17 +548,9 @@
             "ID": "130128B5-C1AF-423D-A2AB-EACC4548B242"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.084Z",
-            "checksum": "2bcd2e57933939b6358aa10949b447f425311060d0eef5703bc9280879352c8a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.559Z",
+            "checksum": "c3f4428a14f14c3ed0e55dbcf2ebb017378a04922f6656ebffd9e2f8044eae4a"
+          }
         },
         {
           "fields": {
@@ -819,17 +563,9 @@
             "ID": "0BF727E1-9C75-4CAB-9D75-06CF994451CA"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.094Z",
-            "checksum": "a099d766f40d1e3ff833a497305fbf3138b1d911cd891047c04b5f4ae1b09be5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.562Z",
+            "checksum": "dcc9cfe45452fd74af75e0ac3d0bae2404cb737534a3c5b2260c68bdb467e4e6"
+          }
         },
         {
           "fields": {
@@ -842,17 +578,9 @@
             "ID": "CA76AAED-101F-4B8F-BC98-9E374EA15A4C"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.104Z",
-            "checksum": "1aee58cb408547aa08a1eb4c95ba74b8fa226f065a4d6e7a9ae24c5ff4a15c04"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.564Z",
+            "checksum": "3716a5d61e27412603b28380c9a32421a4c54a268fef2eec5f5d82b9c7e38d5d"
+          }
         },
         {
           "fields": {
@@ -865,17 +593,9 @@
             "ID": "19279470-41AD-411C-B0DB-D4936CFD0DB5"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.114Z",
-            "checksum": "e60a53aa14cfc5ce9efc27dd9bb235d46de7906b7d38238efcd07376277e15ea"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.567Z",
+            "checksum": "142b74224ff29fdd9d78adefe7dd86f3ccbc9464a9a6897f0c151067775e743d"
+          }
         },
         {
           "fields": {
@@ -888,17 +608,9 @@
             "ID": "26DEBB33-AB57-4D55-8E71-6D03190155A5"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.124Z",
-            "checksum": "9fa164963ec946abd76f0f76febb88d448a44f584ae39b4f48b7c0348f8f46bd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C4943E4A-9501-4985-B472-819B80FCBB84"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.569Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
         }
       ]
     },
@@ -906,17 +618,9 @@
       "ID": "C4943E4A-9501-4985-B472-819B80FCBB84"
     },
     "sync": {
-      "lastModified": "2025-10-29T15:25:20.376Z",
-      "checksum": "893a7b5499fe9a4538baf38b8140dd701036ce3b38b8a09d558c551158771f89"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
-        "resolved": "B2CB33A5-28E9-4356-90A5-B102BADD071C"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:18.198Z",
+      "checksum": "e0442421e2c42b476a2fe576c2439a63203083c01b1ce9922028925dff3047cf"
+    }
   },
   {
     "fields": {
@@ -944,17 +648,9 @@
             "ID": "F05696DC-CD69-44BA-B2CF-A377DD4FEDBA"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.136Z",
-            "checksum": "eb84f8371cf63b901ed539c063de04bb9e63f3e1947b3fe35c08ad8af6756b70"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.572Z",
+            "checksum": "0a591c60abdbc1099f65a1359638228cbe9c1da6f43935ed18a8ad10f698bb2d"
+          }
         },
         {
           "fields": {
@@ -970,17 +666,9 @@
             "ID": "91DF9E80-DDAF-4D4E-8736-35AE45DD40FC"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.149Z",
-            "checksum": "878ab329fafecaf001b586a07efd9fee3a31f0c2a666e1493be7ff742599006a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.575Z",
+            "checksum": "d980db2663d633ae53326ff21b2577b531c72094f8645c044dbd761fd8344de3"
+          }
         },
         {
           "fields": {
@@ -996,17 +684,9 @@
             "ID": "185096A9-FF66-44E3-8FB6-8F435BDCA9FA"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.159Z",
-            "checksum": "29af6bf6effd7942a4710b8c66946a7b27336bfd249e7f60fcc4c302814c60b8"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.577Z",
+            "checksum": "a3feebb7dad0e9c7fba3629053a7f2212af0c1a143070798813882f49efe9d79"
+          }
         },
         {
           "fields": {
@@ -1022,17 +702,9 @@
             "ID": "EC937351-995E-4CD1-84BE-FD7BCF5F25E8"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.170Z",
-            "checksum": "ec420ff32450b65f68c7febe557c7ab91ce8fd7cbd69ab42169e64c9a8dc4db5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.581Z",
+            "checksum": "a554396e273aece8c3957119510879e4bed672e9154b34e1c26c2d31b84e0242"
+          }
         },
         {
           "fields": {
@@ -1048,17 +720,9 @@
             "ID": "ECA2B643-E6CD-43AD-9D79-71184E7CCC5E"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.180Z",
-            "checksum": "9571d74ebf2bc5a7bd736bfbc68caba16e12db5e0b9c2a27cc94ec1988d17adf"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.583Z",
+            "checksum": "ceb7c5ea9b01e45eabeb761356ca28fa6e58b7d67416c765c9bcf3d415c93306"
+          }
         },
         {
           "fields": {
@@ -1074,17 +738,9 @@
             "ID": "7D6883F0-5F7B-468F-B090-EC12D6DA90D8"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.277Z",
-            "checksum": "8d606b03beb3b3ce2e9b4c8d406fb4fd1c5cc3fcc414f73f2596613f29b691b0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.705Z",
+            "checksum": "d939c391a228d8230dfc71347526777032fde669565ed6a639834a5bdbcab84d"
+          }
         },
         {
           "fields": {
@@ -1099,17 +755,9 @@
             "ID": "6F86A602-6469-485E-B408-910F63A1350E"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.288Z",
-            "checksum": "3ef0df5ae75f3024a45a5ea476cd5541102b050ce9ea4704c1ce8dc9bbb36603"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.708Z",
+            "checksum": "4609016bcc260b483325fea68220dda0df1be216c3427bf6aa3ee9a70d8f5100"
+          }
         },
         {
           "fields": {
@@ -1124,17 +772,9 @@
             "ID": "142C3E2A-FEE5-492F-9B67-145ACF48C407"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.302Z",
-            "checksum": "548d3f63ddfc248e8295836a4d3f34b6ae71bf93d44c3c2c1bfa1a1813fc2097"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.711Z",
+            "checksum": "8ba7082aadc701f5db7b24608d962af7d1365f1eeb90d6bc0a05c183bb8c849c"
+          }
         },
         {
           "fields": {
@@ -1149,17 +789,9 @@
             "ID": "9E6EB689-082C-4A14-89AB-739030004DA7"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.314Z",
-            "checksum": "8aac62aba29a6c7daaa8a89bc18b5bd7689a2c5b11c2c01960b6880447cb797e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.714Z",
+            "checksum": "619ad60409e8c9784d7f889582ccab70d7c71a04e0cbc662803184840582e408"
+          }
         },
         {
           "fields": {
@@ -1174,17 +806,9 @@
             "ID": "17B7255B-96CA-4C30-9618-B7115B989AF9"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.325Z",
-            "checksum": "1e5ab2ae07d47da21ccea76946dfe1c9536abf245f5e9d4646beedcc87c02721"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.718Z",
+            "checksum": "45da7b265fcbfd192db906eceb6e20b4256c437ab6d87fc5d9db03a93b9f2593"
+          }
         },
         {
           "fields": {
@@ -1199,17 +823,9 @@
             "ID": "2F42FED9-7D81-4765-8DC6-6C528AB9DEB9"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.335Z",
-            "checksum": "5fa6ec41283d56fc0549cf725b35add947f3ef68a03c641f272fa669bff9c866"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.720Z",
+            "checksum": "a1bdb4c2361993b85c5ae8a7810327a18652d6c7287e65b3272376066025671e"
+          }
         },
         {
           "fields": {
@@ -1224,17 +840,9 @@
             "ID": "BD51F579-379B-4AE4-B7FE-8444CF536F42"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.346Z",
-            "checksum": "8b2b8ea18e94efb3d9fa9e7a79a40d600d0e4b402e3ad50b277ad5696643d306"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.723Z",
+            "checksum": "b1813ea53b49cb7141cf13164091b485042d36df0e4f5a42b6bd0221db243c9c"
+          }
         },
         {
           "fields": {
@@ -1249,17 +857,9 @@
             "ID": "56DC0155-8DCF-46E3-AEC0-D591565147DD"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.357Z",
-            "checksum": "bc0a2a71789adb19bbe8bfb9013dd9230fb315ff021c539903932a2cb2592e6e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.725Z",
+            "checksum": "05442b95081b2eaee41476f379b84b798724d0ac2a2c7b9f65137117e5d12bc5"
+          }
         },
         {
           "fields": {
@@ -1274,17 +874,9 @@
             "ID": "F2F5BEA1-FFEC-4577-A22F-9AC2A94FB823"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.368Z",
-            "checksum": "4c562218d6a385c3a6095d9ed4fabf1cc1303447afa78f23eba383981630e157"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.728Z",
+            "checksum": "9d7b037c97cf7a32dac2cc59586399aba994967e39322956270318e76e0a804e"
+          }
         },
         {
           "fields": {
@@ -1299,17 +891,9 @@
             "ID": "58E6F30F-A667-4967-A2FF-1F147612606E"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.380Z",
-            "checksum": "27cc237868ce2eace5c4e1234246104865c7ab8b90bb07d12c1b4abb36d81724"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.731Z",
+            "checksum": "4b552ce2e175d7ddd38530e231e6c6d3bf39fdd18dbe26f065188c35362df9e7"
+          }
         },
         {
           "fields": {
@@ -1324,17 +908,9 @@
             "ID": "62ABB129-9365-477B-95A7-E0B1245D42E6"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.472Z",
-            "checksum": "31ed3a097af9ae9f3888e884115a495fa4cf24a0878e6ea357e5a3c50c78b7e5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.854Z",
+            "checksum": "55258e471647719ef662dc118e145e8096cdf6a7b6ce30370ee56ac89b2ddd54"
+          }
         },
         {
           "fields": {
@@ -1349,17 +925,9 @@
             "ID": "40F4A0C7-D8A0-408F-8385-00AA17FC4D82"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.484Z",
-            "checksum": "731e82b24e57065a6d39b150e4b8ddef76284a3c05fe11102dec8dddb2b7f27e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.855Z",
+            "checksum": "35afb653c37813f2c7cb55b561f30c3296e4cf57ebe63284bfe7ec86234d01e6"
+          }
         }
       ],
       "Action Result Codes": [
@@ -1374,17 +942,9 @@
             "ID": "8738C639-D54C-4DCA-91FA-1519B061B821"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.496Z",
-            "checksum": "636f60e7fe9b66482f4c0afe80bb6ba31dbca2075e57367515411dc43ce8d710"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.857Z",
+            "checksum": "25fba7ea53e95af93ca27966ed509b70cc77afe95f2f6bb605917ceef92ecd1a"
+          }
         },
         {
           "fields": {
@@ -1397,17 +957,9 @@
             "ID": "50E6AA4F-AEA2-411D-AC02-6210058D8988"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.507Z",
-            "checksum": "e2719603ce9c7ef41562a6dde4c97c6b6e512b6b0762b9f62c539eb7407413ff"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.859Z",
+            "checksum": "51d315ce43929dac9181171d10ad93849694c7eac140a7f93a55edcefc4fe5ec"
+          }
         },
         {
           "fields": {
@@ -1420,17 +972,9 @@
             "ID": "42EAB4BB-6E72-4F0A-99F2-3B0E29AC18B3"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.517Z",
-            "checksum": "2bcd2e57933939b6358aa10949b447f425311060d0eef5703bc9280879352c8a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.861Z",
+            "checksum": "c3f4428a14f14c3ed0e55dbcf2ebb017378a04922f6656ebffd9e2f8044eae4a"
+          }
         },
         {
           "fields": {
@@ -1443,17 +987,9 @@
             "ID": "30A6B63A-76C0-4461-85F0-1A84283C5A46"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.527Z",
-            "checksum": "a099d766f40d1e3ff833a497305fbf3138b1d911cd891047c04b5f4ae1b09be5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.862Z",
+            "checksum": "dcc9cfe45452fd74af75e0ac3d0bae2404cb737534a3c5b2260c68bdb467e4e6"
+          }
         },
         {
           "fields": {
@@ -1466,17 +1002,9 @@
             "ID": "20F0D53F-90F5-4994-B389-102FB6D3546D"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.538Z",
-            "checksum": "1aee58cb408547aa08a1eb4c95ba74b8fa226f065a4d6e7a9ae24c5ff4a15c04"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.866Z",
+            "checksum": "3716a5d61e27412603b28380c9a32421a4c54a268fef2eec5f5d82b9c7e38d5d"
+          }
         },
         {
           "fields": {
@@ -1489,17 +1017,9 @@
             "ID": "398DBEC2-9B7E-4B5C-A0C7-FFC04B041460"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.550Z",
-            "checksum": "9fa164963ec946abd76f0f76febb88d448a44f584ae39b4f48b7c0348f8f46bd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.876Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
         }
       ]
     },
@@ -1507,17 +1027,9 @@
       "ID": "FF7D75B2-C4D7-4A6A-AE11-66544FB05D35"
     },
     "sync": {
-      "lastModified": "2025-10-29T15:25:20.395Z",
-      "checksum": "1e6dc3638d29487e4425cadb9f44b122b739e74ed1c82ec782c7146e44ed40fd"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
-        "resolved": "B2CB33A5-28E9-4356-90A5-B102BADD071C"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:18.200Z",
+      "checksum": "77d3e16b7325f58796db2d50cf24d39465209f6eefb9f5a9901675e23a19ba51"
+    }
   },
   {
     "fields": {
@@ -1545,17 +1057,9 @@
             "ID": "2D0D9BA4-7A47-46EA-AC72-A679E04FC97B"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.562Z",
-            "checksum": "eb84f8371cf63b901ed539c063de04bb9e63f3e1947b3fe35c08ad8af6756b70"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.878Z",
+            "checksum": "0a591c60abdbc1099f65a1359638228cbe9c1da6f43935ed18a8ad10f698bb2d"
+          }
         },
         {
           "fields": {
@@ -1571,17 +1075,9 @@
             "ID": "6F1CF133-E658-4CD5-BBA3-9D6EC4EEB028"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.572Z",
-            "checksum": "878ab329fafecaf001b586a07efd9fee3a31f0c2a666e1493be7ff742599006a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.880Z",
+            "checksum": "d980db2663d633ae53326ff21b2577b531c72094f8645c044dbd761fd8344de3"
+          }
         },
         {
           "fields": {
@@ -1597,17 +1093,9 @@
             "ID": "1308F7CD-3A98-4829-926C-7539D3498CE4"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.668Z",
-            "checksum": "086dd9ee94ba6c9125cb8011adc3c939e68beede0a79517899771a614d9b3efd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.978Z",
+            "checksum": "cf31a4cda29231d5915e73c9ed9028344f76939b85706cd8637451309cb8c869"
+          }
         },
         {
           "fields": {
@@ -1623,17 +1111,9 @@
             "ID": "609345CB-C24F-4DEB-96A3-7E0D2CDBCA99"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.680Z",
-            "checksum": "ce70796b509f1f594c692bc6e88906a4581c27bfc692d28f165dd35c85c1083b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.980Z",
+            "checksum": "505434ef7b958240223a513a00a6c30f87a5ff2e6ebbb9071cabe19a1c614980"
+          }
         },
         {
           "fields": {
@@ -1649,17 +1129,9 @@
             "ID": "545DD52F-3284-4EEB-BEFC-CA4051E91C01"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.692Z",
-            "checksum": "095a01ab731e9c370a2e56f66a7d1d43ea23fef03578d6703258b87e2f0da04a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.982Z",
+            "checksum": "255c4ce3f54bc5a4a0a8d5f3ad0decaeb0e285a6298f7c390b0dcc2d0bde1953"
+          }
         },
         {
           "fields": {
@@ -1675,17 +1147,9 @@
             "ID": "A8374CE0-4B2F-418B-90B8-99CD7BD5BFC4"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.704Z",
-            "checksum": "8b3f6d385e84909b255d0864741a2c8d9a8d1344348f2ba308178e6fba59a890"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.983Z",
+            "checksum": "9b54a0a05c33fd2b43145721e6116ae9faa523f2642c59c6327edbe9a0cf33eb"
+          }
         },
         {
           "fields": {
@@ -1701,17 +1165,9 @@
             "ID": "C3D54570-775C-4CB4-8218-619D87B2588D"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.718Z",
-            "checksum": "c9234d426fa11f8016c11929551e5750356cef7757da46ea3a285f3628d47e22"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.985Z",
+            "checksum": "ee98f6e5f6579ac98e5d35a955a0902c903c70480a81e7d89c78f961813dcc17"
+          }
         },
         {
           "fields": {
@@ -1726,17 +1182,9 @@
             "ID": "A24AA461-FFF1-486C-86EE-F17404E2E690"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.729Z",
-            "checksum": "86c2656564082f568cd806f08abb7afa047485a446374de856c36ba9cc9dde8e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.986Z",
+            "checksum": "b8209cce58b3a81f7a6e877a4b3dfb506f36043be70758a338bdc3a14b03b2c7"
+          }
         },
         {
           "fields": {
@@ -1751,17 +1199,9 @@
             "ID": "830A2652-CD2F-40DE-A5D6-D5EEF8A50F9A"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.740Z",
-            "checksum": "dc09ac0ab3eee7850c9f31d6eb9ba3fdfe28c0a2e96c11c4c46e201c2c359e51"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.988Z",
+            "checksum": "98e03843448b0a60b05de6cedbd2867e7be89248e5cba548dc1768e6a5a4097d"
+          }
         },
         {
           "fields": {
@@ -1776,17 +1216,9 @@
             "ID": "0589DCB5-D83B-480C-A5CA-FE288E39FF9B"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.751Z",
-            "checksum": "0ce94f0a848b7d3263e1bc316b9cf8d55bd6da99daf0db324b0639a6bcf00b7e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.989Z",
+            "checksum": "169941e9b1f42cb847d3346bef8fd0ca82b7fa1bc6ff6781019f5b74d6383f30"
+          }
         },
         {
           "fields": {
@@ -1801,17 +1233,9 @@
             "ID": "BCF2AA5C-76EE-4743-A0D8-3883075CA4D9"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.763Z",
-            "checksum": "b0d9e8a5d493e7b70bed3ba4940d4440e0c381b6446f9b9e9374343086784fb0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.991Z",
+            "checksum": "26f48bdb2e4c6726d29998eb1d77c785d4d20dfdae97c21d90f070f46bc5b54c"
+          }
         },
         {
           "fields": {
@@ -1826,17 +1250,9 @@
             "ID": "D4DA078C-2AFF-44C5-9B4D-47B09B7625DA"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.772Z",
-            "checksum": "3679e38260fc6300398b681d5a85631a164fd109f92a47f7a0a32ae12cf47b87"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:18.992Z",
+            "checksum": "57a4d19d1fc81f5d2df0f79fe7e1186e87b13e6b922d2ab0d5cb5daebfb26c53"
+          }
         }
       ],
       "Action Result Codes": [
@@ -1851,17 +1267,9 @@
             "ID": "139CAA8E-7D05-4BCC-B20C-ED95C768DEA0"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.859Z",
-            "checksum": "2145eab47465022612e6bf7250fbda09317fef92e69f6ec3722c77ea55b0a096"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.119Z",
+            "checksum": "25b7c668e58d9faaeadac57ebeb5e3850cd751e4bc965a165053ab6901969b41"
+          }
         },
         {
           "fields": {
@@ -1874,17 +1282,9 @@
             "ID": "E455E0CC-3B90-4A40-B9EA-52DE88062543"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.871Z",
-            "checksum": "93b2e4849d7d59f6e016f24ff2658e31ddbcfeb04fb3b9c9365b724b40dc6468"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.121Z",
+            "checksum": "0cda99dbec924104e57c0a71bacdae0f51c5d446c56075131242115ff93efd44"
+          }
         },
         {
           "fields": {
@@ -1897,17 +1297,9 @@
             "ID": "50989B68-8ABD-4BBC-B2A8-07965DA78A34"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.885Z",
-            "checksum": "e2719603ce9c7ef41562a6dde4c97c6b6e512b6b0762b9f62c539eb7407413ff"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.123Z",
+            "checksum": "51d315ce43929dac9181171d10ad93849694c7eac140a7f93a55edcefc4fe5ec"
+          }
         },
         {
           "fields": {
@@ -1920,17 +1312,9 @@
             "ID": "8384606C-FEAD-4FAC-BD3D-0783917D4B91"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.896Z",
-            "checksum": "2bcd2e57933939b6358aa10949b447f425311060d0eef5703bc9280879352c8a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.124Z",
+            "checksum": "c3f4428a14f14c3ed0e55dbcf2ebb017378a04922f6656ebffd9e2f8044eae4a"
+          }
         },
         {
           "fields": {
@@ -1943,17 +1327,9 @@
             "ID": "6078DFDF-5F0C-4F7A-B8A4-8FB8E63A61BE"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.906Z",
-            "checksum": "a099d766f40d1e3ff833a497305fbf3138b1d911cd891047c04b5f4ae1b09be5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.126Z",
+            "checksum": "dcc9cfe45452fd74af75e0ac3d0bae2404cb737534a3c5b2260c68bdb467e4e6"
+          }
         },
         {
           "fields": {
@@ -1966,17 +1342,9 @@
             "ID": "477594D8-C910-419B-9691-6A169AA405CE"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.916Z",
-            "checksum": "1aee58cb408547aa08a1eb4c95ba74b8fa226f065a4d6e7a9ae24c5ff4a15c04"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.127Z",
+            "checksum": "3716a5d61e27412603b28380c9a32421a4c54a268fef2eec5f5d82b9c7e38d5d"
+          }
         },
         {
           "fields": {
@@ -1989,17 +1357,9 @@
             "ID": "67775283-6731-4D33-8C3F-6DD33962623B"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.926Z",
-            "checksum": "9fa164963ec946abd76f0f76febb88d448a44f584ae39b4f48b7c0348f8f46bd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.128Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
         }
       ]
     },
@@ -2007,17 +1367,9 @@
       "ID": "C7B070C5-46FD-4A3A-9580-C44FC597C0F4"
     },
     "sync": {
-      "lastModified": "2025-10-29T15:25:20.414Z",
-      "checksum": "368f492025f35b124ee1bbc1c29fdbd724b8fe45b0c203fc10254d5d625e8ebf"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
-        "resolved": "B2CB33A5-28E9-4356-90A5-B102BADD071C"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:18.201Z",
+      "checksum": "c5e26505b8e5808547fd1227fccd69ccd604cebf698272fd66c0d35d977cb18f"
+    }
   },
   {
     "fields": {
@@ -2045,17 +1397,9 @@
             "ID": "472FB8C4-CD39-45D9-B6BC-748636B8BF03"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.939Z",
-            "checksum": "eb84f8371cf63b901ed539c063de04bb9e63f3e1947b3fe35c08ad8af6756b70"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.129Z",
+            "checksum": "0a591c60abdbc1099f65a1359638228cbe9c1da6f43935ed18a8ad10f698bb2d"
+          }
         },
         {
           "fields": {
@@ -2071,17 +1415,9 @@
             "ID": "DD7D5C18-6C4D-47FE-BD52-EAFE4246BD09"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.951Z",
-            "checksum": "180bf24b1b552c3ab17bf57ee24b6a0011276c9f591a498740aa925ed068ff46"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.131Z",
+            "checksum": "6cdff40e3f8586e0e1b45c4e16f25fab677ff73007a9105142594b278356ab4f"
+          }
         },
         {
           "fields": {
@@ -2096,17 +1432,9 @@
             "ID": "114D53DE-C92F-4BBB-BE65-9B9270E5DB72"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:21.961Z",
-            "checksum": "55550c4e8edd350c8dfd8b2c00c5dc05faf5c465e287a0f6083aa40190a568e7"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.132Z",
+            "checksum": "73794801dc600409cb5664dc0368ff97838b29d3ab75f4852ea2bb7f3d9e3d02"
+          }
         },
         {
           "fields": {
@@ -2121,17 +1449,9 @@
             "ID": "C0A13E05-21CF-42E7-9F23-9FA588BAB354"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.054Z",
-            "checksum": "b9257abb6d977fa61ab4a25e4a3a53566014280bd8895c7f12611a7ac3406293"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.255Z",
+            "checksum": "a601b02dea07a16c796ce0f15f6da9afd878a87c09a4c4bab67063df7423bce9"
+          }
         },
         {
           "fields": {
@@ -2146,17 +1466,9 @@
             "ID": "BA77AE4E-140B-4107-9DC5-E9A6C0ADA48F"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.065Z",
-            "checksum": "ba9aec397f045536852cb393476e36dd5f81f68b0ccdd39e6472213400878576"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.258Z",
+            "checksum": "1f6aca7d2cafa428a4f507705a3da0ced9c81ebe660fbad1e97164e9de51a74f"
+          }
         },
         {
           "fields": {
@@ -2171,17 +1483,9 @@
             "ID": "8BBEF447-D721-4980-8798-23D98DE44980"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.078Z",
-            "checksum": "95c4019c080754052640c20e7f33152c525055344494530f10c596ad1615dd74"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.260Z",
+            "checksum": "b33cf48c138afd06ad5024b5818660754fe8641f473b1ecf94d8eb0bc8dad21f"
+          }
         },
         {
           "fields": {
@@ -2196,17 +1500,9 @@
             "ID": "BF990357-3228-4B71-96E3-389D140E898C"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.089Z",
-            "checksum": "968ce19a28004f1cb0d007f73a0e41e066d768ad9e0d6a2d897b6dce6fb7adfa"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.262Z",
+            "checksum": "f1901e76f7a999adbaa67b09ddb2072b3b4279b30ffa714255dd1de74e4c72a4"
+          }
         },
         {
           "fields": {
@@ -2221,17 +1517,9 @@
             "ID": "506D00B8-0D72-4488-BF32-85B4E8598A18"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.099Z",
-            "checksum": "886b5c755b17c7dd629a78ef3de1e1894d625b823a2ce443cb8e321ccb5c6fd2"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.264Z",
+            "checksum": "eb5d95d0d8f006857871ba676cc4b0206f7cf6d3035d3b26a7d48a34346119b1"
+          }
         },
         {
           "fields": {
@@ -2246,17 +1534,9 @@
             "ID": "949ABDCA-C211-4DFA-AACC-2FE8B377705E"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.110Z",
-            "checksum": "1023a15b313ca8c71825f94f883dfecd5ff03be780c7338648d41f8f04d2d87c"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.267Z",
+            "checksum": "9099576a5fead6231fd24b264add6ee46e4347ced1b072adadaa324b6ad0d632"
+          }
         },
         {
           "fields": {
@@ -2271,17 +1551,9 @@
             "ID": "6F284D2E-CECD-4D70-9028-A948CEA6AE19"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.122Z",
-            "checksum": "54345851cab0e1832b5431b56475058aa3c06bee5df08c4c5cd744ff337b33a8"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.269Z",
+            "checksum": "fb0cd6f0f4baa91799fb299ce0d854e0ea06b3dd8d5fe252da80fb5ab35b064b"
+          }
         },
         {
           "fields": {
@@ -2296,17 +1568,9 @@
             "ID": "3090D4D0-BCD9-4F54-9094-EC16C68D36CB"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.134Z",
-            "checksum": "9048242da5fb4b66ecf6ec6f9ec5d6588a1d6bb71059a1dbc59f02c7144e9f38"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.271Z",
+            "checksum": "d20f62928a0e16c7797af3fdfe71086e2efd9379de455dc26431e81353de5104"
+          }
         },
         {
           "fields": {
@@ -2321,17 +1585,9 @@
             "ID": "077A718F-72AF-42B0-A9D1-C17AD4D1A7CD"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.144Z",
-            "checksum": "49cf68f7020114f0afc24fa999f699befa5372ea3f524437def3a10d15c31643"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.272Z",
+            "checksum": "9c02e9256647aec80d8f26022d4d2d060b2a5c50b40e08daf97ab20a9662d0f7"
+          }
         }
       ],
       "Action Result Codes": [
@@ -2346,17 +1602,9 @@
             "ID": "85426068-6306-4C57-BF45-08A1BB8AE8CD"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.153Z",
-            "checksum": "1b0dda4cc94fcdf7f717c3b862446fcaba2dfd081e96ed76c68644adcedc7c68"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.274Z",
+            "checksum": "7779687c9c55930b859ecc38b35127441ac3e0cb8394148d2b50f3055df802fd"
+          }
         },
         {
           "fields": {
@@ -2369,17 +1617,9 @@
             "ID": "6098DB44-0424-48B6-A573-8390EA2AE6D3"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.230Z",
-            "checksum": "e2719603ce9c7ef41562a6dde4c97c6b6e512b6b0762b9f62c539eb7407413ff"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.334Z",
+            "checksum": "51d315ce43929dac9181171d10ad93849694c7eac140a7f93a55edcefc4fe5ec"
+          }
         },
         {
           "fields": {
@@ -2392,17 +1632,9 @@
             "ID": "E98D39F3-A106-4923-A663-A57C1D6717FA"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.241Z",
-            "checksum": "2bcd2e57933939b6358aa10949b447f425311060d0eef5703bc9280879352c8a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.335Z",
+            "checksum": "c3f4428a14f14c3ed0e55dbcf2ebb017378a04922f6656ebffd9e2f8044eae4a"
+          }
         },
         {
           "fields": {
@@ -2415,17 +1647,9 @@
             "ID": "6284113F-3B64-4E28-B244-D77C445668D1"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.251Z",
-            "checksum": "a099d766f40d1e3ff833a497305fbf3138b1d911cd891047c04b5f4ae1b09be5"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.337Z",
+            "checksum": "dcc9cfe45452fd74af75e0ac3d0bae2404cb737534a3c5b2260c68bdb467e4e6"
+          }
         },
         {
           "fields": {
@@ -2438,17 +1662,9 @@
             "ID": "BAFD1110-9C95-41D8-B804-40EE025AD67E"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.261Z",
-            "checksum": "b55178c0240d4db96858a7eff194e801284aae6fbf49cf481ac5a91a912cd67d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.338Z",
+            "checksum": "b1b1dd469c5ca558f4a5f325f04484de8102eb26051f0a8150998840aa757a36"
+          }
         },
         {
           "fields": {
@@ -2461,17 +1677,9 @@
             "ID": "4514316C-C697-4162-A6F9-62317B382BB8"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.273Z",
-            "checksum": "1de16349b54c260b58e34a841bf908beb20fbb759d0f7183dc10e0ce03c2b86b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.339Z",
+            "checksum": "9b9988a3ffc5d3b8c8321ffc0cde992548f2d1a32adee06b500d89ed4807e199"
+          }
         },
         {
           "fields": {
@@ -2484,17 +1692,9 @@
             "ID": "6AC3F921-31DC-4079-B615-75587807FCF6"
           },
           "sync": {
-            "lastModified": "2025-10-29T15:25:22.283Z",
-            "checksum": "9fa164963ec946abd76f0f76febb88d448a44f584ae39b4f48b7c0348f8f46bd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ActionID",
-              "expression": "@parent:ID",
-              "resolved": "5884D939-A697-43D4-8507-943691D8DF0C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:19.341Z",
+            "checksum": "d59b7d4717b4c0c25e433c0012324e7a628f5ea5d93ae1c376aff68684a51c24"
+          }
         }
       ]
     },
@@ -2502,16 +1702,8 @@
       "ID": "5884D939-A697-43D4-8507-943691D8DF0C"
     },
     "sync": {
-      "lastModified": "2025-10-29T15:25:20.427Z",
-      "checksum": "2e5a222c32cb5df233a6952871e3572738d0f384a6b16ee7cc499573441c7eb8"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
-        "resolved": "B2CB33A5-28E9-4356-90A5-B102BADD071C"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:18.202Z",
+      "checksum": "ef688afd99716d623ce9a7665c429ef6010edb701cc722b6cb5028664dfa37d5"
+    }
   }
 ]

@@ -10,8 +10,8 @@
       "ID": "3A1C5A15-8DAA-44E5-A098-F20085E6C93F"
     },
     "sync": {
-      "lastModified": "2025-11-10T00:28:03.614Z",
-      "checksum": "f4ae77b53526aa41b1e28dc78cf422501e152fde378aed2530a5ec7091ede8bc"
+      "lastModified": "2025-12-30T23:06:45.965Z",
+      "checksum": "9c953a9af65c3741e811ac230507f9befd0e172f9856f86ef58fe1e6e91760f3"
     }
   },
   {
@@ -25,8 +25,8 @@
       "ID": "A76B1550-A6D8-4491-9EF6-A38A8F660FBC"
     },
     "sync": {
-      "lastModified": "2025-11-10T00:28:03.618Z",
-      "checksum": "e590f1f62c998281ce8ef7f1eb9f80e3929f55bc1468783a802de0a7449a0f93"
+      "lastModified": "2025-12-30T23:06:45.969Z",
+      "checksum": "7827ab4424cc8155d72bdd833822a87d3661c6020b866363e1df3096ce28702b"
     }
   },
   {
@@ -40,8 +40,38 @@
       "ID": "B6B9D780-52B2-431B-93AB-AC83FEF78553"
     },
     "sync": {
-      "lastModified": "2025-11-10T00:28:03.623Z",
-      "checksum": "f9ddb1b1bef0cb508bead3d7ad6c6f9e4e54954f44851770caf4697726c10c7d"
+      "lastModified": "2025-12-30T23:06:45.973Z",
+      "checksum": "4661b09e6b2effe33a009358add363af2b97f468df930a303dc14409f6cb383b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sage Text",
+      "Description": "Sage Text Only Configuration",
+      "IsDefault": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C12390BB-D4F8-433F-B34D-736B24DFBBAA"
+    },
+    "sync": {
+      "lastModified": "2026-01-02T20:31:43.500Z",
+      "checksum": "608c93cde9a62689ef9d3e67e571637ce16597929eab0c862306bedcdb2d652f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sage Multimodal",
+      "Description": "Text + Images Supported",
+      "IsDefault": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2C649582-D3A2-47EC-82BF-CEC89B7D8F15"
+    },
+    "sync": {
+      "lastModified": "2026-01-02T20:31:43.502Z",
+      "checksum": "a5b892c1aee808e9467c7e3fea98c3f0e34131f9c5b97bdcfb748069400381c2"
     }
   }
 ]

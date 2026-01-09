@@ -221,7 +221,17 @@ export class WorkspaceStateManager {
                  (requestNavItem === tabNavItem || requestDriverClass === tabDriverClass);
         }
 
-        // For standard resource types, match by resourceType and recordId
+        // For Records resource type, also match by Entity name to distinguish between different entity records
+        if (request.Configuration.resourceType === 'Records') {
+          const requestEntity = (request.Configuration.Entity as string)?.trim().toLowerCase() || '';
+          const tabEntity = (tab.configuration?.Entity as string)?.trim().toLowerCase() || '';
+
+          return tab.configuration.resourceType === request.Configuration.resourceType &&
+                 tabRecordId === requestRecordId &&
+                 requestEntity === tabEntity;
+        }
+
+        // For other standard resource types, match by resourceType and recordId
         return tab.configuration.resourceType === request.Configuration.resourceType &&
                tabRecordId === requestRecordId;
       }
@@ -311,7 +321,17 @@ export class WorkspaceStateManager {
                  (requestNavItem === tabNavItem || requestDriverClass === tabDriverClass);
         }
 
-        // For standard resource types, match by resourceType and recordId
+        // For Records resource type, also match by Entity name to distinguish between different entity records
+        if (request.Configuration.resourceType === 'Records') {
+          const requestEntity = (request.Configuration.Entity as string)?.trim().toLowerCase() || '';
+          const tabEntity = (tab.configuration?.Entity as string)?.trim().toLowerCase() || '';
+
+          return tab.configuration.resourceType === request.Configuration.resourceType &&
+                 tabRecordId === requestRecordId &&
+                 requestEntity === tabEntity;
+        }
+
+        // For other standard resource types, match by resourceType and recordId
         return tab.configuration.resourceType === request.Configuration.resourceType &&
                tabRecordId === requestRecordId;
       }

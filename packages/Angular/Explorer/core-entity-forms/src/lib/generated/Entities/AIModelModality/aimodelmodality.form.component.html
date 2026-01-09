@@ -1,0 +1,162 @@
+<mj-record-form-container [record]="record" [formComponent]="this">
+
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Model & Modality Link Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="modelModalityLink"
+        sectionName="Model & Modality Link"
+        icon="fa fa-link"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModalityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Model"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Modality"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Capability Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="capabilitySettings"
+        sectionName="Capability Settings"
+        icon="fa fa-toggle-on"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Direction"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsSupported"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsRequired"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Technical Constraints Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="technicalConstraints"
+        sectionName="Technical Constraints"
+        icon="fa fa-sliders-h"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportedFormats"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxSizeBytes"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxCountPerMessage"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxDimension"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Comments"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+</mj-record-form-container>
+        

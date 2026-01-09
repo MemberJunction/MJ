@@ -1,0 +1,2810 @@
+[
+  {
+    "fields": {
+      "Name": "Membership Renewal Rate By Type",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the membership renewal rate for each membership type?",
+      "Description": "Calculate the percentage of memberships that successfully renewed versus those that lapsed or were cancelled, grouped by membership type",
+      "TechnicalDescription": "Count memberships by type and status, calculate renewal rate as (Active + renewed memberships) / (Total memberships that reached renewal period) for each membership type",
+      "SQL": "@file:SQL/membership-renewal-rate-by-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "2A4B6BF6-59B7-4745-B414-5BC973CE6FC8"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:42.890Z",
+      "checksum": "b7d0bf4c2263af388b18373c0670fecf63e137b94296ea66603affc6486ee189"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Highly Engaged Non-Active Members",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which members have the highest engagement scores but don't have an active membership?",
+      "Description": "Identify highly engaged individuals who may be lapsed members or potential re-engagement targets",
+      "TechnicalDescription": "Join Members with Memberships, filter for members with engagement scores above a threshold and membership status not equal to Active, order by engagement score descending",
+      "SQL": "@file:SQL/highly-engaged-non-active-members.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "D2E5998D-F9F6-40E3-8C49-4F8862B5F519"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:47.179Z",
+      "checksum": "487e75efa0068531018eb983c2a8bbdbde4a299ea6bfb4b4b2985073ae2338f6"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Committees By Average Member Engagement",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which committees have the highest engagement from their members based on average member engagement scores?",
+      "Description": "Identify the most actively engaged committees by analyzing the average engagement scores of their members",
+      "TechnicalDescription": "Join Committees with CommitteeMembership and Members tables, calculate average EngagementScore per committee, filter for active committees, and rank by highest average engagement",
+      "SQL": "@file:SQL/committees-by-average-member-engagement.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "FC6D7B3E-45E1-4C5A-AC28-2224D41637F2"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:49.046Z",
+      "checksum": "4959d0bf5dbff7da6442c11b3f1bb073367034e38f3ec8d01adc9bbfd719721b"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Active Committees By Type",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "How many active committees does the association currently have, broken down by committee type?",
+      "Description": "Get a count of active committees grouped by their classification (Standing, Ad Hoc, or Task Force)",
+      "TechnicalDescription": "Filter Committees table for IsActive = true, group by CommitteeType, and count records in each group",
+      "SQL": "@file:SQL/active-committees-by-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "E7F0C628-5BD0-410C-8DFD-9646E65A6B05"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:37.090Z",
+      "checksum": "56725cf3492483b223deaaa44a46816d0d437d2cc048c99db3b6aacb83ec7ca9"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Certifications Expiring Soon",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which certifications are expiring in the next 90 days and who holds them?",
+      "Description": "Identify members with certifications approaching expiration to enable proactive renewal outreach",
+      "TechnicalDescription": "Filter certifications by DateExpires within next 90 days, join to Members for contact details, include certification type and member information",
+      "SQL": "@file:SQL/certifications-expiring-soon.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "71AED1CA-A7D7-417F-997F-BE1A80DE6A6E"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:49.980Z",
+      "checksum": "df49256ab113bb9a972fa525688eed913c98dec598a945840ba53094e94a59fb"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Member Engagement By Certification Status",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the average engagement score for members grouped by their certification status?",
+      "Description": "Analyze whether members with active certifications show higher engagement compared to those with expired or no certifications",
+      "TechnicalDescription": "Join Members to Certifications, group by certification Status, calculate average EngagementScore per status group, handle members without certifications",
+      "SQL": "@file:SQL/member-engagement-by-certification-status.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "80A7F70C-B79D-4E23-815E-76386453E51B"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:44.472Z",
+      "checksum": "6fbd1bf79e90964dbedb66ca5a00a5cdb0b6e1545a9c69bc0dd92e6dd07afa02"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Course Completion Rates and Scores",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which courses have the highest completion rates and average final scores?",
+      "Description": "Analyze course performance by calculating completion rates and average scores to identify the most successful courses",
+      "TechnicalDescription": "Join Enrollments to Courses, calculate completion rate (completed enrollments / total enrollments), average final score, and passing rate, grouped by course",
+      "SQL": "@file:SQL/course-completion-rates-and-scores.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "7AF80490-B134-4066-B940-902A255D8342"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:48.119Z",
+      "checksum": "8de9551ed4e10709858a73874a71578f3239d1d68c6c87f8b1f4f0b90d5648ab"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Member Engagement By Course Completion",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the average engagement score for members who have completed at least one course versus those who haven't?",
+      "Description": "Compare member engagement levels between learners who have completed courses and those who haven't to understand the relationship between learning activity and overall engagement",
+      "TechnicalDescription": "Left join Members to Enrollments, filter for completed status, calculate average EngagementScore for members with completions versus members without any enrollments or completions",
+      "SQL": "@file:SQL/member-engagement-by-course-completion.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "B4A99135-4579-49EF-8251-6A96F1E35399"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:38.051Z",
+      "checksum": "9b12d9448abd0a852335d013d692bcfd0007690928337302009218e26bbbae53"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Members With No-Show Event Registrations",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which members have registered for events but failed to attend (no-shows), and how many CEUs did they miss out on?",
+      "Description": "Identify members with no-show registrations and calculate the potential CEU credits they forfeited by not attending",
+      "TechnicalDescription": "Filter event registrations where Status = 'No Show', join to Members table for member details, count registrations per member, and sum total missed CEU opportunities where CEUAwarded = 0",
+      "SQL": "@file:SQL/members-with-no-show-event-registrations.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "0DC0155B-EB4C-4FFF-9B76-6D4B852D9C5A"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:46.230Z",
+      "checksum": "7fd425546d5a06e44a519311b2df8866fac574475f199d446fdcc6192c61a8f5"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Member Engagement By Event Attendance",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the average engagement score of members who have attended at least one event in the past year compared to those who haven't?",
+      "Description": "Compare member engagement levels between event attendees and non-attendees to understand the correlation between event participation and overall platform engagement",
+      "TechnicalDescription": "Segment members into two groups based on whether they have Event Registrations with Status = 'Attended' in the past year, calculate average EngagementScore for each group, and compare the metrics",
+      "SQL": "@file:SQL/member-engagement-by-event-attendance.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "CD2131E9-11C4-4410-9957-8BFFFE3A1620"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:39.017Z",
+      "checksum": "4bbc9208a18cc3b3a230ef70bf7c14f205002bb6ddc51ee59f25365400dac082"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Members With Highest Outstanding Balances",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which members have the highest outstanding invoice balances?",
+      "Description": "Identify members with the largest unpaid amounts to prioritize collection efforts",
+      "TechnicalDescription": "Sum the Balance field from Invoices grouped by MemberID, join with Members to get member details, filter for Balance > 0, order by total balance descending",
+      "SQL": "@file:SQL/members-with-highest-outstanding-balances.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "5E7BB185-A2A1-4CEE-9F2C-E9B574B10709"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:00.547Z",
+      "checksum": "969d2f516c66885670b869b4866de6e1d1be69ebcf9b2a9ba0f471fc5ebf0ba1"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Average Invoice Total By Organization",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the average invoice total by member organization?",
+      "Description": "Understand billing patterns across different organizations to inform pricing and membership strategies",
+      "TechnicalDescription": "Join Invoices to Members to Organizations, calculate average of Total field grouped by Organization name, filter out nulls where OrganizationID exists",
+      "SQL": "@file:SQL/average-invoice-total-by-organization.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "C0705CEF-991F-4007-BCAF-CF59B044AF67"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:51.416Z",
+      "checksum": "8e20099748d3a398971c0ee6bc1bc155d73f0077f554f422cd5c51f268e17ca4"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Helpful Forum Members",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which members have contributed the most accepted answers in forum discussions?",
+      "Description": "Identify the most helpful members by counting their posts that have been marked as accepted answers in Q&A-style threads",
+      "TechnicalDescription": "Filter Forum Posts where IsAcceptedAnswer = 1, join to Members on AuthorID, group by member details, count accepted answers per member, order by count descending",
+      "SQL": "@file:SQL/most-helpful-forum-members.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "F0A74EFF-96F7-4E93-B97B-CF72D87C122B"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:01.481Z",
+      "checksum": "6befdf089b7aab4b00274d4087fb6f1974a95fdf8847e641bb5282832e9bbb08"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Forum Reply Depth Analysis With Active Members",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the average reply depth for forum discussions, and which members are most active in nested conversations?",
+      "Description": "Analyze the conversation structure by measuring how deeply nested forum replies go and identify members who frequently participate in multi-level discussions",
+      "TechnicalDescription": "Use recursive self-join on Forum Posts via ParentPostID to calculate reply depth levels, aggregate to find average depth per thread, join to Members on AuthorID to count posts by member at different depth levels, filter for posts with ParentPostID not null to focus on replies",
+      "SQL": "@file:SQL/forum-reply-depth-analysis-with-active-members.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "4CE4711B-3C77-4574-B0C8-3ECF23F0F787"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:59.610Z",
+      "checksum": "dedb3ab11f9f9efdae007e892dd751c5fffcc3feaa67701137092d1db2226d34"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Top Members By Total Awards Won",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which members have won the most awards across their cheese products?",
+      "Description": "Identify the top-performing member producers based on total awards won across all their products",
+      "TechnicalDescription": "Sum AwardCount from Products grouped by MemberID, join to Members for member details, sort by total awards descending",
+      "SQL": "@file:SQL/top-members-by-total-awards-won.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "607F3EAE-5E4F-47A4-8235-F958E099BF02"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:55.847Z",
+      "checksum": "f96351f906cebcd29d8027135737ceb59ea4c7ad156b65abef96557042b47a2e"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Average Retail Price By Cheese Type And Organic Status",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the average retail price for organic versus non-organic cheese products by cheese type?",
+      "Description": "Compare pricing strategies between organic and conventional cheese across different cheese types",
+      "TechnicalDescription": "Group Products by CheeseType and IsOrganic flag, calculate average RetailPrice for each combination, potentially filter for active products",
+      "SQL": "@file:SQL/average-retail-price-by-cheese-type-and-organic-status.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "AB40A8F5-CE43-4CA7-9366-2AFF98A55F91"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:58.668Z",
+      "checksum": "49b05712699d7fcb18150a9ed45ff7e53ee976e09556c3ad6cd3068899a72444"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Member Advocacy Actions This Year",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which members have taken advocacy actions this year and how many actions has each member completed?",
+      "Description": "Identify active advocacy participants and their level of engagement with government relations efforts",
+      "TechnicalDescription": "Join Members with Advocacy Actions, filter by current year ActionDate, count actions per member, order by action count descending",
+      "SQL": "@file:SQL/member-advocacy-actions-this-year.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "CFB96939-DFF8-4FB7-A3EA-947FF908DBDC"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:52.356Z",
+      "checksum": "aacdda8588771aa8f6d553cc933b674849dd8f0141855d4e49bf5488fe657aa7"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Advocacy Actions By Type With Follow-Up Rates",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What are the most common advocacy action types being used by members, and how do follow-up requirements differ across these action types?",
+      "Description": "Understand which advocacy methods are most popular and identify which types of outreach require more follow-up attention",
+      "TechnicalDescription": "Group Advocacy Actions by ActionType, count occurrences, calculate percentage requiring follow-up per action type, order by total count descending",
+      "SQL": "@file:SQL/advocacy-actions-by-type-with-follow-up-rates.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "1DA76D96-3178-408B-AEB1-FB941696F397"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:56.791Z",
+      "checksum": "c6c680bab9510f706f46cbd87a7bad840af1a54b23a124d10ffff1306fe7892a"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Active Memberships By Type",
+      "CategoryID": "@lookup:Query Categories.Name=Memberships&Parent=Golden-Queries",
+      "UserQuestion": "What is the current distribution of active memberships by membership type?",
+      "Description": "Count how many active memberships exist for each membership type to understand the composition of our member base",
+      "TechnicalDescription": "Join Memberships with Membership Types, filter for Status='Active', group by membership type name and count records",
+      "SQL": "@file:SQL/active-memberships-by-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "FBA82B12-5BE9-42AF-9D2D-5C9E8F57DC62"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:53.303Z",
+      "checksum": "ad3fac643c6fce7def3ed7ebc16db0945eb7e8c88dcaf3163ba651bdad83e348"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Memberships&Parent=Golden-Queries",
+        "resolved": "BBC34013-CABD-40F5-BCBB-5FC8E3F9A91C"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Membership Cancellation Rates By Type",
+      "CategoryID": "@lookup:Query Categories.Name=Memberships&Parent=Golden-Queries",
+      "UserQuestion": "Which membership types have the highest cancellation rates and what are the most common cancellation reasons?",
+      "Description": "Analyze cancelled memberships to identify problematic membership types and understand why members are leaving",
+      "TechnicalDescription": "Join Memberships with Membership Types, filter for Status='Cancelled', calculate cancellation rate per type (cancelled/total), aggregate cancellation reasons by frequency per type",
+      "SQL": "@file:SQL/membership-cancellation-rates-by-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "4E6A1234-491E-45E8-AE34-BE91A4EF4297"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:34:57.729Z",
+      "checksum": "863c4b1cc44c8e399bdc0ef1c1facc0bdcb031e111762de8581156cbaf4bdc5d"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Memberships&Parent=Golden-Queries",
+        "resolved": "BBC34013-CABD-40F5-BCBB-5FC8E3F9A91C"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Chapter Officer Turnover Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Chapters&Parent=Golden-Queries",
+      "UserQuestion": "Which chapters have the most officer turnover in the past year?",
+      "Description": "Identify chapters where officer positions have changed hands most frequently, which may indicate instability or healthy rotation depending on context",
+      "TechnicalDescription": "Count distinct officer assignments per chapter where StartDate or EndDate falls within the last 12 months, grouped by chapter, sorted by count descending",
+      "SQL": "@file:SQL/chapter-officer-turnover-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "A8C3FBEE-B6C5-4889-8B2C-4F8B89077C14"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:02.791Z",
+      "checksum": "b4a6c37fe24cf4fa95bc8adb914ee5ee09d7385d31b3e7509273f43361415f97"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Chapters&Parent=Golden-Queries",
+        "resolved": "7ECF21C7-DD57-4C46-8726-90082E474B96"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Average Officers Per Active Chapter By Region",
+      "CategoryID": "@lookup:Query Categories.Name=Chapters&Parent=Golden-Queries",
+      "UserQuestion": "What is the average number of officers per active chapter by region?",
+      "Description": "Understand leadership structure density across different geographic regions to identify potential gaps or over-staffing patterns",
+      "TechnicalDescription": "Count active officers per chapter, join with chapters to get region, filter for IsActive chapters, calculate average officer count grouped by region",
+      "SQL": "@file:SQL/average-officers-per-active-chapter-by-region.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "6539926B-B5EE-425D-9CB0-6BECDE59EB50"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:03.719Z",
+      "checksum": "2e35478e7a4c2f3b599ec6dc9125cf5841e9d073250bac56431ef02d0a1a9744"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Chapters&Parent=Golden-Queries",
+        "resolved": "7ECF21C7-DD57-4C46-8726-90082E474B96"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Active Chapters By Member Count",
+      "CategoryID": "@lookup:Query Categories.Name=Chapters&Parent=Golden-Queries",
+      "UserQuestion": "Which chapters have the most active members and what is their meeting frequency?",
+      "Description": "Identify the top chapters by active member count and understand how often they meet to assess engagement patterns",
+      "TechnicalDescription": "Join Chapters with Chapter Memberships, filter for active status memberships, group by chapter name and meeting frequency, count members per chapter, order by member count descending",
+      "SQL": "@file:SQL/most-active-chapters-by-member-count.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "4C868295-9B4B-42E5-8ECB-89F2718D84CE"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:10.828Z",
+      "checksum": "84415e9508b1c2a5a3d41e94f6372f6abb203113678a00cd6a9923ff87cddf5f"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Chapters&Parent=Golden-Queries",
+        "resolved": "7ECF21C7-DD57-4C46-8726-90082E474B96"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Chapter Membership Growth By Type",
+      "CategoryID": "@lookup:Query Categories.Name=Chapters&Parent=Golden-Queries",
+      "UserQuestion": "How many members joined each chapter type in the last year?",
+      "Description": "Analyze membership growth trends across different chapter types (Geographic, Special Interest, Industry) to understand which categories are attracting the most new members",
+      "TechnicalDescription": "Join Chapter Memberships with Chapters, filter for join dates within the last 12 months, group by chapter type, count distinct members, order by count descending",
+      "SQL": "@file:SQL/chapter-membership-growth-by-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "F36600EC-08E4-4E0F-8703-CC9EB52DE8D4"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:04.662Z",
+      "checksum": "f1b1bb580c3ab379c09c227351809136ad4f3630abb5dc5a6207f8df1ce8c7ca"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Chapters&Parent=Golden-Queries",
+        "resolved": "7ECF21C7-DD57-4C46-8726-90082E474B96"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Active Committees By Member Count",
+      "CategoryID": "@lookup:Query Categories.Name=Committees&Parent=Golden-Queries",
+      "UserQuestion": "Which committees have the most active members currently serving?",
+      "Description": "Identify committees ranked by their current active membership count to understand committee engagement and resource allocation",
+      "TechnicalDescription": "Join Committees with Committee Memberships, filter for IsActive=true and EndDate is null, group by committee name, count members, order by count descending",
+      "SQL": "@file:SQL/active-committees-by-member-count.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "AA8EB3FC-1F54-4BDB-B0EB-2B64ECF8209C"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:05.611Z",
+      "checksum": "13e7b1126d3c28c1fbb892c6573ab462162359d39109659a501ffe8f5e3d6819"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Committees&Parent=Golden-Queries",
+        "resolved": "0DD3EA0D-E541-466A-B581-E2D99D077991"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Committees At Or Over Capacity",
+      "CategoryID": "@lookup:Query Categories.Name=Committees&Parent=Golden-Queries",
+      "UserQuestion": "Which committees have reached or exceeded their maximum member capacity?",
+      "Description": "Identify committees that are at or over their membership limits to support capacity planning and understand when new committees may need to be formed",
+      "TechnicalDescription": "Join Committees with Committee Memberships, filter for active memberships, group by committee with MaxMembers, count current members, compare count to MaxMembers, filter where count >= MaxMembers",
+      "SQL": "@file:SQL/committees-at-or-over-capacity.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "C0CE18C2-5B7F-4A25-865D-B1A92D295217"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:06.557Z",
+      "checksum": "a8e63efeff4dc60c84c5a6b9d96d46ce50f6887dba6190c4da42799ac3ef3d82"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Committees&Parent=Golden-Queries",
+        "resolved": "0DD3EA0D-E541-466A-B581-E2D99D077991"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Active Board Members With Details",
+      "CategoryID": "@lookup:Query Categories.Name=Board Positions&Parent=Golden-Queries",
+      "UserQuestion": "Who are the current active board members and what positions do they hold?",
+      "Description": "List all currently serving board members with their position titles and term information",
+      "TechnicalDescription": "Join Board Members with Board Positions to retrieve active board assignments, including member details, position titles, start dates, and election dates. Filter for IsActive = true.",
+      "SQL": "@file:SQL/active-board-members-with-details.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "32C1D967-AB00-44E4-BC44-AF81CFF0AC58"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:07.483Z",
+      "checksum": "2241e163b1954f556c63c3127731090f96c7b446a005f67c2ce6a9f22e911df9"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Board Positions&Parent=Golden-Queries",
+        "resolved": "067F3052-582F-4D9F-AE42-A1963F546E00"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Board Position Turnover Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Board Positions&Parent=Golden-Queries",
+      "UserQuestion": "How many times has each board position been filled in the past 5 years, and what is the average term length?",
+      "Description": "Analyze board position turnover and actual term durations to understand governance stability",
+      "TechnicalDescription": "Aggregate Board Members by BoardPositionID, count distinct assignments, calculate average duration between StartDate and EndDate (or current date if EndDate is null), filter for terms starting within last 5 years, join with Board Positions to get position titles and compare actual vs. typical term lengths.",
+      "SQL": "@file:SQL/board-position-turnover-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "C73A5F42-3890-4BE8-9E54-67DA9BA15F2D"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:08.403Z",
+      "checksum": "e280273f35963d796f00fa83b7bc89ab4e2752e3657516e02d2ae8de464fbe41"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Board Positions&Parent=Golden-Queries",
+        "resolved": "067F3052-582F-4D9F-AE42-A1963F546E00"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Certification Programs Pass Rates",
+      "CategoryID": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+      "UserQuestion": "Which certification programs have the highest pass rates and how many members currently hold active certifications for each?",
+      "Description": "Analyze certification program effectiveness by comparing the number of active certifications to total certifications issued, identifying programs with strong completion and retention rates",
+      "TechnicalDescription": "Join Certification Types with Certifications, filter for active status certifications, group by certification program, calculate counts and percentages, order by active certification count descending",
+      "SQL": "@file:SQL/certification-programs-pass-rates.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "E60003FC-3E99-4B69-A015-5380A9863DEA"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:09.349Z",
+      "checksum": "63cb9b309444d4603b238ccad013500552ba762bcbc12504f783e6c4f0ff3677"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+        "resolved": "671071EE-1C4B-40B5-8029-3F30EF111993"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Certification Renewal Performance Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+      "UserQuestion": "What is the renewal performance for certifications that are expiring in the next 6 months, and which members are at risk of letting their certifications lapse?",
+      "Description": "Identify upcoming certification expirations and track member renewal readiness by comparing CE credits earned against requirements, helping prioritize outreach to at-risk members",
+      "TechnicalDescription": "Query Certifications with date filtering for expirations within 6 months, join to Certification Types for CE requirements and renewal periods, join to Members for member details, calculate CE credit gap (required minus earned), filter for insufficient credits or pending renewal status, order by expiration date",
+      "SQL": "@file:SQL/certification-renewal-performance-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "44EA8621-445E-4924-93BC-5A10584F456D"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:11.759Z",
+      "checksum": "49f4eee1f2127095fe4988dd7577fc37fe6e26fa4b926e63561b664e692925a4"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+        "resolved": "671071EE-1C4B-40B5-8029-3F30EF111993"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Top Members By CE Credits",
+      "CategoryID": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+      "UserQuestion": "Which members have the most continuing education credits earned across all their active certifications?",
+      "Description": "Identify the top members by total CE credits accumulated, showing their engagement in professional development activities across their certification portfolio",
+      "TechnicalDescription": "Aggregate CreditsEarned from Continuing Educations grouped by MemberID, filter for certifications with Status='Active', order by total credits descending",
+      "SQL": "@file:SQL/top-members-by-ce-credits.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "AA7E4DAA-7748-4026-A8E8-D6FBA8C24182"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:23.871Z",
+      "checksum": "18a8971affc05547690695c5cfdf6e3d29574a8809be4811459c91d038053aba"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+        "resolved": "671071EE-1C4B-40B5-8029-3F30EF111993"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Certification Renewal Window Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+      "UserQuestion": "What is the average time between certification expiration and last renewal date for members who have renewed at least twice?",
+      "Description": "Calculate the typical renewal window timing to understand member renewal behavior patterns and identify opportunities for proactive renewal outreach",
+      "TechnicalDescription": "Calculate DATEDIFF between DateExpires and LastRenewalDate from Certifications where RenewalCount >= 2, compute average across all qualifying records",
+      "SQL": "@file:SQL/certification-renewal-window-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "D8AF18B5-8EEA-49A3-B248-CD600CE105C3"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:22.922Z",
+      "checksum": "4ffece6741d2b82f52350ca7011a94eb081dcba351db68dec1ce0234a1e5da06"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+        "resolved": "671071EE-1C4B-40B5-8029-3F30EF111993"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Certifications Expiring Without Renewal",
+      "CategoryID": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+      "UserQuestion": "Which certifications are expiring in the next 90 days and haven't been renewed yet?",
+      "Description": "Identify at-risk certifications that need renewal attention to prevent expiration",
+      "TechnicalDescription": "Filter active certifications where DateExpires is within 90 days from today and no corresponding renewal record exists with status 'Completed' or 'Pending' for the current expiration period",
+      "SQL": "@file:SQL/certifications-expiring-without-renewal.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "C0702569-54BB-47AE-A382-4B9902133924"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:20.551Z",
+      "checksum": "8fa90914e1d6efa8fd9919b1e5c090f969e1a0af99e5871d104f4903f8b29ad6"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+        "resolved": "671071EE-1C4B-40B5-8029-3F30EF111993"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "CE Credits and Renewals by Certification Type",
+      "CategoryID": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+      "UserQuestion": "What is the average number of continuing education credits earned per certification type, and how many members have completed renewals for each type?",
+      "Description": "Analyze CE credit accumulation patterns and renewal participation rates across different certification programs",
+      "TechnicalDescription": "Group by CertificationTypeID, calculate average CECreditsEarned from Certifications table, count distinct members with completed renewals from Certification Renewals table, join through CertificationID",
+      "SQL": "@file:SQL/ce-credits-and-renewals-by-certification-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "5A551DAB-A712-4AF3-B22C-A6BC0562BCB8"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:13.162Z",
+      "checksum": "097ffdf0e8dc387edc96590a1bab67aa8414d3237485a8da4df30cb096c4d9e7"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certifications&Parent=Golden-Queries",
+        "resolved": "671071EE-1C4B-40B5-8029-3F30EF111993"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Certification Programs By Accrediting Body",
+      "CategoryID": "@lookup:Query Categories.Name=Certification Types&Parent=Golden-Queries",
+      "UserQuestion": "Which accrediting bodies offer the most certification programs, and what is their average program cost?",
+      "Description": "Analyze the distribution of certification programs across accrediting bodies and calculate the average cost per body to understand market positioning and program portfolio size",
+      "TechnicalDescription": "Group certification types by accrediting body, count programs per body, calculate average CostUSD, and join to accrediting body details for name and status",
+      "SQL": "@file:SQL/certification-programs-by-accrediting-body.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "BDDA440B-9810-4EB2-A731-87D924DB8D04"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:21.524Z",
+      "checksum": "d0f24cc111acb10e6ef296ac196543e4da014c877d82d787d31d303be82408eb"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certification Types&Parent=Golden-Queries",
+        "resolved": "7B8A646A-3987-466C-8BA5-A09B99505AFC"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Certification Rigor Assessment By Level",
+      "CategoryID": "@lookup:Query Categories.Name=Certification Types&Parent=Golden-Queries",
+      "UserQuestion": "What percentage of active certification programs require both exams and practical assessments, broken down by certification level?",
+      "Description": "Assess the rigor of certification programs by identifying which levels demand both theoretical and hands-on evaluation components",
+      "TechnicalDescription": "Filter for active certifications, calculate percentage where ExamRequired=1 AND PracticalRequired=1, group by Level field, and compute counts and percentages per level",
+      "SQL": "@file:SQL/certification-rigor-assessment-by-level.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "6F286263-2406-4C1E-B5A2-74C92259AFE7"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:14.095Z",
+      "checksum": "855b6bfb64691753ac568c8ba58093aab8df434ebf31f2046de930bbe1c9bd72"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certification Types&Parent=Golden-Queries",
+        "resolved": "7B8A646A-3987-466C-8BA5-A09B99505AFC"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Common Certification Requirements",
+      "CategoryID": "@lookup:Query Categories.Name=Certification Types&Parent=Golden-Queries",
+      "UserQuestion": "What are the most common certification requirements across all active certification programs?",
+      "Description": "Identify which types of requirements (exam, training, experience, etc.) appear most frequently across active certification programs to understand industry standards",
+      "TechnicalDescription": "Join Certification Requirements with Certification Types filtered on IsActive=true, group by RequirementType, count occurrences, and sort descending to show the most common requirement types",
+      "SQL": "@file:SQL/common-certification-requirements.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "FF7AD89C-8B81-409E-99BD-432262F7B102"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:15.024Z",
+      "checksum": "89abdefe1ed8749bd56378596b5182c776e804d9a99be77b487eb785b8588cb3"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certification Types&Parent=Golden-Queries",
+        "resolved": "7B8A646A-3987-466C-8BA5-A09B99505AFC"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "High Cost Certifications Requiring Continuing Education",
+      "CategoryID": "@lookup:Query Categories.Name=Certification Types&Parent=Golden-Queries",
+      "UserQuestion": "Which certification programs have the highest cost-to-renewal ratio and require continuing education credits?",
+      "Description": "Analyze the financial burden of certifications by comparing initial cost against renewal frequency for programs that mandate ongoing education, helping identify the most expensive certifications to maintain",
+      "TechnicalDescription": "Filter Certification Types where CECreditsRequired > 0, calculate cost-to-renewal ratio (CostUSD / RenewalRequiredMonths), order by this ratio descending, and include fields for cost, renewal months, and CE credits required",
+      "SQL": "@file:SQL/high-cost-certifications-requiring-continuing-education.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "A241215A-9AF3-4111-8744-6C2C183B5655"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:15.951Z",
+      "checksum": "8028cd88f83ca1bf160feaaed3804d2af02577d8b1f03370e2a946c0061406a6"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Certification Types&Parent=Golden-Queries",
+        "resolved": "7B8A646A-3987-466C-8BA5-A09B99505AFC"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Course Completion Rates By Category",
+      "CategoryID": "@lookup:Query Categories.Name=Courses&Parent=Golden-Queries",
+      "UserQuestion": "What is the average completion rate for courses in each category, and which categories have the highest member engagement?",
+      "Description": "Calculate the percentage of enrollments that reach completion status for each course category to identify which training disciplines have the best learner follow-through",
+      "TechnicalDescription": "Join Enrollments to Courses, filter for Status='Completed', calculate completion rate as (completed enrollments / total enrollments) grouped by Course.Category, order by completion rate descending",
+      "SQL": "@file:SQL/course-completion-rates-by-category.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "06D49E94-227B-4F52-B938-0CE6EE7165A3"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:19.342Z",
+      "checksum": "a07e223532d17a6648b7f37667899ca713ea8532040babe2fb4f56c05ff95330"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Courses&Parent=Golden-Queries",
+        "resolved": "C9A1795D-4175-46D8-953E-5DFCF2A8FCC1"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Prerequisite Chain Time Impact On Enrollment",
+      "CategoryID": "@lookup:Query Categories.Name=Courses&Parent=Golden-Queries",
+      "UserQuestion": "Which prerequisite course chains require the most time commitment, and how does this affect enrollment patterns in advanced courses?",
+      "Description": "Analyze courses that have prerequisites by calculating the total duration hours across the prerequisite chain, then correlate with enrollment counts to see if longer prerequisite paths deter advanced course enrollment",
+      "TechnicalDescription": "Recursive self-join on Courses via PrerequisiteCourseID to build course chains, sum DurationHours for each chain, join to Enrollments to count enrollments by course level, identify patterns where prerequisite depth correlates with lower enrollment in advanced courses",
+      "SQL": "@file:SQL/prerequisite-chain-time-impact-on-enrollment.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "7A6421DD-3D65-419B-ABC2-F651F5DFFDA2"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:18.061Z",
+      "checksum": "f5c529805501c2fb887f594056e571bd742af6bd24cc2bde777c728a740ccc27"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Courses&Parent=Golden-Queries",
+        "resolved": "C9A1795D-4175-46D8-953E-5DFCF2A8FCC1"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Course Completion Efficiency and Certification Rate",
+      "CategoryID": "@lookup:Query Categories.Name=Enrollments&Parent=Golden-Queries",
+      "UserQuestion": "What is the average time to completion for courses that have been completed in the last 6 months, and what percentage of enrollments resulted in certificate issuance?",
+      "Description": "Analyze course completion efficiency and certificate issuance rate for recent completions to understand learner success patterns",
+      "TechnicalDescription": "Calculate average days between StartDate and CompletionDate for enrollments with Status='Completed' in the last 6 months, then compute the percentage of these completed enrollments that have an associated certificate record",
+      "SQL": "@file:SQL/course-completion-efficiency-and-certification-rate.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "78321AC4-1E11-4C12-94F8-6E2B5F5D615D"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:25.282Z",
+      "checksum": "e55557ddc0e3f1deb65b6651398ab2d703cf571c7c66ebeea2cb506bf8ef4f79"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Enrollments&Parent=Golden-Queries",
+        "resolved": "894BC5FB-5ADE-4419-8150-CDD84C61B89F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Certificates Expiring Within Period",
+      "CategoryID": "@lookup:Query Categories.Name=Enrollments&Parent=Golden-Queries",
+      "UserQuestion": "How many certificates are expiring in the next 90 days, and which courses do they represent?",
+      "Description": "Identify upcoming certificate expirations to support member retention and recertification campaigns",
+      "TechnicalDescription": "Count certificates with ExpirationDate between today and 90 days from now, join to enrollments to get CourseID, group by course to show expiration counts per course",
+      "SQL": "@file:SQL/certificates-expiring-within-period.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "093423C4-7E32-43F9-AB1C-29615A4C53FF"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:31.295Z",
+      "checksum": "245e4f783ff273127400e6776bcf11231dfae2bca869027cefec10dfb7d18fe3"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Enrollments&Parent=Golden-Queries",
+        "resolved": "894BC5FB-5ADE-4419-8150-CDD84C61B89F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Event No-Show Rate Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Events&Parent=Golden-Queries",
+      "UserQuestion": "What is the no-show rate for our events, and which events have the highest percentage of registered attendees who didn't check in?",
+      "Description": "Calculate the percentage of registrants who registered but never checked in (Status = 'No Show' or CheckInTime is null) compared to total registrations, broken down by event to identify events with attendance issues",
+      "TechnicalDescription": "Join Event Registrations to Events, calculate the ratio of registrations without check-in times or with 'No Show' status versus total registrations per event, filter for completed events, order by no-show percentage descending",
+      "SQL": "@file:SQL/event-no-show-rate-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "3B6D9D55-9086-4737-9BB7-EB3CB97349DB"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:34.140Z",
+      "checksum": "27cf369c7974dd7929f7b1533e0afbb4bf6469a715e73780c810e0354bdec46d"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Events&Parent=Golden-Queries",
+        "resolved": "762540A1-0786-42D9-BB29-2B0489F65F60"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "CEU Credits Awarded Summary",
+      "CategoryID": "@lookup:Query Categories.Name=Events&Parent=Golden-Queries",
+      "UserQuestion": "How many CEUs have we awarded across all events, and what percentage of attendees actually received their CEUs?",
+      "Description": "Summarize total CEU credits awarded to registrants who attended events, comparing the number of registrants who checked in versus those who actually had CEUs awarded (CEUAwarded = true)",
+      "TechnicalDescription": "Aggregate Event Registrations where Status = 'Attended' and CEUAwarded is true, sum the CEU credits from the parent Events table, calculate percentage of attended registrations that received CEU awards versus total attended",
+      "SQL": "@file:SQL/ceu-credits-awarded-summary.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "1551DDA5-A8BA-4A97-9B06-03DE98C54340"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:26.230Z",
+      "checksum": "5e3dfac307e72230216bbd2d03c7144b167102e81387a70b48fff93ee72a9555"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Events&Parent=Golden-Queries",
+        "resolved": "762540A1-0786-42D9-BB29-2B0489F65F60"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Total CEU Credits By Published Event",
+      "CategoryID": "@lookup:Query Categories.Name=Events&Parent=Golden-Queries",
+      "UserQuestion": "What is the total CEU credits offered across all sessions for each published event?",
+      "Description": "Calculate the sum of continuing education units available from all sessions within each published event to understand the educational value proposition",
+      "TechnicalDescription": "Join Events with Event Sessions, filter by Status='Published', group by Event ID and Name, sum CEUCredits from sessions",
+      "SQL": "@file:SQL/total-ceu-credits-by-published-event.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "746A7959-C7D3-4A28-83DB-140988E080C6"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:27.185Z",
+      "checksum": "5e99e649167dfa3b43b1ced29883091d1edf8841be1c9c479547d647af225454"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Events&Parent=Golden-Queries",
+        "resolved": "762540A1-0786-42D9-BB29-2B0489F65F60"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Virtual Events With Capacity-Limited Sessions",
+      "CategoryID": "@lookup:Query Categories.Name=Events&Parent=Golden-Queries",
+      "UserQuestion": "Which virtual events have sessions scheduled with capacity limits and who are the speakers?",
+      "Description": "Identify virtual events (by platform) that have capacity-constrained sessions to help plan resource allocation and promotion targeting",
+      "TechnicalDescription": "Join Events (IsVirtual=1, VirtualPlatform not null) with Event Sessions where Capacity is not null, return Event Name, VirtualPlatform, Session Name, SpeakerName, Capacity",
+      "SQL": "@file:SQL/virtual-events-with-capacity-limited-sessions.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "D93FC144-8C9B-4B4A-9489-96EE2F8733A0"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:28.134Z",
+      "checksum": "5ee31672256a1998ebf98853b64201451728047e6bcdf87cb4df462474fec996"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Events&Parent=Golden-Queries",
+        "resolved": "762540A1-0786-42D9-BB29-2B0489F65F60"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Revenue By Line Item Type",
+      "CategoryID": "@lookup:Query Categories.Name=Invoices&Parent=Golden-Queries",
+      "UserQuestion": "What is the total revenue generated from each type of line item (Event Registration, Membership Dues, Course Enrollment)?",
+      "Description": "Analyze revenue breakdown by business area to understand which services generate the most income",
+      "TechnicalDescription": "Sum the Amount field from Invoice Line Items grouped by ItemType, filtering for paid or partially paid invoices",
+      "SQL": "@file:SQL/revenue-by-line-item-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "858D0A17-4100-4557-89C4-C89BFFB862AE"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:33.186Z",
+      "checksum": "0657447c8447090d10df0148210086e94baeb9cf02018d503f47641bd02caf20"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Invoices&Parent=Golden-Queries",
+        "resolved": "20C4460F-AA9D-450A-A274-8B5BF9433BB3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Overdue Invoices With Balance",
+      "CategoryID": "@lookup:Query Categories.Name=Invoices&Parent=Golden-Queries",
+      "UserQuestion": "Which invoices have an outstanding balance and are past their due date?",
+      "Description": "Identify overdue invoices with unpaid balances to prioritize collection efforts",
+      "TechnicalDescription": "Filter Invoices where Balance > 0 and DueDate < current date, ordered by oldest due date first",
+      "SQL": "@file:SQL/overdue-invoices-with-balance.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "5FEFF2F2-1C73-4D9C-A7D2-71CDDF60A77D"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:35.099Z",
+      "checksum": "42d59294d8d277e7b62ba59724afaced4dad5fa2b43538ed4735037b633e74be"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Invoices&Parent=Golden-Queries",
+        "resolved": "20C4460F-AA9D-450A-A274-8B5BF9433BB3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Total Outstanding Invoice Balance",
+      "CategoryID": "@lookup:Query Categories.Name=Invoices&Parent=Golden-Queries",
+      "UserQuestion": "What is the total outstanding balance across all unpaid and partially paid invoices?",
+      "Description": "Calculate the sum of remaining balances for invoices that haven't been fully settled to understand current accounts receivable",
+      "TechnicalDescription": "Sum the Balance field from Invoices where Status is either 'Partial' or 'Sent' or 'Overdue' (any status except 'Paid', 'Cancelled', 'Refunded')",
+      "SQL": "@file:SQL/total-outstanding-invoice-balance.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "AD4DCC95-14C2-46E6-A015-16C8C79E4DBB"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:29.100Z",
+      "checksum": "67145b129682efdf2d13a96d487bbcc01c138642b9af9729a21c2b6d7ed5fc43"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Invoices&Parent=Golden-Queries",
+        "resolved": "20C4460F-AA9D-450A-A274-8B5BF9433BB3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Payment Method Failure Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Invoices&Parent=Golden-Queries",
+      "UserQuestion": "Which payment methods have the highest failure rates and what are the total amounts lost to failed transactions?",
+      "Description": "Analyze payment method effectiveness by comparing successful vs failed transactions, including financial impact of failures",
+      "TechnicalDescription": "Group payments by PaymentMethod, calculate count and percentage of failed vs completed transactions, sum Amount for failed payments, join to Invoices to understand context of failed payments",
+      "SQL": "@file:SQL/payment-method-failure-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "FB43C58F-B346-4608-9CDB-CFB36DB71F40"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:32.234Z",
+      "checksum": "2810961ca78a36698c6d52704040d7c3e8895ef588267da8c3d010af0a0c35ee"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Invoices&Parent=Golden-Queries",
+        "resolved": "20C4460F-AA9D-450A-A274-8B5BF9433BB3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Campaign Conversion Rates and ROI",
+      "CategoryID": "@lookup:Query Categories.Name=Campaigns&Parent=Golden-Queries",
+      "UserQuestion": "Which campaigns had the highest conversion rates and what was their ROI?",
+      "Description": "Calculate the conversion rate (percentage of targeted members who converted) and return on investment (total conversion value minus actual cost) for each completed campaign to identify the most effective campaigns",
+      "TechnicalDescription": "Join Campaigns with Campaign Members, filter by Status='Completed', group by campaign, calculate conversion rate as (COUNT of Status='Converted' / COUNT of all members) * 100, calculate ROI as (SUM of ConversionValue - ActualCost) / ActualCost, order by conversion rate descending",
+      "SQL": "@file:SQL/campaign-conversion-rates-and-roi.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "9499B3E3-406D-4387-B015-F973C81B9E55"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:36.547Z",
+      "checksum": "0b530c7f61f854a738e7558760aebd02d887013f8655bc38fa5f6dc8785e37ec"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Campaigns&Parent=Golden-Queries",
+        "resolved": "FF9C02FE-B653-45B1-9828-A30F5917B543"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Campaign Opt-Outs By Type",
+      "CategoryID": "@lookup:Query Categories.Name=Campaigns&Parent=Golden-Queries",
+      "UserQuestion": "How many members opted out from each campaign type?",
+      "Description": "Analyze opt-out patterns across different campaign types to understand which types of campaigns generate the most unsubscribes",
+      "TechnicalDescription": "Join Campaigns with Campaign Members, filter Campaign Members where Status='Opted Out', group by CampaignType, count distinct members, order by count descending",
+      "SQL": "@file:SQL/campaign-opt-outs-by-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "4F6DCD0C-9CF8-463F-9CBD-84D85BB801CE"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:37.494Z",
+      "checksum": "8514a599af5f254b82019ca3d7c7108e560a08dc06007ed47297a2d9632d9b23"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Campaigns&Parent=Golden-Queries",
+        "resolved": "FF9C02FE-B653-45B1-9828-A30F5917B543"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Email Engagement Rate By Campaign Type",
+      "CategoryID": "@lookup:Query Categories.Name=Campaigns&Parent=Golden-Queries",
+      "UserQuestion": "What is the email engagement rate (opens and clicks) for each campaign type?",
+      "Description": "Calculate average open rates and click rates by campaign type to understand which types of campaigns resonate best with members",
+      "TechnicalDescription": "Join Campaigns with Email Sends, group by CampaignType, calculate percentage of opens (where OpenedDate is not null) and clicks (where ClickedDate is not null) relative to delivered emails (where DeliveredDate is not null), exclude bounced emails",
+      "SQL": "@file:SQL/email-engagement-rate-by-campaign-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "B43353BF-3282-4602-A4D9-83542DF4AD4F"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:42.518Z",
+      "checksum": "69dca06cce63c0ac678b82fa96d2a8cea1ab367003ab960eacc2ad25e624d502"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Campaigns&Parent=Golden-Queries",
+        "resolved": "FF9C02FE-B653-45B1-9828-A30F5917B543"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Campaign ROI By Delivery Success",
+      "CategoryID": "@lookup:Query Categories.Name=Campaigns&Parent=Golden-Queries",
+      "UserQuestion": "Which active or completed campaigns have the best ROI based on actual cost versus number of successful deliveries?",
+      "Description": "Identify campaigns that efficiently reached members by comparing actual spend to delivery success rate",
+      "TechnicalDescription": "Filter Campaigns where Status is Active or Completed and ActualCost is not null, join to Email Sends, count delivered emails (DeliveredDate not null), calculate cost per delivery, sort by lowest cost per delivery",
+      "SQL": "@file:SQL/campaign-roi-by-delivery-success.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "9139DD70-164A-4E9D-8FD9-16F3ADBFCE09"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:38.463Z",
+      "checksum": "551e382a04762b6d97224dea874960df8e7c562b0719ca3eacd290554f4c8375"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Campaigns&Parent=Golden-Queries",
+        "resolved": "FF9C02FE-B653-45B1-9828-A30F5917B543"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Campaign Conversion Rates By Segment",
+      "CategoryID": "@lookup:Query Categories.Name=Campaign Members&Parent=Golden-Queries",
+      "UserQuestion": "Which segments have the highest conversion rates in our campaigns?",
+      "Description": "Calculate conversion rate by segment to identify which audience segments perform best",
+      "TechnicalDescription": "Join Campaign Members with Segments, filter for 'Converted' status, calculate conversion rate as (converted members / total targeted members) by segment, order by conversion rate descending",
+      "SQL": "@file:SQL/campaign-conversion-rates-by-segment.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "14BBA89E-88BD-4917-B31C-528A1A8B06B7"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:45.314Z",
+      "checksum": "74b222df262674c287c3fffb093e2743ea5e4df9bd691c3a1eb149cd56ed92a4"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Campaign Members&Parent=Golden-Queries",
+        "resolved": "0CB9D611-4CDF-4563-A465-848BE00A0D37"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Conversion Value By Active Segment",
+      "CategoryID": "@lookup:Query Categories.Name=Campaign Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the total conversion value generated by each active segment across all campaigns?",
+      "Description": "Sum the monetary value of conversions attributed to each active segment to measure segment revenue performance",
+      "TechnicalDescription": "Join Campaign Members with Segments, filter for IsActive=true and Status='Converted', sum ConversionValue grouped by segment name, order by total value descending",
+      "SQL": "@file:SQL/conversion-value-by-active-segment.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "E52ADAC0-26D1-4176-9F76-A0C6651E844E"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:39.396Z",
+      "checksum": "e8f917756dc88acdd646169198141e7b8cf62b8bc77b8f61590f8cd9b2677f4f"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Campaign Members&Parent=Golden-Queries",
+        "resolved": "0CB9D611-4CDF-4563-A465-848BE00A0D37"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Email Template Performance Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Email Templates&Parent=Golden-Queries",
+      "UserQuestion": "Which email templates have the highest open rates and are they still actively used?",
+      "Description": "Analyze email template performance by calculating open rates (opens/deliveries) and determine if high-performing templates are still active",
+      "TechnicalDescription": "Join Email Templates with Email Sends, calculate open rate as (COUNT of opens / COUNT of delivered) grouped by template, include IsActive status, filter for templates with at least 10 sends for statistical relevance, order by open rate descending",
+      "SQL": "@file:SQL/email-template-performance-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "3809AC96-CD4A-4C1D-9BA7-F9BFF48A5D3D"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:43.449Z",
+      "checksum": "638a53072addeb56a5439c52206f7b884f1944be76f7bcce9950a30544f0f03a"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Email Templates&Parent=Golden-Queries",
+        "resolved": "3133E293-BE2C-4796-BCC5-B01B803AD3D5"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Email Negative Response Rate",
+      "CategoryID": "@lookup:Query Categories.Name=Email Templates&Parent=Golden-Queries",
+      "UserQuestion": "What percentage of members who received emails in the last 30 days have unsubscribed or reported spam?",
+      "Description": "Measure recent email engagement health by tracking negative responses (unsubscribes and spam reports) as a percentage of total recipients",
+      "TechnicalDescription": "Filter Email Sends for SentDate within last 30 days, count distinct members where UnsubscribedDate or SpamReportedDate is not null, divide by total distinct recipients, multiply by 100 for percentage",
+      "SQL": "@file:SQL/email-negative-response-rate.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "E74F0F8F-3F9C-4ED4-8874-42D78452A367"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:40.320Z",
+      "checksum": "d301f6aa384bf957b53acbad9d54fa97fa89a01d5c6b6df218d3818373110d6f"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Email Templates&Parent=Golden-Queries",
+        "resolved": "3133E293-BE2C-4796-BCC5-B01B803AD3D5"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Email Engagement Funnel Metrics",
+      "CategoryID": "@lookup:Query Categories.Name=Email Sends&Parent=Golden-Queries",
+      "UserQuestion": "What is the overall email engagement rate, and how many emails resulted in clicks versus just opens?",
+      "Description": "Calculate the engagement funnel from sent emails through delivery, opens, and clicks to understand campaign effectiveness",
+      "TechnicalDescription": "Aggregate Email Sends to count total sent, delivered, opened, and clicked emails. Calculate percentages for delivery rate, open rate (opens/delivered), and click-through rate (clicks/opens). Compare emails that had clicks versus those that only had opens.",
+      "SQL": "@file:SQL/email-engagement-funnel-metrics.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "16A8A401-BD93-47A8-8C68-F69B62834D25"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:46.251Z",
+      "checksum": "3ee870b769b69bd4fa04a36986d0d8202bf4df0ef3494c3a76d52c6867771a48"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Email Sends&Parent=Golden-Queries",
+        "resolved": "36A01807-5C87-4561-BA92-349172FDFB59"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Email Template Click Performance Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Email Sends&Parent=Golden-Queries",
+      "UserQuestion": "Which email templates generate the most link clicks, and what are the most popular URLs being clicked?",
+      "Description": "Identify high-performing email templates by analyzing click behavior and determine which destination URLs drive the most engagement",
+      "TechnicalDescription": "Join Email Sends with Email Clicks. Group by template and URL to count clicks. Rank templates by total click count and identify top URLs across all sends. Include link names to understand what call-to-action text resonates most.",
+      "SQL": "@file:SQL/email-template-click-performance-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "1AA0A6CB-6B0B-49D7-8A3F-12D0EB29A858"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:44.375Z",
+      "checksum": "a9ee5f0918c72ce186182861b54c2c3ebfae1c59ed65aa8be070ab386ca1f60e"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Email Sends&Parent=Golden-Queries",
+        "resolved": "36A01807-5C87-4561-BA92-349172FDFB59"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Forum Category Engagement Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Categories&Parent=Golden-Queries",
+      "UserQuestion": "Which forum categories have the highest engagement, and how does their activity compare to their subcategories?",
+      "Description": "Analyze forum category engagement metrics including thread count, post count, and recent activity, comparing parent categories with their subcategories to identify where community discussion is most active",
+      "TechnicalDescription": "Join Forum Categories to itself via ParentCategoryID to get parent-child relationships, aggregate ThreadCount and PostCount for both levels, calculate engagement ratios, and order by total activity metrics. Include LastPostDate to show recency of activity.",
+      "SQL": "@file:SQL/forum-category-engagement-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "DA573F83-84BB-4BFD-9536-C5C0C7FF42EA"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:47.641Z",
+      "checksum": "cb33b3d1ee0bd898687db33cfe8060c5a91c3c24b4f76216f8a0223ec2519abb"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Categories&Parent=Golden-Queries",
+        "resolved": "60132F60-CC43-4B49-A443-854A1CE5DE59"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Popular Forum Threads Recent",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Categories&Parent=Golden-Queries",
+      "UserQuestion": "What are the most popular forum threads in the last 30 days based on views and replies?",
+      "Description": "Identify trending forum discussions by analyzing thread metrics including view counts, reply counts, and recency to surface the most engaging content for members",
+      "TechnicalDescription": "Filter Forum Threads by LastActivityDate within 30 days, join to Forum Categories for category name, calculate engagement score using ViewCount and ReplyCount, order by score descending, and include thread status and moderation flags (IsPinned, IsFeatured)",
+      "SQL": "@file:SQL/most-popular-forum-threads-recent.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "297F90DF-E3FE-4934-B58E-D5A744A394F0"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:48.571Z",
+      "checksum": "32d400cf9b7ce3902eda1b91fe51f54299193aa32404a321b3b21d2b28e416ee"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Categories&Parent=Golden-Queries",
+        "resolved": "60132F60-CC43-4B49-A443-854A1CE5DE59"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Active Forum Threads",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Threads&Parent=Golden-Queries",
+      "UserQuestion": "What are the most active discussion threads in the past 30 days based on reply count and views?",
+      "Description": "Identify the top 10 forum threads with the highest engagement (combined reply count and view count) within the last 30 days to understand what topics are resonating most with the community",
+      "TechnicalDescription": "Filter Forum Threads by LastActivityDate within past 30 days, calculate engagement score (ReplyCount + ViewCount), sort descending by engagement score, return top 10 with thread title, category, author, reply count, view count, and last activity date",
+      "SQL": "@file:SQL/most-active-forum-threads.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "BE8DA3BE-C40F-470C-96AF-085ABBE19480"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:49.521Z",
+      "checksum": "978749be01370e136eae2a0a02ec27023e59492e164e4e04cf60ca8496839496"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Threads&Parent=Golden-Queries",
+        "resolved": "AC087359-6FC9-4BE2-B9BD-8AF8F93ED96B"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Members With Highest Accepted Answer Rates",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Threads&Parent=Golden-Queries",
+      "UserQuestion": "Which members have the highest rate of receiving accepted answers in Q&A threads?",
+      "Description": "Identify expert contributors by analyzing which members have the most posts marked as accepted answers relative to their total number of posts in threads, helping to recognize valuable community contributors",
+      "TechnicalDescription": "Join Forum Posts to Forum Threads, filter for posts where IsAcceptedAnswer is true, group by AuthorID, calculate total posts per author, calculate accepted answer count per author, compute acceptance rate (accepted/total), filter authors with minimum 5 posts, sort by acceptance rate descending, return top 10 members with their names, total posts, accepted answer count, and acceptance rate percentage",
+      "SQL": "@file:SQL/members-with-highest-accepted-answer-rates.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "69DB33A7-3AA2-4502-A98E-C6BDD98A03C7"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:53.333Z",
+      "checksum": "30c1df87ae0a13314f1f1f44afda03341d24c765d0cc5909f11570db66db6a8a"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Threads&Parent=Golden-Queries",
+        "resolved": "AC087359-6FC9-4BE2-B9BD-8AF8F93ED96B"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Top Forum Posts By Engagement",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+      "UserQuestion": "Which forum posts have the highest engagement based on combined likes and helpful reactions?",
+      "Description": "Identify the most engaging posts by aggregating like and helpful reaction counts",
+      "TechnicalDescription": "Sum LikeCount and HelpfulCount for each post, filter by Published status, order by total engagement descending",
+      "SQL": "@file:SQL/top-forum-posts-by-engagement.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "7F3017FA-8C62-4CFB-A391-394C2B441F4E"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:54.279Z",
+      "checksum": "0aaa443fc50a2b68b16845e46c716df194c305673ac48186bd3c79aac28b373d"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+        "resolved": "9DF2FA98-7989-410C-9C7A-B5F2FDDA5DCB"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Reaction Types on Accepted Answer Posts",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+      "UserQuestion": "What types of reactions do members most commonly give to posts that have been accepted as answers?",
+      "Description": "Analyze reaction patterns on accepted answer posts to understand how members respond to helpful content",
+      "TechnicalDescription": "Join Forum Posts (filtered by IsAcceptedAnswer=true) with Post Reactions, group by ReactionType, count occurrences, and calculate percentage distribution of reaction types",
+      "SQL": "@file:SQL/reaction-types-on-accepted-answer-posts.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "E6A56787-0345-422D-AE69-A91972A12139"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:55.223Z",
+      "checksum": "b16d713151006850b7c9194c739d647ef0ca4f46dc31a714dd96e995a465d3b2"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+        "resolved": "9DF2FA98-7989-410C-9C7A-B5F2FDDA5DCB"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Forum Posts With Most Attachments",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+      "UserQuestion": "Which forum posts have the most attachments and what types of files are being shared?",
+      "Description": "Analyze attachment patterns across forum posts to understand what content members are sharing",
+      "TechnicalDescription": "Count attachments per post, group by file type (MIME type), identify posts with highest attachment counts, and show file type distribution",
+      "SQL": "@file:SQL/forum-posts-with-most-attachments.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "17D17AC8-332F-4B97-A3CA-4F7A8924EDB5"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:57.085Z",
+      "checksum": "a2bcad0f34a0e0fe050f969491b6320b3ba9dece68fd14667b87d463995a2bb8"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+        "resolved": "9DF2FA98-7989-410C-9C7A-B5F2FDDA5DCB"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Member Storage Usage by Attachments",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+      "UserQuestion": "What is the total storage space consumed by attachments for each member who has uploaded files?",
+      "Description": "Calculate storage usage per member to understand resource consumption and identify heavy uploaders",
+      "TechnicalDescription": "Sum FileSizeBytes grouped by UploadedByID, join to Members for member details, order by total size descending",
+      "SQL": "@file:SQL/member-storage-usage-by-attachments.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "B7138994-6D39-46F1-8A2D-D0D0EA65AFF9"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:50.461Z",
+      "checksum": "40adbe9986581ab147e49e2af16145c2de2d15c1a4603b2cb36de2d46a678d5d"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+        "resolved": "9DF2FA98-7989-410C-9C7A-B5F2FDDA5DCB"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Popular Forum Tags",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+      "UserQuestion": "Which tags are most frequently used across all forum posts?",
+      "Description": "Analyze tag usage patterns to identify the most popular topics being discussed in the forums",
+      "TechnicalDescription": "Count occurrences of each TagName in Post Tags, group by tag, sort by frequency descending to show most common discussion topics",
+      "SQL": "@file:SQL/most-popular-forum-tags.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "DE437EBB-56FB-43DD-8696-FC0493BAFAD6"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:51.395Z",
+      "checksum": "a290648328b7c4d77d26d8fc54e6958264e2ff62467264b3716f5a17baf79590"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+        "resolved": "9DF2FA98-7989-410C-9C7A-B5F2FDDA5DCB"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Thread Engagement Depth Analysis",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+      "UserQuestion": "What is the average response depth for posts that have been marked as accepted answers, and how does that compare to posts with high helpful counts?",
+      "Description": "Compare the thread engagement patterns between posts marked as accepted answers versus those receiving high helpful reactions, measuring how deep in the conversation hierarchy these valuable contributions typically appear",
+      "TechnicalDescription": "Calculate the depth of nested replies by counting parent-child relationships in Forum Posts using recursive ParentPostID references. Filter for IsAcceptedAnswer = true vs. posts with HelpfulCount above a threshold. Compare average depths between these two groups to understand where valuable content appears in thread hierarchies",
+      "SQL": "@file:SQL/thread-engagement-depth-analysis.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "9964B5D6-044B-4842-A0AA-9F65392179AD"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:56.155Z",
+      "checksum": "7675be413a1c63ef2877e45d35d539b8865bbd336c5603b130b991c6449f7d46"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+        "resolved": "9DF2FA98-7989-410C-9C7A-B5F2FDDA5DCB"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Flagged Forum Posts",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+      "UserQuestion": "Which forum posts have been flagged the most times and what are the most common reasons for those flags?",
+      "Description": "Identify problematic content by analyzing posts with multiple moderation reports and categorizing the reasons members flagged them",
+      "TechnicalDescription": "Join Forum Posts with Forum Moderations, group by PostID and ReportReason, count moderations per post, filter for posts with multiple flags, aggregate reasons",
+      "SQL": "@file:SQL/most-flagged-forum-posts.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "F5CB4A73-31E8-4EBE-A069-05DE4F744E6C"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:03.812Z",
+      "checksum": "62b39907d21b27d71157ec0ca60e4c7cc2acc1c12bbad7aa4ec6eb9fcedec1bf"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+        "resolved": "9DF2FA98-7989-410C-9C7A-B5F2FDDA5DCB"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Moderation Outcomes By Action",
+      "CategoryID": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+      "UserQuestion": "What percentage of flagged posts end up being removed versus dismissed by moderators?",
+      "Description": "Measure the effectiveness and outcomes of the moderation process by comparing moderation actions taken on flagged content",
+      "TechnicalDescription": "Filter Forum Moderations for completed reviews (non-Pending status), count records by Action type (Removed vs Dismissed), calculate percentages of total moderated posts",
+      "SQL": "@file:SQL/moderation-outcomes-by-action.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "07F7D703-6338-4084-831E-9DBB13A9BDD1"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:58.476Z",
+      "checksum": "b4815869ee964dd54e32bd94e273eaefe0d2d212e80ab76c5d9d6ed3545ba609"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Forum Posts&Parent=Golden-Queries",
+        "resolved": "9DF2FA98-7989-410C-9C7A-B5F2FDDA5DCB"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Resource Categories By Average Rating",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "Which resource categories have the highest average user ratings?",
+      "Description": "Identify the top-performing resource categories based on member feedback to understand which content types resonate most with the audience",
+      "TechnicalDescription": "Join Resources with Resource Categories, calculate average of AverageRating weighted by RatingCount per category, filter for categories with minimum threshold of ratings, order by weighted average descending",
+      "SQL": "@file:SQL/resource-categories-by-average-rating.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "82EF5D76-E9DA-4B04-877F-C3075FF399E5"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:05.702Z",
+      "checksum": "38f29af720e16f2235e6ee3ff216615995af34a5b51fec273b181e7eb9be3e69"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Resource Engagement by Access Type",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "What is the total download count and view count for membership-required resources versus public resources?",
+      "Description": "Compare engagement metrics between gated and open-access content to evaluate the effectiveness of membership requirements and content accessibility strategy",
+      "TechnicalDescription": "Aggregate sum of DownloadCount and ViewCount from Resources, group by RequiresMembership flag, include resource counts per group",
+      "SQL": "@file:SQL/resource-engagement-by-access-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "2CABC030-0A7E-4945-A12B-2BAE4F089277"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:35:59.407Z",
+      "checksum": "abb1e2d394e84727995b454370223b7f1156a8fd655cb08e72ecea89c5062b4f"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Resources With Multiple Versions",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "Which resources have had multiple versions created, and how many versions does each have?",
+      "Description": "Identify resources with version history and count their versions to understand content maintenance activity",
+      "TechnicalDescription": "Join Resources with Resource Versions, group by resource ID and title, count versions per resource, filter for resources with more than one version, order by version count descending",
+      "SQL": "@file:SQL/resources-with-multiple-versions.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "03B23B95-83DC-4A01-BED2-4294EA32CA59"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:00.358Z",
+      "checksum": "c83e75668c14fded37b9a9e39e35f7c907a4b530a2eda88f8c07843e4b819881"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Resource Version File Size Comparison",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "What is the average file size difference between current and non-current versions of resources?",
+      "Description": "Compare file sizes between active and historical versions to understand storage implications of version management",
+      "TechnicalDescription": "Calculate average file size for current versions (IsCurrent=1) versus non-current versions (IsCurrent=0) in Resource Versions table, compute the difference to identify storage trends",
+      "SQL": "@file:SQL/resource-version-file-size-comparison.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "AF367A83-081C-4C3E-8ED9-246FCF38BE02"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:01.299Z",
+      "checksum": "4f099ae071550790fdb2861b3f6942d8a424814e49aaefa477df9d11b3dba572"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Resources By Download-to-View Ratio",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "Which resources have the highest download-to-view ratio, and what are their average ratings?",
+      "Description": "Identify resources that convert views into downloads most effectively and assess their quality through user ratings",
+      "TechnicalDescription": "Calculate download-to-view ratio (DownloadCount/ViewCount) for each resource, include AverageRating and RatingCount, filter for resources with sufficient views (e.g., >10), order by ratio descending",
+      "SQL": "@file:SQL/resources-by-download-to-view-ratio.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "AB5BCBAC-5A3B-419D-BF1F-B84072C40DBF"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:06.632Z",
+      "checksum": "e72004cf219ae5be042c5f626d044cdab5a442c670f7cfb2289bc3a623b2d771"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Featured Resource Download Trends And Top Members",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "What is the monthly download activity trend for featured resources, and which members are the most active downloaders?",
+      "Description": "Analyze download patterns over time for featured content and identify power users for engagement insights",
+      "TechnicalDescription": "Join Resource Downloads with Resources filtered by IsFeatured=true, group by month and MemberID, count downloads per member per month, calculate total monthly downloads, identify top downloaders with member details",
+      "SQL": "@file:SQL/featured-resource-download-trends-and-top-members.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "23CE81BB-3461-4A46-A935-FD721AD526AA"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:08.511Z",
+      "checksum": "5ddbfc15621fb5b367dd04dd2f23c650316c4c439e3fd68192e21426f332352a"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Top Rated Resources With Review Counts",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "Which resources have the highest average ratings and how many reviews do they have?",
+      "Description": "Identify top-rated content library items to understand what resources members find most valuable",
+      "TechnicalDescription": "Retrieve resources with their average ratings and rating counts, ordered by average rating descending, filtering for resources with at least a minimum number of reviews to ensure statistical significance",
+      "SQL": "@file:SQL/top-rated-resources-with-review-counts.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "21E84C79-40CC-46A3-9DB6-BAED54C7FAC3"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:04.758Z",
+      "checksum": "1fa935d835acba387230ef3a3763dc9aa85a5c5567c1420e90c57c19333a3a84"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Resource Ratings by Category",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "How do member ratings differ across resource categories, and which categories have the most engaged reviewers?",
+      "Description": "Analyze rating patterns and review volume by resource category to identify which content types resonate most with members and generate the most feedback",
+      "TechnicalDescription": "Join Resources with Resource Ratings, group by category, calculate average rating, total review count, and unique reviewer count per category, ordered by engagement metrics",
+      "SQL": "@file:SQL/resource-ratings-by-category.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "63B1B73E-80DC-4AE8-B426-0CBBB8F13904"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:07.557Z",
+      "checksum": "3ccfe306a5cfa4303c4e6a576f3c4bb706cb3403084d06a8a24ef84654143e68"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Popular Resource Tags",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "What are the most popular tags used across all resources?",
+      "Description": "Identify the top tags applied to content library resources to understand trending topics and common categorization patterns",
+      "TechnicalDescription": "Count occurrences of each TagName in Resource Tags, group by TagName, sort by count descending to find most frequently used tags",
+      "SQL": "@file:SQL/most-popular-resource-tags.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "3C131661-8E30-45C3-9F54-0B4C28563806"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:15.800Z",
+      "checksum": "594c064dd368f3453d907d6a9a84745da78d48ccb5b74c07978db2e075ecebed"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Engaging Resources With Tags",
+      "CategoryID": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+      "UserQuestion": "Which resources have the highest engagement (combining downloads and ratings) and what tags are associated with them?",
+      "Description": "Find the most engaging content library items by analyzing both download activity and user ratings, along with their associated tags to identify successful content themes",
+      "TechnicalDescription": "Join Resources with Resource Tags, calculate engagement score from DownloadCount and AverageRating weighted by RatingCount, group by resource with aggregated tags, sort by engagement score",
+      "SQL": "@file:SQL/most-engaging-resources-with-tags.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "FDB7E17E-003A-4469-B74A-85BEDB1BCF7D"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:17.717Z",
+      "checksum": "5471eeaa06aefb7b8100b2f1fe50408b7d2c0be904b4d84cefc1064c3c446a6e"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Resources&Parent=Golden-Queries",
+        "resolved": "C644BDEE-4A39-4D23-97A6-F05546CE0C6F"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Award-Winning Products By Category",
+      "CategoryID": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+      "UserQuestion": "Which cheese categories have the most award-winning products?",
+      "Description": "Identify product categories with the highest number of award-winning cheese products to understand which styles are most successful in competitions",
+      "TechnicalDescription": "Join Products to Product Categories, filter for IsAwardWinner = true, group by category name, count products, and sort by count descending",
+      "SQL": "@file:SQL/award-winning-products-by-category.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "D5F2B995-91BC-4254-A938-80622C134D4E"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:09.936Z",
+      "checksum": "d7ee2a4d1c0b16a6e5d306c5f15338c0885102879fbb8b4a52ea164f2bb25207"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+        "resolved": "834608D7-A5F9-4851-AE63-93EE2928B9A8"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Organic vs Non-Organic Cheese Pricing by Type",
+      "CategoryID": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+      "UserQuestion": "What is the average retail price for organic versus non-organic cheese products by cheese type?",
+      "Description": "Compare pricing between organic and conventional cheese products across different cheese types to understand premium positioning and market segmentation",
+      "TechnicalDescription": "Group Products by CheeseType and IsOrganic flag, calculate average RetailPrice for each group, present side-by-side comparison",
+      "SQL": "@file:SQL/organic-vs-non-organic-cheese-pricing-by-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "7DDB6D63-7CFF-4397-B98A-CDE9976DE5F9"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:10.879Z",
+      "checksum": "ddb79b4566823286d9a75628316067294ed86c8720183c352a0d77f072341769"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+        "resolved": "834608D7-A5F9-4851-AE63-93EE2928B9A8"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Organic vs Non-Organic Cheese Performance",
+      "CategoryID": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+      "UserQuestion": "What is the average score and ranking distribution for organic versus non-organic cheese products across all competition entries?",
+      "Description": "Compare competitive performance metrics between organic and conventional cheese products to understand if organic certification correlates with judging outcomes",
+      "TechnicalDescription": "Join Competition Entries with Products, group by Products.IsOrganic flag, calculate average Score, average Ranking, and count of entries for each group, include distribution of AwardLevel outcomes",
+      "SQL": "@file:SQL/organic-vs-non-organic-cheese-performance.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "1A73C77F-4249-4C0A-8FA0-A4458A8485DF"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:11.816Z",
+      "checksum": "09b93892afe49443c959ff7957bf725ce1e1bd5eb473a84b63b126521bb6ac17"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+        "resolved": "834608D7-A5F9-4851-AE63-93EE2928B9A8"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Top Award-Winning Products By Level",
+      "CategoryID": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+      "UserQuestion": "Which products have won the most awards and what are their award levels?",
+      "Description": "Identify top award-winning cheese products and break down their awards by level (Gold, Silver, Bronze, Best in Show)",
+      "TechnicalDescription": "Join Products with Product Awards, aggregate count of awards by product and award level, filter for displayed awards, order by total award count descending",
+      "SQL": "@file:SQL/top-award-winning-products-by-level.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "CDCC300A-60AA-4079-816D-3F69673991E2"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:18.701Z",
+      "checksum": "a021a2c39540410ff6b5a180ea9bf99d1aa7e96ac39710c77ad528b77475c2ed"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+        "resolved": "834608D7-A5F9-4851-AE63-93EE2928B9A8"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Average Retail Price by Organic Status",
+      "CategoryID": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+      "UserQuestion": "What is the average retail price of organic versus non-organic award-winning products?",
+      "Description": "Compare pricing strategy between organic and conventional award-winning cheese products",
+      "TechnicalDescription": "Group Products by IsOrganic flag, filter for products where IsAwardWinner is true, calculate average RetailPrice for each group",
+      "SQL": "@file:SQL/average-retail-price-by-organic-status.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "DDA0F672-46B8-47B9-A191-22B97C6656DF"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:12.743Z",
+      "checksum": "76a26192d9a501acc2cc5a6dd966b1578f80e4bc5c2db90af56273b0a346b85a"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Products&Parent=Golden-Queries",
+        "resolved": "834608D7-A5F9-4851-AE63-93EE2928B9A8"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Competition Participation Metrics",
+      "CategoryID": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+      "UserQuestion": "What is the average entry fee and total number of entries for each competition, and which competitions have the highest participation?",
+      "Description": "Analyze competition participation metrics to understand which events attract the most entries and their associated fee structures",
+      "TechnicalDescription": "Aggregate competition entries by competition, calculate average entry fee and count total entries, sort by total entries descending to identify most popular competitions",
+      "SQL": "@file:SQL/competition-participation-metrics.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "6D3A06DE-4FAA-412F-A9B4-D5E01A146D23"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:19.659Z",
+      "checksum": "93db32c94b8106088a17a8b6fdd3f3714fc7c54b34354b181befd28d5a0b460c"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+        "resolved": "9CEB6131-2145-4F7E-96FF-B4507E716599"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Award Distribution By Product Category",
+      "CategoryID": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+      "UserQuestion": "For each product category, what is the distribution of award levels across all competitions, and what percentage of entries in each category receive awards versus no awards?",
+      "Description": "Evaluate judging outcomes by product category to identify which categories perform best and understand award distribution patterns across the competition program",
+      "TechnicalDescription": "Join competition entries with product categories, group by category and award level, calculate counts and percentages, include entries with null/no awards to compute award rate per category",
+      "SQL": "@file:SQL/award-distribution-by-product-category.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "88897FF1-2169-4957-A7D2-3AD581638169"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:13.683Z",
+      "checksum": "edadc6f33f232b234b5b3d1c1c6c35f46ffdd15b7ce08fed098eccad09724587"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+        "resolved": "9CEB6131-2145-4F7E-96FF-B4507E716599"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Competition Entry Metrics by Scope",
+      "CategoryID": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+      "UserQuestion": "What is the average entry fee and total number of entries for international competitions versus domestic competitions in the current year?",
+      "Description": "Compare the scale and pricing between international and domestic competitions to understand market positioning and participation patterns",
+      "TechnicalDescription": "Filter competitions by current year, group by IsInternational flag, calculate average entry fee and sum total entries for each group",
+      "SQL": "@file:SQL/competition-entry-metrics-by-scope.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "9E60A5DF-5FEB-4282-B596-6B8C44DF8E5A"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:16.752Z",
+      "checksum": "4c8e5b66dc575dd4d55553a4a238770deca7be3f0ab349dd8eb7694099fbfe0d"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+        "resolved": "9CEB6131-2145-4F7E-96FF-B4507E716599"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Products With Most Gold Awards",
+      "CategoryID": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+      "UserQuestion": "Which products have won the most gold awards across all competitions?",
+      "Description": "Identify top-performing products by counting their gold-level awards from various competitions, useful for marketing and product positioning",
+      "TechnicalDescription": "Join Product Awards to Products, filter by AwardLevel = 'Gold', group by ProductID and Product name, count awards, order by count descending",
+      "SQL": "@file:SQL/products-with-most-gold-awards.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "85AAB907-8BBB-4FA3-BAC6-D8905E73042C"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:27.007Z",
+      "checksum": "57c8a099937187e233a9f83548956336dbcb9dc38c9a39e30359436df0db1b90"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+        "resolved": "9CEB6131-2145-4F7E-96FF-B4507E716599"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Average Judging Scores By Competition",
+      "CategoryID": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+      "UserQuestion": "What is the average judging score for products in each competition, and which competitions have the highest scoring entries?",
+      "Description": "Compare competition judging standards and identify which events tend to award higher scores, helping producers decide which competitions to enter",
+      "TechnicalDescription": "Join Product Awards to Competitions, group by CompetitionID and Competition Name, calculate average Score, filter out null scores, order by average descending with count of entries per competition",
+      "SQL": "@file:SQL/average-judging-scores-by-competition.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "11206258-E815-440A-9D47-DA023E6211EF"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:28.946Z",
+      "checksum": "cd6303cdebe8309c02d3373d94719dea5df2d2961f21ac9cf52b7a5a5b721e24"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Competitions&Parent=Golden-Queries",
+        "resolved": "9CEB6131-2145-4F7E-96FF-B4507E716599"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Products With Most Competition Awards",
+      "CategoryID": "@lookup:Query Categories.Name=Competition Entries&Parent=Golden-Queries",
+      "UserQuestion": "Which products have won the most awards across all competitions?",
+      "Description": "Identify the top-performing products based on total number of awards received from various competitions",
+      "TechnicalDescription": "Count the number of award records per product from the Product Awards entity, group by product, and rank by total awards descending",
+      "SQL": "@file:SQL/products-with-most-competition-awards.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "36E21CA4-790A-42E7-A360-85DC6309AD0D"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:29.923Z",
+      "checksum": "80c6c435824559880da20062baea135526e05a8bbf5f61be3ab04d1f4f99a9cb"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Competition Entries&Parent=Golden-Queries",
+        "resolved": "96E07E26-332E-4EC9-812A-CA5AB2CD2E16"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Competition Scoring By Award Level",
+      "CategoryID": "@lookup:Query Categories.Name=Competition Entries&Parent=Golden-Queries",
+      "UserQuestion": "What is the average judging score for competition entries that received Gold awards versus those that received Silver or Bronze awards?",
+      "Description": "Compare the scoring patterns between different award levels to understand judging criteria and score thresholds",
+      "TechnicalDescription": "Join Competition Entries with Product Awards on CompetitionEntryID, filter for entries with awards, group by award level (Gold vs Silver/Bronze), and calculate average score for each group",
+      "SQL": "@file:SQL/competition-scoring-by-award-level.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "8CC9F6C4-8473-4217-85D5-9DB56B2812AD"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:27.972Z",
+      "checksum": "e8e67c1d68948fb0b5e2ca6fadd75b95190ad7fc76f101598a14b5d5de4b49c2"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Competition Entries&Parent=Golden-Queries",
+        "resolved": "96E07E26-332E-4EC9-812A-CA5AB2CD2E16"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Legislative Issues By Member Engagement",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+      "UserQuestion": "Which legislative issues have the highest member engagement in advocacy actions?",
+      "Description": "Identify the most actively advocated legislative issues by counting the number of advocacy actions logged against each issue",
+      "TechnicalDescription": "Count advocacy actions per legislative issue, join Legislative Issues with Advocacy Actions, group by issue title and impact level, order by action count descending",
+      "SQL": "@file:SQL/legislative-issues-by-member-engagement.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "AF4A377E-405C-41B9-B7E3-A16817CE4501"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:30.879Z",
+      "checksum": "2b378984379688d2f32377ec46b006cfca675c71927248a9b397765b43479929"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+        "resolved": "8FE8C6B5-CC73-42D0-84E5-2842757FE1B9"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Advocacy Follow-Up Response Time",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+      "UserQuestion": "What is the average time between advocacy actions and their scheduled follow-ups for high-priority issues?",
+      "Description": "Calculate the typical follow-up timeframe for advocacy efforts on critical and high-impact legislative issues to assess advocacy campaign responsiveness",
+      "TechnicalDescription": "Filter advocacy actions where FollowUpRequired is true and impact level is High or Critical, calculate days between ActionDate and FollowUpDate, compute average, join with Legislative Issues for impact filtering",
+      "SQL": "@file:SQL/advocacy-follow-up-response-time.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "3713EDD5-0234-4B80-AC57-A3A876763329"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:21.062Z",
+      "checksum": "5ee06289570e814a36e9b132fb7fc17c647cc1fb3eec3d8399da9ba8881eed42"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+        "resolved": "8FE8C6B5-CC73-42D0-84E5-2842757FE1B9"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Critical and High Impact Issues with Oppose Position",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+      "UserQuestion": "Which legislative issues have a Critical or High impact level and currently have an Oppose position from our association?",
+      "Description": "Identify high-priority issues where the association has taken an opposing stance to focus advocacy efforts",
+      "TechnicalDescription": "Filter Legislative Issues by ImpactLevel IN ('Critical', 'High'), join to Policy Positions where Position = 'Oppose' and IsActive = 1",
+      "SQL": "@file:SQL/critical-and-high-impact-issues-with-oppose-position.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "67EAB858-944B-4E70-81D4-955D63912959"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:22.007Z",
+      "checksum": "18ffb3bdaa88630f2507b0daeff4dbebde64baaf216fcf0bebc804043a826425"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+        "resolved": "8FE8C6B5-CC73-42D0-84E5-2842757FE1B9"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Active Issues By Impact Level",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+      "UserQuestion": "How many active legislative issues are being tracked by impact level and what percentage have formal policy positions adopted?",
+      "Description": "Understand the distribution of tracked issues by priority and determine coverage of formal positions to identify gaps in advocacy strategy",
+      "TechnicalDescription": "Count active Legislative Issues grouped by ImpactLevel, left join to Policy Positions to calculate percentage with adopted positions (AdoptedDate IS NOT NULL), include total counts and percentages",
+      "SQL": "@file:SQL/active-issues-by-impact-level.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "2203CCCD-12B3-4BEF-BC79-5A799E189415"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:22.947Z",
+      "checksum": "2792c9bcfb9a704e29e00c2b56015817259008942afcef2bc351fe2429cade1d"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+        "resolved": "8FE8C6B5-CC73-42D0-84E5-2842757FE1B9"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Top Legislative Issues By Recent Comments",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+      "UserQuestion": "What are the top 5 most impactful legislative issues that have received regulatory comments in the last 6 months?",
+      "Description": "Identify the highest priority legislative issues (by impact level) that have active stakeholder engagement through regulatory comments, focusing on recent activity",
+      "TechnicalDescription": "Join Legislative Issues with Regulatory Comments, filter by SubmittedDate within last 6 months, group by legislative issue details including impact level and title, count comments per issue, order by impact level priority (Critical > High > Medium > Low > Monitoring) then by comment count descending, limit to top 5",
+      "SQL": "@file:SQL/top-legislative-issues-by-recent-comments.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "893B07D3-DAD0-452F-BC0D-3DD240D6C372"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:23.914Z",
+      "checksum": "afb346c1f61e38d270b2c5b869b4cb9fd1521318e4197a64b16cb09f19c4ef4d"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+        "resolved": "8FE8C6B5-CC73-42D0-84E5-2842757FE1B9"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Regulatory Comments By Status",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+      "UserQuestion": "How many regulatory comments are currently in Draft status versus Submitted status?",
+      "Description": "Get a count of regulatory comments by their workflow status to understand comment pipeline and submission readiness",
+      "TechnicalDescription": "Count regulatory comments grouped by Status field, filter to show only Draft and Submitted statuses",
+      "SQL": "@file:SQL/regulatory-comments-by-status.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "69BDA47F-AEE2-4963-B79C-342605039AD6"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:24.875Z",
+      "checksum": "c5960bca02209c46dc0855400739674add9c36f682a3a4dc78ee8956a7c8a273"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Issues&Parent=Golden-Queries",
+        "resolved": "8FE8C6B5-CC73-42D0-84E5-2842757FE1B9"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Critical Active Issues By State",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Bodies&Parent=Golden-Queries",
+      "UserQuestion": "What are the most critical active legislative issues by state, and which bodies are handling them?",
+      "Description": "Identify high-priority legislative matters currently being tracked across different states and their responsible governmental bodies",
+      "TechnicalDescription": "Filter active issues with 'Critical' or 'High' impact levels, join with legislative bodies to get body names and states, aggregate by state and body, showing issue counts and titles",
+      "SQL": "@file:SQL/critical-active-issues-by-state.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "08AFEF1F-2016-4507-BD33-E3E3792E2E95"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:38.226Z",
+      "checksum": "051c6227f38ab408b6aa690f927da617099b617927a9a23d8f79abb84e998f45"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Bodies&Parent=Golden-Queries",
+        "resolved": "BE4CD21B-DA6B-4B8F-865A-103C64D583C7"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Issue Volume and Timeline by Type",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Bodies&Parent=Golden-Queries",
+      "UserQuestion": "How many bills versus regulations are we tracking at the federal level, and what is their average time from introduction to last action?",
+      "Description": "Compare the volume and processing timelines of different issue types (bills vs. regulations) at the federal government level",
+      "TechnicalDescription": "Filter issues where legislative bodies have Level='Federal', group by IssueType, count issues, and calculate average days between IntroducedDate and LastActionDate for each type",
+      "SQL": "@file:SQL/issue-volume-and-timeline-by-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "587BE359-D80B-437D-8B80-80EA3DF4654A"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:32.257Z",
+      "checksum": "8f8ec1efb7ae7a7e8b698d57d53c89099e6cb4a1dbe9f340a4f4809396e5fd13"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Bodies&Parent=Golden-Queries",
+        "resolved": "BE4CD21B-DA6B-4B8F-865A-103C64D583C7"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Contacted Government Officials",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Bodies&Parent=Golden-Queries",
+      "UserQuestion": "Which government contacts have we engaged with most frequently, and what legislative bodies do they belong to?",
+      "Description": "Identify the most frequently contacted government officials across all legislative bodies to understand our advocacy focus areas",
+      "TechnicalDescription": "Count advocacy actions per government contact, join with legislative bodies to show body name, sort by action count descending, include contact details and party affiliation",
+      "SQL": "@file:SQL/most-contacted-government-officials.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "7FB1A153-F559-4224-8ED6-A99A23DD8698"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:40.109Z",
+      "checksum": "4eaa637725436b48fc379ddc7c6a185d78f62eba4a7c9c5f8885289b1b44c176"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Bodies&Parent=Golden-Queries",
+        "resolved": "BE4CD21B-DA6B-4B8F-865A-103C64D583C7"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Active Government Contacts By State And Body Type",
+      "CategoryID": "@lookup:Query Categories.Name=Legislative Bodies&Parent=Golden-Queries",
+      "UserQuestion": "How many active government contacts do we have for each state, broken down by legislative body type?",
+      "Description": "Understand the geographic distribution and type of government relationships we maintain across states",
+      "TechnicalDescription": "Count active government contacts grouped by state and body type from legislative bodies, filter for IsActive=true, exclude null states",
+      "SQL": "@file:SQL/active-government-contacts-by-state-and-body-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "F52E5ABF-0D26-4C5C-BCAE-4844275E975C"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:33.217Z",
+      "checksum": "b8d5fbcec7e0e9cb717ce739c6662a59c1f6eac57a4182a051c9e5a5e90a6f6d"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Legislative Bodies&Parent=Golden-Queries",
+        "resolved": "BE4CD21B-DA6B-4B8F-865A-103C64D583C7"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Most Contacted Government Officials By Action Type",
+      "CategoryID": "@lookup:Query Categories.Name=Government Contacts&Parent=Golden-Queries",
+      "UserQuestion": "Which government contacts have been contacted most frequently through advocacy actions, and what types of actions are most commonly used for each?",
+      "Description": "Identify the most frequently contacted government officials and analyze the distribution of action types (email, phone call, meeting, etc.) for each contact to understand outreach patterns and prioritize future engagement strategies.",
+      "TechnicalDescription": "Join Government Contacts with Advocacy Actions, group by contact name and action type, count actions per contact and type, order by total action count descending to show most-contacted officials with breakdown of communication methods used.",
+      "SQL": "@file:SQL/most-contacted-government-officials-by-action-type.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "3DC90876-1B3D-40AA-B9A7-29F5CBD21D93"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:39.162Z",
+      "checksum": "006dc7c3a571dcad30437343cea83176cd1b572d495c43924d12af1fcfd561ef"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Government Contacts&Parent=Golden-Queries",
+        "resolved": "CBA09491-B672-4D18-A3D2-25E7D0E5116B"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Advocacy Actions Requiring Follow-Up",
+      "CategoryID": "@lookup:Query Categories.Name=Government Contacts&Parent=Golden-Queries",
+      "UserQuestion": "How many advocacy actions require follow-up in the next 30 days, and which government contacts do they involve?",
+      "Description": "Track upcoming follow-up obligations to ensure timely engagement with government contacts and maintain advocacy momentum on active issues.",
+      "TechnicalDescription": "Filter Advocacy Actions where FollowUpRequired is true and FollowUpDate falls within the next 30 days from current date, join with Government Contacts to retrieve contact details, count and list the actions grouped by contact.",
+      "SQL": "@file:SQL/advocacy-actions-requiring-follow-up.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "F29371A6-EE54-4434-BBAE-F2222A7CAED0"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:34.173Z",
+      "checksum": "c7e1fd830ebdf07975945d41854796207f56a26d1fa66c1e531b312270d528d0"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Government Contacts&Parent=Golden-Queries",
+        "resolved": "CBA09491-B672-4D18-A3D2-25E7D0E5116B"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Organizations With Populated Engagement Scores",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "Which organizations have the highest average engagement scores among their member employees?",
+      "Description": "Calculate the average engagement score for members grouped by their employer organization to identify which companies have the most engaged association members",
+      "TechnicalDescription": "Join Members to Organizations on OrganizationID, calculate AVG(EngagementScore) grouped by organization, filter for organizations with at least 3 members to ensure statistical relevance, order by average score descending",
+      "SQL": "@file:SQL/organizations-with-populated-engagement-scores.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "802A97E4-2BB1-495C-AA4B-0AEF49745FA3"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:37.296Z",
+      "checksum": "3fe7be076428557b0fff255b4b4ee0ff242f9d1bbc9180e42159a89660b5f330"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  },
+  {
+    "fields": {
+      "Name": "Member Retention Rate By Industry",
+      "CategoryID": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+      "UserQuestion": "What is the member retention rate by industry over the past 5 years?",
+      "Description": "Analyze how long members stay active in the association segmented by their industry classification to identify which industries have the best retention",
+      "TechnicalDescription": "Calculate time difference between JoinDate and LastActivityDate for members, group by Industry field, compute average tenure and percentage still active (LastActivityDate within last year), filter for members who joined 5+ years ago",
+      "SQL": "@file:SQL/member-retention-rate-by-industry.sql",
+      "Status": "Approved"
+    },
+    "primaryKey": {
+      "ID": "D8DC00E3-1732-48A7-B3CC-A3B3568A0020"
+    },
+    "sync": {
+      "lastModified": "2026-01-03T18:36:35.110Z",
+      "checksum": "9fd085324d642bc10a589b82b691a17c467e16ad4f4d9059eb97686124295507"
+    },
+    "__mj_sync_notes": [
+      {
+        "type": "lookup",
+        "field": "fields.CategoryID",
+        "expression": "@lookup:Query Categories.Name=Members&Parent=Golden-Queries",
+        "resolved": "AEDF3B0B-12BA-4A76-BAC4-D1F377E51AD3"
+      }
+    ]
+  }
+]

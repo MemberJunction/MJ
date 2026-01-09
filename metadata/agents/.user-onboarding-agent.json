@@ -22,23 +22,9 @@
             "ID": "0C2220BB-8477-4AB5-B72B-EA61D9E9D2CA"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.783Z",
-            "checksum": "659059f35d1177bcea528e30fa2372987c7392e23cd3625bfa89ece0d84097dd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=User Onboarding Flow Agent - System Prompt",
-              "resolved": "7D231A18-11CB-48E2-881F-6CC12DD9CD2D"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.890Z",
+            "checksum": "7b897609f1bb6842005224e9b52a20fb3fa50d4526f5f574e19a2fa8d6ab739d"
+          }
         }
       ],
       "AI Agent Actions": [
@@ -52,23 +38,9 @@
             "ID": "C28DF6B0-CACF-4CDD-B9B6-C1377F836375"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.789Z",
-            "checksum": "19d6a1158c53276725a422517c048419e2a9d0857cfb93be02a27234fda83e5e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Check User Permission",
-              "resolved": "C8094D90-1194-4C81-AE0F-77E85FD54169"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.892Z",
+            "checksum": "4782426773448f9a815ccd97c1b08c95e2015afe2ad20eedc09057a3fc937001"
+          }
         },
         {
           "fields": {
@@ -80,23 +52,9 @@
             "ID": "B5A7C8E9-4D2F-11EE-9E3B-0242AC120002"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.794Z",
-            "checksum": "5ec0ed0bf51f284c3cbbeb49de9baf8e8e410fc4e51caf5a9d8af55efc792a10"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Validate Email Unique",
-              "resolved": "540BFDE1-02B5-432C-9490-BD34AF853FE8"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.894Z",
+            "checksum": "0804b56caf242f72cc734020d0dd1d732fe1ce61346289a15a49bf77e49573b9"
+          }
         },
         {
           "fields": {
@@ -108,23 +66,9 @@
             "ID": "D92309DC-A212-4729-A502-4984CF90A8E6"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.803Z",
-            "checksum": "560391e0b02085758df56f7345e3d8a1dd80c8f0307500396d790816a37a31b3"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create User",
-              "resolved": "4A57DE26-16DB-47A4-82AB-DFC74B3152FA"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.895Z",
+            "checksum": "55f1ecb3f3bfb2b61e8117f9a6f58eec33895a5dec596f6ec1da364a80bead6c"
+          }
         },
         {
           "fields": {
@@ -136,23 +80,9 @@
             "ID": "A6C93359-1CA8-41EE-9010-56BDA1EFC8B2"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.811Z",
-            "checksum": "694f09c4459a03fa368b10b7fe08e1e581942d13739a0f555d5ed2c489b69ad9"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create Employee",
-              "resolved": "CC9C1E62-8AB9-4A46-886D-66F6B4295982"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.897Z",
+            "checksum": "7b2d4f09351aee46ab11ed91e126eb45a42f87d70259c070e8b9861da06caa6e"
+          }
         },
         {
           "fields": {
@@ -164,23 +94,9 @@
             "ID": "2BF42A0C-DAE4-494E-BE51-0AC9EF094F3E"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.818Z",
-            "checksum": "a7e18d87090d41904507c568627dc2e6d53358f17e2fb9c03c6a24123327757a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Assign User Roles",
-              "resolved": "873F5441-D1A9-497B-AE32-F9D1A23843C6"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.898Z",
+            "checksum": "47e1563d439ee9327cad4bce50d988616c94a81fc51176a704373c4afc4d2e50"
+          }
         },
         {
           "fields": {
@@ -192,23 +108,9 @@
             "ID": "0274F2D6-DD12-46BF-969A-982CB585AE62"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.823Z",
-            "checksum": "4fe3e09a002bcae5c775d55874e0d0b66b05554433795c99eaff828dbd4e40d8"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Send Single Message",
-              "resolved": "DC4C7E64-2D93-43E4-9F02-F5D7E702784A"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.900Z",
+            "checksum": "a55111d2391d2c84e545bd9ca9ebab0fc22f70bf2b16cc97e291e8db9ba12845"
+          }
         }
       ],
       "MJ: AI Agent Steps": [
@@ -229,23 +131,9 @@
             "ID": "AF1A0DE4-E0DB-4290-A316-FB1CB35FEF11"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.832Z",
-            "checksum": "34197554ebe92087c48a0bf6cef2bd492d6d50dae405dea3a2b612378f2ab79c"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Check User Permission",
-              "resolved": "C8094D90-1194-4C81-AE0F-77E85FD54169"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.901Z",
+            "checksum": "9648e6955f5618ed998ec2fb1400a97fc59eaf9620079f857a3a5ddc9237b2b7"
+          }
         },
         {
           "fields": {
@@ -264,23 +152,9 @@
             "ID": "AE444D5A-0CDC-41B2-A369-3BA12A7E1AAA"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.841Z",
-            "checksum": "c57eec84c481c3c5a71f661fe9046d5561ee80868ace9a9f335949d93f94ff4b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Check User Permission",
-              "resolved": "C8094D90-1194-4C81-AE0F-77E85FD54169"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.903Z",
+            "checksum": "b9a9348635be10d572933211a73ca814e298b78ec8c14803ac5b2e2d1928a6a5"
+          }
         },
         {
           "fields": {
@@ -299,23 +173,9 @@
             "ID": "B6431F43-41DA-4405-9EF5-C98F21409FA6"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.850Z",
-            "checksum": "fc4565430994790eed06f1cf6db7af59895deb477450827cac84668cbb460d9f"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Check User Permission",
-              "resolved": "C8094D90-1194-4C81-AE0F-77E85FD54169"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:35.905Z",
+            "checksum": "ac0ce48ce6b0ad9bb57a4a5fe47dc5dda9365725a09c68c8bf20c8c478284137"
+          }
         },
         {
           "fields": {
@@ -332,23 +192,9 @@
             "ID": "620AD7B8-8BA8-4615-AF66-6BB38F1B5DDB"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.863Z",
-            "checksum": "da2b7bb521b3fe924da548a0226d236e3953d7298a1cf292e1392315ef30a549"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Permission Denied - Users",
-              "resolved": "38B15B99-E33E-400F-A762-E40699697983"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.063Z",
+            "checksum": "ba6f96b79cb993cb6a984e51c3453f82fc1fb320586001899d2a3002a72d19ac"
+          }
         },
         {
           "fields": {
@@ -365,23 +211,9 @@
             "ID": "8DE19F37-02DF-4717-A8FA-98085F62FE2D"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.874Z",
-            "checksum": "4222fa44381f4b7e5057af10fc298d9356dc5a06763ac91c40fa93c185ab0255"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Permission Denied - User Roles",
-              "resolved": "12AC656C-62B8-459C-B6CD-80E4C18EC8AC"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.065Z",
+            "checksum": "e9c844cd00a64309d087667034a4eb03c386ca744f2ad44c4a6c02a5b803f2af"
+          }
         },
         {
           "fields": {
@@ -398,23 +230,9 @@
             "ID": "CB7B4615-1CCB-403F-B406-25F51130D703"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.886Z",
-            "checksum": "e8297449a8fb9a1f80ad3a3bce9eba9050ae795d903e59ba37853ab8b2cfe3ef"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Permission Denied - Employees",
-              "resolved": "BF027FCB-CE89-4D85-8CC5-83EA60A5A007"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.066Z",
+            "checksum": "69d878312e11681d9ab3113d5e2820ce64f16333c6e47c5f61490e1362bbe4fb"
+          }
         },
         {
           "fields": {
@@ -431,23 +249,9 @@
             "ID": "3DB38E5E-FB94-401C-94AB-0B2D7E18302C"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.897Z",
-            "checksum": "847aa77e103be1b3ee39e68a85d2cf0756cc14467392e23bd85925a58972faa1"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Collect User Information - Prompt Step",
-              "resolved": "003C2419-899C-48BB-B184-0A5CDEAAC4A9"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.068Z",
+            "checksum": "982df890f7fe9fc6e17be81062609c3baa8419445a432b6e662467816878db7a"
+          }
         },
         {
           "fields": {
@@ -466,23 +270,9 @@
             "ID": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.908Z",
-            "checksum": "37bf073f45a2613cc95ee6594bbad5958f36deade3f7b593cef7e9010a1215c9"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Validate Email Unique",
-              "resolved": "540BFDE1-02B5-432C-9490-BD34AF853FE8"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.070Z",
+            "checksum": "d876f17da88fd80ca38e2338f7370b9a90f365a9286d2a3b5c553f1a7f505081"
+          }
         },
         {
           "fields": {
@@ -501,23 +291,9 @@
             "ID": "5A421648-5261-4A49-862D-465C71F5A87E"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.917Z",
-            "checksum": "a7afdfa2f1c153dc027358a61f71cc30a1af039bb59f4596533fe28f877a71a7"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create Employee",
-              "resolved": "CC9C1E62-8AB9-4A46-886D-66F6B4295982"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.071Z",
+            "checksum": "b5b9439124e17f3df78d0a1736bd965adb0c7e2efd46fc7741577e500504ccc8"
+          }
         },
         {
           "fields": {
@@ -536,23 +312,9 @@
             "ID": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.924Z",
-            "checksum": "782b44c27c119d20daf4d55266eba4fd635a6c4e096c3f502e4cd62076cd37d0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Create User",
-              "resolved": "4A57DE26-16DB-47A4-82AB-DFC74B3152FA"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.072Z",
+            "checksum": "cde17a658f86be1810da8c16d5e43d0482d49deaf6e87a86cf28d668d6b2890e"
+          }
         },
         {
           "fields": {
@@ -571,23 +333,9 @@
             "ID": "5A977380-2AA5-4119-A329-4450FC603025"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.937Z",
-            "checksum": "d989bce0c4fab8cc3f7a2d405ec66109bf2bca2184cee7b14c6f889f7e61fc83"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Assign User Roles",
-              "resolved": "873F5441-D1A9-497B-AE32-F9D1A23843C6"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.073Z",
+            "checksum": "d83b3774eb7d74ac10f1590f2883561f50c8c6e46a4db38820225e876aace773"
+          }
         },
         {
           "fields": {
@@ -604,23 +352,9 @@
             "ID": "D4F0E61E-9E0C-420D-9F92-6CECF0884C81"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.948Z",
-            "checksum": "470d44676ddc5deaf0718af4c7364fc10b78f742ee6961b1435b597e16d2119a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Prepare Welcome Email - User Onboarding",
-              "resolved": "DA7216B1-C842-4CE5-AEC7-6160E14F0C95"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.075Z",
+            "checksum": "3bfafea756874b9b58995dc3f70b330272511438e15f907bc82e2c8dd3bf8c89"
+          }
         },
         {
           "fields": {
@@ -639,23 +373,9 @@
             "ID": "EA96D877-DEDB-4C7F-9ADC-CB74E6C2A291"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.961Z",
-            "checksum": "5be4b4cbcc20faf586fa03f0f0417b99a22ee8e008dd65c3e4dd3401518439b3"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Send Single Message",
-              "resolved": "DC4C7E64-2D93-43E4-9F02-F5D7E702784A"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.076Z",
+            "checksum": "bc3749e03d355acdd4c97d7af0b8de495758002221faea3fd3280b2483ca764a"
+          }
         },
         {
           "fields": {
@@ -672,23 +392,9 @@
             "ID": "23157416-28D0-422A-AF69-6E4D46E0E212"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.968Z",
-            "checksum": "1613fceb7f1e1ebda21cc22d0987a7faca9b871b657c6e134a838fe4f395700a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Generic Error Message",
-              "resolved": "566D0D19-C986-4847-8EB0-1A1E59FAC06B"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.091Z",
+            "checksum": "bd7022a89409a379774479c5ad433dbadc6243dbc836bfa5c65d2a8c1d0244f9"
+          }
         }
       ],
       "MJ: AI Agent Step Paths": [
@@ -704,23 +410,9 @@
             "ID": "7B8F1886-2D38-45A8-A7C6-AF0034F9CABE"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.973Z",
-            "checksum": "5c40d3c89d4e22cf59eccd56531f7f54da78257dbd14a89811d8bd03ea7ee053"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Check Users Permission&AgentID=@parent:ID",
-              "resolved": "AF1A0DE4-E0DB-4290-A316-FB1CB35FEF11"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Check User Roles Permission&AgentID=@parent:ID",
-              "resolved": "AE444D5A-0CDC-41B2-A369-3BA12A7E1AAA"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.178Z",
+            "checksum": "a8963b96ed7e97c36fa2c636ab96e13a82e811d3a6e31acd2fc0b2f47b47636b"
+          }
         },
         {
           "fields": {
@@ -734,23 +426,9 @@
             "ID": "E74798B9-6059-4095-B0CD-372179DA94DF"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.980Z",
-            "checksum": "117e55d82e847620ae291112d72a44674b9ae36444b5ca3632978450d7a93d2a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Check Users Permission&AgentID=@parent:ID",
-              "resolved": "AF1A0DE4-E0DB-4290-A316-FB1CB35FEF11"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Permission Denied - Users&AgentID=@parent:ID",
-              "resolved": "620AD7B8-8BA8-4615-AF66-6BB38F1B5DDB"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.180Z",
+            "checksum": "3f6329afb1395629236f8338c1c08914f0e9b7b1543dc567d40a37f45d817e56"
+          }
         },
         {
           "fields": {
@@ -764,23 +442,9 @@
             "ID": "D82281A7-A7D6-4E31-B651-0FC125027EF2"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.988Z",
-            "checksum": "a780a8614632f655d262bbeb6d69b4b554cca95e8d89698ccffda86d09d911e1"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Check User Roles Permission&AgentID=@parent:ID",
-              "resolved": "AE444D5A-0CDC-41B2-A369-3BA12A7E1AAA"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Check Employees Permission&AgentID=@parent:ID",
-              "resolved": "B6431F43-41DA-4405-9EF5-C98F21409FA6"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.181Z",
+            "checksum": "00238909207577c8d8db78d5253f19f2cbdd7edc4c5eb3348abeb0bf1e3eff08"
+          }
         },
         {
           "fields": {
@@ -794,23 +458,9 @@
             "ID": "7168F0F1-EBBD-43CA-9A3A-7708D487899B"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.995Z",
-            "checksum": "10a206d381f074d4575d599b10b38b6476656036549d70ac90b3e3e883d4f34d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Check User Roles Permission&AgentID=@parent:ID",
-              "resolved": "AE444D5A-0CDC-41B2-A369-3BA12A7E1AAA"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Permission Denied - Roles&AgentID=@parent:ID",
-              "resolved": "8DE19F37-02DF-4717-A8FA-98085F62FE2D"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.183Z",
+            "checksum": "ac9b142dd3b2e4662fd55d86f2308cdfec2738f4e6be8498f08c0f323fd3c161"
+          }
         },
         {
           "fields": {
@@ -824,23 +474,9 @@
             "ID": "46D56803-999B-4800-8161-434F59204D40"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.003Z",
-            "checksum": "fdf33e0eeecfe0a07ec8f3c471e5684ad94c1b9250b8f965fbeb2fb1a52c2552"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Check Employees Permission&AgentID=@parent:ID",
-              "resolved": "B6431F43-41DA-4405-9EF5-C98F21409FA6"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Collect User Information&AgentID=@parent:ID",
-              "resolved": "3DB38E5E-FB94-401C-94AB-0B2D7E18302C"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.184Z",
+            "checksum": "b963f18d4a3d8dcb9e13f630b5da9b0354c238840749953cbaaca6c563892ee6"
+          }
         },
         {
           "fields": {
@@ -854,23 +490,9 @@
             "ID": "CA2BC3FA-6688-46A9-90DE-D92925EB76C1"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.010Z",
-            "checksum": "2cd0d7a4a6fc3661f20276e5abb3856af96f1086c9da68796ad07083b5e1931b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Collect User Information&AgentID=@parent:ID",
-              "resolved": "3DB38E5E-FB94-401C-94AB-0B2D7E18302C"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Validate User Data&AgentID=@parent:ID",
-              "resolved": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.186Z",
+            "checksum": "931272d58f857d46460e9de4601c2a3b4ba1a0ced0fc07e13b136ea2e8154ca8"
+          }
         },
         {
           "fields": {
@@ -884,23 +506,9 @@
             "ID": "80E2D6D5-D2F8-41DF-A169-3E2383416916"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.018Z",
-            "checksum": "96c16fa4a5f52b5a218e4fc54aca9c9f47a3bcd82a9b7286bff916b60b1cfc91"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Validate User Data&AgentID=@parent:ID",
-              "resolved": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Create Employee Record&AgentID=@parent:ID",
-              "resolved": "5A421648-5261-4A49-862D-465C71F5A87E"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.188Z",
+            "checksum": "8c1dea3961433a2839adb26c3be4b0aec3cb31ae7a214a15b39268386053ca8f"
+          }
         },
         {
           "fields": {
@@ -914,23 +522,9 @@
             "ID": "48CBE3C2-B9D1-49DC-AF70-61767F464B21"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.028Z",
-            "checksum": "cfc8ea210895f1d72fa9fb77ab06bbfe40b7b746f2ba4a7b1b8f64c2e093e7aa"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Validate User Data&AgentID=@parent:ID",
-              "resolved": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Create User Record&AgentID=@parent:ID",
-              "resolved": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.190Z",
+            "checksum": "736cb7f6c510397bc5588a6e07525f3f0b7445409d990ab0cfee1f5ec59a7bf7"
+          }
         },
         {
           "fields": {
@@ -944,23 +538,9 @@
             "ID": "81CABE7B-2917-475E-A125-6D9DBFEBCE94"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.035Z",
-            "checksum": "fbfa2f756ef6684134a4223b893cef067c69dee24970a35731a83c0ef66c7d33"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Validate User Data&AgentID=@parent:ID",
-              "resolved": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Email Already Exists&AgentID=@parent:ID",
-              "resolved": "23157416-28D0-422A-AF69-6E4D46E0E212"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.191Z",
+            "checksum": "2b1f2882d58fb8303a038b4c2e0b98726b574001cc950193337d0d0451b697fa"
+          }
         },
         {
           "fields": {
@@ -974,23 +554,9 @@
             "ID": "71865532-8C3E-438D-9273-10F05FD241C3"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.043Z",
-            "checksum": "b75cd60d3bf331bf22938f7f176c7fd16d4df0ed206f78ea20d6ddf63c3a25ac"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Create Employee Record&AgentID=@parent:ID",
-              "resolved": "5A421648-5261-4A49-862D-465C71F5A87E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Create User Record&AgentID=@parent:ID",
-              "resolved": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.193Z",
+            "checksum": "35a5baed5ddca8c18730e8b80e9a67a319558b22498876eeaa94976bad52b9b2"
+          }
         },
         {
           "fields": {
@@ -1004,23 +570,9 @@
             "ID": "7D146602-75C0-40BA-8768-BDAFAFA8D906"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.050Z",
-            "checksum": "afec7ceab91a93b8d7302988d932516a57d354bac0b54ab5fddc4f1577a5095b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Create User Record&AgentID=@parent:ID",
-              "resolved": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Assign User Roles&AgentID=@parent:ID",
-              "resolved": "5A977380-2AA5-4119-A329-4450FC603025"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.221Z",
+            "checksum": "ddf552f29bb456ba29ff8b902050324fab4282c64e3f8664122838b77babe2a2"
+          }
         },
         {
           "fields": {
@@ -1034,23 +586,9 @@
             "ID": "5A6B3110-6D40-408D-9EC9-25E03057B158"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.058Z",
-            "checksum": "ac1f882db43e7d4d6231e0af5f91126144cc707f908eb6150d4e3e26cc92e217"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Assign User Roles&AgentID=@parent:ID",
-              "resolved": "5A977380-2AA5-4119-A329-4450FC603025"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Prepare Welcome Email&AgentID=@parent:ID",
-              "resolved": "D4F0E61E-9E0C-420D-9F92-6CECF0884C81"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.222Z",
+            "checksum": "7a1ab5957e78712f691da89546c4045d2731845db8d909f0f124209e794825c1"
+          }
         },
         {
           "fields": {
@@ -1064,23 +602,9 @@
             "ID": "CB3A4C77-30C9-44FE-A31F-BF18FB889229"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:44.067Z",
-            "checksum": "95954d9a8d064fccf051af3208840032589ea67acb384dbfc4dc8bb8feaffebc"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "lookup",
-              "field": "fields.OriginStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Prepare Welcome Email&AgentID=@parent:ID",
-              "resolved": "D4F0E61E-9E0C-420D-9F92-6CECF0884C81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.DestinationStepID",
-              "expression": "@lookup:MJ: AI Agent Steps.Name=Send Email&AgentID=@parent:ID",
-              "resolved": "EA96D877-DEDB-4C7F-9ADC-CB74E6C2A291"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:36.224Z",
+            "checksum": "8c13e5e8d32414f5c0a243c58fd982622e2302cd35c03f5b9c9614fcaac3d2d6"
+          }
         }
       ]
     },
@@ -1088,16 +612,8 @@
       "ID": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:43.776Z",
-      "checksum": "35a0b8972e43ca4686f41c59e7e4b170960308e9fc9dd4e5b7fe330f50d0cc6d"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Flow",
-        "resolved": "4F6A189B-C068-4736-9F23-3FF540B40FDD"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:35.740Z",
+      "checksum": "41160a9901a71e1b5f12f4ecf42609cdd90c0140e50a3afbc904861244cd9c52"
+    }
   }
 ]

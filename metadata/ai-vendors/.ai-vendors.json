@@ -1,0 +1,252 @@
+[
+  {
+    "fields": {
+      "Name": "Eleven Labs",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "DAB9433E-F36B-1410-8DA0-00021F8B792E"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.671Z",
+      "checksum": "532714a3349035a9e9a3d7763adb572277c18f6b52bdba651a150077da4ec95a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "HeyGen",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "E1B9433E-F36B-1410-8DA0-00021F8B792E"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.683Z",
+      "checksum": "c15e21ce47505f63c75492886668f9204e6df1967691dc9659cc49d00917e23b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cerebras",
+      "Description": "Cerebras AI Inference Cloud",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.695Z",
+      "checksum": "b579d1be4edea717bcd18072543a142a38b61d7161d804562845a7d6ffec5d2b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenAI",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.705Z",
+      "checksum": "648a037376385a26c9300f4cec4f1569eaa85a23dfa6829eb92eae6d7a866458"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Anthropic",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.716Z",
+      "checksum": "5754f5ddc452eaef43e6db68ca61166546ed43e6e35531c060e1edb8e2d9b288"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mistral AI",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "DBA5CCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.726Z",
+      "checksum": "a6be3e9df6f1c0c852ad0508ec9255d420e1d892b500d37b2d45daa1a6506718"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Groq",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.736Z",
+      "checksum": "f85f2194d55961a4aee281ace3b65c8814713453d115c34ca506c614f43f0be2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Google",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.745Z",
+      "checksum": "ab58665ea14cc97fa8f136bc08eb44867108b9b95af9d2c2a82e6c444f02ef36"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tasio Labs",
+      "Description": "AI Vendor"
+    },
+    "primaryKey": {
+      "ID": "27C0423E-F36B-1410-8876-005D02743E8C"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T18:23:08.835Z",
+      "checksum": "034c2774c06052fb4b8e3c0649974861bd04650a35044d067dd7ad7fe1afd071"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Azure",
+      "Description": "Microsoft Azure cloud platform providing AI inference services for OpenAI models",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Azure Service Principal"
+    },
+    "primaryKey": {
+      "ID": "D75ABC84-6BDB-41B9-94C7-2FE748482193"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.754Z",
+      "checksum": "6ca8c92343f2d8387c6a44fb8739c7d9abe624d769645b3db650ce73fa142783"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LM Studio",
+      "Description": "Local AI inference software for macOS that provides an OpenAI-compatible API for running open-source language models locally. Enables private, offline AI inference without cloud dependencies.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key with Endpoint"
+    },
+    "primaryKey": {
+      "ID": "2DA415EC-25AC-45D9-ABF0-3769F41D7BEF"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.869Z",
+      "checksum": "eddf4da52374054f5950772b15c08bd147224573c234ba97d8c0aab40321136a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Alibaba Cloud",
+      "Description": "Cloud computing company and developer of the Qwen series of large language models, offering advanced AI capabilities across multiple languages and reasoning tasks.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "C2E2D782-1BDA-4F37-AF4B-953155FF6CF6"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.882Z",
+      "checksum": "bc332ad50411c6e2a08f403c741527fdaa3f387cdf94ee163c8abb213bab696e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moonshot AI",
+      "Description": "AI company that developed the Kimi series of large language models, including the advanced Kimi K2 instruction-following model with exceptional reasoning and code writing capabilities.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "F46A85CC-2897-4FB5-B557-99A95E93A42D"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.894Z",
+      "checksum": "ed1b72963c15930660b7d6bbe1253b678dcee3a7366441b7dc40a8acc8a71358"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Amazon Bedrock",
+      "Description": "AWS fully managed service providing access to foundation models from leading AI companies including Anthropic Claude models",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=AWS IAM"
+    },
+    "primaryKey": {
+      "ID": "59FA8F6E-F14C-4874-A69C-BAD794DDC3AA"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.904Z",
+      "checksum": "1ed233344778a030d131de8f8cc8c63424b757d070af41993da7360af6b71539"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LocalEmbeddings",
+      "Description": "Local embedding provider that runs models directly on your infrastructure using Transformers.js and ONNX runtime. Provides privacy-focused, cost-effective embeddings without requiring external API calls."
+    },
+    "primaryKey": {
+      "ID": "FE9D9CEA-5CEB-4EF0-8E2B-D18BF5289627"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T18:23:08.835Z",
+      "checksum": "8c605925b314a1534e377c2fb4d535ef7ef0cba7cbeac9b4fe4f32e5e6d50dcf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenRouter",
+      "Description": "Unified API gateway providing access to hundreds of AI models from various providers with automatic routing and failover capabilities across many inference providers",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "5AD8786B-2D00-45D5-AFBE-DAEC48963FFC"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.916Z",
+      "checksum": "6a3b8e3b98c9ef557a744170172d7b468a1f00dd13b24c8d04ca6a4e4baa877b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "x.ai",
+      "Description": "x.ai is the creator of the Grok series of large language models that power various AI applications including coding assistance and general reasoning.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "5483D98F-1F4E-40F4-91FC-EAA8EFDC90F1"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.927Z",
+      "checksum": "7a3f1a96a532c9968eb70c14e73b73d59155c69d63ac0482277e07cbc4b20c26"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vertex AI",
+      "Description": "Google Cloud Platform's Vertex AI service providing enterprise-grade access to Gemini models with GCP-native features including VPC-SC, CMEK, and regional deployments",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Google Cloud Platform"
+    },
+    "primaryKey": {
+      "ID": "E41E970D-7D38-45D9-BBFC-4013FF7C5860"
+    },
+    "sync": {
+      "lastModified": "2025-12-30T23:06:45.938Z",
+      "checksum": "454eb74c4e6273c55cf8bcf8b655327d39f27b98ba099528e3bb3d9b36abb465"
+    }
+  }
+]

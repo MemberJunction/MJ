@@ -14,23 +14,9 @@
       "ID": "DD7AFB84-8381-482A-B6C7-88DDE4D2FF17"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:41.775Z",
-      "checksum": "08127194e8654f45a1bed268a30d046361ba726cfe41b4c2eedda1dd4c8cfcd8"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Data&Parent=System",
-        "resolved": "22285832-93AD-427E-81BA-E332F63FC5B9"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Actions.Name=Create Record&Category=Data",
-        "resolved": "2504E288-ADF7-4913-A627-AA14276BAA55"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:14.496Z",
+      "checksum": "be6f7717682a19f4d608f02255bac90f3986fc93e6ac96f9483b5a875a31a6ef"
+    }
   },
   {
     "fields": {
@@ -47,22 +33,8 @@
       "ID": "6A699E09-87ED-45F1-B7D2-0C38286C2EFF"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:41.791Z",
-      "checksum": "0ca9440cc241683a352c4cda09cff82a9d3c11a8066399530e83ec3500df8e5b"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Action Categories.Name=Data&Parent=System",
-        "resolved": "22285832-93AD-427E-81BA-E332F63FC5B9"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Actions.Name=Get Record&Category=Data",
-        "resolved": "49E30665-1A90-45CA-9129-C33959A51B4F"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:14.497Z",
+      "checksum": "c409516878d55a87ac7761fc6acc896aebf7a97d8ea054c806d3acbaaacba2fe"
+    }
   }
 ]

@@ -23,29 +23,9 @@
             "ID": "BE776374-0DF5-4FCA-8512-B63AC0C1774D"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:31.753Z",
-            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "6DFEC000-BFBC-4689-96E9-24C9F55FD385"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:29.977Z",
+            "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
+          }
         },
         {
           "fields": {
@@ -58,29 +38,9 @@
             "ID": "9303A133-E1F0-4F55-A63F-8221AD61D2F2"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:31.764Z",
-            "checksum": "f9c074f4c7d9339c6b106c21d307d063b62cd5acf7d9e9a2960ffae45591a2bb"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "6DFEC000-BFBC-4689-96E9-24C9F55FD385"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:29.978Z",
+            "checksum": "953e0b81685fb06b23245c8ae92ab8b245c66ad1e63db24be04b37c9b2feeae3"
+          }
         },
         {
           "fields": {
@@ -93,29 +53,9 @@
             "ID": "7B89273A-6B8D-41FA-9A77-0D33278004C1"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:31.774Z",
-            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "6DFEC000-BFBC-4689-96E9-24C9F55FD385"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 5-nano",
-              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+            "lastModified": "2025-12-30T23:07:29.979Z",
+            "checksum": "0d12a1a58f9ac2190b7a23f315dcf580fbbc10fce0515c5a4d86462c05cb2c48"
+          }
         }
       ]
     },
@@ -123,22 +63,8 @@
       "ID": "6DFEC000-BFBC-4689-96E9-24C9F55FD385"
     },
     "sync": {
-      "lastModified": "2025-11-10T00:28:46.552Z",
-      "checksum": "bb1ac1e0014807f1c137d0cde8cea691697c70a245cd9197f96329662a819b62"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
-        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:29.919Z",
+      "checksum": "eeb8056f260545cedf93009fb4329c63838ade4be7222bc2fa0c2cd77a81f896"
+    }
   }
 ]

@@ -16,16 +16,8 @@
       "ID": "8F84DFB4-C38E-4B8D-80E7-9CCF30039E77"
     },
     "sync": {
-      "lastModified": "2025-10-29T15:26:41.182Z",
-      "checksum": "29a4f6080feb2542b15860e148d636f1fa409a3ab1e9d1ec0abcdf0b8e14a94c"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Query Categories.Name=Conversations",
-        "resolved": "5FB6FAFF-8904-490D-9BEE-CA1FF906BD44"
-      }
-    ]
+      "lastModified": "2025-12-30T23:07:36.355Z",
+      "checksum": "acca6547950566e30cbccd6ef2a9ab76ee432caef3c4a2d0262d0c491a247e3f"
+    }
   }
 ]

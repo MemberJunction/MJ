@@ -25,23 +25,9 @@
           "ID": "CFF1015F-4381-4B30-8670-C7A2FEF9B43B"
         },
         "sync": {
-          "lastModified": "2025-11-28T02:04:46.623Z",
-          "checksum": "d0c2c2b70a099d30a2eb680c258fab20ea35635ff6f9e3ad6ce936f02c0c10f5"
-        },
-        "__mj_sync_notes": [
-          {
-            "type": "parent",
-            "field": "fields.DashboardID",
-            "expression": "@parent:ID",
-            "resolved": "5E425BD5-A7AE-486D-8A4B-B06D15B05B88"
-          },
-          {
-            "type": "lookup",
-            "field": "fields.ApplicationID",
-            "expression": "@lookup:Applications.Name=Home",
-            "resolved": "5D0419BD-21AE-44DD-BC87-DCE0819860F5"
-          }
-        ]
+          "lastModified": "2025-12-30T23:07:38.424Z",
+          "checksum": "8d42a825f4e70402c81b387bbbaaed8a9898b6848919b0af48b1c1bbde0683cc"
+        }
       }
     ]
   },
@@ -49,27 +35,7 @@
     "ID": "5E425BD5-A7AE-486D-8A4B-B06D15B05B88"
   },
   "sync": {
-    "lastModified": "2025-11-28T02:04:46.604Z",
-    "checksum": "f28c4f48f147bd225d2ab40a9a067437c1d76dbb09286e0152a068faf43ff386"
-  },
-  "__mj_sync_notes": [
-    {
-      "type": "lookup",
-      "field": "fields.UserID",
-      "expression": "@lookup:Users.Name=System",
-      "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-    },
-    {
-      "type": "lookup",
-      "field": "fields.ApplicationID",
-      "expression": "@lookup:Applications.Name=Home",
-      "resolved": "5D0419BD-21AE-44DD-BC87-DCE0819860F5"
-    },
-    {
-      "type": "lookup",
-      "field": "fields.EnvironmentID",
-      "expression": "@lookup:MJ: Environments.Name=Default",
-      "resolved": "F51358F3-9447-4176-B313-BF8025FD8D09"
-    }
-  ]
+    "lastModified": "2025-12-30T23:07:38.411Z",
+    "checksum": "9b7400481b8f97f55775baa1e338f6a74f6366b72e8d5b1853c36533e7f9f7eb"
+  }
 }

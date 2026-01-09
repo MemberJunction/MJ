@@ -5,3 +5,4 @@
  */
 
 export * from './TestEngineBase';
+export * from './types';
