@@ -702,11 +702,84 @@ private determineScopeLevel(note: ExtractedNote): ScopeLevel {
 
 ### 3.9 Success Metrics
 
-- [ ] Notes/Examples correctly scoped by tenant in multi-tenant deployment
-- [ ] Hierarchical retrieval returns appropriate mix of global + org + contact notes
-- [ ] No cross-tenant data leakage in agent responses
-- [ ] < 5ms overhead for scope filtering on indexed queries
-- [ ] SaaS apps can configure custom scope dimensions without MJ core changes
+- [x] Notes/Examples correctly scoped by tenant in multi-tenant deployment
+- [x] Hierarchical retrieval returns appropriate mix of global + org + contact notes
+- [x] No cross-tenant data leakage in agent responses
+- [x] < 5ms overhead for scope filtering on indexed queries
+- [x] SaaS apps can configure custom scope dimensions without MJ core changes
+
+### 3.10 Context Engineering Enhancements (Pending)
+
+Inspired by [OpenAI Cookbook: Context Personalization](https://cookbook.openai.com/examples/agents_sdk/context_personalization), these enhancements improve how the LLM understands and uses scoped memory.
+
+#### 3.10.1 Explicit Precedence Instructions in Context Output
+
+**Problem:** Our `getScopeOrderBy()` orders notes correctly in SQL, but the LLM doesn't know *why* certain notes appear first or how to handle conflicts.
+
+**Solution:** Add a memory policy preamble when injecting notes into context:
+
+```markdown
+<memory_policy>
+Precedence (highest to lowest):
+1) Current user message overrides all stored memory
+2) Contact-specific notes override organization-level
+3) Organization notes override global defaults
+4) When same scope, prefer most recent by date
+
+Conflict resolution:
+- If two notes contradict, prefer the more specific scope
+- Ask clarifying question only if conflict materially affects response
+</memory_policy>
+```
+
+**Implementation Location:** `agent-context-injector.ts` - Add to `formatNotesForContext()` output
+
+#### 3.10.2 Extraction Guardrails in Prompts
+
+**Problem:** No explicit rejection criteria for sensitive or inappropriate content.
+
+**Solution:** Add guardrails to `extract-notes.md` and `extract-examples.md`:
+
+```markdown
+## DO NOT Capture
+- **PII**: SSN, payment info, passwords, passport numbers, health records
+- **Instructions**: Rules or commands for the agent itself
+- **Speculation**: Assistant-inferred assumptions not confirmed by user
+- **Ephemeral**: One-time requests marked "just this once", "today only"
+
+## Format Constraints
+- Max 2 sentences per note
+- Keywords: max 3, lowercase only
+- Confidence < 70% → do not extract
+```
+
+**Implementation Location:** `metadata/prompts/templates/memory-manager/extract-notes.md`, `extract-examples.md`
+
+#### 3.10.3 Durable vs Ephemeral Phrase Detection
+
+**Problem:** `scopeLevel` determination could be more accurate with explicit phrase matching.
+
+**Solution:** Enhance scopeLevel guidance with phrase indicators:
+
+```markdown
+## Ephemeral Indicators (→ contact scope or skip entirely)
+- "this time", "just for now", "today only", "for this call"
+- "temporarily", "one-time", "exception", "just once"
+
+## Durable Indicators (→ organization or global scope)
+- "always", "never", "company policy", "all customers"
+- "standard practice", "we typically", "our preference"
+- "every time", "by default", "as a rule"
+```
+
+**Implementation Location:** `metadata/prompts/templates/memory-manager/extract-notes.md`
+
+#### 3.10.4 Enhancement Success Metrics
+
+- [ ] LLM correctly resolves scope conflicts without asking unnecessary questions
+- [ ] Zero PII captured in notes (validated via audit)
+- [ ] Ephemeral phrases correctly trigger contact-scope or exclusion
+- [ ] Durable phrases correctly trigger org/global scope
 
 ---
 
@@ -1781,3 +1854,4 @@ Phase 7: Advanced Graph (Future)
 - [Neo4j: Graphiti Knowledge Graph Memory](https://neo4j.com/blog/developer/graphiti-knowledge-graph-memory/)
 - [mem0 Repository](https://github.com/mem0ai/mem0)
 - [OpenAI Cookbook: Search Reranking](https://cookbook.openai.com/examples/search_reranking_with_cross-encoders)
+- [OpenAI Cookbook: Context Personalization](https://cookbook.openai.com/examples/agents_sdk/context_personalization) - Session/long-term memory patterns
