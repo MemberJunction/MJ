@@ -19,6 +19,8 @@ import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 
 @Component({
   selector: 'mj-conversation-chat-area',
@@ -182,11 +184,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   public inProgressMessageIds: string[] = [];
 
-  // Timer for smooth agent run UI updates (updates every second while agent runs)
-  private agentRunUpdateTimer: any = null;
-
-  // Track previous message statuses to detect completions after navigation
-  private previousMessageStatuses = new Map<string, string>();
+  // Subject for cleanup on destroy
+  private destroy$ = new Subject<void>();
 
   // Cache of message-input metadata for rendering multiple instances
   // Prevents destruction/recreation when switching conversations for performance
@@ -241,7 +240,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
     private dialogService: DialogService,
-    private attachmentService: ConversationAttachmentService
+    private attachmentService: ConversationAttachmentService,
+    private streamingService: ConversationStreamingService
   ) {}
 
   async ngOnInit() {
@@ -274,6 +274,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     window.addEventListener('mouseup', this.onResizeEnd.bind(this));
     window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
     window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
+
+    // Subscribe to completion events from PubSub
+    this.streamingService.completionEvents$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(async (event) => {
+        // Find the message in our current conversation
+        const message = this.messages.find(m => m.ID === event.conversationDetailId);
+        if (message) {
+          await this.handleMessageCompletion(message, event.agentRunId);
+        }
+      });
   }
 
   /**
@@ -364,8 +375,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
 
-    // Stop agent run update timer
-    this.stopAgentRunUpdateTimer();
+    // Complete destroy subject to cleanup subscriptions
+    this.destroy$.next();
+    this.destroy$.complete();
 
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
@@ -384,7 +396,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Do NOT clear activeTasks - they are workspace-level and persist across conversations
     // Clearing causes bugs: global tasks panel blanks out, no notifications when switching
 
-    this.previousMessageStatuses.clear();
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
 
@@ -523,14 +534,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Update attachment support based on agents in this conversation
     this.updateAttachmentSupport();
 
-    // Initialize status tracking to detect message completion
-    this.previousMessageStatuses.clear();
-    for (const message of messages) {
-      if (message.ID && message.Status) {
-        this.previousMessageStatuses.set(message.ID, message.Status);
-      }
-    }
-
     // Detect in-progress messages for streaming reconnection
     // Always create NEW array reference to trigger Input setter in message-input component
     this.inProgressMessageIds = [...messages
@@ -539,7 +542,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     if (this.inProgressMessageIds.length > 0) {
       LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
-      this.startAgentRunUpdateTimer();
+    }
+
+    // Check for missed completions (user navigated away, agent completed, user returned)
+    // The streaming service stores recent completions so we can handle them
+    for (const message of messages) {
+      if (message.Status === 'In-Progress' && message.ID) {
+        const recentCompletion = this.streamingService.getRecentCompletion(message.ID);
+        if (recentCompletion) {
+          // This message completed while we were away - handle it
+          LogStatusEx({message: `📥 Found missed completion for message ${message.ID}, handling...`, verboseOnly: true});
+          this.handleMessageCompletion(message, recentCompletion.agentRunId);
+          this.streamingService.clearRecentCompletion(message.ID);
+        }
+      }
     }
 
     this.scrollToBottom = true;
@@ -832,9 +848,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Trigger re-render to show updated status
       this.messages = [...this.messages];
       this.cdr.detectChanges();
-
-      // Stop timer since agent completed
-      this.stopAgentRunUpdateTimer();
     }
   }
 
@@ -844,86 +857,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Provides real-time updates of status, timestamps, tokens, cost during execution
    */
   async onAgentRunUpdate(event: {conversationDetailId: string; agentRun?: AIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
-    let run: AIAgentRunEntityExtended;
     if (event.agentRun) {
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
       this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
-      run = event.agentRun;
     }
     else {
       // no agent run, should have agentRunId
-      run = await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId!);
+      await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId!);
     }
 
     // Force message list to re-render with updated agent run
     // This ensures message components receive the fresh agent run data
     this.messages = [...this.messages];
     this.cdr.detectChanges();
-
-    // Start 1-second update timer for smooth UI updates (if not already running)
-    this.startAgentRunUpdateTimer();
-
-    // If agent completed or failed, stop the timer
-    const status = run.Status?.toLowerCase();
-    if (status === 'complete' || status === 'completed' || status === 'failed' || status === 'error') {
-      this.stopAgentRunUpdateTimer();
-    }
-  }
-
-  /**
-   * Start 1-second timer for smooth agent run UI updates
-   * Updates the message list every second to keep elapsed times current
-   * Also detects when messages complete and reloads agent runs
-   *
-   * NOTE: This polling approach causes excessive RunView calls (24+ queries per entity).
-   * TODO: Replace with PubSub completion events - see plans/repair-conversations-ui-performance.md
-   */
-  private startAgentRunUpdateTimer(): void {
-    // Don't start if already running
-    if (this.agentRunUpdateTimer !== null) {
-      return;
-    }
-
-    LogStatusEx({message: '⏱️ Starting agent run update timer (1-second interval)', verboseOnly: true});
-
-    this.agentRunUpdateTimer = setInterval(async () => {
-      // Check for messages that changed from In-Progress to Complete
-      // This handles the navigation scenario where onMessageComplete isn't called
-      await this.detectAndHandleCompletedMessages();
-
-      // Check if we have any active agent runs
-      let hasActiveRuns = false;
-      for (const agentRun of this.agentRunsByDetailId.values()) {
-        const status = agentRun.Status?.toLowerCase();
-        if (status === 'in-progress' || status === 'running') {
-          hasActiveRuns = true;
-          break;
-        }
-      }
-
-      // Keep timer running if we have active runs OR tracking messages for completion
-      // This ensures we detect completions even before agent runs are fully loaded
-      if (hasActiveRuns || this.previousMessageStatuses.size > 0) {
-        // Force message list to re-render so timers update
-        this.messages = [...this.messages];
-        this.cdr.detectChanges();
-      } else {
-        // Stop only if nothing to monitor
-        this.stopAgentRunUpdateTimer();
-      }
-    }, 1000);
-  }
-
-  /**
-   * Stop the agent run update timer
-   */
-  private stopAgentRunUpdateTimer(): void {
-    if (this.agentRunUpdateTimer !== null) {
-      LogStatusEx({message: '⏹️ Stopping agent run update timer', verboseOnly: true});
-      clearInterval(this.agentRunUpdateTimer);
-      this.agentRunUpdateTimer = null;
-    }
   }
 
   /**
@@ -985,88 +932,61 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Detect messages that changed from In-Progress to Complete and reload their agent runs
-   * This handles the navigation scenario where onMessageComplete event isn't fired
+   * Handle message completion triggered by PubSub completion event
+   * Reloads message, agent run, and artifacts, then updates UI
+   * @param message The message that completed
+   * @param agentRunId The ID of the agent run that completed
    */
-  private async detectAndHandleCompletedMessages(): Promise<void> {
+  private async handleMessageCompletion(message: ConversationDetailEntity, _agentRunId: string): Promise<void> {
     try {
-      for (const message of this.messages) {
-        if (!message.ID) continue;
+      LogStatusEx({message: `🎉 Handling completion for message ${message.ID}`, verboseOnly: true});
 
-        const previousStatus = this.previousMessageStatuses.get(message.ID);
+      // Reload message from database to get final content and status
+      await message.Load(message.ID);
 
-        // CRITICAL FIX: If message was tracked as In-Progress, reload from database to get actual current status.
-        // This handles the navigation scenario where local state becomes stale while we're away.
-        // The database has the real status and content (updated by streaming callbacks or agent completion).
-        if (previousStatus === 'In-Progress') {
-          try {
-            await message.Load(message.ID);
-          } catch (loadError) {
-            console.error(`Failed to reload message ${message.ID}:`, loadError);
-            continue;
-          }
-        }
+      // Reload agent run to get final status, timestamps, and cost
+      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      if (agentRun?.ID) {
+        await agentRun.Load(agentRun.ID);
+      }
 
-        const currentStatus = message.Status;
+      // Reload artifacts for this completed message
+      await this.reloadArtifactsForMessage(message.ID);
 
-        // Detect completion: was In-Progress, now Complete
-        if (previousStatus === 'In-Progress' && currentStatus === 'Complete') {
-          // Get the agent run for this message
-          const agentRun = this.agentRunsByDetailId.get(message.ID);
-          if (agentRun?.ID) {
-            try {
-              // Reload agent run from database to get updated Status
-              await agentRun.Load(agentRun.ID);
+      // Reload messages to pick up newly delegated agent messages
+      // When Sage delegates to Marketing Agent, a new message is created
+      await this.reloadMessagesForActiveConversation();
 
-              // Reload artifacts for this completed message
-              await this.reloadArtifactsForMessage(message.ID);
+      // Update inProgressMessageIds to include new delegated agents
+      // This triggers callback registration via the setter in message-input
+      this.inProgressMessageIds = [...this.messages
+        .filter(m => m.Status === 'In-Progress')
+        .map(m => m.ID)];
 
-              // CRITICAL: Reload messages to pick up newly delegated agent messages
-              // When Sage delegates to Marketing Agent, a new message is created
-              // We need to discover and register callbacks for these new messages
-              await this.reloadMessagesForActiveConversation();
-
-              // Update inProgressMessageIds to include new delegated agents
-              // This triggers callback registration via the setter in message-input
-              this.inProgressMessageIds = [...this.messages
-                .filter(m => m.Status === 'In-Progress')
-                .map(m => m.ID)];
-
-              // Auto-open artifact panel if this message has artifacts and no artifact is currently shown
-              if (this.artifactsByDetailId.has(message.ID) && !this.showArtifactPanel) {
-                const artifactList = this.artifactsByDetailId.get(message.ID);
-                if (artifactList && artifactList.length > 0) {
-                  // Show the LAST (most recent) artifact - uses display data, no lazy load needed
-                  this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
-                  this.showArtifactPanel = true;
-                  // Load permissions for the new artifact
-                  await this.loadArtifactPermissions(this.selectedArtifactId);
-                }
-              }
-
-              // Force re-render with updated agent run and artifacts
-              this.messages = [...this.messages];
-              this.cdr.detectChanges();
-
-              // Remove from tracking map so timer can stop when all messages complete
-              this.previousMessageStatuses.delete(message.ID);
-
-              // Remove task from ActiveTasksService (clears spinner in conversation list)
-              const task = this.activeTasks.getByConversationDetailId(message.ID);
-              if (task) {
-                this.activeTasks.remove(task.id);
-              }
-            } catch (error) {
-              console.error('Failed to reload agent run on completion:', error);
-            }
-          }
-        } else if (currentStatus === 'In-Progress') {
-          // Only track In-Progress messages - don't re-add Complete messages
-          this.previousMessageStatuses.set(message.ID, currentStatus);
+      // Auto-open artifact panel if this message has artifacts and no artifact is currently shown
+      if (this.artifactsByDetailId.has(message.ID) && !this.showArtifactPanel) {
+        const artifactList = this.artifactsByDetailId.get(message.ID);
+        if (artifactList && artifactList.length > 0) {
+          // Show the LAST (most recent) artifact
+          this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
+          this.showArtifactPanel = true;
+          await this.loadArtifactPermissions(this.selectedArtifactId);
         }
       }
+
+      // Remove task from ActiveTasksService (clears spinner in conversation list)
+      const task = this.activeTasks.getByConversationDetailId(message.ID);
+      if (task) {
+        this.activeTasks.remove(task.id);
+      }
+
+      // Force re-render with updated agent run and artifacts
+      this.messages = [...this.messages];
+      this.cdr.detectChanges();
+
+      LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
     } catch (error) {
-      console.error('Error in detectAndHandleCompletedMessages:', error);
+      console.error(`Error handling message completion for ${message.ID}:`, error);
     }
   }
 

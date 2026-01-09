@@ -173,7 +173,6 @@ export class AgentRunner {
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
             let agentResponseDetail: ConversationDetailEntity | undefined;
-            let serverCreatedAgentResponse = false;
 
             // If conversationDetailId is provided, use it (UI-created agent response detail)
             if (options.conversationDetailId) {
@@ -297,17 +296,30 @@ export class AgentRunner {
                 }
 
                 agentResponseDetailId = agentResponseDetail.ID;
-                serverCreatedAgentResponse = true;
                 LogStatus(`Created agent response detail ${agentResponseDetailId}`);
             }
 
             // Step 4: Execute the agent with conversation context
             LogStatus(`Executing agent ${params.agent.Name} in conversation context`);
 
-            // Wrap progress callback to update agent response detail (only if we created it)
+            // Flag to prevent late progress callbacks from overwriting final status
+            // Progress callbacks fire async and may complete AFTER agent returns
+            let agentExecutionCompleted = false;
+
+            // Wrap progress callback to update agent response detail
             const originalOnProgress = params.onProgress;
-            const wrappedOnProgress = serverCreatedAgentResponse && agentResponseDetail
+            const wrappedOnProgress = agentResponseDetail
                 ? async (progress: any) => {
+                    // Skip DB save if agent already completed - prevents race condition
+                    // where late progress overwrites final Status='Complete'
+                    if (agentExecutionCompleted) {
+                        // Still call original callback for PubSub streaming
+                        if (originalOnProgress) {
+                            await originalOnProgress(progress);
+                        }
+                        return;
+                    }
+
                     // Update the agent response detail with progress message
                     if (agentResponseDetail && progress.message) {
                         agentResponseDetail.Message = progress.message;
@@ -329,9 +341,16 @@ export class AgentRunner {
 
             const agentResult = await this.RunAgent<C, R>(modifiedParams);
 
+            // Mark execution as completed to stop progress saves
+            agentExecutionCompleted = true;
+
             // Step 5: Update agent response detail with final result
             // ALWAYS update status - don't rely on frontend (browser may refresh during execution)
             if (agentResponseDetail && agentResponseDetailId) {
+                // Wait for any in-flight progress save to complete
+                // EnsureSaveComplete() resolves immediately if no save in progress
+                await agentResponseDetail.EnsureSaveComplete();
+
                 LogStatus('Updating agent response detail with final result');
 
                 // Reload to get any updates from agent execution
