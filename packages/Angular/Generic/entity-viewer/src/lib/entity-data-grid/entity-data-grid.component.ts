@@ -1397,16 +1397,59 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   private estimateColumnWidth(field: EntityFieldInfo): number {
-    if (field.TSType === 'boolean') return 100;
-    if (field.TSType === 'number') return 120;
-    if (field.TSType === 'Date') return 150;
-    if (field.Name.toLowerCase().includes('id')) return 100;
-    if (field.Name.toLowerCase().includes('email')) return 200;
-    if (field.Name.toLowerCase().includes('name')) return 180;
+    const fieldNameLower = field.Name.toLowerCase();
+    const displayNameLower = (field.DisplayName || field.Name).toLowerCase();
 
-    const charWidth = 8;
-    const padding = 20;
-    return Math.min(Math.max(field.Length * charWidth / 2, 100), 300) + padding;
+    // Fixed-width types
+    if (field.TSType === 'boolean') return 80;
+    if (field.TSType === 'Date') return 120;
+
+    // Numeric fields - compact
+    if (field.TSType === 'number') {
+      if (fieldNameLower.includes('year') || fieldNameLower.includes('age')) return 80;
+      if (fieldNameLower.includes('amount') || fieldNameLower.includes('price') || fieldNameLower.includes('total')) return 120;
+      return 100;
+    }
+
+    // ID fields - compact
+    if (fieldNameLower.endsWith('id') && field.Length <= 50) return 80;
+
+    // Email - needs more space
+    if (fieldNameLower.includes('email')) return 220;
+
+    // Phone numbers
+    if (fieldNameLower.includes('phone') || fieldNameLower.includes('mobile') || fieldNameLower.includes('fax')) return 130;
+
+    // Name fields - medium width
+    if (fieldNameLower.includes('name') || fieldNameLower.includes('title')) {
+      if (fieldNameLower === 'firstname' || fieldNameLower === 'lastname' || fieldNameLower === 'first name' || fieldNameLower === 'last name') return 120;
+      return 160;
+    }
+
+    // Location fields
+    if (fieldNameLower.includes('city')) return 120;
+    if (fieldNameLower.includes('state') || fieldNameLower.includes('country')) return 100;
+    if (fieldNameLower.includes('zip') || fieldNameLower.includes('postal')) return 90;
+    if (fieldNameLower.includes('address')) return 200;
+
+    // Date-like strings
+    if (fieldNameLower.includes('date') || fieldNameLower.includes('time')) return 120;
+
+    // Status/Type fields - usually short values
+    if (fieldNameLower.includes('status') || fieldNameLower.includes('type') || fieldNameLower.includes('category')) return 110;
+
+    // Code/abbreviation fields
+    if (fieldNameLower.includes('code') || fieldNameLower.includes('abbr')) return 100;
+
+    // Long text fields - limit width, they'll truncate
+    if (field.Length > 500) return 150;
+    if (field.Length > 200) return 180;
+
+    // Default: estimate based on field length but with tighter bounds
+    const estimatedChars = Math.min(field.Length, 50);
+    const charWidth = 7;
+    const padding = 24;
+    return Math.min(Math.max(estimatedChars * charWidth / 2 + padding, 80), 200);
   }
 
   private mapFieldTypeToGridType(fieldType: string): 'string' | 'number' | 'boolean' | 'date' | 'datetime' {
@@ -1997,12 +2040,44 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       this.applySortStateToGrid();
     }
 
-    event.api.sizeColumnsToFit();
+    // Smart column sizing: use our estimated widths but ensure grid fills available space
+    // without making columns excessively wide
+    this.autoSizeColumnsSmartly(event.api);
 
     // Setup infinite scroll if in that mode and we have params
     if (this._paginationMode === 'infinite' && this._allowLoad && (this._params || this._entityName)) {
       this.setupInfiniteScroll();
     }
+  }
+
+  /**
+   * Smart column auto-sizing that respects our width estimates
+   * while ensuring the grid fills available space appropriately
+   */
+  private autoSizeColumnsSmartly(api: GridApi): void {
+    // Get total estimated width from our column definitions
+    const totalEstimatedWidth = this.agColumnDefs.reduce((sum, col) => sum + (col.width || 150), 0);
+
+    // Get available width from the grid container
+    const gridElement = this.elementRef.nativeElement.querySelector('.mj-ag-grid');
+    const availableWidth = gridElement?.clientWidth || 0;
+
+    if (availableWidth > 0 && totalEstimatedWidth < availableWidth) {
+      // If our columns are narrower than available space, stretch proportionally
+      // but cap individual column growth to prevent excessive widths
+      const ratio = availableWidth / totalEstimatedWidth;
+      const maxRatio = 1.5; // Don't let columns grow more than 50%
+
+      if (ratio <= maxRatio) {
+        // Moderate stretch - use sizeColumnsToFit
+        api.sizeColumnsToFit();
+      } else {
+        // Too much stretch - just use our estimated widths
+        // The grid will have some empty space on the right, which is fine
+      }
+    }
+    // If our columns are wider than available space, let the user scroll horizontally
+    // (AG Grid handles this automatically)
   }
 
   onAgRowClicked(event: RowClickedEvent): void {

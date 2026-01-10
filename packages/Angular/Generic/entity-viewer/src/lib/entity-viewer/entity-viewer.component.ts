@@ -166,10 +166,12 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   private _timelineConfig: TimelineState | null = null;
 
   /**
-   * Whether to show the grid toolbar
-   * @default true
+   * Whether to show the grid toolbar.
+   * When false, the grid is displayed without its own toolbar - useful when
+   * entity-viewer provides its own filter/actions in the header.
+   * @default false
    */
-  @Input() showGridToolbar: boolean = true;
+  @Input() showGridToolbar: boolean = false;
 
   /**
    * Grid toolbar configuration - controls which buttons are shown and their behavior

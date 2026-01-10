@@ -18,10 +18,10 @@
   /* Rows */
   --grid-row-height: 40px;
   --grid-row-bg: #ffffff;
-  --grid-row-bg-alt: #f9f9f9;
-  --grid-row-hover-bg: #f0f7ff;
-  --grid-row-selected-bg: #e3f2fd;
-  --grid-row-selected-hover-bg: #bbdefb;
+  --grid-row-bg-alt: #fafafa;
+  --grid-row-hover-bg: #f5f5f5;
+  --grid-row-selected-bg: #e8f4fd;
+  --grid-row-selected-hover-bg: #d4ebfc;
 
   /* Cells */
   --grid-cell-padding: 8px 12px;
@@ -619,11 +619,12 @@
 
 /* Selected row styling with higher specificity */
 ::ng-deep .ag-theme-alpine .ag-row-selected {
-  background-color: var(--grid-row-selected-bg, #e3f2fd) !important;
+  background-color: var(--grid-row-selected-bg, #e8f4fd) !important;
+  box-shadow: inset 3px 0 0 0 var(--grid-selection-indicator-color, #2196F3);
 }
 
 ::ng-deep .ag-theme-alpine .ag-row-selected:hover {
-  background-color: var(--grid-row-selected-hover-bg, #bbdefb) !important;
+  background-color: var(--grid-row-selected-hover-bg, #d4ebfc) !important;
 }
 
 /* Selection checkbox styling */

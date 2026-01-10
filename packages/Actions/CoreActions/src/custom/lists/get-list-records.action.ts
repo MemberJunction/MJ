@@ -124,8 +124,8 @@ export class GetListRecordsAction extends BaseAction {
           const md = new Metadata();
           const entityInfo = md.Entities.find(e => e.Name === entityName);
 
-          if (entityInfo) {
-            const pkField = entityInfo.PrimaryKey.Name;
+          if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+            const pkField = entityInfo.PrimaryKeys[0].Name;
             const recordsResult = await rv.RunView({
               EntityName: entityName,
               ExtraFilter: `${pkField} IN (${recordIdFilter})`,
