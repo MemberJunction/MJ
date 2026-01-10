@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RegisterForStartup, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
 import { UserViewEntityExtended } from "../custom/UserViewEntity";
 
 /**
@@ -10,18 +10,18 @@ import { UserViewEntityExtended } from "../custom/UserViewEntity";
  *
  * Usage:
  * ```typescript
- * // Get the instance (auto-configured on startup)
- * const engine = UserViewEngine.Instance;
+ * // Initialize the engine on-demand before first use
+ * await UserViewEngine.Instance.Config(false);
  *
- * // Access views
+ * // Then access views
  * const myViews = engine.GetViewsForCurrentUser();
  * const entityViews = engine.GetViewsForEntity('entityId');
  * const view = engine.GetViewById('viewId');
  * ```
  *
- * Note: Views are cached globally. Use the filtering methods to get views for specific users or entities.
+ * Note: This engine is NOT auto-started at application startup. You must call Config() before use.
+ * Views are cached globally. Use the filtering methods to get views for specific users or entities.
  */
-@RegisterForStartup()
 export class UserViewEngine extends BaseEngine<UserViewEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application.

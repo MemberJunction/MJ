@@ -125,11 +125,8 @@
       <mj-entity-data-grid
         [hidden]="effectiveViewMode !== 'grid'"
         [data]="filteredRecords"
-        [entityName]="entity.Name"
-        [searchString]="debouncedFilterText"
+        [Params]="{ EntityName: entity.Name, ViewEntity: viewEntity || undefined, OrderBy: effectiveSortOrderBy }"
         [filterText]="debouncedFilterText"
-        [orderBy]="effectiveSortOrderBy"
-        [serverSideSorting]="effectiveConfig.serverSideSorting"
         [gridState]="gridState"
         [height]="'auto'"
         [showToolbar]="showGridToolbar"

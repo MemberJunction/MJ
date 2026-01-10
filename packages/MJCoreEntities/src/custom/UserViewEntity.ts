@@ -728,40 +728,45 @@ export class ViewInfo {
     }
 
     /**
-     * Loads a new entity object for User Views for the specified viewId and returns it if successful.
+     * Gets a User View entity from the UserViewEngine cache.
      * @param viewId record ID for the view to load
-     * @param contextUser optional, the user to use for context when loading the view
+     * @param contextUser optional, the user context for loading views
      * @returns UserViewEntityBase (or a subclass of it)
-     * @throws Error if the view cannot be loaded
+     * @throws Error if the view is not found in the engine cache
      * @memberof ViewInfo
      * @static
      * @async
      */
     static async GetViewEntity(viewId: string, contextUser?: UserInfo): Promise<UserViewEntityExtended> {
-        const md = new Metadata();
-        const view = await md.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
-        if (await view.Load(viewId))
-            return view
-        else
-            throw new Error('Unable to load view with ID: ' + viewId)
+        const { UserViewEngine } = await import('../engines/UserViewEngine');
+        // Ensure the engine is configured before use
+        await UserViewEngine.Instance.Config(false, contextUser);
+        const view = UserViewEngine.Instance.GetViewById(viewId);
+        if (view) {
+            return view;
+        }
+        throw new Error('Unable to find view with ID: ' + viewId);
     }
 
     /**
-     * Loads a new entity object for User Views for the specified viewName and returns it if successful.
+     * Gets a User View entity from the UserViewEngine cache by name.
      * @param viewName name for the view to load
-     * @param contextUser optional, the user to use for context when loading the view
+     * @param contextUser optional, the user context for loading views
      * @returns UserViewEntityBase (or a subclass of it)
-     * @throws Error if the view cannot be loaded
+     * @throws Error if the view is not found in the engine cache
      * @memberof ViewInfo
      * @static
      * @async
      */
     static async GetViewEntityByName(viewName: string, contextUser?: UserInfo): Promise<UserViewEntityExtended> {
-        const viewId = await ViewInfo.GetViewID(viewName);
-        if (viewId) 
-            return await ViewInfo.GetViewEntity(viewId, contextUser)
-        else 
-            throw new Error('Unable to find view with name: ' + viewName)
+        const { UserViewEngine } = await import('../engines/UserViewEngine');
+        // Ensure the engine is configured before use
+        await UserViewEngine.Instance.Config(false, contextUser);
+        const view = UserViewEngine.Instance.GetViewByName(viewName);
+        if (view) {
+            return view;
+        }
+        throw new Error('Unable to find view with name: ' + viewName);
     }
 }
 

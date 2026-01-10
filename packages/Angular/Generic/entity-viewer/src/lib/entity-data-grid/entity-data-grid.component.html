@@ -14,12 +14,12 @@
           type="text"
           class="search-input"
           [placeholder]="toolbarConfig.searchPlaceholder || 'Search...'"
-          [value]="searchString"
-          (input)="searchString = $any($event.target).value" />
+          [value]="filterText"
+          (input)="filterText = $any($event.target).value" />
         <button
-          *ngIf="searchString"
+          *ngIf="filterText"
           class="search-clear"
-          (click)="searchString = ''">
+          (click)="filterText = ''">
           <i class="fa-solid fa-times"></i>
         </button>
       </div>
