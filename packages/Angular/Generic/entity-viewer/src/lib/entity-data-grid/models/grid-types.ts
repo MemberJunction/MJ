@@ -478,3 +478,124 @@ export interface EntityActionConfig {
   /** Additional action metadata */
   metadata?: Record<string, unknown>;
 }
+
+// ========================================
+// Visual Customization Types
+// ========================================
+
+/**
+ * Header style preset options
+ */
+export type GridHeaderStyle = 'flat' | 'elevated' | 'gradient' | 'bold';
+
+/**
+ * Configuration for grid visual appearance
+ * All properties are optional - defaults provide an attractive "out of the box" experience
+ */
+export interface GridVisualConfig {
+  // Header Styling
+  /** Header style preset: 'flat' | 'elevated' | 'gradient' | 'bold' */
+  headerStyle?: GridHeaderStyle;
+  /** Custom header background color (overrides preset) */
+  headerBackground?: string;
+  /** Custom header text color */
+  headerTextColor?: string;
+  /** Show bottom shadow/border on header */
+  headerShadow?: boolean;
+
+  // Row Styling
+  /** Enable alternating row colors (zebra striping) */
+  alternateRows?: boolean;
+  /** Contrast level for alternating rows: 'subtle' | 'medium' | 'strong' */
+  alternateRowContrast?: 'subtle' | 'medium' | 'strong';
+  /** Enable smooth hover transitions */
+  hoverTransitions?: boolean;
+  /** Hover transition duration in ms */
+  hoverTransitionDuration?: number;
+
+  // Cell Formatting
+  /** Right-align numeric columns automatically */
+  rightAlignNumbers?: boolean;
+  /** Format dates with a friendly format (e.g., "Jan 15, 2024" instead of "2024-01-15") */
+  friendlyDates?: boolean;
+  /** Render email cells as clickable mailto links */
+  clickableEmails?: boolean;
+  /** Render boolean cells as checkmark/x icons instead of text */
+  booleanIcons?: boolean;
+  /** Render URL cells as clickable links */
+  clickableUrls?: boolean;
+
+  // Selection Styling
+  /** Color for selection indicator (left border on selected rows) */
+  selectionIndicatorColor?: string;
+  /** Width of selection indicator in pixels */
+  selectionIndicatorWidth?: number;
+  /** Selection background color */
+  selectionBackground?: string;
+
+  // Checkbox Column
+  /** Style for checkbox column: 'default' | 'rounded' | 'filled' */
+  checkboxStyle?: 'default' | 'rounded' | 'filled';
+  /** Checkbox accent color */
+  checkboxColor?: string;
+
+  // Loading States
+  /** Show skeleton loading rows instead of spinner */
+  skeletonLoading?: boolean;
+  /** Number of skeleton rows to show */
+  skeletonRowCount?: number;
+
+  // Borders & Spacing
+  /** Border radius for the grid container */
+  borderRadius?: number;
+  /** Cell padding preset: 'compact' | 'normal' | 'comfortable' */
+  cellPadding?: 'compact' | 'normal' | 'comfortable';
+
+  // Accent Color (used for sort indicators, focus states, etc.)
+  /** Primary accent color for interactive elements */
+  accentColor?: string;
+}
+
+/**
+ * Default visual configuration - provides attractive defaults out of the box
+ */
+export const DEFAULT_VISUAL_CONFIG: Required<GridVisualConfig> = {
+  // Header - elevated style with shadow
+  headerStyle: 'elevated',
+  headerBackground: '',  // Empty = use CSS variable
+  headerTextColor: '',   // Empty = use CSS variable
+  headerShadow: true,
+
+  // Rows - medium contrast zebra striping with transitions
+  alternateRows: true,
+  alternateRowContrast: 'medium',
+  hoverTransitions: true,
+  hoverTransitionDuration: 150,
+
+  // Cell formatting - smart defaults
+  rightAlignNumbers: true,
+  friendlyDates: true,
+  clickableEmails: true,
+  booleanIcons: true,
+  clickableUrls: true,
+
+  // Selection - mellow yellow accent (avoids conflict with blue hyperlinks)
+  selectionIndicatorColor: '#f9a825',
+  selectionIndicatorWidth: 3,
+  selectionBackground: '#fff9e6',
+
+  // Checkbox - rounded style
+  checkboxStyle: 'rounded',
+  checkboxColor: '#2196F3',
+
+  // Loading - skeleton for modern feel
+  skeletonLoading: true,
+  skeletonRowCount: 8,
+
+  // Borders & Spacing
+  borderRadius: 0,
+  cellPadding: 'normal',
+
+  // Accent color
+  accentColor: '#2196F3'
+};

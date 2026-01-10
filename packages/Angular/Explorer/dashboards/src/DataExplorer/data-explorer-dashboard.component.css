@@ -512,6 +512,14 @@
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   animation: slideIn 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-panel mj-entity-record-detail-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 @keyframes slideIn {

@@ -2,7 +2,13 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  height: 100%;
   background: #fafafa;
+}
+
+/* Pagination footer - always visible at bottom */
+mj-pagination {
+  flex-shrink: 0;
 }
 
 /* Header */

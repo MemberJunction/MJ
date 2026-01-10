@@ -54,7 +54,9 @@ import {
   ViewColumnConfig,
   ViewSortConfig,
   GridStateChangedEvent,
-  EntityActionConfig
+  EntityActionConfig,
+  GridVisualConfig,
+  DEFAULT_VISUAL_CONFIG
 } from './models/grid-types';
 import {
   BeforeRowSelectEventArgs,
@@ -611,6 +613,32 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
   get gridLines(): GridLinesMode {
     return this._gridLines;
+  }
+
+  // ========================================
+  // Visual Customization Inputs
+  // ========================================
+
+  private _visualConfig: GridVisualConfig = {};
+  /**
+   * Visual configuration for the grid appearance.
+   * Allows customization of header styles, row colors, cell formatting, and more.
+   * All properties are optional - unset properties use attractive defaults.
+   */
+  @Input()
+  set visualConfig(value: GridVisualConfig) {
+    this._visualConfig = value || {};
+    this.applyVisualConfig();
+  }
+  get visualConfig(): GridVisualConfig {
+    return this._visualConfig;
+  }
+
+  /**
+   * Get the effective visual config (user config merged with defaults)
+   */
+  get effectiveVisualConfig(): Required<GridVisualConfig> {
+    return { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
   }
 
   // ========================================
@@ -1361,8 +1389,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Rebuild column defs to update cell renderers with new filter text
     this.buildAgColumnDefs();
 
-    // Refresh cells to apply highlighting
+    // Update AG Grid with new column definitions and refresh cells
     if (this.gridApi) {
+      // Update the column definitions in AG Grid
+      this.gridApi.setGridOption('columnDefs', this.agColumnDefs);
+      // Force refresh all cells to apply new highlighting
       this.gridApi.refreshCells({ force: true });
     }
   }
@@ -1557,7 +1588,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   private mapColumnConfigToColDef(col: GridColumnConfig): ColDef {
-    return {
+    const colDef: ColDef = {
       field: col.field,
       headerName: col.title || col.field,
       width: typeof col.width === 'number' ? col.width : undefined,
@@ -1568,6 +1599,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       resizable: col.resizable !== false && this._allowColumnResize,
       hide: col.visible === false
     };
+
+    // Apply field formatter for highlighting and type-specific formatting
+    // if we have entity metadata for this field
+    if (this._entityInfo) {
+      const field = this._entityInfo.Fields.find(f =>
+        f.Name.toLowerCase() === col.field.toLowerCase()
+      );
+      if (field) {
+        this.applyFieldFormatter(colDef, field);
+      }
+    }
+
+    return colDef;
   }
 
   private generateAgColumnDefs(entity: EntityInfo): ColDef[] {
@@ -1594,43 +1638,118 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Store type info for use in cell renderer
     const fieldType = field.TSType;
     const fieldNameLower = field.Name.toLowerCase();
+    const extendedType = field.ExtendedType?.toLowerCase() || '';
+    const vc = this.effectiveVisualConfig;
+
+    // Determine special field types using ExtendedType metadata first, then field name patterns as fallback
     const isCurrency = fieldNameLower.includes('amount') ||
                        fieldNameLower.includes('price') ||
                        fieldNameLower.includes('cost') ||
                        fieldNameLower.includes('total');
+    // Use ExtendedType='Email' from metadata, fallback to field name pattern
+    const isEmail = extendedType === 'email' ||
+                    (!extendedType && fieldNameLower.includes('email'));
+    // Use ExtendedType='URL' from metadata, fallback to field name pattern
+    const isUrl = extendedType === 'url' ||
+                  (!extendedType && (fieldNameLower.includes('url') ||
+                                     fieldNameLower.includes('website') ||
+                                     fieldNameLower.includes('link')));
+    // Use ExtendedType='Tel' from metadata, fallback to field name pattern
+    const isPhone = extendedType === 'tel' ||
+                    (!extendedType && (fieldNameLower.includes('phone') ||
+                                       fieldNameLower.includes('mobile') ||
+                                       fieldNameLower.includes('fax')));
 
-    // Use cellRenderer for highlighting support
+    // Apply right-alignment for numeric columns
+    if (vc.rightAlignNumbers && (fieldType === 'number' || isCurrency)) {
+      colDef.cellClass = 'cell-align-right';
+      colDef.headerClass = 'header-align-right';
+    }
+
+    // Use cellRenderer for highlighting support and enhanced formatting
     colDef.cellRenderer = (params: ICellRendererParams) => {
-      let displayValue = '';
-
       if (params.value === null || params.value === undefined) {
-        displayValue = '';
-      } else if (fieldType === 'Date') {
+        return '<span class="cell-empty">—</span>';
+      }
+
+      let displayValue = '';
+      let extraClass = '';
+
+      // Boolean formatting
+      if (fieldType === 'boolean') {
+        if (vc.booleanIcons) {
+          const iconClass = params.value
+            ? 'fa-solid fa-check cell-boolean-true'
+            : 'fa-solid fa-xmark cell-boolean-false';
+          return `<i class="${iconClass}"></i>`;
+        }
+        displayValue = params.value ? 'Yes' : 'No';
+      }
+      // Date formatting
+      else if (fieldType === 'Date') {
         const date = params.value instanceof Date ? params.value : new Date(params.value as string);
         if (isNaN(date.getTime())) {
           displayValue = String(params.value);
-        } else {
+        } else if (vc.friendlyDates) {
           displayValue = date.toLocaleDateString(undefined, {
             month: 'short',
             day: 'numeric',
             year: 'numeric'
           });
+        } else {
+          displayValue = date.toISOString().split('T')[0];
         }
-      } else if (fieldType === 'boolean') {
-        displayValue = params.value ? 'Yes' : 'No';
-      } else if (fieldType === 'number' && isCurrency) {
+      }
+      // Currency formatting
+      else if (fieldType === 'number' && isCurrency) {
         const num = Number(params.value);
-        displayValue = isNaN(num) ? String(params.value) : `$${num.toLocaleString()}`;
-      } else {
+        displayValue = isNaN(num) ? String(params.value) : `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+      // Regular number formatting
+      else if (fieldType === 'number') {
+        const num = Number(params.value);
+        displayValue = isNaN(num) ? String(params.value) : num.toLocaleString();
+      }
+      // Email formatting
+      else if (isEmail && vc.clickableEmails) {
+        const email = String(params.value);
+        const escapedEmail = HighlightUtil.escapeHtml(email);
+        if (this._filterText) {
+          const highlighted = HighlightUtil.highlight(email, this._filterText, true);
+          return `<a href="mailto:${escapedEmail}" class="cell-link cell-email" onclick="event.stopPropagation()">${highlighted}</a>`;
+        }
+        return `<a href="mailto:${escapedEmail}" class="cell-link cell-email" onclick="event.stopPropagation()">${escapedEmail}</a>`;
+      }
+      // URL formatting
+      else if (isUrl && vc.clickableUrls) {
+        let url = String(params.value);
+        if (url && !url.startsWith('http')) {
+          url = 'https://' + url;
+        }
+        const displayUrl = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const escapedDisplay = HighlightUtil.escapeHtml(displayUrl);
+        if (this._filterText) {
+          const highlighted = HighlightUtil.highlight(displayUrl, this._filterText, true);
+          return `<a href="${HighlightUtil.escapeHtml(url)}" target="_blank" class="cell-link cell-url" onclick="event.stopPropagation()">${highlighted}</a>`;
+        }
+        return `<a href="${HighlightUtil.escapeHtml(url)}" target="_blank" class="cell-link cell-url" onclick="event.stopPropagation()">${escapedDisplay}</a>`;
+      }
+      // Phone formatting
+      else if (isPhone) {
+        displayValue = String(params.value);
+        extraClass = 'cell-phone';
+      }
+      // Default string formatting
+      else {
         displayValue = String(params.value);
       }
 
       // Apply highlighting if filterText is set
       if (this._filterText && displayValue) {
-        return HighlightUtil.highlight(displayValue, this._filterText, true);
+        return `<span class="${extraClass}">${HighlightUtil.highlight(displayValue, this._filterText, true)}</span>`;
       }
 
-      return HighlightUtil.escapeHtml(displayValue);
+      return `<span class="${extraClass}">${HighlightUtil.escapeHtml(displayValue)}</span>`;
     };
   }
 
@@ -1641,21 +1760,27 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private updateAgRowSelection(): void {
     switch (this._selectionMode) {
       case 'none':
-        this.agRowSelection = { mode: 'singleRow', enableClickSelection: false };
+        this.agRowSelection = { mode: 'singleRow', enableClickSelection: false, checkboxes: false };
         break;
       case 'single':
-        this.agRowSelection = { mode: 'singleRow' };
+        this.agRowSelection = { mode: 'singleRow', enableClickSelection: true, checkboxes: false };
         break;
       case 'multiple':
-        this.agRowSelection = { mode: 'multiRow' };
+        this.agRowSelection = { mode: 'multiRow', enableClickSelection: true, checkboxes: false };
         break;
       case 'checkbox':
         this.agRowSelection = {
           mode: 'multiRow',
+          enableClickSelection: true,
           checkboxes: true,
           headerCheckbox: true
         };
         break;
+    }
+
+    // Update the grid if it's already initialized
+    if (this.gridApi) {
+      this.gridApi.setGridOption('rowSelection', this.agRowSelection);
     }
   }
 
@@ -2860,7 +2985,60 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const classes = ['mj-grid-container'];
     classes.push(`grid-lines-${this._gridLines}`);
     if (this._striped) classes.push('grid-striped');
+
+    // Add visual config classes
+    const vc = this.effectiveVisualConfig;
+    classes.push(`header-style-${vc.headerStyle}`);
+    if (vc.headerShadow) classes.push('header-shadow');
+    if (vc.alternateRows) classes.push(`alternate-rows-${vc.alternateRowContrast}`);
+    if (vc.hoverTransitions) classes.push('hover-transitions');
+    classes.push(`cell-padding-${vc.cellPadding}`);
+    if (vc.checkboxStyle !== 'default') classes.push(`checkbox-style-${vc.checkboxStyle}`);
+
     return classes;
+  }
+
+  /**
+   * Apply visual configuration by setting CSS custom properties
+   */
+  private applyVisualConfig(): void {
+    const vc = this.effectiveVisualConfig;
+    const el = this.elementRef.nativeElement;
+
+    // Set CSS custom properties for dynamic values
+    if (vc.headerBackground) {
+      el.style.setProperty('--grid-header-bg', vc.headerBackground);
+    }
+    if (vc.headerTextColor) {
+      el.style.setProperty('--grid-header-text', vc.headerTextColor);
+    }
+    if (vc.selectionIndicatorColor) {
+      el.style.setProperty('--grid-selection-indicator-color', vc.selectionIndicatorColor);
+    }
+    if (vc.selectionIndicatorWidth) {
+      el.style.setProperty('--grid-selection-indicator-width', `${vc.selectionIndicatorWidth}px`);
+    }
+    if (vc.selectionBackground) {
+      el.style.setProperty('--grid-row-selected-bg', vc.selectionBackground);
+    }
+    if (vc.checkboxColor) {
+      el.style.setProperty('--grid-checkbox-color', vc.checkboxColor);
+    }
+    if (vc.borderRadius !== undefined) {
+      el.style.setProperty('--grid-border-radius', `${vc.borderRadius}px`);
+    }
+    if (vc.accentColor) {
+      el.style.setProperty('--grid-accent-color', vc.accentColor);
+      el.style.setProperty('--grid-sort-indicator-color', vc.accentColor);
+    }
+    if (vc.hoverTransitionDuration) {
+      el.style.setProperty('--grid-hover-transition', `${vc.hoverTransitionDuration}ms`);
+    }
+
+    // Rebuild column defs if formatting options changed
+    if (this._entityInfo) {
+      this.buildAgColumnDefs();
+    }
   }
 
   get gridHeightStyle(): string {

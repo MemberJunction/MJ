@@ -5,7 +5,7 @@
 :host {
   /* Grid container */
   --grid-border-color: #e0e0e0;
-  --grid-border-radius: 8px;
+  --grid-border-radius: 0px;
   --grid-background: #ffffff;
 
   /* Header */
@@ -20,17 +20,17 @@
   --grid-row-bg: #ffffff;
   --grid-row-bg-alt: #fafafa;
   --grid-row-hover-bg: #f5f5f5;
-  --grid-row-selected-bg: #e8f4fd;
-  --grid-row-selected-hover-bg: #d4ebfc;
+  --grid-row-selected-bg: #fff9e6;
+  --grid-row-selected-hover-bg: #fff3cc;
 
   /* Cells */
   --grid-cell-padding: 8px 12px;
   --grid-cell-text: #333333;
   --grid-cell-border-color: #f0f0f0;
 
-  /* Selection */
+  /* Selection - mellow yellow to avoid conflict with blue hyperlinks */
   --grid-checkbox-color: #2196F3;
-  --grid-selection-indicator-color: #2196F3;
+  --grid-selection-indicator-color: #f9a825;
 
   /* Editing */
   --grid-edit-cell-bg: #ffffff;
@@ -608,23 +608,38 @@
   --ag-selected-row-background-color: var(--grid-row-selected-bg);
   --ag-header-background-color: var(--grid-header-bg);
 
-  /* Selection accent colors */
-  --ag-range-selection-background-color: rgba(33, 150, 243, 0.2);
-  --ag-range-selection-border-color: #2196F3;
+  /* Selection accent colors - mellow yellow */
+  --ag-range-selection-background-color: rgba(249, 168, 37, 0.15);
+  --ag-range-selection-border-color: #f9a825;
 
   /* Ensure borders are visible */
   --ag-borders: none;
   --ag-row-border-color: var(--grid-cell-border-color);
 }
 
-/* Selected row styling with higher specificity */
-::ng-deep .ag-theme-alpine .ag-row-selected {
-  background-color: var(--grid-row-selected-bg, #e8f4fd) !important;
-  box-shadow: inset 3px 0 0 0 var(--grid-selection-indicator-color, #2196F3);
+/* Selected row styling with higher specificity - using mellow yellow */
+/* AG Grid v34+ requires aggressive specificity to override theme styles */
+::ng-deep .ag-theme-alpine .ag-row-selected,
+::ng-deep .mj-ag-grid .ag-row-selected,
+::ng-deep .ag-row.ag-row-selected,
+::ng-deep .ag-row-even.ag-row-selected,
+::ng-deep .ag-row-odd.ag-row-selected,
+::ng-deep [class*="ag-row"].ag-row-selected {
+  background-color: #fff9e6 !important;
+  background: #fff9e6 !important;
+  box-shadow: inset 4px 0 0 0 #f9a825 !important;
+  border-top: 1px solid rgba(249, 168, 37, 0.3) !important;
+  border-bottom: 1px solid rgba(249, 168, 37, 0.3) !important;
 }
 
-::ng-deep .ag-theme-alpine .ag-row-selected:hover {
-  background-color: var(--grid-row-selected-hover-bg, #d4ebfc) !important;
+::ng-deep .ag-theme-alpine .ag-row-selected:hover,
+::ng-deep .mj-ag-grid .ag-row-selected:hover,
+::ng-deep .ag-row.ag-row-selected:hover,
+::ng-deep .ag-row-even.ag-row-selected:hover,
+::ng-deep .ag-row-odd.ag-row-selected:hover,
+::ng-deep [class*="ag-row"].ag-row-selected:hover {
+  background-color: #fff3cc !important;
+  background: #fff3cc !important;
 }
 
 /* Selection checkbox styling */
@@ -640,4 +655,374 @@
 /* Row hover effect */
 ::ng-deep .ag-theme-alpine .ag-row:hover:not(.ag-row-selected) {
   background-color: var(--grid-row-hover-bg, #f0f7ff);
+}
+
+/* ========================================
+   Visual Config: Header Styles
+   ======================================== */
+
+/* Flat header (minimal) */
+.header-style-flat ::ng-deep .ag-header {
+  background: var(--grid-header-bg, #fafafa);
+  border-bottom: 1px solid var(--grid-header-border-color, #e0e0e0);
+}
+
+/* Elevated header (default - subtle shadow) */
+.header-style-elevated ::ng-deep .ag-header {
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+  border-bottom: 1px solid var(--grid-header-border-color, #e0e0e0);
+}
+
+.header-style-elevated.header-shadow ::ng-deep .ag-header {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* Gradient header (more prominent) */
+.header-style-gradient ::ng-deep .ag-header {
+  background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: none;
+}
+
+.header-style-gradient.header-shadow ::ng-deep .ag-header {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Bold header (high contrast) */
+.header-style-bold ::ng-deep .ag-header {
+  background: linear-gradient(180deg, #37474f 0%, #263238 100%);
+  border-bottom: none;
+}
+
+.header-style-bold ::ng-deep .ag-header-cell-text {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.header-style-bold ::ng-deep .ag-header-icon {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.header-style-bold ::ng-deep .ag-header-cell:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Header sort icons enhancement */
+::ng-deep .ag-header-cell-sorted-asc .ag-icon-asc,
+::ng-deep .ag-header-cell-sorted-desc .ag-icon-desc {
+  color: var(--grid-accent-color, var(--grid-sort-indicator-color, #2196F3));
+}
+
+/* ========================================
+   Visual Config: Zebra Striping
+   ======================================== */
+
+/* Subtle contrast */
+.alternate-rows-subtle ::ng-deep .ag-row-odd {
+  background-color: rgba(0, 0, 0, 0.015);
+}
+
+.alternate-rows-subtle ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+  background-color: var(--grid-row-hover-bg, #f5f5f5);
+}
+
+/* Medium contrast (default) */
+.alternate-rows-medium ::ng-deep .ag-row-odd {
+  background-color: rgba(0, 0, 0, 0.025);
+}
+
+.alternate-rows-medium ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+  background-color: var(--grid-row-hover-bg, #f5f5f5);
+}
+
+/* Strong contrast */
+.alternate-rows-strong ::ng-deep .ag-row-odd {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.alternate-rows-strong ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+  background-color: var(--grid-row-hover-bg, #f5f5f5);
+}
+
+/* ========================================
+   Visual Config: Hover Transitions
+   ======================================== */
+
+.hover-transitions ::ng-deep .ag-row {
+  transition: background-color var(--grid-hover-transition, 150ms) ease;
+}
+
+.hover-transitions ::ng-deep .ag-cell {
+  transition: background-color var(--grid-hover-transition, 150ms) ease;
+}
+
+/* ========================================
+   Visual Config: Cell Padding
+   ======================================== */
+
+.cell-padding-compact ::ng-deep .ag-cell {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.cell-padding-compact ::ng-deep .ag-header-cell {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.cell-padding-normal ::ng-deep .ag-cell {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.cell-padding-normal ::ng-deep .ag-header-cell {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.cell-padding-comfortable ::ng-deep .ag-cell {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.cell-padding-comfortable ::ng-deep .ag-header-cell {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* ========================================
+   Visual Config: Checkbox Styles
+   ======================================== */
+
+/* Rounded checkbox */
+.checkbox-style-rounded ::ng-deep .ag-checkbox-input-wrapper {
+  border-radius: 4px;
+}
+
+.checkbox-style-rounded ::ng-deep .ag-checkbox-input-wrapper::after {
+  border-radius: 3px;
+}
+
+/* Filled checkbox */
+.checkbox-style-filled ::ng-deep .ag-checkbox-input-wrapper.ag-checked {
+  background-color: var(--grid-checkbox-color, #2196F3);
+  border-color: var(--grid-checkbox-color, #2196F3);
+}
+
+.checkbox-style-filled ::ng-deep .ag-checkbox-input-wrapper.ag-checked::after {
+  color: #ffffff;
+}
+
+/* ========================================
+   Cell Content Formatting
+   ======================================== */
+
+/* Right-aligned cells (numbers) */
+::ng-deep .cell-align-right {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+::ng-deep .header-align-right .ag-header-cell-label {
+  justify-content: flex-end;
+}
+
+/* Empty cell placeholder */
+::ng-deep .cell-empty {
+  color: #bdbdbd;
+  font-style: normal;
+}
+
+/* Boolean icons */
+::ng-deep .cell-boolean-true {
+  color: #43a047;
+  font-size: 14px;
+}
+
+::ng-deep .cell-boolean-false {
+  color: #bdbdbd;
+  font-size: 14px;
+}
+
+/* Clickable links */
+::ng-deep .cell-link {
+  color: var(--grid-accent-color, #2196F3);
+  text-decoration: none;
+  transition: color 0.15s;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+::ng-deep .cell-link:hover {
+  color: #1976D2;
+  text-decoration: underline;
+}
+
+/* Email cells */
+::ng-deep .cell-email {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* URL cells */
+::ng-deep .cell-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-size: 13px;
+}
+
+/* Phone cells */
+::ng-deep .cell-phone {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+/* ========================================
+   Skeleton Loading Animation
+   ======================================== */
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.skeleton-row {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--grid-cell-border-color, #f0f0f0);
+}
+
+.skeleton-cell {
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 0px,
+    #e8e8e8 40px,
+    #f0f0f0 80px
+  );
+  background-size: 200px 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-cell-short {
+  width: 60px;
+}
+
+.skeleton-cell-medium {
+  width: 120px;
+}
+
+.skeleton-cell-long {
+  width: 180px;
+}
+
+/* ========================================
+   Enhanced Selection Indicator
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-row-selected {
+  box-shadow: inset var(--grid-selection-indicator-width, 3px) 0 0 0 var(--grid-selection-indicator-color, #f9a825);
+}
+
+/* Selection checkbox column header */
+::ng-deep .ag-header-select-all {
+  margin-right: 0;
+}
+
+/* ========================================
+   Row Border Enhancement
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-row {
+  border-bottom: 1px solid var(--grid-cell-border-color, #f0f0f0);
+}
+
+::ng-deep .ag-theme-alpine .ag-row:last-child {
+  border-bottom: none;
+}
+
+/* ========================================
+   Focus States
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-cell-focus {
+  border: none !important;
+  outline: none !important;
+}
+
+::ng-deep .ag-theme-alpine .ag-header-cell:focus {
+  outline: 2px solid var(--grid-accent-color, #2196F3);
+  outline-offset: -2px;
+}
+
+/* ========================================
+   Scrollbar Styling
+   ======================================== */
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-track {
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+
+/* ========================================
+   Pinned Column Styling
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-pinned-left-cols-container {
+  border-right: 2px solid var(--grid-border-color, #e0e0e0);
+}
+
+::ng-deep .ag-theme-alpine .ag-pinned-right-cols-container {
+  border-left: 2px solid var(--grid-border-color, #e0e0e0);
+}
+
+/* ========================================
+   Header Cell Enhancements
+   ======================================== */
+
+::ng-deep .ag-theme-alpine .ag-header-cell {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #546e7a;
+}
+
+::ng-deep .ag-theme-alpine .ag-header-cell:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+::ng-deep .ag-theme-alpine .ag-header-cell-sortable:hover .ag-header-cell-label {
+  color: var(--grid-accent-color, #2196F3);
+}
+
+/* Sort icon animation */
+::ng-deep .ag-theme-alpine .ag-sort-indicator-icon {
+  transition: transform 0.2s ease;
+}
+
+::ng-deep .ag-theme-alpine .ag-header-cell:hover .ag-sort-indicator-icon {
+  transform: scale(1.1);
 }

@@ -282,7 +282,7 @@
     <!-- AG Grid (Client-side mode) -->
     <ag-grid-angular
       *ngIf="!errorMessage && PaginationMode === 'client' && (rowData.length > 0 || loading)"
-      class="mj-ag-grid"
+      class="mj-ag-grid ag-theme-alpine"
       [theme]="agGridTheme"
       [columnDefs]="agColumnDefs"
       [rowData]="rowData"
@@ -305,7 +305,7 @@
     <!-- AG Grid (Infinite Scroll mode) -->
     <ag-grid-angular
       *ngIf="!errorMessage && PaginationMode === 'infinite'"
-      class="mj-ag-grid"
+      class="mj-ag-grid ag-theme-alpine"
       [theme]="agGridTheme"
       [columnDefs]="agColumnDefs"
       [defaultColDef]="defaultColDef"
