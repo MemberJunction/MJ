@@ -9,7 +9,7 @@ import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export function LoadListsBrowseResource() {
-  const test = new ListsBrowseResource(null!, null!, null!);
+  // tree shaker
 }
 
 interface BrowseListItem {
@@ -48,25 +48,21 @@ interface BrowseListItem {
           </div>
           <div class="filter-group">
             <label>Entity:</label>
-            <kendo-dropdownlist
-              [data]="entityOptions"
-              [textField]="'name'"
-              [valueField]="'value'"
+            <select
               [(ngModel)]="selectedEntity"
-              (valueChange)="onEntityFilterChange($event)"
-              [valuePrimitive]="true">
-            </kendo-dropdownlist>
+              (ngModelChange)="onEntityFilterChange($event)"
+              class="filter-select">
+              <option *ngFor="let opt of entityOptions" [value]="opt.value">{{opt.name}}</option>
+            </select>
           </div>
           <div class="filter-group">
             <label>Owner:</label>
-            <kendo-dropdownlist
-              [data]="ownerOptions"
-              [textField]="'name'"
-              [valueField]="'value'"
+            <select
               [(ngModel)]="selectedOwner"
-              (valueChange)="onOwnerFilterChange($event)"
-              [valuePrimitive]="true">
-            </kendo-dropdownlist>
+              (ngModelChange)="onOwnerFilterChange($event)"
+              class="filter-select">
+              <option *ngFor="let opt of ownerOptions" [value]="opt.value">{{opt.name}}</option>
+            </select>
           </div>
         </div>
       </div>
@@ -104,14 +100,12 @@ interface BrowseListItem {
           <span class="result-count">{{filteredLists.length}} list{{filteredLists.length !== 1 ? 's' : ''}}</span>
           <div class="sort-options">
             <label>Sort by:</label>
-            <kendo-dropdownlist
-              [data]="sortOptions"
-              [textField]="'name'"
-              [valueField]="'value'"
+            <select
               [(ngModel)]="selectedSort"
-              (valueChange)="onSortChange($event)"
-              [valuePrimitive]="true">
-            </kendo-dropdownlist>
+              (ngModelChange)="onSortChange($event)"
+              class="filter-select">
+              <option *ngFor="let opt of sortOptions" [value]="opt.value">{{opt.name}}</option>
+            </select>
           </div>
         </div>
 
@@ -300,6 +294,22 @@ interface BrowseListItem {
     .filter-group label {
       font-size: 13px;
       color: #666;
+    }
+
+    .filter-select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      min-width: 140px;
+    }
+
+    .filter-select:focus {
+      outline: none;
+      border-color: #2196F3;
+      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
     }
 
     /* Loading */
@@ -623,8 +633,9 @@ interface BrowseListItem {
         width: 100%;
       }
 
-      .filter-group kendo-dropdownlist {
+      .filter-select {
         flex: 1;
+        width: 100%;
       }
 
       .lists-table {
@@ -882,8 +893,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   openList(item: BrowseListItem) {
     if (item.isOwner) {
-      // Get the application ID from the resource data
-      const appId = this.Data?.ApplicationId || '';
+      // Get the application ID from the resource data configuration
+      const appId = this.Data?.Configuration?.applicationId || '';
 
       // Open the list in a new tab using the ListDetailResource
       this.tabService.OpenList(item.list.ID, item.list.Name, appId);

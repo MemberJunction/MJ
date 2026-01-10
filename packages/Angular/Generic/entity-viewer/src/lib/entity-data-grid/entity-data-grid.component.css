@@ -1,0 +1,609 @@
+/* ========================================
+   CSS Custom Properties (Theme Variables)
+   ======================================== */
+
+:host {
+  /* Grid container */
+  --grid-border-color: #e0e0e0;
+  --grid-border-radius: 8px;
+  --grid-background: #ffffff;
+
+  /* Header */
+  --grid-header-bg: #fafafa;
+  --grid-header-text: #333333;
+  --grid-header-font-weight: 600;
+  --grid-header-height: 40px;
+  --grid-header-border-color: #e0e0e0;
+
+  /* Rows */
+  --grid-row-height: 40px;
+  --grid-row-bg: #ffffff;
+  --grid-row-bg-alt: #f9f9f9;
+  --grid-row-hover-bg: #f0f7ff;
+  --grid-row-selected-bg: #e3f2fd;
+  --grid-row-selected-hover-bg: #bbdefb;
+
+  /* Cells */
+  --grid-cell-padding: 8px 12px;
+  --grid-cell-text: #333333;
+  --grid-cell-border-color: #f0f0f0;
+
+  /* Selection */
+  --grid-checkbox-color: #2196F3;
+  --grid-selection-indicator-color: #2196F3;
+
+  /* Editing */
+  --grid-edit-cell-bg: #ffffff;
+  --grid-edit-cell-border: #2196F3;
+  --grid-edit-cell-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+
+  /* Sorting */
+  --grid-sort-indicator-color: #2196F3;
+
+  /* Toolbar */
+  --grid-toolbar-bg: #ffffff;
+  --grid-toolbar-height: 48px;
+  --grid-toolbar-border-color: #e0e0e0;
+
+  /* Loading */
+  --grid-loading-overlay-bg: rgba(255, 255, 255, 0.8);
+
+  /* Empty state */
+  --grid-empty-text-color: #999999;
+  --grid-empty-icon-color: #cccccc;
+
+  display: block;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+/* ========================================
+   Grid Container
+   ======================================== */
+
+.mj-grid-container {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--grid-border-color);
+  border-radius: var(--grid-border-radius);
+  background: var(--grid-background);
+  overflow: hidden;
+}
+
+/* ========================================
+   Toolbar
+   ======================================== */
+
+.mj-grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--grid-toolbar-height);
+  padding: 0 12px;
+  background: var(--grid-toolbar-bg);
+  border-bottom: 1px solid var(--grid-toolbar-border-color);
+  gap: 12px;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #666;
+  font-size: 13px;
+}
+
+.toolbar-search {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: #999;
+  font-size: 13px;
+}
+
+.search-input {
+  padding: 6px 30px 6px 32px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 200px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--grid-selection-indicator-color);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.search-clear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #999;
+  font-size: 12px;
+}
+
+.search-clear:hover {
+  color: #666;
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.toolbar-button:hover:not(:disabled) {
+  background: #eee;
+  border-color: #ccc;
+}
+
+.toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-button i {
+  font-size: 14px;
+}
+
+.toolbar-button-danger {
+  color: #d32f2f;
+}
+
+.toolbar-button-danger:hover:not(:disabled) {
+  background: #ffebee;
+  border-color: #ffcdd2;
+}
+
+.row-count,
+.selection-count {
+  font-weight: 500;
+}
+
+/* ========================================
+   Grid Content
+   ======================================== */
+
+.mj-grid-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.mj-grid-scroll-container {
+  height: 100%;
+  overflow: auto;
+}
+
+/* ========================================
+   Loading Overlay
+   ======================================== */
+
+.mj-grid-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--grid-loading-overlay-bg);
+  z-index: 10;
+}
+
+/* ========================================
+   Error State
+   ======================================== */
+
+.mj-grid-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #d32f2f;
+  gap: 12px;
+}
+
+.mj-grid-error i {
+  font-size: 32px;
+}
+
+.error-retry {
+  padding: 8px 16px;
+  background: #d32f2f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.error-retry:hover {
+  background: #c62828;
+}
+
+/* ========================================
+   Empty State
+   ======================================== */
+
+.mj-grid-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--grid-empty-text-color);
+  gap: 12px;
+}
+
+.mj-grid-empty i {
+  font-size: 48px;
+  color: var(--grid-empty-icon-color);
+}
+
+/* ========================================
+   Header Row
+   ======================================== */
+
+.mj-grid-header {
+  display: flex;
+  min-height: var(--grid-header-height);
+  background: var(--grid-header-bg);
+  border-bottom: 2px solid var(--grid-header-border-color);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.mj-grid-header-cell {
+  display: flex;
+  align-items: center;
+  padding: var(--grid-cell-padding);
+  font-weight: var(--grid-header-font-weight);
+  color: var(--grid-header-text);
+  font-size: 13px;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--grid-cell-border-color);
+  flex-shrink: 0;
+}
+
+.mj-grid-header-cell:last-child {
+  border-right: none;
+}
+
+.mj-grid-header-cell.sortable {
+  cursor: pointer;
+}
+
+.mj-grid-header-cell.sortable:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.header-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sort-indicator {
+  display: flex;
+  align-items: center;
+  margin-left: 6px;
+  color: var(--grid-sort-indicator-color);
+}
+
+.sort-indicator i {
+  font-size: 12px;
+}
+
+.sort-index {
+  font-size: 10px;
+  margin-left: 2px;
+  font-weight: normal;
+}
+
+/* ========================================
+   Data Rows
+   ======================================== */
+
+.mj-grid-row {
+  display: flex;
+  align-items: stretch;
+  background: var(--grid-row-bg);
+  transition: background-color 0.15s;
+  cursor: default;
+}
+
+.mj-grid-row:hover {
+  background: var(--grid-row-hover-bg);
+}
+
+.mj-grid-row.grid-row-alt {
+  background: var(--grid-row-bg-alt);
+}
+
+.mj-grid-row.grid-row-alt:hover {
+  background: var(--grid-row-hover-bg);
+}
+
+.mj-grid-row.grid-row-selected {
+  background: var(--grid-row-selected-bg);
+}
+
+.mj-grid-row.grid-row-selected:hover {
+  background: var(--grid-row-selected-hover-bg);
+}
+
+.mj-grid-row.grid-row-editing {
+  background: #fffde7;
+}
+
+.mj-grid-row.grid-row-dirty {
+  border-left: 3px solid #ff9800;
+}
+
+/* ========================================
+   Data Cells
+   ======================================== */
+
+.mj-grid-cell {
+  display: flex;
+  align-items: center;
+  padding: var(--grid-cell-padding);
+  color: var(--grid-cell-text);
+  font-size: 13px;
+  overflow: hidden;
+  border-right: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.mj-grid-cell:last-child {
+  border-right: none;
+}
+
+/* Grid lines modes */
+.grid-lines-horizontal .mj-grid-row {
+  border-bottom: 1px solid var(--grid-cell-border-color);
+}
+
+.grid-lines-vertical .mj-grid-cell {
+  border-right: 1px solid var(--grid-cell-border-color);
+}
+
+.grid-lines-both .mj-grid-row {
+  border-bottom: 1px solid var(--grid-cell-border-color);
+}
+
+.grid-lines-both .mj-grid-cell {
+  border-right: 1px solid var(--grid-cell-border-color);
+}
+
+/* Cell alignment */
+.mj-grid-cell.align-left {
+  justify-content: flex-start;
+}
+
+.mj-grid-cell.align-center {
+  justify-content: center;
+}
+
+.mj-grid-cell.align-right {
+  justify-content: flex-end;
+}
+
+.cell-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Special cells */
+.row-number-cell {
+  width: 50px;
+  min-width: 50px;
+  max-width: 50px;
+  justify-content: center;
+  color: #999;
+  font-size: 12px;
+  background: var(--grid-header-bg);
+}
+
+.checkbox-cell {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  justify-content: center;
+}
+
+.checkbox-cell input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--grid-checkbox-color);
+}
+
+/* ========================================
+   Virtual Scrolling
+   ======================================== */
+
+.mj-grid-virtual-spacer {
+  flex-shrink: 0;
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+
+@media (max-width: 768px) {
+  .mj-grid-toolbar {
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+
+  .toolbar-search {
+    order: 3;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .toolbar-center {
+    order: 2;
+  }
+
+  /* Hide button text on mobile */
+  .toolbar-button .button-text {
+    display: none;
+  }
+}
+
+/* ========================================
+   Toolbar Button Text
+   ======================================== */
+
+.toolbar-button .button-text {
+  font-size: 13px;
+}
+
+/* ========================================
+   Overflow Menu
+   ======================================== */
+
+.toolbar-overflow {
+  position: relative;
+}
+
+.overflow-trigger {
+  padding: 6px 8px !important;
+}
+
+.overflow-trigger i {
+  font-size: 16px;
+}
+
+.overflow-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 220px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.overflow-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  text-align: left;
+  gap: 12px;
+  transition: background-color 0.15s;
+}
+
+.overflow-item:hover:not(:disabled) {
+  background: #f5f5f5;
+}
+
+.overflow-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.overflow-item i {
+  width: 18px;
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+}
+
+.overflow-item span {
+  flex: 1;
+}
+
+.overflow-divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 4px 0;
+}
+
+.overflow-section-label {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #999;
+  letter-spacing: 0.5px;
+}
+
+/* Entity Actions submenu styling */
+.overflow-item.action-item i {
+  color: #2196F3;
+}
+
+/* ========================================
+   Highlight Matches
+   ======================================== */
+
+::ng-deep .highlight-match {
+  background-color: #fff176;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ========================================
+   AG Grid Customizations
+   ======================================== */
+
+.mj-ag-grid {
+  width: 100%;
+  height: 100%;
+}
+
+::ng-deep .ag-theme-alpine {
+  --ag-row-hover-color: var(--grid-row-hover-bg);
+  --ag-selected-row-background-color: var(--grid-row-selected-bg);
+  --ag-header-background-color: var(--grid-header-bg);
+}

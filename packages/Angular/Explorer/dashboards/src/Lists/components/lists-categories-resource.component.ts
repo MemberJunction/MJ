@@ -3,12 +3,11 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, ListCategoryEntity, ListEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
-import { Subject, firstValueFrom } from 'rxjs';
-import { DialogService } from '@progress/kendo-angular-dialog';
+import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export function LoadListsCategoriesResource() {
-  const test = new ListsCategoriesResource(null!, null!, null!);
+  // tree shaker 
 }
 
 interface CategoryViewModel {
@@ -183,52 +182,75 @@ interface CategoryViewModel {
       </ng-template>
 
       <!-- Create/Edit Dialog -->
-      <kendo-dialog
-        *ngIf="showDialog"
-        [title]="editingCategory ? 'Edit Category' : 'Create Category'"
-        (close)="closeDialog()"
-        [width]="450">
-        <div class="category-form">
-          <div class="form-group">
-            <label>Name *</label>
-            <input
-              type="text"
-              [(ngModel)]="dialogName"
-              placeholder="Enter category name"
-              class="form-input" />
+      <div class="modal-overlay" *ngIf="showDialog" (click)="closeDialog()">
+        <div class="modal-dialog" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>{{editingCategory ? 'Edit Category' : 'Create Category'}}</h3>
+            <button class="modal-close" (click)="closeDialog()" [disabled]="isSaving">
+              <i class="fa-solid fa-times"></i>
+            </button>
           </div>
-          <div class="form-group">
-            <label>Description</label>
-            <textarea
-              [(ngModel)]="dialogDescription"
-              placeholder="Optional description"
-              class="form-input"
-              rows="3"></textarea>
+          <div class="modal-body">
+            <div class="category-form">
+              <div class="form-group">
+                <label>Name *</label>
+                <input
+                  type="text"
+                  [(ngModel)]="dialogName"
+                  placeholder="Enter category name"
+                  class="form-input" />
+              </div>
+              <div class="form-group">
+                <label>Description</label>
+                <textarea
+                  [(ngModel)]="dialogDescription"
+                  placeholder="Optional description"
+                  class="form-input"
+                  rows="3"></textarea>
+              </div>
+              <div class="form-group">
+                <label>Parent Category</label>
+                <select
+                  [(ngModel)]="dialogParentId"
+                  class="form-input">
+                  <option *ngFor="let parent of availableParents" [ngValue]="parent.ID">{{parent.displayName}}</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Parent Category</label>
-            <kendo-dropdownlist
-              [data]="availableParents"
-              [textField]="'displayName'"
-              [valueField]="'ID'"
-              [(ngModel)]="dialogParentId"
-              [valuePrimitive]="true"
-              placeholder="(Top Level)">
-            </kendo-dropdownlist>
+          <div class="modal-footer">
+            <button
+              class="btn-primary"
+              (click)="saveCategory()"
+              [disabled]="!dialogName || isSaving">
+              <i *ngIf="isSaving" class="fa-solid fa-spinner fa-spin"></i>
+              {{isSaving ? 'Saving...' : (editingCategory ? 'Save' : 'Create')}}
+            </button>
+            <button class="btn-secondary" (click)="closeDialog()" [disabled]="isSaving">Cancel</button>
           </div>
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="closeDialog()" [disabled]="isSaving">Cancel</button>
-          <button
-            kendoButton
-            [primary]="true"
-            (click)="saveCategory()"
-            [disabled]="!dialogName || isSaving">
-            <span *ngIf="isSaving" class="k-icon k-i-loading"></span>
-            {{isSaving ? 'Saving...' : (editingCategory ? 'Save' : 'Create')}}
-          </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+      </div>
+
+      <!-- Delete Confirmation Dialog -->
+      <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
+        <div class="modal-dialog modal-sm" (click)="$event.stopPropagation()">
+          <div class="modal-header danger">
+            <h3>Delete Category</h3>
+            <button class="modal-close" (click)="cancelDelete()">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>{{deleteConfirmMessage}}</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-danger" (click)="confirmDelete()">
+              Delete
+            </button>
+            <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -683,6 +705,172 @@ interface CategoryViewModel {
       border-color: #2196F3;
     }
 
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: fadeIn 0.15s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-dialog {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      width: 450px;
+      max-width: 90vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      animation: slideIn 0.2s ease-out;
+    }
+
+    .modal-dialog.modal-sm {
+      width: 400px;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .modal-header.danger {
+      background: #ffebee;
+      border-bottom-color: #ffcdd2;
+    }
+
+    .modal-header.danger h3 {
+      color: #c62828;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      padding: 4px 8px;
+      color: #999;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+
+    .modal-close:hover:not(:disabled) {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .modal-close:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .modal-body p {
+      margin: 0;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 20px;
+      border-top: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+
+    .btn-secondary {
+      padding: 8px 16px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      color: #666;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #f5f5f5;
+      border-color: #ccc;
+    }
+
+    .btn-secondary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #2196F3;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #1976D2;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-danger {
+      padding: 8px 16px;
+      background: #d32f2f;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-danger:hover {
+      background: #c62828;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .categories-layout {
@@ -691,6 +879,10 @@ interface CategoryViewModel {
 
       .category-detail-panel.empty {
         display: none;
+      }
+
+      .modal-dialog {
+        width: 95vw;
       }
     }
   `],
@@ -716,12 +908,16 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   // Operation states
   isSaving = false;
 
+  // Delete confirmation dialog
+  showDeleteConfirm = false;
+  deleteConfirmMessage = '';
+  private categoryToDelete: ListCategoryEntity | null = null;
+
   private listsByCategoryId: Map<string, ListEntity[]> = new Map();
   private categoryMap: Map<string, ListCategoryEntity> = new Map();
 
   constructor(
     private cdr: ChangeDetectorRef,
-    private dialogService: DialogService,
     private notificationService: MJNotificationService
   ) {
     super();
@@ -924,13 +1120,13 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     this.showDialog = true;
   }
 
-  async deleteCategory() {
+  deleteCategory() {
     if (!this.selectedCategory) return;
 
-    const categoryToDelete = this.selectedCategory;
-    const categoryName = categoryToDelete.Name;
-    const listsInCategory = this.listsByCategoryId.get(categoryToDelete.ID) || [];
-    const childCategories = this.categories.filter(c => c.ParentID === categoryToDelete.ID);
+    this.categoryToDelete = this.selectedCategory;
+    const categoryName = this.categoryToDelete.Name;
+    const listsInCategory = this.listsByCategoryId.get(this.categoryToDelete.ID) || [];
+    const childCategories = this.categories.filter(c => c.ParentID === this.categoryToDelete!.ID);
 
     let message = `Are you sure you want to delete "${categoryName}"?`;
     if (listsInCategory.length > 0) {
@@ -940,43 +1136,45 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
       message += ` ${childCategories.length} subcategory(ies) will become top-level.`;
     }
 
-    const confirmDialog = this.dialogService.open({
-      title: 'Delete Category',
-      content: message,
-      actions: [
-        { text: 'Cancel' },
-        { text: 'Delete', themeColor: 'error' }
-      ],
-      width: 450,
-      height: 220
-    });
+    this.deleteConfirmMessage = message;
+    this.showDeleteConfirm = true;
+  }
+
+  cancelDelete() {
+    this.showDeleteConfirm = false;
+    this.categoryToDelete = null;
+    this.deleteConfirmMessage = '';
+  }
+
+  async confirmDelete() {
+    if (!this.categoryToDelete) return;
+
+    const categoryName = this.categoryToDelete.Name;
+    const categoryToDelete = this.categoryToDelete;
+    this.showDeleteConfirm = false;
+    this.isLoading = true;
+    this.cdr.detectChanges();
 
     try {
-      const result = await firstValueFrom(confirmDialog.result);
-      if (result && (result as { text: string }).text === 'Delete') {
-        // Show loading state during delete
-        this.isLoading = true;
-        this.cdr.detectChanges();
-
-        try {
-          const deleted = await categoryToDelete.Delete();
-          if (deleted) {
-            this.notificationService.CreateSimpleNotification(`"${categoryName}" deleted`, 'success', 3000);
-          } else {
-            this.notificationService.CreateSimpleNotification('Failed to delete category', 'error', 4000);
-          }
-          this.selectedCategory = null;
-          await this.loadData();
-        } catch (error) {
-          console.error('Error deleting category:', error);
-          this.notificationService.CreateSimpleNotification('Error deleting category. Please try again.', 'error', 4000);
-        } finally {
-          this.isLoading = false;
-          this.cdr.detectChanges();
-        }
+      const deleted = await categoryToDelete.Delete();
+      if (deleted) {
+        this.notificationService.CreateSimpleNotification(`"${categoryName}" deleted`, 'success', 3000);
+      } else {
+        // Get the detailed error message from LatestResult
+        const errorMessage = categoryToDelete.LatestResult?.Message || 'Unknown error occurred';
+        console.error('Failed to delete category:', categoryToDelete.LatestResult);
+        this.notificationService.CreateSimpleNotification(`Failed to delete category: ${errorMessage}`, 'error', 6000);
       }
-    } catch {
-      // Dialog was closed without action
+      this.selectedCategory = null;
+      this.categoryToDelete = null;
+      await this.loadData();
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.notificationService.CreateSimpleNotification(`Error deleting category: ${errorMessage}`, 'error', 6000);
+    } finally {
+      this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1000,11 +1198,12 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         category = this.editingCategory;
       } else {
         category = await md.GetEntityObject<ListCategoryEntity>('List Categories');
+        category.UserID = md.CurrentUser!.ID;
       }
 
       category.Name = this.dialogName;
-      category.Description = this.dialogDescription || undefined;
-      category.ParentID = this.dialogParentId || undefined;
+      category.Description = this.dialogDescription || null;
+      category.ParentID = this.dialogParentId || null;
 
       const saved = await category.Save();
       if (saved) {
@@ -1022,15 +1221,20 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
           this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
         }
       } else {
+        // Get the detailed error message from LatestResult
+        const errorMessage = category.LatestResult?.Message || 'Unknown error occurred';
+        const action = isEditing ? 'update' : 'create';
+        console.error(`Failed to ${action} category:`, category.LatestResult);
         this.notificationService.CreateSimpleNotification(
-          isEditing ? 'Failed to update category' : 'Failed to create category',
+          `Failed to ${action} category: ${errorMessage}`,
           'error',
-          4000
+          6000
         );
       }
     } catch (error) {
       console.error('Error saving category:', error);
-      this.notificationService.CreateSimpleNotification('Error saving category. Please try again.', 'error', 4000);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.notificationService.CreateSimpleNotification(`Error saving category: ${errorMessage}`, 'error', 6000);
     } finally {
       this.isSaving = false;
       this.cdr.detectChanges();

@@ -89,9 +89,9 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
 
   // Track changes
   private originalMembership = new Map<string, boolean>();
-  private addedToLists: Set<string> = new Set();
-  private removedFromLists: Set<string> = new Set();
-  private newlyCreatedLists: ListEntity[] = [];
+  public addedToLists: Set<string> = new Set();
+  public removedFromLists: Set<string> = new Set();
+  public newlyCreatedLists: ListEntity[] = [];
 
   // Cleanup
   private destroy$ = new Subject<void>();

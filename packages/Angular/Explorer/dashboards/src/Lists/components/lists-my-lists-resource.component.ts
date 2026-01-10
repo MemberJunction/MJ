@@ -1,16 +1,15 @@
-import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
+import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef, HostListener } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { ListEntity, ListCategoryEntity, ListDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
-import { Subject, firstValueFrom } from 'rxjs';
+import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
-import { DialogService } from '@progress/kendo-angular-dialog';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export function LoadListsMyListsResource() {
-  const test = new ListsMyListsResource(null!, null!, null!, null!);
+  // simple tree shaker prevention
 }
 
 interface ListViewModel {
@@ -144,7 +143,7 @@ interface CategoryNode {
                 <i [class]="getEntityIcon(item.list.Entity)"></i>
               </div>
               <div class="card-menu">
-                <button class="menu-btn" (click)="openListMenu($event, item.list)" aria-label="More options for {{item.list.Name}}">
+                <button class="menu-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
                   <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
                 </button>
               </div>
@@ -234,13 +233,34 @@ interface CategoryNode {
         </div>
       </ng-template>
 
-      <!-- Create/Edit List Dialog -->
-      <kendo-dialog
-        *ngIf="showCreateDialog"
-        [title]="editingList ? 'Edit List' : 'Create New List'"
-        (close)="closeCreateDialog()"
-        [width]="500">
-        <div class="create-list-form">
+      <!-- Context Menu (native) -->
+      <div class="context-menu-overlay" *ngIf="showContextMenu" (click)="closeContextMenu()"></div>
+      <div class="context-menu" *ngIf="showContextMenu" [style.top.px]="contextMenuY" [style.left.px]="contextMenuX">
+        <button class="menu-item" (click)="editList()">
+          <i class="fa-solid fa-pen"></i>
+          Edit
+        </button>
+        <button class="menu-item" (click)="duplicateList()">
+          <i class="fa-solid fa-copy"></i>
+          Duplicate
+        </button>
+        <div class="menu-divider"></div>
+        <button class="menu-item danger" (click)="confirmDeleteList()">
+          <i class="fa-solid fa-trash"></i>
+          Delete
+        </button>
+      </div>
+
+      <!-- Create/Edit List Dialog (native modal) -->
+      <div class="modal-overlay" *ngIf="showCreateDialog" (click)="closeCreateDialog()"></div>
+      <div class="modal-dialog" *ngIf="showCreateDialog">
+        <div class="modal-header">
+          <h3>{{editingList ? 'Edit List' : 'Create New List'}}</h3>
+          <button class="modal-close" (click)="closeCreateDialog()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
           <div class="form-group">
             <label>Name *</label>
             <input
@@ -259,63 +279,81 @@ interface CategoryNode {
           </div>
           <div class="form-group">
             <label>Entity *</label>
-            <kendo-dropdownlist
-              [data]="availableEntities"
-              [textField]="'Name'"
-              [valueField]="'ID'"
-              [(ngModel)]="selectedEntityId"
-              [disabled]="!!editingList"
-              [filterable]="true"
-              (filterChange)="filterEntities($event)"
-              placeholder="Select an entity">
-            </kendo-dropdownlist>
+            <div class="custom-select-wrapper">
+              <input
+                #entityInput
+                type="text"
+                [(ngModel)]="entitySearchTerm"
+                (ngModelChange)="filterEntities($event)"
+                (focus)="openEntityDropdown(entityInput)"
+                placeholder="Search and select an entity"
+                class="form-input"
+                [disabled]="!!editingList" />
+            </div>
           </div>
           <div class="form-group">
             <label>Category</label>
-            <kendo-dropdownlist
-              [data]="flatCategories"
-              [textField]="'displayName'"
-              [valueField]="'ID'"
-              [(ngModel)]="selectedCategoryId"
-              [valuePrimitive]="true"
-              placeholder="No category">
-            </kendo-dropdownlist>
+            <select [(ngModel)]="selectedCategoryId" class="form-input">
+              <option [ngValue]="null">No category</option>
+              <option *ngFor="let cat of flatCategories" [ngValue]="cat.ID">{{cat.displayName}}</option>
+            </select>
           </div>
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="closeCreateDialog()" [disabled]="isSaving">Cancel</button>
+        <div class="modal-footer">
           <button
-            kendoButton
-            [primary]="true"
+            class="btn-primary"
             (click)="saveList()"
             [disabled]="!newListName || !selectedEntityId || isSaving">
-            <span *ngIf="isSaving" class="k-icon k-i-loading"></span>
+            <i *ngIf="isSaving" class="fa-solid fa-spinner fa-spin"></i>
             {{isSaving ? 'Saving...' : (editingList ? 'Save' : 'Create')}}
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+          <button class="btn-secondary" (click)="closeCreateDialog()" [disabled]="isSaving">Cancel</button>
+        </div>
+      </div>
 
-      <!-- Context Menu -->
-      <kendo-popup
-        *ngIf="showContextMenu"
-        [anchor]="contextMenuAnchor"
-        (anchorViewportLeave)="closeContextMenu()">
-        <div class="context-menu">
-          <button class="menu-item" (click)="editList()">
-            <i class="fa-solid fa-pen"></i>
-            Edit
-          </button>
-          <button class="menu-item" (click)="duplicateList()">
-            <i class="fa-solid fa-copy"></i>
-            Duplicate
-          </button>
-          <div class="menu-divider"></div>
-          <button class="menu-item danger" (click)="deleteList()">
-            <i class="fa-solid fa-trash"></i>
-            Delete
+      <!-- Delete Confirmation Dialog -->
+      <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()"></div>
+      <div class="modal-dialog confirm-dialog" *ngIf="showDeleteConfirm">
+        <div class="modal-header">
+          <h3>Delete List</h3>
+          <button class="modal-close" (click)="cancelDelete()">
+            <i class="fa-solid fa-times"></i>
           </button>
         </div>
-      </kendo-popup>
+        <div class="modal-body">
+          <p>Are you sure you want to delete "<strong>{{deleteListName}}</strong>"?</p>
+          <p class="warning-text">This will also remove all items in the list.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-danger" (click)="deleteList()">
+            <i *ngIf="isDeleting" class="fa-solid fa-spinner fa-spin"></i>
+            {{isDeleting ? 'Deleting...' : 'Delete'}}
+          </button>
+          <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Entity Dropdown Portal (fixed positioning) -->
+      <div
+        class="entity-dropdown-portal"
+        *ngIf="showEntityDropdown && !editingList"
+        [style.top.px]="entityDropdownPosition.top"
+        [style.left.px]="entityDropdownPosition.left"
+        [style.width.px]="entityDropdownPosition.width"
+        [class.dropdown-above]="entityDropdownPosition.openAbove">
+        <div class="entity-dropdown-backdrop" (click)="closeEntityDropdown()"></div>
+        <div class="entity-dropdown-content" [class.open-above]="entityDropdownPosition.openAbove">
+          <div
+            class="dropdown-item"
+            *ngFor="let entity of filteredEntities"
+            (click)="selectEntity(entity)">
+            {{entity.Name}}
+          </div>
+          <div class="dropdown-empty" *ngIf="filteredEntities.length === 0">
+            No entities found
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -866,13 +904,24 @@ interface CategoryNode {
       color: #666;
     }
 
-    /* Context Menu */
+    /* Context Menu (native) */
+    .context-menu-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 999;
+    }
+
     .context-menu {
+      position: fixed;
       background: white;
       border-radius: 8px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.15);
       min-width: 160px;
       padding: 4px 0;
+      z-index: 1000;
     }
 
     .menu-item {
@@ -908,35 +957,252 @@ interface CategoryNode {
       margin: 4px 0;
     }
 
-    /* Create Dialog */
-    .create-list-form {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
     }
 
-    .form-group {
+    .modal-dialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      width: 500px;
+      max-width: 90vw;
+      max-height: 90vh;
+      overflow: hidden;
+      z-index: 1001;
+    }
+
+    .confirm-dialog {
+      width: 400px;
+    }
+
+    .modal-header {
       display: flex;
-      flex-direction: column;
-      gap: 6px;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      padding: 4px 8px;
+      color: #999;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .modal-close:hover {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .modal-body {
+      padding: 20px;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .modal-body p {
+      margin: 0 0 8px;
+      color: #333;
+    }
+
+    .warning-text {
+      color: #d32f2f !important;
+      font-size: 13px;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 20px;
+      border-top: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #1976D2;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      padding: 10px 20px;
+      background: white;
+      color: #666;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #f5f5f5;
+    }
+
+    .btn-danger {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: #d32f2f;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #c62828;
+    }
+
+    /* Form Styles */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
     }
 
     .form-group label {
+      display: block;
+      margin-bottom: 6px;
       font-size: 13px;
       font-weight: 500;
       color: #666;
     }
 
     .form-input {
-      padding: 8px 12px;
+      width: 100%;
+      padding: 10px 12px;
       border: 1px solid #ddd;
-      border-radius: 4px;
+      border-radius: 6px;
       font-size: 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-sizing: border-box;
     }
 
     .form-input:focus {
       outline: none;
       border-color: #2196F3;
+      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+    }
+
+    .form-input:disabled {
+      background: #f5f5f5;
+      color: #999;
+    }
+
+    textarea.form-input {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    select.form-input {
+      cursor: pointer;
+    }
+
+    .custom-select-wrapper {
+      position: relative;
+    }
+
+    /* Portal Dropdown - Fixed positioning to escape modal z-index */
+    .entity-dropdown-portal {
+      position: fixed;
+      z-index: 10002; /* Above modal (1001) */
+    }
+
+    .entity-dropdown-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: -1;
+    }
+
+    .entity-dropdown-content {
+      max-height: 200px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .entity-dropdown-content.open-above {
+      position: absolute;
+      bottom: 0;
+    }
+
+    .dropdown-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .dropdown-item:hover {
+      background: #e3f2fd;
+    }
+
+    .dropdown-item:first-child {
+      border-radius: 6px 6px 0 0;
+    }
+
+    .dropdown-item:last-child {
+      border-radius: 0 0 6px 6px;
+    }
+
+    .dropdown-empty {
+      padding: 10px 12px;
+      color: #999;
+      font-style: italic;
     }
 
     /* Responsive */
@@ -963,6 +1229,10 @@ interface CategoryNode {
       .lists-grid {
         grid-template-columns: 1fr;
       }
+
+      .modal-dialog {
+        width: 95vw;
+      }
     }
   `],
   encapsulation: ViewEncapsulation.None
@@ -984,7 +1254,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
   // Context menu
   showContextMenu = false;
-  contextMenuAnchor: Element | null = null;
+  contextMenuX = 0;
+  contextMenuY = 0;
   selectedContextList: ListEntity | null = null;
 
   // Create/Edit dialog
@@ -994,6 +1265,14 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   newListDescription = '';
   selectedEntityId = '';
   selectedCategoryId: string | null = null;
+  entitySearchTerm = '';
+  showEntityDropdown = false;
+  entityDropdownPosition = { top: 0, left: 0, width: 0, openAbove: false };
+
+  // Delete confirmation
+  showDeleteConfirm = false;
+  deleteListName = '';
+  listToDelete: ListEntity | null = null;
 
   // Operation states
   isSaving = false;
@@ -1006,10 +1285,34 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   constructor(
     private cdr: ChangeDetectorRef,
     private tabService: TabService,
-    private dialogService: DialogService,
-    private notificationService: MJNotificationService
+    private notificationService: MJNotificationService,
+    private elementRef: ElementRef
   ) {
     super();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent) {
+    // Close entity dropdown when clicking outside
+    if (this.showEntityDropdown) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.custom-select-wrapper')) {
+        this.showEntityDropdown = false;
+      }
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey() {
+    if (this.showContextMenu) {
+      this.closeContextMenu();
+    }
+    if (this.showCreateDialog) {
+      this.closeCreateDialog();
+    }
+    if (this.showDeleteConfirm) {
+      this.cancelDelete();
+    }
   }
 
   async ngOnInit() {
@@ -1046,8 +1349,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         {
           EntityName: 'List Categories',
           OrderBy: 'Name',
-          ResultType: 'entity_object',
-          CacheLocal: true  // Categories rarely change, cache for performance
+          ResultType: 'entity_object'
         },
         {
           EntityName: 'List Details',
@@ -1100,10 +1402,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       this.filteredEntities = [...this.availableEntities];
 
       // Build flat categories for dropdown
-      this.flatCategories = [
-        { ID: null, displayName: '(No Category)' },
-        ...this.buildFlatCategories(this.categories)
-      ];
+      this.flatCategories = this.buildFlatCategories(this.categories);
 
       this.applyFilter();
       this.buildCategoryTree();
@@ -1115,22 +1414,22 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     }
   }
 
-  private buildFlatCategories(categories: ListCategoryEntity[], parentName = '', depth = 0): Array<{ ID: string; displayName: string }> {
+  private buildFlatCategories(categories: ListCategoryEntity[]): Array<{ ID: string; displayName: string }> {
     const result: Array<{ ID: string; displayName: string }> = [];
     const topLevel = categories.filter(c => !c.ParentID);
 
-    const processCategory = (cat: ListCategoryEntity, prefix: string, level: number) => {
+    const processCategory = (cat: ListCategoryEntity, level: number) => {
       const indent = '\u00A0\u00A0'.repeat(level);
       result.push({ ID: cat.ID, displayName: `${indent}${cat.Name}` });
 
       const children = categories.filter(c => c.ParentID === cat.ID);
       for (const child of children) {
-        processCategory(child, prefix, level + 1);
+        processCategory(child, level + 1);
       }
     };
 
     for (const cat of topLevel) {
-      processCategory(cat, '', 0);
+      processCategory(cat, 0);
     }
 
     return result;
@@ -1183,7 +1482,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.categoryTree = rootNodes;
   }
 
-  onSearchChange(term: string) {
+  onSearchChange(_term: string) {
     this.applyFilter();
     this.buildCategoryTree();
   }
@@ -1232,7 +1531,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   }
 
   private generateEntityColor(entityName: string): string {
-    // Generate a consistent color from entity name
     let hash = 0;
     for (let i = 0; i < entityName.length; i++) {
       hash = entityName.charCodeAt(i) + ((hash << 5) - hash);
@@ -1259,24 +1557,22 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   }
 
   openList(list: ListEntity) {
-    // Get the application ID from the resource data
-    const appId = this.Data?.ApplicationId || '';
-
-    // Open the list in a new tab using the ListDetailResource
+    const appId = this.Data?.Configuration?.applicationId || '';
     this.tabService.OpenList(list.ID, list.Name, appId);
   }
 
   openListMenu(event: Event, list: ListEntity) {
     event.stopPropagation();
+    const mouseEvent = event as MouseEvent;
     this.selectedContextList = list;
-    this.contextMenuAnchor = event.target as Element;
+    this.contextMenuX = mouseEvent.clientX;
+    this.contextMenuY = mouseEvent.clientY;
     this.showContextMenu = true;
   }
 
   closeContextMenu() {
     this.showContextMenu = false;
     this.selectedContextList = null;
-    this.contextMenuAnchor = null;
   }
 
   createNewList() {
@@ -1284,7 +1580,9 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.newListName = '';
     this.newListDescription = '';
     this.selectedEntityId = '';
+    this.entitySearchTerm = '';
     this.selectedCategoryId = null;
+    this.showEntityDropdown = false;
     this.showCreateDialog = true;
   }
 
@@ -1295,9 +1593,44 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.newListName = this.selectedContextList.Name;
     this.newListDescription = this.selectedContextList.Description || '';
     this.selectedEntityId = this.selectedContextList.EntityID;
+    this.entitySearchTerm = this.selectedContextList.Entity || '';
     this.selectedCategoryId = this.selectedContextList.CategoryID || null;
     this.showCreateDialog = true;
     this.closeContextMenu();
+  }
+
+  selectEntity(entity: { ID: string; Name: string }) {
+    this.selectedEntityId = entity.ID;
+    this.entitySearchTerm = entity.Name;
+    this.showEntityDropdown = false;
+  }
+
+  filterEntities(term: string) {
+    const lowerTerm = term.toLowerCase();
+    this.filteredEntities = this.availableEntities.filter(e =>
+      e.Name.toLowerCase().includes(lowerTerm)
+    );
+  }
+
+  openEntityDropdown(inputElement: HTMLInputElement) {
+    const rect = inputElement.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const dropdownHeight = 200; // estimated max height
+    const spaceBelow = viewportHeight - rect.bottom;
+    const openAbove = spaceBelow < dropdownHeight && rect.top > dropdownHeight;
+
+    this.entityDropdownPosition = {
+      top: openAbove ? rect.top - dropdownHeight : rect.bottom,
+      left: rect.left,
+      width: rect.width,
+      openAbove
+    };
+    this.showEntityDropdown = true;
+    this.filteredEntities = [...this.availableEntities];
+  }
+
+  closeEntityDropdown() {
+    this.showEntityDropdown = false;
   }
 
   async duplicateList() {
@@ -1306,7 +1639,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     const listToDuplicate = this.selectedContextList;
     this.closeContextMenu();
 
-    // Show loading state
     this.isLoading = true;
     this.cdr.detectChanges();
 
@@ -1314,7 +1646,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       const md = new Metadata();
       const rv = new RunView();
 
-      // Create the new list
       const newList = await md.GetEntityObject<ListEntity>('Lists');
       newList.Name = `${listToDuplicate.Name} (Copy)`;
       newList.Description = listToDuplicate.Description;
@@ -1328,7 +1659,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         return;
       }
 
-      // Copy all list items
       const itemsResult = await rv.RunView<ListDetailEntity>({
         EntityName: 'List Details',
         ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
@@ -1364,64 +1694,55 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     }
   }
 
-  async deleteList() {
+  confirmDeleteList() {
     if (!this.selectedContextList) return;
-
-    const listToDelete = this.selectedContextList;
-    const listName = listToDelete.Name;
+    this.listToDelete = this.selectedContextList;
+    this.deleteListName = this.selectedContextList.Name;
+    this.showDeleteConfirm = true;
     this.closeContextMenu();
+  }
 
-    const confirmDialog = this.dialogService.open({
-      title: 'Delete List',
-      content: `Are you sure you want to delete "${listName}"? This will also remove all items in the list.`,
-      actions: [
-        { text: 'Cancel' },
-        { text: 'Delete', themeColor: 'error' }
-      ],
-      width: 450,
-      height: 200
-    });
+  cancelDelete() {
+    this.showDeleteConfirm = false;
+    this.listToDelete = null;
+    this.deleteListName = '';
+  }
+
+  async deleteList() {
+    if (!this.listToDelete) return;
+
+    const listToDelete = this.listToDelete;
+    const listName = listToDelete.Name;
+
+    this.isDeleting = true;
+    this.cdr.detectChanges();
 
     try {
-      const result = await firstValueFrom(confirmDialog.result);
-      if (result && (result as { text: string }).text === 'Delete') {
-        // Show loading state during delete
-        this.isDeleting = true;
-        this.isLoading = true;
-        this.cdr.detectChanges();
-
-        try {
-          const deleted = await listToDelete.Delete();
-          if (deleted) {
-            this.notificationService.CreateSimpleNotification(`"${listName}" deleted`, 'success', 3000);
-          } else {
-            this.notificationService.CreateSimpleNotification('Failed to delete list', 'error', 4000);
-          }
-          await this.loadData();
-        } catch (error) {
-          console.error('Error deleting list:', error);
-          this.notificationService.CreateSimpleNotification('Error deleting list. Please try again.', 'error', 4000);
-        } finally {
-          this.isDeleting = false;
-          this.isLoading = false;
-          this.cdr.detectChanges();
-        }
+      const deleted = await listToDelete.Delete();
+      if (deleted) {
+        this.notificationService.CreateSimpleNotification(`"${listName}" deleted`, 'success', 3000);
+      } else {
+        // Get the detailed error message from LatestResult
+        const errorMessage = listToDelete.LatestResult?.Message || 'Unknown error occurred';
+        console.error('Failed to delete list:', listToDelete.LatestResult);
+        this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
-    } catch {
-      // Dialog was closed without action
+      this.cancelDelete();
+      await this.loadData();
+    } catch (error) {
+      console.error('Error deleting list:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.notificationService.CreateSimpleNotification(`Error deleting list: ${errorMessage}`, 'error', 6000);
+    } finally {
+      this.isDeleting = false;
+      this.cdr.detectChanges();
     }
   }
 
   closeCreateDialog() {
     this.showCreateDialog = false;
     this.editingList = null;
-  }
-
-  filterEntities(filter: string) {
-    const term = filter.toLowerCase();
-    this.filteredEntities = this.availableEntities.filter(e =>
-      e.Name.toLowerCase().includes(term)
-    );
+    this.showEntityDropdown = false;
   }
 
   async saveList() {
@@ -1444,8 +1765,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       }
 
       list.Name = this.newListName;
-      list.Description = this.newListDescription || undefined;
-      list.CategoryID = this.selectedCategoryId || undefined;
+      list.Description = this.newListDescription || null;
+      list.CategoryID = this.selectedCategoryId || null;
 
       const saved = await list.Save();
       if (saved) {
@@ -1457,26 +1778,31 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         this.closeCreateDialog();
         await this.loadData();
       } else {
+        // Get the detailed error message from LatestResult
+        const errorMessage = list.LatestResult?.Message || 'Unknown error occurred';
+        const action = isEditing ? 'update' : 'create';
+        console.error(`Failed to ${action} list:`, list.LatestResult);
         this.notificationService.CreateSimpleNotification(
-          isEditing ? 'Failed to update list' : 'Failed to create list',
+          `Failed to ${action} list: ${errorMessage}`,
           'error',
-          4000
+          6000
         );
       }
     } catch (error) {
       console.error('Error saving list:', error);
-      this.notificationService.CreateSimpleNotification('Error saving list. Please try again.', 'error', 4000);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.notificationService.CreateSimpleNotification(`Error saving list: ${errorMessage}`, 'error', 6000);
     } finally {
       this.isSaving = false;
       this.cdr.detectChanges();
     }
   }
 
-  async GetResourceDisplayName(data: ResourceData): Promise<string> {
+  async GetResourceDisplayName(_data: ResourceData): Promise<string> {
     return 'My Lists';
   }
 
-  async GetResourceIconClass(data: ResourceData): Promise<string> {
+  async GetResourceIconClass(_data: ResourceData): Promise<string> {
     return 'fa-solid fa-list-check';
   }
 }
