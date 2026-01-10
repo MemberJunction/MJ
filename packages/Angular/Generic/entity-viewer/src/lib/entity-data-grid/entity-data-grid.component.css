@@ -603,7 +603,40 @@
 }
 
 ::ng-deep .ag-theme-alpine {
+  /* Row colors */
   --ag-row-hover-color: var(--grid-row-hover-bg);
   --ag-selected-row-background-color: var(--grid-row-selected-bg);
   --ag-header-background-color: var(--grid-header-bg);
+
+  /* Selection accent colors */
+  --ag-range-selection-background-color: rgba(33, 150, 243, 0.2);
+  --ag-range-selection-border-color: #2196F3;
+
+  /* Ensure borders are visible */
+  --ag-borders: none;
+  --ag-row-border-color: var(--grid-cell-border-color);
+}
+
+/* Selected row styling with higher specificity */
+::ng-deep .ag-theme-alpine .ag-row-selected {
+  background-color: var(--grid-row-selected-bg, #e3f2fd) !important;
+}
+
+::ng-deep .ag-theme-alpine .ag-row-selected:hover {
+  background-color: var(--grid-row-selected-hover-bg, #bbdefb) !important;
+}
+
+/* Selection checkbox styling */
+::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper {
+  width: 18px;
+  height: 18px;
+}
+
+::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper.ag-checked::after {
+  color: var(--grid-checkbox-color, #2196F3);
+}
+
+/* Row hover effect */
+::ng-deep .ag-theme-alpine .ag-row:hover:not(.ag-row-selected) {
+  background-color: var(--grid-row-hover-bg, #f0f7ff);
 }

@@ -122,22 +122,29 @@
       </div>
     } @else {
       <!-- Grid View - always rendered but hidden when not active to preserve state -->
-      <mj-entity-grid
+      <mj-entity-data-grid
         [hidden]="effectiveViewMode !== 'grid'"
-        [entity]="entity"
-        [records]="filteredRecords"
-        [selectedRecordId]="selectedRecordId"
-        [columns]="gridColumns"
-        [height]="'100%'"
+        [data]="filteredRecords"
+        [entityName]="entity.Name"
+        [searchString]="debouncedFilterText"
         [filterText]="debouncedFilterText"
-        [sortState]="effectiveSortState"
+        [orderBy]="effectiveSortOrderBy"
         [serverSideSorting]="effectiveConfig.serverSideSorting"
         [gridState]="gridState"
-        (recordSelected)="onRecordSelected($event)"
-        (recordOpened)="onRecordOpened($event)"
-        (sortChanged)="onSortChanged($event)"
-        (gridStateChanged)="onGridStateChanged($event)">
-      </mj-entity-grid>
+        [height]="'auto'"
+        [showToolbar]="showGridToolbar"
+        [toolbarConfig]="effectiveGridToolbarConfig"
+        [selectionMode]="gridSelectionMode"
+        [AllowLoad]="false"
+        (afterRowClick)="onDataGridRowClick($event)"
+        (afterRowDoubleClick)="onDataGridRowDoubleClick($event)"
+        (afterSort)="onDataGridSortChanged($event)"
+        (gridStateChanged)="onGridStateChanged($event)"
+        (newButtonClick)="onGridAddRequested()"
+        (refreshButtonClick)="onGridRefreshRequested()"
+        (deleteButtonClick)="onGridDeleteRequested($event)"
+        (exportButtonClick)="onGridExportRequested()">
+      </mj-entity-data-grid>
 
       <!-- Cards View - always rendered but hidden when not active to preserve state -->
       <mj-entity-cards

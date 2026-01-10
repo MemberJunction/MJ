@@ -24,6 +24,12 @@ import {
   TimelineOrientation,
   TimelineState
 } from '../types';
+import {
+  AfterRowClickEventArgs,
+  AfterRowDoubleClickEventArgs,
+  AfterSortEventArgs
+} from '../entity-data-grid/events/grid-events';
+import { GridToolbarConfig, GridSelectionMode } from '../entity-data-grid/models/grid-types';
 
 /**
  * EntityViewerComponent - Full-featured composite component for viewing entity data
@@ -159,6 +165,24 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
   private _timelineConfig: TimelineState | null = null;
 
+  /**
+   * Whether to show the grid toolbar
+   * @default true
+   */
+  @Input() showGridToolbar: boolean = true;
+
+  /**
+   * Grid toolbar configuration - controls which buttons are shown and their behavior
+   * When not provided, uses sensible defaults
+   */
+  @Input() gridToolbarConfig: Partial<GridToolbarConfig> | null = null;
+
+  /**
+   * Grid selection mode
+   * @default 'single'
+   */
+  @Input() gridSelectionMode: GridSelectionMode = 'single';
+
   // ========================================
   // OUTPUTS
   // ========================================
@@ -207,6 +231,27 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Emitted when timeline configuration changes (date field, grouping, etc.)
    */
   @Output() timelineConfigChange = new EventEmitter<TimelineState>();
+
+  /**
+   * Emitted when the Add/New button is clicked in the grid toolbar
+   */
+  @Output() addRequested = new EventEmitter<void>();
+
+  /**
+   * Emitted when the Delete button is clicked in the grid toolbar
+   * Includes the selected records to be deleted
+   */
+  @Output() deleteRequested = new EventEmitter<{ records: BaseEntity[] }>();
+
+  /**
+   * Emitted when the Refresh button is clicked in the grid toolbar
+   */
+  @Output() refreshRequested = new EventEmitter<void>();
+
+  /**
+   * Emitted when the Export button is clicked in the grid toolbar
+   */
+  @Output() exportRequested = new EventEmitter<{ format: 'excel' | 'csv' | 'json' }>();
 
   // ========================================
   // INTERNAL STATE
@@ -337,10 +382,39 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * Get the OrderBy string for mj-entity-data-grid from the effective sort state
+   */
+  get effectiveSortOrderBy(): string {
+    const sortState = this.effectiveSortState;
+    if (!sortState?.field || !sortState.direction) {
+      return '';
+    }
+    return `${sortState.field} ${sortState.direction.toUpperCase()}`;
+  }
+
+  /**
    * Get merged configuration with defaults
    */
   get effectiveConfig(): Required<EntityViewerConfig> {
     return { ...DEFAULT_VIEWER_CONFIG, ...this.config };
+  }
+
+  /**
+   * Get the effective grid toolbar configuration
+   * Merges user-provided config with defaults appropriate for entity-viewer context
+   */
+  get effectiveGridToolbarConfig(): GridToolbarConfig {
+    const defaults: GridToolbarConfig = {
+      showSearch: false, // Entity-viewer has its own filter
+      showRefresh: true,
+      showAdd: true,
+      showDelete: true,
+      showExport: true,
+      showColumnChooser: true,
+      showRowCount: true,
+      showSelectionCount: true
+    };
+    return { ...defaults, ...this.gridToolbarConfig };
   }
 
   /**
@@ -904,6 +978,91 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   onLoadMore(): void {
     this.loadMore();
+  }
+
+  // ========================================
+  // DATA GRID EVENT HANDLERS
+  // ========================================
+
+  /**
+   * Handle row click from mj-entity-data-grid
+   * Maps to recordSelected event for parent components
+   */
+  onDataGridRowClick(event: AfterRowClickEventArgs): void {
+    if (!this.entity || !event.row) return;
+
+    this.recordSelected.emit({
+      record: event.row,
+      entity: this.entity,
+      compositeKey: event.row.PrimaryKey
+    });
+  }
+
+  /**
+   * Handle row double-click from mj-entity-data-grid
+   * Maps to recordOpened event for parent components
+   */
+  onDataGridRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+    if (!this.entity || !event.row) return;
+
+    this.recordOpened.emit({
+      record: event.row,
+      entity: this.entity,
+      compositeKey: event.row.PrimaryKey
+    });
+  }
+
+  /**
+   * Handle sort changed from mj-entity-data-grid
+   * Maps to sortChanged event for parent components
+   */
+  onDataGridSortChanged(event: AfterSortEventArgs): void {
+    // Convert the data grid's sort state to our SortState format
+    const newSort: SortState | null = event.newSortState && event.newSortState.length > 0
+      ? {
+          field: event.newSortState[0].field,
+          direction: event.newSortState[0].direction
+        }
+      : null;
+
+    this.internalSortState = newSort;
+    this.sortChanged.emit({ sort: newSort });
+
+    // If server-side sorting, reload from page 1
+    if (this.effectiveConfig.serverSideSorting && !this.records) {
+      this.resetPaginationState();
+      this.loadData();
+    }
+  }
+
+  /**
+   * Handle Add/New button click from data grid toolbar
+   */
+  onGridAddRequested(): void {
+    this.addRequested.emit();
+  }
+
+  /**
+   * Handle Refresh button click from data grid toolbar
+   */
+  onGridRefreshRequested(): void {
+    this.refreshRequested.emit();
+    // Also trigger an internal refresh
+    this.refresh();
+  }
+
+  /**
+   * Handle Delete button click from data grid toolbar
+   */
+  onGridDeleteRequested(records: BaseEntity[]): void {
+    this.deleteRequested.emit({ records });
+  }
+
+  /**
+   * Handle Export button click from data grid toolbar
+   */
+  onGridExportRequested(): void {
+    this.exportRequested.emit({ format: 'excel' });
   }
 
   // ========================================
