@@ -30,6 +30,11 @@ jobs:
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
       - name: Install MJ CLI globally
         run: npm install --global @memberjunction/cli
 

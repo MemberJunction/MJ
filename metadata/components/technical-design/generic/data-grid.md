@@ -1,5 +1,5 @@
 ## Architecture
-React functional component wrapping Ant Design Table 5.12.0 with MemberJunction metadata enhancements.
+React functional component wrapping Ant Design Table 5.12.0 with MemberJunction metadata enhancements. **Note**: This describes internal implementation details. The public API uses `{field, header, render}`, not Ant Design's `{dataIndex, title, key}`.
 
 ## State Management (React Hooks)
 - **filterText** (string): Raw search input
@@ -32,7 +32,7 @@ Accepts `columns` as:
 Handles invalid configs with console warnings.
 
 ### 2. Column Building
-Maps normalized columns to Ant Design format:
+Converts ColumnDef format (`{field, header}`) to Ant Design Table format internally:
 - **Alignment**: Based on SQL type (int/decimal/float/money/bit → right, others → left)
 - **Width calculation** (when `autoFitColumns=false`):
   - GUIDs: 280px

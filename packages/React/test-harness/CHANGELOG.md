@@ -1,5 +1,34 @@
 # @memberjunction/react-test-harness
 
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ai-core-plus@2.132.0
+  - @memberjunction/aiengine@2.132.0
+  - @memberjunction/ai-vectors-memory@2.132.0
+  - @memberjunction/interactive-component-types@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/react-runtime@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ai-core-plus@2.131.0
+  - @memberjunction/aiengine@2.131.0
+  - @memberjunction/ai-vectors-memory@2.131.0
+  - @memberjunction/interactive-component-types@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/react-runtime@2.131.0
+  - @memberjunction/global@2.131.0
+
 ## 2.130.1
 
 ### Patch Changes

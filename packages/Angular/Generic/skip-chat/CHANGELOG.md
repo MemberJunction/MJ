@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ng-base-types@2.132.0
+  - @memberjunction/ng-code-editor@2.132.0
+  - @memberjunction/ng-container-directives@2.132.0
+  - @memberjunction/ng-data-context@2.132.0
+  - @memberjunction/ng-notifications@2.132.0
+  - @memberjunction/ng-react@2.132.0
+  - @memberjunction/ng-resource-permissions@2.132.0
+  - @memberjunction/ng-shared-generic@2.132.0
+  - @memberjunction/graphql-dataprovider@2.132.0
+  - @memberjunction/interactive-component-types@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/data-context@2.132.0
+  - @memberjunction/react-runtime@2.132.0
+  - @memberjunction/skip-types@2.132.0
+  - @memberjunction/ng-markdown@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ng-base-types@2.131.0
+  - @memberjunction/ng-code-editor@2.131.0
+  - @memberjunction/ng-container-directives@2.131.0
+  - @memberjunction/ng-data-context@2.131.0
+  - @memberjunction/ng-notifications@2.131.0
+  - @memberjunction/ng-react@2.131.0
+  - @memberjunction/ng-resource-permissions@2.131.0
+  - @memberjunction/ng-shared-generic@2.131.0
+  - @memberjunction/graphql-dataprovider@2.131.0
+  - @memberjunction/interactive-component-types@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/data-context@2.131.0
+  - @memberjunction/react-runtime@2.131.0
+  - @memberjunction/skip-types@2.131.0
+  - @memberjunction/ng-markdown@2.131.0
+  - @memberjunction/global@2.131.0
+
 ## 2.130.1
 
 ### Patch Changes

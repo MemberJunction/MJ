@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/cli
 
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ai-cli@2.132.0
+  - @memberjunction/codegen-lib@2.132.0
+  - @memberjunction/db-auto-doc@2.132.0
+  - @memberjunction/metadata-sync@2.132.0
+  - @memberjunction/query-gen@2.132.0
+  - @memberjunction/sqlserver-dataprovider@2.132.0
+  - @memberjunction/testing-cli@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/metadata-sync@2.131.0
+  - @memberjunction/ai-cli@2.131.0
+  - @memberjunction/codegen-lib@2.131.0
+  - @memberjunction/db-auto-doc@2.131.0
+  - @memberjunction/query-gen@2.131.0
+  - @memberjunction/sqlserver-dataprovider@2.131.0
+  - @memberjunction/testing-cli@2.131.0
+
 ## 2.130.1
 
 ### Patch Changes

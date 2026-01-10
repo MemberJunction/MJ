@@ -42,15 +42,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.698Z",
             "checksum": "65fd8052a3c2db3cd8fe346c0a5081187c869c5b61683d71da3830896227bedd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            }
-          ]
+          }
         }
       ],
       "MJ: AI Agent Prompts": [
@@ -67,21 +59,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.738Z",
             "checksum": "124ce0ea076494013fd0731288e1cfa4839ed11375aa03b5293090e24e511921"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Agent Manager - Main Prompt",
-              "resolved": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
-            }
-          ]
+          }
         }
       ],
       "AI Agent Actions": [
@@ -97,21 +75,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.740Z",
             "checksum": "6c947ca73e57f5a9a809f221523a08bc91226b220a21874584e306cc83d9ff6f"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Find Candidate Actions",
-              "resolved": "FD932133-CB1D-4C96-8EFC-14F0C8CE045B"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -125,21 +89,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.741Z",
             "checksum": "cb44e0f8291b1fee974713b29a82f84de3df3c3db7a6641ac31c26d6687ae079"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Find Candidate Agents",
-              "resolved": "EF610103-E48D-4D9C-8DA2-1CF5B05F8AB6"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -153,21 +103,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.743Z",
             "checksum": "0403f4da572b53521f8f8b0dd07677b94e0e79a0069456e704a51bde27bd6c5e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Web Search",
-              "resolved": "82169F64-8566-4AE7-9C87-190A885C98A9"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -181,21 +117,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.744Z",
             "checksum": "51542b7d52a7062fadfe0ded3c63dca886443ec50d72ad155230e7fe7be203ef"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Text Analyzer",
-              "resolved": "154255C2-76D4-492C-88D9-C80614EDD703"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -209,21 +131,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.745Z",
             "checksum": "30f48cfb26d2fb19c34d0a41517878505125f9b353be953ed0e2a1c53d5a497b"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Web Page Content",
-              "resolved": "81F96534-03F5-49E9-81B0-D8902A7645A3"
-            }
-          ]
+          }
         }
       ],
       "AI Agents": [
@@ -259,21 +167,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.934Z",
                   "checksum": "566d8b19316b934314fe617eceda4c90337b0f484c7d26d9754a4debab577ca2"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.PromptID",
-                    "expression": "@lookup:AI Prompts.Name=Requirements Analyst Agent - Main Prompt",
-                    "resolved": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
-                  }
-                ]
+                }
               }
             ],
             "AI Agent Actions": [
@@ -289,21 +183,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.936Z",
                   "checksum": "51542b7d52a7062fadfe0ded3c63dca886443ec50d72ad155230e7fe7be203ef"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Text Analyzer",
-                    "resolved": "154255C2-76D4-492C-88D9-C80614EDD703"
-                  }
-                ]
+                }
               },
               {
                 "fields": {
@@ -317,21 +197,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.937Z",
                   "checksum": "6c947ca73e57f5a9a809f221523a08bc91226b220a21874584e306cc83d9ff6f"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Find Candidate Actions",
-                    "resolved": "FD932133-CB1D-4C96-8EFC-14F0C8CE045B"
-                  }
-                ]
+                }
               },
               {
                 "fields": {
@@ -345,21 +211,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.938Z",
                   "checksum": "0403f4da572b53521f8f8b0dd07677b94e0e79a0069456e704a51bde27bd6c5e"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Web Search",
-                    "resolved": "82169F64-8566-4AE7-9C87-190A885C98A9"
-                  }
-                ]
+                }
               },
               {
                 "fields": {
@@ -373,21 +225,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.940Z",
                   "checksum": "30f48cfb26d2fb19c34d0a41517878505125f9b353be953ed0e2a1c53d5a497b"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Web Page Content",
-                    "resolved": "81F96534-03F5-49E9-81B0-D8902A7645A3"
-                  }
-                ]
+                }
               }
             ]
           },
@@ -397,21 +235,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.747Z",
             "checksum": "67e26b2426b690e543da09dbb27df8d8eadd3074e12e076c175e6e0c6910245f"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ParentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.TypeID",
-              "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-              "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -461,15 +285,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.900Z",
                   "checksum": "65fd8052a3c2db3cd8fe346c0a5081187c869c5b61683d71da3830896227bedd"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "644674DB-7791-44C4-8360-3914111C0E10"
-                  }
-                ]
+                }
               }
             ],
             "MJ: AI Agent Prompts": [
@@ -486,21 +302,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.941Z",
                   "checksum": "bfa830b5f40bfb40a0e1cf2b70256fd423652be89aaebb759a0e738c8ef87b3d"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "644674DB-7791-44C4-8360-3914111C0E10"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.PromptID",
-                    "expression": "@lookup:AI Prompts.Name=Planning Designer Agent - Main Prompt",
-                    "resolved": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
-                  }
-                ]
+                }
               }
             ],
             "AI Agent Actions": [
@@ -516,21 +318,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.943Z",
                   "checksum": "6c947ca73e57f5a9a809f221523a08bc91226b220a21874584e306cc83d9ff6f"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "644674DB-7791-44C4-8360-3914111C0E10"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Find Candidate Actions",
-                    "resolved": "FD932133-CB1D-4C96-8EFC-14F0C8CE045B"
-                  }
-                ]
+                }
               },
               {
                 "fields": {
@@ -544,21 +332,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.944Z",
                   "checksum": "cb44e0f8291b1fee974713b29a82f84de3df3c3db7a6641ac31c26d6687ae079"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "644674DB-7791-44C4-8360-3914111C0E10"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Find Candidate Agents",
-                    "resolved": "EF610103-E48D-4D9C-8DA2-1CF5B05F8AB6"
-                  }
-                ]
+                }
               },
               {
                 "fields": {
@@ -572,21 +346,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:33.945Z",
                   "checksum": "51542b7d52a7062fadfe0ded3c63dca886443ec50d72ad155230e7fe7be203ef"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "644674DB-7791-44C4-8360-3914111C0E10"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Text Analyzer",
-                    "resolved": "154255C2-76D4-492C-88D9-C80614EDD703"
-                  }
-                ]
+                }
               },
               {
                 "fields": {
@@ -600,21 +360,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:34.052Z",
                   "checksum": "0403f4da572b53521f8f8b0dd07677b94e0e79a0069456e704a51bde27bd6c5e"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "644674DB-7791-44C4-8360-3914111C0E10"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Web Search",
-                    "resolved": "82169F64-8566-4AE7-9C87-190A885C98A9"
-                  }
-                ]
+                }
               },
               {
                 "fields": {
@@ -628,21 +374,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:34.054Z",
                   "checksum": "30f48cfb26d2fb19c34d0a41517878505125f9b353be953ed0e2a1c53d5a497b"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "644674DB-7791-44C4-8360-3914111C0E10"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Web Page Content",
-                    "resolved": "81F96534-03F5-49E9-81B0-D8902A7645A3"
-                  }
-                ]
+                }
               }
             ],
             "MJ: AI Agent Relationships": [
@@ -662,21 +394,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:34.056Z",
                   "checksum": "099d5293827c4b14c95c5786517af1cd9d15a7f99ad037291437ce4b3ae38b20"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "644674DB-7791-44C4-8360-3914111C0E10"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.SubAgentID",
-                    "expression": "@lookup:AI Agents.Name=Database Research Agent",
-                    "resolved": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
-                  }
-                ]
+                }
               }
             ]
           },
@@ -686,21 +404,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.748Z",
             "checksum": "e8ae3cdd60cae566506df52d63f2261c88d579acc5d02187d89a5c3c3b39b234"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ParentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.TypeID",
-              "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-              "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -749,15 +453,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:34.027Z",
                   "checksum": "65fd8052a3c2db3cd8fe346c0a5081187c869c5b61683d71da3830896227bedd"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "F80CB55D-7C89-41B4-9E99-73A53EF3D92A"
-                  }
-                ]
+                }
               }
             ],
             "MJ: AI Agent Prompts": [
@@ -774,21 +470,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:34.058Z",
                   "checksum": "df40a609fb1e657254b21677ef50353a86e5f1df76e883cd5a1e386714b8c149"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "F80CB55D-7C89-41B4-9E99-73A53EF3D92A"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.PromptID",
-                    "expression": "@lookup:AI Prompts.Name=Architect Agent - Main Prompt",
-                    "resolved": "FA0031BB-4838-4C16-A161-ED670E9A147B"
-                  }
-                ]
+                }
               }
             ]
           },
@@ -798,21 +480,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.750Z",
             "checksum": "00d34ad4c5321d789c5464e03e6867dfe4bb9757aaab10c73b06beb4574df83d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ParentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.TypeID",
-              "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-              "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -836,21 +504,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.787Z",
             "checksum": "f41f5c7de51060b51c11ccd600e88c4a7864f2930671c6fb2d49271adecc4990"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ParentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.TypeID",
-              "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-              "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -884,21 +538,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:34.059Z",
                   "checksum": "53264f294eb07e22516ec7efa0cef2175e962b13bfb4c9707f983ceac20483dd"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Load Agent Spec",
-                    "resolved": "3E7FB0AE-D63B-4478-B66A-98C887E51BF3"
-                  }
-                ]
+                }
               }
             ],
             "MJ: AI Agent Steps": [
@@ -960,21 +600,7 @@
                 "sync": {
                   "lastModified": "2025-12-30T23:07:34.061Z",
                   "checksum": "2ee69013a5f8384b9c835f4c6b7e2c5f1ff6daba63a7918effe72cd24939efbd"
-                },
-                "__mj_sync_notes": [
-                  {
-                    "type": "parent",
-                    "field": "fields.AgentID",
-                    "expression": "@parent:ID",
-                    "resolved": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
-                  },
-                  {
-                    "type": "lookup",
-                    "field": "fields.ActionID",
-                    "expression": "@lookup:Actions.Name=Load Agent Spec",
-                    "resolved": "3E7FB0AE-D63B-4478-B66A-98C887E51BF3"
-                  }
-                ]
+                }
               }
             ]
           },
@@ -984,21 +610,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:33.789Z",
             "checksum": "3acbcda3dd5537fb9c35be6515450dcd319b7e505a2d89947afb97134cae5b3a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.ParentID",
-              "expression": "@parent:ID",
-              "resolved": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.TypeID",
-              "expression": "@lookup:MJ: AI Agent Types.Name=Flow",
-              "resolved": "4F6A189B-C068-4736-9F23-3FF540B40FDD"
-            }
-          ]
+          }
         }
       ]
     },
@@ -1008,14 +620,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:33.585Z",
       "checksum": "aada3643ea637f8f48a36500d20a168c2fa1081e091a5db02999bcbd429cea59"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+    }
   }
 ]

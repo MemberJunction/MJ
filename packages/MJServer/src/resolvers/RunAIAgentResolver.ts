@@ -125,9 +125,12 @@ export class AgentExecutionStreamMessage {
 
     @Field()
     timestamp: Date;
-    
+
     // Not a GraphQL field - used internally for streaming
     agentRun?: any;
+
+    // Not a GraphQL field - used for completion routing to correct conversation detail
+    conversationDetailId?: string;
 }
 
 
@@ -515,12 +518,13 @@ export class RunAIAgentResolver extends ResolverBase {
             this.PublishStreamingUpdate(pubSub, partialMsg, userPayload);
         }
 
-        // Publish completion
+        // Publish completion with conversationDetailId for client-side routing
         const completeMsg: AgentExecutionStreamMessage = {
             sessionId,
             agentRunId: result.agentRun?.ID || 'unknown',
             type: 'complete',
-            timestamp: new Date()
+            timestamp: new Date(),
+            conversationDetailId: result.agentRun?.ConversationDetailID
         };
         this.PublishStreamingUpdate(pubSub, completeMsg, userPayload);
     }

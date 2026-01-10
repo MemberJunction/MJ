@@ -30,27 +30,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.030Z",
             "checksum": "0853003c0a030b78f2e65249e3c385423bce33a1b89f2f77edc4e05dcbb1ae09"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "58658DAE-C1CE-4621-9540-0735FE98414E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1 Nano",
-              "resolved": "1BEC0566-9D7B-4A83-9701-DF5602A607EF"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -65,27 +45,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.031Z",
             "checksum": "9cfe10770b0d63da5bb7a2f2cf4c62bf7295e417fe050540d854526f33d8154e"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "58658DAE-C1CE-4621-9540-0735FE98414E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Qwen 3 32B",
-              "resolved": "C496B988-4EA4-4D7E-A6DD-255F56D93933"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -100,27 +60,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.032Z",
             "checksum": "9b329117cb4c72bbc05c00f1b05bc569351e5fb603138a8ad560d15da1456c61"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "58658DAE-C1CE-4621-9540-0735FE98414E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Kimi K2",
-              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -135,27 +75,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.033Z",
             "checksum": "f90bff74158d947efc89de88b412bd280ac9049e244f30ab965c44187dee30a4"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "58658DAE-C1CE-4621-9540-0735FE98414E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-20B",
-              "resolved": "F83CBC3E-2980-4C0F-AB74-BD2C192CF01D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -170,27 +90,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.034Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "58658DAE-C1CE-4621-9540-0735FE98414E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -200,21 +100,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.686Z",
       "checksum": "ab55d0b58691c3a01e3da914a68da6a2f32a8c318a4ae1e24602641583b1bc85"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
-        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -252,27 +138,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.035Z",
             "checksum": "fc4914f2be6e4e2c6a052bc576b2973a67c80da3a29aefc93a57ad868a3e8b48"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D441F-36E1-458A-B548-0FC2208923BE"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1-mini",
-              "resolved": "9604B1A4-3A21-F011-8B3D-7C1E5249773E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -287,27 +153,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.036Z",
             "checksum": "1110ace8276205ba3d13e53e00d5450b6aa618f7dec1750b40d1b0cea4f0dd26"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D441F-36E1-458A-B548-0FC2208923BE"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Qwen 3 32B",
-              "resolved": "C496B988-4EA4-4D7E-A6DD-255F56D93933"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -322,27 +168,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.037Z",
             "checksum": "ab75d5f89c40de6d18068583e0586d173f7af20c5f183de28fee9b22235c335a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D441F-36E1-458A-B548-0FC2208923BE"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -357,27 +183,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.038Z",
             "checksum": "a25f14e46aad4b5aa82df99370db7e4178dd92895de0f745e246c3b7b356f004"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D441F-36E1-458A-B548-0FC2208923BE"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -392,27 +198,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.039Z",
             "checksum": "071e546db3ae03851822fd04b94ea4a132ff2c19493ff63e8ceabd758cb661ec"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "FF7D441F-36E1-458A-B548-0FC2208923BE"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -420,8 +206,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:30.690Z",
-      "checksum": "454ca80e213cd0512d1a06be5559f913b7ec3af34df54f644c365a2004795826"
+      "lastModified": "2026-01-09T16:31:23.310Z",
+      "checksum": "3f2a1f4b884d6dc367f12c049b75518972e42d5be529fb7594f9f733ff754e91"
     },
     "__mj_sync_notes": [
       {
@@ -474,27 +260,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.175Z",
             "checksum": "fc4914f2be6e4e2c6a052bc576b2973a67c80da3a29aefc93a57ad868a3e8b48"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "43A6D122-4A76-453F-97D6-82CACC619227"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1-mini",
-              "resolved": "9604B1A4-3A21-F011-8B3D-7C1E5249773E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -509,27 +275,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.176Z",
             "checksum": "1110ace8276205ba3d13e53e00d5450b6aa618f7dec1750b40d1b0cea4f0dd26"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "43A6D122-4A76-453F-97D6-82CACC619227"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Qwen 3 32B",
-              "resolved": "C496B988-4EA4-4D7E-A6DD-255F56D93933"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -544,27 +290,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.177Z",
             "checksum": "ab75d5f89c40de6d18068583e0586d173f7af20c5f183de28fee9b22235c335a"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "43A6D122-4A76-453F-97D6-82CACC619227"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -579,27 +305,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.178Z",
             "checksum": "98442582d8a126324061e122d66be844712ef18f4296d3742dfba8b511fbfade"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "43A6D122-4A76-453F-97D6-82CACC619227"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -609,21 +315,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.688Z",
       "checksum": "47cadc5d0929a42612b57ead8aa6737c5118ed24e8aa2e9e7915a650df467181"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types",
-        "resolved": "838572BE-9464-4935-BC34-4806FD80A69C"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -661,27 +353,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.179Z",
             "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "B4053E4F-165C-4AED-8E14-3A0A25A28EFE"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -696,27 +368,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.180Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "B4053E4F-165C-4AED-8E14-3A0A25A28EFE"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -726,21 +378,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.691Z",
       "checksum": "a9a2a1d79f092245b92acf61a6a347e21efae6b527db3b1bb4a892d80a4d74e9"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Demo?create&Description=Demo Prompts for Demo Agents",
-        "resolved": "89E8D4AC-EAC6-4597-9956-0DA717F4CEC9"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -778,27 +416,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.181Z",
             "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "26949743-4535-4DA6-86F4-0AD76250E17A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -813,27 +431,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.182Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "26949743-4535-4DA6-86F4-0AD76250E17A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -843,21 +441,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.693Z",
       "checksum": "cb79625557ed548c3332f5142434f08fe249ba52df9059041c16d5ba1df80864"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-        "resolved": "A4EE59FE-1C90-47D8-B25F-3764A5BC279A"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -895,27 +479,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.183Z",
             "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "1B078367-9AE8-4CB8-BC32-CAAD5DE506D5"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -930,27 +494,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.184Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "1B078367-9AE8-4CB8-BC32-CAAD5DE506D5"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -960,21 +504,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.694Z",
       "checksum": "eb843890068843a12704de7f4069bf54516bbaa58a38f96ed793c220b4dc51fb"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-        "resolved": "A4EE59FE-1C90-47D8-B25F-3764A5BC279A"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -1012,27 +542,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.308Z",
             "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "D9CF490A-5F1B-4B78-A93C-021707D107A2"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1047,27 +557,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.309Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "D9CF490A-5F1B-4B78-A93C-021707D107A2"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -1077,21 +567,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.696Z",
       "checksum": "898d7d7ff1dc7d95863c45fbafd883d7d55f6c9548e776990423c40eef81482a"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-        "resolved": "A4EE59FE-1C90-47D8-B25F-3764A5BC279A"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -1129,27 +605,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.310Z",
             "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "DDBD7727-0E89-47D5-AA24-C581648775A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1164,27 +620,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.311Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "DDBD7727-0E89-47D5-AA24-C581648775A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -1194,21 +630,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.698Z",
       "checksum": "e6bde2ec2dda5a03f17e6ff0b4913c8c697411f568ba199156fc58eafdaf7f5c"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-        "resolved": "A4EE59FE-1C90-47D8-B25F-3764A5BC279A"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -1246,27 +668,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.311Z",
             "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "D536DD1C-84C0-46B6-8AC7-7B332E2B0273"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1281,27 +683,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.312Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "D536DD1C-84C0-46B6-8AC7-7B332E2B0273"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -1311,21 +693,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.700Z",
       "checksum": "810666cdc45153f3fb88ada75d6d3e6155ebe75cfcdabb88037c592293999f48"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-        "resolved": "A4EE59FE-1C90-47D8-B25F-3764A5BC279A"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -1363,27 +731,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.313Z",
             "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "5182F85B-C86F-4FCB-A38E-90687F8D0CD2"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1398,27 +746,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.314Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "5182F85B-C86F-4FCB-A38E-90687F8D0CD2"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -1428,21 +756,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.701Z",
       "checksum": "277ad043a35880bd76a0a9193f7f10cfa2300c9a881a72d39c36515393bb3d39"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Marketing Agents?create&Description=Prompts for Marketing Agent System",
-        "resolved": "A4EE59FE-1C90-47D8-B25F-3764A5BC279A"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -1480,27 +794,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.315Z",
             "checksum": "3c31973dc6717ab8120c30ad8afb0172e710bebede699c6ce57bd1239d32bafe"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "2222B834-50D9-49B2-9206-FA714FE9124A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1",
-              "resolved": "287E317F-BF26-F011-A770-AC1A3D21423D"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1515,27 +809,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.317Z",
             "checksum": "b2b67ca8bcb18c59e4e61ea5c0732652d58e40dea7fec8799cb4bf0b1b193475"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "2222B834-50D9-49B2-9206-FA714FE9124A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -1545,21 +819,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.822Z",
       "checksum": "8e17b4735c639a3171ee8a850bc918ed73fec8fe5b6a915f6f9a79a6a9ebbe85"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Actions&Parent=MJ: System",
-        "resolved": "9A66484D-1B88-43D9-A166-692ABF7BFE64"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -1598,27 +858,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.444Z",
             "checksum": "1239139d70ead75d08ad60c209f65932e3c76a76718a9dec13ba85048b72a8ab"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Kimi K2",
-              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1633,27 +873,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.445Z",
             "checksum": "4629db09dfa717f76cc94a35cfed75f65914856a9712485bb75bd03b16a8f5e6"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1668,27 +888,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.446Z",
             "checksum": "1fb4858fe111e49f4d5c59ff1da9a06efea43a5f15bce0ff2449aafca7469a04"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1703,27 +903,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.448Z",
             "checksum": "1c18548018b6c6048ccefadd5334d3c7529eb7dfa5dbce7214250e9c5e441746"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
-              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Google",
-              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1738,27 +918,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.449Z",
             "checksum": "c40dbd930f24536a18af46f081b677421dc29b5e73c46ae7c332ee951d1dab06"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
-              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
-              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1773,27 +933,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.451Z",
             "checksum": "0d12a1a58f9ac2190b7a23f315dcf580fbbc10fce0515c5a4d86462c05cb2c48"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "C1D7FE6B-287B-4B3F-8618-4CDBCF1394BB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 5-nano",
-              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -1803,21 +943,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.824Z",
       "checksum": "9a236c21c65ba17f63a471aa5504733af399e2d918a21d864bb9f9a15a46622e"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
-        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -1856,27 +982,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.452Z",
             "checksum": "1239139d70ead75d08ad60c209f65932e3c76a76718a9dec13ba85048b72a8ab"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Kimi K2",
-              "resolved": "71A6513F-1757-4FE5-9E78-0069198607C0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1891,27 +997,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.453Z",
             "checksum": "4629db09dfa717f76cc94a35cfed75f65914856a9712485bb75bd03b16a8f5e6"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1926,27 +1012,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.454Z",
             "checksum": "1fb4858fe111e49f4d5c59ff1da9a06efea43a5f15bce0ff2449aafca7469a04"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1961,27 +1027,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.455Z",
             "checksum": "1c18548018b6c6048ccefadd5334d3c7529eb7dfa5dbce7214250e9c5e441746"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Gemini 2.5 Flash",
-              "resolved": "072969C3-7D19-43FF-83E9-051E7A2D3586"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Google",
-              "resolved": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -1996,27 +1042,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.588Z",
             "checksum": "c40dbd930f24536a18af46f081b677421dc29b5e73c46ae7c332ee951d1dab06"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
-              "resolved": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Anthropic",
-              "resolved": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -2031,27 +1057,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.590Z",
             "checksum": "0d12a1a58f9ac2190b7a23f315dcf580fbbc10fce0515c5a4d86462c05cb2c48"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 5-nano",
-              "resolved": "0221217D-2037-48F8-AED0-286F53A165DF"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -2061,21 +1067,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.831Z",
       "checksum": "f83c632130d23f248cc005eab0672d84ac9c0122990c9c64b2eac8eb3eee4226"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
-        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -2110,27 +1102,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.591Z",
             "checksum": "0358a3313172e346679f86333fa90506da62892127bf3add67a34e1ee89b36cd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -2145,27 +1117,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.592Z",
             "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -2180,27 +1132,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.593Z",
             "checksum": "8a570a81f8212747eb2db2bfacd288640d41dcb1191e1753cb00699ef02fd362"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1-mini",
-              "resolved": "9604B1A4-3A21-F011-8B3D-7C1E5249773E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -2216,33 +1148,7 @@
           "sync": {
             "lastModified": "2026-01-02T21:08:12.724Z",
             "checksum": "a001e2b6661a397667573840b9105d50cb3ba07b69053ec6eabdbb06314f6bb6"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ConfigurationID",
-              "expression": "@lookup:MJ: AI Configurations.Name=Sage Text",
-              "resolved": "C12390BB-D4F8-433F-B34D-736B24DFBBAA"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -2258,33 +1164,7 @@
           "sync": {
             "lastModified": "2026-01-02T21:08:12.739Z",
             "checksum": "413cea5422bc8857362eb80d5aa745d3394ec20095888c9a0570e9d790b10fb8"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ConfigurationID",
-              "expression": "@lookup:MJ: AI Configurations.Name=Sage Text",
-              "resolved": "C12390BB-D4F8-433F-B34D-736B24DFBBAA"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -2300,33 +1180,7 @@
           "sync": {
             "lastModified": "2026-01-02T21:08:12.753Z",
             "checksum": "89bb6096fcb2edb7cf60614ab2fe370719fe8409403270fe376662b1b1621be1"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=Llama 4 Maverick",
-              "resolved": "8A5D433E-F36B-1410-8DA9-00021F8B792E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ConfigurationID",
-              "expression": "@lookup:MJ: AI Configurations.Name=Sage Multimodal",
-              "resolved": "2C649582-D3A2-47EC-82BF-CEC89B7D8F15"
-            }
-          ]
+          }
         }
       ]
     },
@@ -2336,21 +1190,7 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.833Z",
       "checksum": "1879abcca5ff7ef26e680c1db216b9a2e74686405a8415c3b96a37f22c10d225"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=MJ: System",
-        "resolved": "7D2DEF7F-138F-4620-8309-33964A97A997"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -2385,27 +1225,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.595Z",
             "checksum": "0358a3313172e346679f86333fa90506da62892127bf3add67a34e1ee89b36cd"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "69FFD223-C98E-4081-808E-7E1D445D2F85"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Cerebras",
-              "resolved": "3EDA433E-F36B-1410-8DB6-00021F8B792E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -2420,27 +1240,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.596Z",
             "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "69FFD223-C98E-4081-808E-7E1D445D2F85"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT-OSS-120B",
-              "resolved": "8E1BADD5-D593-4F9B-90D4-BF6D8AFA74A0"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=Groq",
-              "resolved": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         },
         {
           "fields": {
@@ -2455,27 +1255,7 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:31.597Z",
             "checksum": "8a570a81f8212747eb2db2bfacd288640d41dcb1191e1753cb00699ef02fd362"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.PromptID",
-              "expression": "@parent:ID",
-              "resolved": "69FFD223-C98E-4081-808E-7E1D445D2F85"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ModelID",
-              "expression": "@lookup:AI Models.Name=GPT 4.1-mini",
-              "resolved": "9604B1A4-3A21-F011-8B3D-7C1E5249773E"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.VendorID",
-              "expression": "@lookup:MJ: AI Vendors.Name=OpenAI",
-              "resolved": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
-            }
-          ]
+          }
         }
       ]
     },
@@ -2485,20 +1265,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:30.834Z",
       "checksum": "ed2b54421624c78616c0f4f8b40b6693a53ff84b299b30d91d9389cc5e1c06e9"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Conversations?create&Description=Prompts for Conversation Management",
-        "resolved": "847C1276-1D2F-4260-9A24-B8490B6B2A36"
-      }
-    ]
+    }
   }
 ]

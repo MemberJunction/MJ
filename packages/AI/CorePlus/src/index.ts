@@ -9,6 +9,8 @@ export * from './agent-spec';
 export * from './response-forms';
 export * from './ui-commands';
 export * from './conversation-utility';
+export * from './foreach-operation';
+export * from './while-operation';
 
 export * from './AIPromptExtended';
 export * from './AIPromptCategoryExtended';

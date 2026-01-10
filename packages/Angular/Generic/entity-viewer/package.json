@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-viewer",
-  "version": "2.130.1",
+  "version": "2.132.0",
   "description": "MemberJunction: Angular components for viewing entity data in multiple formats (grid, cards) with filtering, selection, and shared data management",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -34,11 +34,11 @@
     "ag-grid-community": "^34.3.1"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.130.1",
-    "@memberjunction/global": "2.130.1",
-    "@memberjunction/core": "2.130.1",
-    "@memberjunction/ng-shared-generic": "2.130.1",
-    "@memberjunction/ng-timeline": "2.130.1",
+    "@memberjunction/core-entities": "2.132.0",
+    "@memberjunction/global": "2.132.0",
+    "@memberjunction/core": "2.132.0",
+    "@memberjunction/ng-shared-generic": "2.132.0",
+    "@memberjunction/ng-timeline": "2.132.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },
