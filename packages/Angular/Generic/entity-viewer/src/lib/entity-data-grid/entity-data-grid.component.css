@@ -617,29 +617,9 @@
   --ag-row-border-color: var(--grid-cell-border-color);
 }
 
-/* Selected row styling with higher specificity - using mellow yellow */
-/* AG Grid v34+ requires aggressive specificity to override theme styles */
-::ng-deep .ag-theme-alpine .ag-row-selected,
-::ng-deep .mj-ag-grid .ag-row-selected,
-::ng-deep .ag-row.ag-row-selected,
-::ng-deep .ag-row-even.ag-row-selected,
-::ng-deep .ag-row-odd.ag-row-selected,
-::ng-deep [class*="ag-row"].ag-row-selected {
-  background-color: #fff9e6 !important;
-  background: #fff9e6 !important;
-  box-shadow: inset 4px 0 0 0 #f9a825 !important;
-  border-top: 1px solid rgba(249, 168, 37, 0.3) !important;
-  border-bottom: 1px solid rgba(249, 168, 37, 0.3) !important;
-}
-
-::ng-deep .ag-theme-alpine .ag-row-selected:hover,
-::ng-deep .mj-ag-grid .ag-row-selected:hover,
-::ng-deep .ag-row.ag-row-selected:hover,
-::ng-deep .ag-row-even.ag-row-selected:hover,
-::ng-deep .ag-row-odd.ag-row-selected:hover,
-::ng-deep [class*="ag-row"].ag-row-selected:hover {
-  background-color: #fff3cc !important;
-  background: #fff3cc !important;
+/* Selected row styling - left indicator bar only, background handled by AG Grid theme */
+::ng-deep .ag-row-selected {
+  box-shadow: inset 4px 0 0 0 #f9a825;
 }
 
 /* Selection checkbox styling */
@@ -922,14 +902,6 @@
 
 .skeleton-cell-long {
   width: 180px;
-}
-
-/* ========================================
-   Enhanced Selection Indicator
-   ======================================== */
-
-::ng-deep .ag-theme-alpine .ag-row-selected {
-  box-shadow: inset var(--grid-selection-indicator-width, 3px) 0 0 0 var(--grid-selection-indicator-color, #f9a825);
 }
 
 /* Selection checkbox column header */

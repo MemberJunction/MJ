@@ -1133,8 +1133,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   /** AG Grid API reference */
   private gridApi: GridApi | null = null;
 
-  /** AG Grid theme (v34+) */
-  public agGridTheme = themeAlpine;
+  /** AG Grid theme (v34+) with custom selection colors */
+  public agGridTheme = themeAlpine.withParams({
+    selectedRowBackgroundColor: '#fff3cd',  // More visible mellow yellow selection
+    rowHoverColor: '#f5f5f5'
+  });
 
   /** AG Grid row selection configuration */
   public agRowSelection: RowSelectionOptions = { mode: 'singleRow' };

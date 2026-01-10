@@ -142,8 +142,14 @@ export interface GridColumnConfig {
   /** Custom tooltip content */
   tooltip?: string | ((row: BaseEntity, column: GridColumnConfig) => string);
 
-  /** Frozen column position */
+  /** Frozen column position (alias for pinned, for backward compatibility) */
   frozen?: 'left' | 'right' | false;
+
+  /** Column pinning position (AG Grid terminology) */
+  pinned?: 'left' | 'right' | null;
+
+  /** Flex grow factor for auto-sizing columns */
+  flex?: number;
 
   /** Column group (for grouped headers) */
   group?: string;
@@ -335,7 +341,8 @@ export interface PendingChange {
 }
 
 /**
- * Complete grid state for persistence
+ * Complete grid state for persistence (internal to EntityDataGrid)
+ * Note: For UserView persistence, use ViewGridState from @memberjunction/core-entities
  */
 export interface GridState {
   /** Column states */
@@ -344,6 +351,14 @@ export interface GridState {
     width: number;
     visible: boolean;
     order: number;
+    /** Column pinning position */
+    pinned?: 'left' | 'right' | null;
+    /** Flex grow factor for auto-sizing */
+    flex?: number;
+    /** Minimum column width */
+    minWidth?: number;
+    /** Maximum column width */
+    maxWidth?: number;
   }>;
   /** Sort state */
   sort: DataGridSortState[];

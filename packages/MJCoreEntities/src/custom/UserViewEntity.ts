@@ -765,14 +765,39 @@ export class ViewInfo {
     }
 }
 
+/**
+ * Column pinning position for AG Grid
+ */
+export type ViewColumnPinned = 'left' | 'right' | null;
+
+/**
+ * Column information for a saved view, including AG Grid-specific properties
+ */
 export class ViewColumnInfo extends BaseInfo {
+    /** Entity field ID */
     ID: string = null
+    /** Field name */
     Name: string = null
+    /** Display name for column header */
     DisplayName: string = null
+    /** Whether column is hidden */
     hidden: boolean = null
+    /** Column width in pixels */
     width?: number = null
+    /** Column order index */
     orderIndex?: number = null
 
+    // AG Grid-specific properties
+    /** Column pinning position ('left', 'right', or null for not pinned) */
+    pinned?: ViewColumnPinned = null
+    /** Flex grow factor (for auto-sizing columns) */
+    flex?: number = null
+    /** Minimum column width */
+    minWidth?: number = null
+    /** Maximum column width */
+    maxWidth?: number = null
+
+    /** Reference to the entity field metadata (not persisted) */
     EntityField: EntityFieldInfo = null
 
     constructor (initData: any = null) {
@@ -831,10 +856,54 @@ export class ViewSortInfo extends BaseInfo {
 }
 
 
+/**
+ * Sort setting for a single column
+ */
+export interface ViewGridSortSetting {
+    /** Field name to sort by */
+    field: string;
+    /** Sort direction */
+    dir: 'asc' | 'desc';
+}
+
+/**
+ * Column setting as persisted in GridState JSON
+ * This is the serializable form of ViewColumnInfo (without EntityField reference)
+ */
+export interface ViewGridColumnSetting {
+    /** Entity field ID */
+    ID?: string;
+    /** Field name */
+    Name: string;
+    /** Display name for column header */
+    DisplayName?: string;
+    /** Whether column is hidden */
+    hidden?: boolean;
+    /** Column width in pixels */
+    width?: number;
+    /** Column order index */
+    orderIndex?: number;
+    /** Column pinning position */
+    pinned?: ViewColumnPinned;
+    /** Flex grow factor */
+    flex?: number;
+    /** Minimum column width */
+    minWidth?: number;
+    /** Maximum column width */
+    maxWidth?: number;
+}
+
+/**
+ * Grid state persisted in UserView.GridState column
+ * Contains column configuration, sort settings, and optional filter state
+ */
 export class ViewGridState {
-    sortSettings?: any;
-    columnSettings?: any;
-    filter?: any;
+    /** Sort settings - array of field/direction pairs */
+    sortSettings?: ViewGridSortSetting[];
+    /** Column settings - visibility, width, order, pinning, etc. */
+    columnSettings?: ViewGridColumnSetting[];
+    /** Filter state (Kendo-compatible format) */
+    filter?: ViewFilterInfo;
 }
 
 /**
