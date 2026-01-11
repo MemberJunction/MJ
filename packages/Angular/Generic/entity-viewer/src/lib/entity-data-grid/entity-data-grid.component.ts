@@ -163,7 +163,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   set Params(value: RunViewParams | null) {
     const previousValue = this._params;
     this._params = value;
-    if (value !== previousValue) {
+    // Use deep comparison to avoid triggering changes when the same params are passed
+    // as a new object reference (common with template bindings like BuildRelationshipViewParamsByEntityName)
+    if (!RunViewParams.Equals(value, previousValue)) {
       this.onParamsChanged();
     }
   }
@@ -271,7 +273,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Parent component is responsible for data loading and passing results here.
    */
   @Input()
-  set data(value: BaseEntity[]) {
+  set Data(value: BaseEntity[]) {
     const hadData = this._data.length > 0;
     this._data = value || [];
     this._useExternalData = this._data.length > 0;
@@ -287,7 +289,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
     }
   }
-  get data(): BaseEntity[] {
+  get Data(): BaseEntity[] {
     return this._data;
   }
 
@@ -300,14 +302,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Column definitions - if not provided, auto-generates from entity metadata
    */
   @Input()
-  set columns(value: GridColumnConfig[]) {
+  set Columns(value: GridColumnConfig[]) {
     this._columns = value || [];
     if (this._columns.length > 0) {
       this.initializeColumnStates();
       this.buildAgColumnDefs();
     }
   }
-  get columns(): GridColumnConfig[] {
+  get Columns(): GridColumnConfig[] {
     return this._columns;
   }
 
@@ -317,7 +319,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * When provided, this takes precedence over auto-generated columns
    */
   @Input()
-  set gridState(value: ViewGridStateConfig | null) {
+  set GridState(value: ViewGridStateConfig | null) {
     if (!!value) {
       const previousValue = this._gridState;
       this._gridState = value;
@@ -326,43 +328,43 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
     }
   }
-  get gridState(): ViewGridStateConfig | null {
+  get GridState(): ViewGridStateConfig | null {
     return this._gridState;
   }
 
   private _allowColumnReorder: boolean = true;
   @Input()
-  set allowColumnReorder(value: boolean) {
+  set AllowColumnReorder(value: boolean) {
     this._allowColumnReorder = value;
   }
-  get allowColumnReorder(): boolean {
+  get AllowColumnReorder(): boolean {
     return this._allowColumnReorder;
   }
 
   private _allowColumnResize: boolean = true;
   @Input()
-  set allowColumnResize(value: boolean) {
+  set AllowColumnResize(value: boolean) {
     this._allowColumnResize = value;
   }
-  get allowColumnResize(): boolean {
+  get AllowColumnResize(): boolean {
     return this._allowColumnResize;
   }
 
   private _allowColumnToggle: boolean = true;
   @Input()
-  set allowColumnToggle(value: boolean) {
+  set AllowColumnToggle(value: boolean) {
     this._allowColumnToggle = value;
   }
-  get allowColumnToggle(): boolean {
+  get AllowColumnToggle(): boolean {
     return this._allowColumnToggle;
   }
 
   private _showHeader: boolean = true;
   @Input()
-  set showHeader(value: boolean) {
+  set ShowHeader(value: boolean) {
     this._showHeader = value;
   }
-  get showHeader(): boolean {
+  get ShowHeader(): boolean {
     return this._showHeader;
   }
 
@@ -372,19 +374,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private _allowSorting: boolean = true;
   @Input()
-  set allowSorting(value: boolean) {
+  set AllowSorting(value: boolean) {
     this._allowSorting = value;
   }
-  get allowSorting(): boolean {
+  get AllowSorting(): boolean {
     return this._allowSorting;
   }
 
   private _allowMultiSort: boolean = true;
   @Input()
-  set allowMultiSort(value: boolean) {
+  set AllowMultiSort(value: boolean) {
     this._allowMultiSort = value;
   }
-  get allowMultiSort(): boolean {
+  get AllowMultiSort(): boolean {
     return this._allowMultiSort;
   }
 
@@ -394,28 +396,28 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * When true, sort changes trigger a new data load
    */
   @Input()
-  set serverSideSorting(value: boolean) {
+  set ServerSideSorting(value: boolean) {
     this._serverSideSorting = value;
   }
-  get serverSideSorting(): boolean {
+  get ServerSideSorting(): boolean {
     return this._serverSideSorting;
   }
 
   private _allowColumnFilters: boolean = false;
   @Input()
-  set allowColumnFilters(value: boolean) {
+  set AllowColumnFilters(value: boolean) {
     this._allowColumnFilters = value;
   }
-  get allowColumnFilters(): boolean {
+  get AllowColumnFilters(): boolean {
     return this._allowColumnFilters;
   }
 
   private _showSearch: boolean = true;
   @Input()
-  set showSearch(value: boolean) {
+  set ShowSearch(value: boolean) {
     this._showSearch = value;
   }
-  get showSearch(): boolean {
+  get ShowSearch(): boolean {
     return this._showSearch;
   }
 
@@ -425,33 +427,33 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private _selectionMode: GridSelectionMode = 'single';
   @Input()
-  set selectionMode(value: GridSelectionMode) {
+  set SelectionMode(value: GridSelectionMode) {
     this._selectionMode = value;
     this.updateAgRowSelection();
     if (value === 'none') {
       this.ClearSelection();
     }
   }
-  get selectionMode(): GridSelectionMode {
+  get SelectionMode(): GridSelectionMode {
     return this._selectionMode;
   }
 
   private _selectedKeys: string[] = [];
   @Input()
-  set selectedKeys(value: string[]) {
+  set SelectedKeys(value: string[]) {
     this._selectedKeys = value || [];
     this.updateRowSelectionState();
   }
-  get selectedKeys(): string[] {
+  get SelectedKeys(): string[] {
     return this._selectedKeys;
   }
 
   private _keyField: string = 'ID';
   @Input()
-  set keyField(value: string) {
+  set KeyField(value: string) {
     this._keyField = value || 'ID';
   }
-  get keyField(): string {
+  get KeyField(): string {
     return this._keyField;
   }
 
@@ -461,28 +463,28 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private _editMode: GridEditMode = 'none';
   @Input()
-  set editMode(value: GridEditMode) {
+  set EditMode(value: GridEditMode) {
     this._editMode = value;
   }
-  get editMode(): GridEditMode {
+  get EditMode(): GridEditMode {
     return this._editMode;
   }
 
   private _allowAdd: boolean = false;
   @Input()
-  set allowAdd(value: boolean) {
+  set AllowAdd(value: boolean) {
     this._allowAdd = value;
   }
-  get allowAdd(): boolean {
+  get AllowAdd(): boolean {
     return this._allowAdd;
   }
 
   private _allowDelete: boolean = false;
   @Input()
-  set allowDelete(value: boolean) {
+  set AllowDelete(value: boolean) {
     this._allowDelete = value;
   }
-  get allowDelete(): boolean {
+  get AllowDelete(): boolean {
     return this._allowDelete;
   }
 
@@ -492,56 +494,56 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private _height: number | 'auto' | 'fit-content' = 'auto';
   @Input()
-  set height(value: number | 'auto' | 'fit-content') {
+  set Height(value: number | 'auto' | 'fit-content') {
     this._height = value;
   }
-  get height(): number | 'auto' | 'fit-content' {
+  get Height(): number | 'auto' | 'fit-content' {
     return this._height;
   }
 
   private _rowHeight: number = 40;
   @Input()
-  set rowHeight(value: number) {
+  set RowHeight(value: number) {
     this._rowHeight = value;
   }
-  get rowHeight(): number {
+  get RowHeight(): number {
     return this._rowHeight;
   }
 
   private _virtualScroll: boolean = true;
   @Input()
-  set virtualScroll(value: boolean) {
+  set VirtualScroll(value: boolean) {
     this._virtualScroll = value;
   }
-  get virtualScroll(): boolean {
+  get VirtualScroll(): boolean {
     return this._virtualScroll;
   }
 
   private _showRowNumbers: boolean = false;
   @Input()
-  set showRowNumbers(value: boolean) {
+  set ShowRowNumbers(value: boolean) {
     this._showRowNumbers = value;
     this.buildAgColumnDefs();
   }
-  get showRowNumbers(): boolean {
+  get ShowRowNumbers(): boolean {
     return this._showRowNumbers;
   }
 
   private _striped: boolean = true;
   @Input()
-  set striped(value: boolean) {
+  set Striped(value: boolean) {
     this._striped = value;
   }
-  get striped(): boolean {
+  get Striped(): boolean {
     return this._striped;
   }
 
   private _gridLines: GridLinesMode = 'horizontal';
   @Input()
-  set gridLines(value: GridLinesMode) {
+  set GridLines(value: GridLinesMode) {
     this._gridLines = value;
   }
-  get gridLines(): GridLinesMode {
+  get GridLines(): GridLinesMode {
     return this._gridLines;
   }
 
@@ -556,11 +558,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * All properties are optional - unset properties use attractive defaults.
    */
   @Input()
-  set visualConfig(value: GridVisualConfig) {
+  set VisualConfig(value: GridVisualConfig) {
     this._visualConfig = value || {};
     this.applyVisualConfig();
   }
-  get visualConfig(): GridVisualConfig {
+  get VisualConfig(): GridVisualConfig {
     return this._visualConfig;
   }
 
@@ -577,19 +579,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private _showToolbar: boolean = true;
   @Input()
-  set showToolbar(value: boolean) {
+  set ShowToolbar(value: boolean) {
     this._showToolbar = value;
   }
-  get showToolbar(): boolean {
+  get ShowToolbar(): boolean {
     return this._showToolbar;
   }
 
   private _toolbarConfig: GridToolbarConfig = {};
   @Input()
-  set toolbarConfig(value: GridToolbarConfig) {
+  set ToolbarConfig(value: GridToolbarConfig) {
     this._toolbarConfig = value || {};
   }
-  get toolbarConfig(): GridToolbarConfig {
+  get ToolbarConfig(): GridToolbarConfig {
     return this._toolbarConfig;
   }
 
@@ -599,13 +601,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private _stateKey: string = '';
   @Input()
-  set stateKey(value: string) {
+  set StateKey(value: string) {
     this._stateKey = value || '';
     if (this._stateKey) {
       this.loadPersistedState();
     }
   }
-  get stateKey(): string {
+  get StateKey(): string {
     return this._stateKey;
   }
 
@@ -641,10 +643,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private _refreshDebounce: number = 300;
   @Input()
-  set refreshDebounce(value: number) {
+  set RefreshDebounce(value: number) {
     this._refreshDebounce = value;
   }
-  get refreshDebounce(): number {
+  get RefreshDebounce(): number {
     return this._refreshDebounce;
   }
 
@@ -658,14 +660,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Supports SQL-style % wildcards for pattern matching.
    */
   @Input()
-  set filterText(value: string) {
+  set FilterText(value: string) {
     const previousValue = this._filterText;
     this._filterText = value || '';
     if (value !== previousValue) {
       this.onFilterTextChanged();
     }
   }
-  get filterText(): string {
+  get FilterText(): string {
     return this._filterText;
   }
 
@@ -678,10 +680,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "New" button in toolbar (creates new record)
    */
   @Input()
-  set showNewButton(value: boolean) {
+  set ShowNewButton(value: boolean) {
     this._showNewButton = value;
   }
-  get showNewButton(): boolean {
+  get ShowNewButton(): boolean {
     return this._showNewButton;
   }
 
@@ -690,10 +692,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "Refresh" button in toolbar
    */
   @Input()
-  set showRefreshButton(value: boolean) {
+  set ShowRefreshButton(value: boolean) {
     this._showRefreshButton = value;
   }
-  get showRefreshButton(): boolean {
+  get ShowRefreshButton(): boolean {
     return this._showRefreshButton;
   }
 
@@ -702,10 +704,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "Export to Excel" button in toolbar
    */
   @Input()
-  set showExportButton(value: boolean) {
+  set ShowExportButton(value: boolean) {
     this._showExportButton = value;
   }
-  get showExportButton(): boolean {
+  get ShowExportButton(): boolean {
     return this._showExportButton;
   }
 
@@ -714,10 +716,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "Delete" button in toolbar (deletes selected rows)
    */
   @Input()
-  set showDeleteButton(value: boolean) {
+  set ShowDeleteButton(value: boolean) {
     this._showDeleteButton = value;
   }
-  get showDeleteButton(): boolean {
+  get ShowDeleteButton(): boolean {
     return this._showDeleteButton;
   }
 
@@ -726,10 +728,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "Compare" button in toolbar (compare selected records)
    */
   @Input()
-  set showCompareButton(value: boolean) {
+  set ShowCompareButton(value: boolean) {
     this._showCompareButton = value;
   }
-  get showCompareButton(): boolean {
+  get ShowCompareButton(): boolean {
     return this._showCompareButton;
   }
 
@@ -738,10 +740,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "Merge" button in toolbar (merge selected records)
    */
   @Input()
-  set showMergeButton(value: boolean) {
+  set ShowMergeButton(value: boolean) {
     this._showMergeButton = value;
   }
-  get showMergeButton(): boolean {
+  get ShowMergeButton(): boolean {
     return this._showMergeButton;
   }
 
@@ -750,10 +752,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "Add to List" button in toolbar
    */
   @Input()
-  set showAddToListButton(value: boolean) {
+  set ShowAddToListButton(value: boolean) {
     this._showAddToListButton = value;
   }
-  get showAddToListButton(): boolean {
+  get ShowAddToListButton(): boolean {
     return this._showAddToListButton;
   }
 
@@ -762,10 +764,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "Search for Duplicates" button in toolbar
    */
   @Input()
-  set showDuplicateSearchButton(value: boolean) {
+  set ShowDuplicateSearchButton(value: boolean) {
     this._showDuplicateSearchButton = value;
   }
-  get showDuplicateSearchButton(): boolean {
+  get ShowDuplicateSearchButton(): boolean {
     return this._showDuplicateSearchButton;
   }
 
@@ -774,10 +776,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Show the "Send Message" button in toolbar (if entity supports communication)
    */
   @Input()
-  set showCommunicationButton(value: boolean) {
+  set ShowCommunicationButton(value: boolean) {
     this._showCommunicationButton = value;
   }
-  get showCommunicationButton(): boolean {
+  get ShowCommunicationButton(): boolean {
     return this._showCommunicationButton;
   }
 
@@ -853,7 +855,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   set ShowEntityActionButtons(value: boolean) {
     this._showEntityActionButtons = value;
     if (value && this._entityInfo) {
-      this.loadEntityActionsRequested.emit({ entityInfo: this._entityInfo });
+      this.LoadEntityActionsRequested.emit({ entityInfo: this._entityInfo });
     }
   }
   get ShowEntityActionButtons(): boolean {
@@ -878,73 +880,73 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   // ========================================
 
   // Row Selection
-  @Output() beforeRowSelect = new EventEmitter<BeforeRowSelectEventArgs>();
-  @Output() afterRowSelect = new EventEmitter<AfterRowSelectEventArgs>();
-  @Output() beforeRowDeselect = new EventEmitter<BeforeRowDeselectEventArgs>();
-  @Output() afterRowDeselect = new EventEmitter<AfterRowDeselectEventArgs>();
-  @Output() selectionChange = new EventEmitter<string[]>();
+  @Output() BeforeRowSelect = new EventEmitter<BeforeRowSelectEventArgs>();
+  @Output() AfterRowSelect = new EventEmitter<AfterRowSelectEventArgs>();
+  @Output() BeforeRowDeselect = new EventEmitter<BeforeRowDeselectEventArgs>();
+  @Output() AfterRowDeselect = new EventEmitter<AfterRowDeselectEventArgs>();
+  @Output() SelectionChange = new EventEmitter<string[]>();
 
   // Row Click
-  @Output() beforeRowClick = new EventEmitter<BeforeRowClickEventArgs>();
-  @Output() afterRowClick = new EventEmitter<AfterRowClickEventArgs>();
-  @Output() beforeRowDoubleClick = new EventEmitter<BeforeRowDoubleClickEventArgs>();
-  @Output() afterRowDoubleClick = new EventEmitter<AfterRowDoubleClickEventArgs>();
+  @Output() BeforeRowClick = new EventEmitter<BeforeRowClickEventArgs>();
+  @Output() AfterRowClick = new EventEmitter<AfterRowClickEventArgs>();
+  @Output() BeforeRowDoubleClick = new EventEmitter<BeforeRowDoubleClickEventArgs>();
+  @Output() AfterRowDoubleClick = new EventEmitter<AfterRowDoubleClickEventArgs>();
 
   // Editing
-  @Output() beforeCellEdit = new EventEmitter<BeforeCellEditEventArgs>();
-  @Output() afterCellEditBegin = new EventEmitter<AfterCellEditBeginEventArgs>();
-  @Output() beforeCellEditCommit = new EventEmitter<BeforeCellEditCommitEventArgs>();
-  @Output() afterCellEditCommit = new EventEmitter<AfterCellEditCommitEventArgs>();
-  @Output() beforeCellEditCancel = new EventEmitter<BeforeCellEditCancelEventArgs>();
-  @Output() afterCellEditCancel = new EventEmitter<AfterCellEditCancelEventArgs>();
-  @Output() beforeRowSave = new EventEmitter<BeforeRowSaveEventArgs>();
-  @Output() afterRowSave = new EventEmitter<AfterRowSaveEventArgs>();
-  @Output() beforeRowDelete = new EventEmitter<BeforeRowDeleteEventArgs>();
-  @Output() afterRowDelete = new EventEmitter<AfterRowDeleteEventArgs>();
+  @Output() BeforeCellEdit = new EventEmitter<BeforeCellEditEventArgs>();
+  @Output() AfterCellEditBegin = new EventEmitter<AfterCellEditBeginEventArgs>();
+  @Output() BeforeCellEditCommit = new EventEmitter<BeforeCellEditCommitEventArgs>();
+  @Output() AfterCellEditCommit = new EventEmitter<AfterCellEditCommitEventArgs>();
+  @Output() BeforeCellEditCancel = new EventEmitter<BeforeCellEditCancelEventArgs>();
+  @Output() AfterCellEditCancel = new EventEmitter<AfterCellEditCancelEventArgs>();
+  @Output() BeforeRowSave = new EventEmitter<BeforeRowSaveEventArgs>();
+  @Output() AfterRowSave = new EventEmitter<AfterRowSaveEventArgs>();
+  @Output() BeforeRowDelete = new EventEmitter<BeforeRowDeleteEventArgs>();
+  @Output() AfterRowDelete = new EventEmitter<AfterRowDeleteEventArgs>();
 
   // Data Loading
-  @Output() beforeDataLoad = new EventEmitter<BeforeDataLoadEventArgs>();
-  @Output() afterDataLoad = new EventEmitter<AfterDataLoadEventArgs>();
-  @Output() beforeDataRefresh = new EventEmitter<BeforeDataRefreshEventArgs>();
-  @Output() afterDataRefresh = new EventEmitter<AfterDataRefreshEventArgs>();
+  @Output() BeforeDataLoad = new EventEmitter<BeforeDataLoadEventArgs>();
+  @Output() AfterDataLoad = new EventEmitter<AfterDataLoadEventArgs>();
+  @Output() BeforeDataRefresh = new EventEmitter<BeforeDataRefreshEventArgs>();
+  @Output() AfterDataRefresh = new EventEmitter<AfterDataRefreshEventArgs>();
 
   // Sorting
-  @Output() beforeSort = new EventEmitter<BeforeSortEventArgs>();
-  @Output() afterSort = new EventEmitter<AfterSortEventArgs>();
+  @Output() BeforeSort = new EventEmitter<BeforeSortEventArgs>();
+  @Output() AfterSort = new EventEmitter<AfterSortEventArgs>();
 
   // Column Management
-  @Output() beforeColumnReorder = new EventEmitter<BeforeColumnReorderEventArgs>();
-  @Output() afterColumnReorder = new EventEmitter<AfterColumnReorderEventArgs>();
-  @Output() beforeColumnResize = new EventEmitter<BeforeColumnResizeEventArgs>();
-  @Output() afterColumnResize = new EventEmitter<AfterColumnResizeEventArgs>();
-  @Output() beforeColumnVisibilityChange = new EventEmitter<BeforeColumnVisibilityChangeEventArgs>();
-  @Output() afterColumnVisibilityChange = new EventEmitter<AfterColumnVisibilityChangeEventArgs>();
+  @Output() BeforeColumnReorder = new EventEmitter<BeforeColumnReorderEventArgs>();
+  @Output() AfterColumnReorder = new EventEmitter<AfterColumnReorderEventArgs>();
+  @Output() BeforeColumnResize = new EventEmitter<BeforeColumnResizeEventArgs>();
+  @Output() AfterColumnResize = new EventEmitter<AfterColumnResizeEventArgs>();
+  @Output() BeforeColumnVisibilityChange = new EventEmitter<BeforeColumnVisibilityChangeEventArgs>();
+  @Output() AfterColumnVisibilityChange = new EventEmitter<AfterColumnVisibilityChangeEventArgs>();
 
   // Grid State
-  @Output() gridStateChanged = new EventEmitter<GridStateChangedEvent>();
+  @Output() GridStateChanged = new EventEmitter<GridStateChangedEvent>();
 
   // Toolbar Actions (legacy names)
-  @Output() addRequested = new EventEmitter<void>();
-  @Output() deleteRequested = new EventEmitter<BaseEntity[]>();
-  @Output() exportRequested = new EventEmitter<void>();
+  @Output() AddRequested = new EventEmitter<void>();
+  @Output() DeleteRequested = new EventEmitter<BaseEntity[]>();
+  @Output() ExportRequested = new EventEmitter<void>();
 
   // Predefined Toolbar Button Events
-  @Output() newButtonClick = new EventEmitter<void>();
-  @Output() refreshButtonClick = new EventEmitter<void>();
-  @Output() exportButtonClick = new EventEmitter<void>();
-  @Output() deleteButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() compareButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() mergeButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() addToListButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() duplicateSearchButtonClick = new EventEmitter<BaseEntity[]>();
-  @Output() communicationButtonClick = new EventEmitter<BaseEntity[]>();
+  @Output() NewButtonClick = new EventEmitter<void>();
+  @Output() RefreshButtonClick = new EventEmitter<void>();
+  @Output() ExportButtonClick = new EventEmitter<void>();
+  @Output() DeleteButtonClick = new EventEmitter<BaseEntity[]>();
+  @Output() CompareButtonClick = new EventEmitter<BaseEntity[]>();
+  @Output() MergeButtonClick = new EventEmitter<BaseEntity[]>();
+  @Output() AddToListButtonClick = new EventEmitter<BaseEntity[]>();
+  @Output() DuplicateSearchButtonClick = new EventEmitter<BaseEntity[]>();
+  @Output() CommunicationButtonClick = new EventEmitter<BaseEntity[]>();
 
   // Navigation Events
   /**
    * Emitted when a row is clicked/double-clicked and AutoNavigate is enabled.
    * Parent components should handle this to open the entity record.
    */
-  @Output() navigationRequested = new EventEmitter<{
+  @Output() NavigationRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     record: BaseEntity;
     compositeKey: string;
@@ -954,7 +956,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when the "New" button is clicked and CreateRecordMode is 'Dialog'.
    * Parent components should handle this to show a new record dialog.
    */
-  @Output() newRecordDialogRequested = new EventEmitter<{
+  @Output() NewRecordDialogRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     defaultValues: Record<string, unknown>;
   }>();
@@ -963,7 +965,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when the "New" button is clicked and CreateRecordMode is 'Tab'.
    * Parent components should handle this to open a new record in a tab.
    */
-  @Output() newRecordTabRequested = new EventEmitter<{
+  @Output() NewRecordTabRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     defaultValues: Record<string, unknown>;
   }>();
@@ -973,7 +975,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when Compare Records functionality is requested.
    * Parent components should handle this to show the compare dialog.
    */
-  @Output() compareRecordsRequested = new EventEmitter<{
+  @Output() CompareRecordsRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     records: BaseEntity[];
   }>();
@@ -982,7 +984,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when Merge Records functionality is requested.
    * Parent components should handle this to show the merge dialog.
    */
-  @Output() mergeRecordsRequested = new EventEmitter<{
+  @Output() MergeRecordsRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     records: BaseEntity[];
   }>();
@@ -991,7 +993,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when Communication/Send Message functionality is requested.
    * Parent components should handle this to show the communication dialog.
    */
-  @Output() communicationRequested = new EventEmitter<{
+  @Output() CommunicationRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     records: BaseEntity[];
     viewParams: RunViewParams | null;
@@ -1001,7 +1003,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when duplicate search functionality is requested.
    * Parent components should handle this to show the duplicate search results.
    */
-  @Output() duplicateSearchRequested = new EventEmitter<{
+  @Output() DuplicateSearchRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     records: BaseEntity[];
   }>();
@@ -1010,7 +1012,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when the Add to List button is clicked.
    * Parent components should handle this to show the list management dialog.
    */
-  @Output() addToListRequested = new EventEmitter<{
+  @Output() AddToListRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     records: BaseEntity[];
     recordIds: string[];
@@ -1021,7 +1023,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when entity actions need to be loaded.
    * Parent components should load actions and set the EntityActions input.
    */
-  @Output() loadEntityActionsRequested = new EventEmitter<{
+  @Output() LoadEntityActionsRequested = new EventEmitter<{
     entityInfo: EntityInfo;
   }>();
 
@@ -1029,7 +1031,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Emitted when an entity action is selected for execution.
    * Parent components should handle the action execution.
    */
-  @Output() entityActionRequested = new EventEmitter<{
+  @Output() EntityActionRequested = new EventEmitter<{
     entityInfo: EntityInfo;
     action: EntityActionConfig;
     selectedRecords: BaseEntity[];
@@ -1141,6 +1143,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   loading: boolean = false;
   errorMessage: string = '';
   totalRowCount: number = 0;
+  private _loadDataPromise: Promise<void> | null = null;
 
   // Cleanup
   private destroy$ = new Subject<void>();
@@ -2152,9 +2155,30 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // If a load is already in progress, return the existing promise
+    // This prevents redundant API calls when loadData is called multiple times
+    if (this._loadDataPromise) {
+      return this._loadDataPromise;
+    }
+
+    // Wrap the actual loading logic in a promise we can track
+    this._loadDataPromise = this.executeLoadData(isAutoRefresh);
+
+    try {
+      await this._loadDataPromise;
+    } finally {
+      this._loadDataPromise = null;
+    }
+  }
+
+  /**
+   * Internal method that performs the actual data loading.
+   * Called by loadData() which handles promise deduplication.
+   */
+  private async executeLoadData(isAutoRefresh: boolean): Promise<void> {
     // Client-side mode - load all data upfront
     const beforeRefreshEvent = new BeforeDataRefreshEventArgs(this, isAutoRefresh);
-    this.beforeDataRefresh.emit(beforeRefreshEvent);
+    this.BeforeDataRefresh.emit(beforeRefreshEvent);
     if (beforeRefreshEvent.cancel) {
       return;
     }
@@ -2173,7 +2197,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     };
 
     const beforeLoadEvent = new BeforeDataLoadEventArgs(this, gridParams);
-    this.beforeDataLoad.emit(beforeLoadEvent);
+    this.BeforeDataLoad.emit(beforeLoadEvent);
     if (beforeLoadEvent.cancel) {
       return;
     }
@@ -2234,7 +2258,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           this._allData.length,
           loadTimeMs
         );
-        this.afterDataLoad.emit(afterLoadEvent);
+        this.AfterDataLoad.emit(afterLoadEvent);
 
         const afterRefreshEvent = new AfterDataRefreshEventArgs(
           this,
@@ -2242,7 +2266,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           this.totalRowCount,
           loadTimeMs
         );
-        this.afterDataRefresh.emit(afterRefreshEvent);
+        this.AfterDataRefresh.emit(afterRefreshEvent);
       } else {
         this.errorMessage = result.ErrorMessage || 'Failed to load data';
 
@@ -2255,7 +2279,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           loadTimeMs,
           this.errorMessage
         );
-        this.afterDataLoad.emit(afterLoadEvent);
+        this.AfterDataLoad.emit(afterLoadEvent);
       }
     } catch (error) {
       const loadTimeMs = performance.now() - startTime;
@@ -2270,7 +2294,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         loadTimeMs,
         this.errorMessage
       );
-      this.afterDataLoad.emit(afterLoadEvent);
+      this.AfterDataLoad.emit(afterLoadEvent);
     } finally {
       this.loading = false;
       this.cdr.detectChanges();
@@ -2559,7 +2583,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       undefined,
       undefined
     );
-    this.beforeRowClick.emit(beforeEvent);
+    this.BeforeRowClick.emit(beforeEvent);
     if (beforeEvent.cancel) return;
 
     // Fire after click event
@@ -2572,7 +2596,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       undefined,
       undefined
     );
-    this.afterRowClick.emit(afterEvent);
+    this.AfterRowClick.emit(afterEvent);
 
     // Auto-navigate on single click (if enabled and not navigating on double-click only)
     if (this._autoNavigate && !this._navigateOnDoubleClick && this._editMode === 'none') {
@@ -2598,7 +2622,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       undefined,
       undefined
     );
-    this.beforeRowDoubleClick.emit(beforeEvent);
+    this.BeforeRowDoubleClick.emit(beforeEvent);
     if (beforeEvent.cancel) return;
 
     // Fire after double-click event
@@ -2611,7 +2635,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       undefined,
       undefined
     );
-    this.afterRowDoubleClick.emit(afterEvent);
+    this.AfterRowDoubleClick.emit(afterEvent);
 
     // Auto-navigate on double-click (if enabled)
     if (this._autoNavigate && this._navigateOnDoubleClick && this._editMode === 'none') {
@@ -2625,7 +2649,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private emitNavigationRequest(entity: BaseEntity, compositeKey: string): void {
     if (!this._entityInfo) return;
 
-    this.navigationRequested.emit({
+    this.NavigationRequested.emit({
       entityInfo: this._entityInfo,
       record: entity,
       compositeKey
@@ -2656,7 +2680,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           sortModel.length > 1,
           this._sortState
         );
-        this.beforeSort.emit(beforeEvent);
+        this.BeforeSort.emit(beforeEvent);
         if (beforeEvent.cancel) {
           // Revert to previous sort state
           this.applySortStateToGrid();
@@ -2674,7 +2698,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           sortModel[0].direction,
           this._sortState
         );
-        this.afterSort.emit(afterEvent);
+        this.AfterSort.emit(afterEvent);
       }
 
       // User changed sort - mark as dirty and emit grid state changed
@@ -2719,7 +2743,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           key,
           this._selectedKeys
         );
-        this.beforeRowDeselect.emit(beforeEvent);
+        this.BeforeRowDeselect.emit(beforeEvent);
         // Note: Can't cancel AG Grid's selection, but we emit the event
       }
     }
@@ -2736,7 +2760,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           addedKeys.length > 1,
           this._selectedKeys
         );
-        this.beforeRowSelect.emit(beforeEvent);
+        this.BeforeRowSelect.emit(beforeEvent);
         // Note: Can't cancel AG Grid's selection, but we emit the event
       }
     }
@@ -2756,7 +2780,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           this._selectedKeys,
           previousSelection
         );
-        this.afterRowDeselect.emit(afterEvent);
+        this.AfterRowDeselect.emit(afterEvent);
       }
     }
 
@@ -2772,11 +2796,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           this._selectedKeys,
           previousSelection
         );
-        this.afterRowSelect.emit(afterEvent);
+        this.AfterRowSelect.emit(afterEvent);
       }
     }
 
-    this.selectionChange.emit(this._selectedKeys);
+    this.SelectionChange.emit(this._selectedKeys);
   }
 
   onAgColumnResized(event: ColumnResizedEvent): void {
@@ -2811,7 +2835,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const currentState = this.buildCurrentGridState();
 
     // Emit the event for external consumers
-    this.gridStateChanged.emit({
+    this.GridStateChanged.emit({
       gridState: currentState,
       changeType
     });
@@ -3166,18 +3190,18 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   onAddClick(): void {
     // Emit legacy events for backward compatibility
-    this.addRequested.emit();
-    this.newButtonClick.emit();
+    this.AddRequested.emit();
+    this.NewButtonClick.emit();
 
     // Emit navigation events based on CreateRecordMode
     if (this._entityInfo) {
       if (this._createRecordMode === 'Dialog') {
-        this.newRecordDialogRequested.emit({
+        this.NewRecordDialogRequested.emit({
           entityInfo: this._entityInfo,
           defaultValues: this._newRecordValues
         });
       } else {
-        this.newRecordTabRequested.emit({
+        this.NewRecordTabRequested.emit({
           entityInfo: this._entityInfo,
           defaultValues: this._newRecordValues
         });
@@ -3188,14 +3212,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   onDeleteClick(): void {
     const selectedRows = this.GetSelectedRows();
     if (selectedRows.length > 0) {
-      this.deleteRequested.emit(selectedRows);
-      this.deleteButtonClick.emit(selectedRows);
+      this.DeleteRequested.emit(selectedRows);
+      this.DeleteButtonClick.emit(selectedRows);
     }
   }
 
   onExportClick(): void {
-    this.exportRequested.emit();
-    this.exportButtonClick.emit();
+    this.ExportRequested.emit();
+    this.ExportButtonClick.emit();
     // Show the export dialog
     this.showExportDialogForCurrentData();
   }
@@ -3357,7 +3381,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   onRefreshClick(): void {
-    this.refreshButtonClick.emit();
+    this.RefreshButtonClick.emit();
     this.Refresh();
   }
 
@@ -3365,11 +3389,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const selectedRows = this.GetSelectedRows();
     if (selectedRows.length >= 2) {
       // Emit legacy event for backward compatibility
-      this.compareButtonClick.emit(selectedRows);
+      this.CompareButtonClick.emit(selectedRows);
 
       // Emit new structured event for Explorer dialogs
       if (this._entityInfo) {
-        this.compareRecordsRequested.emit({
+        this.CompareRecordsRequested.emit({
           entityInfo: this._entityInfo,
           records: selectedRows
         });
@@ -3381,11 +3405,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const selectedRows = this.GetSelectedRows();
     if (selectedRows.length >= 2) {
       // Emit legacy event for backward compatibility
-      this.mergeButtonClick.emit(selectedRows);
+      this.MergeButtonClick.emit(selectedRows);
 
       // Emit new structured event for Explorer dialogs
       if (this._entityInfo) {
-        this.mergeRecordsRequested.emit({
+        this.MergeRecordsRequested.emit({
           entityInfo: this._entityInfo,
           records: selectedRows
         });
@@ -3397,14 +3421,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const selectedRows = this.GetSelectedRows();
     if (selectedRows.length > 0) {
       // Emit legacy event for backward compatibility
-      this.addToListButtonClick.emit(selectedRows);
+      this.AddToListButtonClick.emit(selectedRows);
 
       // Emit new structured event with record IDs for list management
       if (this._entityInfo) {
         const recordIds = selectedRows.map(r => {
           return r.PrimaryKey?.ToConcatenatedString() || String(r.Get(this._keyField));
         });
-        this.addToListRequested.emit({
+        this.AddToListRequested.emit({
           entityInfo: this._entityInfo,
           records: selectedRows,
           recordIds
@@ -3417,11 +3441,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const selectedRows = this.GetSelectedRows();
     if (selectedRows.length >= 2) {
       // Emit legacy event for backward compatibility
-      this.duplicateSearchButtonClick.emit(selectedRows);
+      this.DuplicateSearchButtonClick.emit(selectedRows);
 
       // Emit new structured event for Explorer dialogs
       if (this._entityInfo) {
-        this.duplicateSearchRequested.emit({
+        this.DuplicateSearchRequested.emit({
           entityInfo: this._entityInfo,
           records: selectedRows
         });
@@ -3433,11 +3457,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const selectedRows = this.GetSelectedRows();
     if (selectedRows.length > 0) {
       // Emit legacy event for backward compatibility
-      this.communicationButtonClick.emit(selectedRows);
+      this.CommunicationButtonClick.emit(selectedRows);
 
       // Emit new structured event for Explorer dialogs
       if (this._entityInfo) {
-        this.communicationRequested.emit({
+        this.CommunicationRequested.emit({
           entityInfo: this._entityInfo,
           records: selectedRows,
           viewParams: this._params
@@ -3456,7 +3480,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   onEntityActionClick(action: EntityActionConfig): void {
     if (!this._entityInfo) return;
 
-    this.entityActionRequested.emit({
+    this.EntityActionRequested.emit({
       entityInfo: this._entityInfo,
       action,
       selectedRecords: this.GetSelectedRows()
@@ -3516,11 +3540,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   get showExportInOverflow(): boolean {
     // Export is in overflow when it's not shown as a primary button
-    return !this.showExportButton && !!this.toolbarConfig.showExport;
+    return !this.ShowExportButton && !!this.ToolbarConfig.showExport;
   }
 
   get showColumnChooserInOverflow(): boolean {
-    return this.allowColumnToggle && !this.toolbarConfig.showColumnChooser;
+    return this.AllowColumnToggle && !this.ToolbarConfig.showColumnChooser;
   }
 
   get hasSelectionDependentOverflowActions(): boolean {
@@ -3529,7 +3553,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   get showCommunicationInOverflow(): boolean {
     // Communication is in overflow when it's not shown as a primary button
-    return !this.showCommunicationButton && this.HasSelection;
+    return !this.ShowCommunicationButton && this.HasSelection;
   }
 
   // ========================================

@@ -130,23 +130,23 @@
     <!-- Grid View - always rendered, visibility controlled by hidden -->
     <mj-entity-data-grid
       [hidden]="effectiveViewMode !== 'grid' || !entity"
-      [data]="filteredRecords"
+      [Data]="filteredRecords"
       [Params]="gridParams"
-      [filterText]="debouncedFilterText"
-      [gridState]="gridState"
-      [height]="'auto'"
-      [showToolbar]="showGridToolbar"
-      [toolbarConfig]="effectiveGridToolbarConfig"
-      [selectionMode]="gridSelectionMode"
+      [FilterText]="debouncedFilterText"
+      [GridState]="gridState"
+      [Height]="'auto'"
+      [ShowToolbar]="showGridToolbar"
+      [ToolbarConfig]="effectiveGridToolbarConfig"
+      [SelectionMode]="gridSelectionMode"
       [AllowLoad]="false"
-      (afterRowClick)="onDataGridRowClick($event)"
-      (afterRowDoubleClick)="onDataGridRowDoubleClick($event)"
-      (afterSort)="onDataGridSortChanged($event)"
-      (gridStateChanged)="onGridStateChanged($event)"
-      (newButtonClick)="onGridAddRequested()"
-      (refreshButtonClick)="onGridRefreshRequested()"
-      (deleteButtonClick)="onGridDeleteRequested($event)"
-      (exportButtonClick)="onGridExportRequested()">
+      (AfterRowClick)="onDataGridRowClick($event)"
+      (AfterRowDoubleClick)="onDataGridRowDoubleClick($event)"
+      (AfterSort)="onDataGridSortChanged($event)"
+      (GridStateChanged)="onGridStateChanged($event)"
+      (NewButtonClick)="onGridAddRequested()"
+      (RefreshButtonClick)="onGridRefreshRequested()"
+      (DeleteButtonClick)="onGridDeleteRequested($event)"
+      (ExportButtonClick)="onGridExportRequested()">
     </mj-entity-data-grid>
 
     <!-- Cards View - always rendered, visibility controlled by hidden -->

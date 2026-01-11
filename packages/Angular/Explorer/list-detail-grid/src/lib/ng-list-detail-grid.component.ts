@@ -9,9 +9,9 @@ import {
   ChangeDetectorRef,
   ViewChild
 } from '@angular/core';
-import { Router } from '@angular/router';
 import { Metadata, EntityInfo, CompositeKey, BaseEntity, RunViewParams } from '@memberjunction/core';
 import { ListEntity } from '@memberjunction/core-entities';
+import { SharedService } from '@memberjunction/ng-shared';
 import {
   AfterRowClickEventArgs,
   AfterRowDoubleClickEventArgs,
@@ -145,7 +145,7 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
   }
 
   constructor(
-    private router: Router,
+    private sharedService: SharedService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -262,12 +262,9 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
       record: event.row
     });
 
-    // Auto-navigate if enabled
+    // Auto-navigate if enabled - use SharedService for proper tab-based navigation
     if (this.autoNavigate) {
-      this.router.navigate(
-        ['resource', 'record', compositeKey.ToURLSegment()],
-        { queryParams: { Entity: this.entityInfo.Name } }
-      );
+      this.sharedService.OpenEntityRecord(this.entityInfo.Name, compositeKey);
     }
   }
 

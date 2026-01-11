@@ -91,7 +91,8 @@ export class FormToolbarComponent implements OnInit {
 
         try {
             const rv = new RunView();
-            const recordId = record.PrimaryKey.ToConcatenatedString();
+            // Use raw primary key value for list membership (matches List Details RecordID format)
+            const recordId = String(record.PrimaryKey.KeyValuePairs[0].Value);
             const entityId = record.EntityInfo.ID;
 
             // Get list details for this record
@@ -234,7 +235,8 @@ export class FormToolbarComponent implements OnInit {
         const record = this.form.record;
         if (!record) return;
 
-        const recordId = record.PrimaryKey.ToConcatenatedString();
+        // Use raw primary key value for list membership (matches List Details RecordID format)
+        const recordId = String(record.PrimaryKey.KeyValuePairs[0].Value);
         const recordName = this.getRecordDisplayName(record);
         const entityInfo = record.EntityInfo;
 

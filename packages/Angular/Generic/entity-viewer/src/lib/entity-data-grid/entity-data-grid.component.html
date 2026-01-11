@@ -5,27 +5,27 @@
   [style.height]="gridHeightStyle">
 
   <!-- Toolbar -->
-  <div *ngIf="showToolbar" class="mj-grid-toolbar">
+  <div *ngIf="ShowToolbar" class="mj-grid-toolbar">
     <div class="toolbar-left">
       <!-- Search -->
-      <div *ngIf="showSearch" class="toolbar-search">
+      <div *ngIf="ShowSearch" class="toolbar-search">
         <i class="fa-solid fa-search search-icon"></i>
         <input
           type="text"
           class="search-input"
-          [placeholder]="toolbarConfig.searchPlaceholder || 'Search...'"
-          [value]="filterText"
-          (input)="filterText = $any($event.target).value" />
+          [placeholder]="ToolbarConfig.searchPlaceholder || 'Search...'"
+          [value]="FilterText"
+          (input)="FilterText = $any($event.target).value" />
         <button
-          *ngIf="filterText"
+          *ngIf="FilterText"
           class="search-clear"
-          (click)="filterText = ''">
+          (click)="FilterText = ''">
           <i class="fa-solid fa-times"></i>
         </button>
       </div>
 
       <!-- Custom Left Buttons -->
-      <ng-container *ngFor="let button of toolbarConfig.customButtons">
+      <ng-container *ngFor="let button of ToolbarConfig.customButtons">
         <button
           *ngIf="button.position !== 'right' && isButtonVisible(button)"
           class="toolbar-button"
@@ -41,20 +41,20 @@
 
     <div class="toolbar-center">
       <!-- Row Count -->
-      <span *ngIf="toolbarConfig.showRowCount !== false" class="row-count">
+      <span *ngIf="ToolbarConfig.showRowCount !== false" class="row-count">
         {{ totalRowCount }} {{ totalRowCount === 1 ? 'row' : 'rows' }}
       </span>
 
       <!-- Selection Count -->
-      <span *ngIf="toolbarConfig.showSelectionCount && selectedKeys.length > 0" class="selection-count">
-        ({{ selectedKeys.length }} selected)
+      <span *ngIf="ToolbarConfig.showSelectionCount && SelectedKeys.length > 0" class="selection-count">
+        ({{ SelectedKeys.length }} selected)
       </span>
     </div>
 
     <div class="toolbar-right">
       <!-- New/Add Button (predefined) -->
       <button
-        *ngIf="showNewButton"
+        *ngIf="ShowNewButton"
         class="toolbar-button"
         title="Create new record"
         (click)="onAddClick()">
@@ -64,7 +64,7 @@
 
       <!-- Refresh Button (predefined) -->
       <button
-        *ngIf="showRefreshButton"
+        *ngIf="ShowRefreshButton"
         class="toolbar-button"
         title="Refresh data"
         [disabled]="loading"
@@ -75,7 +75,7 @@
 
       <!-- Export Button (predefined) -->
       <button
-        *ngIf="showExportButton"
+        *ngIf="ShowExportButton"
         class="toolbar-button"
         title="Export to Excel"
         (click)="onExportClick()">
@@ -85,7 +85,7 @@
 
       <!-- Delete Button (predefined) -->
       <button
-        *ngIf="showDeleteButton && HasSelection"
+        *ngIf="ShowDeleteButton && HasSelection"
         class="toolbar-button toolbar-button-danger"
         title="Delete selected records"
         (click)="onDeleteClick()">
@@ -95,7 +95,7 @@
 
       <!-- Compare Button (predefined) -->
       <button
-        *ngIf="showCompareButton"
+        *ngIf="ShowCompareButton"
         class="toolbar-button"
         title="Compare selected records"
         [disabled]="!HasMultipleSelection"
@@ -106,7 +106,7 @@
 
       <!-- Merge Button (predefined) -->
       <button
-        *ngIf="showMergeButton"
+        *ngIf="ShowMergeButton"
         class="toolbar-button"
         title="Merge selected records"
         [disabled]="!HasMultipleSelection"
@@ -117,7 +117,7 @@
 
       <!-- Add to List Button (predefined) -->
       <button
-        *ngIf="showAddToListButton"
+        *ngIf="ShowAddToListButton"
         class="toolbar-button"
         title="Add selected records to a list"
         [disabled]="!HasSelection"
@@ -128,7 +128,7 @@
 
       <!-- Search for Duplicates Button (predefined) -->
       <button
-        *ngIf="showDuplicateSearchButton"
+        *ngIf="ShowDuplicateSearchButton"
         class="toolbar-button"
         title="Search for duplicate records"
         [disabled]="!HasMultipleSelection"
@@ -139,7 +139,7 @@
 
       <!-- Communication Button (predefined) -->
       <button
-        *ngIf="showCommunicationButton"
+        *ngIf="ShowCommunicationButton"
         class="toolbar-button"
         title="Send message to selected records"
         [disabled]="!HasSelection"
@@ -148,10 +148,10 @@
         <span class="button-text">Send Message</span>
       </button>
 
-      <!-- Legacy toolbarConfig buttons -->
+      <!-- Legacy ToolbarConfig buttons -->
       <!-- Add Button (legacy) -->
       <button
-        *ngIf="toolbarConfig.showAdd && allowAdd && !showNewButton"
+        *ngIf="ToolbarConfig.showAdd && AllowAdd && !ShowNewButton"
         class="toolbar-button"
         title="Add New"
         (click)="onAddClick()">
@@ -160,7 +160,7 @@
 
       <!-- Refresh Button (legacy) -->
       <button
-        *ngIf="toolbarConfig.showRefresh !== false && !showRefreshButton"
+        *ngIf="ToolbarConfig.showRefresh !== false && !ShowRefreshButton"
         class="toolbar-button"
         title="Refresh"
         [disabled]="loading"
@@ -170,7 +170,7 @@
 
       <!-- Delete Button (legacy) -->
       <button
-        *ngIf="toolbarConfig.showDelete && allowDelete && HasSelection && !showDeleteButton"
+        *ngIf="ToolbarConfig.showDelete && AllowDelete && HasSelection && !ShowDeleteButton"
         class="toolbar-button toolbar-button-danger"
         title="Delete Selected"
         (click)="onDeleteClick()">
@@ -179,7 +179,7 @@
 
       <!-- Export Button (legacy) -->
       <button
-        *ngIf="toolbarConfig.showExport && !showExportButton"
+        *ngIf="ToolbarConfig.showExport && !ShowExportButton"
         class="toolbar-button"
         title="Export"
         (click)="onExportClick()">
@@ -188,7 +188,7 @@
 
       <!-- Column Chooser Button -->
       <button
-        *ngIf="toolbarConfig.showColumnChooser && allowColumnToggle"
+        *ngIf="ToolbarConfig.showColumnChooser && AllowColumnToggle"
         class="toolbar-button"
         title="Column Chooser"
         (click)="onColumnChooserClick()">
@@ -196,7 +196,7 @@
       </button>
 
       <!-- Custom Right Buttons -->
-      <ng-container *ngFor="let button of toolbarConfig.customButtons">
+      <ng-container *ngFor="let button of ToolbarConfig.customButtons">
         <button
           *ngIf="button.position === 'right' && isButtonVisible(button)"
           class="toolbar-button"
@@ -290,9 +290,9 @@
       [rowSelection]="agRowSelection"
       [getRowId]="getRowId"
       [suppressCellFocus]="true"
-      [rowHeight]="rowHeight"
-      [headerHeight]="showHeader ? undefined : 0"
-      [rowMultiSelectWithClick]="selectionMode === 'multiple'"
+      [rowHeight]="RowHeight"
+      [headerHeight]="ShowHeader ? undefined : 0"
+      [rowMultiSelectWithClick]="SelectionMode === 'multiple'"
       (gridReady)="onGridReady($event)"
       (rowClicked)="onAgRowClicked($event)"
       (rowDoubleClicked)="onAgRowDoubleClicked($event)"
@@ -312,9 +312,9 @@
       [rowSelection]="agRowSelection"
       [getRowId]="getRowId"
       [suppressCellFocus]="true"
-      [rowHeight]="rowHeight"
-      [headerHeight]="showHeader ? undefined : 0"
-      [rowMultiSelectWithClick]="selectionMode === 'multiple'"
+      [rowHeight]="RowHeight"
+      [headerHeight]="ShowHeader ? undefined : 0"
+      [rowMultiSelectWithClick]="SelectionMode === 'multiple'"
       [rowModelType]="'infinite'"
       [cacheBlockSize]="CacheBlockSize"
       [maxBlocksInCache]="MaxBlocksInCache"

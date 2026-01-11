@@ -2239,7 +2239,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       return;
     }
 
-    const recordId = this.selectedRecord.PrimaryKey.ToConcatenatedString();
+    // Use the raw primary key value (not concatenated string) for list membership
+    // This matches how records are stored in List Details and enables proper subquery filtering
+    const recordId = String(this.selectedRecord.PrimaryKey.KeyValuePairs[0].Value);
     const recordName = this.getRecordDisplayName(this.selectedRecord);
 
     this.listManagementConfig = {
