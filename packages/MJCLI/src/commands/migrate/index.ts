@@ -9,11 +9,17 @@ export default class Migrate extends Command {
   static examples = [
     `<%= config.bin %> <%= command.id %>
 `,
+    `<%= config.bin %> <%= command.id %> --schema __BCSaaS --dir ./migrations/v1
+`,
+    `<%= config.bin %> <%= command.id %> --schema __BCSaaS --tag v1.0.0
+`,
   ];
 
   static flags = {
     verbose: Flags.boolean({ char: 'v', description: 'Enable additional logging' }),
     tag: Flags.string({ char: 't', description: 'Version tag to use for running remote migrations' }),
+    schema: Flags.string({ char: 's', description: 'Target schema (overrides coreSchema from config)' }),
+    dir: Flags.string({ description: 'Migration source directory (overrides migrationsLocation from config)' }),
   };
 
   async run(): Promise<void> {
@@ -21,7 +27,7 @@ export default class Migrate extends Command {
 
     const config = getValidatedConfig();
 
-    const flywayConfig = await getFlywayConfig(config, flags.tag);
+    const flywayConfig = await getFlywayConfig(config, flags.tag, flags.schema, flags.dir);
     const flyway = new Flyway(flywayConfig);
 
     if (flags.verbose) {
@@ -29,6 +35,8 @@ export default class Migrate extends Command {
       this.log(`Database Connection: ${config.dbHost}, ${config.dbDatabase}, User: ${flywayConfig.user}`);
       this.log(`Migrating ${config.coreSchema} schema using migrations from:\n\t- ${flywayConfig.migrationLocations.join('\n\t- ')}\n`);
       this.log(`Flyway config settings: baselineVersion: ${config.baselineVersion}, baselineMigrate: ${config.baselineOnMigrate}\n`);
+      const targetSchema = flags.schema || config.coreSchema;
+      this.log(`Migrating ${targetSchema} schema using migrations from:\n\t- ${flywayConfig.migrationLocations.join('\n\t- ')}\n`);
     }
 
     if (flags.tag) {
