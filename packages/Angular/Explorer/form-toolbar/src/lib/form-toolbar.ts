@@ -91,8 +91,9 @@ export class FormToolbarComponent implements OnInit {
 
         try {
             const rv = new RunView();
-            // Use raw primary key value for list membership (matches List Details RecordID format)
-            const recordId = String(record.PrimaryKey.KeyValuePairs[0].Value);
+            // Use concatenated key format for list membership (matches List Details RecordID format)
+            // This properly handles both single and composite primary keys
+            const recordId = record.PrimaryKey.ToConcatenatedString();
             const entityId = record.EntityInfo.ID;
 
             // Get list details for this record
@@ -235,8 +236,9 @@ export class FormToolbarComponent implements OnInit {
         const record = this.form.record;
         if (!record) return;
 
-        // Use raw primary key value for list membership (matches List Details RecordID format)
-        const recordId = String(record.PrimaryKey.KeyValuePairs[0].Value);
+        // Use concatenated key format for list membership (matches List Details RecordID format)
+        // This properly handles both single and composite primary keys
+        const recordId = record.PrimaryKey.ToConcatenatedString();
         const recordName = this.getRecordDisplayName(record);
         const entityInfo = record.EntityInfo;
 
@@ -311,7 +313,9 @@ export class FormToolbarComponent implements OnInit {
         const listDetailEntity: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>("List Details", md.CurrentUser);
         listDetailEntity.NewRecord();
         listDetailEntity.ListID = list.ID;
-        listDetailEntity.RecordID = this.form.record.FirstPrimaryKey.Value;
+        // Use concatenated key format for list membership (matches List Details RecordID format)
+        // This properly handles both single and composite primary keys
+        listDetailEntity.RecordID = this.form.record.PrimaryKey.ToConcatenatedString();
 
         const saveResult: boolean = await listDetailEntity.Save();
         if(!saveResult){

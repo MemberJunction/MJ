@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { Metadata, RunView } from "@memberjunction/core";
+import { Metadata, RunView, CompositeKey, EntityInfo } from "@memberjunction/core";
 import { ListEntity, ListDetailEntity } from "@memberjunction/core-entities";
 
 /**
@@ -117,27 +117,29 @@ export class GetListRecordsAction extends BaseAction {
         const entityName = list.Entity; // This is the denormalized entity name
 
         if (entityName) {
-          const recordIds = details.map(d => d.RecordID);
-          const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
-
-          // Get the entity's primary key field
+          // Get the entity's primary key field(s)
           const md = new Metadata();
           const entityInfo = md.Entities.find(e => e.Name === entityName);
 
           if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
-            const pkField = entityInfo.PrimaryKeys[0].Name;
+            // Build appropriate filter for single vs composite keys
+            const extraFilter = this.buildRecordFilter(entityInfo, details);
+
             const recordsResult = await rv.RunView({
               EntityName: entityName,
-              ExtraFilter: `${pkField} IN (${recordIdFilter})`,
+              ExtraFilter: extraFilter,
               ResultType: 'entity_object'
             }, params.ContextUser);
 
             if (recordsResult.Success && recordsResult.Results) {
-              // Create a map for quick lookup
+              // Create a map for quick lookup using concatenated key format
               const recordMap = new Map<string, Record<string, unknown>>();
               for (const rec of recordsResult.Results) {
-                const pkValue = String(rec[pkField as keyof typeof rec]);
-                recordMap.set(pkValue, rec.GetAll ? rec.GetAll() : rec);
+                // Build the concatenated key for this record to match against RecordID
+                const compositeKey = new CompositeKey();
+                compositeKey.LoadFromEntityInfoAndRecord(entityInfo, rec);
+                const keyString = compositeKey.ToConcatenatedString();
+                recordMap.set(keyString, rec.GetAll ? rec.GetAll() : rec);
               }
 
               // Attach record details
@@ -208,6 +210,53 @@ export class GetListRecordsAction extends BaseAction {
       Type: 'Output',
       Value: value
     });
+  }
+
+  /**
+   * Build the SQL filter to select records that match the given list details.
+   * For single PK entities, uses a simple IN clause.
+   * For composite PK entities, uses an OR clause with concatenated key matching.
+   */
+  private buildRecordFilter(entityInfo: EntityInfo, details: ListDetailEntity[]): string {
+    const primaryKeys = entityInfo.PrimaryKeys;
+    const recordIds = details.map(d => d.RecordID);
+
+    if (primaryKeys.length === 1) {
+      // Simple case: single primary key
+      // For single PK, RecordID format is "FieldName|Value", so we need to extract just the value
+      const pkField = primaryKeys[0].Name;
+      const extractedValues = recordIds.map(rid => {
+        // Parse the concatenated format to extract just the value
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromConcatenatedString(rid);
+        const firstPair = compositeKey.KeyValuePairs[0];
+        return firstPair ? `'${String(firstPair.Value).replace(/'/g, "''")}'` : null;
+      }).filter(v => v !== null);
+
+      if (extractedValues.length === 0) {
+        return '1=0'; // No valid records
+      }
+      return `${pkField} IN (${extractedValues.join(',')})`;
+    } else {
+      // Composite key case: build concatenation expression and match against RecordID values
+      // Build SQL expression that concatenates the PK fields in the same format as RecordID
+      // Format: 'Field1|' + CAST(Value1 AS NVARCHAR(MAX)) + '||' + 'Field2|' + CAST(Value2 AS NVARCHAR(MAX))
+      const concatParts = primaryKeys.map((pk, index) => {
+        const fieldNameLiteral = `'${pk.Name}|'`;
+        const fieldValue = `CAST([${pk.Name}] AS NVARCHAR(MAX))`;
+        if (index === 0) {
+          return `${fieldNameLiteral} + ${fieldValue}`;
+        } else {
+          return `'||' + ${fieldNameLiteral} + ${fieldValue}`;
+        }
+      });
+      const compositeKeyExpr = concatParts.join(' + ');
+
+      // Build IN clause with the RecordID values
+      const escapedRecordIds = recordIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+
+      return `(${compositeKeyExpr}) IN (${escapedRecordIds})`;
+    }
   }
 }
 

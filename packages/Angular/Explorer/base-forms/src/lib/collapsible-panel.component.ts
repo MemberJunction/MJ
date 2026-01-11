@@ -198,12 +198,22 @@ export type PanelWidthMode = 'normal' | 'full-width';
             min-height: 300px;
             height: 400px;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* Ensure the grid inside takes full height */
+        /* Ensure wrapper div and grid inside take full height */
+        .form-card.related-entity .form-body > ::ng-deep div {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
         .form-card.related-entity .form-body ::ng-deep mj-entity-data-grid {
-            height: 100%;
+            flex: 1;
             display: block;
+            min-height: 0;
         }
 
         .form-card.related-entity .collapsible-header {
