@@ -11,13 +11,15 @@ import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.compone
 import { EntityRecordDetailPanelComponent } from './lib/entity-record-detail-panel/entity-record-detail-panel.component';
 import { PillComponent } from './lib/pill/pill.component';
 import { PaginationComponent } from './lib/pagination/pagination.component';
+import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid.component';
 
 /**
  * EntityViewerModule - Provides components for viewing entity data
  *
  * This module exports:
  * - EntityViewerComponent: Composite component with grid/cards toggle, server-side filtering/sorting/pagination
- * - EntityGridComponent: AG Grid-based table view with standalone or parent-managed data
+ * - EntityGridComponent: AG Grid-based table view with standalone or parent-managed data (deprecated, use EntityDataGridComponent)
+ * - EntityDataGridComponent: Modern AG Grid-based grid with Before/After cancelable events
  * - EntityCardsComponent: Card-based view with standalone or parent-managed data
  * - EntityRecordDetailPanelComponent: Detail panel for displaying single record information
  * - PillComponent: Semantic color pills for categorical values
@@ -40,7 +42,8 @@ import { PaginationComponent } from './lib/pagination/pagination.component';
     EntityViewerComponent,
     EntityRecordDetailPanelComponent,
     PillComponent,
-    PaginationComponent
+    PaginationComponent,
+    EntityDataGridComponent
   ],
   imports: [
     CommonModule,
@@ -55,7 +58,8 @@ import { PaginationComponent } from './lib/pagination/pagination.component';
     EntityViewerComponent,
     EntityRecordDetailPanelComponent,
     PillComponent,
-    PaginationComponent
+    PaginationComponent,
+    EntityDataGridComponent
   ]
 })
 export class EntityViewerModule { }

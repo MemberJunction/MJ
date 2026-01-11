@@ -59,6 +59,8 @@ export class UserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJConversationDetailRatings', sectionName: 'MJ: Conversation Detail Ratings', isExpanded: false },
             { sectionKey: 'mJDashboardUserPreferences', sectionName: 'MJ: Dashboard User Preferences', isExpanded: false },
             { sectionKey: 'mJDashboardUserStates', sectionName: 'MJ: Dashboard User States', isExpanded: false },
+            { sectionKey: 'mJListInvitations', sectionName: 'MJ: List Invitations', isExpanded: false },
+            { sectionKey: 'mJListShares', sectionName: 'MJ: List Shares', isExpanded: false },
             { sectionKey: 'mJPublicLinks', sectionName: 'MJ: Public Links', isExpanded: false },
             { sectionKey: 'mJReportUserStates', sectionName: 'MJ: Report User States', isExpanded: false },
             { sectionKey: 'mJScheduledJobRuns', sectionName: 'MJ: Scheduled Job Runs', isExpanded: false },

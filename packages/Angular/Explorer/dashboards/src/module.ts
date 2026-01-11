@@ -99,6 +99,7 @@ import { HomeDashboardComponent } from './Home/home-dashboard.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { CommunicationDashboardComponent } from './Communication/communication-dashboard.component';
 import { CommunicationMonitorResourceComponent } from './Communication/communication-monitor-resource.component';
 import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
@@ -117,6 +118,10 @@ import { CredentialCategoryEditPanelComponent } from './Credentials/components/c
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
 // System Diagnostics Components
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+// Lists Dashboard Components
+import { ListsMyListsResource } from './Lists/components/lists-my-lists-resource.component';
+import { ListsBrowseResource } from './Lists/components/lists-browse-resource.component';
+import { ListsCategoriesResource } from './Lists/components/lists-categories-resource.component';
 
 
 
@@ -208,7 +213,11 @@ import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnosti
     CredentialCategoryEditPanelComponent,
     GroupByPipe,
     // System Diagnostics Components
-    SystemDiagnosticsComponent
+    SystemDiagnosticsComponent,
+    // Lists Dashboard Components
+    ListsMyListsResource,
+    ListsBrowseResource,
+    ListsCategoriesResource
   ],
   imports: [
     CommonModule,
@@ -241,7 +250,8 @@ import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnosti
     ExplorerSettingsModule,
     SharedGenericModule,
     FilterBuilderModule,
-    EntityRelationshipDiagramModule
+    EntityRelationshipDiagramModule,
+    ListManagementModule
   ],
   providers: [
     AIInstrumentationService,
@@ -301,7 +311,11 @@ import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnosti
     CredentialCategoryEditPanelComponent,
     GroupByPipe,
     // System Diagnostics Components
-    SystemDiagnosticsComponent
+    SystemDiagnosticsComponent,
+    // Lists Dashboard Components
+    ListsMyListsResource,
+    ListsBrowseResource,
+    ListsCategoriesResource
   ]
 })
 export class DashboardsModule { }

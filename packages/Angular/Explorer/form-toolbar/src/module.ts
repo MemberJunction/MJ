@@ -15,6 +15,7 @@ import { DialogsModule } from '@progress/kendo-angular-dialog';
 // MJ
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 
 // Local to package
 import { FormToolbarComponent } from './lib/form-toolbar';
@@ -37,7 +38,8 @@ import { BaseFormsModule } from '@memberjunction/ng-base-forms';
     DialogsModule,
     IndicatorsModule,
     MemberJunctionSharedModule,
-    MarkdownModule
+    MarkdownModule,
+    ListManagementModule
   ],
   exports: [
     FormToolbarComponent,

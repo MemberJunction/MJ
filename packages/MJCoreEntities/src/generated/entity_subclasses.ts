@@ -13408,6 +13408,149 @@ export const EnvironmentSchema = z.object({
 export type EnvironmentEntityType = z.infer<typeof EnvironmentSchema>;
 
 /**
+ * zod schema definition for the entity MJ: List Invitations
+ */
+export const ListInvitationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the invitation.`),
+    ListID: z.string().describe(`
+        * * Field Name: ListID
+        * * Display Name: List
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Lists (vwLists.ID)
+        * * Description: The list the user is being invited to.`),
+    Email: z.string().describe(`
+        * * Field Name: Email
+        * * Display Name: Email Address
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Email address of the invitee.`),
+    Role: z.union([z.literal('Editor'), z.literal('Viewer')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Editor
+    *   * Viewer
+        * * Description: The role to be assigned upon acceptance (Editor or Viewer).`),
+    Token: z.string().describe(`
+        * * Field Name: Token
+        * * Display Name: Token
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Security token for validating the invitation.`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetime
+        * * Description: When the invitation expires.`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who created the invitation.`),
+    Status: z.union([z.literal('Accepted'), z.literal('Expired'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Accepted
+    *   * Expired
+    *   * Pending
+    *   * Revoked
+        * * Description: Status of the invitation (Pending, Accepted, Expired, Revoked).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    List: z.string().describe(`
+        * * Field Name: List
+        * * Display Name: List Name
+        * * SQL Data Type: nvarchar(100)`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ListInvitationEntityType = z.infer<typeof ListInvitationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: List Shares
+ */
+export const ListShareSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the share record.`),
+    ListID: z.string().describe(`
+        * * Field Name: ListID
+        * * Display Name: List
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Lists (vwLists.ID)
+        * * Description: The list being shared.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user receiving access to the list.`),
+    Role: z.union([z.literal('Editor'), z.literal('Viewer')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Editor
+    *   * Viewer
+        * * Description: The permission level granted (Editor or Viewer).`),
+    Status: z.union([z.literal('Active'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+        * * Description: Current status of the share (Active or Pending).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    List: z.string().describe(`
+        * * Field Name: List
+        * * Display Name: List Name
+        * * SQL Data Type: nvarchar(100)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ListShareEntityType = z.infer<typeof ListShareSchema>;
+
+/**
  * zod schema definition for the entity MJ: Projects
  */
 export const ProjectSchema = z.object({
@@ -53693,6 +53836,341 @@ export class EnvironmentEntity extends BaseEntity<EnvironmentEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: List Invitations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ListInvitation
+ * * Base View: vwListInvitations
+ * * @description Tracks pending invitations for users to access lists, including external users via email.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: List Invitations')
+export class ListInvitationEntity extends BaseEntity<ListInvitationEntityType> {
+    /**
+    * Loads the MJ: List Invitations record from the database
+    * @param ID: string - primary key value to load the MJ: List Invitations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ListInvitationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the invitation.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ListID
+    * * Display Name: List
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Lists (vwLists.ID)
+    * * Description: The list the user is being invited to.
+    */
+    get ListID(): string {
+        return this.Get('ListID');
+    }
+    set ListID(value: string) {
+        this.Set('ListID', value);
+    }
+
+    /**
+    * * Field Name: Email
+    * * Display Name: Email Address
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Email address of the invitee.
+    */
+    get Email(): string {
+        return this.Get('Email');
+    }
+    set Email(value: string) {
+        this.Set('Email', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Editor
+    *   * Viewer
+    * * Description: The role to be assigned upon acceptance (Editor or Viewer).
+    */
+    get Role(): 'Editor' | 'Viewer' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Editor' | 'Viewer') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: Token
+    * * Display Name: Token
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Security token for validating the invitation.
+    */
+    get Token(): string {
+        return this.Get('Token');
+    }
+    set Token(value: string) {
+        this.Set('Token', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetime
+    * * Description: When the invitation expires.
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who created the invitation.
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Accepted
+    *   * Expired
+    *   * Pending
+    *   * Revoked
+    * * Description: Status of the invitation (Pending, Accepted, Expired, Revoked).
+    */
+    get Status(): 'Accepted' | 'Expired' | 'Pending' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Accepted' | 'Expired' | 'Pending' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: List
+    * * Display Name: List Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get List(): string {
+        return this.Get('List');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
+ * MJ: List Shares - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ListShare
+ * * Base View: vwListShares
+ * * @description Manages user access and permissions for shared lists.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: List Shares')
+export class ListShareEntity extends BaseEntity<ListShareEntityType> {
+    /**
+    * Loads the MJ: List Shares record from the database
+    * @param ID: string - primary key value to load the MJ: List Shares record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ListShareEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the share record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ListID
+    * * Display Name: List
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Lists (vwLists.ID)
+    * * Description: The list being shared.
+    */
+    get ListID(): string {
+        return this.Get('ListID');
+    }
+    set ListID(value: string) {
+        this.Set('ListID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user receiving access to the list.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Editor
+    *   * Viewer
+    * * Description: The permission level granted (Editor or Viewer).
+    */
+    get Role(): 'Editor' | 'Viewer' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Editor' | 'Viewer') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    * * Description: Current status of the share (Active or Pending).
+    */
+    get Status(): 'Active' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: List
+    * * Display Name: List Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get List(): string {
+        return this.Get('List');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 

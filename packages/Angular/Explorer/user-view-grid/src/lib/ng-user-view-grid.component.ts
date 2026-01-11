@@ -24,6 +24,7 @@ import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { GraphQLActionClient } from '@memberjunction/graphql-dataprovider';
 import { LoadEntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
+import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
 // Prevent tree-shaking of EntityCommunicationsEngineClient
 LoadEntityCommunicationsEngineClient();
 
@@ -188,6 +189,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
   public listEntities: ListEntity[] = [];
   public selectedListEntities: ListEntity[] = [];
   public listEntitySearch: string = '';
+
+  // Enhanced list management dialog properties
+  public showEnhancedListDialog: boolean = false;
+  public listManagementConfig: ListManagementDialogConfig | null = null;
+  public useEnhancedListDialog: boolean = true; // Toggle between old and new dialog
 
   public EntityActions: EntityActionEntity[] = [];
 
@@ -1276,6 +1282,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public async toggleAddToListDialog(show: boolean): Promise<void> {
+    // Use enhanced dialog if enabled
+    if (this.useEnhancedListDialog && show) {
+      this.openEnhancedListDialog();
+      return;
+    }
+
     this.showAddToListDialog = show;
 
     if(show){
@@ -1361,6 +1373,82 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.showAddToListLoader = false;
     this.toggleAddToListDialog(false);
+  }
+
+  /**
+   * Opens the enhanced list management dialog with full membership visibility
+   */
+  public openEnhancedListDialog(): void {
+    if (!this._entityInfo) {
+      LogError("Entity Info is not set");
+      return;
+    }
+
+    // Get selected record IDs
+    const selectedRecordIds = this.selectedKeys.map((index: number) => {
+      const viewData = this.viewData[index];
+      return String(viewData.ID);
+    });
+
+    if (selectedRecordIds.length === 0) {
+      this.CreateSimpleNotification('Please select at least one record', 'warning', 2000);
+      return;
+    }
+
+    // Configure the enhanced dialog
+    this.listManagementConfig = {
+      mode: 'manage',
+      entityId: this._entityInfo.ID,
+      entityName: this._entityInfo.Name,
+      recordIds: selectedRecordIds,
+      allowCreate: true,
+      allowRemove: true,
+      showMembership: true
+    };
+
+    this.showEnhancedListDialog = true;
+  }
+
+  /**
+   * Handles completion of the enhanced list management dialog
+   */
+  public onEnhancedListDialogComplete(result: ListManagementResult): void {
+    this.showEnhancedListDialog = false;
+    this.listManagementConfig = null;
+
+    if (result.action === 'apply') {
+      const addedCount = result.added.reduce((sum, a) => sum + a.recordIds.length, 0);
+      const removedCount = result.removed.reduce((sum, r) => sum + r.recordIds.length, 0);
+
+      if (addedCount > 0 || removedCount > 0) {
+        let message = '';
+        if (addedCount > 0) {
+          message += `Added to ${result.added.length} list(s)`;
+        }
+        if (removedCount > 0) {
+          if (message) message += ', ';
+          message += `Removed from ${result.removed.length} list(s)`;
+        }
+        this.CreateSimpleNotification(message, 'success', 2500);
+      }
+
+      if (result.newListsCreated.length > 0) {
+        // Invalidate the list cache since new lists were created
+        this.sourceListEntities = null;
+      }
+    }
+
+    // Exit selection mode
+    this.enableCheckbox(true, 'addToList');
+  }
+
+  /**
+   * Handles cancellation of the enhanced list management dialog
+   */
+  public onEnhancedListDialogCancel(): void {
+    this.showEnhancedListDialog = false;
+    this.listManagementConfig = null;
+    this.enableCheckbox(true, 'addToList');
   }
 
   public onSearch(inputValue: string): void {

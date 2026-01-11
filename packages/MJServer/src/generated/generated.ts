@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ActionAuthorizationEntity, ActionCategoryEntity, ActionContextTypeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, ActionEntity, AIActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentNoteEntity, AIAgentRequestEntity, AIAgentEntity, AIModelActionEntity, AIModelTypeEntity, AIModelEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptEntity, AIResultCacheEntity, ApplicationEntityEntity, ApplicationSettingEntity, ApplicationEntity, AuditLogTypeEntity, AuditLogEntity, AuthorizationRoleEntity, AuthorizationEntity, CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationProviderEntity, CommunicationRunEntity, CompanyEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, CompanyIntegrationEntity, ContentFileTypeEntity, ContentItemAttributeEntity, ContentItemTagEntity, ContentItemEntity, ContentProcessRunEntity, ContentSourceParamEntity, ContentSourceTypeParamEntity, ContentSourceTypeEntity, ContentSourceEntity, ContentTypeAttributeEntity, ContentTypeEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextItemEntity, DataContextEntity, DatasetItemEntity, DatasetEntity, DuplicateRunDetailMatchEntity, DuplicateRunDetailEntity, DuplicateRunEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, EmployeeEntity, EntityEntity, EntityActionFilterEntity, EntityActionInvocationTypeEntity, EntityActionInvocationEntity, EntityActionParamEntity, EntityActionEntity, EntityAIActionEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity, EntityDocumentRunEntity, EntityDocumentSettingEntity, EntityDocumentTypeEntity, EntityDocumentEntity, EntityFieldValueEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipDisplayComponentEntity, EntityRelationshipEntity, EntitySettingEntity, ErrorLogEntity, ExplorerNavigationItemEntity, FileCategoryEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, FileEntity, GeneratedCodeCategoryEntity, GeneratedCodeEntity, IntegrationURLFormatEntity, IntegrationEntity, LibraryEntity, LibraryItemEntity, ListCategoryEntity, ListDetailEntity, ListEntity, AccessControlRuleEntity, AIAgentArtifactTypeEntity, AIAgentConfigurationEntity, AIAgentDataSourceEntity, AIAgentExampleEntity, AIAgentModalityEntity, AIAgentPermissionEntity, AIAgentPromptEntity, AIAgentRelationshipEntity, AIAgentRunStepEntity, AIAgentRunEntity, AIAgentStepPathEntity, AIAgentStepEntity, AIAgentTypeEntity, AIArchitectureEntity, AIConfigurationParamEntity, AIConfigurationEntity, AICredentialBindingEntity, AIModalityEntity, AIModelArchitectureEntity, AIModelCostEntity, AIModelModalityEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity, AIModelVendorEntity, AIPromptModelEntity, AIPromptRunEntity, AIVendorTypeDefinitionEntity, AIVendorTypeEntity, AIVendorEntity, ArtifactPermissionEntity, ArtifactTypeEntity, ArtifactUseEntity, ArtifactVersionAttributeEntity, ArtifactVersionEntity, ArtifactEntity, CollectionArtifactEntity, CollectionPermissionEntity, CollectionEntity, ComponentDependencyEntity, ComponentLibraryEntity, ComponentLibraryLinkEntity, ComponentRegistryEntity, ComponentEntity, ConversationArtifactPermissionEntity, ConversationArtifactVersionEntity, ConversationArtifactEntity, ConversationDetailArtifactEntity, ConversationDetailAttachmentEntity, ConversationDetailRatingEntity, CredentialCategoryEntity, CredentialTypeEntity, CredentialEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, EncryptionAlgorithmEntity, EncryptionKeySourceEntity, EncryptionKeyEntity, EnvironmentEntity, ProjectEntity, PublicLinkEntity, QueryParameterEntity, RecordLinkEntity, ReportUserStateEntity, ReportVersionEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, ScheduledJobEntity, TaskDependencyEntity, TaskTypeEntity, TaskEntity, TestRubricEntity, TestRunFeedbackEntity, TestRunEntity, TestSuiteRunEntity, TestSuiteTestEntity, TestSuiteEntity, TestTypeEntity, TestEntity, UserSettingEntity, OutputDeliveryTypeEntity, OutputFormatTypeEntity, OutputTriggerTypeEntity, QueryEntity, QueryCategoryEntity, QueryEntityEntity, QueryFieldEntity, QueryPermissionEntity, QueueTaskEntity, QueueTypeEntity, QueueEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationEntity, RecordChangeReplayRunEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportSnapshotEntity, ReportEntity, ResourceLinkEntity, ResourcePermissionEntity, ResourceTypeEntity, RoleEntity, RowLevelSecurityFilterEntity, ScheduledActionParamEntity, ScheduledActionEntity, SchemaInfoEntity, SkillEntity, TaggedItemEntity, TagEntity, TemplateCategoryEntity, TemplateContentTypeEntity, TemplateContentEntity, TemplateParamEntity, TemplateEntity, UserApplicationEntityEntity, UserApplicationEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewRunDetailEntity, UserViewRunEntity, UserViewEntity, UserEntity, VectorDatabaseEntity, VectorIndexEntity, VersionInstallationEntity, WorkflowEngineEntity, WorkflowRunEntity, WorkflowEntity, WorkspaceItemEntity, WorkspaceEntity } from '@memberjunction/core-entities';
+import { ActionAuthorizationEntity, ActionCategoryEntity, ActionContextTypeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity, ActionEntity, AIActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentNoteEntity, AIAgentRequestEntity, AIAgentEntity, AIModelActionEntity, AIModelTypeEntity, AIModelEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptEntity, AIResultCacheEntity, ApplicationEntityEntity, ApplicationSettingEntity, ApplicationEntity, AuditLogTypeEntity, AuditLogEntity, AuthorizationRoleEntity, AuthorizationEntity, CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationProviderEntity, CommunicationRunEntity, CompanyEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, CompanyIntegrationEntity, ContentFileTypeEntity, ContentItemAttributeEntity, ContentItemTagEntity, ContentItemEntity, ContentProcessRunEntity, ContentSourceParamEntity, ContentSourceTypeParamEntity, ContentSourceTypeEntity, ContentSourceEntity, ContentTypeAttributeEntity, ContentTypeEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextItemEntity, DataContextEntity, DatasetItemEntity, DatasetEntity, DuplicateRunDetailMatchEntity, DuplicateRunDetailEntity, DuplicateRunEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, EmployeeEntity, EntityEntity, EntityActionFilterEntity, EntityActionInvocationTypeEntity, EntityActionInvocationEntity, EntityActionParamEntity, EntityActionEntity, EntityAIActionEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity, EntityDocumentRunEntity, EntityDocumentSettingEntity, EntityDocumentTypeEntity, EntityDocumentEntity, EntityFieldValueEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipDisplayComponentEntity, EntityRelationshipEntity, EntitySettingEntity, ErrorLogEntity, ExplorerNavigationItemEntity, FileCategoryEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, FileEntity, GeneratedCodeCategoryEntity, GeneratedCodeEntity, IntegrationURLFormatEntity, IntegrationEntity, LibraryEntity, LibraryItemEntity, ListCategoryEntity, ListDetailEntity, ListEntity, AccessControlRuleEntity, AIAgentArtifactTypeEntity, AIAgentConfigurationEntity, AIAgentDataSourceEntity, AIAgentExampleEntity, AIAgentModalityEntity, AIAgentPermissionEntity, AIAgentPromptEntity, AIAgentRelationshipEntity, AIAgentRunStepEntity, AIAgentRunEntity, AIAgentStepPathEntity, AIAgentStepEntity, AIAgentTypeEntity, AIArchitectureEntity, AIConfigurationParamEntity, AIConfigurationEntity, AICredentialBindingEntity, AIModalityEntity, AIModelArchitectureEntity, AIModelCostEntity, AIModelModalityEntity, AIModelPriceTypeEntity, AIModelPriceUnitTypeEntity, AIModelVendorEntity, AIPromptModelEntity, AIPromptRunEntity, AIVendorTypeDefinitionEntity, AIVendorTypeEntity, AIVendorEntity, ArtifactPermissionEntity, ArtifactTypeEntity, ArtifactUseEntity, ArtifactVersionAttributeEntity, ArtifactVersionEntity, ArtifactEntity, CollectionArtifactEntity, CollectionPermissionEntity, CollectionEntity, ComponentDependencyEntity, ComponentLibraryEntity, ComponentLibraryLinkEntity, ComponentRegistryEntity, ComponentEntity, ConversationArtifactPermissionEntity, ConversationArtifactVersionEntity, ConversationArtifactEntity, ConversationDetailArtifactEntity, ConversationDetailAttachmentEntity, ConversationDetailRatingEntity, CredentialCategoryEntity, CredentialTypeEntity, CredentialEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, EncryptionAlgorithmEntity, EncryptionKeySourceEntity, EncryptionKeyEntity, EnvironmentEntity, ListInvitationEntity, ListShareEntity, ProjectEntity, PublicLinkEntity, QueryParameterEntity, RecordLinkEntity, ReportUserStateEntity, ReportVersionEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, ScheduledJobEntity, TaskDependencyEntity, TaskTypeEntity, TaskEntity, TestRubricEntity, TestRunFeedbackEntity, TestRunEntity, TestSuiteRunEntity, TestSuiteTestEntity, TestSuiteEntity, TestTypeEntity, TestEntity, UserSettingEntity, OutputDeliveryTypeEntity, OutputFormatTypeEntity, OutputTriggerTypeEntity, QueryEntity, QueryCategoryEntity, QueryEntityEntity, QueryFieldEntity, QueryPermissionEntity, QueueTaskEntity, QueueTypeEntity, QueueEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationEntity, RecordChangeReplayRunEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportSnapshotEntity, ReportEntity, ResourceLinkEntity, ResourcePermissionEntity, ResourceTypeEntity, RoleEntity, RowLevelSecurityFilterEntity, ScheduledActionParamEntity, ScheduledActionEntity, SchemaInfoEntity, SkillEntity, TaggedItemEntity, TagEntity, TemplateCategoryEntity, TemplateContentTypeEntity, TemplateContentEntity, TemplateParamEntity, TemplateEntity, UserApplicationEntityEntity, UserApplicationEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewRunDetailEntity, UserViewRunEntity, UserViewEntity, UserEntity, VectorDatabaseEntity, VectorIndexEntity, VersionInstallationEntity, WorkflowEngineEntity, WorkflowRunEntity, WorkflowEntity, WorkspaceItemEntity, WorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -25282,6 +25282,12 @@ export class MJList_ {
     @Field(() => [MJDuplicateRun_])
     DuplicateRuns_SourceListIDArray: MJDuplicateRun_[]; // Link to DuplicateRuns
     
+    @Field(() => [MJListShare_])
+    MJ_ListShares_ListIDArray: MJListShare_[]; // Link to MJ_ListShares
+    
+    @Field(() => [MJListInvitation_])
+    MJ_ListInvitations_ListIDArray: MJListInvitation_[]; // Link to MJ_ListInvitations
+    
 }
 
 //****************************************************************************
@@ -25425,6 +25431,28 @@ export class MJListResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [SourceListID]='${mjlist_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJListShare_])
+    async MJ_ListShares_ListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: List Shares', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListShares] WHERE [ListID]='${mjlist_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Shares', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: List Shares', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJListInvitation_])
+    async MJ_ListInvitations_ListIDArray(@Root() mjlist_: MJList_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: List Invitations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListInvitations] WHERE [ListID]='${mjlist_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Invitations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: List Invitations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -39991,6 +40019,388 @@ export class MJEnvironmentResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Environments', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: List Invitations
+//****************************************************************************
+@ObjectType({ description: `Tracks pending invitations for users to access lists, including external users via email.` })
+export class MJListInvitation_ {
+    @Field({description: `Unique identifier for the invitation.`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `The list the user is being invited to.`}) 
+    @MaxLength(16)
+    ListID: string;
+        
+    @Field({description: `Email address of the invitee.`}) 
+    @MaxLength(510)
+    Email: string;
+        
+    @Field({description: `The role to be assigned upon acceptance (Editor or Viewer).`}) 
+    @MaxLength(100)
+    Role: string;
+        
+    @Field({description: `Security token for validating the invitation.`}) 
+    @MaxLength(200)
+    Token: string;
+        
+    @Field({description: `When the invitation expires.`}) 
+    @MaxLength(8)
+    ExpiresAt: Date;
+        
+    @Field({description: `The user who created the invitation.`}) 
+    @MaxLength(16)
+    CreatedByUserID: string;
+        
+    @Field({description: `Status of the invitation (Pending, Accepted, Expired, Revoked).`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    List: string;
+        
+    @Field() 
+    @MaxLength(200)
+    CreatedByUser: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: List Invitations
+//****************************************************************************
+@InputType()
+export class CreateMJListInvitationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ListID?: string;
+
+    @Field({ nullable: true })
+    Email?: string;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    Token?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: List Invitations
+//****************************************************************************
+@InputType()
+export class UpdateMJListInvitationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ListID?: string;
+
+    @Field({ nullable: true })
+    Email?: string;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    Token?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: List Invitations
+//****************************************************************************
+@ObjectType()
+export class RunMJListInvitationViewResult {
+    @Field(() => [MJListInvitation_])
+    Results: MJListInvitation_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJListInvitation_)
+export class MJListInvitationResolver extends ResolverBase {
+    @Query(() => RunMJListInvitationViewResult)
+    async RunMJListInvitationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJListInvitationViewResult)
+    async RunMJListInvitationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJListInvitationViewResult)
+    async RunMJListInvitationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: List Invitations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJListInvitation_, { nullable: true })
+    async MJListInvitation(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJListInvitation_ | null> {
+        this.CheckUserReadPermissions('MJ: List Invitations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListInvitations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Invitations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: List Invitations', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJListInvitation_)
+    async CreateMJListInvitation(
+        @Arg('input', () => CreateMJListInvitationInput) input: CreateMJListInvitationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: List Invitations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJListInvitation_)
+    async UpdateMJListInvitation(
+        @Arg('input', () => UpdateMJListInvitationInput) input: UpdateMJListInvitationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: List Invitations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJListInvitation_)
+    async DeleteMJListInvitation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: List Invitations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: List Shares
+//****************************************************************************
+@ObjectType({ description: `Manages user access and permissions for shared lists.` })
+export class MJListShare_ {
+    @Field({description: `Unique identifier for the share record.`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `The list being shared.`}) 
+    @MaxLength(16)
+    ListID: string;
+        
+    @Field({description: `The user receiving access to the list.`}) 
+    @MaxLength(16)
+    UserID: string;
+        
+    @Field({description: `The permission level granted (Editor or Viewer).`}) 
+    @MaxLength(100)
+    Role: string;
+        
+    @Field({description: `Current status of the share (Active or Pending).`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    List: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: List Shares
+//****************************************************************************
+@InputType()
+export class CreateMJListShareInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ListID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: List Shares
+//****************************************************************************
+@InputType()
+export class UpdateMJListShareInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ListID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: List Shares
+//****************************************************************************
+@ObjectType()
+export class RunMJListShareViewResult {
+    @Field(() => [MJListShare_])
+    Results: MJListShare_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJListShare_)
+export class MJListShareResolver extends ResolverBase {
+    @Query(() => RunMJListShareViewResult)
+    async RunMJListShareViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJListShareViewResult)
+    async RunMJListShareViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJListShareViewResult)
+    async RunMJListShareDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: List Shares';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJListShare_, { nullable: true })
+    async MJListShare(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJListShare_ | null> {
+        this.CheckUserReadPermissions('MJ: List Shares', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListShares] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Shares', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: List Shares', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJListShare_)
+    async CreateMJListShare(
+        @Arg('input', () => CreateMJListShareInput) input: CreateMJListShareInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: List Shares', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJListShare_)
+    async UpdateMJListShare(
+        @Arg('input', () => UpdateMJListShareInput) input: UpdateMJListShareInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: List Shares', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJListShare_)
+    async DeleteMJListShare(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: List Shares', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -55582,6 +55992,12 @@ export class MJUser_ {
     @Field(() => [MJUserSetting_])
     MJ_UserSettings_UserIDArray: MJUserSetting_[]; // Link to MJ_UserSettings
     
+    @Field(() => [MJListInvitation_])
+    MJ_ListInvitations_CreatedByUserIDArray: MJListInvitation_[]; // Link to MJ_ListInvitations
+    
+    @Field(() => [MJListShare_])
+    MJ_ListShares_UserIDArray: MJListShare_[]; // Link to MJ_ListShares
+    
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
     
@@ -56326,6 +56742,28 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserSettings] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Settings', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Settings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJListInvitation_])
+    async MJ_ListInvitations_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: List Invitations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListInvitations] WHERE [CreatedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Invitations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: List Invitations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJListShare_])
+    async MJ_ListShares_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: List Shares', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListShares] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Shares', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: List Shares', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

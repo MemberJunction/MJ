@@ -154,6 +154,106 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     /**
+     * Get a user setting value by key.
+     * @param settingKey - The setting key to find (e.g., "default-view-setting/Contacts")
+     * @returns The setting value string, or undefined if not found
+     */
+    public GetSetting(settingKey: string): string | undefined {
+        const setting = this.UserSettings.find(s => s.Setting === settingKey);
+        return setting?.Value ?? undefined;
+    }
+
+    /**
+     * Get a user setting entity by key.
+     * @param settingKey - The setting key to find
+     * @returns The UserSettingEntity, or undefined if not found
+     */
+    public GetSettingEntity(settingKey: string): UserSettingEntity | undefined {
+        return this.UserSettings.find(s => s.Setting === settingKey);
+    }
+
+    /**
+     * Set a user setting by key. Creates a new setting if it doesn't exist.
+     * @param settingKey - The setting key (e.g., "default-view-setting/Contacts")
+     * @param value - The setting value (string, typically JSON for complex data)
+     * @param contextUser - Optional user context for server-side use
+     * @returns true if successful, false otherwise
+     */
+    public async SetSetting(settingKey: string, value: string, contextUser?: UserInfo): Promise<boolean> {
+        const md = new Metadata();
+        const userId = contextUser?.ID || md.CurrentUser?.ID;
+
+        if (!userId) {
+            console.error('UserInfoEngine.SetSetting: No user context available');
+            return false;
+        }
+
+        try {
+            // Try to find existing setting
+            let setting = this.GetSettingEntity(settingKey);
+
+            if (setting) {
+                // Update existing setting
+                setting.Value = value;
+            } else {
+                // Create new setting
+                setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings', contextUser);
+                setting.NewRecord();
+                setting.UserID = userId;
+                setting.Setting = settingKey;
+                setting.Value = value;
+            }
+
+            const saved = await setting.Save();
+            if (saved) {
+                // If it was a new record, add to cache
+                if (!this._UserSettings.some(s => s.ID === setting!.ID)) {
+                    this._UserSettings.push(setting);
+                }
+                return true;
+            } else {
+                console.error('UserInfoEngine.SetSetting: Failed to save:', setting.LatestResult?.Message);
+                return false;
+            }
+        } catch (error) {
+            console.error('UserInfoEngine.SetSetting: Error:', error instanceof Error ? error.message : String(error));
+            return false;
+        }
+    }
+
+    /**
+     * Delete a user setting by key.
+     * @param settingKey - The setting key to delete
+     * @returns true if successful (or setting didn't exist), false on error
+     */
+    public async DeleteSetting(settingKey: string): Promise<boolean> {
+        const setting = this.GetSettingEntity(settingKey);
+
+        if (!setting) {
+            // Setting doesn't exist, consider it a success
+            return true;
+        }
+
+        try {
+            const deleted = await setting.Delete();
+            if (deleted) {
+                // Remove from cache
+                const index = this._UserSettings.findIndex(s => s.ID === setting.ID);
+                if (index >= 0) {
+                    this._UserSettings.splice(index, 1);
+                }
+                return true;
+            } else {
+                console.error('UserInfoEngine.DeleteSetting: Failed to delete:', setting.LatestResult?.Message);
+                return false;
+            }
+        } catch (error) {
+            console.error('UserInfoEngine.DeleteSetting: Error:', error instanceof Error ? error.message : String(error));
+            return false;
+        }
+    }
+
+    /**
      * Get unread notifications for the current user
      */
     public get UnreadNotifications(): UserNotificationEntity[] {
