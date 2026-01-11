@@ -793,9 +793,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public onEntitySelected(entity: EntityInfo): void {
     this.resetRecordCounts();
     this.selectedEntity = entity;
-    // Reset grid state when entity changes - grid state is entity-specific
-    // Without this, columns from a previously viewed entity would incorrectly apply
-    this.currentGridState = null;
+    // Load user's saved default grid state for this entity (if any)
+    // This ensures formatting and column settings persist across sessions
+    this.currentGridState = this.loadUserDefaultGridState();
     this.stateService.selectEntity(entity.Name);
     // Track entity access for recent entities
     this.stateService.trackEntityAccess(entity.Name, entity.ID);
@@ -808,9 +808,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private onStateChanged(): void {
     if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
       this.resetRecordCounts();
-      // Reset grid state when entity changes - grid state is entity-specific
-      this.currentGridState = null;
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
+      // Load user's saved default grid state for this entity (if any)
+      this.currentGridState = this.loadUserDefaultGridState();
     }
   }
 
@@ -850,11 +850,38 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.debouncedFilterText = '';
       }
     } else {
-      // Switching to default view - clear grid state and filters
-      this.currentGridState = null;
+      // Switching to default view - load user's saved defaults from UserInfoEngine
+      this.currentGridState = this.loadUserDefaultGridState();
       this.stateService.setSmartFilterPrompt('');
       this.debouncedFilterText = '';
     }
+  }
+
+  /**
+   * Load user's saved default grid state from UserInfoEngine
+   * Returns null if no saved state exists
+   */
+  private loadUserDefaultGridState(): ViewGridStateConfig | null {
+    if (!this.selectedEntity) return null;
+
+    try {
+      const settingKey = `default-view-setting/${this.selectedEntity.Name}`;
+      const savedState = UserInfoEngine.Instance.GetSetting(settingKey);
+
+      if (savedState) {
+        const gridState = JSON.parse(savedState);
+        if (gridState && Array.isArray(gridState.columnSettings)) {
+          return {
+            columnSettings: gridState.columnSettings,
+            sortSettings: gridState.sortSettings || []
+          };
+        }
+      }
+    } catch (error) {
+      console.warn('[DataExplorer] Failed to load user default grid state:', error);
+    }
+
+    return null;
   }
 
   /**
@@ -1166,6 +1193,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         ID: col.fieldId,
         Name: col.fieldName,
         DisplayName: col.displayName,
+        userDisplayName: col.userDisplayName, // Include user-defined column alias
         hidden: false, // Visible columns only
         width: col.width || null,
         orderIndex: idx,

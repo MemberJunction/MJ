@@ -23,7 +23,10 @@ import {
 export interface ColumnConfig {
   fieldId: string;
   fieldName: string;
+  /** Original display name from entity metadata */
   displayName: string;
+  /** User-defined custom display name (overrides displayName when set) */
+  userDisplayName?: string;
   visible: boolean;
   width: number | null;
   orderIndex: number;
@@ -159,6 +162,15 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   // Column format editing state
   public formatEditingColumn: ColumnConfig | null = null;
 
+  // Panel resize state
+  public isResizing: boolean = false;
+  public panelWidth: number = 400;
+  private readonly MIN_PANEL_WIDTH = 320;
+  private readonly MAX_PANEL_WIDTH = 800;
+  private readonly DEFAULT_PANEL_WIDTH = 400;
+  private resizeStartX: number = 0;
+  private resizeStartWidth: number = 0;
+
   private metadata = new Metadata();
 
   constructor(private cdr: ChangeDetectorRef) {}
@@ -175,6 +187,55 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       this.onClose();
     }
   }
+
+  // ========================================
+  // PANEL RESIZE HANDLERS
+  // ========================================
+
+  /**
+   * Start resizing the panel
+   */
+  onResizeStart(event: MouseEvent): void {
+    event.preventDefault();
+    this.isResizing = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.panelWidth;
+
+    // Add document-level listeners for mouse move and up
+    document.addEventListener('mousemove', this.onResizeMove);
+    document.addEventListener('mouseup', this.onResizeEnd);
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  /**
+   * Handle resize movement (bound to document)
+   */
+  private onResizeMove = (event: MouseEvent): void => {
+    if (!this.isResizing) return;
+
+    // Calculate new width (panel is on the right, so moving left increases width)
+    const deltaX = this.resizeStartX - event.clientX;
+    let newWidth = this.resizeStartWidth + deltaX;
+
+    // Clamp to min/max bounds
+    newWidth = Math.max(this.MIN_PANEL_WIDTH, Math.min(this.MAX_PANEL_WIDTH, newWidth));
+
+    this.panelWidth = newWidth;
+    this.cdr.detectChanges();
+  };
+
+  /**
+   * End resizing the panel (bound to document)
+   */
+  private onResizeEnd = (): void => {
+    this.isResizing = false;
+    document.removeEventListener('mousemove', this.onResizeMove);
+    document.removeEventListener('mouseup', this.onResizeEnd);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    this.cdr.detectChanges();
+  };
 
   ngOnInit(): void {
     this.initializeFromEntity();
@@ -215,6 +276,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         fieldId: field.ID,
         fieldName: field.Name,
         displayName: field.DisplayNameOrName,
+        userDisplayName: undefined,
         visible: field.DefaultInView,
         width: field.DefaultColumnWidth || null,
         orderIndex: index,
@@ -246,6 +308,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
             column.visible = !vc.hidden;
             column.width = vc.width || null;
             column.orderIndex = vc.orderIndex ?? idx;
+            // Apply userDisplayName if present
+            if (vc.userDisplayName) {
+              column.userDisplayName = vc.userDisplayName;
+            }
             // Apply format if present
             if (vc.format) {
               column.format = vc.format;
@@ -451,6 +517,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         column.orderIndex = gc.orderIndex ?? idx;
         if (gc.DisplayName) {
           column.displayName = gc.DisplayName;
+        }
+        // Apply userDisplayName if present
+        if (gc.userDisplayName) {
+          column.userDisplayName = gc.userDisplayName;
         }
         // Apply format if present
         if (gc.format) {
@@ -1056,6 +1126,17 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     if (prop === 'bold' || prop === 'italic' || prop === 'underline') {
       format.headerStyle[prop] = !format.headerStyle[prop];
     }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Update the user-defined display name for a column
+   */
+  updateUserDisplayName(value: string): void {
+    if (!this.formatEditingColumn) return;
+
+    // Set to undefined if empty string, otherwise use the value
+    this.formatEditingColumn.userDisplayName = value.trim() || undefined;
     this.cdr.detectChanges();
   }
 

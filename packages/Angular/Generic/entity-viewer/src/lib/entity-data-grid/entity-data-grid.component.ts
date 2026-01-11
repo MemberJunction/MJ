@@ -1682,7 +1682,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
       const colDef: ColDef = {
         field: field.Name,
-        headerName: colConfig.DisplayName || field.DisplayNameOrName,
+        // Use userDisplayName if set, otherwise fall back to DisplayName or field name
+        headerName: colConfig.userDisplayName || colConfig.DisplayName || field.DisplayNameOrName,
         width: colConfig.width || this.estimateColumnWidth(field),
         sortable: this._allowSorting,
         resizable: this._allowColumnResize
@@ -2879,14 +2880,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return { columnSettings: [], sortSettings: [] };
     }
 
-    // Build a lookup map for existing format settings to preserve them
-    // AG Grid's column state doesn't track our custom format property,
-    // so we need to carry it over from the current gridState
+    // Build lookup maps for existing custom properties to preserve them
+    // AG Grid's column state doesn't track our custom format/userDisplayName properties,
+    // so we need to carry them over from the current gridState
     const existingFormatsByName = new Map<string, ColumnFormat | undefined>();
+    const existingUserDisplayNames = new Map<string, string | undefined>();
     if (this._gridState?.columnSettings) {
       for (const col of this._gridState.columnSettings) {
+        const keyLower = col.Name.toLowerCase();
         if (col.format) {
-          existingFormatsByName.set(col.Name.toLowerCase(), col.format);
+          existingFormatsByName.set(keyLower, col.format);
+        }
+        if (col.userDisplayName) {
+          existingUserDisplayNames.set(keyLower, col.userDisplayName);
         }
       }
     }
@@ -2901,6 +2907,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       const field = this._entityInfo.Fields.find(f => f.Name === col.colId);
 
       if (field) {
+        const keyLower = field.Name.toLowerCase();
         const colConfig: ViewColumnConfig = {
           ID: field.ID,
           Name: field.Name,
@@ -2911,9 +2918,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         };
 
         // Preserve format from existing gridState if present
-        const existingFormat = existingFormatsByName.get(field.Name.toLowerCase());
+        const existingFormat = existingFormatsByName.get(keyLower);
         if (existingFormat) {
           colConfig.format = existingFormat;
+        }
+
+        // Preserve userDisplayName from existing gridState if present
+        const existingUserDisplayName = existingUserDisplayNames.get(keyLower);
+        if (existingUserDisplayName) {
+          colConfig.userDisplayName = existingUserDisplayName;
         }
 
         columnSettings.push(colConfig);

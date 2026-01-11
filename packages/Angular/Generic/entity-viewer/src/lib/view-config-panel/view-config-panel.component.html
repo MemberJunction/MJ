@@ -4,7 +4,17 @@
 }
 
 <!-- Sliding Panel -->
-<div class="config-panel" [class.open]="isOpen">
+<div class="config-panel"
+     [class.open]="isOpen"
+     [class.resizing]="isResizing"
+     [style.width.px]="panelWidth">
+  <!-- Resize Handle -->
+  <div class="resize-handle"
+       (mousedown)="onResizeStart($event)"
+       title="Drag to resize">
+    <div class="resize-grip"></div>
+  </div>
+
   <!-- Panel Header -->
   <div class="panel-header">
     <div class="header-title">
@@ -109,7 +119,10 @@
                   <i class="fa-solid fa-grip-vertical"></i>
                 </div>
                 <span class="column-name">
-                  {{ column.displayName }}
+                  {{ column.userDisplayName || column.displayName }}
+                  @if (column.userDisplayName) {
+                    <i class="fa-solid fa-pen-nib alias-indicator" title="Custom name: {{ column.userDisplayName }}"></i>
+                  }
                   @if (hasCustomFormat(column)) {
                     <i class="fa-solid fa-paintbrush format-indicator" title="Custom formatting applied"></i>
                   }
@@ -206,8 +219,31 @@
             <i class="fa-solid fa-arrow-left"></i>
           </button>
           <div class="format-editor-title">
-            <span>Format: {{ formatEditingColumn.displayName }}</span>
+            <span>Format: {{ formatEditingColumn.userDisplayName || formatEditingColumn.displayName }}</span>
           </div>
+        </div>
+
+        <!-- Column Alias Section -->
+        <div class="format-section">
+          <div class="format-section-header">
+            <i class="fa-solid fa-pen-nib"></i>
+            <span>Column Name</span>
+          </div>
+          <div class="format-row">
+            <label>Display As</label>
+            <input type="text" class="format-input"
+                   [value]="formatEditingColumn.userDisplayName || ''"
+                   (input)="updateUserDisplayName($any($event.target).value)"
+                   [placeholder]="formatEditingColumn.displayName" />
+          </div>
+          @if (formatEditingColumn.userDisplayName) {
+            <div class="format-row alias-info">
+              <small class="muted-text">Original: {{ formatEditingColumn.displayName }}</small>
+              <button class="clear-alias-btn" (click)="formatEditingColumn.userDisplayName = undefined" title="Clear alias">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+          }
         </div>
 
         <!-- Preview Section -->
@@ -223,7 +259,7 @@
                  [style.text-decoration]="formatEditingColumn.format?.headerStyle?.underline ? 'underline' : 'none'"
                  [style.color]="formatEditingColumn.format?.headerStyle?.color"
                  [style.background-color]="formatEditingColumn.format?.headerStyle?.backgroundColor">
-              {{ formatEditingColumn.displayName }}
+              {{ formatEditingColumn.userDisplayName || formatEditingColumn.displayName }}
             </div>
             @for (value of getSampleValues(formatEditingColumn); track $index) {
               <div class="preview-cell"

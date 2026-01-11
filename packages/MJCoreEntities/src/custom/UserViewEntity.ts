@@ -783,8 +783,10 @@ export class ViewColumnInfo extends BaseInfo {
     ID: string = null
     /** Field name */
     Name: string = null
-    /** Display name for column header */
+    /** Display name for column header (from entity metadata) */
     DisplayName: string = null
+    /** User-defined display name override for column header */
+    userDisplayName?: string = null
     /** Whether column is hidden */
     hidden: boolean = null
     /** Column width in pixels */
@@ -883,8 +885,10 @@ export interface ViewGridColumnSetting {
     ID?: string;
     /** Field name */
     Name: string;
-    /** Display name for column header */
+    /** Display name for column header (from entity metadata) */
     DisplayName?: string;
+    /** User-defined display name override for column header */
+    userDisplayName?: string;
     /** Whether column is hidden */
     hidden?: boolean;
     /** Column width in pixels */

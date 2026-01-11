@@ -21,7 +21,8 @@
   top: 0;
   right: 0;
   width: 400px;
-  max-width: 100vw;
+  min-width: 320px;
+  max-width: min(800px, 100vw);
   height: 100%;
   background: white;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
@@ -29,11 +30,50 @@
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
-  transition: transform 0.25s ease;
+  transition: transform 0.25s ease, width 0s;
 }
 
 .config-panel.open {
   transform: translateX(0);
+}
+
+.config-panel.resizing {
+  transition: none;
+  user-select: none;
+}
+
+/* Resize Handle */
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resize-handle:hover,
+.config-panel.resizing .resize-handle {
+  background: linear-gradient(90deg, rgba(25, 118, 210, 0.1) 0%, transparent 100%);
+}
+
+.resize-grip {
+  width: 3px;
+  height: 40px;
+  background: #cbd5e1;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.resize-handle:hover .resize-grip,
+.config-panel.resizing .resize-grip {
+  opacity: 1;
+  background: #1976d2;
 }
 
 /* Panel Header */
@@ -331,6 +371,12 @@
   font-size: 10px;
   color: #1976d2;
   opacity: 0.7;
+}
+
+.column-name .alias-indicator {
+  font-size: 10px;
+  color: #7b1fa2;
+  opacity: 0.8;
 }
 
 .column-actions {
@@ -1553,6 +1599,37 @@
   width: 80px;
 }
 
+/* Alias Info Row */
+.format-row.alias-info {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.format-row.alias-info .muted-text {
+  color: #888;
+  font-size: 12px;
+}
+
+.clear-alias-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: #f0f0f0;
+  border-radius: 50%;
+  color: #888;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  transition: all 0.15s ease;
+}
+
+.clear-alias-btn:hover {
+  background: #e0e0e0;
+  color: #c62828;
+}
+
 /* Color Input */
 .color-input {
   width: 50px;
@@ -1736,7 +1813,13 @@
 /* Responsive */
 @media (max-width: 768px) {
   .config-panel {
-    width: 100%;
+    width: 100% !important;
+    max-width: 100vw !important;
+  }
+
+  /* Hide resize handle on mobile - panel is full width */
+  .resize-handle {
+    display: none;
   }
 
   .tab-btn span {
@@ -1753,5 +1836,12 @@
 
   .format-type-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Medium screens - limit max resize width */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .config-panel {
+    max-width: min(600px, 80vw);
   }
 }
