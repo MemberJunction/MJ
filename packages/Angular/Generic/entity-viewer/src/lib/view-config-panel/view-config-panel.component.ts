@@ -876,16 +876,36 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     const date = value instanceof Date ? value : new Date(value);
     if (isNaN(date.getTime())) return String(value);
 
-    const dateStyle = format.dateFormat === 'short' ? 'short'
-      : format.dateFormat === 'long' ? 'long'
-      : 'medium';
+    // Parse format string - check for weekday variants
+    const formatStr = format.dateFormat || 'medium';
+    const includeWeekday = formatStr.includes('-weekday');
+    const baseFormat = formatStr.replace('-weekday', '') as 'short' | 'medium' | 'long';
 
-    const options: Intl.DateTimeFormatOptions = {
-      dateStyle
-    };
+    let options: Intl.DateTimeFormatOptions;
 
-    if (format.type === 'datetime') {
-      options.timeStyle = 'short';
+    // Intl.DateTimeFormat doesn't allow combining dateStyle with weekday
+    // So we must use individual components when weekday is requested
+    if (includeWeekday) {
+      if (baseFormat === 'short') {
+        options = { weekday: 'short', month: 'numeric', day: 'numeric', year: '2-digit' };
+      } else if (baseFormat === 'long') {
+        options = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+      } else {
+        // medium
+        options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+      }
+      if (format.type === 'datetime') {
+        options.hour = 'numeric';
+        options.minute = '2-digit';
+      }
+    } else {
+      // No weekday - can use dateStyle shorthand
+      options = {
+        dateStyle: baseFormat === 'short' ? 'short' : baseFormat === 'long' ? 'long' : 'medium'
+      };
+      if (format.type === 'datetime') {
+        options.timeStyle = 'short';
+      }
     }
 
     return new Intl.DateTimeFormat('en-US', options).format(date);

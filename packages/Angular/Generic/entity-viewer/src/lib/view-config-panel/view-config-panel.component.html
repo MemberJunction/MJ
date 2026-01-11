@@ -299,8 +299,11 @@
               <label>Format</label>
               <select class="format-select" [(ngModel)]="formatEditingColumn.format!.dateFormat">
                 <option value="short">Short (1/15/25)</option>
+                <option value="short-weekday">Short + Day (Wed, 1/15/25)</option>
                 <option value="medium">Medium (Jan 15, 2025)</option>
+                <option value="medium-weekday">Medium + Day (Wed, Jan 15, 2025)</option>
                 <option value="long">Long (January 15, 2025)</option>
+                <option value="long-weekday">Long + Day (Wednesday, January 15, 2025)</option>
               </select>
             </div>
           </div>
@@ -353,83 +356,79 @@
           </div>
         </div>
 
-        <!-- Header Style (Collapsible) -->
-        <details class="format-section-collapsible">
-          <summary>
+        <!-- Header Style -->
+        <div class="format-section">
+          <div class="format-section-header">
             <i class="fa-solid fa-heading"></i>
             <span>Header Style</span>
-          </summary>
-          <div class="format-section-content">
-            <div class="style-buttons">
-              <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.bold"
-                      (click)="toggleHeaderStyle('bold')"
-                      title="Bold">
-                <i class="fa-solid fa-bold"></i>
-              </button>
-              <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.italic"
-                      (click)="toggleHeaderStyle('italic')"
-                      title="Italic">
-                <i class="fa-solid fa-italic"></i>
-              </button>
-              <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.underline"
-                      (click)="toggleHeaderStyle('underline')"
-                      title="Underline">
-                <i class="fa-solid fa-underline"></i>
-              </button>
-            </div>
-            <div class="format-row">
-              <label>Text Color</label>
-              <input type="color" class="color-input"
-                     [value]="formatEditingColumn.format?.headerStyle?.color || '#000000'"
-                     (input)="updateHeaderColor('color', $any($event.target).value)" />
-            </div>
-            <div class="format-row">
-              <label>Background</label>
-              <input type="color" class="color-input"
-                     [value]="formatEditingColumn.format?.headerStyle?.backgroundColor || '#ffffff'"
-                     (input)="updateHeaderColor('backgroundColor', $any($event.target).value)" />
-            </div>
           </div>
-        </details>
+          <div class="style-buttons">
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.bold"
+                    (click)="toggleHeaderStyle('bold')"
+                    title="Bold">
+              <i class="fa-solid fa-bold"></i>
+            </button>
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.italic"
+                    (click)="toggleHeaderStyle('italic')"
+                    title="Italic">
+              <i class="fa-solid fa-italic"></i>
+            </button>
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.underline"
+                    (click)="toggleHeaderStyle('underline')"
+                    title="Underline">
+              <i class="fa-solid fa-underline"></i>
+            </button>
+          </div>
+          <div class="format-row">
+            <label>Text Color</label>
+            <input type="color" class="color-input"
+                   [value]="formatEditingColumn.format?.headerStyle?.color || '#000000'"
+                   (input)="updateHeaderColor('color', $any($event.target).value)" />
+          </div>
+          <div class="format-row">
+            <label>Background</label>
+            <input type="color" class="color-input"
+                   [value]="formatEditingColumn.format?.headerStyle?.backgroundColor || '#ffffff'"
+                   (input)="updateHeaderColor('backgroundColor', $any($event.target).value)" />
+          </div>
+        </div>
 
-        <!-- Cell Style (Collapsible) -->
-        <details class="format-section-collapsible">
-          <summary>
+        <!-- Cell Style -->
+        <div class="format-section">
+          <div class="format-section-header">
             <i class="fa-solid fa-table-cells"></i>
             <span>Cell Style</span>
-          </summary>
-          <div class="format-section-content">
-            <div class="style-buttons">
-              <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.bold"
-                      (click)="toggleCellStyle('bold')"
-                      title="Bold">
-                <i class="fa-solid fa-bold"></i>
-              </button>
-              <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.italic"
-                      (click)="toggleCellStyle('italic')"
-                      title="Italic">
-                <i class="fa-solid fa-italic"></i>
-              </button>
-              <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.underline"
-                      (click)="toggleCellStyle('underline')"
-                      title="Underline">
-                <i class="fa-solid fa-underline"></i>
-              </button>
-            </div>
-            <div class="format-row">
-              <label>Text Color</label>
-              <input type="color" class="color-input"
-                     [value]="formatEditingColumn.format?.cellStyle?.color || '#000000'"
-                     (input)="updateCellColor('color', $any($event.target).value)" />
-            </div>
-            <div class="format-row">
-              <label>Background</label>
-              <input type="color" class="color-input"
-                     [value]="formatEditingColumn.format?.cellStyle?.backgroundColor || '#ffffff'"
-                     (input)="updateCellColor('backgroundColor', $any($event.target).value)" />
-            </div>
           </div>
-        </details>
+          <div class="style-buttons">
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.bold"
+                    (click)="toggleCellStyle('bold')"
+                    title="Bold">
+              <i class="fa-solid fa-bold"></i>
+            </button>
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.italic"
+                    (click)="toggleCellStyle('italic')"
+                    title="Italic">
+              <i class="fa-solid fa-italic"></i>
+            </button>
+            <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.underline"
+                    (click)="toggleCellStyle('underline')"
+                    title="Underline">
+              <i class="fa-solid fa-underline"></i>
+            </button>
+          </div>
+          <div class="format-row">
+            <label>Text Color</label>
+            <input type="color" class="color-input"
+                   [value]="formatEditingColumn.format?.cellStyle?.color || '#000000'"
+                   (input)="updateCellColor('color', $any($event.target).value)" />
+          </div>
+          <div class="format-row">
+            <label>Background</label>
+            <input type="color" class="color-input"
+                   [value]="formatEditingColumn.format?.cellStyle?.backgroundColor || '#ffffff'"
+                   (input)="updateCellColor('backgroundColor', $any($event.target).value)" />
+          </div>
+        </div>
 
         <!-- Clear Format Button -->
         <div class="format-actions">
