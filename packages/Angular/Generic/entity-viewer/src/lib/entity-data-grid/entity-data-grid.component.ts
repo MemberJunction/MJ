@@ -152,12 +152,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   set Params(value: RunViewParams | null) {
     const previousValue = this._params;
     this._params = value;
-    console.log('[entity-data-grid] Params set:', {
-      ViewID: value?.ViewID,
-      ViewName: value?.ViewName,
-      ViewEntity: value?.ViewEntity ? 'present' : 'undefined',
-      EntityName: value?.EntityName
-    });
     if (value !== previousValue) {
       this.onParamsChanged();
     }
@@ -272,6 +266,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this._useExternalData = this._data.length > 0;
     if (this._useExternalData || hadData) {
       this.processData();
+
+      // Reapply sort state to grid after data changes to maintain visual indicators
+      // Use microtask to ensure AG Grid has processed the new row data first
+      if (this.gridApi && this._sortState.length > 0) {
+        Promise.resolve().then(() => {
+          this.applySortStateToGrid();
+        });
+      }
     }
   }
   get data(): BaseEntity[] {
@@ -1151,7 +1153,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   // ========================================
 
   ngOnInit(): void {
-    console.log('[entity-data-grid] ngOnInit called');
     this.setupRefreshDebounce();
     this.setupStatePersistDebounce();
     this.setupUserDefaultsPersistDebounce();
@@ -1210,24 +1211,26 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Reset internal grid state when params change - this ensures we don't
+    // carry over column/sort settings from a previous view when switching views
+    this._gridState = null;
+    this._sortState = [];
+
     try {
       // If using a stored view, load the view entity first
       if (this._params.ViewEntity) {
         // ViewEntity was provided directly
         this._viewEntity = this._params.ViewEntity as UserViewEntityExtended;
         this._entityInfo = this._viewEntity.ViewEntityInfo;
-        console.log('[entity-data-grid] Loaded view from ViewEntity prop:', this._viewEntity.ID, this._viewEntity.Name);
         this.applyViewEntitySettings();
       } else if (this._params.ViewID) {
         // Load view entity by ID from engine
         const cachedView = this.getViewFromEngine(this._params.ViewID);
         if (cachedView) {
           this._viewEntity = cachedView;
-          console.log('[entity-data-grid] Loaded view from engine by ID:', this._viewEntity.ID, this._viewEntity.Name);
         } else {
           // View not in cache - use ViewInfo (which also uses engine)
           this._viewEntity = await ViewInfo.GetViewEntity(this._params.ViewID);
-          console.log('[entity-data-grid] Loaded view via ViewInfo.GetViewEntity:', this._viewEntity.ID, this._viewEntity.Name);
         }
         this._entityInfo = this._viewEntity.ViewEntityInfo;
         this.applyViewEntitySettings();
@@ -1236,11 +1239,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         const cachedView = this.getViewFromEngineByName(this._params.ViewName);
         if (cachedView) {
           this._viewEntity = cachedView;
-          console.log('[entity-data-grid] Loaded view from engine by name:', this._viewEntity.ID, this._viewEntity.Name);
         } else {
           // View not in cache - use ViewInfo (which also uses engine)
           this._viewEntity = await ViewInfo.GetViewEntityByName(this._params.ViewName);
-          console.log('[entity-data-grid] Loaded view via ViewInfo.GetViewEntityByName:', this._viewEntity.ID, this._viewEntity.Name);
         }
         this._entityInfo = this._viewEntity.ViewEntityInfo;
         this.applyViewEntitySettings();
@@ -1249,7 +1250,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this._viewEntity = null;
         const md = new Metadata();
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
-        console.log('[entity-data-grid] Dynamic view for entity:', this._params.EntityName);
 
         // For dynamic views, try to load user's saved defaults
         if (this._entityInfo && this._autoPersistState) {
@@ -1305,13 +1305,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private loadUserDefaultGridState(entityName: string): void {
     try {
       const settingKey = `default-view-setting/${entityName}`;
-      console.log('[entity-data-grid] loadUserDefaultGridState - looking for key:', settingKey);
       const savedState = UserInfoEngine.Instance.GetSetting(settingKey);
-      console.log('[entity-data-grid] loadUserDefaultGridState - found savedState:', savedState ? 'yes (' + savedState.length + ' chars)' : 'no');
 
       if (savedState) {
         const gridState = JSON.parse(savedState) as ViewGridState;
-        console.log('[entity-data-grid] loadUserDefaultGridState - parsed gridState with', gridState.columnSettings?.length, 'columns');
 
         // Only apply if not already set via props (props take precedence)
         if (!this._gridState && gridState.columnSettings?.length) {
@@ -1319,9 +1316,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
             columnSettings: gridState.columnSettings,
             sortSettings: gridState.sortSettings || []
           };
-          console.log('[entity-data-grid] loadUserDefaultGridState - applied gridState');
-        } else {
-          console.log('[entity-data-grid] loadUserDefaultGridState - skipped (gridState already set via props)');
         }
 
         // Apply sort state if not already set
@@ -1331,7 +1325,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
             direction: s.dir,
             index
           }));
-          console.log('[entity-data-grid] loadUserDefaultGridState - applied sortState');
         }
       }
     } catch (error) {
@@ -1344,9 +1337,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Uses UserInfoEngine to store settings with key format: "default-view-setting/{entityName}"
    */
   private async persistUserDefaultGridState(state: ViewGridStateConfig): Promise<void> {
-    console.log('[entity-data-grid] persistUserDefaultGridState called (after 5s debounce)');
     if (!this._entityInfo) {
-      console.log('[entity-data-grid] persistUserDefaultGridState - no entityInfo, returning');
       return;
     }
 
@@ -1357,9 +1348,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         sortSettings: state.sortSettings
       };
 
-      console.log('[entity-data-grid] Saving to UserInfoEngine with key:', settingKey);
-      const success = await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridStateJson));
-      console.log('[entity-data-grid] UserInfoEngine.SetSetting result:', success);
+      await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridStateJson));
     } catch (error) {
       console.error('[entity-data-grid] Failed to persist user default grid state:', error);
     }
@@ -1377,21 +1366,16 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private applyViewEntitySettings(): void {
     if (!this._viewEntity) return;
 
-    console.log('[entity-data-grid] applyViewEntitySettings - ViewEntity.GridState:', this._viewEntity.GridState);
-    console.log('[entity-data-grid] applyViewEntitySettings - existing _gridState:', this._gridState);
-
     // Only apply grid state from view entity if not already set via props
     // (gridState input takes precedence)
     if (!this._gridState && this._viewEntity.GridState) {
       try {
         const gridState = JSON.parse(this._viewEntity.GridState) as ViewGridState;
-        console.log('[entity-data-grid] Parsed GridState from view:', gridState);
         if (gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
             sortSettings: gridState.sortSettings || []
           };
-          console.log('[entity-data-grid] Applied gridState with', gridState.columnSettings.length, 'columns');
         }
       } catch (e) {
         console.warn('Failed to parse view GridState:', e);
@@ -1412,7 +1396,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           direction: s.direction?.toLowerCase() === 'desc' ? 'desc' : 'asc',
           index
         }));
-        console.log('[entity-data-grid] Applied sortState from ViewSortInfo:', this._sortState);
       }
     }
   }
@@ -2401,9 +2384,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Emit grid state changed
       this.emitGridStateChanged('sort');
 
-      // Reload data if server-side sorting
-      if (this._serverSideSorting) {
+      // Determine if we need to reload data from server or can sort client-side
+      // Client-side sorting is only possible if we have ALL the data loaded
+      if (this._serverSideSorting && !this._useExternalData) {
         this.loadData(true);
+      } else if (this._useExternalData) {
+        // Using external data - check if we have all data or just a page
+        // If totalRowCount > current data length, we only have partial data and parent must handle sorting
+        // Parent receives afterSort event and can reload with new sort order
+        // If we have all data, AG Grid handles client-side sorting automatically
       }
     } else {
       this._sortState = [];
@@ -2511,7 +2500,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     if (!this.gridApi || !this._entityInfo) return;
 
     const currentState = this.buildCurrentGridState();
-    console.log('[entity-data-grid] emitGridStateChanged:', changeType, 'IsDynamicView:', this.IsDynamicView, 'viewEntity:', this._viewEntity?.ID, 'autoPersist:', this._autoPersistState);
 
     // Always emit the event for external consumers
     this.gridStateChanged.emit({
@@ -2523,11 +2511,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     if (this._autoPersistState) {
       if (!this.IsDynamicView && this._viewEntity) {
         // Stored view - persist to UserView.GridState (debounced)
-        console.log('[entity-data-grid] Scheduling persist to UserView.GridState');
         this.statePersistSubject.next(currentState);
       } else if (this.IsDynamicView) {
         // Dynamic view - persist to User Settings as defaults (debounced via same subject)
-        console.log('[entity-data-grid] Scheduling persist to User Settings (dynamic view)');
         this.userDefaultsPersistSubject.next(currentState);
       }
     }
@@ -2538,17 +2524,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * Only saves if the user has edit permission on the view.
    */
   private async persistGridStateToView(state: ViewGridStateConfig): Promise<void> {
-    console.log('[entity-data-grid] persistGridStateToView called, viewEntity:', this._viewEntity?.ID, 'isSavingState:', this.isSavingState);
-
     if (!this._viewEntity || this.isSavingState) {
-      console.log('[entity-data-grid] persistGridStateToView - early exit (no viewEntity or already saving)');
       return;
     }
 
     // Check permission before saving
-    console.log('[entity-data-grid] UserCanEdit:', this._viewEntity.UserCanEdit, 'UserID:', this._viewEntity.UserID);
     if (!this._viewEntity.UserCanEdit) {
-      console.log('[entity-data-grid] User does not have edit permission on this view - state not persisted');
       return;
     }
 
@@ -2564,7 +2545,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
       // Update the view entity's GridState
       this._viewEntity.GridState = JSON.stringify(gridStateJson);
-      console.log('[entity-data-grid] Set GridState on viewEntity:', this._viewEntity.GridState.substring(0, 200) + '...');
 
       // Update SortState separately if changed
       if (state.sortSettings?.length) {
@@ -2577,11 +2557,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
 
       // Save the view entity
-      console.log('[entity-data-grid] Calling viewEntity.Save()...');
       const success = await this._viewEntity.Save();
-      if (success) {
-        console.log('[entity-data-grid] Save succeeded!');
-      } else {
+      if (!success) {
         console.warn('[entity-data-grid] Failed to save view state:', this._viewEntity.LatestResult?.Message);
       }
     } catch (error) {
@@ -2593,11 +2570,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   private buildCurrentGridState(): ViewGridStateConfig {
-    if (!this.gridApi || !this._entityInfo) {
+    if (!this.gridApi || !this._entityInfo || !this._entityInfo.Fields) {
       return { columnSettings: [], sortSettings: [] };
     }
 
     const columnState = this.gridApi.getColumnState();
+    if (!columnState) {
+      return { columnSettings: [], sortSettings: [] };
+    }
+
     const columnSettings: ViewColumnConfig[] = [];
     const sortSettings: ViewSortConfig[] = [];
 

@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
@@ -274,6 +274,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   /** Current sort state */
   public internalSortState: SortState | null = null;
 
+  /** Cached grid params to avoid recreating object on every change detection */
+  private _cachedGridParams: RunViewParams | null = null;
+  private _lastGridParamsEntity: string | null = null;
+  private _lastGridParamsViewEntity: UserViewEntityExtended | null = null;
+
   /** Pagination state */
   public pagination: PaginationState = {
     currentPage: 0,
@@ -399,6 +404,32 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   get effectiveConfig(): Required<EntityViewerConfig> {
     return { ...DEFAULT_VIEWER_CONFIG, ...this.config };
+  }
+
+  /**
+   * Get cached grid params - only recreates object when entity or viewEntity changes
+   * This prevents Angular from seeing a new object reference on every change detection
+   * which would cause the grid to reinitialize
+   */
+  get gridParams(): RunViewParams | null {
+    if (!this.entity) {
+      return null;
+    }
+
+    // Check if we need to recreate the params object
+    const entityChanged = this._lastGridParamsEntity !== this.entity.Name;
+    const viewEntityChanged = this._lastGridParamsViewEntity !== this.viewEntity;
+
+    if (entityChanged || viewEntityChanged || !this._cachedGridParams) {
+      this._lastGridParamsEntity = this.entity.Name;
+      this._lastGridParamsViewEntity = this.viewEntity ?? null;
+      this._cachedGridParams = {
+        EntityName: this.entity.Name,
+        ViewEntity: this.viewEntity || undefined
+      };
+    }
+
+    return this._cachedGridParams;
   }
 
   /**

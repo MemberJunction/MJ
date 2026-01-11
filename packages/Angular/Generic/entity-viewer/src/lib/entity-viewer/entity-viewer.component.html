@@ -105,72 +105,76 @@
 
   <!-- Content -->
   <div class="viewer-content">
-    @if (isLoading && filteredRecords.length === 0) {
-      <!-- Initial loading state -->
-      <div class="loading-container">
-        <mj-loading [text]="loadingMessage" size="medium"></mj-loading>
-      </div>
-    } @else if (!entity) {
-      <div class="empty-state">
-        <i class="fa-solid fa-database"></i>
-        <p>Select an entity to view records</p>
-      </div>
-    } @else if (filteredRecords.length === 0 && !isLoading) {
-      <div class="empty-state">
-        <i class="fa-solid fa-inbox"></i>
-        <p>{{ debouncedFilterText ? 'No matching records' : 'No records found' }}</p>
-      </div>
-    } @else {
-      <!-- Grid View - always rendered but hidden when not active to preserve state -->
-      <mj-entity-data-grid
-        [hidden]="effectiveViewMode !== 'grid'"
-        [data]="filteredRecords"
-        [Params]="{ EntityName: entity.Name, ViewEntity: viewEntity || undefined, OrderBy: effectiveSortOrderBy }"
-        [filterText]="debouncedFilterText"
-        [gridState]="gridState"
-        [height]="'auto'"
-        [showToolbar]="showGridToolbar"
-        [toolbarConfig]="effectiveGridToolbarConfig"
-        [selectionMode]="gridSelectionMode"
-        [AllowLoad]="false"
-        (afterRowClick)="onDataGridRowClick($event)"
-        (afterRowDoubleClick)="onDataGridRowDoubleClick($event)"
-        (afterSort)="onDataGridSortChanged($event)"
-        (gridStateChanged)="onGridStateChanged($event)"
-        (newButtonClick)="onGridAddRequested()"
-        (refreshButtonClick)="onGridRefreshRequested()"
-        (deleteButtonClick)="onGridDeleteRequested($event)"
-        (exportButtonClick)="onGridExportRequested()">
-      </mj-entity-data-grid>
+    <!-- Loading container - full page when no data exists -->
+    <div class="loading-container" [hidden]="!(isLoading && filteredRecords.length === 0)">
+      <mj-loading [text]="loadingMessage" size="medium"></mj-loading>
+    </div>
 
-      <!-- Cards View - always rendered but hidden when not active to preserve state -->
-      <mj-entity-cards
-        [hidden]="effectiveViewMode !== 'cards'"
-        [entity]="entity"
-        [records]="filteredRecords"
-        [selectedRecordId]="selectedRecordId"
-        [cardTemplate]="cardTemplate"
-        [hiddenFieldMatches]="hiddenFieldMatches"
-        [filterText]="debouncedFilterText"
-        (recordSelected)="onRecordSelected($event)"
-        (recordOpened)="onRecordOpened($event)">
-      </mj-entity-cards>
+    <!-- Loading overlay - shown on top of content when loading with existing data -->
+    <div class="loading-overlay" [hidden]="!(isLoading && filteredRecords.length > 0)">
+      <mj-loading [text]="loadingMessage" size="small"></mj-loading>
+    </div>
 
-      <!-- Timeline View - only created when timeline mode is active -->
-      @if (hasDateFields && effectiveViewMode === 'timeline') {
-        <mj-timeline
-          [groups]="timelineGroups"
-          [orientation]="timelineOrientation"
-          [layout]="timelineOrientation === 'vertical' ? 'alternating' : 'single'"
-          [sortOrder]="timelineSortOrder"
-          [segmentGrouping]="timelineSegmentGrouping"
-          [segmentsCollapsible]="true"
-          [segmentsDefaultExpanded]="true"
-          [selectedEventId]="timelineSelectedEventId"
-          (afterEventClick)="onTimelineEventClick($event)">
-        </mj-timeline>
-      }
-    }
+    <!-- Empty state: no entity selected -->
+    <div class="empty-state" [hidden]="!!entity">
+      <i class="fa-solid fa-database"></i>
+      <p>Select an entity to view records</p>
+    </div>
+
+    <!-- Empty state: no records found -->
+    <div class="empty-state" [hidden]="!entity || filteredRecords.length > 0 || isLoading">
+      <i class="fa-solid fa-inbox"></i>
+      <p>{{ debouncedFilterText ? 'No matching records' : 'No records found' }}</p>
+    </div>
+
+    <!-- Grid View - always rendered, visibility controlled by hidden -->
+    <mj-entity-data-grid
+      [hidden]="effectiveViewMode !== 'grid' || !entity"
+      [data]="filteredRecords"
+      [Params]="gridParams"
+      [filterText]="debouncedFilterText"
+      [gridState]="gridState"
+      [height]="'auto'"
+      [showToolbar]="showGridToolbar"
+      [toolbarConfig]="effectiveGridToolbarConfig"
+      [selectionMode]="gridSelectionMode"
+      [AllowLoad]="false"
+      (afterRowClick)="onDataGridRowClick($event)"
+      (afterRowDoubleClick)="onDataGridRowDoubleClick($event)"
+      (afterSort)="onDataGridSortChanged($event)"
+      (gridStateChanged)="onGridStateChanged($event)"
+      (newButtonClick)="onGridAddRequested()"
+      (refreshButtonClick)="onGridRefreshRequested()"
+      (deleteButtonClick)="onGridDeleteRequested($event)"
+      (exportButtonClick)="onGridExportRequested()">
+    </mj-entity-data-grid>
+
+    <!-- Cards View - always rendered, visibility controlled by hidden -->
+    <mj-entity-cards
+      [hidden]="effectiveViewMode !== 'cards' || !entity"
+      [entity]="entity"
+      [records]="filteredRecords"
+      [selectedRecordId]="selectedRecordId"
+      [cardTemplate]="cardTemplate"
+      [hiddenFieldMatches]="hiddenFieldMatches"
+      [filterText]="debouncedFilterText"
+      (recordSelected)="onRecordSelected($event)"
+      (recordOpened)="onRecordOpened($event)">
+    </mj-entity-cards>
+
+    <!-- Timeline View - always rendered when date fields exist, visibility controlled by hidden -->
+    <mj-timeline
+      [hidden]="effectiveViewMode !== 'timeline' || !hasDateFields"
+      [groups]="timelineGroups"
+      [orientation]="timelineOrientation"
+      [layout]="timelineOrientation === 'vertical' ? 'alternating' : 'single'"
+      [sortOrder]="timelineSortOrder"
+      [segmentGrouping]="timelineSegmentGrouping"
+      [segmentsCollapsible]="true"
+      [segmentsDefaultExpanded]="true"
+      [selectedEventId]="timelineSelectedEventId"
+      (afterEventClick)="onTimelineEventClick($event)">
+    </mj-timeline>
   </div>
 
   <!-- Pagination - only show when there's more data to load OR we've loaded more than one page -->
