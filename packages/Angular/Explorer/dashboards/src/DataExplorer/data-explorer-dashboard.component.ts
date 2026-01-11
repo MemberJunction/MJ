@@ -506,6 +506,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   async ngOnInit(): Promise<void> {
+    // Ensure UserInfoEngine is configured before we try to access user settings
+    // This prevents race conditions where we try to load default view settings
+    // before the user settings have been loaded from the server
+    await UserInfoEngine.Instance.Config(false);
+
     // Parse URL state FIRST - URL wins over persisted state
     // This must happen before loading entities to prevent race conditions
     const urlState = this.parseUrlState();
@@ -1144,15 +1149,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         };
 
         // Show success notification
-        MJGlobal.Instance.RaiseEvent({
-          event: MJEventType.DisplaySimpleNotificationRequest,
-          eventCode: '',
-          component: this,
-          args: {
-            message: 'Default view settings saved',
-            type: 'success'
-          } as DisplaySimpleNotificationRequestData
-        } as MJEvent);
+        this.showNotification('Default view settings saved', 'success', 2500);
       }
 
       this.stateService.closeViewConfigPanel();
@@ -1160,15 +1157,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     } catch (error) {
       console.error('[DataExplorer] Error saving default view settings:', error);
       // Show error notification
-      MJGlobal.Instance.RaiseEvent({
-        event: MJEventType.DisplaySimpleNotificationRequest,
-        eventCode: '',
-        component: this,
-        args: {
-          message: 'Failed to save default view settings',
-          type: 'error'
-        } as DisplaySimpleNotificationRequestData
-      } as MJEvent);
+      this.showNotification('Failed to save default view settings', 'error', 3500);
     } finally {
       this.isSavingView = false;
       this.cdr.detectChanges();

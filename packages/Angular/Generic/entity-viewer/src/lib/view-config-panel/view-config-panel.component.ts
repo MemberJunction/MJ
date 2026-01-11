@@ -9,7 +9,6 @@ import {
   ColumnTextStyle,
   ColumnConditionalRule
 } from '@memberjunction/core-entities';
-import { ViewGridStateConfig, ViewColumnConfig } from '../types';
 import {
   CompositeFilterDescriptor,
   FilterFieldInfo,
@@ -88,7 +87,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Current grid state from the grid (includes live column widths/order from user interaction)
    * This takes precedence over viewEntity.Columns for showing current state
    */
-  @Input() currentGridState: ViewGridStateConfig | null = null;
+  @Input() currentGridState: ViewGridState | null = null;
 
   /**
    * Sample data for column format preview (first few records)
@@ -504,7 +503,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   /**
    * Apply grid state column settings to the columns array
    */
-  private applyGridStateToColumns(gridColumns: ViewColumnConfig[]): void {
+  private applyGridStateToColumns(gridColumns: ViewGridColumnSetting[]): void {
     // Mark all columns as hidden initially
     this.columns.forEach(c => c.visible = false);
 
@@ -1007,6 +1006,9 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Save the view
    */
   onSave(): void {
+    // Guard against double-clicks or rapid repeated calls
+    if (this.isSaving) return;
+
     this.save.emit({
       name: this.viewName,
       description: this.viewDescription,
@@ -1025,6 +1027,9 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Save as a new view
    */
   onSaveAsNew(): void {
+    // Guard against double-clicks or rapid repeated calls
+    if (this.isSaving) return;
+
     this.save.emit({
       name: this.viewName || 'New View',
       description: this.viewDescription,
@@ -1044,6 +1049,9 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Used for dynamic/default views that don't have a stored view entity
    */
   onSaveDefaults(): void {
+    // Guard against double-clicks or rapid repeated calls
+    if (this.isSaving) return;
+
     this.saveDefaults.emit({
       name: 'Default',
       description: '',

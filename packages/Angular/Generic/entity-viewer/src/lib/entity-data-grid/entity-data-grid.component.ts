@@ -307,10 +307,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Input()
   set gridState(value: ViewGridStateConfig | null) {
-    const previousValue = this._gridState;
-    this._gridState = value;
-    if (value !== previousValue) {
-      this.onGridStateChanged();
+    if (!!value) {
+      const previousValue = this._gridState;
+      this._gridState = value;
+      if (value !== previousValue) {
+        this.onGridStateChanged();
+      }
     }
   }
   get gridState(): ViewGridStateConfig | null {
@@ -1186,7 +1188,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   // Lifecycle Hooks
   // ========================================
 
-  ngOnInit(): void {
+  async ngOnInit() {
     this.setupRefreshDebounce();
     this.setupStatePersistDebounce();
     this.setupUserDefaultsPersistDebounce();
