@@ -29,9 +29,17 @@ import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
-import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
+import {
+  ExportService,
+  ExportDialogConfig,
+  ExportDialogResult
+} from '@memberjunction/ng-export-service';
+import {
+  ExportColumn,
+  ExportData
+} from '@memberjunction/export-engine';
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -72,9 +80,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /** Reference to the view config panel for passing filter state */
   @ViewChild(ViewConfigPanelComponent) viewConfigPanelRef: ViewConfigPanelComponent | undefined;
-
-  /** Reference to the Excel export component */
-  @ViewChild('excelExport', { read: ExcelExportComponent }) excelExportRef: ExcelExportComponent | undefined;
 
   /**
    * Optional filter to constrain which entities are shown in the explorer.
@@ -160,9 +165,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public recentRecordsEntityFilter: string | null = null;
 
   // Export functionality
-  public exportData: any[] = [];
-  public exportColumns: { Name: string; DisplayName: string }[] = [];
-  public exportFileName: string = 'export.xlsx';
+  public showExportDialog: boolean = false;
+  public exportDialogConfig: ExportDialogConfig | null = null;
 
   // List management
   public showListManagementDialog: boolean = false;
@@ -499,7 +503,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     private cdr: ChangeDetectorRef,
     private router: Router,
     private recentAccessService: RecentAccessService,
-    private navigationService: NavigationService
+    private navigationService: NavigationService,
+    private exportService: ExportService
   ) {
     super();
     this.state = this.stateService.CurrentState;
@@ -1413,68 +1418,126 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Handle export to Excel request
+   * Handle export request - opens the export dialog
    */
   public async onExport(): Promise<void> {
-    if (!this.excelExportRef || !this.selectedEntity) {
-      console.error('Cannot export: Excel export component or entity not available');
+    if (!this.selectedEntity) {
+      console.error('Cannot export: No entity selected');
       return;
     }
 
     try {
-      this.showNotification('Working on the export, will notify you when it is complete...', 'info', 2000);
+      this.showNotification('Preparing export...', 'info', 2000);
 
+      // Load the export data
       const data = await this.getExportData();
 
-      // Get visible columns in priority order:
-      // 1. Current grid state (reflects actual displayed columns including user modifications)
-      // 2. View's column configuration (if a view is selected)
-      // 3. All non-virtual fields (fallback for default view)
-      if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
-        // Use current grid state - only export visible columns in grid order
-        const visibleColumns = this.currentGridState.columnSettings.filter(col => col.hidden !== true);
-        this.exportColumns = visibleColumns.map(col => ({
-          Name: col.Name,
-          DisplayName: col.DisplayName || col.Name
-        }));
-      } else if (this.selectedViewEntity?.Columns) {
-        // Use view's column configuration - only export visible columns in view order
-        const visibleColumns = this.selectedViewEntity.Columns.filter(col => !col.hidden);
-        this.exportColumns = visibleColumns.map(col => ({
-          Name: col.Name,
-          DisplayName: col.DisplayName || col.Name
-        }));
-      } else {
-        // Fall back to all non-virtual fields if no view is selected
-        const visibleFields = this.selectedEntity.Fields.filter(f => !f.IsVirtual);
-        this.exportColumns = visibleFields.map(f => ({
-          Name: f.Name,
-          DisplayName: f.DisplayNameOrName
-        }));
-      }
+      // Get visible columns for export
+      const columns = this.getExportColumns();
 
-      this.exportData = data;
-
-      // Set the export filename
+      // Generate file name
       const viewName = this.selectedViewEntity?.Name || 'Data';
-      this.exportFileName = `${this.selectedEntity.Name}_${viewName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileName = `${this.selectedEntity.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
 
-      // Wait for Angular to update the DOM with the new data before triggering save
-      setTimeout(() => {
-        this.excelExportRef!.save();
-        this.showNotification('Excel Export Complete', 'success', 2000);
-      }, 100);
-    }
-    catch (e) {
-      this.showNotification('Error exporting data', 'error', 5000);
+      // Configure and show the export dialog
+      this.exportDialogConfig = {
+        data,
+        columns,
+        defaultFileName: fileName,
+        availableFormats: ['excel', 'csv', 'json'],
+        defaultFormat: 'excel',
+        showSamplingOptions: true,
+        defaultSamplingMode: 'all',
+        dialogTitle: `Export ${this.selectedEntity.Name}`
+      };
+      this.showExportDialog = true;
+      this.cdr.detectChanges();
+    } catch (e) {
+      this.showNotification('Error preparing export', 'error', 5000);
       console.error('Export error:', e);
     }
   }
 
   /**
+   * Handle export dialog close
+   */
+  public onExportDialogClosed(result: ExportDialogResult): void {
+    this.showExportDialog = false;
+    this.exportDialogConfig = null;
+    this.cdr.detectChanges();
+
+    if (result.exported) {
+      this.showNotification('Export complete', 'success', 2000);
+    }
+  }
+
+  /**
+   * Get visible columns for export based on current grid/view state
+   */
+  private getExportColumns(): ExportColumn[] {
+    if (!this.selectedEntity) return [];
+
+    // Priority 1: Current grid state (reflects actual displayed columns)
+    if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
+      const visibleColumns = this.currentGridState.columnSettings.filter(col => col.hidden !== true);
+      return visibleColumns.map(col => {
+        const field = this.selectedEntity?.Fields.find(f => f.Name === col.Name);
+        return {
+          name: col.Name,
+          displayName: col.DisplayName || col.Name,
+          dataType: this.mapFieldTypeToExportType(field?.Type)
+        };
+      });
+    }
+
+    // Priority 2: View's column configuration
+    if (this.selectedViewEntity?.Columns) {
+      const visibleColumns = this.selectedViewEntity.Columns.filter(col => !col.hidden);
+      return visibleColumns.map(col => {
+        const field = this.selectedEntity?.Fields.find(f => f.Name === col.Name);
+        return {
+          name: col.Name,
+          displayName: col.DisplayName || col.Name,
+          dataType: this.mapFieldTypeToExportType(field?.Type)
+        };
+      });
+    }
+
+    // Priority 3: All non-virtual fields
+    const visibleFields = this.selectedEntity.Fields.filter(f => !f.IsVirtual);
+    return visibleFields.map(f => ({
+      name: f.Name,
+      displayName: f.DisplayNameOrName,
+      dataType: this.mapFieldTypeToExportType(f.Type)
+    }));
+  }
+
+  /**
+   * Map MemberJunction field types to export column types
+   */
+  private mapFieldTypeToExportType(fieldType?: string): ExportColumn['dataType'] {
+    if (!fieldType) return 'string';
+
+    const type = fieldType.toLowerCase();
+    if (type.includes('int') || type.includes('decimal') || type.includes('float') || type.includes('numeric')) {
+      return 'number';
+    }
+    if (type.includes('date') || type.includes('time')) {
+      return 'date';
+    }
+    if (type.includes('bit') || type.includes('bool')) {
+      return 'boolean';
+    }
+    if (type.includes('money') || type.includes('currency')) {
+      return 'currency';
+    }
+    return 'string';
+  }
+
+  /**
    * Get the data for export - loads all records for the current view/entity
    */
-  protected async getExportData(): Promise<any[]> {
+  protected async getExportData(): Promise<ExportData> {
     if (!this.selectedEntity) {
       throw new Error('No entity selected for export');
     }
@@ -1500,9 +1563,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const result = await rv.RunView(params);
 
     if (result && result.Success) {
-      return result.Results;
-    }
-    else {
+      // Convert BaseEntity objects to plain objects for export
+      return result.Results.map((row: BaseEntity | Record<string, unknown>) => {
+        if (row instanceof BaseEntity) {
+          return row.GetAll();
+        }
+        return row as Record<string, unknown>;
+      });
+    } else {
       throw new Error('Unable to get export data: ' + (result?.ErrorMessage || 'Unknown error'));
     }
   }

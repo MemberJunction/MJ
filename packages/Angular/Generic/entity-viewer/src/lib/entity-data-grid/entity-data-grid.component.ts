@@ -90,6 +90,17 @@ import {
   BeforeColumnVisibilityChangeEventArgs,
   AfterColumnVisibilityChangeEventArgs
 } from './events/grid-events';
+import {
+  ExportService,
+  ExportDialogConfig,
+  ExportDialogResult
+} from '@memberjunction/ng-export-service';
+import {
+  ExportOptions,
+  ExportResult,
+  ExportColumn,
+  ExportData
+} from '@memberjunction/export-engine';
 
 // Register AG Grid modules (required for v34+)
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -1179,9 +1190,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   // Overflow menu state
   public showOverflowMenu: boolean = false;
 
+  // Export dialog state
+  public showExportDialog: boolean = false;
+  public exportDialogConfig: ExportDialogConfig | null = null;
+
   constructor(
     private cdr: ChangeDetectorRef,
-    private elementRef: ElementRef
+    private elementRef: ElementRef,
+    private exportService: ExportService
   ) {}
 
   // ========================================
@@ -3180,6 +3196,164 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   onExportClick(): void {
     this.exportRequested.emit();
     this.exportButtonClick.emit();
+    // Show the export dialog
+    this.showExportDialogForCurrentData();
+  }
+
+  /**
+   * Shows the export dialog for the current grid data
+   */
+  private showExportDialogForCurrentData(): void {
+    const data = this.getExportData();
+    const columns = this.getExportColumns();
+    const fileName = this.getDefaultExportFileName();
+
+    this.exportDialogConfig = {
+      data,
+      columns,
+      defaultFileName: fileName,
+      availableFormats: ['excel', 'csv', 'json'],
+      defaultFormat: 'excel',
+      showSamplingOptions: true,
+      defaultSamplingMode: 'all',
+      dialogTitle: `Export ${this._entityInfo?.Name || 'Data'}`
+    };
+    this.showExportDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle export dialog close
+   */
+  onExportDialogClosed(result: ExportDialogResult): void {
+    this.showExportDialog = false;
+    this.exportDialogConfig = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Export grid data directly without showing dialog.
+   * Use this for programmatic export with specific options.
+   * @param options Export options (format, sampling, etc.)
+   * @param download If true, automatically downloads the file. Default true.
+   * @returns Export result with data buffer and metadata
+   */
+  async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
+    const data = this.getExportData();
+    const columns = this.getExportColumns();
+    const fileName = options?.fileName || this.getDefaultExportFileName();
+
+    const exportOptions: Partial<ExportOptions> = {
+      format: 'excel',
+      fileName,
+      columns,
+      includeHeaders: true,
+      ...options
+    };
+
+    const result = await this.exportService.export(data, exportOptions);
+
+    if (result.success && download) {
+      this.exportService.downloadResult(result);
+    }
+
+    return result;
+  }
+
+  /**
+   * Export to Excel format directly (convenience method)
+   * @param download If true, automatically downloads the file. Default true.
+   */
+  async ExportToExcel(download: boolean = true): Promise<ExportResult> {
+    return this.Export({ format: 'excel' }, download);
+  }
+
+  /**
+   * Export to CSV format directly (convenience method)
+   * @param download If true, automatically downloads the file. Default true.
+   */
+  async ExportToCSV(download: boolean = true): Promise<ExportResult> {
+    return this.Export({ format: 'csv' }, download);
+  }
+
+  /**
+   * Export to JSON format directly (convenience method)
+   * @param download If true, automatically downloads the file. Default true.
+   */
+  async ExportToJSON(download: boolean = true): Promise<ExportResult> {
+    return this.Export({ format: 'json' }, download);
+  }
+
+  /**
+   * Get the current grid data formatted for export
+   */
+  private getExportData(): ExportData {
+    // Convert BaseEntity[] to plain objects for export
+    return this.rowData.map(row => {
+      if (row instanceof BaseEntity) {
+        return row.GetAll();
+      }
+      return row as Record<string, unknown>;
+    });
+  }
+
+  /**
+   * Get column definitions for export based on current grid columns
+   */
+  private getExportColumns(): ExportColumn[] {
+    if (!this._entityInfo) {
+      // Fallback: use AG Grid column definitions
+      return this.agColumnDefs
+        .filter(col => col.field && !col.hide)
+        .map(col => ({
+          name: col.field as string,
+          displayName: (col.headerName || col.field) as string
+        }));
+    }
+
+    // Use entity field info for better column metadata
+    return this._columns
+      .filter(col => col.visible !== false)
+      .map(col => {
+        const field = this._entityInfo?.Fields.find(f => f.Name === col.field);
+        return {
+          name: col.field,
+          displayName: col.title || field?.DisplayName || col.field,
+          dataType: this.mapFieldTypeToExportType(field?.Type),
+          width: typeof col.width === 'number' ? col.width : undefined
+        };
+      });
+  }
+
+  /**
+   * Map MemberJunction field types to export column types
+   */
+  private mapFieldTypeToExportType(fieldType?: string): ExportColumn['dataType'] {
+    if (!fieldType) return 'string';
+
+    const type = fieldType.toLowerCase();
+    if (type.includes('int') || type.includes('decimal') || type.includes('float') || type.includes('numeric')) {
+      return 'number';
+    }
+    if (type.includes('date') || type.includes('time')) {
+      return 'date';
+    }
+    if (type.includes('bit') || type.includes('bool')) {
+      return 'boolean';
+    }
+    if (type.includes('money') || type.includes('currency')) {
+      return 'currency';
+    }
+    return 'string';
+  }
+
+  /**
+   * Generate default file name for export
+   */
+  private getDefaultExportFileName(): string {
+    const entityName = this._entityInfo?.Name || 'export';
+    const timestamp = new Date().toISOString().slice(0, 10);
+    return `${entityName}_${timestamp}`;
   }
 
   onRefreshClick(): void {

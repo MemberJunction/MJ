@@ -530,12 +530,12 @@
     (apply)="onFilterApplied($event)">
   </mj-filter-dialog>
 
-  <!-- Excel Export Component (hidden, used for export functionality) -->
-  <kendo-excelexport #excelExport [data]="exportData" [fileName]="exportFileName">
-    @for (col of exportColumns; track col.Name) {
-      <kendo-excelexport-column [field]="col.Name" [title]="col.DisplayName"></kendo-excelexport-column>
-    }
-  </kendo-excelexport>
+  <!-- Export Dialog -->
+  <mj-export-dialog
+    [visible]="showExportDialog"
+    [config]="exportDialogConfig"
+    (closed)="onExportDialogClosed($event)">
+  </mj-export-dialog>
 
   <!-- List Management Dialog -->
   @if (showListManagementDialog && listManagementConfig) {

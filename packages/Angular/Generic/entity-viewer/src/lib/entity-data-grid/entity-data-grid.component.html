@@ -330,3 +330,10 @@
     </ag-grid-angular>
   </div>
 </div>
+
+<!-- Export Dialog -->
+<mj-export-dialog
+  [visible]="showExportDialog"
+  [config]="exportDialogConfig"
+  (closed)="onExportDialogClosed($event)">
+</mj-export-dialog>

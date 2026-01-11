@@ -346,4 +346,13 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
   get selectedCount(): number {
     return this.selectedKeys.length;
   }
+
+  /**
+   * Trigger the export dialog
+   */
+  export(): void {
+    if (this.entityDataGrid) {
+      this.entityDataGrid.onExportClick();
+    }
+  }
 }

@@ -1,0 +1,140 @@
+<!-- Backdrop -->
+@if (visible) {
+  <div class="mj-export-backdrop" (click)="onCancel()"></div>
+
+  <!-- Dialog -->
+  <div class="mj-export-dialog" role="dialog" aria-modal="true" [attr.aria-labelledby]="'export-dialog-title'">
+    <!-- Header -->
+    <div class="mj-export-header">
+      <h2 id="export-dialog-title">{{ dialogTitle }}</h2>
+      <button type="button" class="mj-export-close" (click)="onCancel()" aria-label="Close">
+        <span class="fa-solid fa-times"></span>
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="mj-export-content">
+      <!-- Format Selection -->
+      <div class="mj-export-section">
+        <label class="mj-export-label">Export Format</label>
+        <div class="mj-export-formats">
+          @for (format of availableFormats; track format) {
+            <button
+              type="button"
+              class="mj-export-format-btn"
+              [class.selected]="selectedFormat === format"
+              (click)="selectFormat(format)">
+              <span class="fa-solid {{ getFormatInfo(format).icon }} mj-export-format-icon"></span>
+              <span class="mj-export-format-label">{{ getFormatInfo(format).label }}</span>
+              <span class="mj-export-format-desc">{{ getFormatInfo(format).description }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- File Name -->
+      <div class="mj-export-section">
+        <label class="mj-export-label" for="exportFileName">File Name</label>
+        <div class="mj-export-input-group">
+          <input
+            type="text"
+            id="exportFileName"
+            class="mj-export-input"
+            [(ngModel)]="fileName"
+            placeholder="Enter file name" />
+          <span class="mj-export-input-hint">Extension added automatically</span>
+        </div>
+      </div>
+
+      <!-- Include Headers -->
+      <div class="mj-export-section mj-export-checkbox-section">
+        <label class="mj-export-checkbox">
+          <input type="checkbox" [(ngModel)]="includeHeaders" />
+          <span class="mj-export-checkbox-mark"></span>
+          <span>Include column headers</span>
+        </label>
+      </div>
+
+      <!-- Row Selection (Sampling) -->
+      @if (showSamplingOptions) {
+        <div class="mj-export-section">
+          <label class="mj-export-label">Row Selection</label>
+          <div class="mj-export-sampling-row">
+            <select class="mj-export-select" [(ngModel)]="samplingMode">
+              @for (mode of samplingModes; track mode.mode) {
+                <option [value]="mode.mode">{{ mode.label }}</option>
+              }
+            </select>
+
+            @if (needsSampleCount) {
+              <input
+                type="number"
+                class="mj-export-number-input"
+                [(ngModel)]="sampleCount"
+                [min]="1"
+                [max]="totalRows"
+                placeholder="Count" />
+            }
+
+            @if (needsSampleInterval) {
+              <input
+                type="number"
+                class="mj-export-number-input"
+                [(ngModel)]="sampleInterval"
+                [min]="2"
+                [max]="totalRows"
+                placeholder="Interval" />
+            }
+          </div>
+          <div class="mj-export-sampling-desc">
+            {{ samplingDescription }}
+          </div>
+        </div>
+      }
+
+      <!-- Summary -->
+      <div class="mj-export-section mj-export-summary">
+        <div class="mj-export-summary-row">
+          <span class="mj-export-summary-label">Total rows available</span>
+          <span class="mj-export-summary-value">{{ totalRows | number }}</span>
+        </div>
+        <div class="mj-export-summary-row">
+          <span class="mj-export-summary-label">Rows to export</span>
+          <span class="mj-export-summary-value mj-export-highlight">{{ estimatedRows | number }}</span>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      @if (exportError) {
+        <div class="mj-export-error">
+          <span class="fa-solid fa-exclamation-circle"></span>
+          {{ exportError }}
+        </div>
+      }
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="mj-export-actions">
+      <button
+        type="button"
+        class="mj-export-btn mj-export-btn-primary"
+        (click)="onExport()"
+        [disabled]="isExporting">
+        @if (!isExporting) {
+          <span class="fa-solid fa-download"></span>
+          Export
+        } @else {
+          <span class="fa-solid fa-spinner fa-spin"></span>
+          Exporting...
+        }
+      </button>
+      <button
+        type="button"
+        class="mj-export-btn mj-export-btn-secondary"
+        (click)="onCancel()"
+        [disabled]="isExporting">
+        Cancel
+      </button>
+    </div>
+  </div>
+}

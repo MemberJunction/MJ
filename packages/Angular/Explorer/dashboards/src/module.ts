@@ -100,6 +100,7 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
+import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { CommunicationDashboardComponent } from './Communication/communication-dashboard.component';
 import { CommunicationMonitorResourceComponent } from './Communication/communication-monitor-resource.component';
 import { CommunicationLogsResourceComponent } from './Communication/communication-logs-resource.component';
@@ -251,7 +252,8 @@ import { ListsCategoriesResource } from './Lists/components/lists-categories-res
     SharedGenericModule,
     FilterBuilderModule,
     EntityRelationshipDiagramModule,
-    ListManagementModule
+    ListManagementModule,
+    ExportServiceModule
   ],
   providers: [
     AIInstrumentationService,

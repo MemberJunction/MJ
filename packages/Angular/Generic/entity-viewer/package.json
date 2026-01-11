@@ -36,11 +36,13 @@
   },
   "dependencies": {
     "@memberjunction/core-entities": "2.132.0",
+    "@memberjunction/export-engine": "2.132.0",
     "@memberjunction/global": "2.132.0",
     "@memberjunction/core": "2.132.0",
     "@memberjunction/ng-shared-generic": "2.132.0",
     "@memberjunction/ng-timeline": "2.132.0",
     "@memberjunction/ng-filter-builder": "2.132.0",
+    "@memberjunction/ng-export-service": "2.132.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

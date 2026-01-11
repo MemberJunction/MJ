@@ -166,8 +166,10 @@ export class SingleListDetailComponent implements OnInit {
   }
 
   onExportClick(): void {
-    // TODO: Implement export functionality
-    this.sharedService.CreateSimpleNotification("Export coming soon", 'info', 2000);
+    // Trigger export on the underlying grid
+    if (this.listDetailGrid) {
+      this.listDetailGrid.export();
+    }
   }
 
   onDropdownItemClick(item: NewItemOption): void {

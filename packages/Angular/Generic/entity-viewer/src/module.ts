@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AgGridModule } from 'ag-grid-angular';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { TimelineModule } from '@memberjunction/ng-timeline';
+import { ExportServiceModule } from '@memberjunction/ng-export-service';
 
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
@@ -50,7 +51,8 @@ import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-pa
     FormsModule,
     AgGridModule,
     SharedGenericModule,
-    TimelineModule
+    TimelineModule,
+    ExportServiceModule
   ],
   exports: [
     EntityCardsComponent,
