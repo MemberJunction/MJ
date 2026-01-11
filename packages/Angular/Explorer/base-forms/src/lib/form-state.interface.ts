@@ -30,6 +30,6 @@ export const DEFAULT_FORM_STATE: FormState = {
  * Default state for a new section (when section not yet in saved state)
  */
 export const DEFAULT_SECTION_STATE: FormSectionState = {
-    isExpanded: true,
+    isExpanded: false,
     widthMode: 'normal'
 };

@@ -46,15 +46,16 @@ export class EntityDataGridRelatedEntityGenerator extends RelatedEntityDisplayCo
             ? `IsSectionExpanded('${input.SectionKey.trim()}')`
             : `IsCurrentTab('${input.TabName.trim()}')`;
 
-        // Add afterDataLoad event binding to capture row count (EntityDataGrid uses afterDataLoad instead of dataLoaded)
+        // Add AfterDataLoad event binding to capture row count
         const afterDataLoadEvent = input.SectionKey && input.SectionKey.length > 0
-            ? `(afterDataLoad)="SetSectionRowCount('${input.SectionKey.trim()}', $event.totalRowCount)"`
+            ? `(AfterDataLoad)="SetSectionRowCount('${input.SectionKey.trim()}', $event.totalRowCount)"`
             : '';
 
         const template = `<mj-entity-data-grid
     [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"
     [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}')"
-    [AllowLoad]="${allowLoadCheck}"${afterDataLoadEvent ? `\n    ${afterDataLoadEvent}` : ''}
+    [AllowLoad]="${allowLoadCheck}"
+    [ShowToolbar]="false"${afterDataLoadEvent ? `\n    ${afterDataLoadEvent}` : ''}
     >
 </mj-entity-data-grid>`;
         return {
