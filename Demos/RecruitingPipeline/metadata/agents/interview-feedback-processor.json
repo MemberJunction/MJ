@@ -1,0 +1,163 @@
+{
+  "Name": "Interview Feedback Processor",
+  "Description": "Processes completed interviews: synthesizes feedback from multiple interviewers and recommends next steps",
+  "Type": "Flow Agent",
+  "IsActive": true,
+  "Steps": [
+    {
+      "Name": "Get Applications Ready for Review",
+      "Description": "Get applications with completed interviews that need feedback synthesis",
+      "Type": "Action",
+      "Sequence": 1,
+      "ActionName": "Get Records",
+      "InputMapping": {
+        "EntityName": "static:Applications",
+        "ExtraFilter": "static:CurrentStage IN ('PreliminaryInterview', 'TechnicalInterview', 'FinalInterview') AND Status = 'InterviewCompleted'",
+        "OrderBy": "static:SubmittedAt ASC"
+      },
+      "OutputMapping": {
+        "applicationsToReview": "output.Records"
+      }
+    },
+    {
+      "Name": "Process Each Application",
+      "Description": "Process each application with completed interviews",
+      "Type": "ForEach",
+      "Sequence": 2,
+      "ItemVariable": "application",
+      "ItemsPath": "payload.applicationsToReview",
+      "Parallelizable": true,
+      "ContinueOnError": true,
+      "Steps": [
+        {
+          "Name": "Get Job Details",
+          "Description": "Get job requisition details",
+          "Type": "Action",
+          "Sequence": 1,
+          "ActionName": "Get Records",
+          "InputMapping": {
+            "EntityName": "static:Job Requisitions",
+            "ExtraFilter": "application.JobRequisitionID",
+            "MaxRecords": 1
+          },
+          "OutputMapping": {
+            "jobRequisition": "output.Records[0]"
+          }
+        },
+        {
+          "Name": "Get Completed Interviews",
+          "Description": "Get all completed interviews for this application",
+          "Type": "Action",
+          "Sequence": 2,
+          "ActionName": "Get Records",
+          "InputMapping": {
+            "EntityName": "static:Interviews",
+            "ExtraFilter": "application.ID",
+            "OrderBy": "static:CompletedDateTime ASC"
+          },
+          "OutputMapping": {
+            "interviews": "output.Records"
+          }
+        },
+        {
+          "Name": "Format Interview Data",
+          "Description": "Format interview feedback for AI prompt",
+          "Type": "Action",
+          "Sequence": 3,
+          "ActionName": "Execute JavaScript",
+          "InputMapping": {
+            "Code": "static:const formatted = interviews.map(i => `Interview Type: ${i.InterviewType}\\nInterviewers: ${i.InterviewerEmails}\\nScore: ${i.FeedbackScore}/5\\nRecommendation: ${i.Recommendation}\\nFeedback: ${i.FeedbackNotes}\\n---`).join('\\n\\n'); return formatted;"
+          },
+          "OutputMapping": {
+            "formattedInterviews": "output.Result"
+          }
+        },
+        {
+          "Name": "Synthesize Interview Feedback",
+          "Description": "Use AI to synthesize all interview feedback",
+          "Type": "Prompt",
+          "Sequence": 4,
+          "PromptName": "Synthesize Interview Feedback",
+          "ModelName": "gpt-4o",
+          "InputMapping": {
+            "jobTitle": "payload.jobRequisition.Title",
+            "department": "payload.jobRequisition.Department",
+            "keyRequirements": "payload.jobRequisition.RequiredSkills",
+            "candidateName": "application.CandidateName",
+            "resumeEvaluationScore": "application.ResumeEvaluationScore",
+            "audioEvaluationScore": "application.AudioEvaluationScore",
+            "interviews": "payload.formattedInterviews"
+          },
+          "OutputMapping": {
+            "feedbackSynthesis": "output.Result"
+          },
+          "ResponseFormat": "json_object"
+        },
+        {
+          "Name": "Create Synthesis Note",
+          "Description": "Create note with feedback synthesis",
+          "Type": "Action",
+          "Sequence": 5,
+          "ActionName": "Create Record",
+          "InputMapping": {
+            "EntityName": "static:Application Notes",
+            "Data": {
+              "ApplicationID": "application.ID",
+              "NoteText": "payload.feedbackSynthesis.strengthsSummary + '\\n\\nConcerns: ' + payload.feedbackSynthesis.concernsSummary + '\\n\\nNext Steps: ' + payload.feedbackSynthesis.nextSteps",
+              "NoteType": "static:InterviewFeedback",
+              "IsSystemGenerated": true
+            }
+          }
+        },
+        {
+          "Name": "Update Application Status - Hire",
+          "Description": "Update application if recommendation is to hire",
+          "Type": "Action",
+          "Sequence": 6,
+          "ActionName": "Update Record",
+          "InputMapping": {
+            "EntityName": "static:Applications",
+            "RecordID": "application.ID",
+            "Data": {
+              "Status": "static:OfferExtended",
+              "CurrentStage": "static:Offer",
+              "FinalDecisionNotes": "payload.feedbackSynthesis.nextSteps"
+            }
+          },
+          "ConditionalPath": "payload.feedbackSynthesis.overallRecommendation === 'StrongYes' || payload.feedbackSynthesis.overallRecommendation === 'Yes'"
+        },
+        {
+          "Name": "Update Application Status - Reject",
+          "Description": "Update application if recommendation is to reject",
+          "Type": "Action",
+          "Sequence": 7,
+          "ActionName": "Update Record",
+          "InputMapping": {
+            "EntityName": "static:Applications",
+            "RecordID": "application.ID",
+            "Data": {
+              "Status": "static:Rejected",
+              "FinalDecision": "static:Reject",
+              "FinalDecisionDate": "static:{{NOW}}",
+              "FinalDecisionNotes": "payload.feedbackSynthesis.concernsSummary"
+            }
+          },
+          "ConditionalPath": "payload.feedbackSynthesis.overallRecommendation === 'No' || payload.feedbackSynthesis.overallRecommendation === 'StrongNo'"
+        },
+        {
+          "Name": "Send Notification to Hiring Manager",
+          "Description": "Notify hiring manager of feedback synthesis",
+          "Type": "Action",
+          "Sequence": 8,
+          "ActionName": "Send Email",
+          "InputMapping": {
+            "To": "payload.jobRequisition.HiringManagerEmail",
+            "Subject": "static:Interview Feedback Summary - {candidateName}",
+            "Body": "payload.notificationEmailBody",
+            "TemplateID": "static:interview-feedback-summary"
+          }
+        }
+      ]
+    }
+  ]
+}

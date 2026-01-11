@@ -1,0 +1,10 @@
+{
+  "Name": "Job Pipeline Dashboard",
+  "Description": "Candidate funnel visualization for a specific job requisition, showing progression through stages",
+  "CategoryID": "@lookup:Dashboard Categories.Name=HR & Recruiting Analytics",
+  "UserID": null,
+  "UIConfigDetails": {
+    "Type": "Custom",
+    "ComponentName": "job-pipeline-dashboard"
+  }
+}
