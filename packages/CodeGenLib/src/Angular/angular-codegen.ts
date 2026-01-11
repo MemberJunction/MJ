@@ -819,7 +819,8 @@ ${indentedFormHTML}
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('${sectionKey}')">
+        [badgeCount]="GetSectionRowCount('${sectionKey}')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
 ${componentCodeWithIndent}
         </div>
