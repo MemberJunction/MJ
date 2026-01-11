@@ -1235,14 +1235,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * and triggering data load if allowed.
    */
   private async onParamsChanged(): Promise<void> {
-    console.log('[entity-data-grid] onParamsChanged called');
-    console.log('[entity-data-grid] _params:', this._params ? {
-      EntityName: this._params.EntityName,
-      ViewEntity: this._params.ViewEntity ? 'present' : 'null',
-      ViewID: this._params.ViewID,
-      ViewName: this._params.ViewName
-    } : 'null');
-
     if (!this._params) {
       // Params cleared - reset view entity
       this._viewEntity = null;
@@ -1255,7 +1247,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
     // Reset internal grid state when params change - this ensures we don't
     // carry over column/sort settings from a previous view when switching views
-    console.log('[entity-data-grid] Resetting _gridState and _sortState');
     this._gridState = null;
     this._sortState = [];
 
@@ -1290,33 +1281,26 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.applyViewEntitySettings();
       } else if (this._params.EntityName) {
         // Dynamic view - just get entity metadata
-        console.log('[entity-data-grid] onParamsChanged: Dynamic view path for', this._params.EntityName);
         this._viewEntity = null;
         const md = new Metadata();
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
 
         // Reset columns to force regeneration from metadata when switching to dynamic view
         // This ensures we don't carry over column config from a previous saved view
-        console.log('[entity-data-grid] Resetting _columns (was length:', this._columns.length, ')');
         this._columns = [];
 
         // For dynamic views, try to load user's saved defaults
         if (this._entityInfo && this._autoPersistState) {
-          console.log('[entity-data-grid] Loading user default grid state for', this._entityInfo.Name);
           this.loadUserDefaultGridState(this._entityInfo.Name);
-          console.log('[entity-data-grid] After loadUserDefaultGridState: _gridState =', this._gridState != null ? 'has columns' : 'null');
         }
       }
 
       // Generate columns if not already set
-      console.log('[entity-data-grid] Before generateColumnsFromMetadata: _columns.length =', this._columns.length, ', _entityInfo =', this._entityInfo?.Name);
       if (this._columns.length === 0 && this._entityInfo) {
         this.generateColumnsFromMetadata();
-        console.log('[entity-data-grid] After generateColumnsFromMetadata: _columns.length =', this._columns.length);
       }
 
       // Rebuild AG Grid column definitions to reflect the new view's settings
-      console.log('[entity-data-grid] Before buildAgColumnDefs: _gridState =', this._gridState != null ? 'has columns' : 'null');
       this.buildAgColumnDefs();
 
       // Load data if auto-refresh is enabled
@@ -1623,21 +1607,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private buildAgColumnDefs(): void {
     if (this._gridState?.columnSettings?.length && this._entityInfo) {
-      console.log('[entity-data-grid] buildAgColumnDefs: Using _gridState.columnSettings (', this._gridState.columnSettings.length, 'columns)');
-      console.log('[entity-data-grid] columnSettings names:', this._gridState.columnSettings.slice(0, 5).map(c => c.Name).join(', '));
       this.agColumnDefs = this.buildAgColumnDefsFromGridState(this._gridState.columnSettings);
     } else if (this._columns.length > 0) {
-      console.log('[entity-data-grid] buildAgColumnDefs: Using _columns (', this._columns.length, 'columns)');
-      console.log('[entity-data-grid] _columns names:', this._columns.slice(0, 5).map(c => c.field).join(', '));
       this.agColumnDefs = this._columns.map(col => this.mapColumnConfigToColDef(col));
     } else if (this._entityInfo) {
-      console.log('[entity-data-grid] buildAgColumnDefs: Generating from _entityInfo');
       this.agColumnDefs = this.generateAgColumnDefs(this._entityInfo);
     } else {
-      console.log('[entity-data-grid] buildAgColumnDefs: No source, setting empty');
       this.agColumnDefs = [];
     }
-    console.log('[entity-data-grid] buildAgColumnDefs result: agColumnDefs has', this.agColumnDefs.length, 'columns');
 
     // Add row number column if enabled
     if (this._showRowNumbers && this.agColumnDefs.length > 0) {
@@ -2692,9 +2669,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private applySortStateToGrid(): void {
     if (!this.gridApi || this._sortState.length === 0) return;
 
+    const currentColumnState = this.gridApi.getColumnState();
+    if (!currentColumnState) return;
+
     this.suppressSortEvents = true;
     try {
-      const columnState = this.gridApi.getColumnState().map(col => {
+      const columnState = currentColumnState.map(col => {
         const sort = this._sortState.find(s => s.field === col.colId);
         return {
           ...col,
