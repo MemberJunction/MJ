@@ -1140,6 +1140,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private pendingStateToSave: ViewGridStateConfig | null = null;
   private isSavingState: boolean = false;
 
+  /**
+   * Flag to suppress state persistence during view transitions.
+   * When true, emitGridStateChanged will not trigger persistence.
+   * This prevents the old view's column state from being saved to the new view.
+   */
+  private _suppressPersist: boolean = false;
+
   // Overflow menu state
   public showOverflowMenu: boolean = false;
 
@@ -1211,6 +1218,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Suppress persistence during view transition to prevent old view's state
+    // from being saved to the new view's storage
+    this._suppressPersist = true;
+
     // Reset internal grid state when params change - this ensures we don't
     // carry over column/sort settings from a previous view when switching views
     this._gridState = null;
@@ -1251,6 +1262,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         const md = new Metadata();
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
 
+        // Reset columns to force regeneration from metadata when switching to dynamic view
+        // This ensures we don't carry over column config from a previous saved view
+        this._columns = [];
+
         // For dynamic views, try to load user's saved defaults
         if (this._entityInfo && this._autoPersistState) {
           this.loadUserDefaultGridState(this._entityInfo.Name);
@@ -1262,6 +1277,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.generateColumnsFromMetadata();
       }
 
+      // Rebuild AG Grid column definitions to reflect the new view's settings
+      this.buildAgColumnDefs();
+
       // Load data if auto-refresh is enabled
       if (this._autoRefreshOnParamsChange) {
         await this.loadData(false);
@@ -1269,6 +1287,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : 'Failed to load view';
       this.cdr.detectChanges();
+    } finally {
+      // Re-enable persistence now that the new view is fully loaded
+      this._suppressPersist = false;
     }
   }
 
@@ -2507,8 +2528,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       changeType
     });
 
-    // Schedule auto-persist if enabled
-    if (this._autoPersistState) {
+    // Schedule auto-persist if enabled, but NOT during view transitions
+    // (suppressPersist prevents old view's state from being saved to new view)
+    if (this._autoPersistState && !this._suppressPersist) {
       if (!this.IsDynamicView && this._viewEntity) {
         // Stored view - persist to UserView.GridState (debounced)
         this.statePersistSubject.next(currentState);
