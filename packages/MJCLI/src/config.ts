@@ -125,9 +125,19 @@ export const createFlywayUrl = (mjConfig: MJConfig) => {
   }`;
 };
 
-export const getFlywayConfig = async (mjConfig: MJConfig, tag?: string): Promise<FlywayConfig> => {
+export const getFlywayConfig = async (
+  mjConfig: MJConfig,
+  tag?: string,
+  schema?: string,
+  dir?: string
+): Promise<FlywayConfig> => {
+  const targetSchema = schema || mjConfig.coreSchema;
+
   let location = mjConfig.migrationsLocation;
 
+  if (dir && !tag) {
+    location = dir.startsWith('filesystem:') ? dir : `filesystem:${dir}`;
+  }
   if (tag) {
     // when tag is set, we want to fetch migrations from the github repo using the tag specified
     // we save those to a tmp dir and set that tmp dir as the migration location
@@ -138,12 +148,37 @@ export const getFlywayConfig = async (mjConfig: MJConfig, tag?: string): Promise
     await git.raw(['sparse-checkout', 'set', 'migrations']);
 
     location = `filesystem:${tmp}`;
+
+    if (dir) {
+      const subPath = dir.replace(/^filesystem:/, '').replace(/^\.\//, '');
+      location = `filesystem:${tmp}/${subPath}`;
+    }
+  }
+
+  // Build advanced config - only include properties with defined values
+  const advancedConfig: any = {
+    schemas: [targetSchema],
+  };
+
+  // Only add cleanDisabled if explicitly set to false
+  if (mjConfig.cleanDisabled === false) {
+    advancedConfig.cleanDisabled = false;
+  }
+
+  // Enable custom placeholders for cross-schema references (e.g., BCSaaS → MJ)
+  // This allows migrations to use ${mjSchema} to reference the MJ schema dynamically
+  // NOTE: The Map entries are swapped (value, key) due to a bug in node-flyway's Map.forEach iteration
+  if (schema && schema !== mjConfig.coreSchema) {
+    advancedConfig.placeHolderReplacement = true;
+    advancedConfig.placeHolders = new Map([[mjConfig.coreSchema, 'mjSchema']]);  // Swapped due to node-flyway bug
   }
 
   return {
     url: createFlywayUrl(mjConfig),
     user: mjConfig.codeGenLogin,
     password: mjConfig.codeGenPassword,
+    // Note: Flyway uses the first schema in advanced.schemas as the default schema
+    // Setting both defaultSchema and schemas causes issues due to node-flyway's filtering logic
     migrationLocations: [location],
     advanced: {
       schemas: [mjConfig.coreSchema],
