@@ -291,22 +291,6 @@ Composite component combining grid, cards, and timeline views with view switchin
 
 ---
 
-### EntityGridComponent (`mj-entity-grid`) - Legacy
-
-Basic AG Grid component (use `mj-entity-data-grid` for new development).
-
-```html
-<mj-entity-grid
-  [entity]="selectedEntity"
-  [records]="records"
-  [selectedRecordId]="selectedId"
-  (recordSelected)="onSelected($event)"
-  (recordOpened)="onOpened($event)">
-</mj-entity-grid>
-```
-
----
-
 ### EntityCardsComponent (`mj-entity-cards`)
 
 Card-based view with auto-generated layout.

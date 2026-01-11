@@ -217,14 +217,12 @@ mj-pagination {
 }
 
 /* Hidden components should not display - ensure [hidden] attribute works properly */
-mj-entity-grid[hidden],
 mj-entity-cards[hidden],
 mj-timeline[hidden] {
   display: none !important;
 }
 
 /* Visible view components should fill available space */
-mj-entity-grid:not([hidden]),
 mj-entity-cards:not([hidden]),
 mj-timeline:not([hidden]) {
   display: block;

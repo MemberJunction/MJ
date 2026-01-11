@@ -5,7 +5,6 @@ import { AgGridModule } from 'ag-grid-angular';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { TimelineModule } from '@memberjunction/ng-timeline';
 
-import { EntityGridComponent } from './lib/entity-grid/entity-grid.component';
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
 import { EntityRecordDetailPanelComponent } from './lib/entity-record-detail-panel/entity-record-detail-panel.component';
@@ -19,7 +18,6 @@ import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-pa
  *
  * This module exports:
  * - EntityViewerComponent: Composite component with grid/cards toggle, server-side filtering/sorting/pagination
- * - EntityGridComponent: AG Grid-based table view with standalone or parent-managed data (deprecated, use EntityDataGridComponent)
  * - EntityDataGridComponent: Modern AG Grid-based grid with Before/After cancelable events
  * - EntityCardsComponent: Card-based view with standalone or parent-managed data
  * - EntityRecordDetailPanelComponent: Detail panel for displaying single record information
@@ -39,7 +37,6 @@ import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-pa
  */
 @NgModule({
   declarations: [
-    EntityGridComponent,
     EntityCardsComponent,
     EntityViewerComponent,
     EntityRecordDetailPanelComponent,
@@ -56,7 +53,6 @@ import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-pa
     TimelineModule
   ],
   exports: [
-    EntityGridComponent,
     EntityCardsComponent,
     EntityViewerComponent,
     EntityRecordDetailPanelComponent,
