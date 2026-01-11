@@ -664,24 +664,10 @@
 
   <!-- Panel Footer -->
   <div class="panel-footer">
-    <button class="footer-btn cancel-btn" (click)="onClose()">
-      Cancel
-    </button>
-    <div class="footer-right">
-      @if (canEdit || !viewEntity) {
-        <button
-          class="footer-btn save-as-btn"
-          (click)="onSaveAsNew()"
-          [disabled]="isSaving">
-          @if (isSaving) {
-            <i class="fa-solid fa-spinner fa-spin"></i>
-          } @else {
-            <i class="fa-solid fa-plus"></i>
-          }
-          {{ isSaving ? 'Saving...' : 'Save As New' }}
-        </button>
-      }
+    <!-- Action buttons on LEFT -->
+    <div class="footer-left">
       @if (viewEntity && canEdit) {
+        <!-- Editing an existing saved view -->
         <button
           class="footer-btn save-btn primary"
           (click)="onSave()"
@@ -695,18 +681,49 @@
         </button>
       }
       @if (!viewEntity) {
+        <!-- Default/Dynamic view - Save to user settings -->
         <button
           class="footer-btn save-btn primary"
-          (click)="onSaveAsNew()"
-          [disabled]="isSaving || !viewName">
+          (click)="onSaveDefaults()"
+          [disabled]="isSaving">
           @if (isSaving) {
             <i class="fa-solid fa-spinner fa-spin"></i>
           } @else {
             <i class="fa-solid fa-save"></i>
           }
-          {{ isSaving ? 'Creating...' : 'Create View' }}
+          {{ isSaving ? 'Saving...' : 'Save' }}
+        </button>
+        <!-- Save As New - creates a named view -->
+        <button
+          class="footer-btn save-as-btn"
+          (click)="onSaveAsNew()"
+          [disabled]="isSaving || !viewName">
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-plus"></i>
+          }
+          {{ isSaving ? 'Creating...' : 'Save As New' }}
+        </button>
+      }
+      @if (viewEntity && canEdit) {
+        <!-- Save As New for existing view -->
+        <button
+          class="footer-btn save-as-btn"
+          (click)="onSaveAsNew()"
+          [disabled]="isSaving">
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-plus"></i>
+          }
+          Save As New
         </button>
       }
     </div>
+    <!-- Cancel button on RIGHT -->
+    <button class="footer-btn cancel-btn" (click)="onClose()">
+      Cancel
+    </button>
   </div>
 </div>

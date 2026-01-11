@@ -103,6 +103,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   @Output() save = new EventEmitter<ViewSaveEvent>();
 
   /**
+   * Emitted when default view settings should be saved to user settings
+   * (Used for dynamic/default views that persist to MJ: User Settings)
+   */
+  @Output() saveDefaults = new EventEmitter<ViewSaveEvent>();
+
+  /**
    * Emitted when the view should be deleted
    */
   @Output() delete = new EventEmitter<void>();
@@ -934,6 +940,25 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       description: this.viewDescription,
       isShared: this.isShared,
       saveAsNew: true,
+      columns: this.visibleColumns,
+      sortField: this.sortField,
+      sortDirection: this.sortDirection,
+      smartFilterEnabled: this.smartFilterEnabled,
+      smartFilterPrompt: this.smartFilterPrompt,
+      filterState: this.hasActiveFilters() ? this.filterState : null
+    });
+  }
+
+  /**
+   * Save default view settings to user settings
+   * Used for dynamic/default views that don't have a stored view entity
+   */
+  onSaveDefaults(): void {
+    this.saveDefaults.emit({
+      name: 'Default',
+      description: '',
+      isShared: false,
+      saveAsNew: false,
       columns: this.visibleColumns,
       sortField: this.sortField,
       sortDirection: this.sortDirection,

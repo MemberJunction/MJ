@@ -46,6 +46,7 @@
     "@memberjunction/ng-core-entity-forms": "2.132.0",
     "@memberjunction/ng-entity-viewer": "2.132.0",
     "@memberjunction/ng-filter-builder": "2.132.0",
+    "@memberjunction/ng-list-management": "2.132.0",
     "@memberjunction/ng-explorer-settings": "2.132.0",
     "@memberjunction/ng-notifications": "2.132.0",
     "@memberjunction/ng-react": "2.132.0",

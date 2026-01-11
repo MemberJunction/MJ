@@ -8,7 +8,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
-import { ApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
+import { ApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -1077,6 +1077,71 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.cdr.detectChanges();
     } catch (error) {
       console.error('[DataExplorer] Error saving view:', error);
+    } finally {
+      this.isSavingView = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Handle saving default view settings to user settings
+   * Used for dynamic/default views that persist to MJ: User Settings
+   */
+  public async onSaveDefaultViewSettings(event: ViewSaveEvent): Promise<void> {
+    if (!this.selectedEntity) return;
+
+    this.isSavingView = true;
+    this.cdr.detectChanges();
+
+    try {
+      // Build GridState from the event
+      const gridState = this.buildGridState(event);
+
+      if (gridState) {
+        // Build sort settings if present
+        if (event.sortField) {
+          gridState.sortSettings = [{
+            field: event.sortField,
+            dir: event.sortDirection
+          }];
+        }
+
+        // Save to user settings using the same key pattern as entity-data-grid
+        const settingKey = `default-view-setting/${this.selectedEntity.Name}`;
+        await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridState));
+
+        // Update currentGridState to reflect saved state
+        this.currentGridState = {
+          columnSettings: gridState.columnSettings as ViewGridStateConfig['columnSettings'],
+          sortSettings: gridState.sortSettings as ViewGridStateConfig['sortSettings']
+        };
+
+        // Show success notification
+        MJGlobal.Instance.RaiseEvent({
+          event: MJEventType.DisplaySimpleNotificationRequest,
+          eventCode: '',
+          component: this,
+          args: {
+            message: 'Default view settings saved',
+            type: 'success'
+          } as DisplaySimpleNotificationRequestData
+        } as MJEvent);
+      }
+
+      this.stateService.closeViewConfigPanel();
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('[DataExplorer] Error saving default view settings:', error);
+      // Show error notification
+      MJGlobal.Instance.RaiseEvent({
+        event: MJEventType.DisplaySimpleNotificationRequest,
+        eventCode: '',
+        component: this,
+        args: {
+          message: 'Failed to save default view settings',
+          type: 'error'
+        } as DisplaySimpleNotificationRequestData
+      } as MJEvent);
     } finally {
       this.isSavingView = false;
       this.cdr.detectChanges();

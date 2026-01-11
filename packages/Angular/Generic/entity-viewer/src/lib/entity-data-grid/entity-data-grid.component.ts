@@ -1154,6 +1154,26 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   private _suppressPersist: boolean = false;
 
+  /**
+   * Dirty flag to track if grid state has actually been modified by user actions.
+   * Only set to true when: column resize, column move, or sort change.
+   * Reset to false: when view loads, after successful persistence.
+   * This prevents emitting gridStateChanged events when no real change occurred.
+   */
+  private _isGridStateDirty: boolean = false;
+
+  /**
+   * Whether the current user can edit the view.
+   * For dynamic views, always true (persists to user settings).
+   * For saved views, depends on view ownership and permissions.
+   */
+  public get canEditCurrentView(): boolean {
+    if (this.IsDynamicView) {
+      return true; // Dynamic views persist to user settings
+    }
+    return this._viewEntity?.UserCanEdit ?? false;
+  }
+
   // Overflow menu state
   public showOverflowMenu: boolean = false;
 
@@ -1244,6 +1264,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Suppress persistence during view transition to prevent old view's state
     // from being saved to the new view's storage
     this._suppressPersist = true;
+
+    // Reset dirty flag - no changes have been made to the new view yet
+    this._isGridStateDirty = false;
 
     // Reset internal grid state when params change - this ensures we don't
     // carry over column/sort settings from a previous view when switching views
@@ -1394,8 +1417,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       };
 
       await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridStateJson));
-      // Clear pending state after successful save
+      // Clear pending state and reset dirty flag after successful save
       this._pendingUserDefaultsToPersist = null;
+      this._isGridStateDirty = false;
     } catch (error) {
       console.error('[entity-data-grid] Failed to persist user default grid state:', error);
     }
@@ -2611,7 +2635,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.afterSort.emit(afterEvent);
       }
 
-      // Emit grid state changed
+      // User changed sort - mark as dirty and emit grid state changed
+      this._isGridStateDirty = true;
       this.emitGridStateChanged('sort');
 
       // Determine if we need to reload data from server or can sort client-side
@@ -2626,6 +2651,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       }
     } else {
       this._sortState = [];
+      // User cleared sort - mark as dirty and emit grid state changed
+      this._isGridStateDirty = true;
       this.emitGridStateChanged('sort');
     }
   }
@@ -2712,12 +2739,16 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   onAgColumnResized(event: ColumnResizedEvent): void {
     if (event.finished && event.source !== 'api') {
+      // User manually resized a column - mark as dirty
+      this._isGridStateDirty = true;
       this.emitGridStateChanged('columns');
     }
   }
 
   onAgColumnMoved(event: ColumnMovedEvent): void {
     if (event.finished && event.source !== 'api') {
+      // User manually moved a column - mark as dirty
+      this._isGridStateDirty = true;
       this.emitGridStateChanged('columns');
     }
   }
@@ -2729,9 +2760,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private emitGridStateChanged(changeType: 'columns' | 'sort' | 'filter'): void {
     if (!this.gridApi || !this._entityInfo) return;
 
+    // Only emit and persist if we're dirty (user made actual changes)
+    // This prevents emitting stale state during view transitions
+    if (!this._isGridStateDirty) {
+      return;
+    }
+
     const currentState = this.buildCurrentGridState();
 
-    // Always emit the event for external consumers
+    // Emit the event for external consumers
     this.gridStateChanged.emit({
       gridState: currentState,
       changeType
@@ -2739,7 +2776,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
     // Schedule auto-persist if enabled, but NOT during view transitions
     // (suppressPersist prevents old view's state from being saved to new view)
-    if (this._autoPersistState && !this._suppressPersist) {
+    if (this._autoPersistState && !this._suppressPersist && this.canEditCurrentView) {
       if (!this.IsDynamicView && this._viewEntity) {
         // Stored view - persist to UserView.GridState (debounced)
         // Track pending state for flush on destroy
@@ -2797,8 +2834,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       if (!success) {
         console.warn('[entity-data-grid] Failed to save view state:', this._viewEntity.LatestResult?.Message);
       } else {
-        // Clear pending state after successful save
+        // Clear pending state and reset dirty flag after successful save
         this._pendingViewStateToPersist = null;
+        this._isGridStateDirty = false;
       }
     } catch (error) {
       console.error('[entity-data-grid] Error persisting grid state:', error);
@@ -2818,6 +2856,18 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return { columnSettings: [], sortSettings: [] };
     }
 
+    // Build a lookup map for existing format settings to preserve them
+    // AG Grid's column state doesn't track our custom format property,
+    // so we need to carry it over from the current gridState
+    const existingFormatsByName = new Map<string, ColumnFormat | undefined>();
+    if (this._gridState?.columnSettings) {
+      for (const col of this._gridState.columnSettings) {
+        if (col.format) {
+          existingFormatsByName.set(col.Name.toLowerCase(), col.format);
+        }
+      }
+    }
+
     const columnSettings: ViewColumnConfig[] = [];
     const sortSettings: ViewSortConfig[] = [];
 
@@ -2828,14 +2878,22 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       const field = this._entityInfo.Fields.find(f => f.Name === col.colId);
 
       if (field) {
-        columnSettings.push({
+        const colConfig: ViewColumnConfig = {
           ID: field.ID,
           Name: field.Name,
           DisplayName: field.DisplayNameOrName,
           hidden: col.hide ?? false,
           width: col.width ?? undefined,
           orderIndex: i
-        });
+        };
+
+        // Preserve format from existing gridState if present
+        const existingFormat = existingFormatsByName.get(field.Name.toLowerCase());
+        if (existingFormat) {
+          colConfig.format = existingFormat;
+        }
+
+        columnSettings.push(colConfig);
       }
 
       if (col.sort) {

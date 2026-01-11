@@ -1351,6 +1351,11 @@
   flex-shrink: 0;
 }
 
+.footer-left {
+  display: flex;
+  gap: 8px;
+}
+
 .footer-right {
   display: flex;
   gap: 8px;
