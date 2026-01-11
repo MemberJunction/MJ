@@ -46,6 +46,9 @@ export type GridPendingRecordItem = {
   dataItem: any;
 }
 
+/**
+ * @deprecated use @memberjunction/ng-entity-viewer package and the mj-entity-data-grid as a replacement
+ */
 @Component({
   selector: 'mj-user-view-grid',
   templateUrl: './ng-user-view-grid.component.html',
@@ -357,7 +360,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
         // update the grid state if we have settings updates for columns and/or sorts
         const tempGridState: ViewGridState = JSON.parse(this._viewEntity.Get('GridState'));
         const tempColSettings = this._newGridState.columnSettings ? this._newGridState.columnSettings : tempGridState.columnSettings;
-        tempColSettings.forEach((col: ViewColumnInfo) => {col.DisplayName, col.ID, col.Name, col.hidden, col.orderIndex, col.width}); // remove EntityFieldInfo from the column settings
+        tempColSettings?.forEach((col) => {col.DisplayName, col.ID, col.Name, col.hidden, col.orderIndex, col.width}); // remove EntityFieldInfo from the column settings
         tempGridState.columnSettings = tempColSettings;
         tempGridState.sortSettings = this._newGridState.sortSettings ? this._newGridState.sortSettings : tempGridState.sortSettings;
           
@@ -468,7 +471,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit, OnDestroy {
       this._newGridState.sortSettings = sort;
 
       
-    this.sortSettings = this._newGridState.sortSettings; // for the UI display - grid binding to this shows that the sort is applied via arrows in the column headers
+    this.sortSettings = this._newGridState.sortSettings || []; // for the UI display - grid binding to this shows that the sort is applied via arrows in the column headers
 
     if (this.IsDynamicView()) {
       // Dynamic View, we have this.Params and can add an OrderBy and then just Refresh() the entire component
