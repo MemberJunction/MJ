@@ -6,7 +6,8 @@ import {
   OnInit,
   OnChanges,
   SimpleChanges,
-  ChangeDetectorRef
+  ChangeDetectorRef,
+  ViewChild
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { Metadata, EntityInfo, CompositeKey, BaseEntity, RunViewParams } from '@memberjunction/core';
@@ -14,8 +15,10 @@ import { ListEntity } from '@memberjunction/core-entities';
 import {
   AfterRowClickEventArgs,
   AfterRowDoubleClickEventArgs,
+  AfterDataLoadEventArgs,
   GridToolbarConfig,
-  GridSelectionMode
+  GridSelectionMode,
+  EntityDataGridComponent
 } from '@memberjunction/ng-entity-viewer';
 
 /**
@@ -102,14 +105,29 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
    */
   @Output() dataLoaded = new EventEmitter<{ totalCount: number }>();
 
+  /**
+   * Emitted when row selection changes (for checkbox mode).
+   */
+  @Output() selectionChange = new EventEmitter<string[]>();
+
+  /**
+   * Custom toolbar configuration. If not provided, uses default.
+   */
+  @Input() toolbarConfig: GridToolbarConfig | null = null;
+
+  // ViewChild to access the underlying EDG component
+  @ViewChild('entityDataGrid') entityDataGrid: EntityDataGridComponent | undefined;
+
   // Internal state
   entityInfo: EntityInfo | null = null;
   gridParams: RunViewParams | null = null;
   isLoading: boolean = false;
   listLoaded: boolean = false;
+  selectedKeys: string[] = [];
+  totalRowCount: number = 0;
 
-  // Toolbar configuration - minimal for list display
-  toolbarConfig: GridToolbarConfig = {
+  // Default toolbar configuration - minimal for list display
+  private defaultToolbarConfig: GridToolbarConfig = {
     showSearch: true,
     showRefresh: true,
     showAdd: false,
@@ -118,6 +136,13 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
     showRowCount: true,
     showSelectionCount: true
   };
+
+  /**
+   * Get the effective toolbar config (custom or default)
+   */
+  get effectiveToolbarConfig(): GridToolbarConfig {
+    return this.toolbarConfig || this.defaultToolbarConfig;
+  }
 
   constructor(
     private router: Router,
@@ -249,8 +274,17 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
   /**
    * Handle data loaded event from the grid
    */
-  onDataLoaded(event: { totalCount: number }): void {
-    this.dataLoaded.emit(event);
+  onDataLoaded(event: AfterDataLoadEventArgs): void {
+    this.totalRowCount = event.totalRowCount;
+    this.dataLoaded.emit({ totalCount: event.totalRowCount });
+  }
+
+  /**
+   * Handle selection change from the grid
+   */
+  onSelectionChange(keys: string[]): void {
+    this.selectedKeys = keys;
+    this.selectionChange.emit(keys);
   }
 
   /**
@@ -259,5 +293,57 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
   refresh(): void {
     // Re-trigger load to refresh data
     this.loadList();
+  }
+
+  /**
+   * Get the currently selected entity objects
+   */
+  getSelectedRows(): BaseEntity[] {
+    if (this.entityDataGrid) {
+      return this.entityDataGrid.GetSelectedRows();
+    }
+    return [];
+  }
+
+  /**
+   * Clear all selections
+   */
+  clearSelection(): void {
+    if (this.entityDataGrid) {
+      this.entityDataGrid.ClearSelection();
+    }
+    this.selectedKeys = [];
+  }
+
+  /**
+   * Select specific rows by key
+   */
+  selectRows(keys: string[], additive: boolean = false): void {
+    if (this.entityDataGrid) {
+      this.entityDataGrid.SelectRows(keys, additive);
+    }
+  }
+
+  /**
+   * Select all rows
+   */
+  selectAll(): void {
+    if (this.entityDataGrid) {
+      this.entityDataGrid.SelectAll();
+    }
+  }
+
+  /**
+   * Get the total row count
+   */
+  get rowCount(): number {
+    return this.totalRowCount;
+  }
+
+  /**
+   * Get the selected row count
+   */
+  get selectedCount(): number {
+    return this.selectedKeys.length;
   }
 }

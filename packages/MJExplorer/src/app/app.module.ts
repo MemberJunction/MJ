@@ -18,6 +18,7 @@ LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't
 
 import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjunction/ng-auth-services';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -97,6 +98,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     LabelModule,
     DialogsModule,
     UserViewGridModule,
+    EntityViewerModule,
     ExplorerSettingsModule,
     LinkDirectivesModule,
     ContainerDirectivesModule,

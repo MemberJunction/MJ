@@ -17,13 +17,16 @@
   <!-- Grid display when list is loaded -->
   @if (listLoaded && gridParams) {
     <mj-entity-data-grid
+      #entityDataGrid
       [Params]="gridParams"
       [height]="height"
       [showToolbar]="showToolbar"
-      [toolbarConfig]="toolbarConfig"
+      [toolbarConfig]="effectiveToolbarConfig"
       [selectionMode]="selectionMode"
       (afterRowClick)="onRowClick($event)"
-      (afterRowDoubleClick)="onRowDoubleClick($event)">
+      (afterRowDoubleClick)="onRowDoubleClick($event)"
+      (afterDataLoad)="onDataLoaded($event)"
+      (selectionChange)="onSelectionChange($event)">
     </mj-entity-data-grid>
   }
 </div>
