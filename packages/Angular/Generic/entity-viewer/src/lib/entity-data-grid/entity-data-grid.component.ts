@@ -1141,6 +1141,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private isSavingState: boolean = false;
 
   /**
+   * Pending state waiting to be persisted (for flushing on destroy).
+   * Tracks state for both saved views and user defaults separately.
+   */
+  private _pendingViewStateToPersist: ViewGridStateConfig | null = null;
+  private _pendingUserDefaultsToPersist: ViewGridStateConfig | null = null;
+
+  /**
    * Flag to suppress state persistence during view transitions.
    * When true, emitGridStateChanged will not trigger persistence.
    * This prevents the old view's column state from being saved to the new view.
@@ -1167,8 +1174,29 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    // Flush any pending state persistence immediately before destroying
+    this.flushPendingPersistence();
+
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  /**
+   * Immediately persists any pending state changes without waiting for debounce.
+   * Called on component destroy to ensure changes aren't lost.
+   */
+  private flushPendingPersistence(): void {
+    // Flush pending view state
+    if (this._pendingViewStateToPersist && this._viewEntity) {
+      this.persistGridStateToView(this._pendingViewStateToPersist);
+      this._pendingViewStateToPersist = null;
+    }
+
+    // Flush pending user defaults
+    if (this._pendingUserDefaultsToPersist && this._entityInfo) {
+      this.persistUserDefaultGridState(this._pendingUserDefaultsToPersist);
+      this._pendingUserDefaultsToPersist = null;
+    }
   }
 
   // ========================================
@@ -1207,14 +1235,17 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * and triggering data load if allowed.
    */
   private async onParamsChanged(): Promise<void> {
+    console.log('[entity-data-grid] onParamsChanged called');
+    console.log('[entity-data-grid] _params:', this._params ? {
+      EntityName: this._params.EntityName,
+      ViewEntity: this._params.ViewEntity ? 'present' : 'null',
+      ViewID: this._params.ViewID,
+      ViewName: this._params.ViewName
+    } : 'null');
+
     if (!this._params) {
       // Params cleared - reset view entity
       this._viewEntity = null;
-      return;
-    }
-
-    // Don't load if AllowLoad is false (deferred loading)
-    if (!this._allowLoad) {
       return;
     }
 
@@ -1224,6 +1255,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
     // Reset internal grid state when params change - this ensures we don't
     // carry over column/sort settings from a previous view when switching views
+    console.log('[entity-data-grid] Resetting _gridState and _sortState');
     this._gridState = null;
     this._sortState = [];
 
@@ -1258,26 +1290,33 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.applyViewEntitySettings();
       } else if (this._params.EntityName) {
         // Dynamic view - just get entity metadata
+        console.log('[entity-data-grid] onParamsChanged: Dynamic view path for', this._params.EntityName);
         this._viewEntity = null;
         const md = new Metadata();
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
 
         // Reset columns to force regeneration from metadata when switching to dynamic view
         // This ensures we don't carry over column config from a previous saved view
+        console.log('[entity-data-grid] Resetting _columns (was length:', this._columns.length, ')');
         this._columns = [];
 
         // For dynamic views, try to load user's saved defaults
         if (this._entityInfo && this._autoPersistState) {
+          console.log('[entity-data-grid] Loading user default grid state for', this._entityInfo.Name);
           this.loadUserDefaultGridState(this._entityInfo.Name);
+          console.log('[entity-data-grid] After loadUserDefaultGridState: _gridState =', this._gridState != null ? 'has columns' : 'null');
         }
       }
 
       // Generate columns if not already set
+      console.log('[entity-data-grid] Before generateColumnsFromMetadata: _columns.length =', this._columns.length, ', _entityInfo =', this._entityInfo?.Name);
       if (this._columns.length === 0 && this._entityInfo) {
         this.generateColumnsFromMetadata();
+        console.log('[entity-data-grid] After generateColumnsFromMetadata: _columns.length =', this._columns.length);
       }
 
       // Rebuild AG Grid column definitions to reflect the new view's settings
+      console.log('[entity-data-grid] Before buildAgColumnDefs: _gridState =', this._gridState != null ? 'has columns' : 'null');
       this.buildAgColumnDefs();
 
       // Load data if auto-refresh is enabled
@@ -1359,6 +1398,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   private async persistUserDefaultGridState(state: ViewGridStateConfig): Promise<void> {
     if (!this._entityInfo) {
+      this._pendingUserDefaultsToPersist = null;
       return;
     }
 
@@ -1370,6 +1410,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       };
 
       await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridStateJson));
+      // Clear pending state after successful save
+      this._pendingUserDefaultsToPersist = null;
     } catch (error) {
       console.error('[entity-data-grid] Failed to persist user default grid state:', error);
     }
@@ -1581,14 +1623,21 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private buildAgColumnDefs(): void {
     if (this._gridState?.columnSettings?.length && this._entityInfo) {
+      console.log('[entity-data-grid] buildAgColumnDefs: Using _gridState.columnSettings (', this._gridState.columnSettings.length, 'columns)');
+      console.log('[entity-data-grid] columnSettings names:', this._gridState.columnSettings.slice(0, 5).map(c => c.Name).join(', '));
       this.agColumnDefs = this.buildAgColumnDefsFromGridState(this._gridState.columnSettings);
     } else if (this._columns.length > 0) {
+      console.log('[entity-data-grid] buildAgColumnDefs: Using _columns (', this._columns.length, 'columns)');
+      console.log('[entity-data-grid] _columns names:', this._columns.slice(0, 5).map(c => c.field).join(', '));
       this.agColumnDefs = this._columns.map(col => this.mapColumnConfigToColDef(col));
     } else if (this._entityInfo) {
+      console.log('[entity-data-grid] buildAgColumnDefs: Generating from _entityInfo');
       this.agColumnDefs = this.generateAgColumnDefs(this._entityInfo);
     } else {
+      console.log('[entity-data-grid] buildAgColumnDefs: No source, setting empty');
       this.agColumnDefs = [];
     }
+    console.log('[entity-data-grid] buildAgColumnDefs result: agColumnDefs has', this.agColumnDefs.length, 'columns');
 
     // Add row number column if enabled
     if (this._showRowNumbers && this.agColumnDefs.length > 0) {
@@ -2533,9 +2582,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     if (this._autoPersistState && !this._suppressPersist) {
       if (!this.IsDynamicView && this._viewEntity) {
         // Stored view - persist to UserView.GridState (debounced)
+        // Track pending state for flush on destroy
+        this._pendingViewStateToPersist = currentState;
         this.statePersistSubject.next(currentState);
       } else if (this.IsDynamicView) {
         // Dynamic view - persist to User Settings as defaults (debounced via same subject)
+        // Track pending state for flush on destroy
+        this._pendingUserDefaultsToPersist = currentState;
         this.userDefaultsPersistSubject.next(currentState);
       }
     }
@@ -2552,6 +2605,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
     // Check permission before saving
     if (!this._viewEntity.UserCanEdit) {
+      this._pendingViewStateToPersist = null; // Clear pending since we can't save anyway
       return;
     }
 
@@ -2582,6 +2636,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       const success = await this._viewEntity.Save();
       if (!success) {
         console.warn('[entity-data-grid] Failed to save view state:', this._viewEntity.LatestResult?.Message);
+      } else {
+        // Clear pending state after successful save
+        this._pendingViewStateToPersist = null;
       }
     } catch (error) {
       console.error('[entity-data-grid] Error persisting grid state:', error);
