@@ -49,6 +49,7 @@
     "@memberjunction/ng-entity-form-dialog": "2.132.0",
     "@memberjunction/ng-entity-permissions": "2.132.0",
     "@memberjunction/ng-entity-viewer": "2.132.0",
+    "@memberjunction/ng-list-detail-grid": "2.132.0",
     "@memberjunction/ng-explorer-settings": "2.132.0",
     "@memberjunction/ng-file-storage": "2.132.0",
     "@memberjunction/ng-generic-dialog": "2.132.0",
