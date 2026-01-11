@@ -13,7 +13,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { BaseEntity, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { UserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { UserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle } from '@memberjunction/core-entities';
 import {
   ColDef,
   GridReadyEvent,
@@ -1451,6 +1451,13 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     if (this._gridState && this._entityInfo) {
       this.buildAgColumnDefs();
 
+      // Update AG Grid with new column definitions to apply header styles
+      if (this.gridApi) {
+        this.gridApi.setGridOption('columnDefs', this.agColumnDefs);
+        // Refresh header to apply new header styles
+        this.gridApi.refreshHeader();
+      }
+
       // Apply sort if present
       if (this._gridState.sortSettings?.length && this.gridApi) {
         const sortSetting = this._gridState.sortSettings[0];
@@ -1657,8 +1664,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         resizable: this._allowColumnResize
       };
 
-      // Add type-specific formatters
-      this.applyFieldFormatter(colDef, field);
+      // Add type-specific formatters with optional custom format
+      this.applyFieldFormatter(colDef, field, colConfig.format);
 
       cols.push(colDef);
     }
@@ -1713,7 +1720,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     return cols;
   }
 
-  private applyFieldFormatter(colDef: ColDef, field: EntityFieldInfo): void {
+  private applyFieldFormatter(colDef: ColDef, field: EntityFieldInfo, customFormat?: ColumnFormat): void {
     // Store type info for use in cell renderer
     const fieldType = field.TSType;
     const fieldNameLower = field.Name.toLowerCase();
@@ -1721,7 +1728,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     const vc = this.effectiveVisualConfig;
 
     // Determine special field types using ExtendedType metadata first, then field name patterns as fallback
-    const isCurrency = fieldNameLower.includes('amount') ||
+    const isCurrency = customFormat?.type === 'currency' ||
+                       fieldNameLower.includes('amount') ||
                        fieldNameLower.includes('price') ||
                        fieldNameLower.includes('cost') ||
                        fieldNameLower.includes('total');
@@ -1739,10 +1747,24 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
                                        fieldNameLower.includes('mobile') ||
                                        fieldNameLower.includes('fax')));
 
-    // Apply right-alignment for numeric columns
-    if (vc.rightAlignNumbers && (fieldType === 'number' || isCurrency)) {
+    // Apply alignment - use custom format alignment if provided, otherwise default to right for numbers
+    const customAlign = customFormat?.align;
+    if (customAlign) {
+      colDef.cellClass = `cell-align-${customAlign}`;
+      colDef.headerClass = `header-align-${customAlign}`;
+    } else if (vc.rightAlignNumbers && (fieldType === 'number' || isCurrency)) {
       colDef.cellClass = 'cell-align-right';
       colDef.headerClass = 'header-align-right';
+    }
+
+    // Apply custom header style if provided
+    if (customFormat?.headerStyle) {
+      const headerStyle = this.buildCssStyle(customFormat.headerStyle);
+      if (headerStyle) {
+        colDef.headerClass = (colDef.headerClass || '') + ' custom-header-style';
+        // AG Grid uses headerStyle for inline styles
+        (colDef as ColDef & { headerStyle: Record<string, string> }).headerStyle = this.buildStyleObject(customFormat.headerStyle);
+      }
     }
 
     // Use cellRenderer for highlighting support and enhanced formatting
@@ -1753,83 +1775,244 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
       let displayValue = '';
       let extraClass = '';
+      let inlineStyle = '';
+      let isHtmlContent = false; // Track if displayValue contains HTML (icons, links)
 
-      // Boolean formatting
-      if (fieldType === 'boolean') {
-        if (vc.booleanIcons) {
-          const iconClass = params.value
-            ? 'fa-solid fa-check cell-boolean-true'
-            : 'fa-solid fa-xmark cell-boolean-false';
-          return `<i class="${iconClass}"></i>`;
-        }
-        displayValue = params.value ? 'Yes' : 'No';
+      // Build inline style from custom cell style
+      if (customFormat?.cellStyle) {
+        inlineStyle = this.buildCssStyle(customFormat.cellStyle);
       }
-      // Date formatting
-      else if (fieldType === 'Date') {
-        const date = params.value instanceof Date ? params.value : new Date(params.value as string);
-        if (isNaN(date.getTime())) {
+
+      // Check if custom format is provided and has a non-auto type
+      const useCustomFormat = customFormat && customFormat.type && customFormat.type !== 'auto';
+
+      if (useCustomFormat) {
+        // Use custom formatting
+        displayValue = this.formatValueWithCustomFormat(params.value, customFormat);
+        // Check if formatCustomBoolean returned HTML (icon or checkbox)
+        if (customFormat.type === 'boolean' &&
+            (customFormat.booleanDisplay === 'icon' || customFormat.booleanDisplay === 'checkbox')) {
+          isHtmlContent = true;
+        }
+      } else {
+        // Use default formatting based on field type
+        // Boolean formatting
+        if (fieldType === 'boolean') {
+          if (vc.booleanIcons) {
+            const iconClass = params.value
+              ? 'fa-solid fa-check cell-boolean-true'
+              : 'fa-solid fa-xmark cell-boolean-false';
+            displayValue = `<i class="${iconClass}"></i>`;
+            isHtmlContent = true;
+          } else {
+            displayValue = params.value ? 'Yes' : 'No';
+          }
+        }
+        // Date formatting
+        else if (fieldType === 'Date') {
+          const date = params.value instanceof Date ? params.value : new Date(params.value as string);
+          if (isNaN(date.getTime())) {
+            displayValue = String(params.value);
+          } else if (vc.friendlyDates) {
+            displayValue = date.toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            });
+          } else {
+            displayValue = date.toISOString().split('T')[0];
+          }
+        }
+        // Currency formatting
+        else if (fieldType === 'number' && isCurrency) {
+          const num = Number(params.value);
+          displayValue = isNaN(num) ? String(params.value) : `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+        // Regular number formatting
+        else if (fieldType === 'number') {
+          const num = Number(params.value);
+          displayValue = isNaN(num) ? String(params.value) : num.toLocaleString();
+        }
+        // Email formatting
+        else if (isEmail && vc.clickableEmails) {
+          const email = String(params.value);
+          const escapedEmail = HighlightUtil.escapeHtml(email);
+          if (this._filterText) {
+            const highlighted = HighlightUtil.highlight(email, this._filterText, true);
+            return this.wrapWithStyle(`<a href="mailto:${escapedEmail}" class="cell-link cell-email" onclick="event.stopPropagation()">${highlighted}</a>`, inlineStyle);
+          }
+          return this.wrapWithStyle(`<a href="mailto:${escapedEmail}" class="cell-link cell-email" onclick="event.stopPropagation()">${escapedEmail}</a>`, inlineStyle);
+        }
+        // URL formatting
+        else if (isUrl && vc.clickableUrls) {
+          let url = String(params.value);
+          if (url && !url.startsWith('http')) {
+            url = 'https://' + url;
+          }
+          const displayUrl = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+          const escapedDisplay = HighlightUtil.escapeHtml(displayUrl);
+          if (this._filterText) {
+            const highlighted = HighlightUtil.highlight(displayUrl, this._filterText, true);
+            return this.wrapWithStyle(`<a href="${HighlightUtil.escapeHtml(url)}" target="_blank" class="cell-link cell-url" onclick="event.stopPropagation()">${highlighted}</a>`, inlineStyle);
+          }
+          return this.wrapWithStyle(`<a href="${HighlightUtil.escapeHtml(url)}" target="_blank" class="cell-link cell-url" onclick="event.stopPropagation()">${escapedDisplay}</a>`, inlineStyle);
+        }
+        // Phone formatting
+        else if (isPhone) {
           displayValue = String(params.value);
-        } else if (vc.friendlyDates) {
-          displayValue = date.toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-          });
-        } else {
-          displayValue = date.toISOString().split('T')[0];
+          extraClass = 'cell-phone';
+        }
+        // Default string formatting
+        else {
+          displayValue = String(params.value);
         }
       }
-      // Currency formatting
-      else if (fieldType === 'number' && isCurrency) {
-        const num = Number(params.value);
-        displayValue = isNaN(num) ? String(params.value) : `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      }
-      // Regular number formatting
-      else if (fieldType === 'number') {
-        const num = Number(params.value);
-        displayValue = isNaN(num) ? String(params.value) : num.toLocaleString();
-      }
-      // Email formatting
-      else if (isEmail && vc.clickableEmails) {
-        const email = String(params.value);
-        const escapedEmail = HighlightUtil.escapeHtml(email);
-        if (this._filterText) {
-          const highlighted = HighlightUtil.highlight(email, this._filterText, true);
-          return `<a href="mailto:${escapedEmail}" class="cell-link cell-email" onclick="event.stopPropagation()">${highlighted}</a>`;
+
+      // Build the span with optional style and class
+      const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : '';
+      const classAttr = extraClass ? ` class="${extraClass}"` : '';
+
+      // Handle content that's already HTML (icons, etc.)
+      if (isHtmlContent) {
+        if (inlineStyle) {
+          return `<span${styleAttr}>${displayValue}</span>`;
         }
-        return `<a href="mailto:${escapedEmail}" class="cell-link cell-email" onclick="event.stopPropagation()">${escapedEmail}</a>`;
-      }
-      // URL formatting
-      else if (isUrl && vc.clickableUrls) {
-        let url = String(params.value);
-        if (url && !url.startsWith('http')) {
-          url = 'https://' + url;
-        }
-        const displayUrl = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        const escapedDisplay = HighlightUtil.escapeHtml(displayUrl);
-        if (this._filterText) {
-          const highlighted = HighlightUtil.highlight(displayUrl, this._filterText, true);
-          return `<a href="${HighlightUtil.escapeHtml(url)}" target="_blank" class="cell-link cell-url" onclick="event.stopPropagation()">${highlighted}</a>`;
-        }
-        return `<a href="${HighlightUtil.escapeHtml(url)}" target="_blank" class="cell-link cell-url" onclick="event.stopPropagation()">${escapedDisplay}</a>`;
-      }
-      // Phone formatting
-      else if (isPhone) {
-        displayValue = String(params.value);
-        extraClass = 'cell-phone';
-      }
-      // Default string formatting
-      else {
-        displayValue = String(params.value);
+        return displayValue;
       }
 
       // Apply highlighting if filterText is set
       if (this._filterText && displayValue) {
-        return `<span class="${extraClass}">${HighlightUtil.highlight(displayValue, this._filterText, true)}</span>`;
+        return `<span${classAttr}${styleAttr}>${HighlightUtil.highlight(displayValue, this._filterText, true)}</span>`;
       }
 
-      return `<span class="${extraClass}">${HighlightUtil.escapeHtml(displayValue)}</span>`;
+      return `<span${classAttr}${styleAttr}>${HighlightUtil.escapeHtml(displayValue)}</span>`;
     };
+  }
+
+  /**
+   * Helper to wrap content with an inline style span
+   */
+  private wrapWithStyle(content: string, style: string): string {
+    if (!style) return content;
+    return `<span style="${style}">${content}</span>`;
+  }
+
+  /**
+   * Build a CSS style string from a ColumnTextStyle object
+   */
+  private buildCssStyle(style: ColumnTextStyle): string {
+    const parts: string[] = [];
+    if (style.bold) parts.push('font-weight: bold');
+    if (style.italic) parts.push('font-style: italic');
+    if (style.underline) parts.push('text-decoration: underline');
+    if (style.color) parts.push(`color: ${style.color}`);
+    if (style.backgroundColor) parts.push(`background-color: ${style.backgroundColor}`);
+    return parts.join('; ');
+  }
+
+  /**
+   * Build a style object for AG Grid from a ColumnTextStyle object
+   */
+  private buildStyleObject(style: ColumnTextStyle): Record<string, string> {
+    const obj: Record<string, string> = {};
+    if (style.bold) obj['fontWeight'] = 'bold';
+    if (style.italic) obj['fontStyle'] = 'italic';
+    if (style.underline) obj['textDecoration'] = 'underline';
+    if (style.color) obj['color'] = style.color;
+    if (style.backgroundColor) obj['backgroundColor'] = style.backgroundColor;
+    return obj;
+  }
+
+  /**
+   * Format a value using custom ColumnFormat settings
+   */
+  private formatValueWithCustomFormat(value: unknown, format: ColumnFormat): string {
+    if (value == null) return '—';
+
+    switch (format.type) {
+      case 'number':
+        return this.formatCustomNumber(value as number, format);
+      case 'currency':
+        return this.formatCustomCurrency(value as number, format);
+      case 'percent':
+        return this.formatCustomPercent(value as number, format);
+      case 'date':
+      case 'datetime':
+        return this.formatCustomDate(value, format);
+      case 'boolean':
+        return this.formatCustomBoolean(value as boolean, format);
+      default:
+        return String(value);
+    }
+  }
+
+  private formatCustomNumber(value: number, format: ColumnFormat): string {
+    const num = Number(value);
+    if (isNaN(num)) return String(value);
+
+    const options: Intl.NumberFormatOptions = {
+      minimumFractionDigits: format.decimals ?? 0,
+      maximumFractionDigits: format.decimals ?? 0,
+      useGrouping: format.thousandsSeparator ?? true
+    };
+    return new Intl.NumberFormat('en-US', options).format(num);
+  }
+
+  private formatCustomCurrency(value: number, format: ColumnFormat): string {
+    const num = Number(value);
+    if (isNaN(num)) return String(value);
+
+    const options: Intl.NumberFormatOptions = {
+      style: 'currency',
+      currency: format.currencyCode || 'USD',
+      minimumFractionDigits: format.decimals ?? 2,
+      maximumFractionDigits: format.decimals ?? 2
+    };
+    return new Intl.NumberFormat('en-US', options).format(num);
+  }
+
+  private formatCustomPercent(value: number, format: ColumnFormat): string {
+    const num = Number(value);
+    if (isNaN(num)) return String(value);
+
+    const options: Intl.NumberFormatOptions = {
+      style: 'percent',
+      minimumFractionDigits: format.decimals ?? 0,
+      maximumFractionDigits: format.decimals ?? 0
+    };
+    // Assume value is already a percentage (e.g., 50 = 50%), divide by 100
+    return new Intl.NumberFormat('en-US', options).format(num / 100);
+  }
+
+  private formatCustomDate(value: unknown, format: ColumnFormat): string {
+    const date = value instanceof Date ? value : new Date(value as string);
+    if (isNaN(date.getTime())) return String(value);
+
+    const dateStyle: 'short' | 'medium' | 'long' =
+      format.dateFormat === 'short' ? 'short' :
+      format.dateFormat === 'long' ? 'long' : 'medium';
+
+    const options: Intl.DateTimeFormatOptions = { dateStyle };
+    if (format.type === 'datetime') {
+      options.timeStyle = 'short';
+    }
+
+    return new Intl.DateTimeFormat('en-US', options).format(date);
+  }
+
+  private formatCustomBoolean(value: boolean, format: ColumnFormat): string {
+    if (format.booleanDisplay === 'icon') {
+      const iconClass = value
+        ? 'fa-solid fa-check cell-boolean-true'
+        : 'fa-solid fa-xmark cell-boolean-false';
+      return `<i class="${iconClass}"></i>`;
+    }
+    if (format.booleanDisplay === 'checkbox') {
+      return value
+        ? '<i class="fa-regular fa-square-check cell-boolean-true"></i>'
+        : '<i class="fa-regular fa-square cell-boolean-false"></i>';
+    }
+    return value ? (format.trueLabel || 'Yes') : (format.falseLabel || 'No');
   }
 
   // ========================================

@@ -802,6 +802,9 @@ export class ViewColumnInfo extends BaseInfo {
     /** Maximum column width */
     maxWidth?: number = null
 
+    /** Column formatting configuration */
+    format?: ColumnFormat = null
+
     /** Reference to the entity field metadata (not persisted) */
     EntityField: EntityFieldInfo = null
 
@@ -896,6 +899,87 @@ export interface ViewGridColumnSetting {
     minWidth?: number;
     /** Maximum column width */
     maxWidth?: number;
+    /** Column formatting configuration */
+    format?: ColumnFormat;
+}
+
+/**
+ * Text styling options for column headers and cells
+ */
+export interface ColumnTextStyle {
+    /** Bold text */
+    bold?: boolean;
+    /** Italic text */
+    italic?: boolean;
+    /** Underlined text */
+    underline?: boolean;
+    /** Text color (CSS color value) */
+    color?: string;
+    /** Background color (CSS color value) */
+    backgroundColor?: string;
+}
+
+/**
+ * Conditional formatting rule for dynamic cell styling
+ */
+export interface ColumnConditionalRule {
+    /** Condition type */
+    condition: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterThanOrEqual' | 'lessThanOrEqual' | 'between' | 'contains' | 'startsWith' | 'endsWith' | 'isEmpty' | 'isNotEmpty';
+    /** Value to compare against */
+    value?: string | number | boolean;
+    /** Second value for 'between' condition */
+    value2?: number;
+    /** Style to apply when condition is met */
+    style: ColumnTextStyle;
+}
+
+/**
+ * Column formatting configuration
+ * Supports value formatting, alignment, header/cell styling, and conditional formatting
+ */
+export interface ColumnFormat {
+    /**
+     * Format type - determines which formatter to use
+     * 'auto' uses smart defaults based on field metadata
+     */
+    type?: 'auto' | 'number' | 'currency' | 'percent' | 'date' | 'datetime' | 'boolean' | 'text';
+
+    /** Decimal places for number/currency/percent types */
+    decimals?: number;
+
+    /** Currency code (ISO 4217) for currency type, e.g., 'USD', 'EUR' */
+    currencyCode?: string;
+
+    /** Show thousands separator for number types */
+    thousandsSeparator?: boolean;
+
+    /**
+     * Date format preset or custom pattern
+     * Presets: 'short', 'medium', 'long'
+     * Custom: Any valid date format string
+     */
+    dateFormat?: 'short' | 'medium' | 'long' | string;
+
+    /** Label to display for true values (boolean type) */
+    trueLabel?: string;
+
+    /** Label to display for false values (boolean type) */
+    falseLabel?: string;
+
+    /** How to display boolean values */
+    booleanDisplay?: 'text' | 'checkbox' | 'icon';
+
+    /** Text alignment */
+    align?: 'left' | 'center' | 'right';
+
+    /** Header styling (bold, italic, color, etc.) */
+    headerStyle?: ColumnTextStyle;
+
+    /** Cell styling (applies to all cells in the column) */
+    cellStyle?: ColumnTextStyle;
+
+    /** Conditional formatting rules (applied in order, first match wins) */
+    conditionalRules?: ColumnConditionalRule[];
 }
 
 /**

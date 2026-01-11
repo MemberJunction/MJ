@@ -19,10 +19,11 @@ import {
   NavigateToRelatedEvent,
   EntityViewerComponent,
   ViewGridStateConfig,
-  GridStateChangedEvent
+  GridStateChangedEvent,
+  ViewSaveEvent,
+  ViewConfigPanelComponent
 } from '@memberjunction/ng-entity-viewer';
 import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
-import { ViewSaveEvent, ViewConfigPanelComponent } from './components/view-config-panel/view-config-panel.component';
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
@@ -1102,7 +1103,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         DisplayName: col.displayName,
         hidden: false, // Visible columns only
         width: col.width || null,
-        orderIndex: idx
+        orderIndex: idx,
+        format: col.format // Include column format settings
       }));
     }
     // Otherwise, use the current grid state if available (from grid interactions)

@@ -91,7 +91,7 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
 import { ViewSelectorComponent } from './DataExplorer/components/view-selector/view-selector.component';
-import { ViewConfigPanelComponent } from './DataExplorer/components/view-config-panel/view-config-panel.component';
+// ViewConfigPanelComponent now imported from @memberjunction/ng-entity-viewer via EntityViewerModule
 import { FilterDialogComponent } from './DataExplorer/components/filter-dialog/filter-dialog.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
 // Home Dashboard Components
@@ -191,7 +191,7 @@ import { ListsCategoriesResource } from './Lists/components/lists-categories-res
     DataExplorerDashboardComponent,
     ExplorerNavigationPanelComponent,
     ViewSelectorComponent,
-    ViewConfigPanelComponent,
+    // ViewConfigPanelComponent now comes from EntityViewerModule
     FilterDialogComponent,
     // Home Dashboard Components
     HomeDashboardComponent,

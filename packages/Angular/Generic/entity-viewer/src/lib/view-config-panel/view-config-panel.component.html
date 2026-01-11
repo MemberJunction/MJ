@@ -44,7 +44,7 @@
   <!-- Panel Content -->
   <div class="panel-content">
     <!-- Columns Tab -->
-    @if (activeTab === 'columns') {
+    @if (activeTab === 'columns' && !formatEditingColumn) {
       <div class="tab-content">
         <!-- Sort Configuration -->
         <div class="config-section">
@@ -91,18 +91,36 @@
           </div>
           <div class="column-list visible-columns">
             @for (column of visibleColumns; track column.fieldId; let i = $index) {
+              <!-- Drop indicator before -->
+              @if (isDropBefore(column)) {
+                <div class="drop-indicator"></div>
+              }
               <div
                 class="column-item"
+                [class.dragging]="draggedColumn === column"
+                [class.drop-target]="dropTargetColumn === column"
                 draggable="true"
                 (dragstart)="onDragStart($event, column)"
                 (dragover)="onDragOver($event, column)"
+                (dragleave)="onDragLeave($event)"
                 (drop)="onDrop($event, column)"
-                (dragend)="onDragEnd()">
+                (dragend)="onDragEnd($event)">
                 <div class="drag-handle">
                   <i class="fa-solid fa-grip-vertical"></i>
                 </div>
-                <span class="column-name">{{ column.displayName }}</span>
+                <span class="column-name">
+                  {{ column.displayName }}
+                  @if (hasCustomFormat(column)) {
+                    <i class="fa-solid fa-paintbrush format-indicator" title="Custom formatting applied"></i>
+                  }
+                </span>
                 <div class="column-actions">
+                  <button
+                    class="action-btn format-btn"
+                    (click)="openFormatEditor(column)"
+                    title="Format column">
+                    <i class="fa-solid fa-paintbrush"></i>
+                  </button>
                   <button
                     class="action-btn"
                     [disabled]="i === 0"
@@ -125,6 +143,10 @@
                   </button>
                 </div>
               </div>
+              <!-- Drop indicator after (only for last item) -->
+              @if (isDropAfter(column) && i === visibleColumns.length - 1) {
+                <div class="drop-indicator"></div>
+              }
             }
             @if (visibleColumns.length === 0) {
               <div class="empty-list">
@@ -171,6 +193,250 @@
               </div>
             }
           </div>
+        </div>
+      </div>
+    }
+
+    <!-- Column Format Editor Sub-Panel -->
+    @if (activeTab === 'columns' && formatEditingColumn) {
+      <div class="format-editor">
+        <!-- Format Editor Header -->
+        <div class="format-editor-header">
+          <button class="back-btn" (click)="closeFormatEditor()">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <div class="format-editor-title">
+            <span>Format: {{ formatEditingColumn.displayName }}</span>
+          </div>
+        </div>
+
+        <!-- Preview Section -->
+        <div class="format-preview-section">
+          <div class="preview-header">
+            <i class="fa-solid fa-eye"></i>
+            <span>Preview</span>
+          </div>
+          <div class="preview-table">
+            <div class="preview-header-cell"
+                 [style.font-weight]="formatEditingColumn.format?.headerStyle?.bold ? 'bold' : 'normal'"
+                 [style.font-style]="formatEditingColumn.format?.headerStyle?.italic ? 'italic' : 'normal'"
+                 [style.text-decoration]="formatEditingColumn.format?.headerStyle?.underline ? 'underline' : 'none'"
+                 [style.color]="formatEditingColumn.format?.headerStyle?.color"
+                 [style.background-color]="formatEditingColumn.format?.headerStyle?.backgroundColor">
+              {{ formatEditingColumn.displayName }}
+            </div>
+            @for (value of getSampleValues(formatEditingColumn); track $index) {
+              <div class="preview-cell"
+                   [style.text-align]="formatEditingColumn.format?.align || 'left'"
+                   [style.font-weight]="formatEditingColumn.format?.cellStyle?.bold ? 'bold' : 'normal'"
+                   [style.font-style]="formatEditingColumn.format?.cellStyle?.italic ? 'italic' : 'normal'"
+                   [style.text-decoration]="formatEditingColumn.format?.cellStyle?.underline ? 'underline' : 'none'"
+                   [style.color]="formatEditingColumn.format?.cellStyle?.color"
+                   [style.background-color]="formatEditingColumn.format?.cellStyle?.backgroundColor">
+                {{ formatPreviewValue(value, formatEditingColumn.format) }}
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Format Type -->
+        <div class="format-section">
+          <div class="format-section-header">
+            <i class="fa-solid fa-hashtag"></i>
+            <span>Format Type</span>
+          </div>
+          <select class="format-select" [(ngModel)]="formatEditingColumn.format!.type">
+            <option value="auto">Auto (Smart Default)</option>
+            <option value="text">Text</option>
+            <option value="number">Number</option>
+            <option value="currency">Currency</option>
+            <option value="percent">Percent</option>
+            <option value="date">Date</option>
+            <option value="datetime">Date & Time</option>
+            <option value="boolean">Boolean</option>
+          </select>
+        </div>
+
+        <!-- Type-Specific Options -->
+        @if (formatEditingColumn.format?.type === 'number' || formatEditingColumn.format?.type === 'currency' || formatEditingColumn.format?.type === 'percent') {
+          <div class="format-section">
+            <div class="format-section-header">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Number Options</span>
+            </div>
+            <div class="format-row">
+              <label>Decimal Places</label>
+              <input type="number" class="format-input small" min="0" max="10"
+                     [(ngModel)]="formatEditingColumn.format!.decimals" />
+            </div>
+            @if (formatEditingColumn.format?.type === 'currency') {
+              <div class="format-row">
+                <label>Currency</label>
+                <select class="format-select" [(ngModel)]="formatEditingColumn.format!.currencyCode">
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                  <option value="GBP">GBP (£)</option>
+                  <option value="JPY">JPY (¥)</option>
+                  <option value="CAD">CAD ($)</option>
+                  <option value="AUD">AUD ($)</option>
+                </select>
+              </div>
+            }
+            <div class="format-row">
+              <label>Thousands Separator</label>
+              <input type="checkbox" [(ngModel)]="formatEditingColumn.format!.thousandsSeparator" />
+            </div>
+          </div>
+        }
+
+        @if (formatEditingColumn.format?.type === 'date' || formatEditingColumn.format?.type === 'datetime') {
+          <div class="format-section">
+            <div class="format-section-header">
+              <i class="fa-solid fa-calendar"></i>
+              <span>Date Options</span>
+            </div>
+            <div class="format-row">
+              <label>Format</label>
+              <select class="format-select" [(ngModel)]="formatEditingColumn.format!.dateFormat">
+                <option value="short">Short (1/15/25)</option>
+                <option value="medium">Medium (Jan 15, 2025)</option>
+                <option value="long">Long (January 15, 2025)</option>
+              </select>
+            </div>
+          </div>
+        }
+
+        @if (formatEditingColumn.format?.type === 'boolean') {
+          <div class="format-section">
+            <div class="format-section-header">
+              <i class="fa-solid fa-toggle-on"></i>
+              <span>Boolean Options</span>
+            </div>
+            <div class="format-row">
+              <label>True Label</label>
+              <input type="text" class="format-input" [(ngModel)]="formatEditingColumn.format!.trueLabel" placeholder="Yes" />
+            </div>
+            <div class="format-row">
+              <label>False Label</label>
+              <input type="text" class="format-input" [(ngModel)]="formatEditingColumn.format!.falseLabel" placeholder="No" />
+            </div>
+            <div class="format-row">
+              <label>Display As</label>
+              <select class="format-select" [(ngModel)]="formatEditingColumn.format!.booleanDisplay">
+                <option value="text">Text</option>
+                <option value="checkbox">Checkbox</option>
+                <option value="icon">Icon</option>
+              </select>
+            </div>
+          </div>
+        }
+
+        <!-- Alignment -->
+        <div class="format-section">
+          <div class="format-section-header">
+            <i class="fa-solid fa-align-left"></i>
+            <span>Alignment</span>
+          </div>
+          <div class="alignment-toggle">
+            <button class="align-btn" [class.active]="formatEditingColumn.format?.align === 'left' || !formatEditingColumn.format?.align"
+                    (click)="formatEditingColumn.format!.align = 'left'" title="Left">
+              <i class="fa-solid fa-align-left"></i>
+            </button>
+            <button class="align-btn" [class.active]="formatEditingColumn.format?.align === 'center'"
+                    (click)="formatEditingColumn.format!.align = 'center'" title="Center">
+              <i class="fa-solid fa-align-center"></i>
+            </button>
+            <button class="align-btn" [class.active]="formatEditingColumn.format?.align === 'right'"
+                    (click)="formatEditingColumn.format!.align = 'right'" title="Right">
+              <i class="fa-solid fa-align-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Header Style (Collapsible) -->
+        <details class="format-section-collapsible">
+          <summary>
+            <i class="fa-solid fa-heading"></i>
+            <span>Header Style</span>
+          </summary>
+          <div class="format-section-content">
+            <div class="style-buttons">
+              <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.bold"
+                      (click)="toggleHeaderStyle('bold')"
+                      title="Bold">
+                <i class="fa-solid fa-bold"></i>
+              </button>
+              <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.italic"
+                      (click)="toggleHeaderStyle('italic')"
+                      title="Italic">
+                <i class="fa-solid fa-italic"></i>
+              </button>
+              <button class="style-btn" [class.active]="formatEditingColumn.format?.headerStyle?.underline"
+                      (click)="toggleHeaderStyle('underline')"
+                      title="Underline">
+                <i class="fa-solid fa-underline"></i>
+              </button>
+            </div>
+            <div class="format-row">
+              <label>Text Color</label>
+              <input type="color" class="color-input"
+                     [value]="formatEditingColumn.format?.headerStyle?.color || '#000000'"
+                     (input)="updateHeaderColor('color', $any($event.target).value)" />
+            </div>
+            <div class="format-row">
+              <label>Background</label>
+              <input type="color" class="color-input"
+                     [value]="formatEditingColumn.format?.headerStyle?.backgroundColor || '#ffffff'"
+                     (input)="updateHeaderColor('backgroundColor', $any($event.target).value)" />
+            </div>
+          </div>
+        </details>
+
+        <!-- Cell Style (Collapsible) -->
+        <details class="format-section-collapsible">
+          <summary>
+            <i class="fa-solid fa-table-cells"></i>
+            <span>Cell Style</span>
+          </summary>
+          <div class="format-section-content">
+            <div class="style-buttons">
+              <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.bold"
+                      (click)="toggleCellStyle('bold')"
+                      title="Bold">
+                <i class="fa-solid fa-bold"></i>
+              </button>
+              <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.italic"
+                      (click)="toggleCellStyle('italic')"
+                      title="Italic">
+                <i class="fa-solid fa-italic"></i>
+              </button>
+              <button class="style-btn" [class.active]="formatEditingColumn.format?.cellStyle?.underline"
+                      (click)="toggleCellStyle('underline')"
+                      title="Underline">
+                <i class="fa-solid fa-underline"></i>
+              </button>
+            </div>
+            <div class="format-row">
+              <label>Text Color</label>
+              <input type="color" class="color-input"
+                     [value]="formatEditingColumn.format?.cellStyle?.color || '#000000'"
+                     (input)="updateCellColor('color', $any($event.target).value)" />
+            </div>
+            <div class="format-row">
+              <label>Background</label>
+              <input type="color" class="color-input"
+                     [value]="formatEditingColumn.format?.cellStyle?.backgroundColor || '#ffffff'"
+                     (input)="updateCellColor('backgroundColor', $any($event.target).value)" />
+            </div>
+          </div>
+        </details>
+
+        <!-- Clear Format Button -->
+        <div class="format-actions">
+          <button class="clear-format-btn" (click)="clearColumnFormat(formatEditingColumn); closeFormatEditor()">
+            <i class="fa-solid fa-eraser"></i>
+            Clear Formatting
+          </button>
         </div>
       </div>
     }

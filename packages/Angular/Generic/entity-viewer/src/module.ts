@@ -12,6 +12,7 @@ import { EntityRecordDetailPanelComponent } from './lib/entity-record-detail-pan
 import { PillComponent } from './lib/pill/pill.component';
 import { PaginationComponent } from './lib/pagination/pagination.component';
 import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid.component';
+import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-panel.component';
 
 /**
  * EntityViewerModule - Provides components for viewing entity data
@@ -24,6 +25,7 @@ import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid
  * - EntityRecordDetailPanelComponent: Detail panel for displaying single record information
  * - PillComponent: Semantic color pills for categorical values
  * - PaginationComponent: Beautiful "Load More" pagination with progress indicator
+ * - ViewConfigPanelComponent: Sliding panel for configuring view settings (columns, sort, filters)
  *
  * @example
  * ```typescript
@@ -43,7 +45,8 @@ import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid
     EntityRecordDetailPanelComponent,
     PillComponent,
     PaginationComponent,
-    EntityDataGridComponent
+    EntityDataGridComponent,
+    ViewConfigPanelComponent
   ],
   imports: [
     CommonModule,
@@ -59,7 +62,8 @@ import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid
     EntityRecordDetailPanelComponent,
     PillComponent,
     PaginationComponent,
-    EntityDataGridComponent
+    EntityDataGridComponent,
+    ViewConfigPanelComponent
   ]
 })
 export class EntityViewerModule { }
