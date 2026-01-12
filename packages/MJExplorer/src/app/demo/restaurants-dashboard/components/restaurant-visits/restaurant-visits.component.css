@@ -1,0 +1,211 @@
+.restaurant-visits {
+  padding: 32px;
+  min-height: 100%;
+}
+
+.visits-content {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.visits-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.section-subtitle {
+  color: #64748b;
+  margin: 0;
+  font-size: 14px;
+}
+
+.visits-filters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  align-items: center;
+}
+
+.visits-filters kendo-textbox {
+  flex: 1;
+  max-width: 400px;
+}
+
+.rating-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.visits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.visit-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.visit-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.15);
+  border-color: #6366f1;
+}
+
+.visit-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.visit-card__restaurant h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.visit-card__cuisine {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.visit-card__rating {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.stars {
+  display: flex;
+  gap: 2px;
+}
+
+.stars i {
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.stars i.filled {
+  color: #f59e0b;
+}
+
+.rating-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.visit-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 12px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.meta-item i {
+  color: #94a3b8;
+}
+
+.meta-item i.positive {
+  color: #22c55e;
+}
+
+.meta-item i.negative {
+  color: #ef4444;
+}
+
+.visit-card__dishes {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 12px;
+}
+
+.visit-card__dishes strong {
+  color: #475569;
+}
+
+.visit-card__comments {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+  font-style: italic;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 3px solid #6366f1;
+}
+
+.visit-card__comments p {
+  margin: 0;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #94a3b8;
+}
+
+.empty-state i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.empty-state p {
+  font-size: 16px;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .restaurant-visits {
+    padding: 16px;
+  }
+
+  .visits-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .visits-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .visits-filters kendo-textbox {
+    max-width: none;
+  }
+}

@@ -53,6 +53,7 @@ import { environment } from 'src/environments/environment';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { NavigationItemDemoComponent } from './demo/navigation-item.component';
 import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
+import { RestaurantDashboardsModule } from './demo/restaurants-dashboard/public-api';
 
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
@@ -107,6 +108,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     ReactiveFormsModule,
     AuthServicesModule.forRoot(environment),
     ShellModule,
+    RestaurantDashboardsModule,
     // Import standalone components
     SystemValidationBannerComponent,
   ],

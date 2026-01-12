@@ -1,0 +1,252 @@
+.restaurant-analytics {
+  padding: 32px;
+  min-height: 100%;
+}
+
+.analytics-content {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.section-subtitle {
+  color: #64748b;
+  margin: 0;
+  font-size: 14px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+.analytics-section {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+}
+
+.analytics-section--full {
+  grid-column: 1 / -1;
+}
+
+.analytics-section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 20px 0;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.analytics-section__title i {
+  color: #6366f1;
+}
+
+.top-restaurants {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.restaurant-item {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.restaurant-item:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  border-color: #6366f1;
+}
+
+.restaurant-rank {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 800;
+  background: #cbd5e1;
+  color: white;
+  flex-shrink: 0;
+}
+
+.restaurant-rank.gold {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+}
+
+.restaurant-rank.silver {
+  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+}
+
+.restaurant-rank.bronze {
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+}
+
+.restaurant-info {
+  flex: 1;
+}
+
+.restaurant-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.restaurant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.restaurant-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.restaurant-meta i {
+  color: #94a3b8;
+}
+
+.restaurant-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.restaurant-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.stars {
+  display: flex;
+  gap: 2px;
+}
+
+.stars i {
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.stars i.filled {
+  color: #f59e0b;
+}
+
+.rating-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.restaurant-visits {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #64748b;
+  padding: 4px 8px;
+  background: white;
+  border-radius: 6px;
+}
+
+.cuisine-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cuisine-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cuisine-bar__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cuisine-bar__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.cuisine-bar__count {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.cuisine-bar__track {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cuisine-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 4px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (max-width: 1200px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .restaurant-analytics {
+    padding: 16px;
+  }
+
+  .restaurant-item {
+    flex-direction: column;
+  }
+
+  .restaurant-stats {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+}

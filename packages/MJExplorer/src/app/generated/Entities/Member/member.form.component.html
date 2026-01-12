@@ -1,0 +1,924 @@
+<mj-record-form-container [record]="record" [formComponent]="this">
+
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Contact Information Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="contactInformation"
+        sectionName="Contact Information"
+        icon="fa fa-address-card"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Email"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Email"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PreferredLanguage"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Timezone"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Phone"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Mobile"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Personal Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="personalDetails"
+        sectionName="Personal Details"
+        icon="fa fa-user"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FirstName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="LastName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Title"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="LinkedInURL"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Bio"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProfilePhotoURL"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Professional Profile Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="professionalProfile"
+        sectionName="Professional Profile"
+        icon="fa fa-briefcase"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OrganizationID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Industry"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="JobFunction"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="YearsInProfession"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="JoinDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EngagementScore"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="LastActivityDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Organization"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Location Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="location"
+        sectionName="Location"
+        icon="fa fa-map-marker-alt"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="City"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="State"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Country"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PostalCode"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- Advocacy Actions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="advocacyActions"
+        sectionName="Advocacy Actions"
+        icon="fa fa-bullhorn"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('advocacyActions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Advocacy Actions','MemberID')"
+                [NewRecordValues]="NewRecordValues('Advocacy Actions')"
+                [AllowLoad]="IsSectionExpanded('advocacyActions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('advocacyActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Board Members Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="boardMembers"
+        sectionName="Board Members"
+        icon="fa fa-gavel"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('boardMembers')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Board Members','MemberID')"
+                [NewRecordValues]="NewRecordValues('Board Members')"
+                [AllowLoad]="IsSectionExpanded('boardMembers')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('boardMembers', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Campaign Members Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="campaignMembers"
+        sectionName="Campaign Members"
+        icon="fa fa-bullhorn"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('campaignMembers')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Campaign Members','MemberID')"
+                [NewRecordValues]="NewRecordValues('Campaign Members')"
+                [AllowLoad]="IsSectionExpanded('campaignMembers')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('campaignMembers', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Certifications Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="certifications"
+        sectionName="Certifications"
+        icon="fa fa-certificate"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('certifications')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Certifications','MemberID')"
+                [NewRecordValues]="NewRecordValues('Certifications')"
+                [AllowLoad]="IsSectionExpanded('certifications')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('certifications', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Chapter Memberships Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="chapterMemberships"
+        sectionName="Chapter Memberships"
+        icon="fa fa-users"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('chapterMemberships')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Memberships','MemberID')"
+                [NewRecordValues]="NewRecordValues('Chapter Memberships')"
+                [AllowLoad]="IsSectionExpanded('chapterMemberships')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('chapterMemberships', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Chapter Officers Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="chapterOfficers"
+        sectionName="Chapter Officers"
+        icon="fa fa-user-tie"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('chapterOfficers')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Officers','MemberID')"
+                [NewRecordValues]="NewRecordValues('Chapter Officers')"
+                [AllowLoad]="IsSectionExpanded('chapterOfficers')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('chapterOfficers', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Committee Memberships Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="committeeMemberships"
+        sectionName="Committee Memberships"
+        icon="fa fa-users"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('committeeMemberships')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Committee Memberships','MemberID')"
+                [NewRecordValues]="NewRecordValues('Committee Memberships')"
+                [AllowLoad]="IsSectionExpanded('committeeMemberships')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('committeeMemberships', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Committees Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="committees"
+        sectionName="Committees"
+        icon="fa fa-handshake"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('committees')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Committees','ChairMemberID')"
+                [NewRecordValues]="NewRecordValues('Committees')"
+                [AllowLoad]="IsSectionExpanded('committees')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('committees', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Competition Judges Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="competitionJudges"
+        sectionName="Competition Judges"
+        icon="fa fa-gavel"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('competitionJudges')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Competition Judges','MemberID')"
+                [NewRecordValues]="NewRecordValues('Competition Judges')"
+                [AllowLoad]="IsSectionExpanded('competitionJudges')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('competitionJudges', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Email Sends Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="emailSends"
+        sectionName="Email Sends"
+        icon="fa fa-paper-plane"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('emailSends')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Email Sends','MemberID')"
+                [NewRecordValues]="NewRecordValues('Email Sends')"
+                [AllowLoad]="IsSectionExpanded('emailSends')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('emailSends', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Enrollments Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="enrollments"
+        sectionName="Enrollments"
+        icon="fa fa-user-graduate"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('enrollments')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Enrollments','MemberID')"
+                [NewRecordValues]="NewRecordValues('Enrollments')"
+                [AllowLoad]="IsSectionExpanded('enrollments')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('enrollments', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Event Registrations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="eventRegistrations"
+        sectionName="Event Registrations"
+        icon="fa fa-calendar-check"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('eventRegistrations')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Event Registrations','MemberID')"
+                [NewRecordValues]="NewRecordValues('Event Registrations')"
+                [AllowLoad]="IsSectionExpanded('eventRegistrations')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('eventRegistrations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Forum Categories Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="forumCategories"
+        sectionName="Forum Categories"
+        icon="fa fa-folder"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('forumCategories')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Forum Categories','LastPostAuthorID')"
+                [NewRecordValues]="NewRecordValues('Forum Categories')"
+                [AllowLoad]="IsSectionExpanded('forumCategories')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('forumCategories', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Forum Moderations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="forumModerations"
+        sectionName="Forum Moderations"
+        icon="fa fa-shield-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('forumModerations')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Forum Moderations','ModeratedByID')"
+                [NewRecordValues]="NewRecordValues('Forum Moderations')"
+                [AllowLoad]="IsSectionExpanded('forumModerations')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('forumModerations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Forum Posts Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="forumPosts"
+        sectionName="Forum Posts"
+        icon="fa fa-comments"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('forumPosts')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Forum Posts','AuthorID')"
+                [NewRecordValues]="NewRecordValues('Forum Posts')"
+                [AllowLoad]="IsSectionExpanded('forumPosts')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('forumPosts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Forum Threads Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="forumThreads"
+        sectionName="Forum Threads"
+        icon="fa fa-comments"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('forumThreads')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Forum Threads','LastReplyAuthorID')"
+                [NewRecordValues]="NewRecordValues('Forum Threads')"
+                [AllowLoad]="IsSectionExpanded('forumThreads')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('forumThreads', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Invoices Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="invoices"
+        sectionName="Invoices"
+        icon="fa fa-file-invoice-dollar"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('invoices')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Invoices','MemberID')"
+                [NewRecordValues]="NewRecordValues('Invoices')"
+                [AllowLoad]="IsSectionExpanded('invoices')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('invoices', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Member Follows Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="memberFollows"
+        sectionName="Member Follows"
+        icon="fa fa-users"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('memberFollows')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Member Follows','FollowerID')"
+                [NewRecordValues]="NewRecordValues('Member Follows')"
+                [AllowLoad]="IsSectionExpanded('memberFollows')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('memberFollows', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Memberships Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="memberships"
+        sectionName="Memberships"
+        icon="fa fa-id-card"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('memberships')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Memberships','MemberID')"
+                [NewRecordValues]="NewRecordValues('Memberships')"
+                [AllowLoad]="IsSectionExpanded('memberships')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('memberships', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Post Attachments Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="postAttachments"
+        sectionName="Post Attachments"
+        icon="fa fa-paperclip"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('postAttachments')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Post Attachments','UploadedByID')"
+                [NewRecordValues]="NewRecordValues('Post Attachments')"
+                [AllowLoad]="IsSectionExpanded('postAttachments')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('postAttachments', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Post Reactions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="postReactions"
+        sectionName="Post Reactions"
+        icon="fa fa-thumbs-up"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('postReactions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Post Reactions','MemberID')"
+                [NewRecordValues]="NewRecordValues('Post Reactions')"
+                [AllowLoad]="IsSectionExpanded('postReactions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('postReactions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Products Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="products"
+        sectionName="Products"
+        icon="fa fa-shopping-cart"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('products')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Products','MemberID')"
+                [NewRecordValues]="NewRecordValues('Products')"
+                [AllowLoad]="IsSectionExpanded('products')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('products', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Resource Downloads Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="resourceDownloads"
+        sectionName="Resource Downloads"
+        icon="fa fa-download"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('resourceDownloads')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Resource Downloads','MemberID')"
+                [NewRecordValues]="NewRecordValues('Resource Downloads')"
+                [AllowLoad]="IsSectionExpanded('resourceDownloads')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('resourceDownloads', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Resource Ratings Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="resourceRatings"
+        sectionName="Resource Ratings"
+        icon="fa fa-star"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('resourceRatings')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Resource Ratings','MemberID')"
+                [NewRecordValues]="NewRecordValues('Resource Ratings')"
+                [AllowLoad]="IsSectionExpanded('resourceRatings')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('resourceRatings', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Resource Versions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="resourceVersions"
+        sectionName="Resource Versions"
+        icon="fa fa-history"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('resourceVersions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Resource Versions','CreatedByID')"
+                [NewRecordValues]="NewRecordValues('Resource Versions')"
+                [AllowLoad]="IsSectionExpanded('resourceVersions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('resourceVersions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Resources Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="resources"
+        sectionName="Resources"
+        icon="fa fa-book"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('resources')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Resources','AuthorID')"
+                [NewRecordValues]="NewRecordValues('Resources')"
+                [AllowLoad]="IsSectionExpanded('resources')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('resources', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Continuing Educations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="continuingEducations"
+        sectionName="Continuing Educations"
+        icon="fa fa-graduation-cap"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('continuingEducations')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Continuing Educations','MemberID')"
+                [NewRecordValues]="NewRecordValues('Continuing Educations')"
+                [AllowLoad]="IsSectionExpanded('continuingEducations')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('continuingEducations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Forum Moderations Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="forumModerations"
+        sectionName="Forum Moderations"
+        icon="fa fa-shield-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('forumModerations')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Forum Moderations','ReportedByID')"
+                [NewRecordValues]="NewRecordValues('Forum Moderations')"
+                [AllowLoad]="IsSectionExpanded('forumModerations')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('forumModerations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Forum Posts Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="forumPosts"
+        sectionName="Forum Posts"
+        icon="fa fa-comments"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('forumPosts')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Forum Posts','EditedByID')"
+                [NewRecordValues]="NewRecordValues('Forum Posts')"
+                [AllowLoad]="IsSectionExpanded('forumPosts')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('forumPosts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Forum Threads Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="forumThreads"
+        sectionName="Forum Threads"
+        icon="fa fa-comments"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('forumThreads')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Forum Threads','AuthorID')"
+                [NewRecordValues]="NewRecordValues('Forum Threads')"
+                [AllowLoad]="IsSectionExpanded('forumThreads')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('forumThreads', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
+        

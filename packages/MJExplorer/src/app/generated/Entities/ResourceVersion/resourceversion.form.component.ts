@@ -1,0 +1,28 @@
+import { Component } from '@angular/core';
+import { ResourceVersionEntity } from 'mj_generatedentities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+
+@RegisterClass(BaseFormComponent, 'Resource Versions') // Tell MemberJunction about this class
+@Component({
+    selector: 'gen-resourceversion-form',
+    templateUrl: './resourceversion.form.component.html'
+})
+export class ResourceVersionFormComponent extends BaseFormComponent {
+    public record!: ResourceVersionEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'auditTrail', sectionName: 'Audit Trail', isExpanded: true },
+            { sectionKey: 'fileAttributes', sectionName: 'File Attributes', isExpanded: true },
+            { sectionKey: 'versionDetails', sectionName: 'Version Details', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+        ]);
+    }
+}
+
+export function LoadResourceVersionFormComponent() {
+    // does nothing, but called to prevent tree-shaking from eliminating this component from the build
+}

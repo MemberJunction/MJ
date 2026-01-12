@@ -14,7 +14,10 @@ export class PaymentFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'paymentCore', sectionName: 'Payment Core', isExpanded: true },
+            { sectionKey: 'processingStatus', sectionName: 'Processing & Status', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

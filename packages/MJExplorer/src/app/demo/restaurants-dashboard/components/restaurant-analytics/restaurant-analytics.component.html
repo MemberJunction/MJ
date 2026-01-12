@@ -1,0 +1,81 @@
+<div class="restaurant-analytics">
+  <mj-loading *ngIf="isLoading && restaurants.length === 0"></mj-loading>
+
+  <div *ngIf="restaurants.length > 0" class="analytics-content">
+    <div class="analytics-header">
+      <div>
+        <h2 class="section-title">Restaurant Analytics</h2>
+        <p class="section-subtitle">Insights and rankings</p>
+      </div>
+      <button kendoButton (click)="refresh()" [icon]="'refresh'" themeColor="primary">Refresh</button>
+    </div>
+
+    <div class="analytics-grid">
+      <!-- Top Restaurants -->
+      <div class="analytics-section analytics-section--full">
+        <h3 class="analytics-section__title">
+          <i class="fa-solid fa-trophy"></i>
+          Top Rated Restaurants
+        </h3>
+        <div class="top-restaurants">
+          <div *ngFor="let restaurant of getTopRestaurants(); let i = index" class="restaurant-item">
+            <div class="restaurant-rank" [class.gold]="i === 0" [class.silver]="i === 1" [class.bronze]="i === 2">
+              {{i + 1}}
+            </div>
+            <div class="restaurant-info">
+              <div class="restaurant-name">{{restaurant.name}}</div>
+              <div class="restaurant-meta">
+                <span *ngIf="restaurant.cuisineType">
+                  <i class="fa-solid fa-tag"></i>
+                  {{restaurant.cuisineType}}
+                </span>
+                <span *ngIf="restaurant.priceRange">
+                  <i class="fa-solid fa-dollar-sign" [style.color]="getPriceRangeColor(restaurant.priceRange)"></i>
+                  {{restaurant.priceRange}}
+                </span>
+                <span *ngIf="restaurant.city">
+                  <i class="fa-solid fa-location-dot"></i>
+                  {{restaurant.city}}, {{restaurant.state}}
+                </span>
+              </div>
+            </div>
+            <div class="restaurant-stats">
+              <div class="restaurant-rating">
+                <div class="stars">
+                  <i *ngFor="let star of getStarArray(restaurant.averageRating)"
+                     class="fa-solid fa-star"
+                     [class.filled]="star === 1"></i>
+                </div>
+                <span class="rating-value">{{restaurant.averageRating}}</span>
+              </div>
+              <div class="restaurant-visits">
+                <i class="fa-solid fa-calendar-check"></i>
+                {{restaurant.visitCount}} visits
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cuisine Distribution -->
+      <div class="analytics-section">
+        <h3 class="analytics-section__title">
+          <i class="fa-solid fa-chart-pie"></i>
+          Cuisine Distribution
+        </h3>
+        <div class="cuisine-chart">
+          <div *ngFor="let cuisine of cuisineStats" class="cuisine-bar">
+            <div class="cuisine-bar__label">
+              <span class="cuisine-bar__name">{{cuisine.cuisineName}}</span>
+              <span class="cuisine-bar__count">{{cuisine.visitCount}} visits</span>
+            </div>
+            <div class="cuisine-bar__track">
+              <div class="cuisine-bar__fill"
+                   [style.width.%]="(cuisine.visitCount / cuisineStats[0].visitCount) * 100"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -3,28 +3,26 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Event Basics Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="eventBasics"
+        sectionName="Event Basics"
+        icon="fa fa-info-circle"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ParentID"
-            Type="textbox"
+            FieldName="Name"
+            Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
-            Type="textarea"
+            FieldName="EventType"
+            Type="dropdownlist"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -39,19 +37,21 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ConferenceTheme"
-            Type="textarea"
+            FieldName="Status"
+            Type="dropdownlist"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TargetAudience"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Schedule & Timing Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="scheduleTiming"
+        sectionName="Schedule & Timing"
+        icon="fa fa-calendar"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -71,6 +71,40 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="Timezone"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RegistrationOpenDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RegistrationCloseDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Venue & Access Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="venueAccess"
+        sectionName="Venue & Access"
+        icon="fa fa-map-marker-alt"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Location"
             Type="textarea"
             [EditMode]="EditMode"
@@ -79,63 +113,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SubmissionDeadline"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="NotificationDate"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EvaluationRubric"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="BaselinePassingScore"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ReviewCommitteeEmails"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TypeformID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="TypeformMonitorEnabled"
+            FieldName="IsVirtual"
             Type="checkbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -143,15 +121,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TypeformCheckFrequencyMinutes"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="BoxFolderID"
+            FieldName="VirtualPlatform"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -159,21 +129,80 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SessionFormats"
+            FieldName="MeetingURL"
             Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ChapterID"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AccountID"
+            FieldName="Capacity"
             Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Pricing & Credits Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="pricingCredits"
+        sectionName="Pricing & Credits"
+        icon="fa fa-dollar-sign"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RegistrationFee"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MemberPrice"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="NonMemberPrice"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CEUCredits"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -196,66 +225,47 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
-    <!-- Events Section -->
+    <!-- Event Sessions Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="events"
-        sectionName="Events"
-        icon="fa fa-table"
+        sectionKey="eventSessions"
+        sectionName="Event Sessions"
+        icon="fa fa-chalkboard-teacher"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('events')">
+        [badgeCount]="GetSectionRowCount('eventSessions')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Events','ParentID')"
-                [NewRecordValues]="NewRecordValues('Events')"
-                [AllowLoad]="IsSectionExpanded('events')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('events', $event.totalRowCount)"
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Event Sessions','EventID')"
+                [NewRecordValues]="NewRecordValues('Event Sessions')"
+                [AllowLoad]="IsSectionExpanded('eventSessions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('eventSessions', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
-    <!-- Submissions Section -->
+    <!-- Event Registrations Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="submissions"
-        sectionName="Submissions"
-        icon="fa fa-table"
+        sectionKey="eventRegistrations"
+        sectionName="Event Registrations"
+        icon="fa fa-calendar-check"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('submissions')">
+        [badgeCount]="GetSectionRowCount('eventRegistrations')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Submissions','EventID')"
-                [NewRecordValues]="NewRecordValues('Submissions')"
-                [AllowLoad]="IsSectionExpanded('submissions')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('submissions', $event.totalRowCount)"
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Event Registrations','EventID')"
+                [NewRecordValues]="NewRecordValues('Event Registrations')"
+                [AllowLoad]="IsSectionExpanded('eventRegistrations')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('eventRegistrations', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- Event Review Tasks Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="eventReviewTasks"
-        sectionName="Event Review Tasks"
-        icon="fa fa-table"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('eventReviewTasks')">
-        <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('Event Review Tasks','EventID')"
-                [NewRecordValues]="NewRecordValues('Event Review Tasks')"
-                [AllowLoad]="IsSectionExpanded('eventReviewTasks')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('eventReviewTasks', $event.totalRowCount)"
-                >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

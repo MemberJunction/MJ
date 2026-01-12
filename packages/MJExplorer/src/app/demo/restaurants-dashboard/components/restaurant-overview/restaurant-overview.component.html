@@ -1,0 +1,196 @@
+<div class="restaurant-overview">
+  <mj-loading *ngIf="isLoading && !kpis"></mj-loading>
+
+  <div *ngIf="kpis" class="overview-content">
+    <!-- Header with refresh button -->
+    <div class="overview-header">
+      <div>
+        <h2 class="section-title">Dashboard Overview</h2>
+        <p class="section-subtitle">Your restaurant tracking at a glance</p>
+      </div>
+      <button kendoButton (click)="refresh()" [icon]="'refresh'" themeColor="primary">
+        Refresh Data
+      </button>
+    </div>
+
+    <!-- KPI Cards Grid -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-card--primary">
+        <div class="kpi-card__icon">
+          <i class="fa-solid fa-utensils"></i>
+        </div>
+        <div class="kpi-card__content">
+          <div class="kpi-card__title">Total Restaurants</div>
+          <div class="kpi-card__value">{{kpis.totalRestaurants}}</div>
+          <div class="kpi-card__subtitle">Places discovered</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-card--success">
+        <div class="kpi-card__icon">
+          <i class="fa-solid fa-calendar-check"></i>
+        </div>
+        <div class="kpi-card__content">
+          <div class="kpi-card__title">Total Visits</div>
+          <div class="kpi-card__value">{{kpis.totalVisits}}</div>
+          <div class="kpi-card__trend kpi-card__trend--up">
+            <i class="fa-solid fa-arrow-up"></i>
+            {{kpis.visitTrend}}% this month
+          </div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-card--warning">
+        <div class="kpi-card__icon">
+          <i class="fa-solid fa-star"></i>
+        </div>
+        <div class="kpi-card__content">
+          <div class="kpi-card__title">Average Rating</div>
+          <div class="kpi-card__value">{{kpis.averageRating}}</div>
+          <div class="kpi-card__stars">
+            <i *ngFor="let star of getStarArray(kpis.averageRating)"
+               class="fa-solid fa-star"
+               [class.filled]="star === 1"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-card--danger">
+        <div class="kpi-card__icon">
+          <i class="fa-solid fa-heart"></i>
+        </div>
+        <div class="kpi-card__content">
+          <div class="kpi-card__title">Favorites</div>
+          <div class="kpi-card__value">{{kpis.favoriteRestaurants}}</div>
+          <div class="kpi-card__subtitle">4+ star average</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-card--info">
+        <div class="kpi-card__icon">
+          <i class="fa-solid fa-users"></i>
+        </div>
+        <div class="kpi-card__content">
+          <div class="kpi-card__title">Members</div>
+          <div class="kpi-card__value">{{kpis.totalMembers}}</div>
+          <div class="kpi-card__subtitle">Food enthusiasts</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-card--purple">
+        <div class="kpi-card__icon">
+          <i class="fa-solid fa-bookmark"></i>
+        </div>
+        <div class="kpi-card__content">
+          <div class="kpi-card__title">Wishlist</div>
+          <div class="kpi-card__value">{{kpis.wishlistCount}}</div>
+          <div class="kpi-card__subtitle">Want to try</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-card--green">
+        <div class="kpi-card__icon">
+          <i class="fa-solid fa-dollar-sign"></i>
+        </div>
+        <div class="kpi-card__content">
+          <div class="kpi-card__title">Total Spent</div>
+          <div class="kpi-card__value">\${{kpis.totalSpent.toLocaleString()}}</div>
+          <div class="kpi-card__subtitle">On group dinners</div>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-card--orange">
+        <div class="kpi-card__icon">
+          <i class="fa-solid fa-fire"></i>
+        </div>
+        <div class="kpi-card__content">
+          <div class="kpi-card__title">Top Cuisine</div>
+          <div class="kpi-card__value-text">{{kpis.mostVisitedCuisine}}</div>
+          <div class="kpi-card__subtitle">Most visited</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two Column Layout -->
+    <div class="content-grid">
+      <!-- Cuisine Stats -->
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h3 class="section-title">
+            <i class="fa-solid fa-chart-pie"></i>
+            Cuisine Breakdown
+          </h3>
+        </div>
+        <div class="cuisine-stats">
+          <div *ngFor="let cuisine of cuisineStats" class="cuisine-stat-item">
+            <div class="cuisine-stat-header">
+              <span class="cuisine-name">{{cuisine.cuisineName}}</span>
+              <span class="cuisine-rating">
+                <i class="fa-solid fa-star"></i>
+                {{cuisine.averageRating}}
+              </span>
+            </div>
+            <div class="cuisine-stat-details">
+              <div class="cuisine-detail">
+                <i class="fa-solid fa-utensils"></i>
+                {{cuisine.restaurantCount}} restaurants
+              </div>
+              <div class="cuisine-detail">
+                <i class="fa-solid fa-calendar-check"></i>
+                {{cuisine.visitCount}} visits
+              </div>
+              <div class="cuisine-detail" *ngIf="cuisine.totalSpent > 0">
+                <i class="fa-solid fa-dollar-sign"></i>
+                \${{cuisine.totalSpent.toLocaleString()}} spent
+              </div>
+            </div>
+            <div class="cuisine-progress">
+              <div class="cuisine-progress-bar"
+                   [style.width.%]="(cuisine.visitCount / kpis.totalVisits) * 100"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Member Activity -->
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h3 class="section-title">
+            <i class="fa-solid fa-users"></i>
+            Member Activity
+          </h3>
+        </div>
+        <div class="member-activity">
+          <div *ngFor="let member of memberActivity" class="member-item">
+            <div class="member-avatar">
+              <i class="fa-solid fa-user"></i>
+            </div>
+            <div class="member-info">
+              <div class="member-name">{{member.memberName}}</div>
+              <div class="member-stats">
+                <span class="member-stat">
+                  <i class="fa-solid fa-calendar-check"></i>
+                  {{member.visitCount}} visits
+                </span>
+                <span class="member-stat">
+                  <i class="fa-solid fa-heart"></i>
+                  {{member.favoriteRestaurants}} favorites
+                </span>
+              </div>
+              <div class="member-stats">
+                <span class="member-stat">
+                  <i class="fa-solid fa-star"></i>
+                  {{member.averageRating}} avg rating
+                </span>
+                <span class="member-stat" *ngIf="member.totalSpent > 0">
+                  <i class="fa-solid fa-dollar-sign"></i>
+                  \${{member.totalSpent.toLocaleString()}}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

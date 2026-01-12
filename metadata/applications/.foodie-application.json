@@ -1,0 +1,54 @@
+{
+  "fields": {
+    "Name": "Foodie",
+    "Description": "Restaurant Tracking and Analytics",
+    "Icon": "fa-solid fa-utensils",
+    "DefaultForNewUser": false,
+    "Color": "#ef4444",
+    "DefaultSequence": 1100,
+    "DefaultNavItems": [
+      {
+        "Label": "Overview",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "RestaurantOverview",
+        "isDefault": true
+      },
+      {
+        "Label": "Visits",
+        "Icon": "fa-solid fa-calendar-check",
+        "ResourceType": "Custom",
+        "DriverClass": "RestaurantVisits",
+        "isDefault": false
+      },
+      {
+        "Label": "Analytics",
+        "Icon": "fa-solid fa-chart-bar",
+        "ResourceType": "Custom",
+        "DriverClass": "RestaurantAnalytics",
+        "isDefault": false
+      },
+      {
+        "Label": "Restaurants",
+        "Icon": "fa-solid fa-utensils",
+        "ResourceType": "Entity",
+        "ResourceRecordID": "Restaurants",
+        "isDefault": false
+      },
+      {
+        "Label": "Members",
+        "Icon": "fa-solid fa-users",
+        "ResourceType": "Entity",
+        "ResourceRecordID": "Members",
+        "isDefault": false
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "48EA4407-579F-4F12-9211-A0825FAFFAB9"
+  },
+  "sync": {
+    "lastModified": "2026-01-12T20:51:05.697Z",
+    "checksum": "d5881c729b368d671ba6b1cf8d59190787e3e55bbd99e4e92ae95badbda9818d"
+  }
+}

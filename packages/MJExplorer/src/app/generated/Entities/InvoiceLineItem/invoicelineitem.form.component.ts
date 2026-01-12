@@ -14,7 +14,11 @@ export class InvoiceLineItemFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'invoiceAssociation', sectionName: 'Invoice Association', isExpanded: true },
+            { sectionKey: 'itemInformation', sectionName: 'Item Information', isExpanded: true },
+            { sectionKey: 'pricing', sectionName: 'Pricing', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

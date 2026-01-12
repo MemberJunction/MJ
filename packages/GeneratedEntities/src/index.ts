@@ -1,4 +1,7 @@
+import { antiTreeShaker } from './demo/restaurant-extended';
+
 export * from './generated/entity_subclasses'
+export * from './demo/restaurant-extended';
 
 /**
  * This function is used to force the generated entities to be loaded. This is necessary because of the way that tree shaking works in webpack.
@@ -13,4 +16,5 @@ export * from './generated/entity_subclasses'
  * LoadGeneratedEntities()
  */
 export function LoadGeneratedEntities() {
+    antiTreeShaker();
 } 

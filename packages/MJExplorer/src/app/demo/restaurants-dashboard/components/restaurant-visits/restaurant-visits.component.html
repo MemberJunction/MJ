@@ -1,0 +1,89 @@
+<div class="restaurant-visits">
+  <mj-loading *ngIf="isLoading && visits.length === 0"></mj-loading>
+
+  <div *ngIf="visits.length > 0" class="visits-content">
+    <div class="visits-header">
+      <div>
+        <h2 class="section-title">Restaurant Visits</h2>
+        <p class="section-subtitle">Browse and filter your dining experiences</p>
+      </div>
+      <button kendoButton (click)="refresh()" [icon]="'refresh'" themeColor="primary">Refresh</button>
+    </div>
+
+    <div class="visits-filters">
+      <kendo-textbox
+        [(ngModel)]="searchText"
+        (ngModelChange)="onSearchChange($event)"
+        placeholder="Search restaurants, members, cuisines..."
+        [clearButton]="true">
+        <ng-template kendoTextBoxPrefixTemplate>
+          <i class="fa-solid fa-search"></i>
+        </ng-template>
+      </kendo-textbox>
+
+      <div class="rating-filters">
+        <button kendoButton [toggleable]="true" [selected]="selectedRating === null"
+                (click)="onRatingFilter(null)" themeColor="info" size="small">All</button>
+        <button kendoButton [toggleable]="true" [selected]="selectedRating === 5"
+                (click)="onRatingFilter(5)" size="small">5⭐</button>
+        <button kendoButton [toggleable]="true" [selected]="selectedRating === 4"
+                (click)="onRatingFilter(4)" size="small">4⭐</button>
+        <button kendoButton [toggleable]="true" [selected]="selectedRating === 3"
+                (click)="onRatingFilter(3)" size="small">3⭐</button>
+      </div>
+    </div>
+
+    <div class="visits-grid">
+      <div *ngFor="let visit of filteredVisits" class="visit-card">
+        <div class="visit-card__header">
+          <div class="visit-card__restaurant">
+            <h3>{{visit.restaurantName}}</h3>
+            <span class="visit-card__cuisine" *ngIf="visit.cuisineType">
+              <i class="fa-solid fa-tag"></i>
+              {{visit.cuisineType}}
+            </span>
+          </div>
+          <div class="visit-card__rating" *ngIf="visit.rating">
+            <div class="stars">
+              <i *ngFor="let star of getStarArray(visit.rating)"
+                 class="fa-solid fa-star"
+                 [class.filled]="star === 1"></i>
+            </div>
+            <span class="rating-value">{{visit.rating}}</span>
+          </div>
+        </div>
+
+        <div class="visit-card__meta">
+          <span class="meta-item">
+            <i class="fa-solid fa-user"></i>
+            {{visit.memberName}}
+          </span>
+          <span class="meta-item">
+            <i class="fa-solid fa-calendar"></i>
+            {{formatDate(visit.visitDate)}}
+          </span>
+          <span class="meta-item" *ngIf="visit.wouldReturn !== null">
+            <i class="fa-solid" [class.fa-thumbs-up]="visit.wouldReturn"
+               [class.fa-thumbs-down]="!visit.wouldReturn"
+               [class.positive]="visit.wouldReturn"
+               [class.negative]="!visit.wouldReturn"></i>
+            {{visit.wouldReturn ? 'Would return' : 'Would not return'}}
+          </span>
+        </div>
+
+        <div class="visit-card__dishes" *ngIf="visit.dishesOrdered">
+          <strong>Dishes:</strong> {{visit.dishesOrdered}}
+        </div>
+
+        <div class="visit-card__comments" *ngIf="visit.comments">
+          <p>{{visit.comments}}</p>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="filteredVisits.length === 0" class="empty-state">
+      <i class="fa-solid fa-search"></i>
+      <p>No visits found matching your filters</p>
+    </div>
+  </div>
+</div>

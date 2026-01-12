@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { InvoiceEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Invoices') // Tell MemberJunction about this class
 @Component({
@@ -15,7 +15,10 @@ export class InvoiceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'invoiceOverview', sectionName: 'Invoice Overview', isExpanded: true },
+            { sectionKey: 'financialSummary', sectionName: 'Financial Summary', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'invoiceLineItems', sectionName: 'Invoice Line Items', isExpanded: false },
             { sectionKey: 'payments', sectionName: 'Payments', isExpanded: false }
         ]);
