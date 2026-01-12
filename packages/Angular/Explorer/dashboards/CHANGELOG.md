@@ -1,5 +1,41 @@
 # @memberjunction/ng-dashboards
 
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [43df8f4]
+- Updated dependencies [c00bd13]
+  - @memberjunction/ng-entity-viewer@2.133.0
+  - @memberjunction/ng-list-management@2.133.0
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ng-core-entity-forms@2.133.0
+  - @memberjunction/ng-user-view-grid@2.133.0
+  - @memberjunction/ai-engine-base@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/ng-base-application@2.133.0
+  - @memberjunction/ng-explorer-settings@2.133.0
+  - @memberjunction/ng-shared@2.133.0
+  - @memberjunction/ng-testing@2.133.0
+  - @memberjunction/ng-action-gallery@2.133.0
+  - @memberjunction/ng-ai-test-harness@2.133.0
+  - @memberjunction/ng-code-editor@2.133.0
+  - @memberjunction/ng-container-directives@2.133.0
+  - @memberjunction/ng-entity-relationship-diagram@2.133.0
+  - @memberjunction/ng-filter-builder@2.133.0
+  - @memberjunction/ng-notifications@2.133.0
+  - @memberjunction/ng-react@2.133.0
+  - @memberjunction/ng-shared-generic@2.133.0
+  - @memberjunction/graphql-dataprovider@2.133.0
+  - @memberjunction/interactive-component-types@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/skip-types@2.133.0
+  - @memberjunction/templates-base-types@2.133.0
+  - @memberjunction/testing-engine-base@2.133.0
+  - @memberjunction/ng-export-service@2.133.0
+  - @memberjunction/export-engine@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes

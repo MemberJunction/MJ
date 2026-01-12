@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/aiengine@2.133.0
+  - @memberjunction/communication-types@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/sqlserver-dataprovider@2.133.0
+  - @memberjunction/ai-provider-bundle@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes

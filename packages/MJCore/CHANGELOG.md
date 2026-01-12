@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.133.0
+
+### Minor Changes
+
+- c00bd13: Add metadata migration script for 2.133.0
+
+### Patch Changes
+
+- @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Minor Changes
