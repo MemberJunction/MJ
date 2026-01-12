@@ -277,6 +277,11 @@ export class ListManagementService {
     recordIds: string[],
     skipDuplicates: boolean = true
   ): Promise<BatchOperationResult> {
+    console.log(`[ListManagementService] addRecordsToLists called:`);
+    console.log(`  - listIds (${listIds.length}):`, listIds);
+    console.log(`  - recordIds (${recordIds.length}):`, recordIds);
+    console.log(`  - skipDuplicates:`, skipDuplicates);
+
     const result: BatchOperationResult = {
       success: 0,
       failed: 0,
@@ -320,23 +325,44 @@ export class ListManagementService {
         }
 
         try {
+          console.log(`[ListManagementService] Creating ListDetail: listId=${listId}, recordId=${recordId}`);
           const listDetail = await md.GetEntityObject<ListDetailEntity>('List Details');
+          console.log(`[ListManagementService] Got entity object, calling NewRecord()`);
           listDetail.NewRecord();
-          listDetail.ListID = listId;
-          listDetail.RecordID = recordId;
-          listDetail.Sequence = 0;
-          listDetail.Status = 'Active';
+          console.log(`[ListManagementService] NewRecord() called, Dirty=${listDetail.Dirty}, IsSaved=${listDetail.IsSaved}`);
 
+          listDetail.ListID = listId;
+          console.log(`[ListManagementService] Set ListID=${listId}, Dirty=${listDetail.Dirty}`);
+
+          listDetail.RecordID = recordId;
+          console.log(`[ListManagementService] Set RecordID=${recordId}, Dirty=${listDetail.Dirty}`);
+
+          listDetail.Sequence = 0;
+          console.log(`[ListManagementService] Set Sequence=0, Dirty=${listDetail.Dirty}`);
+
+          // Note: Status has default of 'Pending' in DB, so setting to 'Active' explicitly
+          listDetail.Status = 'Active';
+          console.log(`[ListManagementService] Set Status=Active, Dirty=${listDetail.Dirty}`);
+
+          console.log(`[ListManagementService] About to save. Entity state: Dirty=${listDetail.Dirty}, IsSaved=${listDetail.IsSaved}`);
+          console.log(`[ListManagementService] Fields: ListID=${listDetail.ListID}, RecordID=${listDetail.RecordID}, Sequence=${listDetail.Sequence}, Status=${listDetail.Status}`);
+
+          console.log(`[ListManagementService] Saving ListDetail...`);
           const saveResult = await listDetail.Save();
+          console.log(`[ListManagementService] Save result:`, saveResult, `LatestResult:`, listDetail.LatestResult);
           if (saveResult) {
             result.success++;
+            console.log(`[ListManagementService] Successfully added record ${recordId} to list ${listId}`);
           } else {
             result.failed++;
-            result.errors.push(`Failed to add record ${recordId} to list ${listId}`);
+            const errorMsg = `Failed to add record ${recordId} to list ${listId}`;
+            console.error(`[ListManagementService] ${errorMsg}`);
+            result.errors.push(errorMsg);
           }
         } catch (error) {
           result.failed++;
           const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`[ListManagementService] Exception adding record:`, error);
           result.errors.push(`Error adding record ${recordId} to list ${listId}: ${errorMessage}`);
         }
       }
@@ -345,6 +371,7 @@ export class ListManagementService {
     // Invalidate membership cache
     this.membershipCache.clear();
 
+    console.log(`[ListManagementService] addRecordsToLists final result:`, result);
     return result;
   }
 

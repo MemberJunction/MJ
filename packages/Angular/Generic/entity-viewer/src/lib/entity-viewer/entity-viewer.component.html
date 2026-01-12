@@ -138,15 +138,18 @@
       [ShowToolbar]="showGridToolbar"
       [ToolbarConfig]="effectiveGridToolbarConfig"
       [SelectionMode]="gridSelectionMode"
+      [ShowAddToListButton]="showAddToListButton"
       [AllowLoad]="false"
       (AfterRowClick)="onDataGridRowClick($event)"
       (AfterRowDoubleClick)="onDataGridRowDoubleClick($event)"
       (AfterSort)="onDataGridSortChanged($event)"
       (GridStateChanged)="onGridStateChanged($event)"
+      (SelectionChange)="onGridSelectionChange($event)"
       (NewButtonClick)="onGridAddRequested()"
       (RefreshButtonClick)="onGridRefreshRequested()"
       (DeleteButtonClick)="onGridDeleteRequested($event)"
-      (ExportButtonClick)="onGridExportRequested()">
+      (ExportButtonClick)="onGridExportRequested()"
+      (AddToListRequested)="onGridAddToListRequested($event)">
     </mj-entity-data-grid>
 
     <!-- Cards View - always rendered, visibility controlled by hidden -->

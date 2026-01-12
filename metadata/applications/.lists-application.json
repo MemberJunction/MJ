@@ -11,17 +11,17 @@
     "TopNavLocation": "Left of User Menu",
     "DefaultNavItems": [
       {
-        "Label": "My Lists",
+        "Label": "Lists",
         "Icon": "fa-solid fa-list-check",
         "ResourceType": "Custom",
-        "DriverClass": "ListsMyListsResource",
+        "DriverClass": "ListsBrowseResource",
         "isDefault": true
       },
       {
-        "Label": "Browse",
-        "Icon": "fa-solid fa-folder-open",
+        "Label": "Operations",
+        "Icon": "fa-solid fa-diagram-project",
         "ResourceType": "Custom",
-        "DriverClass": "ListsBrowseResource",
+        "DriverClass": "ListsOperationsResource",
         "isDefault": false
       },
       {
@@ -40,7 +40,7 @@
     "ID": "140166B9-4064-4C3F-ACF1-3EB7DB2C9BD0"
   },
   "sync": {
-    "lastModified": "2026-01-10T15:34:27.279Z",
-    "checksum": "e2d73b52fc4f1842b451c44b9552eba396d578d38040ec9ce8f950bddd0640aa"
+    "lastModified": "2026-01-12T12:15:35.606Z",
+    "checksum": "4348afd917eb6ae2924609f8c44573af606a4df53edc618f860e85f9bc88282c"
   }
 }

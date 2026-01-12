@@ -2097,14 +2097,16 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.agRowSelection = { mode: 'singleRow', enableClickSelection: true, checkboxes: false };
         break;
       case 'multiple':
-        this.agRowSelection = { mode: 'multiRow', enableClickSelection: true, checkboxes: false };
+        // enableSelectionWithoutKeys replaces deprecated rowMultiSelectWithClick (as of AG Grid v32.2)
+        this.agRowSelection = { mode: 'multiRow', enableClickSelection: true, checkboxes: false, enableSelectionWithoutKeys: true };
         break;
       case 'checkbox':
         this.agRowSelection = {
           mode: 'multiRow',
           enableClickSelection: true,
           checkboxes: true,
-          headerCheckbox: true
+          headerCheckbox: true,
+          enableSelectionWithoutKeys: true
         };
         break;
     }

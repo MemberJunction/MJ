@@ -215,6 +215,52 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+/* Header Action Button (Add to List, etc.) */
+.header-action-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e0e0e0;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: all 0.15s ease;
+  margin-left: 8px;
+}
+.header-action-btn:hover:not(.disabled) {
+  border-color: #1976d2;
+  color: #1976d2;
+  background: #f5f9ff;
+}
+.header-action-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.header-action-btn i {
+  font-size: 14px;
+}
+.selection-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #1976d2;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
 /* Timeline Date Field Selector - Styled Dropdown */
 .date-field-selector-container {
   display: flex;

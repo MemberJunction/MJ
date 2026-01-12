@@ -94,7 +94,7 @@
   padding: 10px 30px;
   border-radius: 10px;
   color: white;
-  background-color: var(--border-blue);
+  background-color: var(--border-blue, #0078d4);
   font-size: initial;
   cursor: pointer;
 }
@@ -104,12 +104,25 @@
 }
 
 ::ng-deep .k-dropdown-button .k-button {
-  background: var(--border-blue);
-  color: var(--white-color);
+  background: var(--border-blue, #0078d4) !important;
+  color: white !important;
   font-size: 16px;
   border: none;
   padding: 8px 25px;
   border-radius: 10px;
+}
+
+::ng-deep .k-dropdown-button .k-button:hover {
+  background: var(--border-blue, #0078d4) !important;
+  filter: brightness(85%);
+}
+
+::ng-deep .k-dropdown-button .k-button .k-button-text {
+  color: white !important;
+}
+
+::ng-deep .k-dropdown-button .k-button .fa-plus {
+  color: white !important;
 }
 
 /* ==========================================

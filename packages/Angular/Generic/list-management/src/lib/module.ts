@@ -15,9 +15,11 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Components
 import { ListManagementDialogComponent } from './components/list-management-dialog/list-management-dialog.component';
+import { ListShareDialogComponent } from './components/list-share-dialog/list-share-dialog.component';
 
 // Services
 import { ListManagementService } from './services/list-management.service';
+import { ListSharingService } from './services/list-sharing.service';
 
 /**
  * Module providing list management components for MemberJunction.
@@ -47,7 +49,8 @@ import { ListManagementService } from './services/list-management.service';
  */
 @NgModule({
   declarations: [
-    ListManagementDialogComponent
+    ListManagementDialogComponent,
+    ListShareDialogComponent
   ],
   imports: [
     CommonModule,
@@ -61,10 +64,12 @@ import { ListManagementService } from './services/list-management.service';
     SharedGenericModule
   ],
   exports: [
-    ListManagementDialogComponent
+    ListManagementDialogComponent,
+    ListShareDialogComponent
   ],
   providers: [
-    ListManagementService
+    ListManagementService,
+    ListSharingService
   ]
 })
 export class ListManagementModule { }

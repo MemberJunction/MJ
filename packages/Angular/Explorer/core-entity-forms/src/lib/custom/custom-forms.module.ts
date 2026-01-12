@@ -42,6 +42,7 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { AIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
@@ -163,7 +164,8 @@ import { ListFormComponentExtended, LoadListFormComponentExtended } from "./List
         TestingModule,
         MJIntegratedFlowEditorComponent,
         SharedGenericModule,
-        EntityRelationshipDiagramModule
+        EntityRelationshipDiagramModule,
+        ListManagementModule
     ],
     exports: [
         EntityFormComponentExtended,

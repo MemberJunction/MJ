@@ -185,6 +185,13 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Input() gridSelectionMode: GridSelectionMode = 'single';
 
+  /**
+   * Show the "Add to List" button in the grid toolbar.
+   * Requires gridSelectionMode to be 'multiple' for best UX.
+   * @default false
+   */
+  @Input() showAddToListButton: boolean = false;
+
   // ========================================
   // OUTPUTS
   // ========================================
@@ -254,6 +261,25 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Emitted when the Export button is clicked in the grid toolbar
    */
   @Output() exportRequested = new EventEmitter<{ format: 'excel' | 'csv' | 'json' }>();
+
+  /**
+   * Emitted when the Add to List button is clicked in the grid toolbar.
+   * Parent components should handle this to show the list management dialog.
+   */
+  @Output() addToListRequested = new EventEmitter<{
+    entityInfo: EntityInfo;
+    records: BaseEntity[];
+    recordIds: string[];
+  }>();
+
+  /**
+   * Emitted when grid selection changes.
+   * Parent components can use this to track selected records for their own toolbar buttons.
+   */
+  @Output() selectionChanged = new EventEmitter<{
+    records: BaseEntity[];
+    recordIds: string[];
+  }>();
 
   // ========================================
   // INTERNAL STATE
@@ -1096,6 +1122,33 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   onGridExportRequested(): void {
     this.exportRequested.emit({ format: 'excel' });
+  }
+
+  /**
+   * Handle Add to List button click from data grid toolbar.
+   * Forwards the event to parent components for list management.
+   */
+  onGridAddToListRequested(event: { entityInfo: EntityInfo; records: BaseEntity[]; recordIds: string[] }): void {
+    this.addToListRequested.emit(event);
+  }
+
+  /**
+   * Handle selection change from data grid.
+   * Converts selected keys to records and forwards to parent components.
+   */
+  onGridSelectionChange(selectedKeys: string[]): void {
+    // Find the actual records from our filtered records
+    const records = this.filteredRecords.filter(record => {
+      const key = record.PrimaryKey?.ToConcatenatedString() || String(record.Get('ID'));
+      return selectedKeys.includes(key);
+    });
+
+    // Get the raw primary key values for list management
+    const recordIds = records.map(record =>
+      String(record.PrimaryKey.KeyValuePairs[0].Value)
+    );
+
+    this.selectionChanged.emit({ records, recordIds });
   }
 
   // ========================================
