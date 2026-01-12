@@ -345,8 +345,8 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       .attr('r', radius)
       .attr('fill', set.color)
       .attr('opacity', 0.6)
-      .on('mouseenter', (event) => this.showTooltip(event, set.listName, set.size))
-      .on('mousemove', (event) => this.moveTooltip(event))
+      .on('mouseenter', (event: MouseEvent) => this.showCircleTooltip(event, set.listName, set.size))
+      .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
       .on('mouseleave', () => this.hideTooltip())
       .on('click', () => this.onCircleClick(set));
 
@@ -389,8 +389,8 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .attr('r', pos.r)
         .attr('fill', pos.set.color)
         .attr('opacity', 0.5)
-        .on('mouseenter', (event) => this.showTooltip(event, pos.set.listName, pos.set.size))
-        .on('mousemove', (event) => this.moveTooltip(event))
+        .on('mouseenter', (event: MouseEvent) => this.showCircleTooltip(event, pos.set.listName, pos.set.size))
+        .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
         .on('mouseleave', () => this.hideTooltip())
         .on('click', () => this.onCircleClick(pos.set));
     }
@@ -463,22 +463,28 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       .style('pointer-events', 'none')
       .text(text);
 
-    // Attach events to the rect (the main clickable area) to prevent flickering
-    // Stop propagation to prevent underlying circle events from firing
+    // Attach events to the rect (the main clickable area)
+    // Show tooltip for intersection labels with proper event handling to prevent flickering
     rect
       .on('mouseenter', (event: MouseEvent) => {
         event.stopPropagation();
+        // Set flag to suppress circle tooltips and prevent their mousemove from calling detectChanges
         this.isHoveringIntersectionLabel = true;
-        this.showTooltip(event, intersection.label, intersection.size, true);
+        // Hide any existing tooltip immediately without triggering detectChanges
+        this.tooltipVisible = false;
+        // Show the label's tooltip
+        this.showLabelTooltip(event, intersection);
       })
       .on('mousemove', (event: MouseEvent) => {
         event.stopPropagation();
-        this.moveTooltip(event);
+        // Update tooltip position without calling detectChanges (avoid flicker)
+        this.moveLabelTooltipPosition(event);
       })
       .on('mouseleave', (event: MouseEvent) => {
         event.stopPropagation();
         this.isHoveringIntersectionLabel = false;
-        this.hideTooltip();
+        this.tooltipVisible = false;
+        this.cdr.detectChanges();
       })
       .on('click', (event: MouseEvent) => {
         event.stopPropagation();
@@ -585,8 +591,8 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .attr('r', pos.r)
         .attr('fill', pos.set.color)
         .attr('opacity', 0.5)
-        .on('mouseenter', (event) => this.showTooltip(event, pos.set.listName, pos.set.size))
-        .on('mousemove', (event) => this.moveTooltip(event))
+        .on('mouseenter', (event: MouseEvent) => this.showCircleTooltip(event, pos.set.listName, pos.set.size))
+        .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
         .on('mouseleave', () => this.hideTooltip())
         .on('click', () => this.onCircleClick(pos.set));
     }
@@ -684,7 +690,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .attr('transform', `rotate(${pos.rotation}, ${pos.cx}, ${pos.cy})`)
         .attr('fill', pos.set.color)
         .attr('opacity', 0.4)
-        .on('mouseenter', (event: MouseEvent) => this.showTooltip(event, pos.set.listName, pos.set.size))
+        .on('mouseenter', (event: MouseEvent) => this.showCircleTooltip(event, pos.set.listName, pos.set.size))
         .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
         .on('mouseleave', () => this.hideTooltip())
         .on('click', () => this.onCircleClick(pos.set));
@@ -789,8 +795,8 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .attr('r', radius)
         .attr('fill', set.color)
         .attr('opacity', 0.6)
-        .on('mouseenter', (event) => this.showTooltip(event, set.listName, set.size))
-        .on('mousemove', (event) => this.moveTooltip(event))
+        .on('mouseenter', (event: MouseEvent) => this.showCircleTooltip(event, set.listName, set.size))
+        .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
         .on('mouseleave', () => this.hideTooltip())
         .on('click', () => this.onCircleClick(set));
 
@@ -811,12 +817,19 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     });
   }
 
-  private showTooltip(event: MouseEvent, title: string, count: number, isIntersectionLabel: boolean = false): void {
-    // If we're hovering an intersection label and this is a circle tooltip, ignore it
-    if (this.isHoveringIntersectionLabel && !isIntersectionLabel) {
+  /**
+   * Show tooltip for circle/ellipse elements.
+   * This is suppressed when hovering an intersection label.
+   */
+  private showCircleTooltip(event: MouseEvent, title: string, count: number): void {
+    // Don't show circle tooltip if hovering an intersection label
+    if (this.isHoveringIntersectionLabel) {
       return;
     }
+    this.showTooltip(event, title, count);
+  }
 
+  private showTooltip(event: MouseEvent, title: string, count: number): void {
     this.tooltipTitle = title;
     this.tooltipCount = count;
     this.tooltipVisible = true;
@@ -825,6 +838,11 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private moveTooltip(event: MouseEvent): void {
+    // Skip updating if hovering an intersection label (prevents flicker from circle mousemove events)
+    if (this.isHoveringIntersectionLabel) {
+      return;
+    }
+
     const container = this.containerRef?.nativeElement;
     if (!container) return;
 
@@ -834,7 +852,46 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     this.cdr.detectChanges();
   }
 
+  /**
+   * Show tooltip for intersection label with proper intersection name
+   */
+  private showLabelTooltip(event: MouseEvent, intersection: VennIntersection): void {
+    // Build the tooltip title from the intersection
+    const setNames = intersection.setIds.map(id => {
+      const set = this.data?.sets.find(s => s.listId === id);
+      return set?.listName || 'Unknown';
+    });
+
+    if (intersection.setIds.length === 1) {
+      this.tooltipTitle = `Only in ${setNames[0]}`;
+    } else {
+      this.tooltipTitle = setNames.join(' ∩ ');
+    }
+    this.tooltipCount = intersection.size;
+    this.tooltipVisible = true;
+    this.moveLabelTooltipPosition(event);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Update tooltip position for label without triggering extra change detection
+   */
+  private moveLabelTooltipPosition(event: MouseEvent): void {
+    const container = this.containerRef?.nativeElement;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    this.tooltipX = event.clientX - rect.left + 10;
+    this.tooltipY = event.clientY - rect.top - 30;
+    // Don't call detectChanges here - we call it once in showLabelTooltip
+    // and the Angular zone will handle the position updates
+  }
+
   private hideTooltip(): void {
+    // Don't hide tooltip if we're hovering an intersection label
+    if (this.isHoveringIntersectionLabel) {
+      return;
+    }
     this.tooltipVisible = false;
     this.cdr.detectChanges();
   }
