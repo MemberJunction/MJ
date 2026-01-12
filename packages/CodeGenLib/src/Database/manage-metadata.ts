@@ -2064,40 +2064,34 @@ NumberedRows AS (
    }
 
    /**
-    * Creates a new application using the entity framework.
-    * This ensures the server-side entity extension is used, which handles:
-    * - Auto-generation of Path from Name (via ApplicationEntityServerEntity)
-    * - Any other server-side business logic
+    * Creates a new application using direct SQL INSERT to ensure it's captured in SQL logging.
+    * The Path field is auto-generated from Name using the same slug logic as ApplicationEntityServerEntity.
     *
-    * @param pool SQL connection pool (unused but kept for signature compatibility)
+    * @param pool SQL connection pool
     * @param appID Pre-generated UUID for the application
     * @param appName Name of the application
     * @param schemaName Schema name for SchemaAutoAddNewEntities
-    * @param currentUser Current user for entity operations
+    * @param currentUser Current user for entity operations (unused but kept for signature compatibility)
     * @returns The application ID if successful, null otherwise
     */
    protected async createNewApplication(pool: sql.ConnectionPool, appID: string, appName: string, schemaName: string, currentUser: UserInfo): Promise<string | null>{
       try {
-         const md = new Metadata();
-         const app = await md.GetEntityObject<ApplicationEntity>('Applications', currentUser);
+         // Generate Path from Name using slug conversion:
+         // 1. Convert to lowercase
+         // 2. Replace spaces with hyphens
+         // 3. Remove special characters (keep only alphanumeric and hyphens)
+         const path = appName
+            .toLowerCase()
+            .replace(/\s+/g, '-')           // spaces to hyphens
+            .replace(/[^a-z0-9-]/g, '')     // remove special chars
+            .replace(/-+/g, '-')            // collapse multiple hyphens
+            .replace(/^-|-$/g, '');         // trim hyphens from start/end
 
-         app.NewRecord();
-         app.ID = appID;
-         app.Name = appName;
-         app.Description = 'Generated for schema';
-         app.SchemaAutoAddNewEntities = schemaName;
-         // Path and AutoUpdatePath will be handled by the server-side entity extension
-         // which auto-generates Path from Name when AutoUpdatePath is true (default)
-
-         const saved = await app.Save();
-         if (saved) {
-            LogStatus(`Created new application ${appName} with Path: ${app.Path}`);
-            return appID;
-         } else {
-            const errorMsg = app.LatestResult ? JSON.stringify(app.LatestResult) : 'Unknown error';
-            LogError(`Failed to save new application ${appName}: ${errorMsg}`);
-            return null;
-         }
+         const sSQL = `INSERT INTO [${mj_core_schema()}].Application (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
+                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
+         await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
+         LogStatus(`Created new application ${appName} with Path: ${path}`);
+         return appID;
       }
       catch (e) {
          LogError(`Failed to create new application ${appName} for schema ${schemaName}`, null, e);
