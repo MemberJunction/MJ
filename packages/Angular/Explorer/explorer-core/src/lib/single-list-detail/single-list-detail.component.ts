@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
-import { BaseEntity, CompositeKey, LogError, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { ListDetailEntity, ListDetailEntityExtended, ListEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
@@ -396,11 +396,16 @@ export class SingleListDetailComponent implements OnInit {
     const tg = await md.CreateTransactionGroup();
 
     for (const record of recordsToAdd) {
-      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details");
+      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
       listDetail.ListID = this.listRecord.ID;
       listDetail.RecordID = record.ID;
       listDetail.TransactionGroup = tg;
-      await listDetail.Save();
+      const result = await listDetail.Save();
+      if (!result) {
+        LogErrorEx({
+          message: listDetail.LatestResult?.CompleteMessage
+        });
+      }
     }
 
     const success = await tg.Submit();
@@ -523,11 +528,16 @@ export class SingleListDetailComponent implements OnInit {
     const tg = await md.CreateTransactionGroup();
 
     for (const recordID of recordsToAdd) {
-      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details");
+      const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
       listDetail.ListID = this.listRecord.ID;
       listDetail.RecordID = recordID;
       listDetail.TransactionGroup = tg;
-      await listDetail.Save();
+      const result = await listDetail.Save();
+      if (!result) {
+        LogErrorEx({
+          message: listDetail.LatestResult?.CompleteMessage
+        })
+      }
     }
 
     const success = await tg.Submit();
