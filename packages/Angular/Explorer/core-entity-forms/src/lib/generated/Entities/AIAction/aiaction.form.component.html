@@ -113,14 +113,14 @@
         [badgeCount]="GetSectionRowCount('aIModelActions')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions','AIActionID')"
                 [NewRecordValues]="NewRecordValues('AI Model Actions')"
                 [AllowLoad]="IsSectionExpanded('aIModelActions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIModelActions', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -135,14 +135,14 @@
         [badgeCount]="GetSectionRowCount('entityAIActions')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions','AIActionID')"
                 [NewRecordValues]="NewRecordValues('Entity AI Actions')"
                 [AllowLoad]="IsSectionExpanded('entityAIActions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('entityAIActions', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

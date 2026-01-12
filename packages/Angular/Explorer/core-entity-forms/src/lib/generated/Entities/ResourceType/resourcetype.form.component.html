@@ -159,14 +159,14 @@
         [badgeCount]="GetSectionRowCount('workspaceItems')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Workspace Items')"
                 [AllowLoad]="IsSectionExpanded('workspaceItems')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('workspaceItems', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -181,14 +181,14 @@
         [badgeCount]="GetSectionRowCount('userNotifications')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('User Notifications')"
                 [AllowLoad]="IsSectionExpanded('userNotifications')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('userNotifications', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -203,14 +203,14 @@
         [badgeCount]="GetSectionRowCount('resourceLinks')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Resource Links')"
                 [AllowLoad]="IsSectionExpanded('resourceLinks')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('resourceLinks', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -225,14 +225,14 @@
         [badgeCount]="GetSectionRowCount('resourcePermissions')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Resource Permissions')"
                 [AllowLoad]="IsSectionExpanded('resourcePermissions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

@@ -596,14 +596,14 @@
         [badgeCount]="GetSectionRowCount('aIAgentActions')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Actions','AgentID')"
                 [NewRecordValues]="NewRecordValues('AI Agent Actions')"
                 [AllowLoad]="IsSectionExpanded('aIAgentActions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentActions', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -618,14 +618,14 @@
         [badgeCount]="GetSectionRowCount('aIAgentLearningCycles')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Learning Cycles','AgentID')"
                 [NewRecordValues]="NewRecordValues('AI Agent Learning Cycles')"
                 [AllowLoad]="IsSectionExpanded('aIAgentLearningCycles')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentLearningCycles', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -640,14 +640,14 @@
         [badgeCount]="GetSectionRowCount('aIAgentModels')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Models','AgentID')"
                 [NewRecordValues]="NewRecordValues('AI Agent Models')"
                 [AllowLoad]="IsSectionExpanded('aIAgentModels')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentModels', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -662,14 +662,14 @@
         [badgeCount]="GetSectionRowCount('aIAgentRequests')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Requests','AgentID')"
                 [NewRecordValues]="NewRecordValues('AI Agent Requests')"
                 [AllowLoad]="IsSectionExpanded('aIAgentRequests')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentRequests', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -684,14 +684,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentArtifactTypes')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -706,14 +706,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentDataSources')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Data Sources','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Data Sources')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentDataSources')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentDataSources', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -728,14 +728,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentModalities')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Modalities','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Modalities')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentModalities')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentModalities', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -750,14 +750,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentPermissions')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentPermissions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentPermissions', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -772,14 +772,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentRelationships')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Relationships','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRelationships')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRelationships', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -794,14 +794,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentSteps')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Steps','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSteps')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSteps', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -816,14 +816,14 @@
         [badgeCount]="GetSectionRowCount('aIAgentNotes')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','AgentID')"
                 [NewRecordValues]="NewRecordValues('AI Agent Notes')"
                 [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -838,14 +838,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentConfigurations')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Configurations','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Configurations')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentConfigurations')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentConfigurations', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -860,14 +860,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentExamples')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -882,14 +882,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentPrompts')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentPrompts')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentPrompts', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -904,14 +904,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentRelationships')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Relationships','SubAgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRelationships')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRelationships', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -926,14 +926,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentRuns')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -948,14 +948,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentSteps')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Steps','SubAgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSteps')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSteps', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -970,14 +970,14 @@
         [badgeCount]="GetSectionRowCount('mJTasks')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Tasks')"
                 [AllowLoad]="IsSectionExpanded('mJTasks')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -992,14 +992,14 @@
         [badgeCount]="GetSectionRowCount('aIResultCache')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AgentID')"
                 [NewRecordValues]="NewRecordValues('AI Result Cache')"
                 [AllowLoad]="IsSectionExpanded('aIResultCache')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIResultCache', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -1014,14 +1014,14 @@
         [badgeCount]="GetSectionRowCount('mJAIPromptRuns')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','AgentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRuns')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRuns', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -1036,14 +1036,14 @@
         [badgeCount]="GetSectionRowCount('conversationDetails')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','AgentID')"
                 [NewRecordValues]="NewRecordValues('Conversation Details')"
                 [AllowLoad]="IsSectionExpanded('conversationDetails')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -1058,14 +1058,14 @@
         [badgeCount]="GetSectionRowCount('aIAgents')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','ParentID')"
                 [NewRecordValues]="NewRecordValues('AI Agents')"
                 [AllowLoad]="IsSectionExpanded('aIAgents')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

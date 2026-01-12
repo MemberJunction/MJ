@@ -105,14 +105,14 @@
         [badgeCount]="GetSectionRowCount('fileCategories')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('File Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('File Categories')"
                 [AllowLoad]="IsSectionExpanded('fileCategories')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('fileCategories', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -127,14 +127,14 @@
         [badgeCount]="GetSectionRowCount('files')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Files','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Files')"
                 [AllowLoad]="IsSectionExpanded('files')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('files', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

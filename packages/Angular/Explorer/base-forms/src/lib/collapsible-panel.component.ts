@@ -210,7 +210,8 @@ export type PanelWidthMode = 'normal' | 'full-width';
             min-height: 0;
         }
 
-        .form-card.related-entity .form-body ::ng-deep mj-entity-data-grid {
+        .form-card.related-entity .form-body ::ng-deep mj-entity-data-grid,
+        .form-card.related-entity .form-body ::ng-deep mj-explorer-entity-data-grid {
             flex: 1;
             display: block;
             min-height: 0;

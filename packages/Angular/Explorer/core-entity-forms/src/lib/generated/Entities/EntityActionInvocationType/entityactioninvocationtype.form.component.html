@@ -77,14 +77,14 @@
         [badgeCount]="GetSectionRowCount('entityActionInvocations')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Invocations','InvocationTypeID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Invocations')"
                 [AllowLoad]="IsSectionExpanded('entityActionInvocations')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('entityActionInvocations', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

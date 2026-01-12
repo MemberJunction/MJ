@@ -137,14 +137,14 @@
         [badgeCount]="GetSectionRowCount('entityActionParams')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Params','ActionParamID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Params')"
                 [AllowLoad]="IsSectionExpanded('entityActionParams')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('entityActionParams', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -159,14 +159,14 @@
         [badgeCount]="GetSectionRowCount('scheduledActionParams')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ActionParamID')"
                 [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
                 [AllowLoad]="IsSectionExpanded('scheduledActionParams')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

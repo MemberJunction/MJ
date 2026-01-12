@@ -97,14 +97,14 @@
         [badgeCount]="GetSectionRowCount('employeeSkills')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills','SkillID')"
                 [NewRecordValues]="NewRecordValues('Employee Skills')"
                 [AllowLoad]="IsSectionExpanded('employeeSkills')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('employeeSkills', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -119,14 +119,14 @@
         [badgeCount]="GetSectionRowCount('skills')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Skills','ParentID')"
                 [NewRecordValues]="NewRecordValues('Skills')"
                 [AllowLoad]="IsSectionExpanded('skills')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('skills', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

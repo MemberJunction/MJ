@@ -324,14 +324,14 @@
         [badgeCount]="GetSectionRowCount('mJTestRuns')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Runs','TestSuiteRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Runs')"
                 [AllowLoad]="IsSectionExpanded('mJTestRuns')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRuns', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

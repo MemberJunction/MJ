@@ -211,14 +211,14 @@
         [badgeCount]="GetSectionRowCount('queueTasks')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Queue Tasks','QueueID')"
                 [NewRecordValues]="NewRecordValues('Queue Tasks')"
                 [AllowLoad]="IsSectionExpanded('queueTasks')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('queueTasks', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

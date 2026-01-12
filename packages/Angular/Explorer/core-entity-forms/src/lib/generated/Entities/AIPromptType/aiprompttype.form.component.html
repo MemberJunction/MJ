@@ -69,14 +69,14 @@
         [badgeCount]="GetSectionRowCount('aIPrompts')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','TypeID')"
                 [NewRecordValues]="NewRecordValues('AI Prompts')"
                 [AllowLoad]="IsSectionExpanded('aIPrompts')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

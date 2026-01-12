@@ -173,14 +173,14 @@
         [badgeCount]="GetSectionRowCount('companyIntegrationRunAPILogs')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run API Logs','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('Company Integration Run API Logs')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrationRunAPILogs')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('companyIntegrationRunAPILogs', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -195,14 +195,14 @@
         [badgeCount]="GetSectionRowCount('companyIntegrationRunDetails')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run Details','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('Company Integration Run Details')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrationRunDetails')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('companyIntegrationRunDetails', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -217,14 +217,14 @@
         [badgeCount]="GetSectionRowCount('errorLogs')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Error Logs','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('Error Logs')"
                 [AllowLoad]="IsSectionExpanded('errorLogs')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('errorLogs', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

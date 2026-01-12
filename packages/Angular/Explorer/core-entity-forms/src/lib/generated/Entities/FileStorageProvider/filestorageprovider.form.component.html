@@ -129,14 +129,14 @@
         [badgeCount]="GetSectionRowCount('files')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Files','ProviderID')"
                 [NewRecordValues]="NewRecordValues('Files')"
                 [AllowLoad]="IsSectionExpanded('files')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('files', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -151,14 +151,14 @@
         [badgeCount]="GetSectionRowCount('mJAIConfigurations')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultStorageProviderID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
                 [AllowLoad]="IsSectionExpanded('mJAIConfigurations')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIConfigurations', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -173,14 +173,14 @@
         [badgeCount]="GetSectionRowCount('aIAgents')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','AttachmentStorageProviderID')"
                 [NewRecordValues]="NewRecordValues('AI Agents')"
                 [AllowLoad]="IsSectionExpanded('aIAgents')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIAgents', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

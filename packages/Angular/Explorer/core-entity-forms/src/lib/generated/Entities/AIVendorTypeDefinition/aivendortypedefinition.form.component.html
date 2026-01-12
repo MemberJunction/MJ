@@ -69,14 +69,14 @@
         [badgeCount]="GetSectionRowCount('mJAIModelVendors')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Vendors','TypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelVendors')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelVendors', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -91,14 +91,14 @@
         [badgeCount]="GetSectionRowCount('mJAIVendorTypes')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Vendor Types','TypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Vendor Types')"
                 [AllowLoad]="IsSectionExpanded('mJAIVendorTypes')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIVendorTypes', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

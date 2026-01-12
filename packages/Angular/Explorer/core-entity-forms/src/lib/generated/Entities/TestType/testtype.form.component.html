@@ -75,14 +75,14 @@
         [badgeCount]="GetSectionRowCount('mJTestRubrics')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Rubrics','TypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Rubrics')"
                 [AllowLoad]="IsSectionExpanded('mJTestRubrics')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRubrics', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -97,14 +97,14 @@
         [badgeCount]="GetSectionRowCount('mJTests')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tests','TypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Tests')"
                 [AllowLoad]="IsSectionExpanded('mJTests')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJTests', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

@@ -363,14 +363,14 @@
         [badgeCount]="GetSectionRowCount('reports')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Reports','ConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('Reports')"
                 [AllowLoad]="IsSectionExpanded('reports')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -385,14 +385,14 @@
         [badgeCount]="GetSectionRowCount('mJConversationDetailArtifacts')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Artifacts','ConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetailArtifacts')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailArtifacts', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -407,14 +407,14 @@
         [badgeCount]="GetSectionRowCount('mJConversationDetailAttachments')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Attachments','ConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -429,14 +429,14 @@
         [badgeCount]="GetSectionRowCount('mJConversationDetailRatings')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Ratings','ConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Ratings')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetailRatings')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailRatings', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -451,14 +451,14 @@
         [badgeCount]="GetSectionRowCount('aIAgentNotes')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','SourceConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('AI Agent Notes')"
                 [AllowLoad]="IsSectionExpanded('aIAgentNotes')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('aIAgentNotes', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -473,14 +473,14 @@
         [badgeCount]="GetSectionRowCount('conversationDetails')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ParentID')"
                 [NewRecordValues]="NewRecordValues('Conversation Details')"
                 [AllowLoad]="IsSectionExpanded('conversationDetails')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -495,14 +495,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentRuns')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','ConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -517,14 +517,14 @@
         [badgeCount]="GetSectionRowCount('mJAIAgentExamples')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','SourceConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -539,14 +539,14 @@
         [badgeCount]="GetSectionRowCount('mJTasks')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','ConversationDetailID')"
                 [NewRecordValues]="NewRecordValues('MJ: Tasks')"
                 [AllowLoad]="IsSectionExpanded('mJTasks')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

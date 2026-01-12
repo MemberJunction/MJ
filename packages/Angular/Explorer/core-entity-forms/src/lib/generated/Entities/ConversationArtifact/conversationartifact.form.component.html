@@ -131,14 +131,14 @@
         [badgeCount]="GetSectionRowCount('mJConversationArtifactPermissions')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Permissions','ConversationArtifactID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifactPermissions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifactPermissions', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -153,14 +153,14 @@
         [badgeCount]="GetSectionRowCount('mJConversationArtifactVersions')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Versions','ConversationArtifactID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Versions')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifactVersions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifactVersions', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -175,14 +175,14 @@
         [badgeCount]="GetSectionRowCount('conversationDetails')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ArtifactID')"
                 [NewRecordValues]="NewRecordValues('Conversation Details')"
                 [AllowLoad]="IsSectionExpanded('conversationDetails')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

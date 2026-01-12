@@ -85,14 +85,14 @@
         [badgeCount]="GetSectionRowCount('entityActionFilters')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters','ActionFilterID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Filters')"
                 [AllowLoad]="IsSectionExpanded('entityActionFilters')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('entityActionFilters', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

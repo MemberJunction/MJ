@@ -147,14 +147,14 @@
         [badgeCount]="GetSectionRowCount('mJTestSuites')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suites','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Suites')"
                 [AllowLoad]="IsSectionExpanded('mJTestSuites')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJTestSuites', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -169,14 +169,14 @@
         [badgeCount]="GetSectionRowCount('mJTestSuiteRuns')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Runs','SuiteID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Suite Runs')"
                 [AllowLoad]="IsSectionExpanded('mJTestSuiteRuns')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJTestSuiteRuns', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -191,14 +191,14 @@
         [badgeCount]="GetSectionRowCount('mJTestSuiteTests')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Tests','SuiteID')"
                 [NewRecordValues]="NewRecordValues('MJ: Test Suite Tests')"
                 [AllowLoad]="IsSectionExpanded('mJTestSuiteTests')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJTestSuiteTests', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

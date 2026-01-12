@@ -69,14 +69,14 @@
         [badgeCount]="GetSectionRowCount('mJAIModelCosts')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Costs','PriceTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Model Costs')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelCosts')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelCosts', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

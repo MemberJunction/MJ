@@ -183,14 +183,14 @@
         [badgeCount]="GetSectionRowCount('duplicateRunDetailMatches')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','RecordMergeLogID')"
                 [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
                 [AllowLoad]="IsSectionExpanded('duplicateRunDetailMatches')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('duplicateRunDetailMatches', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -205,14 +205,14 @@
         [badgeCount]="GetSectionRowCount('recordMergeDeletionLogs')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs','RecordMergeLogID')"
                 [NewRecordValues]="NewRecordValues('Record Merge Deletion Logs')"
                 [AllowLoad]="IsSectionExpanded('recordMergeDeletionLogs')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('recordMergeDeletionLogs', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

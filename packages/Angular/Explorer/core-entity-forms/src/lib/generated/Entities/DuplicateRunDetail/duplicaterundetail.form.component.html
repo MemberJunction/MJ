@@ -139,14 +139,14 @@
         [badgeCount]="GetSectionRowCount('duplicateRunDetailMatches')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','DuplicateRunDetailID')"
                 [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
                 [AllowLoad]="IsSectionExpanded('duplicateRunDetailMatches')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('duplicateRunDetailMatches', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

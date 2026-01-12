@@ -319,14 +319,14 @@
         [badgeCount]="GetSectionRowCount('reportSnapshots')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Report Snapshots','ReportID')"
                 [NewRecordValues]="NewRecordValues('Report Snapshots')"
                 [AllowLoad]="IsSectionExpanded('reportSnapshots')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('reportSnapshots', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -341,14 +341,14 @@
         [badgeCount]="GetSectionRowCount('mJReportVersions')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Report Versions','ReportID')"
                 [NewRecordValues]="NewRecordValues('MJ: Report Versions')"
                 [AllowLoad]="IsSectionExpanded('mJReportVersions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJReportVersions', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -363,14 +363,14 @@
         [badgeCount]="GetSectionRowCount('mJReportUserStates')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Report User States','ReportID')"
                 [NewRecordValues]="NewRecordValues('MJ: Report User States')"
                 [AllowLoad]="IsSectionExpanded('mJReportUserStates')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJReportUserStates', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

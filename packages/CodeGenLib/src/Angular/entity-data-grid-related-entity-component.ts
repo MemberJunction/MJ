@@ -51,13 +51,13 @@ export class EntityDataGridRelatedEntityGenerator extends RelatedEntityDisplayCo
             ? `(AfterDataLoad)="SetSectionRowCount('${input.SectionKey.trim()}', $event.totalRowCount)"`
             : '';
 
-        const template = `<mj-entity-data-grid
+        const template = `<mj-explorer-entity-data-grid
     [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"
     [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}')"
     [AllowLoad]="${allowLoadCheck}"
     [ShowToolbar]="false"${afterDataLoadEvent ? `\n    ${afterDataLoadEvent}` : ''}
     >
-</mj-entity-data-grid>`;
+</mj-explorer-entity-data-grid>`;
         return {
             Success: true,
             TemplateOutput: template,

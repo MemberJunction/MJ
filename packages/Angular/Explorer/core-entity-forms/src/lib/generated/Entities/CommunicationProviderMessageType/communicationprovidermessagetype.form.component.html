@@ -123,14 +123,14 @@
         [badgeCount]="GetSectionRowCount('communicationLogs')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs','CommunicationProviderMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('Communication Logs')"
                 [AllowLoad]="IsSectionExpanded('communicationLogs')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('communicationLogs', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

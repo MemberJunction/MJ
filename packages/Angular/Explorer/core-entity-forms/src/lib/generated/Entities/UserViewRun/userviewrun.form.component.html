@@ -107,14 +107,14 @@
         [badgeCount]="GetSectionRowCount('details')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User View Run Details','UserViewRunID')"
                 [NewRecordValues]="NewRecordValues('User View Run Details')"
                 [AllowLoad]="IsSectionExpanded('details')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('details', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

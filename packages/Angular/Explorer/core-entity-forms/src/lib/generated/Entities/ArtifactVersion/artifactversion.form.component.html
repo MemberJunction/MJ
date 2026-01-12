@@ -165,14 +165,14 @@
         [badgeCount]="GetSectionRowCount('mJArtifactVersionAttributes')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Version Attributes','ArtifactVersionID')"
                 [NewRecordValues]="NewRecordValues('MJ: Artifact Version Attributes')"
                 [AllowLoad]="IsSectionExpanded('mJArtifactVersionAttributes')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifactVersionAttributes', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -187,14 +187,14 @@
         [badgeCount]="GetSectionRowCount('mJCollectionArtifacts')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Artifacts','ArtifactVersionID')"
                 [NewRecordValues]="NewRecordValues('MJ: Collection Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJCollectionArtifacts')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJCollectionArtifacts', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -209,14 +209,14 @@
         [badgeCount]="GetSectionRowCount('mJArtifactUses')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Uses','ArtifactVersionID')"
                 [NewRecordValues]="NewRecordValues('MJ: Artifact Uses')"
                 [AllowLoad]="IsSectionExpanded('mJArtifactUses')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifactUses', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -231,14 +231,14 @@
         [badgeCount]="GetSectionRowCount('mJConversationDetailArtifacts')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-entity-data-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Artifacts','ArtifactVersionID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetailArtifacts')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailArtifacts', $event.totalRowCount)"
                 >
-            </mj-entity-data-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>
