@@ -273,7 +273,8 @@ export class RunCodeGenBase {
         // generate the GraphQL server code
         if (isVerbose) startSpinner('Generating GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
-        if (!graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, 'mj_generatedentities', false)) {
+        const entityPackageName = configInfo.entityPackageName || 'mj_generatedentities';
+        if (!graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName, false)) {
           failSpinner('Error generating GraphQL Resolver code');
           return;
         } else if (isVerbose) {
