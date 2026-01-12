@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
-import { BaseEntity, LogError, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { ListDetailEntity, ListDetailEntityExtended, ListEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
@@ -206,9 +206,24 @@ export class SingleListDetailComponent implements OnInit {
 
     const md = new Metadata();
     const rv = new RunView();
+    const entityInfo = md.EntityByID(this.listRecord.EntityID);
 
-    // Load the List Details that match the selected record IDs
-    const selectedRecordIds = this.selectedKeys;
+    // selectedKeys from grid are in concatenated format (ID|value)
+    // For single PK entities, RecordID in DB is just the raw value
+    // For composite PK entities, RecordID in DB is the concatenated format
+    // Extract the appropriate format for the query
+    const selectedRecordIds = this.selectedKeys.map(key => {
+      if (entityInfo && entityInfo.PrimaryKeys.length === 1) {
+        // Single PK: extract just the value from concatenated format
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromConcatenatedString(key);
+        return compositeKey.KeyValuePairs[0]?.Value || key;
+      } else {
+        // Composite PK: use full concatenated format as-is
+        return key;
+      }
+    });
+
     const listDetailsFilter = `ListID = '${this.listRecord.ID}' AND RecordID IN (${selectedRecordIds.map(id => `'${id}'`).join(',')})`;
 
     const listDetailsResult = await rv.RunView<ListDetailEntity>({

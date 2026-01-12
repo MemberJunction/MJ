@@ -4,7 +4,7 @@ import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { CompositeKey, LogError, Metadata, RecordDependency, BaseEntity, RunView } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { ListDetailEntity, ListEntity } from '@memberjunction/core-entities';
+import { ListDetailEntity, ListDetailEntityExtended, ListEntity } from '@memberjunction/core-entities';
 import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
 
 
@@ -91,9 +91,9 @@ export class FormToolbarComponent implements OnInit {
 
         try {
             const rv = new RunView();
-            // Use concatenated key format for list membership (matches List Details RecordID format)
-            // This properly handles both single and composite primary keys
-            const recordId = record.PrimaryKey.ToConcatenatedString();
+            // Use the proper RecordID format based on PK count:
+            // Single PK: raw value, Composite PK: concatenated format
+            const recordId = ListDetailEntityExtended.BuildRecordID(record.EntityInfo, record);
             const entityId = record.EntityInfo.ID;
 
             // Get list details for this record
@@ -236,11 +236,11 @@ export class FormToolbarComponent implements OnInit {
         const record = this.form.record;
         if (!record) return;
 
-        // Use concatenated key format for list membership (matches List Details RecordID format)
-        // This properly handles both single and composite primary keys
-        const recordId = record.PrimaryKey.ToConcatenatedString();
-        const recordName = this.getRecordDisplayName(record);
+        // Use the proper RecordID format based on PK count:
+        // Single PK: raw value, Composite PK: concatenated format
         const entityInfo = record.EntityInfo;
+        const recordId = ListDetailEntityExtended.BuildRecordID(entityInfo, record);
+        const recordName = this.getRecordDisplayName(record);
 
         this.listManagementConfig = {
             mode: 'manage',
@@ -307,15 +307,14 @@ export class FormToolbarComponent implements OnInit {
 
     public async addRecordToList(list: ListEntity): Promise<void> {
         this.toggleListDialog(false);
-        
+
         const md: Metadata = new Metadata();
-        
-        const listDetailEntity: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>("List Details", md.CurrentUser);
+
+        const listDetailEntity = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
         listDetailEntity.NewRecord();
         listDetailEntity.ListID = list.ID;
-        // Use concatenated key format for list membership (matches List Details RecordID format)
-        // This properly handles both single and composite primary keys
-        listDetailEntity.RecordID = this.form.record.PrimaryKey.ToConcatenatedString();
+        // Use SetRecordIDFromEntity which handles single vs composite PK properly
+        listDetailEntity.SetRecordIDFromEntity(this.form.record.EntityInfo, this.form.record);
 
         const saveResult: boolean = await listDetailEntity.Save();
         if(!saveResult){

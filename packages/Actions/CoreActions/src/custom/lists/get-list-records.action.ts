@@ -132,13 +132,24 @@ export class GetListRecordsAction extends BaseAction {
             }, params.ContextUser);
 
             if (recordsResult.Success && recordsResult.Results) {
-              // Create a map for quick lookup using concatenated key format
+              // Create a map for quick lookup
+              // For single PK, RecordID is just the raw value
+              // For composite PK, RecordID is the concatenated string
               const recordMap = new Map<string, Record<string, unknown>>();
+              const isSinglePK = entityInfo.PrimaryKeys.length === 1;
+
               for (const rec of recordsResult.Results) {
-                // Build the concatenated key for this record to match against RecordID
-                const compositeKey = new CompositeKey();
-                compositeKey.LoadFromEntityInfoAndRecord(entityInfo, rec);
-                const keyString = compositeKey.ToConcatenatedString();
+                let keyString: string;
+                if (isSinglePK) {
+                  // Single PK: use raw value
+                  const pkField = entityInfo.PrimaryKeys[0].Name;
+                  keyString = String(rec.Get ? rec.Get(pkField) : rec[pkField]);
+                } else {
+                  // Composite PK: use concatenated format
+                  const compositeKey = new CompositeKey();
+                  compositeKey.LoadFromEntityInfoAndRecord(entityInfo, rec);
+                  keyString = compositeKey.ToConcatenatedString();
+                }
                 recordMap.set(keyString, rec.GetAll ? rec.GetAll() : rec);
               }
 
@@ -214,7 +225,7 @@ export class GetListRecordsAction extends BaseAction {
 
   /**
    * Build the SQL filter to select records that match the given list details.
-   * For single PK entities, uses a simple IN clause.
+   * For single PK entities, uses a simple IN clause with the raw RecordID values.
    * For composite PK entities, uses an OR clause with concatenated key matching.
    */
   private buildRecordFilter(entityInfo: EntityInfo, details: ListDetailEntity[]): string {
@@ -223,20 +234,14 @@ export class GetListRecordsAction extends BaseAction {
 
     if (primaryKeys.length === 1) {
       // Simple case: single primary key
-      // For single PK, RecordID format is "FieldName|Value", so we need to extract just the value
+      // For single PK entities, RecordID stores just the raw value (not concatenated format)
       const pkField = primaryKeys[0].Name;
-      const extractedValues = recordIds.map(rid => {
-        // Parse the concatenated format to extract just the value
-        const compositeKey = new CompositeKey();
-        compositeKey.LoadFromConcatenatedString(rid);
-        const firstPair = compositeKey.KeyValuePairs[0];
-        return firstPair ? `'${String(firstPair.Value).replace(/'/g, "''")}'` : null;
-      }).filter(v => v !== null);
+      const escapedValues = recordIds.map(rid => `'${rid.replace(/'/g, "''")}'`);
 
-      if (extractedValues.length === 0) {
+      if (escapedValues.length === 0) {
         return '1=0'; // No valid records
       }
-      return `${pkField} IN (${extractedValues.join(',')})`;
+      return `${pkField} IN (${escapedValues.join(',')})`;
     } else {
       // Composite key case: build concatenation expression and match against RecordID values
       // Build SQL expression that concatenates the PK fields in the same format as RecordID
