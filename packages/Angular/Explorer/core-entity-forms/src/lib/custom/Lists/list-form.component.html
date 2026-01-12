@@ -9,7 +9,7 @@
             <div class="header-info">
                 <div class="name-row">
                     <ng-container *ngIf="!isEditingName">
-                        <h1 class="list-name">{{record?.Name || 'Untitled List'}}</h1>
+                        <h1 class="list-name">{{record.Name || 'Untitled List'}}</h1>
                         <button
                             class="edit-btn"
                             (click)="startEditingName()"
@@ -89,8 +89,8 @@
                     </div>
                     <div class="card-body">
                         <ng-container *ngIf="!isEditingDescription">
-                            <p *ngIf="record?.Description" class="description-text">{{record.Description}}</p>
-                            <p *ngIf="!record?.Description" class="description-empty">No description provided</p>
+                            <p *ngIf="record.Description" class="description-text">{{record.Description}}</p>
+                            <p *ngIf="!record.Description" class="description-empty">No description provided</p>
                         </ng-container>
                         <ng-container *ngIf="isEditingDescription">
                             <textarea
@@ -129,7 +129,7 @@
                             <select
                                 *ngIf="isCurrentUserOwner()"
                                 class="category-select"
-                                [ngModel]="record?.CategoryID"
+                                [ngModel]="record.CategoryID"
                                 (ngModelChange)="onCategoryChange($event)">
                                 <option [ngValue]="null">Uncategorized</option>
                                 <option *ngFor="let cat of categories" [ngValue]="cat.ID">{{cat.Name}}</option>
@@ -147,7 +147,7 @@
                             <span class="detail-label">Created</span>
                             <span class="detail-value">
                                 <i class="fa-solid fa-calendar detail-icon"></i>
-                                {{record?.__mj_CreatedAt | date:'mediumDate'}}
+                                {{record.__mj_CreatedAt | date:'mediumDate'}}
                             </span>
                         </div>
                     </div>
@@ -357,7 +357,7 @@
                     </div>
                     <div class="timeline-content">
                         <p class="timeline-text">List updated</p>
-                        <span class="timeline-date">{{record?.__mj_UpdatedAt | date:'medium'}}</span>
+                        <span class="timeline-date">{{record.__mj_UpdatedAt | date:'medium'}}</span>
                     </div>
                 </div>
                 <div class="timeline-item">
@@ -366,7 +366,7 @@
                     </div>
                     <div class="timeline-content">
                         <p class="timeline-text">List created</p>
-                        <span class="timeline-date">{{record?.__mj_CreatedAt | date:'medium'}}</span>
+                        <span class="timeline-date">{{record.__mj_CreatedAt | date:'medium'}}</span>
                     </div>
                 </div>
             </div>
