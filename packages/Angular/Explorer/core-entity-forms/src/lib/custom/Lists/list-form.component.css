@@ -805,6 +805,274 @@
     gap: 16px;
 }
 
+/* Add Buttons in Items Section */
+.add-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.add-buttons .btn-secondary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Sharing Summary */
+.sharing-summary {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.summary-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    flex: 1;
+    max-width: 280px;
+}
+
+.summary-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: #e3f2fd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2196F3;
+    font-size: 20px;
+}
+
+.summary-icon.pending {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.summary-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.summary-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: #333;
+    line-height: 1;
+}
+
+.summary-label {
+    font-size: 13px;
+    color: #666;
+    margin-top: 4px;
+}
+
+.readonly-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    color: #666;
+    font-size: 14px;
+}
+
+.readonly-notice i {
+    color: #999;
+}
+
+/* Dialog Styles */
+.dialog-content {
+    padding: 16px 0;
+}
+
+.dialog-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    gap: 16px;
+}
+
+.dialog-instruction {
+    margin: 0 0 16px;
+    color: #666;
+}
+
+/* Add Records Dialog */
+.add-records-dialog .search-section {
+    margin-bottom: 16px;
+}
+
+.add-records-dialog .search-input {
+    width: 100%;
+}
+
+.add-records-dialog .search-hint {
+    display: block;
+    font-size: 12px;
+    color: #999;
+    margin-top: 4px;
+}
+
+.add-records-dialog .records-list {
+    min-height: 280px;
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+.add-records-dialog .list-loading {
+    display: flex;
+    justify-content: center;
+    padding: 40px;
+}
+
+.add-records-dialog .empty-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.add-records-dialog .empty-results .empty-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+    margin-bottom: 12px;
+    background: #f5f5f5;
+}
+
+.add-records-dialog .selection-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.add-records-dialog .selection-info {
+    margin-left: auto;
+    font-size: 12px;
+    color: #666;
+}
+
+.add-records-dialog .records-scroll {
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.add-records-dialog .record-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.add-records-dialog .record-item:hover {
+    background: #f9f9f9;
+}
+
+.add-records-dialog .record-item.selected {
+    background: #e3f2fd;
+}
+
+.add-records-dialog .record-item.in-list {
+    background: #f5f5f5;
+    cursor: default;
+}
+
+.add-records-dialog .record-checkbox {
+    width: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.add-records-dialog .in-list-icon {
+    color: #4CAF50;
+}
+
+.add-records-dialog .record-name {
+    flex: 1;
+    font-size: 14px;
+}
+
+.add-records-dialog .in-list-badge {
+    padding: 2px 8px;
+    background: #e8f5e9;
+    color: #388E3C;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* Add From View Dialog */
+.views-list {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.views-list .empty-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.views-list .empty-results .empty-icon {
+    font-size: 36px;
+    color: #ccc;
+    margin-bottom: 12px;
+}
+
+.view-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.view-item:last-child {
+    border-bottom: none;
+}
+
+.view-item:hover {
+    background: #f9f9f9;
+}
+
+.view-item.selected {
+    background: #e3f2fd;
+}
+
+.view-item .view-icon {
+    color: #2196F3;
+}
+
+.view-item .view-name {
+    flex: 1;
+    font-size: 14px;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .list-form-explorer {

@@ -3247,6 +3247,13 @@ export class MJAIAgentNote_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    SourceConversationDetail?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SourceAIAgentRun?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     Company?: string;
         
@@ -6787,6 +6794,10 @@ export class MJAIResultCache_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     Configuration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    PromptRun?: string;
         
 }
 
@@ -13726,6 +13737,10 @@ export class MJConversation_ {
     @MaxLength(510)
     Project?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    TestRun?: string;
+        
     @Field(() => [MJConversationDetail_])
     ConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to ConversationDetails
     
@@ -15615,6 +15630,10 @@ export class MJDuplicateRunDetail_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    DuplicateRun: string;
+        
     @Field(() => [MJDuplicateRunDetailMatch_])
     DuplicateRunDetailMatches_DuplicateRunDetailIDArray: MJDuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
     
@@ -16070,6 +16089,10 @@ export class MJEmployeeCompanyIntegration_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(162)
+    Employee?: string;
+        
     @Field() 
     @MaxLength(510)
     CompanyIntegration: string;
@@ -16234,6 +16257,10 @@ export class MJEmployeeRole_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(162)
+    Employee?: string;
+        
     @Field() 
     @MaxLength(100)
     Role: string;
@@ -16385,6 +16412,10 @@ export class MJEmployeeSkill_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(162)
+    Employee?: string;
         
     @Field() 
     @MaxLength(100)
@@ -18090,6 +18121,13 @@ export class MJEntityActionFilter_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(850)
+    EntityAction: string;
+        
+    @Field() 
+    ActionFilter: string;
+        
 }
 
 //****************************************************************************
@@ -18425,6 +18463,10 @@ export class MJEntityActionInvocation_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
+    @MaxLength(850)
+    EntityAction: string;
+        
+    @Field() 
     @MaxLength(510)
     InvocationType: string;
         
@@ -18591,6 +18633,10 @@ export class MJEntityActionParam_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(850)
+    EntityAction: string;
         
     @Field() 
     @MaxLength(510)
@@ -19243,6 +19289,10 @@ export class MJEntityCommunicationField_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    EntityCommunicationMessageType: string;
         
 }
 
@@ -22386,6 +22436,14 @@ export class MJErrorLog_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    CompanyIntegrationRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(900)
+    CompanyIntegrationRunDetail?: string;
         
 }
 
@@ -26507,6 +26565,13 @@ export class MJAIAgentExample_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    SourceConversationDetail?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SourceAIAgentRun?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     EmbeddingModel?: string;
         
@@ -27636,6 +27701,14 @@ detailed information about what validation rules failed.`})
     Comments?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(510)
+    AgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(16)
     RootParentID?: string;
         
@@ -28065,6 +28138,10 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true}) 
     @MaxLength(400)
     ScheduledJobRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    TestRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -37504,6 +37581,9 @@ export class MJConversationDetailArtifact_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    ConversationDetail: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     ArtifactVersion?: string;
@@ -37919,6 +37999,9 @@ export class MJConversationDetailRating_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    ConversationDetail: string;
         
     @Field() 
     @MaxLength(200)
@@ -42902,6 +42985,9 @@ export class MJTask_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Project?: string;
+        
+    @Field({nullable: true}) 
+    ConversationDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -47943,6 +48029,9 @@ export class MJRecommendationItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
+    Recommendation: string;
+        
+    @Field() 
     @MaxLength(510)
     DestinationEntity: string;
         
@@ -48481,6 +48570,10 @@ export class MJRecommendation_ {
         
     @Field() 
     @MaxLength(510)
+    RecommendationRun: string;
+        
+    @Field() 
+    @MaxLength(510)
     SourceEntity: string;
         
     @Field(() => [MJRecommendationItem_])
@@ -48890,6 +48983,10 @@ export class MJRecordChange_ {
         
     @Field({nullable: true}) 
     @MaxLength(200)
+    ReplayRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
     Integration?: string;
         
 }
@@ -49118,6 +49215,10 @@ export class MJRecordMergeDeletionLog_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(900)
+    RecordMergeLog: string;
         
 }
 
@@ -49985,6 +50086,9 @@ export class MJReport_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Conversation?: string;
+        
+    @Field({nullable: true}) 
+    ConversationDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -53234,6 +53338,10 @@ export class MJTemplateParam_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    TemplateContent?: string;
         
 }
 

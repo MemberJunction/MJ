@@ -277,6 +277,11 @@ export class ListManagementService {
     recordIds: string[],
     skipDuplicates: boolean = true
   ): Promise<BatchOperationResult> {
+    console.log(`[ListManagementService] addRecordsToLists called:`);
+    console.log(`  - listIds (${listIds.length}):`, listIds);
+    console.log(`  - recordIds (${recordIds.length}):`, recordIds);
+    console.log(`  - skipDuplicates:`, skipDuplicates);
+
     const result: BatchOperationResult = {
       success: 0,
       failed: 0,
@@ -297,7 +302,7 @@ export class ListManagementService {
         EntityName: 'List Details',
         ExtraFilter: `ListID IN (${listIdFilter}) AND RecordID IN (${recordIdFilter})`,
         ResultType: 'entity_object'
-      });
+      }, md.CurrentUser);
 
       if (existing.Success && existing.Results) {
         for (const detail of existing.Results) {
@@ -308,43 +313,64 @@ export class ListManagementService {
       }
     }
 
-    // Add records to each list
+    // Build list of records to add (excluding duplicates)
+    const recordsToAdd: Array<{listId: string, recordId: string}> = [];
     for (const listId of listIds) {
       const existingRecords = existingMembership.get(listId) || new Set();
-
       for (const recordId of recordIds) {
-        // Skip if already exists
         if (skipDuplicates && existingRecords.has(recordId)) {
           result.skipped++;
-          continue;
-        }
-
-        try {
-          const listDetail = await md.GetEntityObject<ListDetailEntity>('List Details');
-          listDetail.NewRecord();
-          listDetail.ListID = listId;
-          listDetail.RecordID = recordId;
-          listDetail.Sequence = 0;
-          listDetail.Status = 'Active';
-
-          const saveResult = await listDetail.Save();
-          if (saveResult) {
-            result.success++;
-          } else {
-            result.failed++;
-            result.errors.push(`Failed to add record ${recordId} to list ${listId}`);
-          }
-        } catch (error) {
-          result.failed++;
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          result.errors.push(`Error adding record ${recordId} to list ${listId}: ${errorMessage}`);
+        } else {
+          recordsToAdd.push({ listId, recordId });
         }
       }
+    }
+
+    if (recordsToAdd.length === 0) {
+      console.log(`[ListManagementService] No records to add (all skipped as duplicates)`);
+      return result;
+    }
+
+    // Use transaction group for bulk insert
+    const tg = await md.CreateTransactionGroup();
+
+    for (const { listId, recordId } of recordsToAdd) {
+      try {
+        const listDetail = await md.GetEntityObject<ListDetailEntity>('List Details', md.CurrentUser);
+        listDetail.ListID = listId;
+        listDetail.RecordID = recordId;
+        listDetail.TransactionGroup = tg;
+        const saveResult = await listDetail.Save();
+        if (!saveResult) {
+          console.error(`[ListManagementService] Failed to queue record ${recordId} for list ${listId}:`, listDetail.LatestResult?.Message);
+          result.errors.push(`Failed to add record ${recordId} to list ${listId}: ${listDetail.LatestResult?.Message || 'Unknown error'}`);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[ListManagementService] Exception adding record:`, error);
+        result.errors.push(`Error adding record ${recordId} to list ${listId}: ${errorMessage}`);
+      }
+    }
+
+    // Submit the transaction
+    console.log(`[ListManagementService] Submitting transaction with ${recordsToAdd.length} records...`);
+    const success = await tg.Submit();
+
+    if (success) {
+      result.success = recordsToAdd.length - result.errors.length;
+      result.failed = result.errors.length;
+      console.log(`[ListManagementService] Transaction succeeded. Added ${result.success} records.`);
+    } else {
+      result.failed = recordsToAdd.length;
+      result.success = 0;
+      console.error(`[ListManagementService] Transaction failed`);
+      result.errors.push('Transaction failed to submit');
     }
 
     // Invalidate membership cache
     this.membershipCache.clear();
 
+    console.log(`[ListManagementService] addRecordsToLists final result:`, result);
     return result;
   }
 

@@ -172,6 +172,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   public showListManagementDialog: boolean = false;
   public listManagementConfig: ListManagementDialogConfig | null = null;
 
+  // Selection tracking for grid - needed to enable Add to List button in header
+  public selectedRecordIds: string[] = [];
+  public selectedRecords: BaseEntity[] = [];
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return "Data Explorer"
@@ -2228,8 +2231,122 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   // ========================================
+  // SELECTION TRACKING
+  // ========================================
+
+  /**
+   * Handle selection changes from entity-viewer grid.
+   * Tracks selected records to enable the Add to List button in the header toolbar.
+   */
+  public onSelectionChanged(event: { records: BaseEntity[]; recordIds: string[] }): void {
+    this.selectedRecords = event.records || [];
+    this.selectedRecordIds = event.recordIds || [];
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Check if there are selected records (for enabling Add to List button)
+   */
+  public get hasSelectedRecords(): boolean {
+    return this.selectedRecords.length > 0;
+  }
+
+  // ========================================
   // LIST MANAGEMENT
   // ========================================
+
+  /**
+   * Handle Add to List button click from header toolbar.
+   * Opens the list management dialog for selected records.
+   */
+  public onAddToListClick(): void {
+    if (!this.selectedEntity || this.selectedRecords.length === 0) {
+      console.warn('Add to List: No entity selected or no records selected');
+      return;
+    }
+
+    // Build the event object and delegate to existing handler
+    const event = {
+      entityInfo: this.selectedEntity,
+      records: this.selectedRecords,
+      recordIds: this.selectedRecordIds
+    };
+
+    this.onAddToListRequested(event);
+  }
+
+  /**
+   * Handle Add to List request from entity-viewer grid toolbar.
+   * Opens the list management dialog for multiple selected records.
+   */
+  public onAddToListRequested(event: { entityInfo: EntityInfo; records: BaseEntity[]; recordIds: string[] }): void {
+    // Validate input
+    if (!event.entityInfo) {
+      console.error('Add to List: entityInfo is missing from event');
+      return;
+    }
+    if (!event.records || event.records.length === 0) {
+      console.error('Add to List: No records in event. Event:', event);
+      return;
+    }
+
+    console.log(`Add to List: Processing ${event.records.length} record(s) for entity "${event.entityInfo.Name}"`);
+
+    // Get display names for the records
+    const recordDisplayNames = event.records.map(record => {
+      try {
+        if (event.entityInfo.NameField) {
+          const nameValue = record.Get(event.entityInfo.NameField.Name);
+          if (nameValue) return String(nameValue);
+        }
+        return record.PrimaryKey?.ToString() || 'Unknown';
+      } catch (err) {
+        console.error('Add to List: Error getting record display name:', err);
+        return 'Unknown';
+      }
+    });
+
+    // Get raw primary key values (not concatenated strings) for list membership
+    const recordIds = event.records.map(record => {
+      try {
+        if (!record.PrimaryKey || !record.PrimaryKey.KeyValuePairs || record.PrimaryKey.KeyValuePairs.length === 0) {
+          console.error('Add to List: Record has no primary key:', record);
+          return '';
+        }
+        return String(record.PrimaryKey.KeyValuePairs[0].Value);
+      } catch (err) {
+        console.error('Add to List: Error getting record ID:', err);
+        return '';
+      }
+    }).filter(id => id !== '');
+
+    if (recordIds.length === 0) {
+      console.error('Add to List: No valid record IDs found');
+      return;
+    }
+
+    const recordCount = event.records.length;
+    const dialogTitle = recordCount === 1
+      ? `Manage Lists for "${recordDisplayNames[0]}"`
+      : `Add ${recordCount} Records to List`;
+
+    console.log(`Add to List: Opening dialog for ${recordIds.length} record(s)`);
+
+    this.listManagementConfig = {
+      mode: 'manage',
+      entityId: event.entityInfo.ID,
+      entityName: event.entityInfo.Name,
+      recordIds: recordIds,
+      recordDisplayNames: recordDisplayNames,
+      allowCreate: true,
+      allowRemove: recordCount === 1, // Only allow remove for single record
+      showMembership: recordCount === 1, // Only show membership for single record
+      dialogTitle: dialogTitle
+    };
+
+    this.showListManagementDialog = true;
+    this.cdr.detectChanges();
+  }
 
   /**
    * Open the list management dialog for the currently selected record

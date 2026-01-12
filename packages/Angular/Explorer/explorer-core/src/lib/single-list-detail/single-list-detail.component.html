@@ -95,6 +95,7 @@
             [min]="0"
             [max]="removeTotal"
             [value]="removeProgress"
+            [label]="false"
             class="progress-bar">
           </kendo-progressbar>
         }
@@ -128,9 +129,9 @@
   *ngIf="showAddRecordsDialog"
   [title]="'Add ' + (listRecord?.Entity || 'Records') + ' to List'"
   (close)="closeAddRecordsDialog()"
-  [minWidth]="400"
-  [width]="600"
-  [height]="550">
+  [minWidth]="500"
+  [width]="700"
+  [height]="650">
   <div class="dialog-content add-records-dialog">
     @if (addDialogSaving) {
       <div class="dialog-loading">
@@ -140,6 +141,7 @@
             [min]="0"
             [max]="addTotal"
             [value]="addProgress"
+            [label]="false"
             class="progress-bar">
           </kendo-progressbar>
         }
@@ -248,6 +250,7 @@
           [min]="0"
           [max]="addFromViewTotal"
           [value]="addFromViewProgress"
+          [label]="false"
           class="progress-bar">
         </kendo-progressbar>
       </div>

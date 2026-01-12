@@ -1,10 +1,11 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Subject, debounceTime } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { ListFormComponent } from '../../generated/Entities/List/list.form.component';
-import { ListEntity, ListDetailEntity, ListCategoryEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView, EntityInfo } from '@memberjunction/core';
+import { ListEntity, ListDetailEntity, ListDetailEntityExtended, ListCategoryEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
+import { ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
 
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
 
@@ -19,6 +20,16 @@ export interface ListStats {
     shareCount: number;
     invitationCount: number;
     lastUpdated: Date | null;
+}
+
+/**
+ * Represents a record that can be added to a list
+ */
+export interface AddableRecord {
+    ID: string;
+    Name: string;
+    isInList: boolean;
+    isSelected: boolean;
 }
 
 /**
@@ -79,11 +90,41 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
     public editingName = '';
     public editingDescription = '';
 
+    // Add Records dialog
+    public showAddRecordsDialog = false;
+    public addDialogLoading = false;
+    public addDialogSaving = false;
+    public addableRecords: AddableRecord[] = [];
+    public addRecordsSearchFilter = '';
+    public existingListDetailIds = new Set<string>();
+    public addProgress = 0;
+    public addTotal = 0;
+    private searchSubject = new Subject<string>();
+
+    // Add From View dialog
+    public showAddFromViewDialog = false;
+    public showAddFromViewLoader = false;
+    public userViews: UserViewEntityExtended[] | null = null;
+    public userViewsToAdd: UserViewEntityExtended[] = [];
+    public addFromViewProgress = 0;
+    public addFromViewTotal = 0;
+    public fetchingRecordsToSave = false;
+
+    // Share dialog
+    public showShareDialog = false;
+    public shareDialogConfig: ListShareDialogConfig | null = null;
+
     private destroy$ = new Subject<void>();
     private metadata = new Metadata();
 
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
+
+        // Set up search debounce
+        this.searchSubject
+            .pipe(debounceTime(300))
+            .subscribe((searchText) => this.searchRecords(searchText));
+
         await this.loadExplorerData();
     }
 
@@ -458,6 +499,335 @@ export class ListFormComponentExtended extends ListFormComponent implements OnIn
         await this.loadItems();
         await this.loadStats();
         this.updateNavBadges();
+    }
+
+    // ==========================================
+    // Add Records Dialog
+    // ==========================================
+
+    public async openAddRecordsDialog(): Promise<void> {
+        this.showAddRecordsDialog = true;
+        this.addableRecords = [];
+        this.addRecordsSearchFilter = '';
+        this.addDialogLoading = true;
+        this.addDialogSaving = false;
+
+        // Load existing list detail IDs to mark which records are already in the list
+        await this.loadExistingListDetailIds();
+        this.addDialogLoading = false;
+        this.cdr.markForCheck();
+    }
+
+    public closeAddRecordsDialog(): void {
+        this.showAddRecordsDialog = false;
+        this.addableRecords = [];
+        this.addRecordsSearchFilter = '';
+        this.existingListDetailIds.clear();
+        this.addDialogSaving = false;
+        this.addProgress = 0;
+        this.addTotal = 0;
+        this.cdr.markForCheck();
+    }
+
+    private async loadExistingListDetailIds(): Promise<void> {
+        if (!this.record) return;
+
+        const rv = new RunView();
+        const result = await rv.RunView<{ RecordID: string }>({
+            EntityName: 'List Details',
+            ExtraFilter: `ListID = '${this.record.ID}'`,
+            Fields: ['RecordID'],
+            ResultType: 'simple'
+        }, this.metadata.CurrentUser);
+
+        if (result.Success) {
+            this.existingListDetailIds = new Set(result.Results.map(r => r.RecordID));
+        }
+    }
+
+    public onAddRecordsSearchChange(value: string): void {
+        this.addRecordsSearchFilter = value;
+        this.searchSubject.next(value);
+    }
+
+    private async searchRecords(searchText: string): Promise<void> {
+        if (!this.record || !searchText || searchText.length < 2) {
+            this.addableRecords = [];
+            this.cdr.markForCheck();
+            return;
+        }
+
+        this.addDialogLoading = true;
+        this.cdr.markForCheck();
+
+        const sourceEntityInfo = this.metadata.EntityByID(this.record.EntityID);
+        if (!sourceEntityInfo) {
+            this.addDialogLoading = false;
+            this.cdr.markForCheck();
+            return;
+        }
+
+        const nameField = sourceEntityInfo.Fields.find(field => field.IsNameField);
+        const pkField = sourceEntityInfo.FirstPrimaryKey?.Name || 'ID';
+
+        let filter: string | undefined;
+        if (nameField) {
+            filter = `${nameField.Name} LIKE '%${searchText}%'`;
+        }
+
+        const rv = new RunView();
+        const result: RunViewResult = await rv.RunView({
+            EntityName: this.record.Entity,
+            ExtraFilter: filter,
+            MaxRows: 100,
+            ResultType: 'simple'
+        });
+
+        if (result.Success) {
+            this.addableRecords = result.Results.map((record: Record<string, unknown>) => {
+                const recordId = String(record[pkField]);
+                return {
+                    ID: recordId,
+                    Name: nameField ? String(record[nameField.Name]) : recordId,
+                    isInList: this.existingListDetailIds.has(recordId),
+                    isSelected: false
+                };
+            });
+        }
+
+        this.addDialogLoading = false;
+        this.cdr.markForCheck();
+    }
+
+    public toggleRecordSelection(record: AddableRecord): void {
+        if (record.isInList) return; // Can't select records already in list
+        record.isSelected = !record.isSelected;
+        this.cdr.markForCheck();
+    }
+
+    public get selectedAddableRecords(): AddableRecord[] {
+        return this.addableRecords.filter(r => r.isSelected);
+    }
+
+    public selectAllAddable(): void {
+        this.addableRecords.forEach(r => {
+            if (!r.isInList) r.isSelected = true;
+        });
+        this.cdr.markForCheck();
+    }
+
+    public deselectAllAddable(): void {
+        this.addableRecords.forEach(r => r.isSelected = false);
+        this.cdr.markForCheck();
+    }
+
+    public async confirmAddRecords(): Promise<void> {
+        const recordsToAdd = this.selectedAddableRecords;
+        if (recordsToAdd.length === 0 || !this.record) return;
+
+        this.addDialogSaving = true;
+        this.addTotal = recordsToAdd.length;
+        this.addProgress = 0;
+        this.cdr.markForCheck();
+
+        // Use transaction group for bulk insert
+        const tg = await this.metadata.CreateTransactionGroup();
+
+        for (const record of recordsToAdd) {
+            const listDetail = await this.metadata.GetEntityObject<ListDetailEntityExtended>('List Details');
+            listDetail.ListID = this.record.ID;
+            listDetail.RecordID = record.ID;
+            listDetail.TransactionGroup = tg;
+            await listDetail.Save();
+        }
+
+        const success = await tg.Submit();
+
+        if (success) {
+            this.addProgress = this.addTotal;
+            this.showNotification(
+                `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
+                'success',
+                2500
+            );
+            this.closeAddRecordsDialog();
+            await this.refreshItems();
+        } else {
+            LogError('Error adding records to list');
+            this.showNotification('Failed to add some records', 'error', 2500);
+            this.addDialogSaving = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    // ==========================================
+    // Add From View Dialog
+    // ==========================================
+
+    public async openAddFromViewDialog(): Promise<void> {
+        this.showAddFromViewDialog = true;
+        this.userViewsToAdd = [];
+        this.cdr.markForCheck();
+
+        if (!this.userViews) {
+            await this.loadEntityViews();
+        }
+    }
+
+    public closeAddFromViewDialog(): void {
+        this.showAddFromViewDialog = false;
+        this.userViewsToAdd = [];
+        this.showAddFromViewLoader = false;
+        this.addFromViewProgress = 0;
+        this.addFromViewTotal = 0;
+        this.cdr.markForCheck();
+    }
+
+    private async loadEntityViews(): Promise<void> {
+        if (!this.record || !this.record.Entity) return;
+
+        this.showAddFromViewLoader = true;
+        this.cdr.markForCheck();
+
+        const rv = new RunView();
+        const runViewResult = await rv.RunView<UserViewEntityExtended>({
+            EntityName: 'User Views',
+            ExtraFilter: `UserID = '${this.metadata.CurrentUser.ID}' AND EntityID = '${this.record.EntityID}'`,
+            ResultType: 'entity_object'
+        }, this.metadata.CurrentUser);
+
+        if (!runViewResult.Success) {
+            LogError(`Error loading User Views for entity ${this.record.Entity}`);
+        } else {
+            this.userViews = runViewResult.Results;
+        }
+
+        this.showAddFromViewLoader = false;
+        this.cdr.markForCheck();
+    }
+
+    public toggleViewSelection(view: UserViewEntityExtended): void {
+        const index = this.userViewsToAdd.findIndex(v => v.ID === view.ID);
+        if (index >= 0) {
+            this.userViewsToAdd.splice(index, 1);
+        } else {
+            this.userViewsToAdd.push(view);
+        }
+        this.cdr.markForCheck();
+    }
+
+    public isViewSelected(view: UserViewEntityExtended): boolean {
+        return this.userViewsToAdd.some(v => v.ID === view.ID);
+    }
+
+    public async confirmAddFromView(): Promise<void> {
+        if (!this.record || this.userViewsToAdd.length === 0) return;
+
+        this.showAddFromViewLoader = true;
+        this.fetchingRecordsToSave = true;
+        this.cdr.markForCheck();
+
+        const rv = new RunView();
+
+        // Collect all unique record IDs from selected views
+        const recordIdSet = new Set<string>();
+
+        for (const userView of this.userViewsToAdd) {
+            const runViewResult = await rv.RunView({
+                EntityName: 'User Views',
+                ViewEntity: userView,
+                Fields: ['ID']
+            }, this.metadata.CurrentUser);
+
+            if (runViewResult.Success) {
+                const records = runViewResult.Results as Array<{ ID: string }>;
+                records.forEach(r => recordIdSet.add(r.ID));
+            }
+        }
+
+        // Filter out records already in the list
+        await this.loadExistingListDetailIds();
+        const recordsToAdd = [...recordIdSet].filter(id => !this.existingListDetailIds.has(id));
+
+        this.addFromViewTotal = recordsToAdd.length;
+        this.addFromViewProgress = 0;
+        this.fetchingRecordsToSave = false;
+        this.cdr.markForCheck();
+
+        if (recordsToAdd.length === 0) {
+            this.showNotification('All records already in list', 'info', 2500);
+            this.showAddFromViewLoader = false;
+            this.cdr.markForCheck();
+            return;
+        }
+
+        LogStatus(`Adding ${recordsToAdd.length} records to list`);
+
+        // Use transaction group for bulk insert
+        const tg = await this.metadata.CreateTransactionGroup();
+
+        for (const recordID of recordsToAdd) {
+            const listDetail = await this.metadata.GetEntityObject<ListDetailEntityExtended>('List Details');
+            listDetail.ListID = this.record.ID;
+            listDetail.RecordID = recordID;
+            listDetail.TransactionGroup = tg;
+            await listDetail.Save();
+        }
+
+        const success = await tg.Submit();
+
+        if (success) {
+            this.addFromViewProgress = this.addFromViewTotal;
+            this.showNotification(
+                `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
+                'success',
+                2500
+            );
+            this.closeAddFromViewDialog();
+            await this.refreshItems();
+        } else {
+            LogError('Error adding records from view to list');
+            this.showNotification('Failed to add some records', 'error', 2500);
+            this.showAddFromViewLoader = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    // ==========================================
+    // Share Dialog
+    // ==========================================
+
+    public openShareDialog(): void {
+        if (!this.record?.IsSaved) return;
+
+        this.shareDialogConfig = {
+            listId: this.record.ID,
+            listName: this.record.Name,
+            currentUserId: this.metadata.CurrentUser.ID,
+            isOwner: this.isCurrentUserOwner()
+        };
+        this.showShareDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    public onShareDialogComplete(result: ListShareDialogResult): void {
+        this.showShareDialog = false;
+        this.shareDialogConfig = null;
+
+        if (result.action === 'apply') {
+            // Refresh stats to update share counts
+            this.loadStats().then(() => {
+                this.updateNavBadges();
+                this.cdr.markForCheck();
+            });
+        }
+        this.cdr.markForCheck();
+    }
+
+    public onShareDialogCancel(): void {
+        this.showShareDialog = false;
+        this.shareDialogConfig = null;
+        this.cdr.markForCheck();
     }
 }
 

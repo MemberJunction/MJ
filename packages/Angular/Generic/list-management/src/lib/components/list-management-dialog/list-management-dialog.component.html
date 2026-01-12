@@ -35,7 +35,7 @@
           }
         </div>
 
-        @if (config?.allowCreate !== false) {
+        @if (config.allowCreate !== false) {
           <button class="create-button" (click)="showCreateListForm()" [disabled]="showCreateForm">
             <span class="fa-solid fa-plus"></span>
             <span class="button-text">New</span>
@@ -145,7 +145,7 @@
               <span class="fa-solid fa-rectangle-list empty-icon"></span>
               <p class="empty-title">No lists yet</p>
               <p class="empty-subtitle">Create your first list to get started</p>
-              @if (config?.allowCreate !== false) {
+              @if (config.allowCreate !== false) {
                 <button class="btn btn-primary" (click)="showCreateListForm()">
                   <span class="fa-solid fa-plus"></span>
                   Create List
@@ -213,7 +213,7 @@
                 </div>
 
                 <!-- Membership Indicator -->
-                @if (config?.showMembership !== false) {
+                @if (config.showMembership !== false) {
                   <div class="membership-indicator" [class]="getMembershipClass(vm)">
                     <span [class]="getMembershipIcon(vm)"></span>
                     <span class="membership-text">{{ getMembershipText(vm) }}</span>

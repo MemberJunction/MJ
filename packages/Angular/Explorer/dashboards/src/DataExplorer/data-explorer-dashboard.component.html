@@ -77,6 +77,19 @@
             (createNewRecordRequested)="onCreateNewRecord()"
             (exportRequested)="onExport()">
           </mj-view-selector>
+
+          <!-- Add to List Button -->
+          <button
+            class="header-action-btn"
+            [class.disabled]="!hasSelectedRecords"
+            [disabled]="!hasSelectedRecords"
+            (click)="onAddToListClick()"
+            [title]="hasSelectedRecords ? 'Add ' + selectedRecords.length + ' selected record(s) to a list' : 'Select records to add to a list'">
+            <i class="fa-solid fa-list-check"></i>
+            @if (hasSelectedRecords) {
+              <span class="selection-badge">{{ selectedRecords.length }}</span>
+            }
+          </button>
         } @else {
           @if (displayIcon) {
             <i [class]="displayIcon" class="entity-icon"></i>
@@ -460,6 +473,7 @@
         </div>
       } @else {
         <mj-entity-viewer
+          #entityViewer
           [entity]="selectedEntity"
           [viewEntity]="selectedViewEntity"
           [viewMode]="state.viewMode"
@@ -468,13 +482,18 @@
           [config]="viewerConfig"
           [gridState]="currentGridState"
           [timelineConfig]="currentTimelineConfig"
+          [gridSelectionMode]="'checkbox'"
+          [showGridToolbar]="false"
+          [showAddToListButton]="false"
           (viewModeChange)="onViewModeChanged($event)"
           (filterTextChange)="onFilterTextChanged($event)"
           (recordSelected)="onViewerRecordSelected($event)"
           (recordOpened)="onViewerRecordOpened($event)"
           (dataLoaded)="onDataLoaded($event)"
           (filteredCountChanged)="onFilteredCountChanged($event)"
-          (gridStateChanged)="onGridStateChanged($event)">
+          (gridStateChanged)="onGridStateChanged($event)"
+          (selectionChanged)="onSelectionChanged($event)"
+          (addToListRequested)="onAddToListRequested($event)">
         </mj-entity-viewer>
       }
     </div>
