@@ -1,5 +1,40 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [43df8f4]
+- Updated dependencies [c00bd13]
+  - @memberjunction/ng-entity-viewer@2.133.0
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ng-base-forms@2.133.0
+  - @memberjunction/ng-form-toolbar@2.133.0
+  - @memberjunction/ng-user-view-grid@2.133.0
+  - @memberjunction/ai-engine-base@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/actions-base@2.133.0
+  - @memberjunction/ng-base-application@2.133.0
+  - @memberjunction/ng-link-directives@2.133.0
+  - @memberjunction/ng-shared@2.133.0
+  - @memberjunction/ng-testing@2.133.0
+  - @memberjunction/ng-action-gallery@2.133.0
+  - @memberjunction/ng-ai-test-harness@2.133.0
+  - @memberjunction/ng-code-editor@2.133.0
+  - @memberjunction/ng-container-directives@2.133.0
+  - @memberjunction/ng-deep-diff@2.133.0
+  - @memberjunction/ng-entity-relationship-diagram@2.133.0
+  - @memberjunction/ng-join-grid@2.133.0
+  - @memberjunction/ng-notifications@2.133.0
+  - @memberjunction/ng-shared-generic@2.133.0
+  - @memberjunction/ng-timeline@2.133.0
+  - @memberjunction/graphql-dataprovider@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/templates-base-types@2.133.0
+  - @memberjunction/ng-tabstrip@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes
