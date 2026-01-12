@@ -604,7 +604,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   
   /**
    * Starts polling for conversation status updates
-   * @param conversationId The ID of the conversation to poll for
+   * @param convoID The ID of the conversation to poll for
    */
   protected startRequestStatusPolling(convoID: string) {
     // Clear any existing polling for this conversation
@@ -727,7 +727,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   
   /**
    * Checks the status of a conversation request
-   * @param conversationId The ID of the conversation to check
+   * @param convoID The ID of the conversation to check
    */
   protected async checkRequestStatus(convoID: string) {
     try {
