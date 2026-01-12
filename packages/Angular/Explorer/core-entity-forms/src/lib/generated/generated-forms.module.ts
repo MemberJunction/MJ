@@ -12,7 +12,7 @@ import { FormsModule } from '@angular/forms';
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
@@ -189,6 +189,8 @@ import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent 
 import { EncryptionKeySourceFormComponent, LoadEncryptionKeySourceFormComponent } from "./Entities/EncryptionKeySource/encryptionkeysource.form.component";
 import { EncryptionKeyFormComponent, LoadEncryptionKeyFormComponent } from "./Entities/EncryptionKey/encryptionkey.form.component";
 import { EnvironmentFormComponent, LoadEnvironmentFormComponent } from "./Entities/Environment/environment.form.component";
+import { ListInvitationFormComponent, LoadListInvitationFormComponent } from "./Entities/ListInvitation/listinvitation.form.component";
+import { ListShareFormComponent, LoadListShareFormComponent } from "./Entities/ListShare/listshare.form.component";
 import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
 import { PublicLinkFormComponent, LoadPublicLinkFormComponent } from "./Entities/PublicLink/publiclink.form.component";
 import { QueryParameterFormComponent, LoadQueryParameterFormComponent } from "./Entities/QueryParameter/queryparameter.form.component";
@@ -298,7 +300,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -343,7 +345,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -389,7 +391,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -434,7 +436,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -479,7 +481,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -524,7 +526,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -569,7 +571,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -614,7 +616,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -635,6 +637,8 @@ declarations: [
     EncryptionKeySourceFormComponent,
     EncryptionKeyFormComponent,
     EnvironmentFormComponent,
+    ListInvitationFormComponent,
+    ListShareFormComponent,
     ProjectFormComponent,
     PublicLinkFormComponent,
     QueryParameterFormComponent,
@@ -649,9 +653,7 @@ declarations: [
     TaskFormComponent,
     TestRubricFormComponent,
     TestRunFeedbackFormComponent,
-    TestRunFormComponent,
-    TestSuiteRunFormComponent,
-    TestSuiteTestFormComponent],
+    TestRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -659,7 +661,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -677,6 +679,8 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    TestSuiteRunFormComponent,
+    TestSuiteTestFormComponent,
     TestSuiteFormComponent,
     TestTypeFormComponent,
     TestFormComponent,
@@ -694,9 +698,7 @@ declarations: [
     QueueFormComponent,
     RecommendationItemFormComponent,
     RecommendationProviderFormComponent,
-    RecommendationRunFormComponent,
-    RecommendationFormComponent,
-    RecordChangeReplayRunFormComponent],
+    RecommendationRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -704,7 +706,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -722,6 +724,8 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    RecommendationFormComponent,
+    RecordChangeReplayRunFormComponent,
     RecordChangeFormComponent,
     RecordMergeDeletionLogFormComponent,
     RecordMergeLogFormComponent,
@@ -739,9 +743,7 @@ declarations: [
     SkillFormComponent,
     TaggedItemFormComponent,
     TagFormComponent,
-    TemplateCategoryFormComponent,
-    TemplateContentTypeFormComponent,
-    TemplateContentFormComponent],
+    TemplateCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -749,7 +751,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -767,6 +769,8 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    TemplateContentTypeFormComponent,
+    TemplateContentFormComponent,
     TemplateParamFormComponent,
     TemplateFormComponent,
     UserApplicationEntityFormComponent,
@@ -784,9 +788,7 @@ declarations: [
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
     WorkflowEngineFormComponent,
-    WorkflowRunFormComponent,
-    WorkflowFormComponent,
-    WorkspaceItemFormComponent],
+    WorkflowRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -794,7 +796,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -812,6 +814,8 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    WorkflowFormComponent,
+    WorkspaceItemFormComponent,
     WorkspaceFormComponent],
 imports: [
     CommonModule,
@@ -820,7 +824,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -1026,6 +1030,8 @@ export function LoadCoreGeneratedForms() {
     LoadEncryptionKeySourceFormComponent();
     LoadEncryptionKeyFormComponent();
     LoadEnvironmentFormComponent();
+    LoadListInvitationFormComponent();
+    LoadListShareFormComponent();
     LoadProjectFormComponent();
     LoadPublicLinkFormComponent();
     LoadQueryParameterFormComponent();

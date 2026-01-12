@@ -218,7 +218,7 @@ import { FormsModule } from '@angular/forms';
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
@@ -234,7 +234,7 @@ import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 // Import Generated Components
 ${componentImports.join('\n')}
 ${
-    relatedEntityModuleImports.filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-user-view-grid' )
+    relatedEntityModuleImports.filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-entity-viewer' )
                                  .map(remi => `import { ${remi.modules.map(m => m).join(', ')} } from "${remi.library}"`)
                                 .join('\n')
 }   
@@ -348,7 +348,7 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    UserViewGridModule,
+    EntityViewerModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -819,7 +819,8 @@ ${indentedFormHTML}
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('${sectionKey}')">
+        [badgeCount]="GetSectionRowCount('${sectionKey}')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
 ${componentCodeWithIndent}
         </div>

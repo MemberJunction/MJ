@@ -166,16 +166,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJComponentLibraryLinks')">
+        [badgeCount]="GetSectionRowCount('mJComponentLibraryLinks')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','LibraryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
                 [AllowLoad]="IsSectionExpanded('mJComponentLibraryLinks')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('mJComponentLibraryLinks', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJComponentLibraryLinks', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

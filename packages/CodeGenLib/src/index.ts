@@ -59,7 +59,7 @@ export * from './Misc/graphql_server_codegen'
 // Angular exports
 export * from './Angular/angular-codegen'
 export * from './Angular/related-entity-components';
-export * from './Angular/user-view-grid-related-entity-component';
+export * from './Angular/entity-data-grid-related-entity-component';
 export * from './Angular/join-grid-related-entity-component';
 export * from './Angular/timeline-related-entity-component';
 

@@ -190,16 +190,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('duplicateRunDetails')">
+        [badgeCount]="GetSectionRowCount('duplicateRunDetails')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Details','DuplicateRunID')"
                 [NewRecordValues]="NewRecordValues('Duplicate Run Details')"
                 [AllowLoad]="IsSectionExpanded('duplicateRunDetails')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('duplicateRunDetails', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('duplicateRunDetails', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

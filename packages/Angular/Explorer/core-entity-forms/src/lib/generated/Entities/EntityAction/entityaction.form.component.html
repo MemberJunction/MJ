@@ -104,16 +104,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityActionFilters')">
+        [badgeCount]="GetSectionRowCount('entityActionFilters')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters','EntityActionID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Filters')"
                 [AllowLoad]="IsSectionExpanded('entityActionFilters')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('entityActionFilters', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('entityActionFilters', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -125,16 +126,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityActionInvocations')">
+        [badgeCount]="GetSectionRowCount('entityActionInvocations')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Invocations','EntityActionID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Invocations')"
                 [AllowLoad]="IsSectionExpanded('entityActionInvocations')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('entityActionInvocations', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('entityActionInvocations', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -146,16 +148,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityActionParams')">
+        [badgeCount]="GetSectionRowCount('entityActionParams')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Params','EntityActionID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Params')"
                 [AllowLoad]="IsSectionExpanded('entityActionParams')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('entityActionParams', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('entityActionParams', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

@@ -100,8 +100,13 @@
         <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
     }
     @if(!form.EditMode){
-        <button kendoButton (click)="toggleListDialog(true)" title="Add this record to a list">
+        <button kendoButton (click)="toggleListDialog(true)"
+                [title]="recordListCount > 0 ? 'Member of ' + recordListCount + ' list(s) - Click to manage' : 'Add this record to a list'"
+                class="list-button">
             <span class="fa-solid fa-rectangle-list"></span>
+            @if (recordListCount > 0) {
+                <span class="list-count-badge">{{ recordListCount }}</span>
+            }
         </button>
     }
 
@@ -128,10 +133,11 @@
       </kendo-dialog-actions>
     </kendo-dialog>
 
+    <!-- Legacy List Dialog (fallback when useEnhancedListDialog is false) -->
     <kendo-dialog
     class="dialog-wrapper"
     title="Select List to Add Record To"
-    *ngIf="listDialogVisible"
+    *ngIf="listDialogVisible && !useEnhancedListDialog"
     (close)="toggleListDialog(false)"
     [minWidth]="250"
     [width]="650"
@@ -160,4 +166,14 @@
         </button>
     </kendo-dialog-actions>
 </kendo-dialog>
+
+    <!-- Enhanced List Management Dialog -->
+    @if (showEnhancedListDialog && listManagementConfig) {
+        <mj-list-management-dialog
+            [config]="listManagementConfig"
+            [visible]="showEnhancedListDialog"
+            (complete)="onEnhancedListDialogComplete($event)"
+            (cancel)="onEnhancedListDialogCancel()">
+        </mj-list-management-dialog>
+    }
 </div>
