@@ -387,15 +387,18 @@ export class SingleListDetailComponent implements OnInit {
     if (recordsToAdd.length === 0 || !this.listRecord) return;
 
     this.addDialogSaving = true;
+    // Reserve 20% of progress for tg.Submit()
     this.addTotal = recordsToAdd.length;
     this.addProgress = 0;
+    const progressPerRecord = 0.8 / recordsToAdd.length; // 80% for individual saves
 
     const md = new Metadata();
 
     // Use transaction group for bulk insert
     const tg = await md.CreateTransactionGroup();
 
-    for (const record of recordsToAdd) {
+    for (let i = 0; i < recordsToAdd.length; i++) {
+      const record = recordsToAdd[i];
       const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
       listDetail.ListID = this.listRecord.ID;
       listDetail.RecordID = record.ID;
@@ -406,7 +409,12 @@ export class SingleListDetailComponent implements OnInit {
           message: listDetail.LatestResult?.CompleteMessage
         });
       }
+      // Update progress (0-80%)
+      this.addProgress = Math.round((i + 1) * progressPerRecord * this.addTotal);
     }
+
+    // Show 80% complete before submit
+    this.addProgress = Math.round(this.addTotal * 0.8);
 
     const success = await tg.Submit();
 
@@ -515,6 +523,7 @@ export class SingleListDetailComponent implements OnInit {
     this.addFromViewTotal = recordsToAdd.length;
     this.addFromViewProgress = 0;
     this.fetchingRecordsToSave = false;
+    const progressPerRecord = 0.8 / Math.max(recordsToAdd.length, 1); // 80% for individual saves
 
     if (recordsToAdd.length === 0) {
       this.sharedService.CreateSimpleNotification("All records already in list", 'info', 2500);
@@ -527,7 +536,8 @@ export class SingleListDetailComponent implements OnInit {
     // Use transaction group for bulk insert
     const tg = await md.CreateTransactionGroup();
 
-    for (const recordID of recordsToAdd) {
+    for (let i = 0; i < recordsToAdd.length; i++) {
+      const recordID = recordsToAdd[i];
       const listDetail = await md.GetEntityObject<ListDetailEntityExtended>("List Details", md.CurrentUser);
       listDetail.ListID = this.listRecord.ID;
       listDetail.RecordID = recordID;
@@ -536,9 +546,14 @@ export class SingleListDetailComponent implements OnInit {
       if (!result) {
         LogErrorEx({
           message: listDetail.LatestResult?.CompleteMessage
-        })
+        });
       }
+      // Update progress (0-80%)
+      this.addFromViewProgress = Math.round((i + 1) * progressPerRecord * this.addFromViewTotal);
     }
+
+    // Show 80% complete before submit
+    this.addFromViewProgress = Math.round(this.addFromViewTotal * 0.8);
 
     const success = await tg.Submit();
 

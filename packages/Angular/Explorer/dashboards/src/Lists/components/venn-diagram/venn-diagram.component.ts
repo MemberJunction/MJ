@@ -236,6 +236,9 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
   tooltipTitle = '';
   tooltipCount = 0;
 
+  // Track if hovering an intersection label (to suppress circle tooltips)
+  private isHoveringIntersectionLabel = false;
+
   private svg: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private width = 0;
@@ -317,6 +320,8 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       this.renderTwoSets(g, sets, drawWidth, drawHeight);
     } else if (sets.length === 3) {
       this.renderThreeSets(g, sets, drawWidth, drawHeight);
+    } else if (sets.length === 4) {
+      this.renderFourSets(g, sets, drawWidth, drawHeight);
     } else {
       this.renderMultipleSets(g, sets, drawWidth, drawHeight);
     }
@@ -430,34 +435,55 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
   ): void {
     const labelGroup = g.append('g')
       .attr('class', 'intersection-label-group')
-      .style('cursor', 'pointer')
-      .on('mouseenter', (event) => this.showTooltip(event, intersection.label, intersection.size))
-      .on('mousemove', (event) => this.moveTooltip(event))
-      .on('mouseleave', () => this.hideTooltip())
-      .on('click', () => this.onIntersectionClick(intersection));
+      .style('cursor', 'pointer');
 
     // Add background circle/pill for better click target
     const text = intersection.size.toString();
     const padding = 8;
     const fontSize = intersection.setIds.length >= 3 ? 14 : 12;
-    const width = Math.max(text.length * fontSize * 0.7 + padding * 2, 32);
+    const rectWidth = Math.max(text.length * fontSize * 0.7 + padding * 2, 32);
 
-    labelGroup.append('rect')
-      .attr('x', x - width / 2)
+    // The rect is the main hover/click target
+    const rect = labelGroup.append('rect')
+      .attr('x', x - rectWidth / 2)
       .attr('y', y - fontSize / 2 - padding / 2)
-      .attr('width', width)
+      .attr('width', rectWidth)
       .attr('height', fontSize + padding)
       .attr('rx', (fontSize + padding) / 2)
       .attr('ry', (fontSize + padding) / 2)
       .attr('fill', 'rgba(0,0,0,0.6)')
       .attr('class', this.isRegionSelected(intersection) ? 'intersection-region selected' : 'intersection-region');
 
+    // Text has pointer-events: none to prevent hover flickering
     labelGroup.append('text')
       .attr('class', 'venn-label')
       .attr('x', x)
       .attr('y', y + fontSize * 0.35)
       .style('font-size', `${fontSize}px`)
+      .style('pointer-events', 'none')
       .text(text);
+
+    // Attach events to the rect (the main clickable area) to prevent flickering
+    // Stop propagation to prevent underlying circle events from firing
+    rect
+      .on('mouseenter', (event: MouseEvent) => {
+        event.stopPropagation();
+        this.isHoveringIntersectionLabel = true;
+        this.showTooltip(event, intersection.label, intersection.size, true);
+      })
+      .on('mousemove', (event: MouseEvent) => {
+        event.stopPropagation();
+        this.moveTooltip(event);
+      })
+      .on('mouseleave', (event: MouseEvent) => {
+        event.stopPropagation();
+        this.isHoveringIntersectionLabel = false;
+        this.hideTooltip();
+      })
+      .on('click', (event: MouseEvent) => {
+        event.stopPropagation();
+        this.onIntersectionClick(intersection);
+      });
   }
 
   /**
@@ -619,6 +645,124 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     return null;
   }
 
+  /**
+   * Render a 4-set Venn diagram using overlapping ellipses.
+   * This is a simplified approach - true 4-set Venn diagrams use complex curves.
+   * We use two pairs of rotated ellipses to create all 15 possible regions.
+   */
+  private renderFourSets(
+    g: d3.Selection<SVGGElement, unknown, null, undefined>,
+    sets: VennSet[],
+    width: number,
+    height: number
+  ): void {
+    const cx = width / 2;
+    const cy = height / 2;
+
+    // Use ellipses for 4-set Venn
+    const baseSize = Math.min(width, height) * 0.35;
+    const rx = baseSize * 1.2; // Ellipse horizontal radius
+    const ry = baseSize * 0.7; // Ellipse vertical radius
+
+    // Position ellipses with rotations to create overlapping regions
+    // Two ellipses rotated ~45 degrees and two rotated ~-45 degrees
+    const positions = [
+      { cx: cx - baseSize * 0.3, cy: cy - baseSize * 0.15, rx, ry, rotation: 45, set: sets[0] },
+      { cx: cx + baseSize * 0.3, cy: cy - baseSize * 0.15, rx, ry, rotation: -45, set: sets[1] },
+      { cx: cx - baseSize * 0.3, cy: cy + baseSize * 0.15, rx, ry, rotation: -45, set: sets[2] },
+      { cx: cx + baseSize * 0.3, cy: cy + baseSize * 0.15, rx, ry, rotation: 45, set: sets[3] }
+    ];
+
+    // Draw ellipses
+    for (const pos of positions) {
+      g.append('ellipse')
+        .attr('class', 'venn-circle')
+        .attr('cx', pos.cx)
+        .attr('cy', pos.cy)
+        .attr('rx', pos.rx)
+        .attr('ry', pos.ry)
+        .attr('transform', `rotate(${pos.rotation}, ${pos.cx}, ${pos.cy})`)
+        .attr('fill', pos.set.color)
+        .attr('opacity', 0.4)
+        .on('mouseenter', (event: MouseEvent) => this.showTooltip(event, pos.set.listName, pos.set.size))
+        .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
+        .on('mouseleave', () => this.hideTooltip())
+        .on('click', () => this.onCircleClick(pos.set));
+    }
+
+    // Draw clickable intersection labels
+    // For 4 sets, we need to calculate positions for all 15 regions
+    for (const intersection of this.data?.intersections || []) {
+      const labelPos = this.getFourSetIntersectionPosition(intersection, positions, cx, cy, baseSize);
+      if (labelPos && intersection.size > 0) {
+        this.addClickableLabel(g, labelPos.x, labelPos.y, intersection);
+      }
+    }
+  }
+
+  /**
+   * Calculate label position for 4-set Venn intersections
+   */
+  private getFourSetIntersectionPosition(
+    intersection: VennIntersection,
+    positions: Array<{ cx: number; cy: number; set: VennSet }>,
+    cx: number,
+    cy: number,
+    baseSize: number
+  ): { x: number; y: number } | null {
+    const n = intersection.setIds.length;
+    const setIndices = intersection.setIds.map(id =>
+      positions.findIndex(p => p.set.listId === id)
+    ).filter(i => i >= 0);
+
+    if (setIndices.length !== n) return null;
+
+    if (n === 1) {
+      // Single set - position at outer edge
+      const pos = positions[setIndices[0]];
+      const dx = pos.cx - cx;
+      const dy = pos.cy - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      return {
+        x: pos.cx + (dx / dist) * baseSize * 0.6,
+        y: pos.cy + (dy / dist) * baseSize * 0.6
+      };
+    } else if (n === 2) {
+      // Two sets - average position, offset from center
+      const pos1 = positions[setIndices[0]];
+      const pos2 = positions[setIndices[1]];
+      const avgX = (pos1.cx + pos2.cx) / 2;
+      const avgY = (pos1.cy + pos2.cy) / 2;
+      // Offset slightly from the center
+      const dx = avgX - cx;
+      const dy = avgY - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      return {
+        x: avgX + (dx / dist) * baseSize * 0.2,
+        y: avgY + (dy / dist) * baseSize * 0.2
+      };
+    } else if (n === 3) {
+      // Three sets - find the set NOT in the intersection
+      const missingIndex = [0, 1, 2, 3].find(i => !setIndices.includes(i));
+      if (missingIndex === undefined) return { x: cx, y: cy };
+
+      // Position opposite to the missing set
+      const missingPos = positions[missingIndex];
+      const dx = cx - missingPos.cx;
+      const dy = cy - missingPos.cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      return {
+        x: cx + (dx / dist) * baseSize * 0.25,
+        y: cy + (dy / dist) * baseSize * 0.25
+      };
+    } else if (n === 4) {
+      // All four sets - center
+      return { x: cx, y: cy };
+    }
+
+    return null;
+  }
+
   private renderMultipleSets(
     g: d3.Selection<SVGGElement, unknown, null, undefined>,
     sets: VennSet[],
@@ -667,7 +811,12 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     });
   }
 
-  private showTooltip(event: MouseEvent, title: string, count: number): void {
+  private showTooltip(event: MouseEvent, title: string, count: number, isIntersectionLabel: boolean = false): void {
+    // If we're hovering an intersection label and this is a circle tooltip, ignore it
+    if (this.isHoveringIntersectionLabel && !isIntersectionLabel) {
+      return;
+    }
+
     this.tooltipTitle = title;
     this.tooltipCount = count;
     this.tooltipVisible = true;

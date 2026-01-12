@@ -1,8 +1,8 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
-import { ResourceData, ListEntity, ListDetailEntity, EntityEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView, EntityInfo, EntityFieldInfo, CompositeKey } from '@memberjunction/core';
+import { ResourceData, ListEntity, ListDetailEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { Metadata, RunView, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { ListSetOperationsService, VennData, VennIntersection, SetOperation, SetOperationResult } from '../services/list-set-operations.service';
 import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
@@ -44,9 +44,18 @@ interface EntityOption {
     <div class="operations-container">
       <!-- Header -->
       <div class="operations-header">
-        <div class="header-title">
-          <i class="fa-solid fa-diagram-project"></i>
-          <h2>List Operations</h2>
+        <div class="header-top">
+          <div class="header-title">
+            <i class="fa-solid fa-diagram-project"></i>
+            <h2>List Operations</h2>
+          </div>
+          <button *ngIf="selectedLists.length > 0 || selectedEntityId"
+                  class="clear-all-btn"
+                  (click)="clearAllSelections()"
+                  title="Clear all selections">
+            <i class="fa-solid fa-xmark"></i>
+            Clear
+          </button>
         </div>
         <div class="header-subtitle">
           Visualize overlaps and perform set operations on your lists
@@ -289,6 +298,66 @@ interface EntityOption {
           <button class="btn-secondary" (click)="cancelCreateDialog()">Cancel</button>
         </div>
       </div>
+
+      <!-- Add to Existing List Dialog -->
+      <div class="modal-overlay" *ngIf="showAddToListDialog" (click)="cancelAddToListDialog()"></div>
+      <div class="modal-dialog add-to-list-dialog" *ngIf="showAddToListDialog">
+        <div class="modal-header">
+          <h3>Add to Existing List</h3>
+          <button class="modal-close" (click)="cancelAddToListDialog()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-info" style="margin-bottom: 16px;">
+            <i class="fa-solid fa-info-circle"></i>
+            {{recordsToAdd.length}} record{{recordsToAdd.length !== 1 ? 's' : ''}} will be added
+          </div>
+
+          <!-- Search input -->
+          <div class="list-search">
+            <i class="fa-solid fa-search"></i>
+            <input
+              type="text"
+              [(ngModel)]="addToListSearchTerm"
+              (ngModelChange)="filterAddToListOptions()"
+              placeholder="Search lists..."
+              class="form-input" />
+          </div>
+
+          <!-- List options -->
+          <div class="list-options">
+            <div
+              class="list-option"
+              *ngFor="let list of filteredAddToListOptions"
+              [class.selected]="selectedTargetListId === list.ID"
+              (click)="selectTargetList(list.ID)">
+              <div class="list-option-radio">
+                <input
+                  type="radio"
+                  [checked]="selectedTargetListId === list.ID"
+                  name="targetList" />
+              </div>
+              <div class="list-option-info">
+                <span class="list-option-name">{{list.Name}}</span>
+                <span class="list-option-entity">{{list.Entity}}</span>
+              </div>
+            </div>
+
+            <div class="list-options-empty" *ngIf="filteredAddToListOptions.length === 0">
+              <i class="fa-solid fa-inbox"></i>
+              <p>{{addToListSearchTerm ? 'No lists match your search' : 'No other lists available'}}</p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-primary" (click)="confirmAddToList()" [disabled]="!selectedTargetListId || isSaving">
+            <i *ngIf="isSaving" class="fa-solid fa-spinner fa-spin"></i>
+            {{isSaving ? 'Adding...' : 'Add to List'}}
+          </button>
+          <button class="btn-secondary" (click)="cancelAddToListDialog()">Cancel</button>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -311,11 +380,41 @@ interface EntityOption {
       border-bottom: 1px solid #e0e0e0;
     }
 
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
     .header-title {
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-bottom: 4px;
+    }
+
+    .clear-all-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .clear-all-btn:hover {
+      background: #ffebee;
+      border-color: #f44336;
+      color: #d32f2f;
+    }
+
+    .clear-all-btn i {
+      font-size: 12px;
     }
 
     .header-title i {
@@ -1001,6 +1100,128 @@ interface EntityOption {
       background: #f5f5f5;
     }
 
+    /* Add to List Dialog */
+    .add-to-list-dialog {
+      width: 480px;
+    }
+
+    .add-to-list-dialog .modal-body {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .list-search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .list-search i {
+      color: #999;
+      flex-shrink: 0;
+    }
+
+    .list-search .form-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 0;
+      font-size: 14px;
+    }
+
+    .list-search .form-input:focus {
+      box-shadow: none;
+      outline: none;
+    }
+
+    .list-options {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .list-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .list-option:last-child {
+      border-bottom: none;
+    }
+
+    .list-option:hover {
+      background: #f8f9fa;
+    }
+
+    .list-option.selected {
+      background: #f3e5f5;
+    }
+
+    .list-option-radio {
+      flex-shrink: 0;
+    }
+
+    .list-option-radio input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #9C27B0;
+    }
+
+    .list-option-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .list-option-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .list-option-entity {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .list-options-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 20px;
+      text-align: center;
+      color: #999;
+    }
+
+    .list-options-empty i {
+      font-size: 28px;
+      margin-bottom: 10px;
+      opacity: 0.5;
+    }
+
+    .list-options-empty p {
+      margin: 0;
+      font-size: 13px;
+    }
+
     /* Responsive */
     @media (max-width: 1024px) {
       .operations-content {
@@ -1054,8 +1275,19 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   newListDescription = '';
   recordsToAdd: string[] = [];
 
+  // Add to existing list dialog
+  showAddToListDialog = false;
+  addToListSearchTerm = '';
+  filteredAddToListOptions: ListEntity[] = [];
+  selectedTargetListId: string | null = null;
+
   private entityIdFromSelectedLists: string | null = null;
   private currentEntityInfo: EntityInfo | null = null;
+
+  // User Settings persistence
+  private readonly USER_SETTING_KEY = 'ListsOperations.State';
+  private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
+  private isLoadingSettings = false;
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -1073,12 +1305,18 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
   async ngOnInit() {
     await this.loadAvailableLists();
+    await this.loadSavedState();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+
+    // Clear any pending save timeout
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
   }
 
   async loadAvailableLists() {
@@ -1140,6 +1378,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       }
     }
     this.filterAvailableLists();
+    this.saveState();
   }
 
   filterAvailableLists() {
@@ -1181,6 +1420,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.showListDropdown = false;
     this.filterAvailableLists();
     this.recalculateVenn();
+    this.saveState();
   }
 
   removeList(index: number) {
@@ -1193,6 +1433,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     this.filterAvailableLists();
     this.recalculateVenn();
+    this.saveState();
   }
 
   async recalculateVenn() {
@@ -1456,7 +1697,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const md = new Metadata();
 
       // Create the list
-      const list = await md.GetEntityObject<ListEntity>('Lists');
+      const list = await md.GetEntityObject<ListEntity>('Lists', md.CurrentUser);
       list.Name = this.newListName;
       list.Description = this.newListDescription || null;
       list.EntityID = entityId;
@@ -1468,24 +1709,33 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         return;
       }
 
-      // Add records to the list
-      let addedCount = 0;
+      // Add records to the list using transaction group
+      const tg = await md.CreateTransactionGroup();
+
       for (const recordId of this.recordsToAdd) {
-        const detail = await md.GetEntityObject<ListDetailEntity>('List Details');
+        const detail = await md.GetEntityObject<ListDetailEntity>('List Details', md.CurrentUser);
         detail.ListID = list.ID;
         detail.RecordID = recordId;
         detail.Sequence = 0;
-
-        if (await detail.Save()) {
-          addedCount++;
-        }
+        detail.TransactionGroup = tg;
+        await detail.Save();
       }
 
-      this.notificationService.CreateSimpleNotification(
-        `Created "${this.newListName}" with ${addedCount} items`,
-        'success',
-        3000
-      );
+      const success = await tg.Submit();
+
+      if (success) {
+        this.notificationService.CreateSimpleNotification(
+          `Created "${this.newListName}" with ${this.recordsToAdd.length} items`,
+          'success',
+          3000
+        );
+      } else {
+        this.notificationService.CreateSimpleNotification(
+          `Created list but failed to add some records`,
+          'warning',
+          4000
+        );
+      }
 
       this.cancelCreateDialog();
 
@@ -1501,13 +1751,120 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   addToExistingList() {
-    // TODO: Implement add to existing list dialog
-    this.notificationService.CreateSimpleNotification('Add to existing list - coming soon', 'info', 2000);
+    if (!this.selectedRegion || this.selectedRegion.size === 0) return;
+    this.recordsToAdd = [...this.selectedRegion.recordIds];
+    this.openAddToListDialog();
   }
 
   addResultToExistingList() {
-    // TODO: Implement add to existing list dialog
-    this.notificationService.CreateSimpleNotification('Add to existing list - coming soon', 'info', 2000);
+    if (!this.lastOperationResult || this.lastOperationResult.resultCount === 0) return;
+    this.recordsToAdd = [...this.lastOperationResult.resultRecordIds];
+    this.openAddToListDialog();
+  }
+
+  /**
+   * Open the Add to Existing List dialog
+   */
+  private openAddToListDialog(): void {
+    this.showAddToListDialog = true;
+    this.addToListSearchTerm = '';
+    this.selectedTargetListId = null;
+    this.filterAddToListOptions();
+  }
+
+  /**
+   * Filter available lists for add-to-list dialog
+   */
+  filterAddToListOptions(): void {
+    // Get entity ID from selected lists to filter to same entity type
+    if (this.selectedLists.length === 0) {
+      this.filteredAddToListOptions = [];
+      return;
+    }
+
+    const entityId = this.selectedLists[0].list.EntityID;
+
+    // Filter to same entity, exclude already selected lists
+    const selectedIds = new Set(this.selectedLists.map(s => s.list.ID));
+    let filtered = this.availableLists.filter(l =>
+      l.EntityID === entityId && !selectedIds.has(l.ID)
+    );
+
+    // Apply search filter
+    if (this.addToListSearchTerm) {
+      const term = this.addToListSearchTerm.toLowerCase();
+      filtered = filtered.filter(l =>
+        l.Name.toLowerCase().includes(term)
+      );
+    }
+
+    this.filteredAddToListOptions = filtered;
+  }
+
+  /**
+   * Select a target list for adding records
+   */
+  selectTargetList(listId: string): void {
+    this.selectedTargetListId = listId;
+  }
+
+  /**
+   * Cancel the add to list dialog
+   */
+  cancelAddToListDialog(): void {
+    this.showAddToListDialog = false;
+    this.addToListSearchTerm = '';
+    this.selectedTargetListId = null;
+    this.recordsToAdd = [];
+  }
+
+  /**
+   * Confirm adding records to selected list
+   */
+  async confirmAddToList(): Promise<void> {
+    if (!this.selectedTargetListId || this.recordsToAdd.length === 0) return;
+
+    this.isSaving = true;
+    this.cdr.detectChanges();
+
+    try {
+      const md = new Metadata();
+      const tg = await md.CreateTransactionGroup();
+
+      for (const recordId of this.recordsToAdd) {
+        const detail = await md.GetEntityObject<ListDetailEntity>('List Details', md.CurrentUser);
+        detail.ListID = this.selectedTargetListId;
+        detail.RecordID = recordId;
+        detail.Sequence = 0;
+        detail.TransactionGroup = tg;
+        await detail.Save();
+      }
+
+      const success = await tg.Submit();
+
+      if (success) {
+        const targetList = this.availableLists.find(l => l.ID === this.selectedTargetListId);
+        this.notificationService.CreateSimpleNotification(
+          `Added ${this.recordsToAdd.length} records to "${targetList?.Name || 'list'}"`,
+          'success',
+          3000
+        );
+      } else {
+        this.notificationService.CreateSimpleNotification(
+          'Failed to add some records',
+          'warning',
+          4000
+        );
+      }
+
+      this.cancelAddToListDialog();
+    } catch (error) {
+      console.error('Error adding to list:', error);
+      this.notificationService.CreateSimpleNotification('Error adding records to list', 'error', 4000);
+    } finally {
+      this.isSaving = false;
+      this.cdr.detectChanges();
+    }
   }
 
   exportToExcel() {
@@ -1521,5 +1878,125 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
   async GetResourceIconClass(_data: ResourceData): Promise<string> {
     return 'fa-solid fa-diagram-project';
+  }
+
+  /**
+   * Clear all selections and reset state
+   */
+  clearAllSelections(): void {
+    this.selectedLists = [];
+    this.selectedEntityId = '';
+    this.vennData = null;
+    this.selectedRegion = null;
+    this.lastOperationResult = null;
+    this.previewRecordsDisplay = [];
+    this.filterAvailableLists();
+    this.saveState();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Save state to User Settings (debounced to avoid excessive writes)
+   */
+  private saveState(): void {
+    // Don't save during initial load
+    if (this.isLoadingSettings) return;
+
+    // Debounce the server save
+    if (this.saveSettingsTimeout) {
+      clearTimeout(this.saveSettingsTimeout);
+    }
+    this.saveSettingsTimeout = setTimeout(() => {
+      this.saveStateToServer();
+    }, 1000); // 1 second debounce
+  }
+
+  /**
+   * Save state to User Settings entity on server
+   */
+  private async saveStateToServer(): Promise<void> {
+    try {
+      const md = new Metadata();
+      const userId = md.CurrentUser?.ID;
+      if (!userId) return;
+
+      const stateToSave = {
+        entityId: this.selectedEntityId,
+        listIds: this.selectedLists.map(s => s.list.ID)
+      };
+
+      const engine = UserInfoEngine.Instance;
+
+      // Find existing setting from cached user settings
+      let setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_KEY);
+
+      if (!setting) {
+        // Create new setting
+        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting.UserID = userId;
+        setting.Setting = this.USER_SETTING_KEY;
+      }
+
+      setting.Value = JSON.stringify(stateToSave);
+      await setting.Save();
+    } catch (error) {
+      console.warn('Failed to save operations state to User Settings:', error);
+    }
+  }
+
+  /**
+   * Load saved state from User Settings
+   */
+  private async loadSavedState(): Promise<void> {
+    this.isLoadingSettings = true;
+
+    try {
+      const md = new Metadata();
+      const userId = md.CurrentUser?.ID;
+      if (!userId) {
+        this.isLoadingSettings = false;
+        return;
+      }
+
+      // Load from cached User Settings
+      const engine = UserInfoEngine.Instance;
+      const setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_KEY);
+
+      if (setting?.Value) {
+        const state = JSON.parse(setting.Value) as { entityId?: string; listIds?: string[] };
+
+        // Restore entity filter
+        if (state.entityId) {
+          this.selectedEntityId = state.entityId;
+        }
+
+        // Restore selected lists
+        if (state.listIds && state.listIds.length > 0) {
+          for (const listId of state.listIds) {
+            const list = this.availableLists.find(l => l.ID === listId);
+            if (list) {
+              const color = this.setOperationsService.getColorForIndex(this.selectedLists.length);
+              this.selectedLists.push({
+                list,
+                entityName: list.Entity || 'Unknown',
+                color
+              });
+            }
+          }
+
+          // If we restored lists, recalculate venn
+          if (this.selectedLists.length > 0) {
+            this.filterAvailableLists();
+            await this.recalculateVenn();
+          }
+        }
+
+        this.cdr.detectChanges();
+      }
+    } catch (error) {
+      console.warn('Failed to load operations state from User Settings:', error);
+    } finally {
+      this.isLoadingSettings = false;
+    }
   }
 }
