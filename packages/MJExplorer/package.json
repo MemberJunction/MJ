@@ -35,6 +35,7 @@
     "@memberjunction/ng-container-directives": "2.132.0",
     "@memberjunction/ng-core-entity-forms": "2.132.0",
     "@memberjunction/ng-dashboards": "2.132.0",
+    "@memberjunction/ng-entity-viewer": "2.132.0",
     "@memberjunction/ng-explorer-core": "2.132.0",
     "@memberjunction/ng-explorer-settings": "2.132.0",
     "@memberjunction/ng-form-toolbar": "2.132.0",

@@ -172,16 +172,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('contentItemAttributes')">
+        [badgeCount]="GetSectionRowCount('contentItemAttributes')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Content Item Attributes','ContentItemID')"
                 [NewRecordValues]="NewRecordValues('Content Item Attributes')"
                 [AllowLoad]="IsSectionExpanded('contentItemAttributes')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('contentItemAttributes', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('contentItemAttributes', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -193,16 +194,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('contentItemTags')">
+        [badgeCount]="GetSectionRowCount('contentItemTags')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Content Item Tags','ItemID')"
                 [NewRecordValues]="NewRecordValues('Content Item Tags')"
                 [AllowLoad]="IsSectionExpanded('contentItemTags')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('contentItemTags', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('contentItemTags', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

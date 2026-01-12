@@ -37,6 +37,7 @@
     "@memberjunction/ng-container-directives": "2.132.0",
     "@memberjunction/ng-entity-communications": "2.132.0",
     "@memberjunction/ng-entity-form-dialog": "2.132.0",
+    "@memberjunction/ng-list-management": "2.132.0",
     "@memberjunction/ng-resource-permissions": "2.132.0",
     "@memberjunction/ng-shared": "2.132.0",
     "@memberjunction/ng-shared-generic": "2.132.0",

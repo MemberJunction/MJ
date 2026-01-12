@@ -1,7 +1,14 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
-import { UserViewEntityExtended, ViewColumnInfo, ViewGridState } from '@memberjunction/core-entities';
-import { ViewGridStateConfig, ViewColumnConfig } from '@memberjunction/ng-entity-viewer';
+import {
+  UserViewEntityExtended,
+  ViewColumnInfo,
+  ViewGridState,
+  ViewGridColumnSetting,
+  ColumnFormat,
+  ColumnTextStyle,
+  ColumnConditionalRule
+} from '@memberjunction/core-entities';
 import {
   CompositeFilterDescriptor,
   FilterFieldInfo,
@@ -10,16 +17,21 @@ import {
 } from '@memberjunction/ng-filter-builder';
 
 /**
- * Column configuration for the view
+ * Column configuration for the view (internal use)
  */
 export interface ColumnConfig {
   fieldId: string;
   fieldName: string;
+  /** Original display name from entity metadata */
   displayName: string;
+  /** User-defined custom display name (overrides displayName when set) */
+  userDisplayName?: string;
   visible: boolean;
   width: number | null;
   orderIndex: number;
   field: EntityFieldInfo;
+  /** Column formatting configuration */
+  format?: ColumnFormat;
 }
 
 /**
@@ -43,7 +55,8 @@ export interface ViewSaveEvent {
  * ViewConfigPanelComponent - Sliding panel for configuring view settings
  *
  * Features:
- * - Column visibility and ordering
+ * - Column visibility and ordering with drag-drop
+ * - Column formatting (number, currency, date, etc.)
  * - Sort configuration
  * - View name and description editing
  * - Share settings
@@ -74,7 +87,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Current grid state from the grid (includes live column widths/order from user interaction)
    * This takes precedence over viewEntity.Columns for showing current state
    */
-  @Input() currentGridState: ViewGridStateConfig | null = null;
+  @Input() currentGridState: ViewGridState | null = null;
+
+  /**
+   * Sample data for column format preview (first few records)
+   */
+  @Input() sampleData: Record<string, unknown>[] = [];
 
   /**
    * Emitted when the panel should close
@@ -85,6 +103,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Emitted when the view should be saved
    */
   @Output() save = new EventEmitter<ViewSaveEvent>();
+
+  /**
+   * Emitted when default view settings should be saved to user settings
+   * (Used for dynamic/default views that persist to MJ: User Settings)
+   */
+  @Output() saveDefaults = new EventEmitter<ViewSaveEvent>();
 
   /**
    * Emitted when the view should be deleted
@@ -131,6 +155,20 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
   // Drag state for column reordering
   public draggedColumn: ColumnConfig | null = null;
+  public dropTargetColumn: ColumnConfig | null = null;
+  public dropPosition: 'before' | 'after' | null = null;
+
+  // Column format editing state
+  public formatEditingColumn: ColumnConfig | null = null;
+
+  // Panel resize state
+  public isResizing: boolean = false;
+  public panelWidth: number = 400;
+  private readonly MIN_PANEL_WIDTH = 320;
+  private readonly MAX_PANEL_WIDTH = 800;
+  private readonly DEFAULT_PANEL_WIDTH = 400;
+  private resizeStartX: number = 0;
+  private resizeStartWidth: number = 0;
 
   private metadata = new Metadata();
 
@@ -138,14 +176,65 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
   /**
    * Handle keyboard shortcuts
-   * Escape: Close the panel
+   * Escape: Close the panel or format sub-panel
    */
   @HostListener('document:keydown.escape')
   handleEscape(): void {
-    if (this.isOpen) {
+    if (this.formatEditingColumn) {
+      this.closeFormatEditor();
+    } else if (this.isOpen) {
       this.onClose();
     }
   }
+
+  // ========================================
+  // PANEL RESIZE HANDLERS
+  // ========================================
+
+  /**
+   * Start resizing the panel
+   */
+  onResizeStart(event: MouseEvent): void {
+    event.preventDefault();
+    this.isResizing = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.panelWidth;
+
+    // Add document-level listeners for mouse move and up
+    document.addEventListener('mousemove', this.onResizeMove);
+    document.addEventListener('mouseup', this.onResizeEnd);
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  /**
+   * Handle resize movement (bound to document)
+   */
+  private onResizeMove = (event: MouseEvent): void => {
+    if (!this.isResizing) return;
+
+    // Calculate new width (panel is on the right, so moving left increases width)
+    const deltaX = this.resizeStartX - event.clientX;
+    let newWidth = this.resizeStartWidth + deltaX;
+
+    // Clamp to min/max bounds
+    newWidth = Math.max(this.MIN_PANEL_WIDTH, Math.min(this.MAX_PANEL_WIDTH, newWidth));
+
+    this.panelWidth = newWidth;
+    this.cdr.detectChanges();
+  };
+
+  /**
+   * End resizing the panel (bound to document)
+   */
+  private onResizeEnd = (): void => {
+    this.isResizing = false;
+    document.removeEventListener('mousemove', this.onResizeMove);
+    document.removeEventListener('mouseup', this.onResizeEnd);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    this.cdr.detectChanges();
+  };
 
   ngOnInit(): void {
     this.initializeFromEntity();
@@ -156,6 +245,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     if (changes['isOpen'] && this.isOpen) {
       this.activeTab = 'columns';
       this.columnSearchText = '';
+      this.formatEditingColumn = null;
     }
 
     if (changes['entity'] || changes['viewEntity'] || changes['currentGridState']) {
@@ -185,10 +275,12 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         fieldId: field.ID,
         fieldName: field.Name,
         displayName: field.DisplayNameOrName,
+        userDisplayName: undefined,
         visible: field.DefaultInView,
         width: field.DefaultColumnWidth || null,
         orderIndex: index,
-        field
+        field,
+        format: undefined
       }));
 
     // Priority 1: Use currentGridState if available (reflects live grid state including resizes)
@@ -215,6 +307,14 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
             column.visible = !vc.hidden;
             column.width = vc.width || null;
             column.orderIndex = vc.orderIndex ?? idx;
+            // Apply userDisplayName if present
+            if (vc.userDisplayName) {
+              column.userDisplayName = vc.userDisplayName;
+            }
+            // Apply format if present
+            if (vc.format) {
+              column.format = vc.format;
+            }
           }
         });
 
@@ -256,7 +356,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       } else {
         // Default to smart mode for new/empty filters (promote AI filtering)
         this.filterMode = 'smart';
-        this.smartFilterEnabled = true; // Enable smart filter when defaulting to smart mode
+        this.smartFilterEnabled = true;
       }
     } else {
       // Default view - use entity defaults
@@ -272,7 +372,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       this.filterState = createEmptyFilter();
       // Default to smart mode (promote AI filtering)
       this.filterMode = 'smart';
-      this.smartFilterEnabled = true; // Enable smart filter when defaulting to smart mode
+      this.smartFilterEnabled = true;
     }
 
     this.cdr.detectChanges();
@@ -403,7 +503,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   /**
    * Apply grid state column settings to the columns array
    */
-  private applyGridStateToColumns(gridColumns: ViewColumnConfig[]): void {
+  private applyGridStateToColumns(gridColumns: ViewGridColumnSetting[]): void {
     // Mark all columns as hidden initially
     this.columns.forEach(c => c.visible = false);
 
@@ -416,6 +516,14 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         column.orderIndex = gc.orderIndex ?? idx;
         if (gc.DisplayName) {
           column.displayName = gc.DisplayName;
+        }
+        // Apply userDisplayName if present
+        if (gc.userDisplayName) {
+          column.userDisplayName = gc.userDisplayName;
+        }
+        // Apply format if present
+        if (gc.format) {
+          column.format = gc.format;
         }
       }
     });
@@ -522,6 +630,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     }
   }
 
+  // ========================================
+  // DRAG AND DROP WITH DROP INDICATOR
+  // ========================================
+
   /**
    * Handle drag start for column reordering
    */
@@ -529,16 +641,46 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     this.draggedColumn = column;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', column.fieldId);
     }
+    // Add dragging class to the element
+    (event.target as HTMLElement).classList.add('dragging');
   }
 
   /**
-   * Handle drag over for column reordering
+   * Handle drag over for column reordering - determines drop position
    */
   onDragOver(event: DragEvent, column: ColumnConfig): void {
     event.preventDefault();
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
+    }
+
+    if (!this.draggedColumn || this.draggedColumn === column) {
+      this.dropTargetColumn = null;
+      this.dropPosition = null;
+      return;
+    }
+
+    // Calculate if we're in the top or bottom half of the target
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const threshold = rect.height / 2;
+
+    this.dropTargetColumn = column;
+    this.dropPosition = y < threshold ? 'before' : 'after';
+  }
+
+  /**
+   * Handle drag leave - clear drop indicator
+   */
+  onDragLeave(event: DragEvent): void {
+    // Only clear if we're leaving the column item, not entering a child element
+    const relatedTarget = event.relatedTarget as HTMLElement;
+    const currentTarget = event.currentTarget as HTMLElement;
+    if (!currentTarget.contains(relatedTarget)) {
+      this.dropTargetColumn = null;
+      this.dropPosition = null;
     }
   }
 
@@ -547,37 +689,304 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    */
   onDrop(event: DragEvent, targetColumn: ColumnConfig): void {
     event.preventDefault();
-    if (this.draggedColumn && this.draggedColumn !== targetColumn) {
-      const draggedIndex = this.draggedColumn.orderIndex;
-      const targetIndex = targetColumn.orderIndex;
 
-      // Reorder columns
-      if (draggedIndex < targetIndex) {
-        this.columns.forEach(c => {
-          if (c.orderIndex > draggedIndex && c.orderIndex <= targetIndex) {
-            c.orderIndex--;
-          }
-        });
-      } else {
-        this.columns.forEach(c => {
-          if (c.orderIndex >= targetIndex && c.orderIndex < draggedIndex) {
-            c.orderIndex++;
-          }
-        });
+    if (this.draggedColumn && this.draggedColumn !== targetColumn && this.dropPosition) {
+      const visibleCols = this.visibleColumns;
+      const draggedIndex = visibleCols.indexOf(this.draggedColumn);
+      let targetIndex = visibleCols.indexOf(targetColumn);
+
+      // Adjust target index based on drop position
+      if (this.dropPosition === 'after') {
+        targetIndex++;
       }
-      this.draggedColumn.orderIndex = targetIndex;
-      this.columns.sort((a, b) => a.orderIndex - b.orderIndex);
+
+      // If dragging from before target, adjust for removal
+      if (draggedIndex < targetIndex) {
+        targetIndex--;
+      }
+
+      // Reorder the columns
+      this.reorderColumn(this.draggedColumn, targetIndex);
     }
-    this.draggedColumn = null;
-    this.cdr.detectChanges();
+
+    this.clearDragState();
   }
 
   /**
    * Handle drag end
    */
-  onDragEnd(): void {
-    this.draggedColumn = null;
+  onDragEnd(event: DragEvent): void {
+    (event.target as HTMLElement).classList.remove('dragging');
+    this.clearDragState();
   }
+
+  /**
+   * Clear all drag state
+   */
+  private clearDragState(): void {
+    this.draggedColumn = null;
+    this.dropTargetColumn = null;
+    this.dropPosition = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Reorder a column to a new position
+   */
+  private reorderColumn(column: ColumnConfig, newIndex: number): void {
+    const visibleCols = this.visibleColumns;
+
+    // Remove from current position
+    const currentIndex = visibleCols.indexOf(column);
+    if (currentIndex === newIndex) return;
+
+    // Update order indices
+    visibleCols.forEach((col, idx) => {
+      if (col === column) {
+        col.orderIndex = newIndex;
+      } else if (currentIndex < newIndex) {
+        // Dragging down - shift items between old and new position up
+        if (idx > currentIndex && idx <= newIndex) {
+          col.orderIndex = idx - 1;
+        }
+      } else {
+        // Dragging up - shift items between new and old position down
+        if (idx >= newIndex && idx < currentIndex) {
+          col.orderIndex = idx + 1;
+        }
+      }
+    });
+
+    // Re-sort all columns by orderIndex
+    this.columns.sort((a, b) => a.orderIndex - b.orderIndex);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Check if drop indicator should show before a column
+   */
+  isDropBefore(column: ColumnConfig): boolean {
+    return this.dropTargetColumn === column && this.dropPosition === 'before';
+  }
+
+  /**
+   * Check if drop indicator should show after a column
+   */
+  isDropAfter(column: ColumnConfig): boolean {
+    return this.dropTargetColumn === column && this.dropPosition === 'after';
+  }
+
+  // ========================================
+  // COLUMN FORMAT EDITOR
+  // ========================================
+
+  /**
+   * Open the format editor for a column
+   */
+  openFormatEditor(column: ColumnConfig): void {
+    // Initialize format if not present
+    if (!column.format) {
+      column.format = this.getDefaultFormat(column.field);
+    }
+    this.formatEditingColumn = column;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Close the format editor
+   */
+  closeFormatEditor(): void {
+    this.formatEditingColumn = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Get default format based on field type
+   */
+  private getDefaultFormat(field: EntityFieldInfo): ColumnFormat {
+    const sqlType = field.Type.toLowerCase();
+
+    if (sqlType.includes('money') || sqlType.includes('currency')) {
+      return { type: 'currency', decimals: 2, currencyCode: 'USD', thousandsSeparator: true };
+    }
+    if (sqlType.includes('percent')) {
+      return { type: 'percent', decimals: 1 };
+    }
+    if (sqlType.includes('decimal') || sqlType.includes('numeric') || sqlType.includes('float') || sqlType.includes('real')) {
+      return { type: 'number', decimals: 2, thousandsSeparator: true };
+    }
+    if (sqlType.includes('int')) {
+      return { type: 'number', decimals: 0, thousandsSeparator: true };
+    }
+    if (sqlType.includes('datetime')) {
+      return { type: 'datetime', dateFormat: 'medium' };
+    }
+    if (sqlType.includes('date')) {
+      return { type: 'date', dateFormat: 'medium' };
+    }
+    if (sqlType.includes('bit') || sqlType === 'boolean') {
+      return { type: 'boolean', trueLabel: 'Yes', falseLabel: 'No', booleanDisplay: 'text' };
+    }
+
+    return { type: 'auto' };
+  }
+
+  /**
+   * Check if a column has custom formatting applied
+   */
+  hasCustomFormat(column: ColumnConfig): boolean {
+    return !!column.format && column.format.type !== 'auto';
+  }
+
+  /**
+   * Clear formatting for a column
+   */
+  clearColumnFormat(column: ColumnConfig): void {
+    column.format = undefined;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Get sample values for preview
+   */
+  getSampleValues(column: ColumnConfig): unknown[] {
+    if (!this.sampleData || this.sampleData.length === 0) {
+      return this.getPlaceholderSamples(column.field);
+    }
+    return this.sampleData
+      .slice(0, 5)
+      .map(row => row[column.fieldName])
+      .filter(v => v != null);
+  }
+
+  /**
+   * Get placeholder sample values when no data available
+   */
+  private getPlaceholderSamples(field: EntityFieldInfo): unknown[] {
+    const sqlType = field.Type.toLowerCase();
+
+    if (sqlType.includes('money') || sqlType.includes('decimal') || sqlType.includes('numeric')) {
+      return [1234.56, -567.89, 10000.00, 0.50, 999999.99];
+    }
+    if (sqlType.includes('int')) {
+      return [42, 100, 1500, 0, -25];
+    }
+    if (sqlType.includes('date')) {
+      const now = new Date();
+      return [
+        new Date(now.getTime() - 86400000),
+        new Date(now.getTime() - 172800000),
+        now,
+        new Date(now.getTime() + 86400000),
+        new Date(now.getTime() - 604800000)
+      ];
+    }
+    if (sqlType.includes('bit') || sqlType === 'boolean') {
+      return [true, false, true, false, true];
+    }
+
+    return ['Sample', 'Text', 'Values', 'Here', 'Preview'];
+  }
+
+  /**
+   * Format a value for preview display
+   */
+  formatPreviewValue(value: unknown, format: ColumnFormat | undefined): string {
+    if (value == null) return '—';
+    if (!format || format.type === 'auto') return String(value);
+
+    switch (format.type) {
+      case 'number':
+        return this.formatNumber(value as number, format);
+      case 'currency':
+        return this.formatCurrency(value as number, format);
+      case 'percent':
+        return this.formatPercent(value as number, format);
+      case 'date':
+      case 'datetime':
+        return this.formatDate(value as Date, format);
+      case 'boolean':
+        return this.formatBoolean(value as boolean, format);
+      default:
+        return String(value);
+    }
+  }
+
+  private formatNumber(value: number, format: ColumnFormat): string {
+    const options: Intl.NumberFormatOptions = {
+      minimumFractionDigits: format.decimals ?? 0,
+      maximumFractionDigits: format.decimals ?? 0,
+      useGrouping: format.thousandsSeparator ?? true
+    };
+    return new Intl.NumberFormat('en-US', options).format(value);
+  }
+
+  private formatCurrency(value: number, format: ColumnFormat): string {
+    const options: Intl.NumberFormatOptions = {
+      style: 'currency',
+      currency: format.currencyCode || 'USD',
+      minimumFractionDigits: format.decimals ?? 2,
+      maximumFractionDigits: format.decimals ?? 2
+    };
+    return new Intl.NumberFormat('en-US', options).format(value);
+  }
+
+  private formatPercent(value: number, format: ColumnFormat): string {
+    const options: Intl.NumberFormatOptions = {
+      style: 'percent',
+      minimumFractionDigits: format.decimals ?? 0,
+      maximumFractionDigits: format.decimals ?? 0
+    };
+    // Assume value is already a percentage (e.g., 50 = 50%), divide by 100
+    return new Intl.NumberFormat('en-US', options).format(value / 100);
+  }
+
+  private formatDate(value: Date, format: ColumnFormat): string {
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+
+    // Parse format string - check for weekday variants
+    const formatStr = format.dateFormat || 'medium';
+    const includeWeekday = formatStr.includes('-weekday');
+    const baseFormat = formatStr.replace('-weekday', '') as 'short' | 'medium' | 'long';
+
+    let options: Intl.DateTimeFormatOptions;
+
+    // Intl.DateTimeFormat doesn't allow combining dateStyle with weekday
+    // So we must use individual components when weekday is requested
+    if (includeWeekday) {
+      if (baseFormat === 'short') {
+        options = { weekday: 'short', month: 'numeric', day: 'numeric', year: '2-digit' };
+      } else if (baseFormat === 'long') {
+        options = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+      } else {
+        // medium
+        options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+      }
+      if (format.type === 'datetime') {
+        options.hour = 'numeric';
+        options.minute = '2-digit';
+      }
+    } else {
+      // No weekday - can use dateStyle shorthand
+      options = {
+        dateStyle: baseFormat === 'short' ? 'short' : baseFormat === 'long' ? 'long' : 'medium'
+      };
+      if (format.type === 'datetime') {
+        options.timeStyle = 'short';
+      }
+    }
+
+    return new Intl.DateTimeFormat('en-US', options).format(date);
+  }
+
+  private formatBoolean(value: boolean, format: ColumnFormat): string {
+    return value ? (format.trueLabel || 'Yes') : (format.falseLabel || 'No');
+  }
+
+  // ========================================
+  // CLOSE / SAVE / DELETE
+  // ========================================
 
   /**
    * Close the panel
@@ -597,6 +1006,9 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Save the view
    */
   onSave(): void {
+    // Guard against double-clicks or rapid repeated calls
+    if (this.isSaving) return;
+
     this.save.emit({
       name: this.viewName,
       description: this.viewDescription,
@@ -615,11 +1027,36 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    * Save as a new view
    */
   onSaveAsNew(): void {
+    // Guard against double-clicks or rapid repeated calls
+    if (this.isSaving) return;
+
     this.save.emit({
       name: this.viewName || 'New View',
       description: this.viewDescription,
       isShared: this.isShared,
       saveAsNew: true,
+      columns: this.visibleColumns,
+      sortField: this.sortField,
+      sortDirection: this.sortDirection,
+      smartFilterEnabled: this.smartFilterEnabled,
+      smartFilterPrompt: this.smartFilterPrompt,
+      filterState: this.hasActiveFilters() ? this.filterState : null
+    });
+  }
+
+  /**
+   * Save default view settings to user settings
+   * Used for dynamic/default views that don't have a stored view entity
+   */
+  onSaveDefaults(): void {
+    // Guard against double-clicks or rapid repeated calls
+    if (this.isSaving) return;
+
+    this.saveDefaults.emit({
+      name: 'Default',
+      description: '',
+      isShared: false,
+      saveAsNew: false,
       columns: this.visibleColumns,
       sortField: this.sortField,
       sortDirection: this.sortDirection,
@@ -643,6 +1080,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    */
   setActiveTab(tab: 'columns' | 'filters' | 'settings'): void {
     this.activeTab = tab;
+    this.formatEditingColumn = null; // Close format editor when switching tabs
     this.cdr.detectChanges();
   }
 
@@ -675,6 +1113,83 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
    */
   applySmartFilterExample(example: string): void {
     this.smartFilterPrompt = example;
+    this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // STYLE UPDATE HELPERS
+  // ========================================
+
+  /**
+   * Toggle a header style property
+   */
+  toggleHeaderStyle(prop: keyof ColumnTextStyle): void {
+    if (!this.formatEditingColumn?.format) return;
+
+    const format = this.formatEditingColumn.format;
+    if (!format.headerStyle) {
+      format.headerStyle = {};
+    }
+
+    if (prop === 'bold' || prop === 'italic' || prop === 'underline') {
+      format.headerStyle[prop] = !format.headerStyle[prop];
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Update the user-defined display name for a column
+   */
+  updateUserDisplayName(value: string): void {
+    if (!this.formatEditingColumn) return;
+
+    // Set to undefined if empty string, otherwise use the value
+    this.formatEditingColumn.userDisplayName = value.trim() || undefined;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Update a header style color property
+   */
+  updateHeaderColor(prop: 'color' | 'backgroundColor', value: string): void {
+    if (!this.formatEditingColumn?.format) return;
+
+    const format = this.formatEditingColumn.format;
+    if (!format.headerStyle) {
+      format.headerStyle = {};
+    }
+    format.headerStyle[prop] = value;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle a cell style property
+   */
+  toggleCellStyle(prop: keyof ColumnTextStyle): void {
+    if (!this.formatEditingColumn?.format) return;
+
+    const format = this.formatEditingColumn.format;
+    if (!format.cellStyle) {
+      format.cellStyle = {};
+    }
+
+    if (prop === 'bold' || prop === 'italic' || prop === 'underline') {
+      format.cellStyle[prop] = !format.cellStyle[prop];
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Update a cell style color property
+   */
+  updateCellColor(prop: 'color' | 'backgroundColor', value: string): void {
+    if (!this.formatEditingColumn?.format) return;
+
+    const format = this.formatEditingColumn.format;
+    if (!format.cellStyle) {
+      format.cellStyle = {};
+    }
+    format.cellStyle[prop] = value;
     this.cdr.detectChanges();
   }
 }

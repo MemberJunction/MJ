@@ -192,6 +192,31 @@ export type PanelWidthMode = 'normal' | 'full-width';
             border-left: 3px solid #3b82f6;
         }
 
+        /* Related entity sections contain grids that need more vertical space */
+        .form-card.related-entity .form-body {
+            max-height: none;
+            min-height: 300px;
+            height: 400px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Ensure wrapper div and grid inside take full height */
+        .form-card.related-entity .form-body > ::ng-deep div {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .form-card.related-entity .form-body ::ng-deep mj-entity-data-grid,
+        .form-card.related-entity .form-body ::ng-deep mj-explorer-entity-data-grid {
+            flex: 1;
+            display: block;
+            min-height: 0;
+        }
+
         .form-card.related-entity .collapsible-header {
             background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
         }
@@ -249,6 +274,7 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit, O
     @Input() variant: 'default' | 'related-entity' = 'default';
     @Input() badgeCount: number | undefined;
     @Input() entityName: string = ''; // For display/reference purposes
+    @Input() defaultExpanded: boolean | undefined; // Default expanded state when no persisted state exists
 
     @Output() widthModeChange = new EventEmitter<PanelWidthMode>();
 
@@ -266,7 +292,7 @@ export class CollapsiblePanelComponent implements OnChanges, AfterContentInit, O
 
 
     get expanded(): boolean {
-        return this.form ? this.form.IsSectionExpanded(this.sectionKey) : true;
+        return this.form ? this.form.IsSectionExpanded(this.sectionKey, this.defaultExpanded) : true;
     }
 
     displayName: string = '';
