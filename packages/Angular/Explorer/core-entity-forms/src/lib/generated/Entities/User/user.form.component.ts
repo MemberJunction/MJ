@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { UserEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Users') // Tell MemberJunction about this class
 @Component({
@@ -59,6 +59,8 @@ export class UserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJConversationDetailRatings', sectionName: 'MJ: Conversation Detail Ratings', isExpanded: false },
             { sectionKey: 'mJDashboardUserPreferences', sectionName: 'MJ: Dashboard User Preferences', isExpanded: false },
             { sectionKey: 'mJDashboardUserStates', sectionName: 'MJ: Dashboard User States', isExpanded: false },
+            { sectionKey: 'mJListInvitations', sectionName: 'MJ: List Invitations', isExpanded: false },
+            { sectionKey: 'mJListShares', sectionName: 'MJ: List Shares', isExpanded: false },
             { sectionKey: 'mJPublicLinks', sectionName: 'MJ: Public Links', isExpanded: false },
             { sectionKey: 'mJReportUserStates', sectionName: 'MJ: Report User States', isExpanded: false },
             { sectionKey: 'mJScheduledJobRuns', sectionName: 'MJ: Scheduled Job Runs', isExpanded: false },

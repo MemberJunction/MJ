@@ -1,0 +1,163 @@
+<kendo-dialog
+  *ngIf="visible"
+  [title]="dialogTitle"
+  [width]="500"
+  [minWidth]="400"
+  (close)="onCancel()">
+
+  <div class="share-dialog-content">
+    <!-- Loading state -->
+    <div *ngIf="loading" class="loading-container">
+      <mj-loading text="Loading shares..."></mj-loading>
+    </div>
+
+    <ng-container *ngIf="!loading">
+      <!-- Add new share section -->
+      <div class="add-share-section" *ngIf="canModifyShares">
+        <h4 class="section-title">Add people or roles</h4>
+
+        <!-- Search type toggle -->
+        <div class="search-type-toggle">
+          <button kendoButton
+                  [fillMode]="searchType === 'User' ? 'solid' : 'outline'"
+                  [themeColor]="searchType === 'User' ? 'primary' : 'base'"
+                  (click)="setSearchType('User')">
+            <i class="fa-solid fa-user"></i> Users
+          </button>
+          <button kendoButton
+                  [fillMode]="searchType === 'Role' ? 'solid' : 'outline'"
+                  [themeColor]="searchType === 'Role' ? 'primary' : 'base'"
+                  (click)="setSearchType('Role')">
+            <i class="fa-solid fa-users"></i> Roles
+          </button>
+        </div>
+
+        <!-- Search input -->
+        <div class="search-container">
+          <kendo-textbox
+            [value]="searchText"
+            (valueChange)="onSearchInput($event)"
+            [placeholder]="'Search for ' + (searchType === 'User' ? 'users' : 'roles') + '...'"
+            [clearButton]="true"
+            (blur)="showSearchResults = false">
+            <ng-template kendoTextBoxPrefixTemplate>
+              <i class="fa-solid fa-search search-icon"></i>
+            </ng-template>
+          </kendo-textbox>
+
+          <!-- Search results dropdown -->
+          <div class="search-results" *ngIf="showSearchResults && searchResults.length > 0">
+            <div class="search-result-item"
+                 *ngFor="let recipient of searchResults"
+                 (mousedown)="selectRecipient(recipient)">
+              <i [class]="getShareTypeIcon(recipient.type)"></i>
+              <div class="recipient-info">
+                <span class="recipient-name">{{ recipient.name }}</span>
+                <span class="recipient-email" *ngIf="recipient.email">{{ recipient.email }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selected recipient and permission -->
+        <div class="selected-recipient" *ngIf="selectedRecipient">
+          <div class="recipient-chip">
+            <i [class]="getShareTypeIcon(selectedRecipient.type)"></i>
+            <span>{{ selectedRecipient.name }}</span>
+            <button kendoButton [look]="'flat'" [icon]="'close'" (click)="clearSearch()"></button>
+          </div>
+
+          <kendo-dropdownlist
+            [data]="permissionOptions"
+            [textField]="'label'"
+            [valueField]="'value'"
+            [(ngModel)]="selectedPermission"
+            [valuePrimitive]="true"
+            class="permission-dropdown">
+            <ng-template kendoDropDownListItemTemplate let-dataItem>
+              <div class="permission-option">
+                <span class="permission-label">{{ dataItem.label }}</span>
+                <span class="permission-desc">{{ dataItem.description }}</span>
+              </div>
+            </ng-template>
+          </kendo-dropdownlist>
+
+          <button kendoButton
+                  themeColor="primary"
+                  [disabled]="saving"
+                  (click)="addShare()">
+            <i class="fa-solid fa-plus"></i> Add
+          </button>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <hr class="section-divider" *ngIf="currentShares.length > 0 && canModifyShares">
+
+      <!-- Current shares section -->
+      <div class="current-shares-section" *ngIf="currentShares.length > 0">
+        <h4 class="section-title">People with access</h4>
+
+        <div class="share-list">
+          <div class="share-item" *ngFor="let share of currentShares">
+            <div class="share-info">
+              <i [class]="getShareTypeIcon(share.type)" class="share-type-icon"></i>
+              <div class="share-details">
+                <span class="share-name">{{ share.recipientName }}</span>
+                <span class="share-email" *ngIf="share.recipientEmail">{{ share.recipientEmail }}</span>
+                <span class="share-type-label" *ngIf="share.type === 'Role'">Role</span>
+              </div>
+            </div>
+
+            <div class="share-actions">
+              <kendo-dropdownlist
+                *ngIf="canModifyShares"
+                [data]="permissionOptions"
+                [textField]="'label'"
+                [valueField]="'value'"
+                [value]="share.permissionLevel"
+                [valuePrimitive]="true"
+                (valueChange)="updateSharePermission(share, $event)"
+                [disabled]="saving"
+                class="permission-dropdown-small">
+              </kendo-dropdownlist>
+
+              <span class="permission-badge" *ngIf="!canModifyShares">
+                {{ getPermissionLabel(share.permissionLevel) }}
+              </span>
+
+              <button kendoButton
+                      *ngIf="canModifyShares"
+                      [look]="'flat'"
+                      [icon]="'trash'"
+                      title="Remove access"
+                      [disabled]="saving"
+                      (click)="removeShare(share)">
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty-state" *ngIf="currentShares.length === 0 && !loading">
+        <i class="fa-solid fa-share-nodes empty-icon"></i>
+        <p>This list hasn't been shared with anyone yet.</p>
+        <p *ngIf="canModifyShares" class="empty-hint">
+          Use the search above to find users or roles to share with.
+        </p>
+      </div>
+
+      <!-- Read-only notice -->
+      <div class="readonly-notice" *ngIf="!canModifyShares">
+        <i class="fa-solid fa-info-circle"></i>
+        <span>Only the list owner can manage sharing.</span>
+      </div>
+    </ng-container>
+  </div>
+
+  <kendo-dialog-actions>
+    <button kendoButton themeColor="primary" (click)="onDone()">Done</button>
+    <button kendoButton (click)="onCancel()">Cancel</button>
+  </kendo-dialog-actions>
+</kendo-dialog>

@@ -96,16 +96,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJEncryptionKeys')">
+        [badgeCount]="GetSectionRowCount('mJEncryptionKeys')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Encryption Keys','EncryptionAlgorithmID')"
                 [NewRecordValues]="NewRecordValues('MJ: Encryption Keys')"
                 [AllowLoad]="IsSectionExpanded('mJEncryptionKeys')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('mJEncryptionKeys', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJEncryptionKeys', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

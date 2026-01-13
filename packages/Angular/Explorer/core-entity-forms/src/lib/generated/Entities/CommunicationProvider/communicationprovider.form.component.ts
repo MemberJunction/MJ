@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { CommunicationProviderEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 import { JoinGridComponent } from "@memberjunction/ng-join-grid"
 
 @RegisterClass(BaseFormComponent, 'Communication Providers') // Tell MemberJunction about this class

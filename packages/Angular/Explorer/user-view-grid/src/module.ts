@@ -20,6 +20,7 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { EntityCommunicationsModule } from '@memberjunction/ng-entity-communications';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 
 @NgModule({
   declarations: [
@@ -42,7 +43,8 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     IndicatorsModule,
     EntityCommunicationsModule,
     ResourcePermissionsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    ListManagementModule
   ],
   exports: [
     UserViewGridComponent
