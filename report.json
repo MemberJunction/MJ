@@ -1,0 +1,179 @@
+{
+  "individualResults": [
+    {
+      "initialSchemaVersion": null,
+      "targetSchemaVersion": null,
+      "schemaName": "__mj",
+      "migrations": [],
+      "migrationsExecuted": 0,
+      "success": false,
+      "flywayVersion": "9.22.3",
+      "database": "MJ_v3_Test_v2_133_0",
+      "warnings": [],
+      "timestamp": "2026-01-12T23:52:28.488682",
+      "operation": "migrate",
+      "exception": "Migration B202601122300__v3.0_Baseline.sql failed\n-------------------------------------------------\nSQL State  : S0001\nError Code : 2714\nMessage    : There is already an object named \u0027flyway_schema_history\u0027 in the database.\nLocation   : ./migrations/v3/B202601122300__v3.0_Baseline.sql (/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/v3/B202601122300__v3.0_Baseline.sql)\nLine       : 55329\nStatement  : CREATE TABLE [__mj].[flyway_schema_history]\n(\n[installed_rank] [int] NOT NULL,\n[version] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,\n[description] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,\n[type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,\n[script] [nvarchar] (1000) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,\n[checksum] [int] NULL,\n[installed_by] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,\n[installed_on] [datetime] NOT NULL CONSTRAINT [DF__flyway_sc__insta__36B12243] DEFAULT (getdate()),\n[execution_time] [int] NOT NULL,\n[success] [bit] NOT NULL\n)\n",
+      "licenseFailed": false
+    },
+    {
+      "initialSchemaVersion": null,
+      "targetSchemaVersion": "202601122300",
+      "schemaName": "__mj",
+      "migrations": [
+        {
+          "category": "Baseline",
+          "version": "202601122300",
+          "description": "v3.0 Baseline",
+          "type": "SQL_BASELINE",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/v3/B202601122300__v3.0_Baseline.sql",
+          "executionTime": 26195
+        },
+        {
+          "category": "Repeatable",
+          "version": "",
+          "description": "RefreshMetadata",
+          "type": "SQL",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/R__RefreshMetadata.sql",
+          "executionTime": 16550
+        }
+      ],
+      "migrationsExecuted": 2,
+      "success": true,
+      "flywayVersion": "9.22.3",
+      "database": "MJ_v3_Test_v2_133_0",
+      "warnings": [],
+      "timestamp": "2026-01-12T23:58:26.948709",
+      "operation": "migrate",
+      "exception": null,
+      "licenseFailed": false
+    },
+    {
+      "initialSchemaVersion": null,
+      "targetSchemaVersion": "202601122300",
+      "schemaName": "__mj",
+      "migrations": [
+        {
+          "category": "Baseline",
+          "version": "202601122300",
+          "description": "v3.0 Baseline",
+          "type": "SQL_BASELINE",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/v3/B202601122300__v3.0_Baseline.sql",
+          "executionTime": 25343
+        },
+        {
+          "category": "Repeatable",
+          "version": "",
+          "description": "RefreshMetadata",
+          "type": "SQL",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/R__RefreshMetadata.sql",
+          "executionTime": 16407
+        }
+      ],
+      "migrationsExecuted": 2,
+      "success": true,
+      "flywayVersion": "9.22.3",
+      "database": "MJ_v3_Test_v2_133_0",
+      "warnings": [],
+      "timestamp": "2026-01-13T00:07:31.906570",
+      "operation": "migrate",
+      "exception": null,
+      "licenseFailed": false
+    },
+    {
+      "initialSchemaVersion": null,
+      "targetSchemaVersion": "202601122300",
+      "schemaName": "__mj",
+      "migrations": [
+        {
+          "category": "Baseline",
+          "version": "202601122300",
+          "description": "v3.0 Baseline",
+          "type": "SQL_BASELINE",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/v3/B202601122300__v3.0_Baseline.sql",
+          "executionTime": 28050
+        },
+        {
+          "category": "Repeatable",
+          "version": "",
+          "description": "RefreshMetadata",
+          "type": "SQL",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/R__RefreshMetadata.sql",
+          "executionTime": 16677
+        }
+      ],
+      "migrationsExecuted": 2,
+      "success": true,
+      "flywayVersion": "9.22.3",
+      "database": "MJ_v3_Test_v2_133_0",
+      "warnings": [],
+      "timestamp": "2026-01-13T00:38:40.610046",
+      "operation": "migrate",
+      "exception": null,
+      "licenseFailed": false
+    },
+    {
+      "initialSchemaVersion": null,
+      "targetSchemaVersion": "202601122300",
+      "schemaName": "__mj",
+      "migrations": [
+        {
+          "category": "Baseline",
+          "version": "202601122300",
+          "description": "v3.0 Baseline",
+          "type": "SQL_BASELINE",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/v3/B202601122300__v3.0_Baseline.sql",
+          "executionTime": 22099
+        },
+        {
+          "category": "Repeatable",
+          "version": "",
+          "description": "RefreshMetadata",
+          "type": "SQL",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/R__RefreshMetadata.sql",
+          "executionTime": 16196
+        }
+      ],
+      "migrationsExecuted": 2,
+      "success": true,
+      "flywayVersion": "9.22.3",
+      "database": "MJ_v3_Test_v2_133_0",
+      "warnings": [],
+      "timestamp": "2026-01-13T00:47:11.995359",
+      "operation": "migrate",
+      "exception": null,
+      "licenseFailed": false
+    },
+    {
+      "initialSchemaVersion": null,
+      "targetSchemaVersion": "202601122300",
+      "schemaName": "__mj",
+      "migrations": [
+        {
+          "category": "Baseline",
+          "version": "202601122300",
+          "description": "v3.0 Baseline",
+          "type": "SQL_BASELINE",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/v3/B202601122300__v3.0_Baseline.sql",
+          "executionTime": 33958
+        },
+        {
+          "category": "Repeatable",
+          "version": "",
+          "description": "RefreshMetadata",
+          "type": "SQL",
+          "filepath": "/Users/rkihm/Documents/GitHub/rkihm-BC/MJ/./migrations/R__RefreshMetadata.sql",
+          "executionTime": 17526
+        }
+      ],
+      "migrationsExecuted": 2,
+      "success": true,
+      "flywayVersion": "9.22.3",
+      "database": "MJ_v3_Test_v2_133_0",
+      "warnings": [],
+      "timestamp": "2026-01-13T07:51:41.247132",
+      "operation": "migrate",
+      "exception": null,
+      "licenseFailed": false
+    }
+  ]
+}

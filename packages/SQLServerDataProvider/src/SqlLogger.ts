@@ -428,7 +428,15 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       const concatenated = chunks
         .map((chunk, index) => {
           const prefix = index === 0 ? '' : indent;
-          return `${prefix}${unicodePrefix}'${chunk}'`;
+          const literal = `${unicodePrefix}'${chunk}'`;
+          // Wrap first chunk with CAST to prevent SQL Server 4000/8000 char truncation
+          // SQL Server implicitly converts string literals to NVARCHAR(4000)/VARCHAR(8000),
+          // causing truncation even when assigning to MAX fields. Explicit CAST fixes this.
+          if (index === 0) {
+            const dataType = isUnicode ? 'NVARCHAR(MAX)' : 'VARCHAR(MAX)';
+            return `${prefix}CAST(${literal} AS ${dataType})`;
+          }
+          return `${prefix}${literal}`;
         })
         .join(' +\n');
 

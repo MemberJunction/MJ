@@ -40,7 +40,7 @@ const mjConfigSchemaOptional = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
-  baselineVersion: z.string().optional().default('202601071900'),
+  baselineVersion: z.string().optional().default('202601122300'),
   baselineOnMigrate: z.boolean().optional().default(true),
 });
 
