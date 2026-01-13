@@ -25,7 +25,6 @@
     "@memberjunction/graphql-dataprovider": "^2.129.0",
     "@memberjunction/ng-auth-services": "^2.129.0",
     "@memberjunction/ng-shared": "^2.129.0",
-    "@memberjunction/ng-explorer-core": "^2.129.0",
     "rxjs": "^7.8.1"
   },
   "dependencies": {},

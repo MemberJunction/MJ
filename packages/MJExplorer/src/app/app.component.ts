@@ -1,158 +1,17 @@
 /**
  * MemberJunction Explorer - Application Component
  *
- * MJ 3.0 Pattern: Delegates all business logic to WorkspaceInitializerService
- * Reduced from 242 lines to ~100 lines by using packaged initialization service
+ * MJ 3.0 Minimal App Shell Pattern:
+ * Reduced from 158 lines to 12 lines by using @memberjunction/ng-explorer-app
  */
 
-import { DOCUMENT } from '@angular/common';
-import { Component, Inject, OnInit, ViewEncapsulation } from '@angular/core';
-import { Router } from '@angular/router';
-import { LogError, SetProductionStatus } from '@memberjunction/core';
-import { take } from 'rxjs/operators';
-import { environment } from '../environments/environment';
+import { Component } from '@angular/core';
 import { LoadGeneratedEntities } from 'mj_generatedentities';
-import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
-import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 
 LoadGeneratedEntities(); // forces the generated entities library to load up, sometimes tree shaking in the build process can break this, so this is a workaround that ensures it always happens
 
 @Component({
-  encapsulation: ViewEncapsulation.None,
   selector: 'app-root',
-  templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css'],
+  template: '<mj-explorer-app></mj-explorer-app>'
 })
-export class AppComponent implements OnInit {
-  public title = 'MJ Explorer';
-  public initalPath = '/';
-  public HasError = false;
-  public ErrorMessage: any = '';
-  public environment = environment;
-  public subHeaderText: string = "Welcome back! Please log in to your account.";
-  public showValidationOnly = false;
-
-
-  constructor(
-    private router: Router,
-    @Inject(DOCUMENT) public document: Document,
-    public authBase: MJAuthBase,
-    private workspaceInit: WorkspaceInitializerService
-  ) { }
-
-  /**
-   * Handle successful login and initialize the application
-   * Delegates all business logic to WorkspaceInitializerService
-   */
-  async handleLogin(token: string, userInfo: StandardUserInfo) {
-    if (!token) return;
-
-    try {
-      // Delegate all initialization logic to the service
-      const result = await this.workspaceInit.initializeWorkspace(token, userInfo, {
-        GRAPHQL_URI: environment.GRAPHQL_URI,
-        GRAPHQL_WS_URI: environment.GRAPHQL_WS_URI,
-        MJ_CORE_SCHEMA_NAME: environment.MJ_CORE_SCHEMA_NAME
-      });
-
-      if (result.success) {
-        // Navigate to initial route
-        if (this.initalPath === '/') {
-          // use first nav item url instead
-          setTimeout(() => {
-            // Find the KendoDrawer element, and simulate a click for the first item
-            const drawerElement = this.document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
-            if (drawerElement) drawerElement.click();
-          }, 10); // wait for the drawer to finish rerender and then do this
-        } else {
-          this.router.navigateByUrl(this.initalPath, { replaceUrl: true });
-        }
-      } else if (result.error) {
-        // Handle errors based on type
-        if (result.error.type === 'no_roles') {
-          // Show validation banner instead of generic error
-          this.showValidationOnly = true;
-          this.HasError = true;
-          return; // Don't throw, just return to show validation banner
-        }
-
-        // Try auth retry for retryable errors
-        const retried = await this.workspaceInit.handleAuthRetry(result.error, window.location.pathname);
-
-        if (!retried) {
-          // Show error to user
-          this.HasError = true;
-          this.ErrorMessage = result.error.userMessage;
-          LogError('Error Logging In: ' + result.error.message);
-          throw new Error(result.error.message);
-        }
-      }
-    } catch (err: any) {
-      this.HasError = true;
-      this.ErrorMessage = err;
-      LogError('Error Logging In: ' + err);
-      throw err;
-    }
-  }
-
-  async setupAuth() {
-    // Auth provider already initialized by APP_INITIALIZER
-
-    // v3.0 API - Clean abstraction using observables
-    this.authBase.getUserInfo()
-      .pipe(take(1))
-      .subscribe({
-        next: async (userInfo) => {
-          if (userInfo) {
-            // v3.0 API - No more provider-specific logic!
-            const token = await this.authBase.getIdToken();
-
-            if (token) {
-              this.handleLogin(token, userInfo);
-            } else {
-              console.error('User info available but no token found');
-              // Auth state is managed by the provider itself via observables
-            }
-          }
-        },
-        error: (err: unknown) => {
-          LogError('Error Logging In: ' + err);
-
-          // v3.0 API - Use semantic error classification
-          const authError = this.authBase.classifyError(err);
-
-          switch (authError.type) {
-            case AuthErrorType.NO_ACTIVE_SESSION:
-              this.subHeaderText = "Welcome back! Please log in to your account.";
-              break;
-            case AuthErrorType.INTERACTION_REQUIRED:
-            case AuthErrorType.TOKEN_EXPIRED:
-              this.subHeaderText = "Your session has expired. Please log in to your account.";
-              break;
-            default:
-              this.subHeaderText = authError.userMessage || "Welcome back! Please log in to your account.";
-          }
-
-          // Auth state is managed by the provider itself via observables
-        }
-      });
-
-    // Check auth state - the provider manages this internally now
-    this.authBase.isAuthenticated()
-      .pipe(take(1))
-      .subscribe((loggedIn: boolean) => {
-        if (!loggedIn) {
-          // Instead of kicking off the login process,
-          // just display the login screen to the user
-          // Auth state is already false if we're here
-        }
-      });
-
-    this.initalPath = window.location.pathname + (window.location.search ? window.location.search : '');
-  }
-
-  ngOnInit() {
-    SetProductionStatus(environment.production);
-    this.setupAuth();
-  }
-}
+export class AppComponent {}

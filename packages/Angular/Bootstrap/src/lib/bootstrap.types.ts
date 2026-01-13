@@ -6,6 +6,30 @@ import { InjectionToken } from '@angular/core';
 export const MJ_ENVIRONMENT = new InjectionToken<MJEnvironmentConfig>('MJ_ENVIRONMENT');
 
 /**
+ * Injection token for optional startup validation service
+ */
+export const MJ_STARTUP_VALIDATION = new InjectionToken<MJStartupValidationService | null>('MJ_STARTUP_VALIDATION', {
+  providedIn: 'root',
+  factory: () => null // Default to null if not provided
+});
+
+/**
+ * Optional interface for startup validation services
+ * Applications can provide their own implementation to handle startup validation
+ */
+export interface MJStartupValidationService {
+  /**
+   * Runs validation checks during application startup
+   */
+  validateSystemSetup(): void;
+
+  /**
+   * Adds a validation issue for missing user roles
+   */
+  addNoRolesValidationIssue(): void;
+}
+
+/**
  * Environment configuration interface for MemberJunction Angular applications
  */
 export interface MJEnvironmentConfig {

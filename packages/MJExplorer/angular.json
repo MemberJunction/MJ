@@ -25,9 +25,8 @@
               "src/staticwebapp.config.json"
             ],
             "styles": [
-              {
-                "input": "src/styles/main.scss"
-              }
+              "@memberjunction/ng-explorer-app/dist/styles.scss",
+              "src/styles.css"
             ],
             "scripts": []
           },

@@ -432,7 +432,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
             days: z.number().default(7).describe("Number of days to look back"),
             limit: z.number().default(10).describe("Maximum number of runs to return")
         }),
-        async execute(props: { agentName?: string; status: string; days: number; limit: number }) {
+        async execute(props: any) {
             const rv = new RunView();
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - props.days);
@@ -469,7 +469,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
         parameters: z.object({
             runId: z.string().describe("The agent run ID to summarize")
         }),
-        async execute(props: { runId: string }) {
+        async execute(props: any) {
             const md = new Metadata();
             const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
             const loaded = await agentRun.Load(props.runId);
@@ -541,7 +541,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
         }),
-        async execute(props: { runId: string; stepNumber: number; maxChars: number }) {
+        async execute(props: any) {
             const rv = new RunView();
             const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
@@ -600,7 +600,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             outputFile: z.string().optional().describe("File path to write JSON output (optional)")
         }),
-        async execute(props: { runId: string; stepNumber: number; outputFile?: string }) {
+        async execute(props: any) {
             const rv = new RunView();
             const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',

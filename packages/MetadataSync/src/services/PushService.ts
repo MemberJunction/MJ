@@ -190,6 +190,7 @@ export class PushService {
             prettyPrint: true,
             filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
             filterType: this.syncConfig?.sqlLogging?.filterType,
+            verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
           });
           
           if (options.verbose) {

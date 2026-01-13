@@ -35,7 +35,8 @@
     "@memberjunction/ai-recommendations-rex": "2.132.0",
     "@memberjunction/ai-vectors-pinecone": "2.132.0",
     "@memberjunction/ai-vertex": "2.132.0",
-    "@memberjunction/ai-xai": "2.132.0"
+    "@memberjunction/ai-xai": "2.132.0",
+    "@mistralai/mistralai": "^1.6.0"
   },
   "repository": {
     "type": "git",

@@ -14,8 +14,7 @@ import { Metadata } from '@memberjunction/core';
 import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
-import { StartupValidationService } from '@memberjunction/ng-explorer-core';
-import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '../bootstrap.types';
+import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJStartupValidationService, MJ_STARTUP_VALIDATION } from '../bootstrap.types';
 
 export interface InitializationResult {
   success: boolean;
@@ -33,7 +32,7 @@ export class MJInitializationService {
   constructor(
     private router: Router,
     private authBase: MJAuthBase,
-    private startupValidationService: StartupValidationService
+    @Inject(MJ_STARTUP_VALIDATION) private startupValidationService: MJStartupValidationService | null
   ) {}
 
   /**
@@ -49,15 +48,9 @@ export class MJInitializationService {
       url,
       wsurl,
       async () => {
-        // Token refresh callback
-        const result = await this.authBase.refreshToken();
-
-        if (!result.success || !result.token) {
-          console.error('[GraphQL] Token refresh failed:', result.error?.message);
-          throw new Error(result.error?.userMessage || 'Failed to refresh authentication token');
-        }
-
-        return result.token.idToken;
+        // Token refresh callback - refreshToken() returns StandardAuthToken directly or throws
+        const token = await this.authBase.refreshToken();
+        return token.idToken;
       },
       environment.MJ_CORE_SCHEMA_NAME
     );
@@ -89,12 +82,16 @@ export class MJInitializationService {
   }
 
   /**
-   * Run startup validation checks
+   * Run startup validation checks (if validation service is provided)
    */
   runValidationChecks(): void {
+    if (!this.startupValidationService) {
+      return; // No validation service provided
+    }
+
     // Small delay to ensure everything is initialized
     setTimeout(() => {
-      this.startupValidationService.validateSystemSetup();
+      this.startupValidationService?.validateSystemSetup();
     }, 500);
   }
 
@@ -159,10 +156,10 @@ export class MJInitializationService {
   }
 
   /**
-   * Handle no roles error by showing validation banner
+   * Handle no roles error by showing validation banner (if validation service is provided)
    */
   handleNoRolesError(): InitializationResult {
-    this.startupValidationService.addNoRolesValidationIssue();
+    this.startupValidationService?.addNoRolesValidationIssue();
 
     return {
       success: false,
