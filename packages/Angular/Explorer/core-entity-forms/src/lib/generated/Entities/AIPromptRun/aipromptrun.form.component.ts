@@ -22,6 +22,7 @@ export class AIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'validationRetryDetails', sectionName: 'Validation & Retry Details', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunMedias', sectionName: 'MJ: AI Prompt Run Medias', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'MJ: AI Prompt Runs', isExpanded: false },
             { sectionKey: 'aIResultCache', sectionName: 'AI Result Cache', isExpanded: false }
         ]);

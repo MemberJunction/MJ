@@ -9094,6 +9094,106 @@ export const AIAgentRelationshipSchema = z.object({
 export type AIAgentRelationshipEntityType = z.infer<typeof AIAgentRelationshipSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Run Medias
+ */
+export const AIAgentRunMediaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentRunID: z.string().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)`),
+    SourcePromptRunMediaID: z.string().nullable().describe(`
+        * * Field Name: SourcePromptRunMediaID
+        * * Display Name: Source Prompt Run Media
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Run Medias (vwAIPromptRunMedias.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    MimeType: z.string().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(100)`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(255)`),
+    FileSizeBytes: z.number().nullable().describe(`
+        * * Field Name: FileSizeBytes
+        * * Display Name: File Size (Bytes)
+        * * SQL Data Type: int`),
+    Width: z.number().nullable().describe(`
+        * * Field Name: Width
+        * * Display Name: Width
+        * * SQL Data Type: int`),
+    Height: z.number().nullable().describe(`
+        * * Field Name: Height
+        * * Display Name: Height
+        * * SQL Data Type: int`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration (Seconds)
+        * * SQL Data Type: decimal(10, 2)`),
+    InlineData: z.string().nullable().describe(`
+        * * Field Name: InlineData
+        * * Display Name: Inline Data
+        * * SQL Data Type: nvarchar(MAX)`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Files (vwFiles.ID)`),
+    ThumbnailBase64: z.string().nullable().describe(`
+        * * Field Name: ThumbnailBase64
+        * * Display Name: Thumbnail (Base64)
+        * * SQL Data Type: nvarchar(MAX)`),
+    Label: z.string().nullable().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(255)`),
+    Metadata: z.string().nullable().describe(`
+        * * Field Name: Metadata
+        * * Display Name: Metadata
+        * * SQL Data Type: nvarchar(MAX)`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality Name
+        * * SQL Data Type: nvarchar(50)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type AIAgentRunMediaEntityType = z.infer<typeof AIAgentRunMediaSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Run Steps
  */
 export const AIAgentRunStepSchema = z.object({
@@ -10810,6 +10910,97 @@ export const AIPromptModelSchema = z.object({
 });
 
 export type AIPromptModelEntityType = z.infer<typeof AIPromptModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Prompt Run Medias
+ */
+export const AIPromptRunMediaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PromptRunID: z.string().describe(`
+        * * Field Name: PromptRunID
+        * * Display Name: Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    MimeType: z.string().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(100)`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(255)`),
+    FileSizeBytes: z.number().nullable().describe(`
+        * * Field Name: FileSizeBytes
+        * * Display Name: File Size (Bytes)
+        * * SQL Data Type: int`),
+    Width: z.number().nullable().describe(`
+        * * Field Name: Width
+        * * Display Name: Width
+        * * SQL Data Type: int`),
+    Height: z.number().nullable().describe(`
+        * * Field Name: Height
+        * * Display Name: Height
+        * * SQL Data Type: int`),
+    DurationSeconds: z.number().nullable().describe(`
+        * * Field Name: DurationSeconds
+        * * Display Name: Duration (Seconds)
+        * * SQL Data Type: decimal(10, 2)`),
+    InlineData: z.string().nullable().describe(`
+        * * Field Name: InlineData
+        * * Display Name: Inline Data
+        * * SQL Data Type: nvarchar(MAX)`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Files (vwFiles.ID)`),
+    ThumbnailBase64: z.string().nullable().describe(`
+        * * Field Name: ThumbnailBase64
+        * * Display Name: Thumbnail (Base64)
+        * * SQL Data Type: nvarchar(MAX)`),
+    Metadata: z.string().nullable().describe(`
+        * * Field Name: Metadata
+        * * Display Name: Metadata
+        * * SQL Data Type: nvarchar(MAX)`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    PromptRun: z.string().nullable().describe(`
+        * * Field Name: PromptRun
+        * * Display Name: Prompt Run
+        * * SQL Data Type: nvarchar(255)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(50)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type AIPromptRunMediaEntityType = z.infer<typeof AIPromptRunMediaSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Runs
@@ -42429,6 +42620,282 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
 
 
 /**
+ * MJ: AI Agent Run Medias - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRunMedia
+ * * Base View: vwAIAgentRunMedias
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Run Medias')
+export class AIAgentRunMediaEntity extends BaseEntity<AIAgentRunMediaEntityType> {
+    /**
+    * Loads the MJ: AI Agent Run Medias record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Run Medias record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentRunMediaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    */
+    get AgentRunID(): string {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: SourcePromptRunMediaID
+    * * Display Name: Source Prompt Run Media
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Run Medias (vwAIPromptRunMedias.ID)
+    */
+    get SourcePromptRunMediaID(): string | null {
+        return this.Get('SourcePromptRunMediaID');
+    }
+    set SourcePromptRunMediaID(value: string | null) {
+        this.Set('SourcePromptRunMediaID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get MimeType(): string {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: FileSizeBytes
+    * * Display Name: File Size (Bytes)
+    * * SQL Data Type: int
+    */
+    get FileSizeBytes(): number | null {
+        return this.Get('FileSizeBytes');
+    }
+    set FileSizeBytes(value: number | null) {
+        this.Set('FileSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width
+    * * SQL Data Type: int
+    */
+    get Width(): number | null {
+        return this.Get('Width');
+    }
+    set Width(value: number | null) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height
+    * * SQL Data Type: int
+    */
+    get Height(): number | null {
+        return this.Get('Height');
+    }
+    set Height(value: number | null) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration (Seconds)
+    * * SQL Data Type: decimal(10, 2)
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: InlineData
+    * * Display Name: Inline Data
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get InlineData(): string | null {
+        return this.Get('InlineData');
+    }
+    set InlineData(value: string | null) {
+        this.Set('InlineData', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Files (vwFiles.ID)
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: ThumbnailBase64
+    * * Display Name: Thumbnail (Base64)
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ThumbnailBase64(): string | null {
+        return this.Get('ThumbnailBase64');
+    }
+    set ThumbnailBase64(value: string | null) {
+        this.Set('ThumbnailBase64', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Metadata
+    * * Display Name: Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Metadata(): string | null {
+        return this.Get('Metadata');
+    }
+    set Metadata(value: string | null) {
+        this.Set('Metadata', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
+    }
+}
+
+
+/**
  * MJ: AI Agent Run Steps - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentRunStep
@@ -47173,6 +47640,257 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
+    }
+}
+
+
+/**
+ * MJ: AI Prompt Run Medias - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPromptRunMedia
+ * * Base View: vwAIPromptRunMedias
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Prompt Run Medias')
+export class AIPromptRunMediaEntity extends BaseEntity<AIPromptRunMediaEntityType> {
+    /**
+    * Loads the MJ: AI Prompt Run Medias record from the database
+    * @param ID: string - primary key value to load the MJ: AI Prompt Run Medias record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIPromptRunMediaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PromptRunID
+    * * Display Name: Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    */
+    get PromptRunID(): string {
+        return this.Get('PromptRunID');
+    }
+    set PromptRunID(value: string) {
+        this.Set('PromptRunID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get MimeType(): string {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: FileSizeBytes
+    * * Display Name: File Size (Bytes)
+    * * SQL Data Type: int
+    */
+    get FileSizeBytes(): number | null {
+        return this.Get('FileSizeBytes');
+    }
+    set FileSizeBytes(value: number | null) {
+        this.Set('FileSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width
+    * * SQL Data Type: int
+    */
+    get Width(): number | null {
+        return this.Get('Width');
+    }
+    set Width(value: number | null) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height
+    * * SQL Data Type: int
+    */
+    get Height(): number | null {
+        return this.Get('Height');
+    }
+    set Height(value: number | null) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: DurationSeconds
+    * * Display Name: Duration (Seconds)
+    * * SQL Data Type: decimal(10, 2)
+    */
+    get DurationSeconds(): number | null {
+        return this.Get('DurationSeconds');
+    }
+    set DurationSeconds(value: number | null) {
+        this.Set('DurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: InlineData
+    * * Display Name: Inline Data
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get InlineData(): string | null {
+        return this.Get('InlineData');
+    }
+    set InlineData(value: string | null) {
+        this.Set('InlineData', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Files (vwFiles.ID)
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: ThumbnailBase64
+    * * Display Name: Thumbnail (Base64)
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ThumbnailBase64(): string | null {
+        return this.Get('ThumbnailBase64');
+    }
+    set ThumbnailBase64(value: string | null) {
+        this.Set('ThumbnailBase64', value);
+    }
+
+    /**
+    * * Field Name: Metadata
+    * * Display Name: Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Metadata(): string | null {
+        return this.Get('Metadata');
+    }
+    set Metadata(value: string | null) {
+        this.Set('Metadata', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: PromptRun
+    * * Display Name: Prompt Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PromptRun(): string | null {
+        return this.Get('PromptRun');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
     }
 }
 

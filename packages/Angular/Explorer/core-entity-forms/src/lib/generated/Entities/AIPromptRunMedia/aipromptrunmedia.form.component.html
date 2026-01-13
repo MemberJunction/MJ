@@ -3,43 +3,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- File Basics Section -->
+    <!-- Association Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="fileBasics"
-        sectionName="File Basics"
-        icon="fa fa-file"
+        sectionKey="association"
+        sectionName="Association"
+        icon="fa fa-link"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Classification & Status Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="classificationStatus"
-        sectionName="Classification & Status"
-        icon="fa fa-tags"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CategoryID"
+            FieldName="PromptRunID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -49,33 +23,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Category"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Storage Details Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="storageDetails"
-        sectionName="Storage Details"
-        icon="fa fa-cloud"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ProviderID"
+            FieldName="ModalityID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -85,7 +33,49 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ContentType"
+            FieldName="DisplayOrder"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Modality"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Media Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="mediaMetadata"
+        sectionName="Media Metadata"
+        icon="fa fa-image"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MimeType"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FileName"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -93,7 +83,57 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ProviderKey"
+            FieldName="FileSizeBytes"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Width"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Height"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DurationSeconds"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Metadata"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Content Data Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="contentData"
+        sectionName="Content Data"
+        icon="fa fa-database"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="InlineData"
             Type="textarea"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -101,7 +141,25 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Provider"
+            FieldName="FileID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ThumbnailBase64"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="File"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -138,72 +196,6 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
-    <!-- File Entity Record Links Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="fileEntityRecordLinks"
-        sectionName="File Entity Record Links"
-        icon="fa fa-link"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('fileEntityRecordLinks')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('File Entity Record Links','FileID')"
-                [NewRecordValues]="NewRecordValues('File Entity Record Links')"
-                [AllowLoad]="IsSectionExpanded('fileEntityRecordLinks')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('fileEntityRecordLinks', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- MJ: AI Prompt Run Medias Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIPromptRunMedias"
-        sectionName="MJ: AI Prompt Run Medias"
-        icon="fa fa-image"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIPromptRunMedias')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
-                [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-    </mj-collapsible-panel>
-
-    <!-- MJ: Conversation Detail Attachments Section -->
-    <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJConversationDetailAttachments"
-        sectionName="MJ: Conversation Detail Attachments"
-        icon="fa fa-paperclip"
-        variant="related-entity"
-        [form]="this"
-        [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJConversationDetailAttachments')"
-        [defaultExpanded]="false">
-        <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Attachments','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
-                [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-    </mj-collapsible-panel>
-
     <!-- MJ: AI Agent Run Medias Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJAIAgentRunMedias"
@@ -216,7 +208,7 @@
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','FileID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','SourcePromptRunMediaID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
                 [ShowToolbar]="false"
