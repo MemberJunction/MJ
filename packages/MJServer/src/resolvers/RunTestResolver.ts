@@ -105,6 +105,7 @@ export class RunTestResolver extends ResolverBase {
         @Arg('verbose', { nullable: true }) verbose: boolean = true,
         @Arg('environment', { nullable: true }) environment?: string,
         @Arg('tags', { nullable: true }) tags?: string,
+        @Arg('variables', { nullable: true }) variables?: string,
         @PubSub() pubSub?: PubSubEngine,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<TestRunResult> {
@@ -129,11 +130,22 @@ export class RunTestResolver extends ResolverBase {
                 this.createProgressCallback(pubSub, userPayload, testId) :
                 undefined;
 
+            // Parse variables from JSON string if provided
+            let parsedVariables: Record<string, unknown> | undefined;
+            if (variables) {
+                try {
+                    parsedVariables = JSON.parse(variables);
+                } catch (e) {
+                    LogError(`[RunTestResolver] Failed to parse variables: ${variables}`);
+                }
+            }
+
             // Run the test
             const options = {
                 verbose,
                 environment,
                 tags,
+                variables: parsedVariables,
                 progressCallback
             };
 
@@ -213,6 +225,7 @@ export class RunTestResolver extends ResolverBase {
         @Arg('environment', { nullable: true }) environment?: string,
         @Arg('parallel', { nullable: true }) parallel: boolean = false,
         @Arg('tags', { nullable: true }) tags?: string,
+        @Arg('variables', { nullable: true }) variables?: string,
         @Arg('selectedTestIds', { nullable: true }) selectedTestIds?: string,
         @Arg('sequenceStart', () => Int, { nullable: true }) sequenceStart?: number,
         @Arg('sequenceEnd', () => Int, { nullable: true }) sequenceEnd?: number,
@@ -247,11 +260,22 @@ export class RunTestResolver extends ResolverBase {
                 }
             }
 
+            // Parse variables from JSON string if provided
+            let parsedVariables: Record<string, unknown> | undefined;
+            if (variables) {
+                try {
+                    parsedVariables = JSON.parse(variables);
+                } catch (e) {
+                    LogError(`[RunTestResolver] Failed to parse variables: ${variables}`);
+                }
+            }
+
             const options = {
                 verbose,
                 environment,
                 parallel,
                 tags,
+                variables: parsedVariables,
                 selectedTestIds: parsedSelectedTestIds,
                 sequenceStart,
                 sequenceEnd,

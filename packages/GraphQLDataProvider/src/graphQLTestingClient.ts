@@ -11,6 +11,11 @@ export interface RunTestParams {
     verbose?: boolean;
     environment?: string;
     tags?: string[];
+    /**
+     * Variable values to use for this test run.
+     * Key is the variable name, value is the resolved value.
+     */
+    variables?: Record<string, unknown>;
     onProgress?: (progress: TestExecutionProgress) => void;
 }
 
@@ -33,6 +38,11 @@ export interface RunTestSuiteParams {
     environment?: string;
     parallel?: boolean;
     tags?: string[];
+    /**
+     * Variable values to apply to all tests in this suite.
+     * Key is the variable name, value is the resolved value.
+     */
+    variables?: Record<string, unknown>;
     /**
      * Run only specific tests by their IDs.
      * If provided, only tests with matching IDs will be executed.
@@ -166,13 +176,15 @@ export class GraphQLTestingClient {
                     $testId: String!,
                     $verbose: Boolean,
                     $environment: String,
-                    $tags: String
+                    $tags: String,
+                    $variables: String
                 ) {
                     RunTest(
                         testId: $testId,
                         verbose: $verbose,
                         environment: $environment,
-                        tags: $tags
+                        tags: $tags,
+                        variables: $variables
                     ) {
                         success
                         errorMessage
@@ -184,12 +196,15 @@ export class GraphQLTestingClient {
 
             // Serialize tags array to JSON string for GraphQL
             const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
+            // Serialize variables object to JSON string for GraphQL
+            const variablesJson = params.variables ? JSON.stringify(params.variables) : undefined;
 
             const variables = {
                 testId: params.testId,
                 verbose: params.verbose,
                 environment: params.environment,
-                tags: tagsJson
+                tags: tagsJson,
+                variables: variablesJson
             };
 
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);
@@ -262,6 +277,7 @@ export class GraphQLTestingClient {
                     $environment: String,
                     $parallel: Boolean,
                     $tags: String,
+                    $variables: String,
                     $selectedTestIds: String,
                     $sequenceStart: Int,
                     $sequenceEnd: Int
@@ -272,6 +288,7 @@ export class GraphQLTestingClient {
                         environment: $environment,
                         parallel: $parallel,
                         tags: $tags,
+                        variables: $variables,
                         selectedTestIds: $selectedTestIds,
                         sequenceStart: $sequenceStart,
                         sequenceEnd: $sequenceEnd
@@ -286,6 +303,8 @@ export class GraphQLTestingClient {
 
             // Serialize tags array to JSON string for GraphQL
             const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
+            // Serialize variables object to JSON string for GraphQL
+            const variablesJson = params.variables ? JSON.stringify(params.variables) : undefined;
             // Serialize selectedTestIds array to JSON string for GraphQL
             const selectedTestIdsJson = params.selectedTestIds && params.selectedTestIds.length > 0
                 ? JSON.stringify(params.selectedTestIds)
@@ -297,6 +316,7 @@ export class GraphQLTestingClient {
                 environment: params.environment,
                 parallel: params.parallel,
                 tags: tagsJson,
+                variables: variablesJson,
                 selectedTestIds: selectedTestIdsJson,
                 sequenceStart: params.sequenceStart,
                 sequenceEnd: params.sequenceEnd
