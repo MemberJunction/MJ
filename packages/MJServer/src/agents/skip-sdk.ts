@@ -13,6 +13,7 @@ import {
     SkipAPIAnalysisCompleteResponse,
     SkipAPIClarifyingQuestionResponse,
     SkipRequestPhase,
+    SkipResponsePhase,
     SkipAPIRequestAPIKey,
     SkipQueryInfo,
     SkipEntityInfo,
@@ -209,11 +210,27 @@ export class SkipSDK {
                 this.buildHeaders(),
                 (streamMessage: any) => {
                     // Handle streaming status updates
+                    // Queue messages come as flat objects: {responsePhase: 'queued'|'error', message: '...', error: '...'}
+                    // Skip API messages come wrapped: {type: 'status_update', value: {responsePhase: '...', messages: [...]}}
                     if (streamMessage.type === 'status_update' && options.onStatusUpdate) {
                         const statusContent = streamMessage.value?.messages?.[0]?.content;
                         const responsePhase = streamMessage.value?.responsePhase;
                         if (statusContent) {
                             options.onStatusUpdate(statusContent, responsePhase);
+                        }
+                    } else if (streamMessage.responsePhase === SkipResponsePhase.queued && options.onStatusUpdate) {
+                        // Handle queue progress messages
+                        const statusContent = streamMessage.message;
+                        const responsePhase = streamMessage.responsePhase;
+                        if (statusContent) {
+                            options.onStatusUpdate(statusContent, responsePhase);
+                        }
+                    } else if (streamMessage.responsePhase === 'error') {
+                        // Queue error messages - log but don't throw (final response will handle error)
+                        // Note: 'error' is not in SkipResponsePhase enum - it's a queue-specific error state
+                        LogError(`[SkipSDK] Queue error: ${streamMessage.error || 'Unknown error'}`);
+                        if (options.onStatusUpdate) {
+                            options.onStatusUpdate(`Error: ${streamMessage.error || 'Request failed'}`, 'error');
                         }
                     }
                 }
