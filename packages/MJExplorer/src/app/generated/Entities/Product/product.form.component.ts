@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { ProductEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Products') // Tell MemberJunction about this class
 @Component({
@@ -16,8 +16,8 @@ export class ProductFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'dealProducts', sectionName: 'Deal Products', isExpanded: false },
-            { sectionKey: 'invoiceLineItems', sectionName: 'Invoice Line Items', isExpanded: false }
+            { sectionKey: 'competitionEntries', sectionName: 'Competition Entries', isExpanded: false },
+            { sectionKey: 'productAwards', sectionName: 'Product Awards', isExpanded: false }
         ]);
     }
 }

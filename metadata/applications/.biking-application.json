@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "Name": "Trailbloom",
+    "Description": "Cycling Analytics & Performance Tracking",
+    "Icon": "fa-solid fa-bicycle",
+    "DefaultForNewUser": false,
+    "Color": "#059669",
+    "DefaultSequence": 1010,
+    "DefaultNavItems": [
+      {
+        "Label": "Dashboard",
+        "Icon": "fa-solid fa-gauge-high",
+        "ResourceType": "Custom",
+        "DriverClass": "BikingDashboardResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Rides",
+        "Icon": "fa-solid fa-route",
+        "ResourceType": "Custom",
+        "DriverClass": "BikingRidesResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Locations",
+        "Icon": "fa-solid fa-map-location-dot",
+        "ResourceType": "Custom",
+        "DriverClass": "BikingLocationsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Fleet",
+        "Icon": "fa-solid fa-bicycle",
+        "ResourceType": "Custom",
+        "DriverClass": "BikingFleetResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "B970816F-E276-4F38-BA0E-F23AE0771CC9"
+  },
+  "sync": {
+    "lastModified": "2026-01-13T18:07:49.441Z",
+    "checksum": "a3bf31186730af44881f45e480c5a62724582e5a32c5d1b7a8800200070a2a88"
+  }
+}

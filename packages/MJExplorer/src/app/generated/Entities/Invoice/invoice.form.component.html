@@ -21,18 +21,8 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AccountID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DealID"
-            Type="numerictextbox"
+            FieldName="MemberID"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
             LinkType="Record"
@@ -57,14 +47,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="SubTotal"
             Type="numerictextbox"
             [EditMode]="EditMode"
@@ -73,7 +55,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TaxRate"
+            FieldName="Tax"
             Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -81,16 +63,16 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TaxAmount"
-            Type="textbox"
+            FieldName="Discount"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TotalAmount"
-            Type="textbox"
+            FieldName="Total"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -105,16 +87,16 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="BalanceDue"
-            Type="textbox"
+            FieldName="Balance"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Terms"
-            Type="textbox"
+            FieldName="Status"
+            Type="dropdownlist"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -129,39 +111,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="BillingStreet"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="BillingCity"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="BillingState"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="BillingPostalCode"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="BillingCountry"
+            FieldName="PaymentTerms"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -196,16 +146,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('invoiceLineItems')">
+        [badgeCount]="GetSectionRowCount('invoiceLineItems')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Invoice Line Items','InvoiceID')"
                 [NewRecordValues]="NewRecordValues('Invoice Line Items')"
                 [AllowLoad]="IsSectionExpanded('invoiceLineItems')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('invoiceLineItems', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('invoiceLineItems', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -217,16 +168,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('payments')">
+        [badgeCount]="GetSectionRowCount('payments')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Payments','InvoiceID')"
                 [NewRecordValues]="NewRecordValues('Payments')"
                 [AllowLoad]="IsSectionExpanded('payments')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('payments', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('payments', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

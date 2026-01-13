@@ -1,0 +1,438 @@
+<div class="biking-dashboard">
+  <!-- Header Section -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <i class="fa-solid fa-leaf"></i>
+        </div>
+        <div class="brand-text">
+          <h1>Trailbloom</h1>
+          <p class="tagline">Grow your cycling journey</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="time-range-selector">
+          <button class="range-btn" [class.active]="selectedTimeRange === '7d'" (click)="setTimeRange('7d')">7D</button>
+          <button class="range-btn" [class.active]="selectedTimeRange === '30d'" (click)="setTimeRange('30d')">30D</button>
+          <button class="range-btn" [class.active]="selectedTimeRange === '90d'" (click)="setTimeRange('90d')">90D</button>
+          <button class="range-btn" [class.active]="selectedTimeRange === '1y'" (click)="setTimeRange('1y')">1Y</button>
+        </div>
+
+        <button class="refresh-btn" (click)="refresh()" [disabled]="isRefreshing">
+          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="isRefreshing"></i>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="greeting-section">
+      <span class="greeting">{{ greeting }}, Rider</span>
+      <span class="date">{{ formattedDate }}</span>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-overlay" *ngIf="isLoading">
+    <div class="loading-content">
+      <div class="loading-icon">
+        <i class="fa-solid fa-bicycle fa-bounce"></i>
+      </div>
+      <p>Loading your cycling data...</p>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="dashboard-content" *ngIf="!isLoading">
+    <!-- KPI Cards Row - Ride Metrics from Rider_Stats -->
+    <section class="kpi-section">
+      <div class="section-header">
+        <h2><i class="fa-solid fa-chart-line"></i> Performance Overview</h2>
+      </div>
+
+      <div class="kpi-grid">
+        <!-- Total Rides -->
+        <div class="kpi-card kpi-primary">
+          <div class="kpi-icon">
+            <i class="fa-solid fa-route"></i>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ rideMetrics?.totalRides || 0 }}</span>
+            <span class="kpi-label">Total Rides</span>
+            <span class="kpi-subtitle">{{ selectedTimeRange === '7d' ? 'This week' : selectedTimeRange === '30d' ? 'This month' : 'Selected period' }}</span>
+          </div>
+        </div>
+
+        <!-- Total Distance (distance_m converted to km) -->
+        <div class="kpi-card kpi-success">
+          <div class="kpi-icon">
+            <i class="fa-solid fa-road"></i>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ formatNumber(rideMetrics?.totalDistanceKm || 0) }}</span>
+            <span class="kpi-label">Kilometers</span>
+            <span class="kpi-subtitle">Total distance</span>
+          </div>
+        </div>
+
+        <!-- Calories Burned (calories_burned) -->
+        <div class="kpi-card kpi-warning">
+          <div class="kpi-icon">
+            <i class="fa-solid fa-fire-flame-curved"></i>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ formatNumber(rideMetrics?.totalCaloriesBurned || 0) }}</span>
+            <span class="kpi-label">Calories</span>
+            <span class="kpi-subtitle">Burned</span>
+          </div>
+        </div>
+
+        <!-- Elevation Gain (elevation_gain_m) -->
+        <div class="kpi-card kpi-info">
+          <div class="kpi-icon">
+            <i class="fa-solid fa-mountain-sun"></i>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ formatNumber(rideMetrics?.totalElevationGainM || 0) }}</span>
+            <span class="kpi-label">Meters</span>
+            <span class="kpi-subtitle">Elevation gained</span>
+          </div>
+        </div>
+
+        <!-- Average Speed (avg_speed_mps converted to km/h) -->
+        <div class="kpi-card kpi-accent">
+          <div class="kpi-icon">
+            <i class="fa-solid fa-gauge-high"></i>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ rideMetrics?.avgSpeedKmh || 0 }}</span>
+            <span class="kpi-label">km/h</span>
+            <span class="kpi-subtitle">Avg speed</span>
+          </div>
+        </div>
+
+        <!-- Duration (duration_seconds converted to hours) -->
+        <div class="kpi-card kpi-danger">
+          <div class="kpi-icon">
+            <i class="fa-solid fa-clock"></i>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ rideMetrics?.totalDurationHours || 0 }}</span>
+            <span class="kpi-label">Hours</span>
+            <span class="kpi-subtitle">Time riding</span>
+          </div>
+        </div>
+
+        <!-- Average Heart Rate (avg_heart_rate_bpm) -->
+        <div class="kpi-card kpi-secondary">
+          <div class="kpi-icon">
+            <i class="fa-solid fa-heart-pulse"></i>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ rideMetrics?.avgHeartRate || 0 }}</span>
+            <span class="kpi-label">BPM</span>
+            <span class="kpi-subtitle">Avg heart rate</span>
+          </div>
+        </div>
+
+        <!-- Average Power (power_watts) -->
+        <div class="kpi-card kpi-power">
+          <div class="kpi-icon">
+            <i class="fa-solid fa-bolt"></i>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ rideMetrics?.avgPowerWatts || 0 }}</span>
+            <span class="kpi-label">Watts</span>
+            <span class="kpi-subtitle">Avg power</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Grid - Two Column Layout -->
+    <div class="main-grid">
+      <!-- Left Column -->
+      <div class="column-left">
+        <!-- Activity Chart -->
+        <section class="chart-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-chart-area"></i> Riding Activity</h3>
+            <div class="card-legend">
+              <span class="legend-item"><span class="legend-dot rides"></span> Rides</span>
+              <span class="legend-item"><span class="legend-dot distance"></span> Distance</span>
+            </div>
+          </div>
+          <div class="activity-chart">
+            <div class="chart-bars" *ngIf="timeSeriesData.length > 0">
+              <div class="bar-group" *ngFor="let data of timeSeriesData; let i = index">
+                <div class="bar-container">
+                  <div class="bar rides-bar"
+                       [style.height.%]="getBarHeight(data.rides, getMaxTimeSeriesValue('rides'))"
+                       [title]="data.rides + ' rides'">
+                  </div>
+                  <div class="bar distance-bar"
+                       [style.height.%]="getBarHeight(data.distanceKm, getMaxTimeSeriesValue('distanceKm'))"
+                       [title]="data.distanceKm + ' km'">
+                  </div>
+                </div>
+                <span class="bar-label" *ngIf="i % 3 === 0">{{ data.date | date:'d' }}</span>
+              </div>
+            </div>
+            <div class="chart-empty" *ngIf="timeSeriesData.length === 0">
+              <i class="fa-solid fa-chart-simple"></i>
+              <p>No activity data for this period</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Terrain Distribution (from Location.terrain_type joined with Rider_Stats) -->
+        <section class="terrain-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-map"></i> Terrain Distribution</h3>
+          </div>
+          <div class="terrain-chart">
+            <div class="terrain-bars">
+              <div class="terrain-bar-item" *ngFor="let terrain of terrainDistribution">
+                <div class="terrain-info">
+                  <div class="terrain-icon" [style.background]="terrain.color + '20'" [style.color]="terrain.color">
+                    <i [class]="'fa-solid ' + getTerrainIcon(terrain.terrain)"></i>
+                  </div>
+                  <div class="terrain-details">
+                    <span class="terrain-name">{{ getTerrainDisplayName(terrain.terrain) }}</span>
+                    <span class="terrain-stats">{{ terrain.rideCount }} rides · {{ terrain.totalDistanceKm }} km · {{ terrain.avgEffort }}/10 effort</span>
+                  </div>
+                </div>
+                <div class="terrain-bar-wrapper">
+                  <div class="terrain-bar"
+                       [style.width.%]="(terrain.rideCount / (rideMetrics?.totalRides || 1)) * 100"
+                       [style.background]="terrain.color">
+                  </div>
+                </div>
+                <span class="terrain-speed">{{ terrain.avgSpeed }} km/h</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bike Fleet (from Bike table) -->
+        <section class="fleet-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-bicycle"></i> Your Fleet</h3>
+            <span class="card-badge">{{ bikeStats?.totalBikes || 0 }} bikes</span>
+          </div>
+          <div class="fleet-stats">
+            <div class="fleet-summary">
+              <div class="fleet-stat">
+                <span class="stat-value">{{ formatNumber(bikeStats?.totalDistanceKm || 0) }}</span>
+                <span class="stat-label">Total km (all bikes)</span>
+              </div>
+              <div class="fleet-stat">
+                <span class="stat-value">{{ bikeStats?.avgBikeWeight || 0 }}</span>
+                <span class="stat-label">Avg weight (kg)</span>
+              </div>
+              <div class="fleet-stat" *ngIf="bikeStats?.needsService">
+                <span class="stat-value warning-text">{{ bikeStats?.needsService }}</span>
+                <span class="stat-label">Need service</span>
+              </div>
+            </div>
+            <div class="bike-types">
+              <div class="bike-type-item" *ngFor="let bike of bikeStats?.bikesByType?.slice(0, 4)">
+                <div class="bike-type-icon">
+                  <i [class]="'fa-solid ' + getBikeTypeIcon(bike.type)"></i>
+                </div>
+                <div class="bike-type-info">
+                  <span class="bike-type-name">{{ bike.type | titlecase }}</span>
+                  <span class="bike-type-count">{{ bike.count }} bikes</span>
+                </div>
+                <span class="bike-type-pct">{{ bike.percentage }}%</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column -->
+      <div class="column-right">
+        <!-- Recent Rides (from Rider_Stats with joined data) -->
+        <section class="recent-rides-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-history"></i> Recent Rides</h3>
+            <button class="view-all-btn">View All</button>
+          </div>
+          <div class="rides-list">
+            <div class="ride-item" *ngFor="let ride of recentRides; let i = index">
+              <div class="ride-index">{{ i + 1 }}</div>
+              <div class="ride-info">
+                <div class="ride-header">
+                  <span class="ride-rider">{{ ride.riderName }}</span>
+                  <span class="ride-time">{{ getRelativeTime(ride.recordedAt) }}</span>
+                </div>
+                <div class="ride-location" *ngIf="ride.locationName !== 'Unknown Location'">
+                  <i class="fa-solid fa-location-dot"></i> {{ ride.locationName }}
+                </div>
+                <div class="ride-details">
+                  <span class="ride-stat">
+                    <i class="fa-solid fa-road"></i> {{ ride.distanceKm }} km
+                  </span>
+                  <span class="ride-stat">
+                    <i class="fa-solid fa-gauge"></i> {{ ride.avgSpeedKmh }} km/h
+                  </span>
+                  <span class="ride-stat">
+                    <i class="fa-solid fa-clock"></i> {{ formatDuration(ride.durationMinutes) }}
+                  </span>
+                </div>
+                <div class="ride-details-secondary">
+                  <span class="ride-stat" *ngIf="ride.caloriesBurned">
+                    <i class="fa-solid fa-fire"></i> {{ ride.caloriesBurned }} cal
+                  </span>
+                  <span class="ride-stat" *ngIf="ride.avgHeartRate">
+                    <i class="fa-solid fa-heart-pulse"></i> {{ ride.avgHeartRate }} bpm
+                  </span>
+                  <span class="ride-stat" *ngIf="ride.powerWatts">
+                    <i class="fa-solid fa-bolt"></i> {{ ride.powerWatts }} W
+                  </span>
+                  <span class="ride-stat" *ngIf="ride.elevationGainM">
+                    <i class="fa-solid fa-mountain"></i> {{ ride.elevationGainM }} m
+                  </span>
+                </div>
+                <div class="ride-bike" *ngIf="ride.bikeName !== 'Unknown Bike'">
+                  <i [class]="'fa-solid ' + getBikeTypeIcon(ride.bikeType)"></i>
+                  {{ ride.bikeName }} ({{ ride.bikeType | titlecase }})
+                </div>
+              </div>
+              <div class="ride-effort" [style.color]="getEffortColor(ride.effortRating)">
+                <span class="effort-value">{{ ride.effortRating }}</span>
+                <span class="effort-label">{{ getEffortLabel(ride.effortRating) }}</span>
+              </div>
+            </div>
+            <div class="rides-empty" *ngIf="recentRides.length === 0">
+              <i class="fa-solid fa-bicycle"></i>
+              <p>No recent rides</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Weather & Locations -->
+        <section class="weather-locations-card">
+          <div class="card-split">
+            <!-- Weather (from Weather table) -->
+            <div class="weather-section">
+              <div class="section-title">
+                <i class="fa-solid fa-cloud-sun"></i> Weather Conditions
+              </div>
+              <div class="weather-stats" *ngIf="weatherSnapshot">
+                <div class="weather-main">
+                  <div class="temp-display">
+                    <span class="temp-value">{{ weatherSnapshot.avgTemperature }}°</span>
+                    <span class="temp-unit">C</span>
+                  </div>
+                  <div class="weather-details">
+                    <span><i class="fa-solid fa-droplet"></i> {{ weatherSnapshot.avgHumidity }}%</span>
+                    <span><i class="fa-solid fa-wind"></i> {{ weatherSnapshot.avgWindSpeed }} m/s</span>
+                    <span><i class="fa-solid fa-eye"></i> {{ weatherSnapshot.avgVisibility }} km</span>
+                  </div>
+                </div>
+                <div class="weather-conditions">
+                  <div class="condition-chip" *ngFor="let cond of weatherSnapshot.conditionBreakdown.slice(0, 3)">
+                    <i [class]="'fa-solid ' + getWeatherIcon(cond.condition)"></i>
+                    <span>{{ cond.condition | titlecase }} ({{ cond.percentage }}%)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Locations (from Location table) -->
+            <div class="locations-section">
+              <div class="section-title">
+                <i class="fa-solid fa-location-dot"></i> Popular Locations
+              </div>
+              <div class="locations-stats" *ngIf="locationStats">
+                <div class="location-summary">
+                  <div class="location-count">
+                    <span class="count-value">{{ locationStats.totalLocations }}</span>
+                    <span class="count-label">places explored</span>
+                  </div>
+                  <div class="location-metrics">
+                    <span><i class="fa-solid fa-star"></i> {{ locationStats.avgDifficultyRating }}/10 avg difficulty</span>
+                    <span><i class="fa-solid fa-mountain"></i> {{ locationStats.avgElevation }}m avg elevation</span>
+                  </div>
+                </div>
+                <div class="top-locations">
+                  <div class="location-item" *ngFor="let loc of locationStats.mostVisitedLocations.slice(0, 3)">
+                    <div class="location-icon">
+                      <i [class]="'fa-solid ' + getTerrainIcon(loc.terrain)"></i>
+                    </div>
+                    <div class="location-info">
+                      <span class="location-name">{{ loc.name | slice:0:20 }}{{ loc.name.length > 20 ? '...' : '' }}</span>
+                      <span class="location-meta">
+                        {{ loc.visitCount }} visits ·
+                        <span [style.color]="getDifficultyColor(loc.difficulty)">{{ loc.difficulty }}/10</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Community Stats (from Rider table) -->
+        <section class="community-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-users"></i> Community</h3>
+          </div>
+          <div class="community-stats">
+            <div class="community-stat">
+              <div class="stat-icon primary">
+                <i class="fa-solid fa-users"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value">{{ riderStats?.totalRiders || 0 }}</span>
+                <span class="stat-label">Total Riders</span>
+              </div>
+            </div>
+            <div class="community-stat">
+              <div class="stat-icon success">
+                <i class="fa-solid fa-person-biking"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value">{{ riderStats?.activeRiders || 0 }}</span>
+                <span class="stat-label">Active This Month</span>
+              </div>
+            </div>
+            <div class="community-stat">
+              <div class="stat-icon warning">
+                <i class="fa-solid fa-user-plus"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value">{{ riderStats?.newRidersThisMonth || 0 }}</span>
+                <span class="stat-label">New Riders</span>
+              </div>
+            </div>
+            <div class="community-stat">
+              <div class="stat-icon info">
+                <i class="fa-solid fa-heart-pulse"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value">{{ riderStats?.avgFitnessLevel || 0 }}</span>
+                <span class="stat-label">Avg Fitness</span>
+              </div>
+            </div>
+          </div>
+          <!-- Terrain Preferences from Riders -->
+          <div class="terrain-preferences" *ngIf="riderStats?.terrainPreferences?.length">
+            <div class="preference-header">Preferred Terrains</div>
+            <div class="preference-chips">
+              <div class="preference-chip" *ngFor="let pref of riderStats?.terrainPreferences?.slice(0, 4)">
+                <i [class]="'fa-solid ' + getTerrainIcon(pref.terrain)"></i>
+                <span>{{ getTerrainDisplayName(pref.terrain) }}</span>
+                <span class="pref-count">{{ pref.count }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>

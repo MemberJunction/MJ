@@ -55,8 +55,27 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { NavigationItemDemoComponent } from './demo/navigation-item.component';
 import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
 
+// Trailbloom Biking Dashboard
+import {
+  BikingModule,
+  LoadBikingModule,
+  LoadBikingDashboard,
+  LoadBikingDashboardResource,
+  LoadBikingRidesResource,
+  LoadBikingLocationsResource,
+  LoadBikingFleetResource
+} from './generated/Entities/Bike';
+
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
+
+// Trailbloom Biking - prevent tree shaking
+LoadBikingModule();
+LoadBikingDashboard();
+LoadBikingDashboardResource();
+LoadBikingRidesResource();
+LoadBikingLocationsResource();
+LoadBikingFleetResource();
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -109,6 +128,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     ReactiveFormsModule,
     AuthServicesModule.forRoot(environment),
     ShellModule,
+    BikingModule,
     // Import standalone components
     SystemValidationBannerComponent,
   ],
