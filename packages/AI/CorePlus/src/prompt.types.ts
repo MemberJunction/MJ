@@ -1,9 +1,9 @@
 /**
  * @fileoverview Type definitions for AI prompt execution results.
- * 
+ *
  * This module contains type definitions for prompt execution results that are
  * shared between AI packages to avoid circular dependencies.
- * 
+ *
  * @module @memberjunction/ai
  * @author MemberJunction.com
  * @since 2.50.0
@@ -14,6 +14,44 @@ import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
 import { AIPromptEntityExtended } from './AIPromptExtended';
 import { AIModelEntityExtended } from './AIModelExtended';
+
+/**
+ * Modality types for multi-modal outputs
+ */
+export type MediaModality = 'Image' | 'Audio' | 'Video';
+
+/**
+ * Represents a media item generated during prompt execution.
+ * This is stored in AIPromptRunMedia for complete audit trail.
+ */
+export interface PromptRunMediaReference {
+    /** ID of the AIPromptRunMedia record */
+    id: string;
+    /** The modality type */
+    modality: MediaModality;
+    /** MIME type of the media (e.g., 'image/png', 'audio/mp3') */
+    mimeType: string;
+    /** Original filename if available */
+    fileName?: string;
+    /** File size in bytes */
+    fileSizeBytes?: number;
+    /** Width in pixels (for images/video) */
+    width?: number;
+    /** Height in pixels (for images/video) */
+    height?: number;
+    /** Duration in seconds (for audio/video) */
+    durationSeconds?: number;
+    /** Base64 encoded data (for inline storage) */
+    inlineData?: string;
+    /** URL if available (some providers return URLs) */
+    url?: string;
+    /** Base64 encoded thumbnail */
+    thumbnailBase64?: string;
+    /** Provider-specific metadata (seed, revisedPrompt, etc.) */
+    metadata?: Record<string, unknown>;
+    /** Display order when multiple media are generated */
+    displayOrder: number;
+}
 
 
 /**
@@ -237,6 +275,14 @@ export interface AIPromptRunResult<T = unknown> {
    * Model selection information for debugging and analysis
    */
   modelSelectionInfo?: AIModelSelectionInfo;
+
+  /**
+   * Media generated during this prompt execution.
+   * Contains references to AIPromptRunMedia records with full metadata.
+   * This provides complete audit trail of all generated media.
+   * @since 3.1.0
+   */
+  media?: PromptRunMediaReference[];
 }
 
 /**

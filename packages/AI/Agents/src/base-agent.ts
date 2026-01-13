@@ -41,7 +41,8 @@ import {
     AIModelSelectionInfo,
     ConversationUtility,
     ActionChange,
-    ActionChangeScope
+    ActionChangeScope,
+    MediaOutput
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -260,6 +261,49 @@ export class BaseAgent {
     }
 
     /**
+     * Promotes media outputs to the agent's final outputs.
+     * Call this method to add generated images, audio, or video to the agent's outputs.
+     * These will be saved to AIAgentRunMedia and flow to ConversationDetailAttachment.
+     *
+     * @param mediaOutputs - Array of media outputs to promote
+     * @since 3.1.0
+     *
+     * @example
+     * ```typescript
+     * // Promote images from action result
+     * this.promoteMediaOutputs([{
+     *   modality: 'Image',
+     *   mimeType: 'image/png',
+     *   data: base64Data,
+     *   label: 'Generated Product Image'
+     * }]);
+     *
+     * // Promote from prompt run media reference
+     * this.promoteMediaOutputs([{
+     *   promptRunMediaId: 'prompt-run-media-uuid',
+     *   modality: 'Image',
+     *   mimeType: 'image/png',
+     *   label: 'AI Generated Visualization'
+     * }]);
+     * ```
+     */
+    public promoteMediaOutputs(mediaOutputs: MediaOutput[]): void {
+        if (mediaOutputs && mediaOutputs.length > 0) {
+            this._mediaOutputs.push(...mediaOutputs);
+            this.logStatus(`📎 Promoted ${mediaOutputs.length} media output(s) to agent results`, true);
+        }
+    }
+
+    /**
+     * Gets the currently accumulated media outputs for this agent run.
+     * @returns Array of promoted media outputs
+     * @since 3.1.0
+     */
+    public get MediaOutputs(): MediaOutput[] {
+        return [...this._mediaOutputs];
+    }
+
+    /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
      * Tracked separately as it's display-only and doesn't need persistence.
      * @private
@@ -299,7 +343,16 @@ export class BaseAgent {
      * @private
      */
     private _subAgentRuns: ExecuteAgentResult[] = [];
-    
+
+    /**
+     * Accumulated media outputs that agents have explicitly promoted.
+     * These are collected during agent execution and returned in ExecuteAgentResult.mediaOutputs.
+     * Stored to AIAgentRunMedia when the agent completes.
+     * @private
+     * @since 3.1.0
+     */
+    private _mediaOutputs: MediaOutput[] = [];
+
     /**
      * Payload manager for handling payload access control.
      * @private
@@ -642,6 +695,9 @@ export class BaseAgent {
             this._effectiveActions = [];
             this._dynamicActionLimits = {};
 
+            // Reset media outputs accumulator for this run
+            this._mediaOutputs = [];
+
             // Store message lifecycle callback if provided
             this._messageLifecycleCallback = params.onMessageLifecycle;
 
@@ -804,7 +860,12 @@ export class BaseAgent {
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
-            
+
+            // Promote any media outputs from this step to the agent's outputs
+            if (nextStep.promoteMediaOutputs && nextStep.promoteMediaOutputs.length > 0) {
+                this.promoteMediaOutputs(nextStep.promoteMediaOutputs);
+            }
+
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
@@ -7011,6 +7072,11 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         
+        // Also promote any media from the final step's promoteMediaOutputs
+        if (finalStep.promoteMediaOutputs && finalStep.promoteMediaOutputs.length > 0) {
+            this.promoteMediaOutputs(finalStep.promoteMediaOutputs);
+        }
+
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
@@ -7020,7 +7086,8 @@ The context is now within limits. Please retry your request with the recovered c
             automaticCommands: finalStep.automaticCommands,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
-                : undefined
+                : undefined,
+            mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined
         };
     }
 

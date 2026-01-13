@@ -4,9 +4,10 @@
 
 This plan covers the complete implementation of image generation capabilities and multi-modal output support for MemberJunction agents. The work enables agents to generate images (and eventually audio/video) and have those outputs flow through to the conversation UI.
 
-**Branch**: `claude/image-generation-api-DFli7`
+**Branch**: `lists-additional-features` (merged from `claude/image-generation-api-DFli7`)
 **PR**: #1748
 **Target Version**: v3.1.x
+**Status**: Core Infrastructure Complete ✅
 
 ## Goals
 
@@ -21,15 +22,15 @@ This plan covers the complete implementation of image generation capabilities an
 ### Data Flow
 
 ```
-[BaseImageGenerator] ──generates──> [ImageGenerationResult]
+[GenerateImageAction] ──generates──> [ImageGenerationResult]
          │
-         │ (prompt runner stores)
+         │ (action returns to agent)
          ▼
-[AIPromptRunMedia] ◄── Complete audit trail of all generated media
+[Agent.promoteMediaOutputs()] ◄── Agent decides what to surface
          │
-         │ (agent promotes by reference)
+         │ (framework saves on completion)
          ▼
-[AIAgentRunMedia] ◄── Agent's chosen outputs (references SourcePromptRunMediaID)
+[AIAgentRunMedia] ◄── Permanent storage of promoted media
          │
          │ (framework copies to conversation)
          ▼
@@ -43,63 +44,52 @@ This plan covers the complete implementation of image generation capabilities an
 3. **Modality Agnostic**: Same pattern works for images, audio, video
 4. **Storage Flexibility**: Small media inline, large media in MJStorage
 
-## Implementation Phases
+## Implementation Status
 
-### Phase 1: Database Schema (COMPLETE)
+### Phase 1: Database Schema ✅ COMPLETE
 - [x] Add AIPromptRunMedia table
 - [x] Add AIAgentRunMedia table
 - [x] Foreign keys to AIPromptRun, AIAgentRun, AIModality, Files
 - [x] Indexes for efficient queries
+- [x] Added 'Per Image' price unit type for image generation pricing
 
-### Phase 2: Image Generation Infrastructure (COMPLETE)
+### Phase 2: Image Generation Infrastructure ✅ COMPLETE
 - [x] BaseImageGenerator abstract class in @memberjunction/ai
 - [x] ImageGenerationParams and ImageGenerationResult types
-- [x] OpenAIImageGenerator implementation
+- [x] OpenAIImageGenerator implementation (gpt-image-1, gpt-image-1.5)
 - [x] GeminiImageGenerator implementation (Nano Banana Pro)
-- [x] FLUXImageGenerator implementation (Black Forest Labs)
+- [x] FLUXImageGenerator implementation (Black Forest Labs FLUX.2 Pro, FLUX 1.1 Pro)
 - [x] GenerateImageAction in CoreActions
 - [x] Bundle registration for all image generators
 - [x] AI Model metadata for image generation models
 
-### Phase 3: Prompt Runner Media Storage (TODO)
-- [ ] Create AIPromptRunMediaEntity in generated entities (CodeGen)
-- [ ] Add media storage logic to AIPromptRunner
-- [ ] Store generated images to AIPromptRunMedia after generation
-- [ ] Handle both inline storage and MJStorage based on size
-- [ ] Generate thumbnails for large images
-- [ ] Return media references in AIPromptRunResult
+### Phase 3: Media Type Definitions ✅ COMPLETE
+- [x] MediaModality type in @memberjunction/ai-core-plus
+- [x] PromptRunMediaReference interface for prompt-level tracking
+- [x] MediaOutput interface for agent outputs
+- [x] Extended AIPromptRunResult with `media` field
+- [x] Extended ExecuteAgentResult with `mediaOutputs` field
+- [x] Added `promoteMediaOutputs` field to BaseAgentNextStep
 
-### Phase 4: Agent Media Output Types (TODO)
-- [ ] Define MediaOutput interface in @memberjunction/ai-core-plus
-- [ ] Define MediaAccumulator interface for agent execution context
-- [ ] Add mediaOutputs field to ExecuteAgentResult
-- [ ] Create AIAgentRunMediaEntity in generated entities (CodeGen)
+### Phase 4: Agent Media Accumulation ✅ COMPLETE
+- [x] Added `_mediaOutputs` array to BaseAgent
+- [x] Added `promoteMediaOutputs()` method for explicit promotion
+- [x] Added `MediaOutputs` getter for accumulated media
+- [x] Reset media accumulator at start of each run
+- [x] Process `promoteMediaOutputs` from each step in execution loop
+- [x] Include accumulated media in `finalizeAgentRun()` result
 
-### Phase 5: Agent Type Media Promotion (TODO)
-- [ ] Add media accumulator to BaseAgent execution context
-- [ ] Implement media promotion in FlowAgentType
-  - [ ] Support output mapping syntax: `'Images[0]': '@mediaOutput:label'`
-  - [ ] Handle multiple image promotion
-- [ ] Implement media promotion in LoopAgentType
-  - [ ] Add promoteMediaOutputs to BaseAgentNextStep
-- [ ] Test sub-agent media bubbling
+### Phase 5: Agent Runner Integration ✅ COMPLETE
+- [x] Added `SaveAgentRunMedia()` method to save media to AIAgentRunMedia
+- [x] Added `CreateConversationMediaAttachments()` for UI display
+- [x] Updated `RunAgentInConversation()` to process media outputs
+- [x] Proper modality ID lookup from AIModality table
+- [x] MIME type extension mapping for file naming
 
-### Phase 6: Agent Runner Integration (TODO)
-- [ ] Update AgentRunner to initialize media accumulator
-- [ ] Save promoted media to AIAgentRunMedia after agent completes
-- [ ] Handle SourcePromptRunMediaID linking
-- [ ] Copy metadata (label, etc.) to agent run media
-
-### Phase 7: Conversation Integration (TODO)
-- [ ] Update RunAIAgentResolver to process mediaOutputs
-- [ ] Copy AIAgentRunMedia to ConversationDetailAttachment
-- [ ] Use existing ConversationAttachmentService infrastructure
-- [ ] Handle storage decisions (inline vs MJStorage)
-
-### Phase 8: Testing & Validation (TODO)
+### Phase 6: Testing & Validation (PENDING)
 - [ ] Unit tests for image generators
-- [ ] Integration test: image generation -> prompt run media
-- [ ] Integration test: agent promotion -> agent run media
+- [ ] Integration test: image generation -> agent run media
+- [ ] Integration test: agent promotion -> conversation attachment
 - [ ] End-to-end test: agent -> conversation UI display
 - [ ] Performance testing with large images
 
@@ -181,57 +171,52 @@ export interface MediaOutput {
 }
 ```
 
-### Extended ExecuteAgentResult
+### BaseAgent Media Methods
 
 ```typescript
-export type ExecuteAgentResult<P = any> = {
-    success: boolean;
-    payload?: P;
-    agentRun: AIAgentRunEntityExtended;
-    payloadArtifactTypeID?: string;
-    responseForm?: AgentResponseForm;
-    actionableCommands?: ActionableCommand[];
-    automaticCommands?: AutomaticCommand[];
-    memoryContext?: {...};
+// Promote media outputs to agent's final results
+public promoteMediaOutputs(mediaOutputs: MediaOutput[]): void;
 
-    /** Multi-modal outputs generated by the agent */
-    mediaOutputs?: MediaOutput[];
+// Get accumulated media outputs
+public get MediaOutputs(): MediaOutput[];
+```
+
+### BaseAgentNextStep Extension
+
+```typescript
+export type BaseAgentNextStep<P = any> = {
+    // ... existing fields ...
+
+    /** Media outputs to promote to the agent's final outputs */
+    promoteMediaOutputs?: MediaOutput[];
 }
 ```
 
-## Files to Modify
+## Files Modified
 
 ### Core AI Package
-- `packages/AI/Core/src/generic/baseImage.ts` - Already complete
-- `packages/AI/Core/src/index.ts` - Already exports baseImage
+- `packages/AI/Core/src/generic/baseImage.ts` - Complete ✅
+- `packages/AI/Core/src/index.ts` - Exports baseImage ✅
 
 ### AI Providers
-- `packages/AI/Providers/OpenAI/src/models/openAIImage.ts` - Already complete
-- `packages/AI/Providers/Gemini/src/models/geminiImage.ts` - Already complete
-- `packages/AI/Providers/BlackForestLabs/src/index.ts` - Already complete
-- `packages/AI/Providers/Bundle/src/index.ts` - Already registers providers
+- `packages/AI/Providers/OpenAI/src/models/openAIImage.ts` - Complete ✅
+- `packages/AI/Providers/Gemini/src/models/geminiImage.ts` - Complete ✅
+- `packages/AI/Providers/BlackForestLabs/src/index.ts` - Complete ✅
+- `packages/AI/Providers/Bundle/src/index.ts` - Registers providers ✅
 
 ### AI CorePlus (Types)
-- `packages/AI/CorePlus/src/agent-types.ts` - Add mediaOutputs to ExecuteAgentResult
-- `packages/AI/CorePlus/src/prompt.types.ts` - Add media references to AIPromptRunResult
-
-### AI Prompts
-- `packages/AI/Prompts/src/AIPromptRunner.ts` - Store media to AIPromptRunMedia
+- `packages/AI/CorePlus/src/prompt.types.ts` - Added MediaModality, PromptRunMediaReference, media field ✅
+- `packages/AI/CorePlus/src/agent-types.ts` - Added MediaOutput, mediaOutputs, promoteMediaOutputs ✅
 
 ### AI Agents
-- `packages/AI/Agents/src/base-agent.ts` - Add media accumulator
-- `packages/AI/Agents/src/AgentRunner.ts` - Save to AIAgentRunMedia
-- `packages/AI/Agents/src/agent-types/flow-agent-type.ts` - Media promotion
-- `packages/AI/Agents/src/agent-types/loop-agent-type.ts` - Media promotion
-
-### Server
-- `packages/MJServer/src/resolvers/RunAIAgentResolver.ts` - Copy to ConversationDetailAttachment
+- `packages/AI/Agents/src/base-agent.ts` - Added media accumulator and promotion methods ✅
+- `packages/AI/Agents/src/AgentRunner.ts` - Added SaveAgentRunMedia and CreateConversationMediaAttachments ✅
 
 ### Actions
-- `packages/Actions/CoreActions/src/custom/ai/generate-image.action.ts` - Already complete
+- `packages/Actions/CoreActions/src/custom/ai/generate-image.action.ts` - Complete ✅
 
 ### Migration
-- `migrations/v2/V202601121807__v3.1.x__Add_Image_Generation_Models.sql` - Complete
+- `migrations/v2/V202601121807__v3.1.x__Add_Image_Generation_Models.sql` - Complete ✅
 
 ## Image Generation Models Added
 
@@ -243,20 +228,55 @@ export type ExecuteAgentResult<P = any> = {
 | FLUX.2 Pro | Black Forest Labs | flux-2-pro | FLUXImageGenerator |
 | FLUX 1.1 Pro | Black Forest Labs | flux-1.1-pro | FLUXImageGenerator |
 
+## Usage Example
+
+### Agent Promoting Generated Images
+
+```typescript
+// In a custom agent or agent type
+const actionResult = await this.ExecuteSingleAction(params, generateImageAction, actionEntity, contextUser);
+
+// Check for generated images in the action result
+const images = actionResult.Params.find(p => p.Name === 'Images')?.Value;
+if (images && Array.isArray(images)) {
+    const mediaOutputs: MediaOutput[] = images.map((img, index) => ({
+        modality: 'Image',
+        mimeType: `image/${img.format || 'png'}`,
+        data: img.base64,
+        width: img.width,
+        height: img.height,
+        label: `Generated Image ${index + 1}`,
+        metadata: { revisedPrompt: actionResult.Params.find(p => p.Name === 'RevisedPrompt')?.Value }
+    }));
+
+    // Promote to agent outputs
+    this.promoteMediaOutputs(mediaOutputs);
+}
+```
+
 ## Success Criteria
 
-1. Image generation works via GenerateImageAction
-2. Generated images are stored in AIPromptRunMedia with full metadata
-3. Agents can promote images to their outputs
-4. Promoted images are stored in AIAgentRunMedia
-5. Images flow to ConversationDetailAttachment and display in UI
-6. Multiple images can be generated and selectively promoted
-7. System handles both small (inline) and large (MJStorage) images
-8. Pattern is extensible for audio/video modalities
+1. ✅ Image generation works via GenerateImageAction
+2. ✅ MediaOutput interface defined and integrated
+3. ✅ Agents can promote images to their outputs via `promoteMediaOutputs()`
+4. ✅ Promoted images stored in AIAgentRunMedia
+5. ✅ Images flow to ConversationDetailAttachment for UI display
+6. ✅ Multiple images can be generated and selectively promoted
+7. ⏳ System handles both small (inline) and large (MJStorage) images (inline complete, MJStorage pending)
+8. ✅ Pattern is extensible for audio/video modalities
+
+## Future Work
+
+1. **Prompt Run Media Storage**: Store media at prompt execution level (AIPromptRunMedia) for complete audit trail
+2. **MJStorage Integration**: Move large media files to cloud storage with FileID references
+3. **Thumbnail Generation**: Auto-generate thumbnails for large images
+4. **Flow Agent Support**: Add output mapping syntax for promoting media in Flow agents
+5. **Loop Agent Support**: Add media accumulation across loop iterations
+6. **Sub-Agent Media Bubbling**: Allow parent agents to access/promote child agent media
 
 ## Notes
 
-- CodeGen will create entity classes after migration runs
-- Existing ConversationAttachmentService handles storage decisions
+- CodeGen has created entity classes after migration ran
+- ConversationDetailAttachment entity uses ModalityID reference
 - AIModality table already has Image, Audio, Video modalities
 - AIAgentModality supports Direction: 'Output' for agent output modalities

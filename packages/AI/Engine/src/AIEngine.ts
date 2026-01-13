@@ -18,7 +18,8 @@ import { AIActionEntity, ActionEntity,
          AIConfigurationEntity, AIConfigurationParamEntity, AIAgentStepEntity,
          AIAgentStepPathEntity, AIAgentRelationshipEntity, AIAgentPermissionEntity,
          AIAgentDataSourceEntity, AIAgentConfigurationEntity, AIAgentExampleEntity,
-         AICredentialBindingEntity } from "@memberjunction/core-entities";
+         AICredentialBindingEntity, AIModalityEntity, AIAgentModalityEntity,
+         AIModelModalityEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -158,6 +159,34 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public get Actions(): AIActionEntity[] { return this.Base.Actions; }
     /** @deprecated Use the new Action system instead */
     public get EntityAIActions(): EntityAIActionEntity[] { return this.Base.EntityAIActions; }
+
+    // Modality getters - delegated from AIEngineBase
+    public get Modalities(): AIModalityEntity[] { return this.Base.Modalities; }
+    public get AgentModalities(): AIAgentModalityEntity[] { return this.Base.AgentModalities; }
+    public get ModelModalities(): AIModelModalityEntity[] { return this.Base.ModelModalities; }
+
+    // Modality helper methods - delegated from AIEngineBase
+    public GetModalityByName(name: string): AIModalityEntity | undefined {
+        return this.Base.GetModalityByName(name);
+    }
+    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+        return this.Base.GetAgentModalities(agentId, direction);
+    }
+    public GetModelModalitiesByDirection(modelId: string, direction: 'Input' | 'Output'): AIModalityEntity[] {
+        return this.Base.GetModelModalities(modelId, direction);
+    }
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        return this.Base.AgentSupportsModality(agentId, modalityName, direction);
+    }
+    public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
+        return this.Base.ModelSupportsModality(modelId, modalityName, direction);
+    }
+    public AgentSupportsAttachments(agentId: string): boolean {
+        return this.Base.AgentSupportsAttachments(agentId);
+    }
+    public GetAgentSupportedInputModalities(agentId: string): string[] {
+        return this.Base.GetAgentSupportedInputModalities(agentId);
+    }
 
     // Delegate AIEngineBase public methods
     public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
