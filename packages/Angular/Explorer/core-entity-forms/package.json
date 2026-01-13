@@ -52,6 +52,7 @@
     "@memberjunction/ng-tabstrip": "2.133.0",
     "@memberjunction/ng-testing": "2.133.0",
     "@memberjunction/ng-timeline": "2.133.0",
+    "@memberjunction/ng-list-management": "2.133.0",
     "@memberjunction/ng-user-view-grid": "2.133.0",
     "@memberjunction/ng-entity-relationship-diagram": "2.133.0",
     "@memberjunction/templates-base-types": "2.133.0",
