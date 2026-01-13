@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0",
+  "variables": [
+    {
+      "name": "AIConfiguration",
+      "displayName": "AI Configuration",
+      "description": "Override the AI configuration used for agent execution. This controls the LLM model, provider, and settings.",
+      "dataType": "string",
+      "valueSource": "static",
+      "possibleValues": [
+        { "value": "claude-sonnet", "label": "Claude Sonnet 4", "description": "Anthropic Claude Sonnet model" },
+        { "value": "claude-opus", "label": "Claude Opus 4", "description": "Anthropic Claude Opus model" },
+        { "value": "gpt-4o", "label": "GPT-4o", "description": "OpenAI GPT-4o model" },
+        { "value": "gpt-4o-mini", "label": "GPT-4o Mini", "description": "OpenAI GPT-4o Mini model" },
+        { "value": "gemini-pro", "label": "Gemini Pro", "description": "Google Gemini Pro model" }
+      ],
+      "required": false
+    },
+    {
+      "name": "Temperature",
+      "displayName": "Temperature",
+      "description": "LLM temperature setting. Lower values (0.0) produce more deterministic responses, higher values (1.0) produce more creative responses.",
+      "dataType": "number",
+      "valueSource": "freeform",
+      "defaultValue": 0.7,
+      "required": false
+    },
+    {
+      "name": "MaxTokens",
+      "displayName": "Max Tokens",
+      "description": "Maximum number of output tokens for the LLM response. Leave unset to use the model's default.",
+      "dataType": "number",
+      "valueSource": "freeform",
+      "required": false
+    }
+  ]
+}

@@ -27,13 +27,25 @@ export {
   ValidationError,
   ValidationWarning,
   RunContextDetails,
-  OracleConfig
+  OracleConfig,
+  // Variable system types
+  TestVariableDataType,
+  TestVariableValueSource,
+  TestVariablePossibleValue,
+  TestVariableDefinition,
+  TestTypeVariablesSchema,
+  TestVariableOverride,
+  TestVariablesConfig,
+  TestSuiteVariablesConfig,
+  ResolvedTestVariables,
+  TestVariableValue
 } from '@memberjunction/testing-engine-base';
 
 // Import types we need for local interfaces
 import {
   TestRunOptions,
-  OracleResult
+  OracleResult,
+  ResolvedTestVariables
 } from '@memberjunction/testing-engine-base';
 
 /**
@@ -64,6 +76,13 @@ export interface DriverExecutionContext {
    * Oracle registry for evaluations
    */
   oracleRegistry: Map<string, IOracle>;
+
+  /**
+   * Resolved variable values for this execution.
+   * Variables have been resolved through the hierarchy and validated.
+   * May be undefined if no variables are defined for this test type.
+   */
+  resolvedVariables?: ResolvedTestVariables;
 }
 
 /**

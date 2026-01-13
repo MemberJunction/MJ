@@ -3,7 +3,8 @@
  * @module @memberjunction/testing-cli
  */
 
-import { TestEngine } from '@memberjunction/testing-engine';
+import { TestEngine, VariableResolver } from '@memberjunction/testing-engine';
+import { TestVariableDefinition } from '@memberjunction/testing-engine-base';
 import { UserInfo } from '@memberjunction/core';
 import { TestEntity, TestSuiteEntity, TestTypeEntity } from '@memberjunction/core-entities';
 import { ListFlags } from '../types';
@@ -35,7 +36,7 @@ export class ListCommand {
             await engine.Config(false, contextUser);
 
             if (flags.types) {
-                this.listTestTypes(engine);
+                this.listTestTypes(engine, flags);
             } else if (flags.suites) {
                 this.listTestSuites(engine, flags);
             } else {
@@ -62,7 +63,7 @@ export class ListCommand {
     /**
      * List test types
      */
-    private listTestTypes(engine: TestEngine): void {
+    private listTestTypes(engine: TestEngine, flags?: ListFlags): void {
         const types = engine.TestTypes;
 
         console.log(chalk.bold(`\nTest Types (${types.length}):\n`));
@@ -71,6 +72,17 @@ export class ListCommand {
             console.log(chalk.cyan(`  ${type.Name}`));
             if (type.Description) {
                 console.log(chalk.gray(`    ${type.Description}`));
+            }
+
+            // Show variables if flag is set
+            if (flags?.showVariables && type.VariablesSchema) {
+                const variables = this.parseVariablesSchema(type.VariablesSchema);
+                if (variables.length > 0) {
+                    console.log(chalk.yellow(`    Variables:`));
+                    for (const variable of variables) {
+                        this.displayVariable(variable, 6);
+                    }
+                }
             }
         }
 
@@ -153,6 +165,8 @@ export class ListCommand {
 
         console.log(chalk.bold(`\nAvailable Tests (${tests.length}):\n`));
 
+        const resolver = new VariableResolver();
+
         for (const [typeName, testsInType] of typeMap) {
             console.log(chalk.bold.cyan(`${typeName} (${testsInType.length}):`));
 
@@ -163,6 +177,23 @@ export class ListCommand {
 
                 if (flags.verbose && test.Description) {
                     console.log(chalk.gray(`    ${test.Description}`));
+                }
+
+                // Show variables if flag is set
+                if (flags.showVariables) {
+                    const testType = types.find(t => t.ID === test.TypeID);
+                    if (testType?.VariablesSchema) {
+                        const variables = resolver.getAvailableVariables(
+                            testType.VariablesSchema,
+                            test.Variables
+                        );
+                        if (variables.length > 0) {
+                            console.log(chalk.yellow(`    Variables:`));
+                            for (const variable of variables) {
+                                this.displayVariable(variable, 6);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -195,6 +226,41 @@ export class ListCommand {
             return chalk.gray(`Tags: ${tags.join(', ')}`);
         } catch {
             return '';
+        }
+    }
+
+    /**
+     * Parse variables schema JSON
+     */
+    private parseVariablesSchema(schemaJson: string): TestVariableDefinition[] {
+        try {
+            const resolver = new VariableResolver();
+            const schema = resolver.parseTypeSchema(schemaJson);
+            return schema?.variables || [];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Display a single variable definition
+     */
+    private displayVariable(variable: TestVariableDefinition, indent: number): void {
+        const prefix = ' '.repeat(indent);
+        const required = variable.required ? chalk.red('*') : '';
+        const defaultVal = variable.defaultValue !== undefined
+            ? chalk.gray(` (default: ${variable.defaultValue})`)
+            : '';
+
+        console.log(`${prefix}${chalk.white(variable.name)}${required}: ${chalk.cyan(variable.dataType)}${defaultVal}`);
+
+        if (variable.description) {
+            console.log(`${prefix}  ${chalk.gray(variable.description)}`);
+        }
+
+        if (variable.possibleValues && variable.possibleValues.length > 0) {
+            const values = variable.possibleValues.map(pv => pv.value).join(', ');
+            console.log(`${prefix}  ${chalk.gray(`Values: [${values}]`)}`);
         }
     }
 }

@@ -634,15 +634,18 @@ const suiteResult = await engine.RunSuite(suiteId, {
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure (This Plan)
-- [ ] Add database columns (migration)
-- [ ] Create TypeScript interfaces in EngineBase
-- [ ] Implement VariableResolver class
-- [ ] Update TestEngine to resolve and pass variables
-- [ ] Update DriverExecutionContext interface
-- [ ] Store resolved variables on TestRun
-- [ ] Update AgentEvalDriver to use AIConfiguration variable
-- [ ] Add --var flag to CLI
+### Phase 1: Core Infrastructure (COMPLETED)
+- [x] Add database columns (migration) - `V202601131726__v2.134.x__Add_Test_Variables_Support.sql`
+- [x] Create TypeScript interfaces in EngineBase - `EngineBase/src/types.ts`
+- [x] Implement VariableResolver class with unit tests - `Engine/src/utils/variable-resolver.ts`
+- [x] Update TestEngine to resolve and pass variables - `Engine/src/engine/TestEngine.ts`
+- [x] Update DriverExecutionContext interface - `Engine/src/types.ts`
+- [x] Store resolved variables on TestRun - integrated in TestEngine
+- [x] Update AgentEvalDriver to use AIConfiguration variable - `Engine/src/drivers/AgentEvalDriver.ts`
+- [x] Add --var flag to CLI run command - `CLI/src/commands/run.ts`
+- [x] Add --var flag to CLI suite command - `CLI/src/commands/suite.ts`
+- [x] Add --show-variables flag to CLI list command - `CLI/src/commands/list.ts`
+- [x] Add Agent Eval test type VariablesSchema metadata - `metadata/test-types/`
 
 ### Phase 2: Enhanced Features (Future)
 - [ ] Entity-sourced variables (pull values from AI Configurations table)

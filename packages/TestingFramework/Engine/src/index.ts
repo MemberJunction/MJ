@@ -30,3 +30,4 @@ export * from './utils/scoring';
 export * from './utils/cost-calculator';
 export * from './utils/result-formatter';
 export * from './utils/execution-context';
+export * from './utils/variable-resolver';
