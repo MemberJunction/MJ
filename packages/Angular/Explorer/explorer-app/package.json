@@ -21,7 +21,7 @@
   "license": "MIT",
   "dependencies": {
     "@memberjunction/ng-bootstrap": "3.0.0-alpha.1",
-    "@memberjunction/ng-workspace-initializer": "2.132.0"
+    "@memberjunction/ng-workspace-initializer": "2.133.0"
   },
   "peerDependencies": {
     "@angular/common": "^18.0.0",

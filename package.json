@@ -85,7 +85,7 @@
     "turbo": "^2.7.3",
     "typedoc": "~0.26.0",
     "typedoc-plugin-missing-exports": "~3.0.0",
-    "typescript": "5.5.4"
+    "typescript": "5.4.5"
   },
   "overrides": {
     "@types/node": "20.14.2",
