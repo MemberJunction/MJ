@@ -165,7 +165,7 @@ export class GenerateImageAction extends BaseAction {
             }
 
             params.Params.push({
-                Name: 'Model',
+                Name: 'ModelUsed',
                 Type: 'Output',
                 Value: model.Name
             });
