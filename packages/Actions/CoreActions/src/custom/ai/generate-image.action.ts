@@ -112,10 +112,10 @@ export class GenerateImageAction extends BaseAction {
             };
 
             if (quality) {
-                genParams.quality = quality;
+                genParams.quality = quality as ImageGenerationParams['quality'];
             }
             if (style) {
-                genParams.style = style;
+                genParams.style = style as ImageGenerationParams['style'];
             }
             if (negativePrompt) {
                 genParams.negativePrompt = negativePrompt;

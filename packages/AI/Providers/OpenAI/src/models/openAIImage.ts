@@ -49,7 +49,12 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             const openAIParams = this.buildGenerationParams(params);
             const response = await this._openAI.images.generate(openAIParams);
 
-            return this.processGenerationResponse(response, startTime, params);
+            // Handle the response - ensure it's not a stream
+            if ('data' in response) {
+                return this.processGenerationResponse(response, startTime, params);
+            } else {
+                return this.createErrorResult(startTime, 'Unexpected streaming response from OpenAI');
+            }
         } catch (error) {
             return this.handleError(error, startTime);
         }
@@ -105,11 +110,14 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             // Create File object for OpenAI API
             const imageFile = new File([imageInput.buffer], 'image.png', { type: 'image/png' });
 
+            // Note: The variations API only supports limited sizes
+            const variationSize = this.normalizeVariationSize(params.size);
+
             const openAIParams: OpenAI.Images.ImageCreateVariationParams = {
                 image: imageFile,
                 model: params.model || 'gpt-image-1.5',
                 n: params.n || 1,
-                size: this.normalizeSize(params.size) as '1024x1024' | '1536x1024' | '1024x1536' | 'auto',
+                size: variationSize,
                 response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
             };
 
@@ -214,6 +222,23 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             return '2048x2048';
         }
 
+        return '1024x1024';
+    }
+
+    /**
+     * Normalize size for variation API which only supports limited sizes
+     */
+    private normalizeVariationSize(size: string | undefined): '256x256' | '512x512' | '1024x1024' {
+        if (!size) {
+            return '1024x1024';
+        }
+
+        // Variation API only supports these sizes
+        if (size === '256x256' || size === '512x512' || size === '1024x1024') {
+            return size;
+        }
+
+        // Default to largest supported size
         return '1024x1024';
     }
 

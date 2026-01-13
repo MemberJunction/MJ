@@ -106,9 +106,9 @@ export class FLUXImageGenerator extends BaseImageGenerator {
 
             const result = this.createSuccessResult(startTime, [generatedImage]);
 
-            // Include seed if available for reproducibility
+            // Include seed if available for reproducibility in metadata
             if (resultResponse.result.seed !== undefined) {
-                result.seed = resultResponse.result.seed;
+                result.metadata = { seed: resultResponse.result.seed };
             }
 
             return result;
