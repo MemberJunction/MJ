@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { ActivityTypeEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'Activity Types') // Tell MemberJunction about this class
 @Component({
@@ -14,7 +15,9 @@ export class ActivityTypeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'activityTypeDetails', sectionName: 'Activity Type Details', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'activities', sectionName: 'Activities', isExpanded: false }
         ]);
     }
 }

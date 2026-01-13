@@ -1,0 +1,197 @@
+<div class="insights-resource">
+  <!-- Header -->
+  <div class="resource-header">
+    <div class="header-title">
+      <h2><i class="fa-solid fa-brain"></i> AI-Powered Contact Insights</h2>
+      <span class="analyzed-count">{{ analyzedCount }} contacts analyzed</span>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-grid">
+    <div class="summary-card engagement">
+      <div class="card-header">
+        <i class="fa-solid fa-chart-line"></i>
+        <h3>Engagement Distribution</h3>
+      </div>
+      <div class="card-content">
+        <div class="distribution-bar">
+          <div class="segment high" [style.width.%]="analyzedCount > 0 ? (engagementSummary.high / analyzedCount * 100) : 0" title="High"></div>
+          <div class="segment medium" [style.width.%]="analyzedCount > 0 ? (engagementSummary.medium / analyzedCount * 100) : 0" title="Medium"></div>
+          <div class="segment low" [style.width.%]="analyzedCount > 0 ? (engagementSummary.low / analyzedCount * 100) : 0" title="Low"></div>
+        </div>
+        <div class="distribution-legend">
+          <span class="legend-item high"><i class="fa-solid fa-circle"></i> High: {{ engagementSummary.high }}</span>
+          <span class="legend-item medium"><i class="fa-solid fa-circle"></i> Medium: {{ engagementSummary.medium }}</span>
+          <span class="legend-item low"><i class="fa-solid fa-circle"></i> Low: {{ engagementSummary.low }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-card sentiment">
+      <div class="card-header">
+        <i class="fa-solid fa-face-smile"></i>
+        <h3>Sentiment Trends</h3>
+      </div>
+      <div class="card-content">
+        <div class="distribution-bar">
+          <div class="segment improving" [style.width.%]="analyzedCount > 0 ? (sentimentSummary.improving / analyzedCount * 100) : 0" title="Improving"></div>
+          <div class="segment stable" [style.width.%]="analyzedCount > 0 ? (sentimentSummary.stable / analyzedCount * 100) : 0" title="Stable"></div>
+          <div class="segment declining" [style.width.%]="analyzedCount > 0 ? (sentimentSummary.declining / analyzedCount * 100) : 0" title="Declining"></div>
+        </div>
+        <div class="distribution-legend">
+          <span class="legend-item improving"><i class="fa-solid fa-arrow-up"></i> Improving: {{ sentimentSummary.improving }}</span>
+          <span class="legend-item stable"><i class="fa-solid fa-minus"></i> Stable: {{ sentimentSummary.stable }}</span>
+          <span class="legend-item declining"><i class="fa-solid fa-arrow-down"></i> Declining: {{ sentimentSummary.declining }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-card churn">
+      <div class="card-header">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <h3>Churn Risk</h3>
+      </div>
+      <div class="card-content churn-content">
+        <div class="churn-stats">
+          <div class="stat-item">
+            <div class="stat-value warning">{{ atRiskCount }}</div>
+            <div class="stat-label">At Risk</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ avgChurnRisk }}%</div>
+            <div class="stat-label">Avg Risk Score</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-card topics">
+      <div class="card-header">
+        <i class="fa-solid fa-tags"></i>
+        <h3>Top Topics</h3>
+      </div>
+      <div class="card-content">
+        @if (topTopics.length > 0) {
+          <div class="topics-list">
+            @for (topic of topTopics.slice(0, 5); track topic.name) {
+              <div class="topic-item">
+                <span class="topic-name">{{ topic.name }}</span>
+                <div class="topic-bar">
+                  <div class="topic-fill" [style.width.%]="topic.percentage"></div>
+                </div>
+                <span class="topic-count">{{ topic.count }}</span>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-mini">No topics detected yet</div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Insights Table -->
+  <div class="insights-table-container">
+    <div class="table-header">
+      <h3><i class="fa-solid fa-table"></i> Contact Insights Detail</h3>
+    </div>
+
+    @if (insights.length > 0) {
+      <div class="insights-table">
+        <div class="table-row header-row">
+          <div class="col-contact">Contact</div>
+          <div class="col-engagement">Engagement</div>
+          <div class="col-sentiment">Sentiment</div>
+          <div class="col-score">Avg Score</div>
+          <div class="col-churn">Churn Risk</div>
+          <div class="col-activities">Activities</div>
+          <div class="col-analyzed">Last Analyzed</div>
+          <div class="col-actions"></div>
+        </div>
+
+        @for (insight of insights; track insight.ID) {
+          <div class="table-row data-row" (click)="openContact(insight.ContactID)">
+            <div class="col-contact">
+              <div class="contact-avatar">
+                {{ insight.ContactName.split(' ')[0].charAt(0) }}{{ insight.ContactName.split(' ')[1]?.charAt(0) || '' }}
+              </div>
+              <div class="contact-info">
+                <div class="contact-name">{{ insight.ContactName }}</div>
+                <div class="contact-company">{{ insight.Company || 'No company' }}</div>
+              </div>
+            </div>
+
+            <div class="col-engagement">
+              @if (insight.EngagementLevel) {
+                <span class="engagement-badge" [style.background-color]="getEngagementColor(insight.EngagementLevel)">
+                  {{ insight.EngagementLevel }}
+                </span>
+              } @else {
+                <span class="no-data">-</span>
+              }
+            </div>
+
+            <div class="col-sentiment">
+              @if (insight.OverallSentimentTrend) {
+                <span class="sentiment-trend" [style.color]="getSentimentTrendColor(insight.OverallSentimentTrend)">
+                  <i [class]="getSentimentTrendIcon(insight.OverallSentimentTrend)"></i>
+                  {{ insight.OverallSentimentTrend }}
+                </span>
+              } @else {
+                <span class="no-data">-</span>
+              }
+            </div>
+
+            <div class="col-score">
+              <span [class.positive]="(insight.AverageSentimentScore || 0) > 0"
+                    [class.negative]="(insight.AverageSentimentScore || 0) < 0">
+                {{ formatSentimentScore(insight.AverageSentimentScore) }}
+              </span>
+            </div>
+
+            <div class="col-churn">
+              <div class="churn-indicator">
+                <div class="churn-bar">
+                  <div class="churn-fill"
+                       [style.width.%]="(insight.ChurnRiskScore || 0) * 100"
+                       [style.background-color]="getChurnRiskColor(insight.ChurnRiskScore)">
+                  </div>
+                </div>
+                <span class="churn-value" [style.color]="getChurnRiskColor(insight.ChurnRiskScore)">
+                  {{ formatChurnRisk(insight.ChurnRiskScore) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="col-activities">
+              <span class="activity-count">{{ insight.ActivityCount }}</span>
+            </div>
+
+            <div class="col-analyzed">
+              <span class="analyzed-date">{{ insight.LastAnalyzedAt | date:'MMM d, h:mm a' }}</span>
+            </div>
+
+            <div class="col-actions">
+              <button kendoButton [look]="'flat'" [size]="'small'" (click)="openInsight(insight.ID); $event.stopPropagation()">
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="empty-state">
+        <i class="fa-solid fa-brain"></i>
+        <p>No AI insights available yet</p>
+        <span class="empty-hint">Insights are generated when activities are analyzed by AI</span>
+      </div>
+    }
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <mj-loading [showText]="false" size="medium"></mj-loading>
+    </div>
+  }
+</div>

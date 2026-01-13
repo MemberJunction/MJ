@@ -208,21 +208,7 @@
     "sync": {
       "lastModified": "2026-01-09T16:31:23.310Z",
       "checksum": "3f2a1f4b884d6dc367f12c049b75518972e42d5be529fb7594f9f733ff754e91"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:AI Prompt Types.Name=Chat",
-        "resolved": "A6DA423E-F36B-1410-8DAC-00021F8B792E"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types",
-        "resolved": "838572BE-9464-4935-BC34-4806FD80A69C"
-      }
-    ]
+    }
   },
   {
     "fields": {

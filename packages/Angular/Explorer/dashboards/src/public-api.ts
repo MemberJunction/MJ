@@ -18,6 +18,8 @@ import { LoadCredentialsAuditResource } from './Credentials/components/credentia
 import { LoadSystemDiagnosticsResource } from './SystemDiagnostics/system-diagnostics.component';
 // Lists Dashboard
 import { LoadListsResources } from './Lists';
+// Contacts Demo Dashboard
+import { LoadContactsDemoResources } from './ContactsDemo';
 
 import {
   LoadActionsOverviewResource,
@@ -57,6 +59,7 @@ export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
 export * from './Lists';
+export * from './ContactsDemo';
 
 // Export AI components as resources (BaseResourceComponent-based)
 export {
@@ -199,3 +202,6 @@ LoadSystemDiagnosticsResource();
 
 // Lists Dashboard resource loaders
 LoadListsResources();
+
+// Contacts Demo Dashboard resource loaders
+LoadContactsDemoResources();

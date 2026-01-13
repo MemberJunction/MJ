@@ -3,28 +3,18 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Participants Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="participants"
+        sectionName="Participants"
+        icon="fa fa-users"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AccountID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="ContactID"
-            Type="numerictextbox"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
             LinkType="Record"
@@ -33,10 +23,40 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ActivityType"
-            Type="dropdownlist"
+            FieldName="UserID"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="User"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Activity Details Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="activityDetails"
+        sectionName="Activity Details"
+        icon="fa fa-clipboard"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ActivityTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -57,7 +77,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="StartDate"
+            FieldName="ActivityDate"
             Type="datepicker"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -65,8 +85,8 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EndDate"
-            Type="datepicker"
+            FieldName="DurationMinutes"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -74,30 +94,6 @@
             [record]="record"
             [ShowLabel]="true"
             FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Priority"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Direction"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Location"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -105,11 +101,79 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Result"
+            FieldName="RequiresFollowUp"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FollowUpDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ActivityType"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- AI Insights Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="aIInsights"
+        sectionName="AI Insights"
+        icon="fa fa-chart-line"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RawContent"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UrgencyLevel"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UrgencyScore"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProcessedByAI"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"

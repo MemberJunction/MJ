@@ -1,5 +1,6 @@
 import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
 import { LoadActionEntityServer } from './custom/ActionEntity.server';
+import { LoadActivityEntityServerSubClass } from './custom/ActivityEntity.server';
 import { LoadApplicationEntityServer } from './custom/ApplicationEntity.server';
 import { LoadAIPromptEntityExtendedServerSubClass } from './custom/AIPromptEntityExtended.server';
 import { LoadAIPromptRunEntityServerSubClass } from './custom/AIPromptRunEntity.server';
@@ -15,6 +16,7 @@ import { LoadAIAgentExampleEntityServerSubClass } from './custom/AIAgentExampleE
 
 LoadAIProviders(); // Ensure all AI providers are loaded
 
+export * from './custom/ActivityEntity.server';
 export * from './custom/AIPromptEntityExtended.server';
 export * from './custom/AIPromptRunEntity.server';
 export * from './custom/ConversationDetailEntity.server';
@@ -33,6 +35,7 @@ export * from './custom/util';
 
 // Call the stub functions to ensure that the custom subclasses are not tree shaken out.
 export function LoadCoreEntitiesServerSubClasses(): void {
+    LoadActivityEntityServerSubClass();
     LoadAIPromptEntityExtendedServerSubClass();
     LoadAIPromptRunEntityServerSubClass();
     LoadConversationDetailEntityServerSubClass();

@@ -1,0 +1,259 @@
+<div class="contacts-overview">
+  <!-- Header with search and filters -->
+  <div class="overview-header">
+    <div class="header-title">
+      <h2><i class="fa-solid fa-address-book"></i> Contact Management Dashboard</h2>
+      <p class="subtitle">AI-powered insights and activity tracking</p>
+    </div>
+    <div class="filters-row">
+      <div class="search-container">
+        <kendo-textbox
+          placeholder="Search contacts..."
+          [value]="searchTerm$.value"
+          (valueChange)="onSearchChange($event)">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <i class="fa-solid fa-search"></i>
+          </ng-template>
+        </kendo-textbox>
+      </div>
+
+      <div class="filter-container">
+        <kendo-dropdownlist
+          [data]="[
+            { text: 'All Statuses', value: 'all' },
+            { text: 'Active', value: 'Active' },
+            { text: 'Inactive', value: 'Inactive' }
+          ]"
+          textField="text"
+          valueField="value"
+          [valuePrimitive]="true"
+          [value]="selectedStatus$.value"
+          (valueChange)="onStatusFilterChange($event)">
+        </kendo-dropdownlist>
+      </div>
+    </div>
+  </div>
+
+  <!-- Metrics Cards -->
+  <div class="metrics-grid">
+    <div class="metric-card contacts">
+      <div class="metric-icon">
+        <i class="fa-solid fa-users"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.totalContacts }}</div>
+        <div class="metric-label">Total Contacts</div>
+        <div class="metric-breakdown">
+          <span class="active"><i class="fa-solid fa-circle"></i> {{ metrics.activeContacts }} Active</span>
+          <span class="inactive"><i class="fa-solid fa-circle"></i> {{ metrics.inactiveContacts }} Inactive</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card activities">
+      <div class="metric-icon">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.totalActivities }}</div>
+        <div class="metric-label">Total Activities</div>
+        <div class="metric-breakdown">
+          <span class="recent"><i class="fa-solid fa-bolt"></i> {{ metrics.recentActivities }} in last 24h</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card sentiment">
+      <div class="metric-icon">
+        <i class="fa-solid fa-face-smile"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.avgSentimentScore > 0 ? '+' : '' }}{{ metrics.avgSentimentScore }}</div>
+        <div class="metric-label">Avg Sentiment Score</div>
+        <div class="metric-breakdown">
+          <span class="positive"><i class="fa-solid fa-arrow-up"></i> {{ metrics.positiveContacts }} Improving</span>
+          <span class="negative"><i class="fa-solid fa-arrow-down"></i> {{ metrics.negativeContacts }} Declining</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card engagement">
+      <div class="metric-icon">
+        <i class="fa-solid fa-chart-line"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.highEngagement }}</div>
+        <div class="metric-label">High Engagement</div>
+        <div class="metric-breakdown">
+          <span class="medium"><i class="fa-solid fa-circle"></i> {{ metrics.mediumEngagement }} Medium</span>
+          <span class="low"><i class="fa-solid fa-circle"></i> {{ metrics.lowEngagement }} Low</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sentiment Distribution Bar -->
+  <div class="sentiment-bar-container">
+    <div class="sentiment-bar-header">
+      <h4><i class="fa-solid fa-chart-pie"></i> Activity Sentiment Distribution</h4>
+    </div>
+    <div class="sentiment-bar">
+      <div class="sentiment-segment positive" [style.width.%]="sentimentDistribution.positive">
+        @if (sentimentDistribution.positive > 10) {
+          <span>{{ sentimentDistribution.positive }}% Positive</span>
+        }
+      </div>
+      <div class="sentiment-segment neutral" [style.width.%]="sentimentDistribution.neutral">
+        @if (sentimentDistribution.neutral > 10) {
+          <span>{{ sentimentDistribution.neutral }}% Neutral</span>
+        }
+      </div>
+      <div class="sentiment-segment negative" [style.width.%]="sentimentDistribution.negative">
+        @if (sentimentDistribution.negative > 10) {
+          <span>{{ sentimentDistribution.negative }}% Negative</span>
+        }
+      </div>
+    </div>
+    <div class="sentiment-legend">
+      <span class="legend-item positive"><i class="fa-solid fa-circle"></i> Positive</span>
+      <span class="legend-item neutral"><i class="fa-solid fa-circle"></i> Neutral</span>
+      <span class="legend-item negative"><i class="fa-solid fa-circle"></i> Negative</span>
+    </div>
+  </div>
+
+  <!-- Content Grid -->
+  <div class="content-grid">
+    <!-- Recent Activities -->
+    <div class="panel recent-activities">
+      <div class="panel-header">
+        <h3><i class="fa-solid fa-clock"></i> Recent Activities</h3>
+      </div>
+      <div class="panel-content">
+        @if (recentActivities.length > 0) {
+          <div class="activities-list">
+            @for (activity of recentActivities; track activity.ID) {
+              <div class="activity-item" (click)="openActivity(activity.ID)">
+                <div class="activity-icon" [style.border-left-color]="getUrgencyColor(activity.UrgencyLevel)">
+                  <i [class]="activity.ActivityTypeIcon"></i>
+                </div>
+                <div class="activity-info">
+                  <div class="activity-subject">{{ activity.Subject }}</div>
+                  <div class="activity-meta">
+                    <span class="contact-name" (click)="openContact(activity.ContactID); $event.stopPropagation()">
+                      <i class="fa-solid fa-user"></i> {{ activity.ContactName }}
+                    </span>
+                    <span class="activity-type">{{ activity.ActivityType }}</span>
+                    <span class="activity-date">{{ activity.ActivityDate | date:'MMM d, h:mm a' }}</span>
+                  </div>
+                </div>
+                <div class="activity-status">
+                  <kendo-chip
+                    [themeColor]="getStatusColor(activity.Status)"
+                    [size]="'small'">
+                    {{ activity.Status }}
+                  </kendo-chip>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-inbox"></i>
+            <p>No recent activities found</p>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Top Performing Contacts -->
+    <div class="panel top-contacts">
+      <div class="panel-header">
+        <h3><i class="fa-solid fa-star"></i> Top Contacts</h3>
+        <span class="header-subtitle">High engagement & positive sentiment</span>
+      </div>
+      <div class="panel-content">
+        @if (topContacts.length > 0) {
+          <div class="contacts-list">
+            @for (contact of topContacts; track contact.ID) {
+              <div class="contact-item" (click)="openContact(contact.ID)">
+                <div class="contact-avatar">
+                  {{ contact.FirstName.charAt(0) }}{{ contact.LastName.charAt(0) }}
+                </div>
+                <div class="contact-info">
+                  <div class="contact-name">{{ contact.FirstName }} {{ contact.LastName }}</div>
+                  <div class="contact-company">{{ contact.Company || 'No company' }}</div>
+                </div>
+                <div class="contact-indicators">
+                  @if (contact.EngagementLevel) {
+                    <span class="engagement-badge" [style.background-color]="getEngagementColor(contact.EngagementLevel)">
+                      {{ contact.EngagementLevel }}
+                    </span>
+                  }
+                  @if (contact.SentimentTrend) {
+                    <i [class]="getSentimentTrendIcon(contact.SentimentTrend)"
+                       [style.color]="getSentimentTrendColor(contact.SentimentTrend)"
+                       [title]="'Sentiment: ' + contact.SentimentTrend"></i>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-star"></i>
+            <p>No top contacts data available yet</p>
+            <span class="empty-hint">AI insights will appear after activities are analyzed</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- At Risk Contacts -->
+    <div class="panel at-risk-contacts">
+      <div class="panel-header warning">
+        <h3><i class="fa-solid fa-triangle-exclamation"></i> At-Risk Contacts</h3>
+        <span class="header-subtitle">High churn risk or declining sentiment</span>
+      </div>
+      <div class="panel-content">
+        @if (atRiskContacts.length > 0) {
+          <div class="contacts-list">
+            @for (contact of atRiskContacts; track contact.ID) {
+              <div class="contact-item at-risk" (click)="openContact(contact.ID)">
+                <div class="contact-avatar warning">
+                  {{ contact.FirstName.charAt(0) }}{{ contact.LastName.charAt(0) }}
+                </div>
+                <div class="contact-info">
+                  <div class="contact-name">{{ contact.FirstName }} {{ contact.LastName }}</div>
+                  <div class="contact-company">{{ contact.Company || 'No company' }}</div>
+                </div>
+                <div class="contact-risk">
+                  <div class="churn-score" [class.high]="(contact.ChurnRiskScore || 0) > 0.7">
+                    <i class="fa-solid fa-warning"></i>
+                    {{ formatChurnRisk(contact.ChurnRiskScore) }} Risk
+                  </div>
+                  @if (contact.SentimentTrend === 'Declining') {
+                    <span class="declining-badge">
+                      <i class="fa-solid fa-arrow-trend-down"></i> Declining
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state success">
+            <i class="fa-solid fa-check-circle"></i>
+            <p>No at-risk contacts detected</p>
+            <span class="empty-hint">Great news! All contacts appear healthy</span>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <mj-loading [showText]="false" size="medium"></mj-loading>
+    </div>
+  }
+</div>

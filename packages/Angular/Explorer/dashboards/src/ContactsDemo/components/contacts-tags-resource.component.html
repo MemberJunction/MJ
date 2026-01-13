@@ -1,0 +1,181 @@
+<div class="tags-resource">
+  <!-- Header -->
+  <div class="resource-header">
+    <div class="header-title">
+      <h2><i class="fa-solid fa-tags"></i> Tag Management</h2>
+    </div>
+  </div>
+
+  <!-- Stats Overview -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon contact">
+        <i class="fa-solid fa-user-tag"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ totalContactTags }}</div>
+        <div class="stat-label">Contact Tags</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon activity">
+        <i class="fa-solid fa-tag"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ totalActivityTags }}</div>
+        <div class="stat-label">Activity Tags</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon usage">
+        <i class="fa-solid fa-chart-simple"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ totalTagUsage }}</div>
+        <div class="stat-label">Total Tag Uses</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon top">
+        <i class="fa-solid fa-trophy"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ mostUsedTag?.Name || '-' }}</div>
+        <div class="stat-label">Most Used Tag</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tag Cloud Section -->
+  <div class="tag-clouds">
+    <div class="cloud-card">
+      <div class="cloud-header">
+        <i class="fa-solid fa-user-tag"></i>
+        <h3>Contact Tags Cloud</h3>
+      </div>
+      <div class="cloud-content">
+        @if (contactTagCloud.length > 0) {
+          <div class="tag-cloud">
+            @for (tag of contactTagCloud; track tag.name) {
+              <span class="cloud-tag"
+                    [style.fontSize.rem]="tag.size"
+                    [style.color]="tag.color"
+                    [title]="tag.name + ': ' + tag.count + ' uses'">
+                {{ tag.name }}
+              </span>
+            }
+          </div>
+        } @else {
+          <div class="empty-cloud">No contact tags yet</div>
+        }
+      </div>
+    </div>
+
+    <div class="cloud-card">
+      <div class="cloud-header">
+        <i class="fa-solid fa-tag"></i>
+        <h3>Activity Tags Cloud</h3>
+      </div>
+      <div class="cloud-content">
+        @if (activityTagCloud.length > 0) {
+          <div class="tag-cloud">
+            @for (tag of activityTagCloud; track tag.name) {
+              <span class="cloud-tag"
+                    [style.fontSize.rem]="tag.size"
+                    [style.color]="tag.color"
+                    [title]="tag.name + ': ' + tag.count + ' uses'">
+                {{ tag.name }}
+              </span>
+            }
+          </div>
+        } @else {
+          <div class="empty-cloud">No activity tags yet</div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Tags List Section -->
+  <div class="tags-list-container">
+    <div class="list-header">
+      <div class="tab-buttons">
+        <button class="tab-button" [class.active]="activeTab === 'contact'" (click)="setActiveTab('contact')">
+          <i class="fa-solid fa-user-tag"></i>
+          Contact Tags
+          <span class="tab-count">{{ totalContactTags }}</span>
+        </button>
+        <button class="tab-button" [class.active]="activeTab === 'activity'" (click)="setActiveTab('activity')">
+          <i class="fa-solid fa-tag"></i>
+          Activity Tags
+          <span class="tab-count">{{ totalActivityTags }}</span>
+        </button>
+      </div>
+
+      <div class="search-container">
+        <kendo-textbox
+          [value]="searchTerm"
+          (valueChange)="onSearchChange($event)"
+          placeholder="Search tags...">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <i class="fa-solid fa-search"></i>
+          </ng-template>
+        </kendo-textbox>
+      </div>
+    </div>
+
+    <div class="tags-list">
+      @if (filteredTags.length > 0) {
+        @for (tag of filteredTags; track tag.ID) {
+          <div class="tag-card" (click)="openTag(tag)">
+            <div class="tag-header">
+              <div class="tag-color" [style.backgroundColor]="getTagColor(tag)"></div>
+              <div class="tag-info">
+                <div class="tag-name">{{ tag.Name }}</div>
+                @if (tag.Description) {
+                  <div class="tag-description">{{ tag.Description }}</div>
+                }
+              </div>
+              <div class="tag-badge" [style.backgroundColor]="getTagColor(tag)">
+                {{ tag.usageCount }} uses
+              </div>
+            </div>
+
+            @if (tag.recentItems.length > 0) {
+              <div class="tag-items">
+                <div class="items-label">Recent {{ activeTab === 'contact' ? 'contacts' : 'activities' }}:</div>
+                <div class="items-list">
+                  @for (item of tag.recentItems; track item.id) {
+                    <span class="item-chip" (click)="openItem(activeTab, item.id); $event.stopPropagation()">
+                      <i [class]="activeTab === 'contact' ? 'fa-solid fa-user' : 'fa-solid fa-clock'"></i>
+                      {{ item.name }}
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      } @else {
+        <div class="empty-state">
+          <i class="fa-solid fa-tags"></i>
+          @if (searchTerm) {
+            <p>No tags match "{{ searchTerm }}"</p>
+            <span class="empty-hint">Try a different search term</span>
+          } @else {
+            <p>No {{ activeTab }} tags yet</p>
+            <span class="empty-hint">Tags will appear here once created</span>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <mj-loading [showText]="false" size="medium"></mj-loading>
+    </div>
+  }
+</div>

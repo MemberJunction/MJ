@@ -1,0 +1,25 @@
+{
+  "sentiment": {
+    "overallSentiment": "Negative",
+    "sentimentScore": -0.7,
+    "emotionCategory": "Frustrated",
+    "confidenceScore": 0.95,
+    "urgencyLevel": "High",
+    "urgencyScore": 0.8,
+    "requiresFollowUp": true
+  },
+  "topics": {
+    "topics": [
+      {
+        "topicName": "Issue Resolution",
+        "confidenceScore": 0.95,
+        "relevanceRank": 1
+      },
+      {
+        "topicName": "Customer Service",
+        "confidenceScore": 0.85,
+        "relevanceRank": 2
+      }
+    ]
+  }
+}

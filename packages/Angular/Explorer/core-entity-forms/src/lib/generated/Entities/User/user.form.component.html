@@ -889,6 +889,28 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- Activities__Demo Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="activitiesDemo"
+        sectionName="Activities__Demo"
+        icon="fa fa-comment"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('activitiesDemo')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Activities__Demo','UserID')"
+                [NewRecordValues]="NewRecordValues('Activities__Demo')"
+                [AllowLoad]="IsSectionExpanded('activitiesDemo')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('activitiesDemo', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- AI Agent Notes Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="aIAgentNotes"
@@ -1324,6 +1346,28 @@
                 [AllowLoad]="IsSectionExpanded('scheduledActions')"
                 [ShowToolbar]="false"
                 (AfterDataLoad)="SetSectionRowCount('scheduledActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Activities Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="activities"
+        sectionName="Activities"
+        icon="fa fa-comment"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('activities')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Activities','UserID')"
+                [NewRecordValues]="NewRecordValues('Activities')"
+                [AllowLoad]="IsSectionExpanded('activities')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('activities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

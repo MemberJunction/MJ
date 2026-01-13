@@ -14,7 +14,10 @@ export class ActivityFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'participants', sectionName: 'Participants', isExpanded: true },
+            { sectionKey: 'activityDetails', sectionName: 'Activity Details', isExpanded: true },
+            { sectionKey: 'aIInsights', sectionName: 'AI Insights', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

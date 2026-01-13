@@ -126,6 +126,12 @@ import { ListsCategoriesResource } from './Lists/components/lists-categories-res
 import { ListsOperationsResource } from './Lists/components/lists-operations-resource.component';
 import { VennDiagramComponent } from './Lists/components/venn-diagram/venn-diagram.component';
 import { ListSetOperationsService } from './Lists/services/list-set-operations.service';
+// Contacts Demo Dashboard Components
+import { ContactsOverviewResourceComponent } from './ContactsDemo/components/contacts-overview-resource.component';
+import { ContactsActivitiesResourceComponent } from './ContactsDemo/components/contacts-activities-resource.component';
+import { ContactsInsightsResourceComponent } from './ContactsDemo/components/contacts-insights-resource.component';
+import { ContactsTagsResourceComponent } from './ContactsDemo/components/contacts-tags-resource.component';
+import { ActivityEditPanelComponent } from './ContactsDemo/components/activity-edit-panel.component';
 
 
 
@@ -223,7 +229,13 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsOperationsResource,
-    VennDiagramComponent
+    VennDiagramComponent,
+    // Contacts Demo Dashboard Components
+    ContactsOverviewResourceComponent,
+    ContactsActivitiesResourceComponent,
+    ContactsInsightsResourceComponent,
+    ContactsTagsResourceComponent,
+    ActivityEditPanelComponent
   ],
   imports: [
     CommonModule,
@@ -325,7 +337,13 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsOperationsResource,
-    VennDiagramComponent
+    VennDiagramComponent,
+    // Contacts Demo Dashboard Components
+    ContactsOverviewResourceComponent,
+    ContactsActivitiesResourceComponent,
+    ContactsInsightsResourceComponent,
+    ContactsTagsResourceComponent,
+    ActivityEditPanelComponent
   ]
 })
 export class DashboardsModule { }

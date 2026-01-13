@@ -1,0 +1,591 @@
+.contacts-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
+  position: relative;
+  background: var(--kendo-color-app-surface);
+}
+
+/* Header Styles */
+.contacts-overview .overview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.contacts-overview .overview-header .header-title h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--kendo-color-on-app-surface);
+}
+
+.contacts-overview .overview-header .header-title h2 i {
+  color: #4CAF50;
+}
+
+.contacts-overview .overview-header .header-title .subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--kendo-color-subtle);
+}
+
+.contacts-overview .overview-header .filters-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.contacts-overview .overview-header .filters-row .search-container {
+  min-width: 250px;
+}
+
+.contacts-overview .overview-header .filters-row .search-container kendo-textbox {
+  width: 100%;
+}
+
+.contacts-overview .overview-header .filters-row .filter-container {
+  min-width: 150px;
+}
+
+.contacts-overview .overview-header .filters-row .filter-container kendo-dropdownlist {
+  width: 100%;
+}
+
+/* Metrics Grid */
+.contacts-overview .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.contacts-overview .metrics-grid .metric-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
+}
+
+.contacts-overview .metrics-grid .metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 0.75rem;
+  font-size: 1.5rem;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-icon i {
+  color: white;
+}
+
+.contacts-overview .metrics-grid .metric-card.contacts .metric-icon {
+  background: linear-gradient(135deg, #4CAF50, #66BB6A);
+}
+
+.contacts-overview .metrics-grid .metric-card.activities .metric-icon {
+  background: linear-gradient(135deg, #2196F3, #42A5F5);
+}
+
+.contacts-overview .metrics-grid .metric-card.sentiment .metric-icon {
+  background: linear-gradient(135deg, #9C27B0, #BA68C8);
+}
+
+.contacts-overview .metrics-grid .metric-card.engagement .metric-icon {
+  background: linear-gradient(135deg, #FF9800, #FFB74D);
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content {
+  flex: 1;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+  color: var(--kendo-color-on-app-surface);
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--kendo-color-subtle);
+  margin-bottom: 0.5rem;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--kendo-color-subtle);
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span i {
+  font-size: 0.5rem;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span.active i {
+  color: #4CAF50;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span.inactive i {
+  color: #9e9e9e;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span.recent {
+  color: #2196F3;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span.positive {
+  color: #4CAF50;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span.negative {
+  color: #f44336;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span.medium {
+  color: #FF9800;
+}
+
+.contacts-overview .metrics-grid .metric-card .metric-content .metric-breakdown span.low {
+  color: #f44336;
+}
+
+/* Sentiment Distribution Bar */
+.contacts-overview .sentiment-bar-container {
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-bar-header {
+  margin-bottom: 1rem;
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-bar-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-bar-header h4 i {
+  color: var(--kendo-color-primary);
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-bar {
+  display: flex;
+  height: 2rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--kendo-color-border);
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-bar .sentiment-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: width 0.5s ease;
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-bar .sentiment-segment.positive {
+  background: linear-gradient(135deg, #4CAF50, #66BB6A);
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-bar .sentiment-segment.neutral {
+  background: linear-gradient(135deg, #9e9e9e, #bdbdbd);
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-bar .sentiment-segment.negative {
+  background: linear-gradient(135deg, #f44336, #ef5350);
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-legend {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  justify-content: center;
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--kendo-color-subtle);
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-legend .legend-item i {
+  font-size: 0.5rem;
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-legend .legend-item.positive i {
+  color: #4CAF50;
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-legend .legend-item.neutral i {
+  color: #9e9e9e;
+}
+
+.contacts-overview .sentiment-bar-container .sentiment-legend .legend-item.negative i {
+  color: #f44336;
+}
+
+/* Content Grid */
+.contacts-overview .content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.contacts-overview .content-grid .panel {
+  background: var(--kendo-color-surface);
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.contacts-overview .content-grid .panel .panel-header {
+  padding: 1rem 1.25rem;
+  background: var(--kendo-color-app-surface);
+  border-bottom: 1px solid var(--kendo-color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.contacts-overview .content-grid .panel .panel-header.warning {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.1), rgba(255, 193, 7, 0.05));
+}
+
+.contacts-overview .content-grid .panel .panel-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.contacts-overview .content-grid .panel .panel-header h3 i {
+  color: var(--kendo-color-primary);
+}
+
+.contacts-overview .content-grid .panel .panel-header.warning h3 i {
+  color: #FF9800;
+}
+
+.contacts-overview .content-grid .panel .panel-header .header-subtitle {
+  font-size: 0.75rem;
+  color: var(--kendo-color-subtle);
+}
+
+.contacts-overview .content-grid .panel .panel-content {
+  padding: 1rem;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+/* Recent Activities Panel */
+.contacts-overview .content-grid .recent-activities {
+  grid-column: 1 / -1;
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem;
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item:hover {
+  background: var(--kendo-color-base-hover);
+  border-color: var(--kendo-color-primary);
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item .activity-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.375rem;
+  background: var(--kendo-color-primary-subtle);
+  border-left: 3px solid transparent;
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item .activity-icon i {
+  color: var(--kendo-color-primary);
+  font-size: 1rem;
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item .activity-info {
+  flex: 1;
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item .activity-info .activity-subject {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--kendo-color-on-app-surface);
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item .activity-info .activity-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--kendo-color-subtle);
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item .activity-info .activity-meta .contact-name {
+  color: var(--kendo-color-primary);
+  cursor: pointer;
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item .activity-info .activity-meta .contact-name:hover {
+  text-decoration: underline;
+}
+
+.contacts-overview .content-grid .recent-activities .activities-list .activity-item .activity-status {
+  flex-shrink: 0;
+}
+
+/* Contacts Lists */
+.contacts-overview .content-grid .contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem;
+  border: 1px solid var(--kendo-color-border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item:hover {
+  background: var(--kendo-color-base-hover);
+  border-color: var(--kendo-color-primary);
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item.at-risk:hover {
+  border-color: #FF9800;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4CAF50, #66BB6A);
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-avatar.warning {
+  background: linear-gradient(135deg, #FF9800, #FFB74D);
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-info {
+  flex: 1;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-info .contact-name {
+  font-weight: 600;
+  color: var(--kendo-color-on-app-surface);
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-info .contact-company {
+  font-size: 0.75rem;
+  color: var(--kendo-color-subtle);
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-indicators {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-indicators .engagement-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-indicators i {
+  font-size: 1rem;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-risk {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-risk .churn-score {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #FF9800;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-risk .churn-score.high {
+  color: #f44336;
+}
+
+.contacts-overview .content-grid .contacts-list .contact-item .contact-risk .declining-badge {
+  font-size: 0.625rem;
+  color: #f44336;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Empty States */
+.contacts-overview .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  color: var(--kendo-color-subtle);
+}
+
+.contacts-overview .empty-state.success {
+  color: #4CAF50;
+}
+
+.contacts-overview .empty-state i {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.contacts-overview .empty-state.success i {
+  opacity: 1;
+}
+
+.contacts-overview .empty-state p {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.contacts-overview .empty-state .empty-hint {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+/* Loading Overlay */
+.contacts-overview .loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .contacts-overview .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .contacts-overview .content-grid .recent-activities {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .contacts-overview {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .contacts-overview .overview-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contacts-overview .overview-header .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contacts-overview .overview-header .filters-row .search-container,
+  .contacts-overview .overview-header .filters-row .filter-container {
+    min-width: unset;
+  }
+
+  .contacts-overview .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}

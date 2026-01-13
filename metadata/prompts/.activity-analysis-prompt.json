@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "Activity Analysis",
+      "Description": "Analyzes activity content (emails, calls, meetings) to extract sentiment, emotion, urgency indicators, and topic classifications. Used by ActivityEntityExtended to auto-populate sentiment and topic records.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/demo/activity-analysis.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/demo/activity-analysis.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Demo?create&Description=Demo application prompts"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "D7F9963B-C8F2-412F-AC5E-D29E5A398A98"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T21:50:49.294Z",
+            "checksum": "b7f9171aaec23e10fa0d1925552a9455d156c4a5c046a442e530258dcbb7a1d5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "AA2A364A-A3FD-47CD-B4EE-ADB3681FC6C1"
+          },
+          "sync": {
+            "lastModified": "2026-01-13T21:50:49.305Z",
+            "checksum": "e9b1e0df1114ad130d76df24a66b3aee574595f779f023ff9d6b694d311f5ece"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2F4FCF80-2F4D-4A51-BDF3-DD6205994054"
+    },
+    "sync": {
+      "lastModified": "2026-01-13T21:50:49.234Z",
+      "checksum": "d8ef495d0b5843046bbc516e7761b7357bfe8e17accab6f1c9e877a7aa4e3de0"
+    }
+  }
+]

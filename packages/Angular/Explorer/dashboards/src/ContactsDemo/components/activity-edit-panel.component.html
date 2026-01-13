@@ -1,0 +1,233 @@
+<div class="panel-backdrop" *ngIf="isOpen" (click)="onBackdropClick($event)">
+    <div class="edit-panel" [class.open]="isOpen">
+        <!-- Panel Header -->
+        <div class="panel-header">
+            <div class="header-content">
+                <div class="header-icon" [class.has-type]="selectedActivityType">
+                    <i [class]="getActivityTypeIcon(selectedActivityType)"></i>
+                </div>
+                <div class="header-text">
+                    <h2>New Activity</h2>
+                    <span class="header-subtitle" *ngIf="selectedActivityType">{{ selectedActivityType.Name }}</span>
+                    <span class="header-subtitle" *ngIf="!selectedActivityType">Select an activity type</span>
+                </div>
+            </div>
+            <button class="close-btn" (click)="closePanel()" [disabled]="isSaving">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Panel Body -->
+        <div class="panel-body">
+            <mj-loading *ngIf="isLoading" text="Loading..."></mj-loading>
+
+            <form *ngIf="!isLoading" class="activity-form" (submit)="$event.preventDefault(); save()">
+                <!-- Contact & Type Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fa-solid fa-user"></i>
+                        Contact & Type
+                    </h3>
+
+                    <div class="form-group">
+                        <label for="activityContact" class="required">Contact</label>
+                        <select
+                            id="activityContact"
+                            name="activityContact"
+                            [(ngModel)]="selectedContactId"
+                            [disabled]="isSaving"
+                            required
+                        >
+                            <option [ngValue]="''">Select a contact...</option>
+                            <option *ngFor="let contact of contacts" [ngValue]="contact.ID">
+                                {{ contact.Name }}{{ contact.Company ? ' - ' + contact.Company : '' }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="activityType" class="required">Activity Type</label>
+                        <div class="activity-type-grid">
+                            <button
+                                *ngFor="let type of activityTypes"
+                                type="button"
+                                class="type-button"
+                                [class.selected]="selectedActivityTypeId === type.ID"
+                                (click)="selectedActivityTypeId = type.ID"
+                                [disabled]="isSaving"
+                            >
+                                <i [class]="type.Icon || 'fa-solid fa-calendar'"></i>
+                                <span>{{ type.Name }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity Details Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fa-solid fa-info-circle"></i>
+                        Activity Details
+                    </h3>
+
+                    <div class="form-group">
+                        <label for="activitySubject" class="required">Subject</label>
+                        <input
+                            type="text"
+                            id="activitySubject"
+                            name="activitySubject"
+                            [(ngModel)]="subject"
+                            placeholder="e.g., Follow-up call about proposal"
+                            [disabled]="isSaving"
+                            required
+                        />
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="activityDate">Date & Time</label>
+                            <input
+                                type="datetime-local"
+                                id="activityDate"
+                                name="activityDate"
+                                [value]="formatDateForInput(activityDate)"
+                                (change)="onActivityDateChange($any($event.target).value)"
+                                [disabled]="isSaving"
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="activityDuration">Duration (minutes)</label>
+                            <input
+                                type="number"
+                                id="activityDuration"
+                                name="activityDuration"
+                                [(ngModel)]="durationMinutes"
+                                placeholder="e.g., 30"
+                                min="0"
+                                [disabled]="isSaving"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="activityDescription">Description</label>
+                        <textarea
+                            id="activityDescription"
+                            name="activityDescription"
+                            [(ngModel)]="description"
+                            placeholder="Add details about this activity..."
+                            rows="3"
+                            [disabled]="isSaving"
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="activityRawContent">Full Content (for AI Analysis)</label>
+                        <textarea
+                            id="activityRawContent"
+                            name="activityRawContent"
+                            [(ngModel)]="rawContent"
+                            placeholder="Paste full email, transcript, or notes here for AI to analyze..."
+                            rows="5"
+                            [disabled]="isSaving"
+                        ></textarea>
+                        <span class="field-hint">This content will be processed by AI for sentiment analysis and tagging</span>
+                    </div>
+                </div>
+
+                <!-- Status & Urgency Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fa-solid fa-flag"></i>
+                        Status & Priority
+                    </h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="activityStatus">Status</label>
+                            <select
+                                id="activityStatus"
+                                name="activityStatus"
+                                [(ngModel)]="status"
+                                [disabled]="isSaving"
+                            >
+                                <option *ngFor="let opt of statusOptions" [ngValue]="opt.value">
+                                    {{ opt.label }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="activityUrgency">Urgency Level</label>
+                            <select
+                                id="activityUrgency"
+                                name="activityUrgency"
+                                [(ngModel)]="urgencyLevel"
+                                [disabled]="isSaving"
+                            >
+                                <option *ngFor="let opt of urgencyOptions" [ngValue]="opt.value">
+                                    {{ opt.label }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="toggle-group">
+                        <label class="toggle-label">
+                            <span class="toggle-wrapper">
+                                <input
+                                    type="checkbox"
+                                    name="requiresFollowUp"
+                                    [(ngModel)]="requiresFollowUp"
+                                    (ngModelChange)="onRequiresFollowUpChange()"
+                                    [disabled]="isSaving"
+                                />
+                                <span class="toggle-slider"></span>
+                            </span>
+                            <span class="toggle-text">
+                                <span class="toggle-title">Requires Follow-Up</span>
+                                <span class="toggle-description">Mark this activity for follow-up action</span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="form-group" *ngIf="requiresFollowUp">
+                        <label for="followUpDate">Follow-Up Date</label>
+                        <input
+                            type="date"
+                            id="followUpDate"
+                            name="followUpDate"
+                            [value]="formatDateOnlyForInput(followUpDate)"
+                            (change)="onFollowUpDateChange($any($event.target).value)"
+                            [disabled]="isSaving"
+                        />
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Panel Footer -->
+        <div class="panel-footer">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button
+                    class="btn-secondary"
+                    (click)="closePanel()"
+                    [disabled]="isSaving"
+                >
+                    Cancel
+                </button>
+                <button
+                    class="btn-primary"
+                    (click)="save()"
+                    [disabled]="isSaving || !canSave"
+                >
+                    <i class="fa-solid fa-spinner fa-spin" *ngIf="isSaving"></i>
+                    <i class="fa-solid fa-plus" *ngIf="!isSaving"></i>
+                    <span>Create Activity</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

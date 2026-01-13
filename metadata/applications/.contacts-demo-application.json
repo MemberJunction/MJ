@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "Name": "Contacts Demo",
+    "Description": "Demo Contact Management with AI-Powered Insights",
+    "Icon": "fa-solid fa-address-book",
+    "DefaultForNewUser": false,
+    "Color": "#4CAF50",
+    "DefaultSequence": 1010,
+    "DefaultNavItems": [
+      {
+        "Label": "Overview",
+        "Icon": "fa-solid fa-chart-pie",
+        "ResourceType": "Custom",
+        "DriverClass": "ContactsOverviewResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Activities",
+        "Icon": "fa-solid fa-clock-rotate-left",
+        "ResourceType": "Custom",
+        "DriverClass": "ContactsActivitiesResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Insights",
+        "Icon": "fa-solid fa-brain",
+        "ResourceType": "Custom",
+        "DriverClass": "ContactsInsightsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Tags",
+        "Icon": "fa-solid fa-tags",
+        "ResourceType": "Custom",
+        "DriverClass": "ContactsTagsResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "D785BFAB-1BA2-4C54-A4B3-970861229C55"
+  },
+  "sync": {
+    "lastModified": "2026-01-13T21:51:09.846Z",
+    "checksum": "0f82b9cf44682aad0c9578bcb2112147f61782c2c40a800c1da23f0ec326bb27"
+  }
+}

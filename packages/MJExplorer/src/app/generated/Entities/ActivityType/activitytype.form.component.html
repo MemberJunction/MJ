@@ -3,21 +3,47 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Activity Type Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="details"
-        sectionName="Details"
-        icon="fa fa-align-left"
+        sectionKey="activityTypeDetails"
+        sectionName="Activity Type Details"
+        icon="fa fa-info-circle"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Name"
-            Type="dropdownlist"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -35,6 +61,31 @@
             [formContext]="formContext"
         ></mj-form-field>
 
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- Activities Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="activities"
+        sectionName="Activities"
+        icon="fa fa-comment"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('activities')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Activities','ActivityTypeID')"
+                [NewRecordValues]="NewRecordValues('Activities')"
+                [AllowLoad]="IsSectionExpanded('activities')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('activities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
     </mj-collapsible-panel>
 </mj-record-form-container>
         

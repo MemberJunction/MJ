@@ -1,0 +1,194 @@
+<div class="activities-resource">
+  <!-- Header with filters -->
+  <div class="resource-header">
+    <div class="header-title">
+      <h2><i class="fa-solid fa-clock-rotate-left"></i> Activity Timeline</h2>
+      <span class="activity-count">{{ filteredActivities.length }} activities</span>
+      <button kendoButton
+              [themeColor]="'primary'"
+              [size]="'medium'"
+              (click)="openNewActivityPanel()"
+              class="new-activity-btn">
+        <i class="fa-solid fa-plus"></i> New Activity
+      </button>
+    </div>
+
+    <div class="filters-row">
+      <div class="search-container">
+        <kendo-textbox
+          placeholder="Search activities..."
+          [value]="searchTerm$.value"
+          (valueChange)="onSearchChange($event)">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <i class="fa-solid fa-search"></i>
+          </ng-template>
+        </kendo-textbox>
+      </div>
+
+      <div class="filter-container">
+        <kendo-dropdownlist
+          [data]="activityTypeOptions"
+          textField="text"
+          valueField="value"
+          [valuePrimitive]="true"
+          [value]="selectedType$.value"
+          (valueChange)="onTypeChange($event)">
+        </kendo-dropdownlist>
+      </div>
+
+      <div class="filter-container">
+        <kendo-dropdownlist
+          [data]="statusOptions"
+          textField="text"
+          valueField="value"
+          [valuePrimitive]="true"
+          [value]="selectedStatus$.value"
+          (valueChange)="onStatusChange($event)">
+        </kendo-dropdownlist>
+      </div>
+
+      <div class="filter-container">
+        <kendo-dropdownlist
+          [data]="urgencyOptions"
+          textField="text"
+          valueField="value"
+          [valuePrimitive]="true"
+          [value]="selectedUrgency$.value"
+          (valueChange)="onUrgencyChange($event)">
+        </kendo-dropdownlist>
+      </div>
+
+      <div class="filter-container">
+        <kendo-dropdownlist
+          [data]="sentimentOptions"
+          textField="text"
+          valueField="value"
+          [valuePrimitive]="true"
+          [value]="selectedSentiment$.value"
+          (valueChange)="onSentimentChange($event)">
+        </kendo-dropdownlist>
+      </div>
+
+      <div class="filter-container checkbox-filter">
+        <label class="follow-up-filter">
+          <input type="checkbox"
+                 [checked]="followUpOnly$.value"
+                 (change)="onFollowUpToggle($any($event.target).checked)" />
+          <span><i class="fa-solid fa-bell"></i> Follow-up required</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activities Timeline -->
+  <div class="activities-timeline">
+    @if (filteredActivities.length > 0) {
+      @for (activity of filteredActivities; track activity.ID) {
+        <div class="activity-card"
+             [class.has-urgency]="activity.UrgencyLevel"
+             [style.border-left-color]="getUrgencyColor(activity.UrgencyLevel)"
+             (click)="openActivity(activity.ID)">
+
+          <div class="activity-header">
+            <div class="activity-type-icon">
+              <i [class]="activity.ActivityTypeIcon"></i>
+            </div>
+            <div class="activity-title">
+              <div class="activity-subject">{{ activity.Subject }}</div>
+              <div class="activity-meta">
+                <span class="activity-type-name">{{ activity.ActivityTypeName }}</span>
+                <span class="separator">|</span>
+                <span class="activity-date">{{ activity.ActivityDate | date:'MMM d, yyyy h:mm a' }}</span>
+                @if (activity.DurationMinutes) {
+                  <span class="separator">|</span>
+                  <span class="activity-duration"><i class="fa-solid fa-stopwatch"></i> {{ formatDuration(activity.DurationMinutes) }}</span>
+                }
+              </div>
+            </div>
+            <div class="activity-badges">
+              <kendo-chip
+                [themeColor]="getStatusColor(activity.Status)"
+                [size]="'small'">
+                {{ activity.Status }}
+              </kendo-chip>
+              @if (activity.UrgencyLevel) {
+                <span class="urgency-badge" [style.background-color]="getUrgencyColor(activity.UrgencyLevel)">
+                  {{ activity.UrgencyLevel }}
+                </span>
+              }
+            </div>
+          </div>
+
+          <div class="activity-body">
+            <div class="activity-contact" (click)="openContact(activity.ContactID, $event)">
+              <i class="fa-solid fa-user"></i>
+              <span>{{ activity.ContactName }}</span>
+            </div>
+
+            @if (activity.Description) {
+              <div class="activity-description">
+                {{ activity.Description }}
+              </div>
+            }
+
+            <div class="activity-footer">
+              <div class="activity-indicators">
+                @if (activity.ProcessedByAI) {
+                  <span class="ai-badge" title="Analyzed by AI">
+                    <i class="fa-solid fa-brain"></i> AI Analyzed
+                  </span>
+                }
+
+                @if (activity.OverallSentiment) {
+                  <span class="sentiment-indicator" [style.color]="getSentimentColor(activity.OverallSentiment)">
+                    <i [class]="getSentimentIcon(activity.OverallSentiment)"></i>
+                    {{ activity.OverallSentiment }}
+                    @if (activity.SentimentScore != null) {
+                      <span class="sentiment-score">({{ activity.SentimentScore > 0 ? '+' : '' }}{{ activity.SentimentScore | number:'1.2-2' }})</span>
+                    }
+                  </span>
+                }
+
+                @if (activity.RequiresFollowUp) {
+                  <span class="follow-up-indicator">
+                    <i class="fa-solid fa-bell"></i> Follow-up
+                    @if (activity.FollowUpDate) {
+                      <span class="follow-up-date">by {{ activity.FollowUpDate | date:'MMM d' }}</span>
+                    }
+                  </span>
+                }
+              </div>
+
+              <button kendoButton
+                      [look]="'flat'"
+                      [size]="'small'"
+                      (click)="openActivity(activity.ID); $event.stopPropagation()">
+                <i class="fa-solid fa-arrow-right"></i> View Details
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    } @else {
+      <div class="empty-state">
+        <i class="fa-solid fa-inbox"></i>
+        <p>No activities found</p>
+        <span class="empty-hint">Try adjusting your filters or add new activities</span>
+      </div>
+    }
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <mj-loading [showText]="false" size="medium"></mj-loading>
+    </div>
+  }
+</div>
+
+<!-- Activity Edit Panel -->
+<mj-activity-edit-panel
+    #editPanel
+    [isOpen]="isEditPanelOpen"
+    (close)="onEditPanelClose()"
+    (saved)="onActivitySaved()">
+</mj-activity-edit-panel>
