@@ -1,0 +1,265 @@
+@if (visible) {
+  <div class="dialog-overlay" (click)="onCancel()">
+    <div class="dialog-container" (click)="$event.stopPropagation()">
+      <!-- Header -->
+      <div class="dialog-header">
+        <div class="header-content">
+          <div class="header-icon">
+            <span class="fa-solid fa-rectangle-list"></span>
+          </div>
+          <div class="header-text">
+            <h2 class="dialog-title">{{ dialogTitle }}</h2>
+            <p class="dialog-subtitle">{{ dialogSubtitle }}</p>
+          </div>
+        </div>
+        <button class="close-button" (click)="onCancel()" title="Close">
+          <span class="fa-solid fa-times"></span>
+        </button>
+      </div>
+
+      <!-- Search and Filters -->
+      <div class="search-section">
+        <div class="search-bar">
+          <span class="fa-solid fa-search search-icon"></span>
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Search lists..."
+            [value]="searchText"
+            (input)="onSearchInput($event)"
+          />
+          @if (searchText) {
+            <button class="clear-search" (click)="clearSearch()">
+              <span class="fa-solid fa-times-circle"></span>
+            </button>
+          }
+        </div>
+
+        @if (config.allowCreate !== false) {
+          <button class="create-button" (click)="showCreateListForm()" [disabled]="showCreateForm">
+            <span class="fa-solid fa-plus"></span>
+            <span class="button-text">New</span>
+          </button>
+        }
+      </div>
+
+      <!-- Filter Tabs -->
+      <div class="filter-tabs">
+        <div class="tabs-left">
+          <button
+            class="tab-button"
+            [class.active]="activeTab === 'all'"
+            (click)="setActiveTab('all')">
+            All
+          </button>
+          <button
+            class="tab-button"
+            [class.active]="activeTab === 'my-lists'"
+            (click)="setActiveTab('my-lists')">
+            My Lists
+          </button>
+          <button
+            class="tab-button"
+            [class.active]="activeTab === 'recent'"
+            (click)="setActiveTab('recent')">
+            Recent
+          </button>
+        </div>
+        <div class="tabs-right">
+          <select class="sort-select" [value]="sortOption" (change)="setSortOption($any($event.target).value)">
+            <option value="name">Sort: Name</option>
+            <option value="recent">Sort: Recent</option>
+            <option value="item-count">Sort: Items</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Create List Form -->
+      @if (showCreateForm) {
+        <div class="create-form">
+          <div class="create-form-header">
+            <span class="fa-solid fa-plus-circle"></span>
+            <span>Create New List</span>
+          </div>
+          <div class="create-form-body">
+            <div class="form-group">
+              <input
+                type="text"
+                class="form-input"
+                placeholder="List name *"
+                [(ngModel)]="newListName"
+                [disabled]="saving"
+                (keyup.enter)="createList()"
+              />
+            </div>
+            <div class="form-group">
+              <textarea
+                class="form-input form-textarea"
+                placeholder="Description (optional)"
+                [(ngModel)]="newListDescription"
+                [disabled]="saving"
+                rows="2">
+              </textarea>
+            </div>
+            @if (categories.length > 0) {
+              <div class="form-group">
+                <select class="form-input" [(ngModel)]="newListCategoryId" [disabled]="saving">
+                  <option [ngValue]="null">No category</option>
+                  @for (category of categories; track category.ID) {
+                    <option [ngValue]="category.ID">{{ category.Name }}</option>
+                  }
+                </select>
+              </div>
+            }
+            <div class="create-form-actions">
+              <button
+                class="btn btn-primary"
+                (click)="createList()"
+                [disabled]="!newListName.trim() || saving">
+                @if (saving) {
+                  <span class="fa-solid fa-spinner fa-spin"></span>
+                }
+                Create List
+              </button>
+              <button class="btn btn-secondary" (click)="cancelCreateList()" [disabled]="saving">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- List Content -->
+      <div class="list-content">
+        @if (loading) {
+          <div class="loading-state">
+            <mj-loading text="Loading lists..." size="medium"></mj-loading>
+          </div>
+        } @else if (filteredLists.length === 0) {
+          <div class="empty-state">
+            @if (searchText) {
+              <span class="fa-solid fa-search empty-icon"></span>
+              <p class="empty-title">No lists found</p>
+              <p class="empty-subtitle">Try a different search term</p>
+            } @else {
+              <span class="fa-solid fa-rectangle-list empty-icon"></span>
+              <p class="empty-title">No lists yet</p>
+              <p class="empty-subtitle">Create your first list to get started</p>
+              @if (config.allowCreate !== false) {
+                <button class="btn btn-primary" (click)="showCreateListForm()">
+                  <span class="fa-solid fa-plus"></span>
+                  Create List
+                </button>
+              }
+            }
+          </div>
+        } @else {
+          <div class="list-items">
+            @for (vm of filteredLists; track vm.list.ID) {
+              <div
+                class="list-item"
+                [class.selected-add]="vm.isSelectedForAdd || addedToLists.has(vm.list.ID)"
+                [class.selected-remove]="vm.isSelectedForRemove || removedFromLists.has(vm.list.ID)"
+                [class.is-member]="vm.isFullMember || vm.isPartialMember">
+
+                <!-- Checkbox / Selection Area -->
+                <div class="list-item-select">
+                  @if (showAddButton(vm)) {
+                    <button
+                      class="select-btn add-btn"
+                      [class.selected]="vm.isSelectedForAdd || addedToLists.has(vm.list.ID)"
+                      (click)="toggleListForAdd(vm)"
+                      [title]="(vm.isSelectedForAdd || addedToLists.has(vm.list.ID)) ? 'Remove from selection' : 'Add to this list'">
+                      @if (vm.isSelectedForAdd || addedToLists.has(vm.list.ID)) {
+                        <span class="fa-solid fa-check"></span>
+                      } @else {
+                        <span class="fa-solid fa-plus"></span>
+                      }
+                    </button>
+                  }
+                  @if (showRemoveButton(vm) && (vm.isFullMember || vm.isPartialMember)) {
+                    <button
+                      class="select-btn remove-btn"
+                      [class.selected]="vm.isSelectedForRemove || removedFromLists.has(vm.list.ID)"
+                      (click)="toggleListForRemove(vm)"
+                      [title]="(vm.isSelectedForRemove || removedFromLists.has(vm.list.ID)) ? 'Cancel removal' : 'Remove from this list'">
+                      @if (vm.isSelectedForRemove || removedFromLists.has(vm.list.ID)) {
+                        <span class="fa-solid fa-undo"></span>
+                      } @else {
+                        <span class="fa-solid fa-minus"></span>
+                      }
+                    </button>
+                  }
+                </div>
+
+                <!-- List Info -->
+                <div class="list-item-content">
+                  <div class="list-item-header">
+                    <span class="fa-solid fa-folder list-icon"></span>
+                    <span class="list-name">{{ vm.list.Name }}</span>
+                    @if (newlyCreatedLists.includes(vm.list)) {
+                      <span class="badge badge-new">New</span>
+                    }
+                  </div>
+                  <div class="list-item-meta">
+                    @if (vm.list.Description) {
+                      <span class="list-description">{{ vm.list.Description }}</span>
+                      <span class="meta-separator">•</span>
+                    }
+                    <span class="list-count">{{ vm.itemCount }} item{{ vm.itemCount !== 1 ? 's' : '' }}</span>
+                    <span class="meta-separator">•</span>
+                    <span class="list-updated">{{ formatDate(vm.lastUpdated) }}</span>
+                  </div>
+                </div>
+
+                <!-- Membership Indicator -->
+                @if (config.showMembership !== false) {
+                  <div class="membership-indicator" [class]="getMembershipClass(vm)">
+                    <span [class]="getMembershipIcon(vm)"></span>
+                    <span class="membership-text">{{ getMembershipText(vm) }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Footer -->
+      <div class="dialog-footer">
+        <div class="footer-summary">
+          @if (hasChanges) {
+            @if (addCount > 0) {
+              <span class="summary-item add">
+                <span class="fa-solid fa-plus-circle"></span>
+                {{ addCount }} list{{ addCount !== 1 ? 's' : '' }}
+              </span>
+            }
+            @if (removeCount > 0) {
+              <span class="summary-item remove">
+                <span class="fa-solid fa-minus-circle"></span>
+                {{ removeCount }} list{{ removeCount !== 1 ? 's' : '' }}
+              </span>
+            }
+          } @else {
+            <span class="summary-empty">No changes</span>
+          }
+        </div>
+        <div class="footer-actions">
+          <button class="btn btn-secondary" (click)="onCancel()" [disabled]="saving">
+            Cancel
+          </button>
+          <button
+            class="btn btn-primary"
+            (click)="applyChanges()"
+            [disabled]="!hasChanges || saving">
+            @if (saving) {
+              <span class="fa-solid fa-spinner fa-spin"></span>
+            }
+            Apply Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

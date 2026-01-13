@@ -1,14 +1,17 @@
 # @memberjunction/ng-entity-viewer
 
-Angular components for viewing MemberJunction entity data in multiple formats - grid and card views with filtering, selection, and shared data management.
+Angular components for viewing MemberJunction entity data in multiple formats - grid, card, and timeline views with filtering, selection, toolbar actions, and comprehensive event handling.
 
 ## Features
 
-- **Multiple View Modes**: Switch between grid (AG Grid) and card views
+- **Multiple View Modes**: Switch between grid (AG Grid), card, and timeline views
+- **Modern Data Grid**: `mj-entity-data-grid` with Before/After cancelable events, infinite scroll, state persistence
+- **Configurable Toolbar**: Show/hide individual buttons, add custom buttons, overflow menu
 - **Auto-Generated Layout**: Automatically structures columns/cards based on entity metadata
+- **Server-Side Operations**: Filtering, sorting, and pagination with RunView integration
 - **Client-Side Filtering**: SQL-style wildcard support (`%`) for consistent behavior
-- **Selection Handling**: Configurable selection behavior with events
-- **Shared Data Layer**: Load data once, display in multiple ways
+- **Selection Handling**: Single, multiple, and checkbox selection modes
+- **Grid State Persistence**: Save/restore column widths, order, visibility, and sort state
 - **Semantic Pills**: Auto-colored pills for status/type/category fields
 
 ## Installation
@@ -17,7 +20,7 @@ Angular components for viewing MemberJunction entity data in multiple formats - 
 npm install @memberjunction/ng-entity-viewer ag-grid-angular ag-grid-community
 ```
 
-## Usage
+## Quick Start
 
 ### Import the Module
 
@@ -30,187 +33,376 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 export class MyModule { }
 ```
 
-### EntityViewerComponent (Composite)
-
-The main component that combines grid/cards with built-in filtering and view switching.
+### Basic Usage
 
 ```html
-<!-- Basic usage - auto-loads data -->
+<!-- Composite viewer with grid/cards/timeline toggle -->
 <mj-entity-viewer
   [entity]="selectedEntity"
   (recordSelected)="onRecordSelected($event)"
   (recordOpened)="onRecordOpened($event)">
 </mj-entity-viewer>
 
-<!-- With pre-loaded data and configuration -->
-<mj-entity-viewer
-  [entity]="selectedEntity"
-  [records]="myRecords"
-  [config]="{
-    showFilter: true,
-    showViewModeToggle: true,
-    defaultViewMode: 'cards',
-    pageSize: 500
-  }">
-</mj-entity-viewer>
+<!-- Standalone data grid with toolbar -->
+<mj-entity-data-grid
+  [entityName]="'Contacts'"
+  [showToolbar]="true"
+  [selectionMode]="'multiple'"
+  (afterRowDoubleClick)="onRowDoubleClick($event)">
+</mj-entity-data-grid>
 ```
 
-#### Configuration Options
+---
+
+## Components
+
+### EntityDataGridComponent (`mj-entity-data-grid`)
+
+Modern AG Grid-based data grid with rich event system and configurable toolbar.
+
+```html
+<mj-entity-data-grid
+  [entityName]="'Contacts'"
+  [extraFilter]="'Status = \'Active\''"
+  [showToolbar]="true"
+  [toolbarConfig]="myToolbarConfig"
+  [selectionMode]="'multiple'"
+  [PaginationMode]="'infinite'"
+  [PageSize]="100"
+  (afterRowClick)="onRowClick($event)"
+  (afterRowDoubleClick)="onRowDoubleClick($event)"
+  (newButtonClick)="onAddNew()"
+  (exportButtonClick)="onExport()">
+</mj-entity-data-grid>
+```
+
+#### Data Source Inputs
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Params` | RunViewParams | - | Primary data source (supports stored views + dynamic views) |
+| `entityName` | string | - | Entity name for dynamic views |
+| `extraFilter` | string | - | Additional WHERE clause filter |
+| `searchString` | string | - | User search string |
+| `orderBy` | string | - | ORDER BY clause |
+| `maxRows` | number | 0 | Max rows to fetch (0 = no limit) |
+| `data` | BaseEntity[] | - | Pre-loaded data (bypasses RunView) |
+| `AllowLoad` | boolean | true | Enable/disable data loading |
+| `AutoRefreshOnParamsChange` | boolean | true | Auto-refresh when Params changes |
+
+#### Pagination Inputs
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `PaginationMode` | 'client' \| 'infinite' | 'client' | Pagination strategy |
+| `PageSize` | number | 100 | Rows per page (infinite mode) |
+| `CacheBlockSize` | number | 100 | Cache block size (infinite mode) |
+| `MaxBlocksInCache` | number | 10 | Max cached blocks |
+
+#### Display Inputs
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `showToolbar` | boolean | true | Show the toolbar |
+| `toolbarConfig` | GridToolbarConfig | - | Toolbar configuration |
+| `selectionMode` | 'none' \| 'single' \| 'multiple' \| 'checkbox' | 'single' | Row selection mode |
+| `height` | number \| 'auto' \| 'fit-content' | 'auto' | Grid height |
+| `gridState` | ViewGridStateConfig | - | Column/sort state from User View |
+| `allowSorting` | boolean | true | Enable column sorting |
+| `allowColumnReorder` | boolean | true | Enable column reordering |
+| `allowColumnResize` | boolean | true | Enable column resizing |
+| `serverSideSorting` | boolean | true | Sort triggers server reload |
+
+#### Before/After Events
+
+The grid uses a cancelable event pattern. Before events can be canceled by setting `event.cancel = true`.
+
+**Row Selection Events:**
+| Event | Args Type | Description |
+|-------|-----------|-------------|
+| `beforeRowSelect` | BeforeRowSelectEventArgs | Before row is selected |
+| `afterRowSelect` | AfterRowSelectEventArgs | After row is selected |
+| `beforeRowDeselect` | BeforeRowDeselectEventArgs | Before row is deselected |
+| `afterRowDeselect` | AfterRowDeselectEventArgs | After row is deselected |
+
+**Row Click Events:**
+| Event | Args Type | Description |
+|-------|-----------|-------------|
+| `beforeRowClick` | BeforeRowClickEventArgs | Before row click processes |
+| `afterRowClick` | AfterRowClickEventArgs | After row click |
+| `beforeRowDoubleClick` | BeforeRowDoubleClickEventArgs | Before double-click |
+| `afterRowDoubleClick` | AfterRowDoubleClickEventArgs | After double-click |
+
+**Data Events:**
+| Event | Args Type | Description |
+|-------|-----------|-------------|
+| `beforeDataLoad` | BeforeDataLoadEventArgs | Before data loads |
+| `afterDataLoad` | AfterDataLoadEventArgs | After data loads |
+| `beforeDataRefresh` | BeforeDataRefreshEventArgs | Before refresh |
+| `afterDataRefresh` | AfterDataRefreshEventArgs | After refresh |
+
+**Sorting/Column Events:**
+| Event | Args Type | Description |
+|-------|-----------|-------------|
+| `beforeSort` | BeforeSortEventArgs | Before sort changes |
+| `afterSort` | AfterSortEventArgs | After sort changes |
+| `beforeColumnReorder` | BeforeColumnReorderEventArgs | Before column move |
+| `afterColumnReorder` | AfterColumnReorderEventArgs | After column move |
+| `gridStateChanged` | GridStateChangedEvent | Column state changed |
+
+**Toolbar Button Events:**
+| Event | Args Type | Description |
+|-------|-----------|-------------|
+| `newButtonClick` | void | Add/New button clicked |
+| `refreshButtonClick` | void | Refresh button clicked |
+| `deleteButtonClick` | BaseEntity[] | Delete button clicked |
+| `exportButtonClick` | void | Export button clicked |
+| `compareButtonClick` | BaseEntity[] | Compare button clicked |
+| `mergeButtonClick` | BaseEntity[] | Merge button clicked |
+| `addToListButtonClick` | BaseEntity[] | Add to List clicked |
+
+---
+
+### GridToolbarConfig
+
+Configure which toolbar buttons are shown and their behavior.
+
+```typescript
+const toolbarConfig: GridToolbarConfig = {
+  // Search
+  showSearch: true,
+  searchPlaceholder: 'Search records...',
+  searchDebounce: 300,
+
+  // Buttons
+  showRefresh: true,
+  showAdd: true,
+  showDelete: true,
+  showExport: true,
+  showColumnChooser: true,
+  showFilterToggle: false,
+
+  // Export options
+  exportFormats: ['excel', 'csv', 'json'],
+
+  // Display
+  showRowCount: true,
+  showSelectionCount: true,
+  position: 'top',
+
+  // Custom buttons
+  customButtons: [
+    {
+      id: 'myButton',
+      text: 'My Action',
+      icon: 'fa-solid fa-star',
+      tooltip: 'Do something custom',
+      position: 'right',
+      onClick: () => console.log('Clicked!')
+    }
+  ]
+};
+```
+
+#### GridToolbarConfig Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `showFilter` | boolean | true | Show the filter input |
-| `showViewModeToggle` | boolean | true | Show grid/cards toggle |
-| `showRecordCount` | boolean | true | Show record count |
-| `defaultViewMode` | 'grid' \| 'cards' | 'grid' | Initial view mode |
-| `pageSize` | number | 1000 | Max records to load |
-| `filterPlaceholder` | string | 'Filter records...' | Filter input placeholder |
-| `filterDebounceMs` | number | 250 | Filter debounce time |
-| `selectionBehavior` | string | 'emit-only' | Selection behavior |
+| `showSearch` | boolean | true | Show search input |
+| `searchPlaceholder` | string | 'Search...' | Search placeholder text |
+| `searchDebounce` | number | 300 | Search debounce (ms) |
+| `showRefresh` | boolean | true | Show refresh button |
+| `showAdd` | boolean | true | Show add/new button |
+| `showDelete` | boolean | true | Show delete button |
+| `showExport` | boolean | true | Show export button |
+| `exportFormats` | Array | ['excel'] | Available export formats |
+| `showColumnChooser` | boolean | true | Show column chooser |
+| `showFilterToggle` | boolean | false | Show filter toggle |
+| `showRowCount` | boolean | true | Show total row count |
+| `showSelectionCount` | boolean | true | Show selected count |
+| `position` | string | 'top' | Toolbar position |
+| `customButtons` | GridToolbarButton[] | [] | Custom buttons |
 
-### EntityGridComponent
+#### GridToolbarButton
 
-Standalone AG Grid-based table view.
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | Unique button identifier |
+| `text` | string | Button text |
+| `icon` | string | Font Awesome icon class |
+| `tooltip` | string | Hover tooltip |
+| `disabled` | boolean \| () => boolean | Disabled state |
+| `visible` | boolean \| () => boolean | Visibility |
+| `cssClass` | string | Custom CSS class |
+| `position` | 'left' \| 'right' | Button position |
+| `onClick` | () => void | Click handler |
+
+---
+
+### EntityViewerComponent (`mj-entity-viewer`)
+
+Composite component combining grid, cards, and timeline views with view switching.
 
 ```html
-<mj-entity-grid
+<mj-entity-viewer
   [entity]="selectedEntity"
-  [records]="filteredRecords"
-  [selectedRecordId]="selectedId"
-  [columns]="customColumns"
+  [viewEntity]="myUserView"
+  [showGridToolbar]="true"
+  [gridToolbarConfig]="toolbarConfig"
+  [gridSelectionMode]="'multiple'"
   (recordSelected)="onRecordSelected($event)"
-  (recordOpened)="onRecordOpened($event)">
-</mj-entity-grid>
+  (recordOpened)="onRecordOpened($event)"
+  (addRequested)="onAddNew()"
+  (exportRequested)="onExport($event)">
+</mj-entity-viewer>
 ```
 
 #### Inputs
 
-| Input | Type | Description |
-|-------|------|-------------|
-| `entity` | EntityInfo | Entity metadata |
-| `records` | BaseEntity[] | Records to display |
-| `selectedRecordId` | string | Selected record's PK |
-| `columns` | GridColumnDef[] | Custom column definitions |
-| `height` | string | Grid height (CSS) |
-| `enableSelection` | boolean | Enable row selection |
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `entity` | EntityInfo | - | Entity metadata |
+| `records` | BaseEntity[] | - | Pre-loaded records |
+| `viewEntity` | UserViewEntityExtended | - | User View for filtering/sorting |
+| `viewMode` | 'grid' \| 'cards' \| 'timeline' | 'grid' | Current view mode |
+| `filterText` | string | - | Filter text |
+| `sortState` | SortState | - | Sort state |
+| `gridState` | ViewGridStateConfig | - | Grid column state |
+| `showGridToolbar` | boolean | true | Show grid toolbar |
+| `gridToolbarConfig` | GridToolbarConfig | - | Toolbar configuration |
+| `gridSelectionMode` | GridSelectionMode | 'single' | Selection mode |
+| `config` | EntityViewerConfig | - | Viewer configuration |
 
 #### Outputs
 
-| Output | Type | Description |
-|--------|------|-------------|
-| `recordSelected` | RecordSelectedEvent | Single click on row |
-| `recordOpened` | RecordOpenedEvent | Double click on row |
+| Output | Event Type | Description |
+|--------|------------|-------------|
+| `recordSelected` | RecordSelectedEvent | Record clicked |
+| `recordOpened` | RecordOpenedEvent | Record double-clicked |
+| `dataLoaded` | DataLoadedEvent | Data finished loading |
+| `viewModeChange` | EntityViewMode | View mode changed |
+| `filterTextChange` | string | Filter text changed |
+| `sortChanged` | SortChangedEvent | Sort changed |
+| `gridStateChanged` | GridStateChangedEvent | Grid state changed |
+| `addRequested` | void | Add button clicked |
+| `deleteRequested` | { records } | Delete button clicked |
+| `refreshRequested` | void | Refresh button clicked |
+| `exportRequested` | { format } | Export button clicked |
 
-### EntityCardsComponent
+---
 
-Standalone card-based view with auto-generated layout.
+### EntityCardsComponent (`mj-entity-cards`)
+
+Card-based view with auto-generated layout.
 
 ```html
 <mj-entity-cards
   [entity]="selectedEntity"
   [records]="records"
   [filterText]="searchFilter"
-  [selectedRecordId]="selectedId"
-  (recordSelected)="onRecordSelected($event)"
-  (recordOpened)="onRecordOpened($event)"
-  (filteredCountChanged)="onFilteredCountChanged($event)">
+  [cardTemplate]="customTemplate"
+  (recordSelected)="onSelected($event)"
+  (recordOpened)="onOpened($event)">
 </mj-entity-cards>
 ```
 
-#### Inputs
+---
 
-| Input | Type | Description |
-|-------|------|-------------|
-| `entity` | EntityInfo | Entity metadata |
-| `records` | BaseEntity[] | Records to display |
-| `selectedRecordId` | string | Selected record's PK |
-| `filterText` | string | Filter text (supports `%` wildcards) |
-| `cardTemplate` | CardTemplate | Custom card template |
-
-#### Outputs
-
-| Output | Type | Description |
-|--------|------|-------------|
-| `recordSelected` | RecordSelectedEvent | Click on card |
-| `recordOpened` | RecordOpenedEvent | Open button click |
-| `filteredCountChanged` | number | Filtered count changed |
-
-### PillComponent
+### PillComponent (`mj-pill`)
 
 Semantic color pill for categorical values.
 
 ```html
-<!-- Auto-color based on value -->
 <mj-pill [value]="record.Status"></mj-pill>
-
-<!-- Force specific color -->
 <mj-pill [value]="record.Type" color="info"></mj-pill>
 ```
 
-Colors are auto-detected based on semantic meaning:
-- **success** (green): active, approved, complete, etc.
-- **warning** (yellow): pending, in progress, draft, etc.
-- **danger** (red): failed, error, rejected, etc.
-- **info** (blue): new, info, created, etc.
+Auto-detected colors:
+- **success** (green): active, approved, complete, success
+- **warning** (yellow): pending, in progress, draft, waiting
+- **danger** (red): failed, error, rejected, cancelled
+- **info** (blue): new, info, created, open
 - **neutral** (gray): default
 
-## Events
+---
 
-### RecordSelectedEvent
+## Advanced Usage
+
+### Infinite Scroll Pagination
+
+```html
+<mj-entity-data-grid
+  [entityName]="'Contacts'"
+  [PaginationMode]="'infinite'"
+  [PageSize]="100"
+  [CacheBlockSize]="100"
+  [MaxBlocksInCache]="10">
+</mj-entity-data-grid>
+```
+
+### State Persistence with User Views
+
+```html
+<mj-entity-data-grid
+  [Params]="{ ViewID: myUserView.ID }"
+  [AutoPersistState]="true"
+  [StatePersistDebounce]="5000">
+</mj-entity-data-grid>
+```
+
+### Cancelable Events
 
 ```typescript
-interface RecordSelectedEvent {
-  record: BaseEntity;      // The selected record
-  entity: EntityInfo;      // Entity metadata
-  compositeKey: CompositeKey; // Record's composite key
+onBeforeRowSelect(event: BeforeRowSelectEventArgs) {
+  // Prevent selecting certain rows
+  if (event.row.Get('Status') === 'Locked') {
+    event.cancel = true;
+    event.cancelReason = 'Cannot select locked records';
+  }
 }
 ```
 
-### RecordOpenedEvent
+### Custom Export Handler
 
 ```typescript
-interface RecordOpenedEvent {
-  record: BaseEntity;
-  entity: EntityInfo;
-  compositeKey: CompositeKey;
+onExportRequested(event: { format: 'excel' | 'csv' | 'json' }) {
+  // Custom export logic
+  if (event.format === 'excel') {
+    this.exportService.exportToExcel(this.records);
+  }
 }
 ```
 
-## Filtering
+---
 
-The filter supports SQL-style `%` wildcards for consistency with server-side behavior:
-
-- `test` - matches "this is a test string"
-- `hub%updat%comp` - matches "hubspot update company"
-- `%comp` - matches "my company"
-
-## Custom Templates
-
-### Grid Columns
+## Type Exports
 
 ```typescript
-const columns: GridColumnDef[] = [
-  { field: 'Name', headerName: 'Name', width: 200 },
-  { field: 'Status', headerName: 'Status', width: 120 },
-  { field: 'Amount', headerName: 'Amount', width: 100 }
-];
+// Types
+import {
+  GridToolbarConfig,
+  GridToolbarButton,
+  GridSelectionMode,
+  GridColumnConfig,
+  ViewGridStateConfig,
+  DataGridSortState,
+  RecordSelectedEvent,
+  RecordOpenedEvent
+} from '@memberjunction/ng-entity-viewer';
+
+// Event Args
+import {
+  BeforeRowSelectEventArgs,
+  AfterRowSelectEventArgs,
+  BeforeRowClickEventArgs,
+  AfterRowClickEventArgs,
+  BeforeDataLoadEventArgs,
+  AfterDataLoadEventArgs,
+  AfterSortEventArgs
+} from '@memberjunction/ng-entity-viewer';
 ```
 
-### Card Template
-
-```typescript
-const template: CardTemplate = {
-  titleField: 'Name',
-  subtitleField: 'Status',
-  descriptionField: 'Notes',
-  displayFields: [
-    { name: 'Amount', type: 'number', label: 'Amount' },
-    { name: 'IsActive', type: 'boolean', label: 'Active' }
-  ],
-  thumbnailField: 'ImageUrl',
-  badgeField: 'Priority'
-};
-```
+---
 
 ## Dependencies
 
@@ -220,6 +412,7 @@ const template: CardTemplate = {
 - `ag-grid-angular` ^34.0.0
 - `ag-grid-community` ^34.0.0
 - `@memberjunction/core` ^2.0.0
+- `@memberjunction/core-entities` ^2.0.0
 
 ## License
 

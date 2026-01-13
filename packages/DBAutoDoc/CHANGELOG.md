@@ -1,5 +1,15 @@
 # @memberjunction/db-auto-doc
 
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-provider-bundle@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/cli
 
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-cli@2.133.0
+  - @memberjunction/codegen-lib@2.133.0
+  - @memberjunction/db-auto-doc@2.133.0
+  - @memberjunction/metadata-sync@2.133.0
+  - @memberjunction/query-gen@2.133.0
+  - @memberjunction/sqlserver-dataprovider@2.133.0
+  - @memberjunction/testing-cli@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes

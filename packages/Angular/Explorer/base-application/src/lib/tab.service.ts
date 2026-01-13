@@ -126,4 +126,20 @@ export class TabService {
       }
     });
   }
+
+  /**
+   * Helper method to open a list in a tab
+   */
+  OpenList(listId: string, listName: string, applicationId: string): void {
+    this.OpenTab({
+      ApplicationId: applicationId,
+      Title: listName,
+      ResourceRecordId: listId,
+      Configuration: {
+        resourceType: 'Custom',
+        driverClass: 'ListDetailResource',
+        recordId: listId
+      }
+    });
+  }
 }

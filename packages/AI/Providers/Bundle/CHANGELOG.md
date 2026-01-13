@@ -1,5 +1,29 @@
 # @memberjunction/ai-provider-bundle
 
+## 2.133.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@2.133.0
+- @memberjunction/ai-vectors-pinecone@2.133.0
+- @memberjunction/ai-anthropic@2.133.0
+- @memberjunction/ai-azure@2.133.0
+- @memberjunction/ai-bedrock@2.133.0
+- @memberjunction/ai-betty-bot@2.133.0
+- @memberjunction/ai-cerebras@2.133.0
+- @memberjunction/ai-elevenlabs@2.133.0
+- @memberjunction/ai-gemini@2.133.0
+- @memberjunction/ai-groq@2.133.0
+- @memberjunction/ai-heygen@2.133.0
+- @memberjunction/ai-lmstudio@2.133.0
+- @memberjunction/ai-local-embeddings@2.133.0
+- @memberjunction/ai-mistral@2.133.0
+- @memberjunction/ai-ollama@2.133.0
+- @memberjunction/ai-openai@2.133.0
+- @memberjunction/ai-openrouter@2.133.0
+- @memberjunction/ai-vertex@2.133.0
+- @memberjunction/ai-xai@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes

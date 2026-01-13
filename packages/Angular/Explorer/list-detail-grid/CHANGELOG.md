@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-list-detail-grid
 
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [43df8f4]
+- Updated dependencies [c00bd13]
+  - @memberjunction/ng-entity-viewer@2.133.0
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ng-shared@2.133.0
+  - @memberjunction/ng-shared-generic@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes
