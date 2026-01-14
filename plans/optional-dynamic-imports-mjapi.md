@@ -1,9 +1,9 @@
 # Optional Dynamic Imports in MJAPI
 
-**Date**: 2026-01-13
+**Date**: 2026-01-14
 **Status**: Planning
 **Priority**: Medium
-**Affected Packages**: `@memberjunction/server-bootstrap`, `@memberjunction/server`, `MJAPI`
+**Affected Packages**: `@memberjunction/global`, `@memberjunction/server-bootstrap`, `@memberjunction/server`, `MJAPI`
 
 ## Overview
 
@@ -37,11 +37,11 @@ const mjServerConfig = {
   additionalImports: [
     {
       name: "SendGrid Provider",
-      importPath: "@memberjunction/communication-sendgrid"
+      package: "@memberjunction/communication-sendgrid"
     },
     {
       name: "Custom User Logic",
-      importPath: "./custom/customUserCreation",
+      package: "./custom/customUserCreation",
       initFunction: "initialize" // Optional
     }
   ]
@@ -52,7 +52,7 @@ const mjServerConfig = {
 
 Each import configuration object:
 - **`name`** (required, string): Friendly identifier for logging
-- **`importPath`** (required, string): Package name or relative path
+- **`package`** (required, string): Package name or relative path
 - **`initFunction`** (optional, string): Function name to execute after import
 
 ## Architecture Analysis
@@ -95,7 +95,7 @@ Add Zod schemas for the new configuration:
 // Add after line 146, before configInfoSchema
 const additionalImportSchema = z.object({
   name: z.string().describe('Friendly name/identifier for the import'),
-  importPath: z.string().describe('Package name or relative path to import'),
+  package: z.string().describe('Package name or relative path to import'),
   initFunction: z.string().optional().describe('Optional function name to execute after import')
 });
 
@@ -121,76 +121,145 @@ export type AdditionalImportConfig = z.infer<typeof additionalImportSchema>;
 export type AdditionalImportsConfig = z.infer<typeof additionalImportsSchema>;
 ```
 
-### Phase 2: Dynamic Import Loader Implementation
+### Phase 2: Dynamic Import Loader Implementation in MJGlobal
 
-**New File**: `packages/ServerBootstrap/src/dynamicImportLoader.ts`
+**File**: `packages/MJGlobal/src/Global.ts`
 
-Create a comprehensive loader utility with validation, error handling, and logging:
+Add dynamic import methods to the `MJGlobal` class with comprehensive validation, error handling, and logging:
 
 ```typescript
-/**
- * Dynamic Import Loader for MemberJunction Server Bootstrap
- */
-
-export interface DynamicImportConfig {
-  name: string;
-  importPath: string;
-  initFunction?: string;
-}
-
-export interface ImportResult {
-  name: string;
-  success: boolean;
-  error?: string;
-  module?: any;
-}
+// Add these methods to the MJGlobal class
 
 /**
- * Loads a single dynamic import and optionally executes its init function
+ * Dynamically imports a single module/package and optionally executes an initialization function.
+ *
+ * @param config - Import configuration { name, package, initFunction? }
+ * @returns Promise<ImportResult> with success status and module reference
+ *
+ * @example
+ * const result = await MJGlobal.Instance.dynamicImport({
+ *   name: "SendGrid Provider",
+ *   package: "@memberjunction/communication-sendgrid",
+ *   initFunction: "initialize"
+ * });
  */
-async function loadSingleImport(config: DynamicImportConfig): Promise<ImportResult> {
-  const { name, importPath, initFunction } = config;
+public async dynamicImport(config: MJ.DynamicImportConfig): Promise<MJ.ImportResult> {
+  return this.loadSingleImport(config);
+}
+
+/**
+ * Dynamically imports multiple modules/packages sequentially.
+ *
+ * @param configs - Array of import configurations
+ * @returns Promise<ImportResult[]> with results for each import
+ *
+ * @example
+ * const results = await MJGlobal.Instance.dynamicImports([
+ *   { name: "SendGrid", package: "@memberjunction/communication-sendgrid" },
+ *   { name: "Teams", package: "@memberjunction/communication-teams" }
+ * ]);
+ */
+public async dynamicImports(configs: MJ.DynamicImportConfig[]): Promise<MJ.ImportResult[]> {
+  if (!configs || configs.length === 0) {
+    return [];
+  }
+
+  console.log(`\n📦 Loading ${configs.length} additional import(s)...\n`);
+
+  const results: MJ.ImportResult[] = [];
+
+  // Load imports sequentially to preserve order and make logs readable
+  for (const config of configs) {
+    const result = await this.loadSingleImport(config);
+    results.push(result);
+  }
+
+  this.logImportSummary(results);
+
+  return results;
+}
+
+/**
+ * Validates import configurations before attempting to load them.
+ *
+ * @param imports - Array of import configurations to validate
+ * @returns Validation result with success flag and error messages
+ */
+public validateImportConfigs(imports: any[]): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!Array.isArray(imports)) {
+    errors.push('additionalImports must be an array');
+    return { valid: false, errors };
+  }
+
+  imports.forEach((imp, index) => {
+    this.validateSingleImportConfig(imp, index, errors);
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
+// Private helper methods
+
+private async loadSingleImport(config: MJ.DynamicImportConfig): Promise<MJ.ImportResult> {
+  const { name, package: packagePath, initFunction } = config;
 
   try {
-    console.log(`  ⏳ Loading: ${name} (${importPath})...`);
+    console.log(`  ⏳ Loading: ${name} (${packagePath})...`);
 
     // Dynamic import - works for both ESM and CJS
-    const module = await import(importPath);
+    const module = await import(packagePath);
 
     // Execute init function if specified
     if (initFunction) {
-      const initFn = module[initFunction];
-
-      if (typeof initFn !== 'function') {
-        throw new Error(
-          `Init function '${initFunction}' not found or not a function in module '${importPath}'. ` +
-          `Available exports: ${Object.keys(module).join(', ')}`
-        );
-      }
-
-      console.log(`    🔧 Executing init function: ${initFunction}()`);
-
-      // Handle both sync and async init functions
-      const result = initFn();
-      if (result instanceof Promise) {
-        await result;
-      }
+      await this.executeInitFunction(module, initFunction, packagePath);
     }
 
     console.log(`  ✓ Successfully loaded: ${name}`);
     return { name, success: true, module };
 
   } catch (error: any) {
-    return handleImportError(name, importPath, error);
+    return this.handleImportError(name, packagePath, error);
   }
 }
 
-function handleImportError(name: string, importPath: string, error: any): ImportResult {
+private async executeInitFunction(
+  module: any,
+  initFunction: string,
+  packagePath: string
+): Promise<void> {
+  const initFn = module[initFunction];
+
+  if (typeof initFn !== 'function') {
+    throw new Error(
+      `Init function '${initFunction}' not found or not a function in module '${packagePath}'. ` +
+      `Available exports: ${Object.keys(module).join(', ')}`
+    );
+  }
+
+  console.log(`    🔧 Executing init function: ${initFunction}()`);
+
+  // Handle both sync and async init functions
+  const result = initFn();
+  if (result instanceof Promise) {
+    await result;
+  }
+}
+
+private handleImportError(
+  name: string,
+  packagePath: string,
+  error: any
+): MJ.ImportResult {
   const errorMessage = error.message || String(error);
 
   // Check if it's a module not found error
   if (error.code === 'ERR_MODULE_NOT_FOUND' || error.code === 'MODULE_NOT_FOUND') {
-    console.warn(`  ⚠ Module not found: ${name} (${importPath})`);
+    console.warn(`  ⚠ Module not found: ${name} (${packagePath})`);
     console.warn(`    This may be expected if the package is optional and not installed.`);
   } else {
     console.error(`  ✗ Failed to load: ${name}`);
@@ -203,75 +272,57 @@ function handleImportError(name: string, importPath: string, error: any): Import
   return { name, success: false, error: errorMessage };
 }
 
-/**
- * Loads multiple dynamic imports sequentially
- */
-export async function loadDynamicImports(
-  imports: DynamicImportConfig[]
-): Promise<ImportResult[]> {
-
-  if (!imports || imports.length === 0) {
-    return [];
-  }
-
-  console.log(`\n📦 Loading ${imports.length} additional import(s)...\n`);
-
-  const results: ImportResult[] = [];
-
-  // Load imports sequentially to preserve order and make logs readable
-  for (const importConfig of imports) {
-    const result = await loadSingleImport(importConfig);
-    results.push(result);
-  }
-
-  logImportSummary(results);
-
-  return results;
-}
-
-function logImportSummary(results: ImportResult[]): void {
+private logImportSummary(results: MJ.ImportResult[]): void {
   const successful = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
 
   console.log(`\n📊 Import Summary: ${successful} successful, ${failed} failed\n`);
 }
 
-/**
- * Validates import configurations before attempting to load them
- */
-export function validateImportConfigs(imports: any[]): {
-  valid: boolean;
-  errors: string[];
-} {
-  const errors: string[] = [];
-
-  if (!Array.isArray(imports)) {
-    errors.push('additionalImports must be an array');
-    return { valid: false, errors };
-  }
-
-  imports.forEach((imp, index) => {
-    validateSingleImportConfig(imp, index, errors);
-  });
-
-  return {
-    valid: errors.length === 0,
-    errors
-  };
-}
-
-function validateSingleImportConfig(imp: any, index: number, errors: string[]): void {
+private validateSingleImportConfig(imp: any, index: number, errors: string[]): void {
   if (!imp.name || typeof imp.name !== 'string') {
     errors.push(`Import at index ${index}: 'name' is required and must be a string`);
   }
 
-  if (!imp.importPath || typeof imp.importPath !== 'string') {
-    errors.push(`Import at index ${index}: 'importPath' is required and must be a string`);
+  if (!imp.package || typeof imp.package !== 'string') {
+    errors.push(`Import at index ${index}: 'package' is required and must be a string`);
   }
 
   if (imp.initFunction && typeof imp.initFunction !== 'string') {
     errors.push(`Import at index ${index}: 'initFunction' must be a string if provided`);
   }
+}
+```
+
+**File**: `packages/MJGlobal/src/interface.ts`
+
+Add the interface definitions:
+
+```typescript
+/**
+ * Configuration for dynamically importing a module/package
+ */
+export interface DynamicImportConfig {
+  /** Friendly name/identifier for logging */
+  name: string;
+  /** Package name or relative path to import */
+  package: string;
+  /** Optional function name to execute after import */
+  initFunction?: string;
+}
+
+/**
+ * Result of a dynamic import operation
+ */
+export interface ImportResult {
+  /** Name of the import from config */
+  name: string;
+  /** Whether the import succeeded */
+  success: boolean;
+  /** Error message if import failed */
+  error?: string;
+  /** The imported module (if successful) */
+  module?: any;
 }
 ```
 
@@ -282,7 +333,7 @@ function validateSingleImportConfig(imp: any, index: number, errors: string[]): 
 Add import at top of file (after line 15):
 
 ```typescript
-import { loadDynamicImports, validateImportConfigs } from './dynamicImportLoader';
+import { MJGlobal } from '@memberjunction/global';
 ```
 
 Add new step after `discoverAndLoadGeneratedPackages` (after line 147):
@@ -297,7 +348,7 @@ Add new step after `discoverAndLoadGeneratedPackages` (after line 147):
   const additionalImports = config.config?.additionalImports;
   if (additionalImports && additionalImports.length > 0) {
     // Validate configurations before attempting imports
-    const validation = validateImportConfigs(additionalImports);
+    const validation = MJGlobal.Instance.validateImportConfigs(additionalImports);
 
     if (!validation.valid) {
       console.error('❌ Invalid additionalImports configuration:');
@@ -306,17 +357,10 @@ Add new step after `discoverAndLoadGeneratedPackages` (after line 147):
     }
 
     // Load all configured dynamic imports
-    await loadDynamicImports(additionalImports);
+    await MJGlobal.Instance.dynamicImports(additionalImports);
   }
 
   // Build resolver paths - auto-discover standard locations if not provided
-```
-
-Export the loader functions from `packages/ServerBootstrap/src/index.ts`:
-
-```typescript
-export { loadDynamicImports, validateImportConfigs } from './dynamicImportLoader';
-export type { DynamicImportConfig, ImportResult } from './dynamicImportLoader';
 ```
 
 ### Phase 4: Configuration File Updates
@@ -338,12 +382,12 @@ const mjServerConfig = {
    * additionalImports: [
    *   {
    *     name: "SendGrid Email Provider",
-   *     importPath: "@memberjunction/communication-sendgrid",
+   *     package: "@memberjunction/communication-sendgrid",
    *     // initFunction: "initializeSendGrid" // optional
    *   },
    *   {
    *     name: "Custom User Creation Logic",
-   *     importPath: "./custom/customUserCreation",
+   *     package: "./custom/customUserCreation",
    *     initFunction: "setupCustomUserHandling"
    *   }
    * ]
@@ -352,15 +396,15 @@ const mjServerConfig = {
     // Uncomment and configure as needed:
     // {
     //   name: "SendGrid Email Provider",
-    //   importPath: "@memberjunction/communication-sendgrid"
+    //   package: "@memberjunction/communication-sendgrid"
     // },
     // {
     //   name: "Microsoft Teams Provider",
-    //   importPath: "@memberjunction/communication-teams"
+    //   package: "@memberjunction/communication-teams"
     // },
     // {
     //   name: "Custom User Creation",
-    //   importPath: "./custom/customUserCreation"
+    //   package: "./custom/customUserCreation"
     // }
   ],
 
@@ -390,11 +434,11 @@ const mjServerConfig = {
   additionalImports: [
     {
       name: "SendGrid Email Provider",
-      importPath: "@memberjunction/communication-sendgrid"
+      package: "@memberjunction/communication-sendgrid"
     },
     {
       name: "Custom Initialization",
-      importPath: "./custom/myCustomSetup",
+      package: "./custom/myCustomSetup",
       initFunction: "initialize" // Optional: function to call after import
     }
   ]
@@ -415,7 +459,7 @@ const mjServerConfig = {
 ```javascript
 {
   name: "SendGrid",
-  importPath: "@memberjunction/communication-sendgrid"
+  package: "@memberjunction/communication-sendgrid"
 }
 ```
 
@@ -423,7 +467,7 @@ const mjServerConfig = {
 ```javascript
 {
   name: "Custom User Creation",
-  importPath: "./custom/customUserCreation",
+  package: "./custom/customUserCreation",
   initFunction: "setupUserHandling"
 }
 ```
@@ -432,7 +476,7 @@ const mjServerConfig = {
 ```javascript
 {
   name: "Monitoring Service",
-  importPath: "@mycompany/monitoring",
+  package: "@mycompany/monitoring",
   initFunction: "initMonitoring"
 }
 ```
@@ -455,8 +499,8 @@ import './custom/customUserCreation';
 **After** (in `mj.config.cjs`):
 ```javascript
 additionalImports: [
-  { name: "SendGrid", importPath: "@memberjunction/communication-sendgrid" },
-  { name: "Custom User", importPath: "./custom/customUserCreation" }
+  { name: "SendGrid", package: "@memberjunction/communication-sendgrid" },
+  { name: "Custom User", package: "./custom/customUserCreation" }
 ]
 ```
 ```
@@ -482,8 +526,8 @@ Replace commented imports (lines 13-19) with deprecation notice:
  *
  * Example configuration:
  * additionalImports: [
- *   { name: "SendGrid", importPath: "@memberjunction/communication-sendgrid" },
- *   { name: "Custom User Logic", importPath: "./custom/customUserCreation" }
+ *   { name: "SendGrid", package: "@memberjunction/communication-sendgrid" },
+ *   { name: "Custom User Logic", package: "./custom/customUserCreation" }
  * ]
  */
 ```
@@ -539,10 +583,10 @@ Replace commented imports (lines 13-19) with deprecation notice:
 ## Implementation Checklist
 
 ### Core Implementation
+- [ ] Add interface definitions to `MJGlobal/src/interface.ts`
+- [ ] Add dynamic import methods to `MJGlobal/src/Global.ts`
 - [ ] Add Zod schemas to `MJServer/src/config.ts`
-- [ ] Create `ServerBootstrap/src/dynamicImportLoader.ts`
-- [ ] Update `ServerBootstrap/src/index.ts` to call loader
-- [ ] Export loader from `ServerBootstrap/src/index.ts`
+- [ ] Update `ServerBootstrap/src/index.ts` to use MJGlobal methods
 - [ ] Add `additionalImports` to `MJAPI/mj.config.cjs`
 
 ### Documentation
@@ -571,11 +615,12 @@ Replace commented imports (lines 13-19) with deprecation notice:
 - [ ] Add validation before execution
 
 ### Build & Compilation
-- [ ] Compile ServerBootstrap package: `cd packages/ServerBootstrap && npm run build`
+- [ ] Compile MJGlobal package: `cd packages/MJGlobal && npm run build`
 - [ ] Compile MJServer package: `cd packages/MJServer && npm run build`
+- [ ] Compile ServerBootstrap package: `cd packages/ServerBootstrap && npm run build`
 - [ ] Test MJAPI startup: `cd packages/MJAPI && npm run start`
 - [ ] Fix any TypeScript errors
-- [ ] Run linting: `npx eslint packages/ServerBootstrap/src/*.ts`
+- [ ] Run linting: `npx eslint packages/MJGlobal/src/Global.ts packages/MJServer/src/config.ts`
 
 ## Testing Strategy
 
@@ -587,7 +632,7 @@ Replace commented imports (lines 13-19) with deprecation notice:
 4. **With Init Function**: Import with valid `initFunction` → Function executes
 5. **Invalid Init Function**: Import with non-existent function → Error logged, server stops
 6. **Module Not Found**: Import non-existent package → Warning logged, server continues
-7. **Invalid Config**: Missing `name` or `importPath` → Validation error, server stops
+7. **Invalid Config**: Missing `name` or `package` → Validation error, server stops
 8. **Async Init Function**: Init function returns Promise → Properly awaited
 9. **Init Function Throws**: Init function throws error → Caught and logged, server stops
 
@@ -604,7 +649,7 @@ Replace commented imports (lines 13-19) with deprecation notice:
 2. **Communication Provider Test**
    ```javascript
    additionalImports: [
-     { name: "SendGrid", importPath: "@memberjunction/communication-sendgrid" }
+     { name: "SendGrid", package: "@memberjunction/communication-sendgrid" }
    ]
    ```
    - Start MJAPI
@@ -623,7 +668,7 @@ Replace commented imports (lines 13-19) with deprecation notice:
      additionalImports: [
        {
          name: "Test Init",
-         importPath: "./custom/testInit",
+         package: "./custom/testInit",
          initFunction: "testInitialize"
        }
      ]
@@ -633,7 +678,7 @@ Replace commented imports (lines 13-19) with deprecation notice:
 4. **Missing Module Test**
    ```javascript
    additionalImports: [
-     { name: "Missing", importPath: "@does-not-exist/package" }
+     { name: "Missing", package: "@does-not-exist/package" }
    ]
    ```
    - Verify warning (not error)
@@ -644,7 +689,7 @@ Replace commented imports (lines 13-19) with deprecation notice:
    additionalImports: [
      {
        name: "Bad Init",
-       importPath: "./custom/testInit",
+       package: "./custom/testInit",
        initFunction: "doesNotExist"
      }
    ]
@@ -655,7 +700,7 @@ Replace commented imports (lines 13-19) with deprecation notice:
 6. **Validation Error Test**
    ```javascript
    additionalImports: [
-     { name: "Missing Path" } // No importPath
+     { name: "Missing Path" } // No package
    ]
    ```
    - Verify validation error before any imports attempted
@@ -692,8 +737,8 @@ Replace commented imports (lines 13-19) with deprecation notice:
 // packages/MJAPI/mj.config.cjs
 const mjServerConfig = {
   additionalImports: [
-    { name: "SendGrid", importPath: "@memberjunction/communication-sendgrid" },
-    { name: "Custom User", importPath: "./custom/customUserCreation" }
+    { name: "SendGrid", package: "@memberjunction/communication-sendgrid" },
+    { name: "Custom User", package: "./custom/customUserCreation" }
   ]
 };
 ```
@@ -713,7 +758,7 @@ const mjServerConfig = {
    ```javascript
    {
      name: "Dev Tools",
-     importPath: "./dev-tools",
+     package: "./dev-tools",
      condition: process.env.NODE_ENV === 'development'
    }
    ```
@@ -735,7 +780,7 @@ const mjServerConfig = {
    ```javascript
    {
      name: "Feature B",
-     importPath: "./feature-b",
+     package: "./feature-b",
      dependsOn: ["Feature A"]
    }
    ```
@@ -764,6 +809,8 @@ const mjServerConfig = {
 ## References
 
 ### Related Files
+- MJGlobal class: [packages/MJGlobal/src/Global.ts](packages/MJGlobal/src/Global.ts)
+- MJGlobal interfaces: [packages/MJGlobal/src/interface.ts](packages/MJGlobal/src/interface.ts)
 - Configuration schema: [packages/MJServer/src/config.ts](packages/MJServer/src/config.ts)
 - Server bootstrap: [packages/ServerBootstrap/src/index.ts](packages/ServerBootstrap/src/index.ts)
 - MJAPI entry point: [packages/MJAPI/src/index.ts](packages/MJAPI/src/index.ts)
@@ -773,6 +820,41 @@ const mjServerConfig = {
 - MemberJunction Developer Guide: [CLAUDE.md](CLAUDE.md)
 - Server Bootstrap README: [packages/ServerBootstrap/README.md](packages/ServerBootstrap/README.md)
 - MJAPI README: [packages/MJAPI/README.md](packages/MJAPI/README.md)
+
+---
+
+## Architecture Benefits
+
+### Why MJGlobal?
+
+Moving the dynamic import functionality to `MJGlobal` instead of `ServerBootstrap` provides several advantages:
+
+1. **Reusability**: Any package can use `MJGlobal.Instance.dynamicImport()` or `dynamicImports()`, not just server bootstrap code
+2. **Consistency**: Follows MJ pattern of global utilities in MJGlobal (ClassFactory, ObjectCache, etc.)
+3. **Testability**: Easier to test in isolation via the singleton instance
+4. **Flexibility**: Can be used in CLI tools, worker processes, or any Node.js context
+5. **Discoverability**: Centralized location for all global utilities
+
+### API Design
+
+**Singular vs Plural Methods**:
+- `dynamicImport(config)` - For loading a single module programmatically
+- `dynamicImports(configs)` - For loading multiple modules (used by ServerBootstrap)
+
+This pattern provides flexibility:
+```typescript
+// Load single module
+await MJGlobal.Instance.dynamicImport({
+  name: "SendGrid",
+  package: "@memberjunction/communication-sendgrid"
+});
+
+// Load multiple modules
+await MJGlobal.Instance.dynamicImports([
+  { name: "SendGrid", package: "@memberjunction/communication-sendgrid" },
+  { name: "Teams", package: "@memberjunction/communication-teams" }
+]);
+```
 
 ---
 
