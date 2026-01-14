@@ -18,13 +18,15 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { BikingDashboardComponent } from './biking-dashboard.component';
 
 // Resource Components
-import { BikingDashboardResourceComponent } from './components/biking-dashboard-resource.component';
-import { BikingRidesResourceComponent } from './components/biking-rides-resource.component';
-import { BikingLocationsResourceComponent } from './components/biking-locations-resource.component';
-import { BikingFleetResourceComponent } from './components/biking-fleet-resource.component';
+import { BikingDashboardResourceComponent, LoadBikingDashboardResource } from './components/biking-dashboard-resource.component';
+import { BikingRidesResourceComponent, LoadBikingRidesResource } from './components/biking-rides-resource.component';
+import { BikingLocationsResourceComponent, LoadBikingLocationsResource } from './components/biking-locations-resource.component';
+import { BikingFleetResourceComponent, LoadBikingFleetResource } from './components/biking-fleet-resource.component';
+import { BikingRouteRecommendationsResourceComponent, LoadBikingRouteRecommendationsResource } from './components/biking-route-recommendations-resource.component';
 
 // Services
 import { BikingInstrumentationService } from './services/biking-instrumentation.service';
+import { RouteRecommendationService } from './services/route-recommendation.service';
 
 @NgModule({
   declarations: [
@@ -32,7 +34,8 @@ import { BikingInstrumentationService } from './services/biking-instrumentation.
     BikingDashboardResourceComponent,
     BikingRidesResourceComponent,
     BikingLocationsResourceComponent,
-    BikingFleetResourceComponent
+    BikingFleetResourceComponent,
+    BikingRouteRecommendationsResourceComponent
   ],
   imports: [
     CommonModule,
@@ -47,14 +50,16 @@ import { BikingInstrumentationService } from './services/biking-instrumentation.
     ContainerDirectivesModule
   ],
   providers: [
-    BikingInstrumentationService
+    BikingInstrumentationService,
+    RouteRecommendationService
   ],
   exports: [
     BikingDashboardComponent,
     BikingDashboardResourceComponent,
     BikingRidesResourceComponent,
     BikingLocationsResourceComponent,
-    BikingFleetResourceComponent
+    BikingFleetResourceComponent,
+    BikingRouteRecommendationsResourceComponent
   ]
 })
 export class BikingModule { }
@@ -63,5 +68,10 @@ export class BikingModule { }
  * Tree-shaking prevention - call this function to ensure the module is included
  */
 export function LoadBikingModule(): void {
-  // Force inclusion in production builds
+  // Force inclusion in production builds by referencing all resource loaders
+  LoadBikingDashboardResource();
+  LoadBikingRidesResource();
+  LoadBikingLocationsResource();
+  LoadBikingFleetResource();
+  LoadBikingRouteRecommendationsResource();
 }

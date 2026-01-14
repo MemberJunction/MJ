@@ -112,32 +112,82 @@ CROSS APPLY (
 GO
 
 -- ============================================================================
--- LOCATIONS (200 locations)
+-- LOCATIONS (200 locations) - Real SF Bay Area Cycling Locations
 -- ============================================================================
 
+-- First, insert 20 well-known Bay Area cycling locations with exact coordinates
 INSERT INTO [MJ_Biking_App].[Location]
     ([rider_id], [name], [latitude], [longitude], [elevation_m], [terrain_type], [surface_condition], [difficulty_rating], [visit_count])
-SELECT TOP 200
+SELECT
+    (SELECT TOP 1 rider_id FROM [MJ_Biking_App].[Rider] ORDER BY NEWID()),
+    loc.[name], loc.[latitude], loc.[longitude], loc.[elevation_m], loc.[terrain_type], loc.[surface_condition], loc.[difficulty_rating], loc.[visit_count]
+FROM (VALUES
+    -- Famous Marin County Climbs & Trails
+    ('Hawk Hill Summit', 37.8267, -122.4985, 284, 'road', 'dry', 7.5, 156),
+    ('Mt. Tamalpais East Peak', 37.9235, -122.5965, 784, 'mountain', 'packed', 8.5, 134),
+    ('Marin Headlands Loop', 37.8352, -122.5267, 245, 'road', 'dry', 6.5, 112),
+    ('China Camp Village Trail', 37.9985, -122.4678, 85, 'singletrack', 'packed', 5.5, 98),
+    ('Paradise Loop', 37.9195, -122.4845, 15, 'road', 'dry', 4.0, 89),
+    ('Tamarancho Flow Trail', 38.0124, -122.5734, 320, 'singletrack', 'loose', 7.0, 67),
+    ('Camino Alto', 37.9082, -122.5234, 195, 'road', 'dry', 6.0, 78),
+
+    -- San Francisco
+    ('SF Embarcadero', 37.7955, -122.3933, 3, 'urban', 'dry', 2.0, 128),
+    ('Golden Gate Park', 37.7694, -122.4862, 45, 'urban', 'dry', 2.5, 145),
+    ('Twin Peaks Climb', 37.7544, -122.4477, 282, 'road', 'dry', 7.0, 62),
+    ('Presidio Trails', 37.7989, -122.4662, 85, 'paved_trail', 'dry', 3.5, 95),
+
+    -- East Bay
+    ('Mt. Diablo Summit', 37.8816, -121.9142, 1173, 'mountain', 'dry', 9.0, 76),
+    ('Redwood Regional Park', 37.8128, -122.1456, 425, 'singletrack', 'packed', 5.0, 58),
+    ('Joaquin Miller Park', 37.8124, -122.1892, 365, 'singletrack', 'loose', 5.5, 45),
+    ('Coyote Hills Regional', 37.5548, -122.0876, 45, 'gravel', 'packed', 3.0, 58),
+
+    -- Peninsula & South Bay
+    ('Old La Honda Road', 37.3648, -122.2175, 425, 'road', 'dry', 7.0, 82),
+    ('Skyline Ridge', 37.3125, -122.1654, 792, 'gravel', 'packed', 6.0, 48),
+    ('Stevens Creek Trail', 37.3228, -122.0456, 125, 'paved_trail', 'dry', 2.0, 92),
+    ('Pacifica Coastal Trail', 37.6138, -122.4869, 95, 'paved_trail', 'dry', 4.5, 54),
+
+    -- Wine Country
+    ('Annadel State Park', 38.4352, -122.6234, 385, 'singletrack', 'loose', 6.5, 43)
+) AS loc([name], [latitude], [longitude], [elevation_m], [terrain_type], [surface_condition], [difficulty_rating], [visit_count]);
+
+-- Generate 180 more locations based on real Bay Area cycling areas
+INSERT INTO [MJ_Biking_App].[Location]
+    ([rider_id], [name], [latitude], [longitude], [elevation_m], [terrain_type], [surface_condition], [difficulty_rating], [visit_count])
+SELECT TOP 180
     r.[rider_id],
     CONCAT(
-        CASE (ABS(CHECKSUM(NEWID())) % 10)
-            WHEN 0 THEN 'Mountain View Trail'
-            WHEN 1 THEN 'Riverside Path'
-            WHEN 2 THEN 'City Center Loop'
-            WHEN 3 THEN 'Coastal Highway'
-            WHEN 4 THEN 'Forest Single Track'
-            WHEN 5 THEN 'Valley Gravel Road'
-            WHEN 6 THEN 'Urban Greenway'
-            WHEN 7 THEN 'Summit Climb'
-            WHEN 8 THEN 'Lakeside Circuit'
-            ELSE 'Desert Canyon Route'
+        CASE (ABS(CHECKSUM(NEWID())) % 20)
+            WHEN 0 THEN 'Bolinas Ridge'
+            WHEN 1 THEN 'Panoramic Highway'
+            WHEN 2 THEN 'Lucas Valley'
+            WHEN 3 THEN 'Sir Francis Drake'
+            WHEN 4 THEN 'Nicasio Valley'
+            WHEN 5 THEN 'Shoreline Trail'
+            WHEN 6 THEN 'Bay Trail'
+            WHEN 7 THEN 'Coastal Trail'
+            WHEN 8 THEN 'Sawyer Camp'
+            WHEN 9 THEN 'Cañada Road'
+            WHEN 10 THEN 'Kings Mountain'
+            WHEN 11 THEN 'Page Mill Road'
+            WHEN 12 THEN 'Montebello Ridge'
+            WHEN 13 THEN 'Los Gatos Creek'
+            WHEN 14 THEN 'Guadalupe Trail'
+            WHEN 15 THEN 'Morgan Territory'
+            WHEN 16 THEN 'Mines Road'
+            WHEN 17 THEN 'Palomares Road'
+            WHEN 18 THEN 'Niles Canyon'
+            ELSE 'Sunol Regional'
         END,
-        ' #', (ABS(CHECKSUM(NEWID())) % 99) + 1
+        ' - Section ', (ABS(CHECKSUM(NEWID())) % 15) + 1
     ) AS [name],
-    -- Latitude: various cycling hotspots worldwide
-    CAST(37.0 + (ABS(CHECKSUM(NEWID())) % 100) / 10.0 AS DECIMAL(9,6)) AS [latitude],
-    CAST(-122.0 + (ABS(CHECKSUM(NEWID())) % 100) / 10.0 AS DECIMAL(9,6)) AS [longitude],
-    CAST((ABS(CHECKSUM(NEWID())) % 2000) AS DECIMAL(7,2)) AS [elevation_m],
+    -- Real Bay Area latitude range (37.2 to 38.5)
+    CAST(37.2 + (ABS(CHECKSUM(NEWID())) % 130) / 100.0 AS DECIMAL(9,6)) AS [latitude],
+    -- Real Bay Area longitude range (-122.7 to -121.8)
+    CAST(-122.7 + (ABS(CHECKSUM(NEWID())) % 90) / 100.0 AS DECIMAL(9,6)) AS [longitude],
+    CAST((ABS(CHECKSUM(NEWID())) % 1200) AS DECIMAL(7,2)) AS [elevation_m],
     -- Terrain distribution: 30% road, 20% urban, 50% other
     CASE
         WHEN ROW_NUMBER() OVER (ORDER BY NEWID()) % 10 <= 2 THEN 'road'
@@ -158,7 +208,7 @@ SELECT TOP 200
         ELSE 'dry'
     END AS [surface_condition],
     CAST(1.0 + (ABS(CHECKSUM(NEWID())) % 90) / 10.0 AS DECIMAL(3,1)) AS [difficulty_rating],
-    (ABS(CHECKSUM(NEWID())) % 50) + 1 AS [visit_count]
+    (ABS(CHECKSUM(NEWID())) % 80) + 5 AS [visit_count]
 FROM [MJ_Biking_App].[Rider] r
 CROSS JOIN (SELECT TOP 2 1 AS n FROM sys.objects) AS multiplier;
 GO

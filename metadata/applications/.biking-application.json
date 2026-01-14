@@ -34,6 +34,13 @@
         "ResourceType": "Custom",
         "DriverClass": "BikingFleetResource",
         "isDefault": false
+      },
+      {
+        "Label": "Route Finder",
+        "Icon": "fa-solid fa-wand-magic-sparkles",
+        "ResourceType": "Custom",
+        "DriverClass": "BikingRouteRecommendationsResource",
+        "isDefault": false
       }
     ]
   },
@@ -44,7 +51,7 @@
     "ID": "B970816F-E276-4F38-BA0E-F23AE0771CC9"
   },
   "sync": {
-    "lastModified": "2026-01-13T18:07:49.441Z",
-    "checksum": "a3bf31186730af44881f45e480c5a62724582e5a32c5d1b7a8800200070a2a88"
+    "lastModified": "2026-01-13T22:55:06.310Z",
+    "checksum": "f6c4359d3a0716fb4b506c50f87ef800c4bec0053cd3146822775af8cecc29d8"
   }
 }

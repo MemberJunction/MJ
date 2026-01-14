@@ -772,12 +772,12 @@ export class BikingLocationsResourceComponent extends BaseResourceComponent impl
   selectedLocation: MapLocation | null = null;
   activeTerrain: string | null = null;
 
-  // Map bounds based on sample data (NYC area approximation)
+  // Map bounds based on SF Bay Area cycling locations
   private mapBounds = {
-    minLat: 40.55,
-    maxLat: 40.85,
-    minLng: -74.20,
-    maxLng: -73.85
+    minLat: 37.25,
+    maxLat: 38.50,
+    minLng: -122.70,
+    maxLng: -121.85
   };
 
   constructor(

@@ -669,33 +669,37 @@ export class BikingInstrumentationService {
         avgDifficultyRating: 5.4,
         avgElevation: 342,
         mostVisitedLocations: [
-          { name: 'Central Park Loop', visitCount: 87, terrain: 'urban', difficulty: 3.5 },
-          { name: 'Mountain Ridge Trail', visitCount: 64, terrain: 'mountain', difficulty: 7.8 },
-          { name: 'Riverside Greenway', visitCount: 52, terrain: 'paved_trail', difficulty: 2.2 },
-          { name: 'Gravel Creek Path', visitCount: 45, terrain: 'gravel', difficulty: 5.5 },
-          { name: 'Highway 101 Shoulder', visitCount: 38, terrain: 'road', difficulty: 4.0 }
+          { name: 'Hawk Hill Summit', visitCount: 156, terrain: 'road', difficulty: 7.5 },
+          { name: 'Mt. Tamalpais East Peak', visitCount: 134, terrain: 'mountain', difficulty: 8.5 },
+          { name: 'SF Embarcadero', visitCount: 128, terrain: 'urban', difficulty: 2.0 },
+          { name: 'Marin Headlands Loop', visitCount: 112, terrain: 'road', difficulty: 6.5 },
+          { name: 'China Camp Village Trail', visitCount: 98, terrain: 'singletrack', difficulty: 5.5 }
         ],
         mapLocations: [
-          { id: 'loc-001', name: 'Central Park Loop', latitude: 40.785, longitude: -73.968, elevation: 45, terrain: 'urban', surface: 'dry', difficulty: 3.5, visitCount: 87 },
-          { id: 'loc-002', name: 'Mountain Ridge Trail', latitude: 40.742, longitude: -74.178, elevation: 520, terrain: 'mountain', surface: 'loose', difficulty: 7.8, visitCount: 64 },
-          { id: 'loc-003', name: 'Riverside Greenway', latitude: 40.812, longitude: -73.952, elevation: 25, terrain: 'paved_trail', surface: 'dry', difficulty: 2.2, visitCount: 52 },
-          { id: 'loc-004', name: 'Gravel Creek Path', latitude: 40.698, longitude: -74.045, elevation: 180, terrain: 'gravel', surface: 'packed', difficulty: 5.5, visitCount: 45 },
-          { id: 'loc-005', name: 'Highway 101 Shoulder', latitude: 40.765, longitude: -73.892, elevation: 85, terrain: 'road', surface: 'dry', difficulty: 4.0, visitCount: 38 },
-          { id: 'loc-006', name: 'Forest Singletrack', latitude: 40.718, longitude: -74.125, elevation: 380, terrain: 'singletrack', surface: 'muddy', difficulty: 8.2, visitCount: 32 },
-          { id: 'loc-007', name: 'Coastal Route', latitude: 40.582, longitude: -73.965, elevation: 15, terrain: 'road', surface: 'dry', difficulty: 3.0, visitCount: 28 },
-          { id: 'loc-008', name: 'Urban Circuit', latitude: 40.758, longitude: -73.985, elevation: 35, terrain: 'urban', surface: 'dry', difficulty: 2.5, visitCount: 42 },
-          { id: 'loc-009', name: 'Hilltop Overlook', latitude: 40.795, longitude: -74.012, elevation: 425, terrain: 'mountain', surface: 'packed', difficulty: 6.8, visitCount: 22 },
-          { id: 'loc-010', name: 'Wetlands Trail', latitude: 40.625, longitude: -74.088, elevation: 12, terrain: 'paved_trail', surface: 'wet', difficulty: 2.8, visitCount: 18 },
-          { id: 'loc-011', name: 'Downtown Express', latitude: 40.748, longitude: -73.992, elevation: 28, terrain: 'urban', surface: 'dry', difficulty: 3.2, visitCount: 35 },
-          { id: 'loc-012', name: 'Ridge Runner', latitude: 40.685, longitude: -74.155, elevation: 610, terrain: 'doubletrack', surface: 'loose', difficulty: 7.2, visitCount: 15 }
+          // San Francisco Bay Area - Real cycling locations
+          { id: 'loc-001', name: 'Hawk Hill Summit', latitude: 37.8267, longitude: -122.4985, elevation: 284, terrain: 'road', surface: 'dry', difficulty: 7.5, visitCount: 156 },
+          { id: 'loc-002', name: 'Mt. Tamalpais East Peak', latitude: 37.9235, longitude: -122.5965, elevation: 784, terrain: 'mountain', surface: 'packed', difficulty: 8.5, visitCount: 134 },
+          { id: 'loc-003', name: 'SF Embarcadero', latitude: 37.7955, longitude: -122.3933, elevation: 3, terrain: 'urban', surface: 'dry', difficulty: 2.0, visitCount: 128 },
+          { id: 'loc-004', name: 'Marin Headlands Loop', latitude: 37.8352, longitude: -122.5267, elevation: 245, terrain: 'road', surface: 'dry', difficulty: 6.5, visitCount: 112 },
+          { id: 'loc-005', name: 'China Camp Village Trail', latitude: 37.9985, longitude: -122.4678, elevation: 85, terrain: 'singletrack', surface: 'packed', difficulty: 5.5, visitCount: 98 },
+          { id: 'loc-006', name: 'Paradise Loop', latitude: 37.9195, longitude: -122.4845, elevation: 15, terrain: 'road', surface: 'dry', difficulty: 4.0, visitCount: 89 },
+          { id: 'loc-007', name: 'Mt. Diablo Summit', latitude: 37.8816, longitude: -121.9142, elevation: 1173, terrain: 'mountain', surface: 'dry', difficulty: 9.0, visitCount: 76 },
+          { id: 'loc-008', name: 'Golden Gate Park', latitude: 37.7694, longitude: -122.4862, elevation: 45, terrain: 'urban', surface: 'dry', difficulty: 2.5, visitCount: 145 },
+          { id: 'loc-009', name: 'Tamarancho Flow Trail', latitude: 38.0124, longitude: -122.5734, elevation: 320, terrain: 'singletrack', surface: 'loose', difficulty: 7.0, visitCount: 67 },
+          { id: 'loc-010', name: 'Pacifica Coastal Trail', latitude: 37.6138, longitude: -122.4869, elevation: 95, terrain: 'paved_trail', surface: 'dry', difficulty: 4.5, visitCount: 54 },
+          { id: 'loc-011', name: 'Old La Honda Road', latitude: 37.3648, longitude: -122.2175, elevation: 425, terrain: 'road', surface: 'dry', difficulty: 7.0, visitCount: 82 },
+          { id: 'loc-012', name: 'Skyline Ridge', latitude: 37.3125, longitude: -122.1654, elevation: 792, terrain: 'gravel', surface: 'packed', difficulty: 6.0, visitCount: 48 },
+          { id: 'loc-013', name: 'Stevens Creek Trail', latitude: 37.3228, longitude: -122.0456, elevation: 125, terrain: 'paved_trail', surface: 'dry', difficulty: 2.0, visitCount: 92 },
+          { id: 'loc-014', name: 'Annadel State Park', latitude: 38.4352, longitude: -122.6234, elevation: 385, terrain: 'singletrack', surface: 'loose', difficulty: 6.5, visitCount: 43 },
+          { id: 'loc-015', name: 'Coyote Hills Regional', latitude: 37.5548, longitude: -122.0876, elevation: 45, terrain: 'gravel', surface: 'packed', difficulty: 3.0, visitCount: 58 }
         ],
         popularRoutes: [
-          { id: 'route-001', name: 'Central Park Full Loop', terrain: 'urban', difficulty: 3.5, visitCount: 87, totalDistanceKm: 10.2, elevationGainM: 85, avgSpeedKmh: 24.5 },
-          { id: 'route-002', name: 'Mountain Ridge Epic', terrain: 'mountain', difficulty: 7.8, visitCount: 64, totalDistanceKm: 28.5, elevationGainM: 890, avgSpeedKmh: 14.2 },
-          { id: 'route-003', name: 'Riverside Out & Back', terrain: 'paved_trail', difficulty: 2.2, visitCount: 52, totalDistanceKm: 18.8, elevationGainM: 45, avgSpeedKmh: 26.8 },
-          { id: 'route-004', name: 'Gravel Century Lite', terrain: 'gravel', difficulty: 5.5, visitCount: 45, totalDistanceKm: 65.0, elevationGainM: 520, avgSpeedKmh: 19.5 },
-          { id: 'route-005', name: 'Highway Sprint', terrain: 'road', difficulty: 4.0, visitCount: 38, totalDistanceKm: 42.0, elevationGainM: 180, avgSpeedKmh: 32.5 },
-          { id: 'route-006', name: 'Forest Flow', terrain: 'singletrack', difficulty: 8.2, visitCount: 32, totalDistanceKm: 15.5, elevationGainM: 450, avgSpeedKmh: 12.8 }
+          { id: 'route-001', name: 'Hawk Hill Climb', terrain: 'road', difficulty: 7.5, visitCount: 156, totalDistanceKm: 8.5, elevationGainM: 284, avgSpeedKmh: 18.5 },
+          { id: 'route-002', name: 'Mt. Tam Epic', terrain: 'mountain', difficulty: 8.5, visitCount: 134, totalDistanceKm: 32.0, elevationGainM: 1250, avgSpeedKmh: 12.8 },
+          { id: 'route-003', name: 'Embarcadero to Sausalito', terrain: 'urban', difficulty: 3.5, visitCount: 128, totalDistanceKm: 14.5, elevationGainM: 85, avgSpeedKmh: 22.5 },
+          { id: 'route-004', name: 'Marin Headlands Century', terrain: 'road', difficulty: 6.5, visitCount: 112, totalDistanceKm: 65.0, elevationGainM: 1450, avgSpeedKmh: 26.2 },
+          { id: 'route-005', name: 'China Camp XC Loop', terrain: 'singletrack', difficulty: 5.5, visitCount: 98, totalDistanceKm: 18.5, elevationGainM: 520, avgSpeedKmh: 14.5 },
+          { id: 'route-006', name: 'Mt. Diablo Challenge', terrain: 'mountain', difficulty: 9.0, visitCount: 76, totalDistanceKm: 28.5, elevationGainM: 1173, avgSpeedKmh: 15.8 }
         ]
       };
     }
