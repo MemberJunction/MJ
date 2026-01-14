@@ -40,6 +40,7 @@ const mcpServerAgentToolInfoSchema = z.object({
 
 const mcpServerInfoSchema = z.object({
   port: z.coerce.number().optional().default(3100),
+  transport: z.enum(['stdio', 'sse']).optional().default('sse'),
   entityTools: z.array(mcpServerEntityToolInfoSchema).optional(),
   actionTools: z.array(mcpServerActionToolInfoSchema).optional(),
   agentTools: z.array(mcpServerAgentToolInfoSchema).optional(),

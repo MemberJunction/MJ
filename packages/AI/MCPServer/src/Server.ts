@@ -1,7 +1,7 @@
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
-import { FastMCP } from "fastmcp";
-import * as sql from "mssql";
+import { FastMCP, type Tool, type ToolParameters } from "fastmcp";
+import sql from "mssql";
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
@@ -48,6 +48,16 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
 const server = new FastMCP({
     name: "MemberJunction",
     version: "1.0.0"
+});
+
+// Add a prompt to enable completion capability (required by fastmcp)
+server.addPrompt({
+    name: "help",
+    description: "Get help with MemberJunction MCP tools",
+    arguments: [],
+    load: async () => {
+        return "MemberJunction MCP Server provides tools for querying entities, running views, and executing AI agents. Use the available tools to interact with your MemberJunction database.";
+    }
 });
 
 /**
@@ -111,7 +121,7 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
 /**
  * Wrapper to add a tool with filtering support
  */
-function addToolWithFilter(toolConfig: Parameters<typeof server.addTool>[0]): void {
+function addToolWithFilter<Params extends ToolParameters>(toolConfig: Tool<undefined, Params>): void {
     const toolName = toolConfig.name;
 
     // Always track the tool name for --list-tools
@@ -151,6 +161,16 @@ function truncateText(text: string | null | undefined, maxChars: number): { valu
 }
 
 // Initialize database and setup tools
+// Helper to log messages - uses stderr for stdio transport to avoid breaking MCP protocol
+const useStdioTransport = process.env.MCP_TRANSPORT === 'stdio';
+function mcpLog(message: string) {
+    if (useStdioTransport) {
+        console.error(message);
+    } else {
+        console.log(message);
+    }
+}
+
 export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
     try {
         // Store filter options for use by addToolWithFilter
@@ -160,17 +180,17 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         registeredToolNames.length = 0;
 
         if (!mcpServerSettings?.enableMCPServer) {
-            console.log("MCP Server is disabled in the configuration.");
+            mcpLog("MCP Server is disabled in the configuration.");
             throw new Error("MCP Server is disabled in the configuration.");
        }
         // Initialize database connection
         const pool = new sql.ConnectionPool(poolConfig);
         await pool.connect();
-        
+
         // Setup SQL Server client
         const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
         await setupSQLServerClient(config);
-        console.log("Database connection setup completed.");
+        mcpLog("Database connection setup completed.");
 
         addToolWithFilter({
             name: "Get_All_Entities",
@@ -188,28 +208,39 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         await loadActionTools(contextUser);
         await loadAgentTools(contextUser);
         loadAgentRunDiagnosticTools(contextUser);
-        console.log("Tools loaded successfully.");
-        
-        // Configure server options
-        const serverOptions = {
-            transportType: "sse" as const,
-            sse: {
-                endpoint: "/mcp" as `/${string}`,
-                port: mcpServerPort
-            },
-            // Optional: Add auth configuration if needed
-            // auth: {
-            //   type: "basic",
-            //   username: "user",
-            //   password: "pass"
-            // }
-        };
+        mcpLog("Tools loaded successfully.");
 
-        // Start server with SSE transport
-        server.start(serverOptions);
+        // Check for transport type from environment or config
+        const useStdio = process.env.MCP_TRANSPORT === 'stdio' || mcpServerSettings?.transport === 'stdio';
 
-        console.log(`MemberJunction MCP Server running on port ${mcpServerPort}`);
-        console.log(`Server endpoint available at: http://localhost:${mcpServerPort}/mcp`);
+        if (useStdio) {
+            // Use stdio transport for Claude Desktop integration
+            server.start({
+                transportType: "stdio" as const
+            });
+            mcpLog("MemberJunction MCP Server running with stdio transport");
+        } else {
+            // Configure server options for SSE transport
+            const serverOptions = {
+                transportType: "sse" as const,
+                sse: {
+                    endpoint: "/mcp" as `/${string}`,
+                    port: mcpServerPort
+                },
+                // Optional: Add auth configuration if needed
+                // auth: {
+                //   type: "basic",
+                //   username: "user",
+                //   password: "pass"
+                // }
+            };
+
+            // Start server with SSE transport
+            server.start(serverOptions);
+
+            mcpLog(`MemberJunction MCP Server running on port ${mcpServerPort}`);
+            mcpLog(`Server endpoint available at: http://localhost:${mcpServerPort}/mcp`);
+        }
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);
     }
@@ -421,18 +452,37 @@ async function loadAgentTools(contextUser: UserInfo) {
 /**
  * Load agent run diagnostic tools for debugging and auditing agent executions
  */
+// Schema definitions for agent diagnostic tools
+const listRecentAgentRunsSchema = z.object({
+    agentName: z.string().optional().describe("Filter by agent name (partial match)"),
+    status: z.enum(['Success', 'Failed', 'Running', 'Cancelled', 'all']).default('all').describe("Filter by run status"),
+    days: z.number().default(7).describe("Number of days to look back"),
+    limit: z.number().default(10).describe("Maximum number of runs to return")
+});
+
+const runIdSchema = z.object({
+    runId: z.string().describe("The agent run ID")
+});
+
+const stepDataSchema = z.object({
+    runId: z.string().describe("The agent run ID"),
+    stepNumber: z.number().describe("The step number to retrieve"),
+    maxChars: z.number().default(50000).describe("Maximum characters to return (0 for unlimited)")
+});
+
+const stepOutputSchema = z.object({
+    runId: z.string().describe("The agent run ID"),
+    stepNumber: z.number().describe("The step number"),
+    outputFile: z.string().optional().describe("Optional file path to write the output to")
+});
+
 function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
     // Tool 1: List Recent Agent Runs
     addToolWithFilter({
         name: "List_Recent_Agent_Runs",
         description: "Fast query for recent AI agent runs with optional filtering by agent name, status, and date range",
-        parameters: z.object({
-            agentName: z.string().optional().describe("Filter by agent name (partial match)"),
-            status: z.enum(['Success', 'Failed', 'Running', 'Cancelled', 'all']).default('all').describe("Filter by run status"),
-            days: z.number().default(7).describe("Number of days to look back"),
-            limit: z.number().default(10).describe("Maximum number of runs to return")
-        }),
-        async execute(props: { agentName?: string; status: string; days: number; limit: number }) {
+        parameters: listRecentAgentRunsSchema,
+        async execute(props: z.infer<typeof listRecentAgentRunsSchema>) {
             const rv = new RunView();
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - props.days);
