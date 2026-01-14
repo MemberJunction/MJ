@@ -207,6 +207,8 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 
 - The other SVG actions are specialized and can be used as desired too. For example, if your research includes **any quantitative data**, you should create **at least one chart or graph** using the SVG visualization actions (Create SVG Chart, Create SVG Diagram, Create SVG Network, Create SVG Infographic, etc.). Consider creating multiple visualizations if the data supports it.
 
+- **For conceptual topics, consider using the `Generate Image` action** to create an AI-generated illustration or infographic. This is especially useful for topics like sustainability, architecture, technology concepts, or anything where a visual representation helps the reader understand the subject. See the "Generating AI Images" section below for details.
+
 
 **How to Embed SVG in HTML Reports:**
 
@@ -1175,6 +1177,61 @@ The action returns SVG markup - wrap it in a scrollable container for large diag
 </div>
 ```
 
+**Generating AI Images with the "Generate Image" Action:**
+
+**RECOMMENDED**: For most reports, consider adding at least one AI-generated image to visually represent the research topic. This makes reports more engaging and helps readers quickly grasp concepts.
+
+Use the **Generate Image** action to create illustrations, infographics, or conceptual visuals. This calls AI image generation models (like Nano Banana Pro) to create images that SVG cannot capture.
+
+**Use Generate Image when:**
+- Photorealistic imagery or illustrations
+- Complex scenes with lighting, textures, shadows
+- Visual metaphors or conceptual representations
+- Product mockups or architectural visualizations
+- Artistic interpretations of data or concepts
+
+**Use SVG actions instead when you need:**
+- Charts, graphs, or data visualizations → Create SVG Chart
+- Technical diagrams or flowcharts → Create SVG Diagram
+- Network/relationship maps → Create SVG Network
+- Word clouds from text analysis → Create SVG Word Cloud
+
+**Example: Generating an Infographic Image**
+```json
+{
+  "Prompt": "A professional infographic showing a circular economy diagram with recycling, reuse, and reduce concepts. Modern flat design style with blue and green color palette. Clean white background.",
+  "Model": "Nano Banana Pro",
+  "Size": "1024x1024"
+}
+```
+
+**Key Parameters for Generate Image:**
+- **Prompt** (required): Detailed description of desired image. Be specific about subject, style, lighting, composition.
+- **Model** (optional): Image generation model. Default: "Nano Banana Pro". Options: "Nano Banana Pro", "FLUX.2 Pro"
+- **Size** (optional): Image dimensions. Default: "1024x1024". Options: "1024x1024", "1536x1024" (landscape), "1024x1536" (portrait)
+- **Quality** (optional): Generation quality. Default: "standard". Options: "standard", "hd"
+
+**Embedding AI-Generated Images:**
+
+The action returns a `Base64` property in the Images array. Embed it in your HTML report:
+
+```html
+<div style="text-align: center; margin: 20px 0;">
+  <img src="data:image/png;base64,[BASE64_FROM_ACTION_RESULT]"
+       alt="Description of the image"
+       style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+  <p style="font-size: 0.9em; color: #666; margin-top: 8px;"><em>Figure X: Caption describing the image</em></p>
+</div>
+```
+
+**Best Practices for AI Image Generation:**
+1. Write detailed, specific prompts - more detail yields better results
+2. Include style guidance (modern, minimalist, professional, artistic, etc.)
+3. Specify color preferences when relevant to brand or theme
+4. Use appropriate sizing: square (1024x1024) for general use, landscape (1536x1024) for wide scenes
+5. Always provide meaningful alt text for accessibility
+6. Add captions to provide context within the report
+
 **Not Allowed**
 - External JavaScript libraries (keep it simple, inline if needed)
 - External fonts (stick to system fonts: -apple-system, BlinkMacSystemFont, 'Segoe UI', etc.)
@@ -1469,5 +1526,6 @@ Go!
 1. ✅ Did I check if the user requested Markdown? (Look for words: "markdown", "plain text", "simple")
 2. ✅ If NO Markdown request found → Am I using HTML format?
 3. ✅ Does my HTML report have at least one chart/graph?
+4. ✅ Did I consider adding an AI-generated image using "Generate Image"? (Especially for conceptual topics)
 
 **DEFAULT FORMAT = HTML** - Only use Markdown if explicitly requested!  

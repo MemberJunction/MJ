@@ -170,12 +170,14 @@ export class GenerateImageAction extends BaseAction {
                 Value: model.Name
             });
 
-            // Build response
+            // Build response - NOTE: images data is in output params, not in Message
+            // This keeps Message lightweight for LLM context (base64 images are ~700K tokens each)
             const responseData = {
                 message: `Successfully generated ${result.images.length} image(s)`,
                 model: model.Name,
                 imageCount: result.images.length,
-                images: outputImages,
+                // Images are available in the 'Images' output parameter
+                // Use the provided placeholder references in your response
                 revisedPrompt: result.revisedPrompt
             };
 

@@ -300,6 +300,18 @@ export type ExecuteAgentResult<P = any> = {
      * @since 3.1.0
      */
     mediaOutputs?: MediaOutput[];
+
+    /**
+     * Pending media references that need to bubble up to parent agents.
+     * Contains large binary content (images, etc.) that was intercepted during action execution
+     * and replaced with placeholders like ${media:img-xxx} to keep LLM context small.
+     *
+     * Sub-agents return these to their parent, which merges them into its own registry.
+     * The root agent resolves all placeholders at the end using the accumulated references.
+     *
+     * @since 3.1.0
+     */
+    pendingMediaReferences?: Array<{refId: string; media: MediaOutput}>;
 }
 
 /**
