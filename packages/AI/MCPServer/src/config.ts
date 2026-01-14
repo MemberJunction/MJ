@@ -1,10 +1,15 @@
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 dotenv.config();
 
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError } from '@memberjunction/core';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -89,10 +94,29 @@ export const {
 } = configInfo;
 
 export function loadConfig(): ConfigInfo {
-  const configSearchResult = explorer.search(process.cwd());
+  const cwd = process.cwd();
+  // Navigate from dist/config.js up to project root: packages/AI/MCPServer/dist -> project root
+  const projectRoot = join(__dirname, '..', '..', '..', '..');
+
+  console.error(`[MCP Config] Current working directory: ${cwd}`);
+  console.error(`[MCP Config] Script directory: ${__dirname}`);
+  console.error(`[MCP Config] Project root: ${projectRoot}`);
+  console.error(`[MCP Config] Searching for mj.config.* files...`);
+
+  // Try project root first (more reliable), then fall back to cwd
+  let configSearchResult = explorer.search(projectRoot);
   if (!configSearchResult) {
+    console.error(`[MCP Config] Config not found in project root, trying cwd...`);
+    configSearchResult = explorer.search(cwd);
+  }
+
+  if (!configSearchResult) {
+    console.error(`[MCP Config] Config file not found in: ${projectRoot} or ${cwd}`);
+    console.error(`[MCP Config] Expected file: mj.config.cjs or similar`);
     throw new Error('Config file not found.');
   }
+
+  console.error(`[MCP Config] Found config at: ${configSearchResult.filepath}`);
 
   if (configSearchResult.isEmpty) {
     throw new Error(`Config file ${configSearchResult.filepath} is empty or does not exist.`);
