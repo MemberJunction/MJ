@@ -1,0 +1,65 @@
+<div class="providers-list">
+  <!-- Loading State -->
+  <div *ngIf="isLoading" class="loading-state">
+    <mj-loading text="Loading providers..."></mj-loading>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="errorMessage && !isLoading" class="error-state">
+    <div class="error-icon">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+    </div>
+    <p class="error-message">{{ errorMessage }}</p>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!isLoading && !errorMessage && providers.length === 0" class="empty-state">
+    <div class="empty-icon">
+      <i class="fa-solid fa-cloud-slash"></i>
+    </div>
+    <p class="empty-message">No storage providers configured</p>
+    <p class="empty-hint">Configure a storage provider in the Admin app to get started</p>
+  </div>
+
+  <!-- Provider List -->
+  <div *ngIf="!isLoading && !errorMessage && providers.length > 0" class="providers-container">
+    <div
+      *ngFor="let provider of providers"
+      class="provider-item"
+      [class.selected]="isSelected(provider)"
+      (click)="selectProvider(provider)"
+      [title]="provider.Description || provider.Name"
+    >
+      <div class="provider-icon">
+        <i [class]="getProviderIcon(provider)"></i>
+      </div>
+      <div class="provider-info">
+        <div class="provider-name">{{ provider.Name }}</div>
+        <div class="provider-meta">
+          <!-- Connection status indicator -->
+          <span class="connection-status">
+            <i
+              *ngIf="getProviderStatus(provider).isChecking"
+              class="fa-solid fa-spinner fa-spin status-checking"
+              title="Checking connection..."
+            ></i>
+            <i
+              *ngIf="!getProviderStatus(provider).isChecking && getProviderStatus(provider).isConnected"
+              class="fa-solid fa-circle status-connected"
+              title="Connected"
+            ></i>
+            <i
+              *ngIf="!getProviderStatus(provider).isChecking && !getProviderStatus(provider).isConnected"
+              class="fa-solid fa-circle status-disconnected"
+              title="Not connected"
+            ></i>
+          </span>
+          <!-- Search support badge -->
+          <span class="search-badge" *ngIf="provider.SupportsSearch" title="Supports search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -67,6 +67,13 @@ export const createUploadUrl = async <
   await providerEntity.Load(ProviderID);
   const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
 
+  // Initialize driver with config if available
+  const configJson = providerEntity.Get('Configuration') as string | null;
+  if (configJson) {
+    const config = JSON.parse(configJson);
+    await driver.initialize(config);
+  }
+
   const { UploadUrl, ...maybeProviderKey } = await driver.CreatePreAuthUploadUrl(Name);
   const updatedInput = { ...input, ...maybeProviderKey, ContentType, Status };
 
@@ -103,6 +110,14 @@ export const createUploadUrl = async <
  */
 export const createDownloadUrl = async (providerEntity: FileStorageProviderEntity, providerKeyOrName: string): Promise<string> => {
   const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+
+  // Initialize driver with config if available
+  const configJson = providerEntity.Get('Configuration') as string | null;
+  if (configJson) {
+    const config = JSON.parse(configJson);
+    await driver.initialize(config);
+  }
+
   return driver.CreatePreAuthDownloadUrl(providerKeyOrName);
 };
 
@@ -139,17 +154,70 @@ export const createDownloadUrl = async (providerEntity: FileStorageProviderEntit
  * ```
  */
 export const moveObject = async (
-  providerEntity: FileStorageProviderEntity, 
-  oldProviderKeyOrName: string, 
+  providerEntity: FileStorageProviderEntity,
+  oldProviderKeyOrName: string,
   newProviderKeyOrName: string
 ): Promise<boolean> => {
   const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+
+  // Initialize driver with config if available
+  const configJson = providerEntity.Get('Configuration') as string | null;
+  if (configJson) {
+    const config = JSON.parse(configJson);
+    await driver.initialize(config);
+  }
+
   return driver.MoveObject(oldProviderKeyOrName, newProviderKeyOrName);
 };
 
 /**
+ * Copies an object from one location to another within the specified file storage provider.
+ *
+ * This utility function handles copying files by instantiating the appropriate storage
+ * provider driver and delegating to its CopyObject method. It can be used to duplicate files
+ * within the same storage provider, either in the same folder with a different name or to
+ * a different folder.
+ *
+ * @param providerEntity - The file storage provider entity containing connection details
+ * @param sourceProviderKeyOrName - The key or name of the source file to copy
+ * @param destinationProviderKeyOrName - The key or name for the destination copy
+ * @returns A promise that resolves to a boolean indicating whether the copy was successful
+ *
+ * @example
+ * ```typescript
+ * const success = await copyObject(
+ *   providerEntity,
+ *   'documents/report.pdf',
+ *   'documents/archive/report-2024.pdf'
+ * );
+ *
+ * if (success) {
+ *   console.log('File successfully copied');
+ * } else {
+ *   console.log('Failed to copy file');
+ * }
+ * ```
+ */
+export const copyObject = async (
+  providerEntity: FileStorageProviderEntity,
+  sourceProviderKeyOrName: string,
+  destinationProviderKeyOrName: string
+): Promise<boolean> => {
+  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+
+  // Initialize driver with config if available
+  const configJson = providerEntity.Get('Configuration') as string | null;
+  if (configJson) {
+    const config = JSON.parse(configJson);
+    await driver.initialize(config);
+  }
+
+  return driver.CopyObject(sourceProviderKeyOrName, destinationProviderKeyOrName);
+};
+
+/**
  * Deletes a file from the specified file storage provider.
- * 
+ *
  * This utility function handles file deletion by instantiating the appropriate storage
  * provider driver and delegating to its DeleteObject method. It provides a simple way
  * to remove files that are no longer needed.
@@ -177,10 +245,124 @@ export const moveObject = async (
  * }
  * ```
  */
-export const deleteObject = (
-  providerEntity: FileStorageProviderEntity, 
+export const deleteObject = async (
+  providerEntity: FileStorageProviderEntity,
   providerKeyOrName: string
 ): Promise<boolean> => {
+  console.log('[deleteObject] Called with:', {
+    providerName: providerEntity.Name,
+    providerID: providerEntity.ID,
+    serverDriverKey: providerEntity.ServerDriverKey,
+    providerKeyOrName
+  });
+
   const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
-  return driver.DeleteObject(providerKeyOrName);
+
+  console.log('[deleteObject] Driver created:', {
+    driverType: driver.constructor.name,
+    hasDeleteMethod: typeof driver.DeleteObject === 'function'
+  });
+
+  // Initialize driver with config if available
+  const configJson = providerEntity.Get('Configuration') as string | null;
+  if (configJson) {
+    const config = JSON.parse(configJson);
+    await driver.initialize(config);
+    console.log('[deleteObject] Driver initialized with config');
+  }
+
+  console.log('[deleteObject] Calling driver.DeleteObject...');
+  const result = await driver.DeleteObject(providerKeyOrName);
+  console.log('[deleteObject] Result:', result);
+
+  return result;
+};
+
+/**
+ * Lists objects (files) and prefixes (directories) in a storage provider at the specified path.
+ *
+ * This utility function provides access to the storage provider's file and folder listing
+ * functionality. It returns both files and directories found at the specified path prefix,
+ * allowing for hierarchical navigation through the storage provider's contents.
+ *
+ * @param providerEntity - The file storage provider entity containing connection details
+ * @param prefix - The path prefix to list objects from (e.g., "/" for root, "documents/" for a specific folder)
+ * @param delimiter - The character used to group keys into a hierarchy (defaults to "/")
+ * @returns A promise that resolves to a StorageListResult containing:
+ *          - objects: Array of file metadata (name, size, contentType, lastModified, etc.)
+ *          - prefixes: Array of directory/folder path strings
+ *
+ * @example
+ * ```typescript
+ * // List contents of the root directory
+ * const fileStorageProvider = await entityMgr.FindById('FileStorageProvider', 'aws-s3-main');
+ * const result = await listObjects(fileStorageProvider, '/');
+ *
+ * // Display files
+ * for (const file of result.objects) {
+ *   console.log(`File: ${file.name} (${file.size} bytes)`);
+ * }
+ *
+ * // Display folders
+ * for (const folder of result.prefixes) {
+ *   console.log(`Folder: ${folder}`);
+ * }
+ *
+ * // List contents of a specific folder
+ * const docsResult = await listObjects(fileStorageProvider, 'documents/');
+ * ```
+ */
+export const listObjects = async (
+  providerEntity: FileStorageProviderEntity,
+  prefix: string,
+  delimiter: string = '/'
+): Promise<import('./generic/FileStorageBase').StorageListResult> => {
+  console.log('[listObjects] Starting with:', {
+    providerName: providerEntity.Name,
+    serverDriverKey: providerEntity.ServerDriverKey,
+    prefix,
+    delimiter
+  });
+
+  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+
+  console.log('[listObjects] Driver created:', {
+    driverType: driver.constructor.name,
+    isConfigured: driver.IsConfigured
+  });
+
+  // If the provider entity has configuration, parse it and pass to initialize
+  // Use Get() method to access Configuration field dynamically (until CodeGen runs)
+
+  // Debug: Log all available fields on the entity
+  const allFields = providerEntity.GetAll();
+  console.log('[listObjects] All entity fields:', Object.keys(allFields));
+  console.log('[listObjects] Has Configuration key?', 'Configuration' in allFields);
+
+  const configJson = providerEntity.Get('Configuration') as string | null;
+  console.log('[listObjects] Configuration:', {
+    hasConfig: !!configJson,
+    configLength: configJson?.length,
+    configValue: configJson ? configJson.substring(0, 100) + '...' : null
+  });
+
+  if (configJson) {
+    try {
+      const config = JSON.parse(configJson);
+      console.log('[listObjects] Parsed config keys:', Object.keys(config));
+      await driver.initialize(config);
+      console.log('[listObjects] Driver initialized, isConfigured:', driver.IsConfigured);
+    } catch (error) {
+      console.error('[listObjects] Failed to parse config:', error);
+      throw new Error(`Failed to parse provider configuration: ${error.message}`);
+    }
+  }
+
+  const result = await driver.ListObjects(prefix, delimiter);
+  console.log('[listObjects] Result:', {
+    objectsCount: result.objects.length,
+    prefixesCount: result.prefixes.length
+  });
+
+  return result;
 };

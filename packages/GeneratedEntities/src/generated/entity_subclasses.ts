@@ -3749,13 +3749,13 @@ export const PlaylistSongSchema = z.object({
         * * Description: Unique identifier for the playlist-song relationship.`),
     PlaylistID: z.string().describe(`
         * * Field Name: PlaylistID
-        * * Display Name: Playlist ID
+        * * Display Name: Playlist
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Playlists (vwPlaylists.ID)
         * * Description: Playlist this song belongs to.`),
     SongID: z.string().describe(`
         * * Field Name: SongID
-        * * Display Name: Song ID
+        * * Display Name: Song
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Songs (vwSongs.ID)
         * * Description: Song included in the playlist.`),
@@ -3785,13 +3785,28 @@ export const PlaylistSongSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecommendationMonth: z.number().nullable().describe(`
+        * * Field Name: RecommendationMonth
+        * * Display Name: Recommendation Month
+        * * SQL Data Type: int
+        * * Description: Month (1-12) this song is recommended for in yearly emotional playlists.`),
+    MatchedEmotion: z.string().nullable().describe(`
+        * * Field Name: MatchedEmotion
+        * * Display Name: Matched Emotion
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The emotion from the user journey that this song was matched to.`),
+    AIReason: z.string().nullable().describe(`
+        * * Field Name: AIReason
+        * * Display Name: AI Reason
+        * * SQL Data Type: nvarchar(500)
+        * * Description: AI-generated explanation of why this song was recommended.`),
     Playlist: z.string().describe(`
         * * Field Name: Playlist
-        * * Display Name: Playlist
+        * * Display Name: Playlist Name
         * * SQL Data Type: nvarchar(255)`),
     Song: z.string().describe(`
         * * Field Name: Song
-        * * Display Name: Song
+        * * Display Name: Song Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -3809,7 +3824,7 @@ export const PlaylistSchema = z.object({
         * * Description: Unique identifier for the playlist.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: User who owns this playlist.`),
@@ -3860,9 +3875,24 @@ export const PlaylistSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SourceYear: z.number().nullable().describe(`
+        * * Field Name: SourceYear
+        * * Display Name: Source Year
+        * * SQL Data Type: int
+        * * Description: The year from which emotional patterns were analyzed to generate this playlist.`),
+    TargetYear: z.number().nullable().describe(`
+        * * Field Name: TargetYear
+        * * Display Name: Target Year
+        * * SQL Data Type: int
+        * * Description: The year this playlist is intended to accompany the user through.`),
+    PlaylistType: z.string().nullable().describe(`
+        * * Field Name: PlaylistType
+        * * Display Name: Playlist Type
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Type of playlist: YearlyEmotional, Custom, General, etc.`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -14821,6 +14851,39 @@ export class PlaylistSongEntity extends BaseEntity<PlaylistSongEntityType> {
     }
 
     /**
+    * Validate() method override for Playlist Songs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RecommendationMonth: If a recommendation month is set, it must be a valid month number (1‑12); otherwise the field can be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRecommendationMonthRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If a recommendation month is set, it must be a valid month number (1‑12); otherwise the field can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRecommendationMonthRange(result: ValidationResult) {
+    	// If a month is provided, it must be between 1 and 12
+    	if (this.RecommendationMonth != null && (this.RecommendationMonth < 1 || this.RecommendationMonth > 12)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RecommendationMonth",
+    			"Recommendation month must be a number between 1 and 12.",
+    			this.RecommendationMonth,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -14836,7 +14899,7 @@ export class PlaylistSongEntity extends BaseEntity<PlaylistSongEntityType> {
 
     /**
     * * Field Name: PlaylistID
-    * * Display Name: Playlist ID
+    * * Display Name: Playlist
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Playlists (vwPlaylists.ID)
     * * Description: Playlist this song belongs to.
@@ -14850,7 +14913,7 @@ export class PlaylistSongEntity extends BaseEntity<PlaylistSongEntityType> {
 
     /**
     * * Field Name: SongID
-    * * Display Name: Song ID
+    * * Display Name: Song
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Songs (vwSongs.ID)
     * * Description: Song included in the playlist.
@@ -14923,8 +14986,47 @@ export class PlaylistSongEntity extends BaseEntity<PlaylistSongEntityType> {
     }
 
     /**
+    * * Field Name: RecommendationMonth
+    * * Display Name: Recommendation Month
+    * * SQL Data Type: int
+    * * Description: Month (1-12) this song is recommended for in yearly emotional playlists.
+    */
+    get RecommendationMonth(): number | null {
+        return this.Get('RecommendationMonth');
+    }
+    set RecommendationMonth(value: number | null) {
+        this.Set('RecommendationMonth', value);
+    }
+
+    /**
+    * * Field Name: MatchedEmotion
+    * * Display Name: Matched Emotion
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The emotion from the user journey that this song was matched to.
+    */
+    get MatchedEmotion(): string | null {
+        return this.Get('MatchedEmotion');
+    }
+    set MatchedEmotion(value: string | null) {
+        this.Set('MatchedEmotion', value);
+    }
+
+    /**
+    * * Field Name: AIReason
+    * * Display Name: AI Reason
+    * * SQL Data Type: nvarchar(500)
+    * * Description: AI-generated explanation of why this song was recommended.
+    */
+    get AIReason(): string | null {
+        return this.Get('AIReason');
+    }
+    set AIReason(value: string | null) {
+        this.Set('AIReason', value);
+    }
+
+    /**
     * * Field Name: Playlist
-    * * Display Name: Playlist
+    * * Display Name: Playlist Name
     * * SQL Data Type: nvarchar(255)
     */
     get Playlist(): string {
@@ -14933,7 +15035,7 @@ export class PlaylistSongEntity extends BaseEntity<PlaylistSongEntityType> {
 
     /**
     * * Field Name: Song
-    * * Display Name: Song
+    * * Display Name: Song Name
     * * SQL Data Type: nvarchar(255)
     */
     get Song(): string {
@@ -14988,7 +15090,7 @@ export class PlaylistEntity extends BaseEntity<PlaylistEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: User who owns this playlist.
@@ -15114,8 +15216,47 @@ export class PlaylistEntity extends BaseEntity<PlaylistEntityType> {
     }
 
     /**
+    * * Field Name: SourceYear
+    * * Display Name: Source Year
+    * * SQL Data Type: int
+    * * Description: The year from which emotional patterns were analyzed to generate this playlist.
+    */
+    get SourceYear(): number | null {
+        return this.Get('SourceYear');
+    }
+    set SourceYear(value: number | null) {
+        this.Set('SourceYear', value);
+    }
+
+    /**
+    * * Field Name: TargetYear
+    * * Display Name: Target Year
+    * * SQL Data Type: int
+    * * Description: The year this playlist is intended to accompany the user through.
+    */
+    get TargetYear(): number | null {
+        return this.Get('TargetYear');
+    }
+    set TargetYear(value: number | null) {
+        this.Set('TargetYear', value);
+    }
+
+    /**
+    * * Field Name: PlaylistType
+    * * Display Name: Playlist Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Type of playlist: YearlyEmotional, Custom, General, etc.
+    */
+    get PlaylistType(): string | null {
+        return this.Get('PlaylistType');
+    }
+    set PlaylistType(value: string | null) {
+        this.Set('PlaylistType', value);
+    }
+
+    /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -18403,9 +18544,9 @@ export class UserYearSummaryEntity extends BaseEntity<UserYearSummaryEntityType>
 
     /**
     * Validate() method override for User Year Summaries entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * TotalListens: Total listens must be zero or greater; negative values are not allowed, ensuring that listen counts are always non‑negative.
+    * * TotalListens: Total listens must be zero or greater; negative values are not allowed, ensuring that listen counts are always non-negative.
     * * TotalMinutesListened: Total minutes listened must be zero or more; negative values are not allowed.
-    * * UniqueArtists: The number of unique artists recorded must be zero or a positive integer; negative values are not allowed, ensuring the count reflects a realistic, non‑negative total.
+    * * UniqueArtists: The number of unique artists recorded must be zero or a positive integer; negative values are not allowed, ensuring the count reflects a realistic, non-negative total.
     * * UniqueSongs: UniqueSongs must be zero or a positive number, ensuring the count of distinct songs a user has cannot be negative, which keeps the listening statistics logically correct
     * * Year: Year must be between 2020 and 2100 inclusive, ensuring that only valid reporting years are recorded in the system
     * @public
@@ -18425,7 +18566,7 @@ export class UserYearSummaryEntity extends BaseEntity<UserYearSummaryEntityType>
     }
 
     /**
-    * Total listens must be zero or greater; negative values are not allowed, ensuring that listen counts are always non‑negative.
+    * Total listens must be zero or greater; negative values are not allowed, ensuring that listen counts are always non-negative.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -18460,7 +18601,7 @@ export class UserYearSummaryEntity extends BaseEntity<UserYearSummaryEntityType>
     }
 
     /**
-    * The number of unique artists recorded must be zero or a positive integer; negative values are not allowed, ensuring the count reflects a realistic, non‑negative total.
+    * The number of unique artists recorded must be zero or a positive integer; negative values are not allowed, ensuring the count reflects a realistic, non-negative total.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method

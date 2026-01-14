@@ -668,24 +668,29 @@ export abstract class FileStorageBase {
    * The default implementation does nothing and resolves immediately. Storage provider
    * implementations should override this method if they need to perform async setup.
    *
+   * @param config - Optional configuration object to use instead of reading from
+   *                 environment variables or config files. This allows passing
+   *                 configuration from database entities or other runtime sources.
+   *
    * @example
    * ```typescript
    * // In a specific provider implementation:
-   * public async initialize(): Promise<void> {
-   *   // Set up OAuth tokens or other async initialization
-   *   await this.refreshAccessToken();
+   * public async initialize(config?: any): Promise<void> {
+   *   if (config?.accessToken) {
+   *     this._client = new ProviderClient({ accessToken: config.accessToken });
+   *   }
    *   await this.verifyBucketAccess();
    * }
    *
    * // Usage:
    * const storage = new MyStorageProvider();
-   * await storage.initialize();
+   * await storage.initialize({ accessToken: 'abc123' });
    * // Now the provider is ready to use
    * ```
    *
    * @returns A Promise that resolves when initialization is complete.
    */
-  public async initialize(): Promise<void> {
+  public async initialize(config?: any): Promise<void> {
     // Default implementation does nothing
   }
 

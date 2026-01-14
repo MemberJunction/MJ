@@ -1,0 +1,222 @@
+/* ===========================
+   Storage Providers List
+   =========================== */
+
+.providers-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Loading, Error, and Empty States */
+.loading-state,
+.error-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #86868b;
+  height: 100%;
+}
+
+.error-icon,
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
+
+.error-icon {
+  color: #f44336;
+}
+
+.empty-icon {
+  color: #b0b0b5;
+}
+
+.error-message,
+.empty-message {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 4px 0;
+  color: #1d1d1f;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: #86868b;
+  margin: 4px 0 0 0;
+  max-width: 180px;
+  line-height: 1.4;
+}
+
+/* Provider List Container */
+.providers-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Individual Provider Item */
+.provider-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+}
+
+.provider-item:hover {
+  background-color: #f5f5f7;
+}
+
+.provider-item.selected {
+  background-color: #e8f4fd;
+  border-left: 3px solid #007aff;
+}
+
+.provider-item.selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #007aff;
+}
+
+/* Provider Icon */
+.provider-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #424242;
+  margin-right: 12px;
+}
+
+.provider-item.selected .provider-icon {
+  color: #007aff;
+}
+
+/* Provider Info */
+.provider-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.provider-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1d1d1f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-item.selected .provider-name {
+  color: #007aff;
+  font-weight: 600;
+}
+
+.provider-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #86868b;
+}
+
+/* Connection Status */
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+}
+
+.connection-status i {
+  font-size: 8px;
+}
+
+.status-checking {
+  color: #86868b;
+}
+
+.status-connected {
+  color: #34c759;
+}
+
+.status-disconnected {
+  color: #ff3b30;
+}
+
+/* Search Badge */
+.search-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background-color: #f0f0f0;
+  border-radius: 10px;
+  font-size: 10px;
+  color: #666;
+}
+
+.provider-item.selected .search-badge {
+  background-color: rgba(0, 122, 255, 0.15);
+  color: #007aff;
+}
+
+.search-badge i {
+  font-size: 9px;
+}
+
+/* Scrollbar Styling */
+.providers-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.providers-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.providers-container::-webkit-scrollbar-thumb {
+  background: #c7c7cc;
+  border-radius: 3px;
+}
+
+.providers-container::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a5;
+}
+
+/* Responsive Adjustments */
+@media screen and (max-width: 768px) {
+  .provider-item {
+    padding: 10px 12px;
+  }
+
+  .provider-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
+    margin-right: 10px;
+  }
+
+  .provider-name {
+    font-size: 12px;
+  }
+
+  .provider-status {
+    font-size: 10px;
+  }
+}

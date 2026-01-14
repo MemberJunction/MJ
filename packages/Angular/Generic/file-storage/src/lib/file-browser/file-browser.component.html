@@ -1,0 +1,50 @@
+<div class="file-browser" (window:resize)="onWindowResize($event)">
+  <!-- Mobile header with sidebar toggle -->
+  <div class="mobile-header">
+    <button (click)="toggleSidebar()" class="sidebar-toggle">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+    <h2 class="browser-title">File Browser</h2>
+  </div>
+
+  <!-- Main two-panel layout -->
+  <div class="browser-container">
+    <!-- Left Sidebar: Providers + Categories -->
+    <div class="sidebar" [class.collapsed]="!isSidebarVisible">
+      <!-- Providers Section -->
+      <div class="sidebar-section">
+        <div class="section-header">
+          <h3>PROVIDERS</h3>
+        </div>
+        <div class="section-content">
+          <mj-storage-providers-list
+            (providerSelected)="onProviderSelected($event)"
+          ></mj-storage-providers-list>
+        </div>
+      </div>
+
+      <!-- Categories Section -->
+      <div class="sidebar-section">
+        <div class="section-header">
+          <h3>CATEGORIES</h3>
+        </div>
+        <div class="section-content">
+          <mj-folder-tree
+            [provider]="selectedProvider"
+            (folderSelected)="onFolderSelected($event)"
+          ></mj-folder-tree>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: File Grid -->
+    <div class="main-panel">
+      <mj-file-grid
+        [provider]="selectedProvider"
+        [folderPath]="selectedFolderPath"
+        (folderNavigate)="onFolderNavigate($event)"
+        (folderStructureChanged)="onFolderStructureChanged()"
+      ></mj-file-grid>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,199 @@
+/* ===========================
+   File Browser Shell Styles
+   Traditional dual-pane file manager layout
+   =========================== */
+
+.file-browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background-color: #f0f0f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  border: 1px solid #ccc;
+}
+
+/* Mobile Header */
+.mobile-header {
+  display: none;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #ccc;
+}
+
+.mobile-header .browser-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #000;
+}
+
+.sidebar-toggle {
+  margin-right: 12px;
+  background: none;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.sidebar-toggle:hover {
+  background-color: #f0f0f0;
+}
+
+/* Main Container - Two Panel Layout */
+.browser-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* Left Sidebar */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  background-color: #f8f8f8;
+  border-right: 1px solid #ccc;
+  width: 220px;
+  min-width: 220px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 0;
+  min-width: 0;
+  border-right: none;
+  opacity: 0;
+}
+
+/* Sidebar Sections */
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid #ddd;
+}
+
+.sidebar-section:last-child {
+  flex: 1;
+  border-bottom: none;
+}
+
+.section-header {
+  padding: 8px 12px;
+  background-color: #e8e8e8;
+  border-bottom: 1px solid #ccc;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Right Main Panel */
+.main-panel {
+  flex: 1;
+  background-color: #fff;
+  border-left: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Custom Scrollbar Styling */
+.section-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.section-content::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+.section-content::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+}
+
+.section-content::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+
+/* ===========================
+   Responsive Design
+   =========================== */
+
+/* Tablet (768px - 1024px) */
+@media screen and (max-width: 1024px) {
+  .sidebar {
+    width: 200px;
+    min-width: 200px;
+  }
+}
+
+/* Mobile (below 768px) */
+@media screen and (max-width: 768px) {
+  .mobile-header {
+    display: flex;
+  }
+
+  .browser-container {
+    flex-direction: column;
+  }
+
+  /* Sidebar becomes overlay on mobile */
+  .sidebar {
+    position: absolute;
+    left: 0;
+    top: 45px; /* Height of mobile header */
+    bottom: 0;
+    width: 280px;
+    min-width: 280px;
+    z-index: 1000;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+
+  /* File grid takes full space on mobile */
+  .main-panel {
+    flex: 1;
+  }
+}
+
+/* Small Mobile (below 480px) */
+@media screen and (max-width: 480px) {
+  .mobile-header {
+    padding: 6px 10px;
+  }
+
+  .mobile-header .browser-title {
+    font-size: 14px;
+  }
+
+  .section-header {
+    padding: 6px 10px;
+  }
+
+  .section-header h3 {
+    font-size: 10px;
+  }
+
+  .sidebar {
+    width: 260px;
+    min-width: 260px;
+  }
+}

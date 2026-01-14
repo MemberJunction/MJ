@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "Name": "File Browser",
+    "Description": "Mac Finder-style file browser for managing files across all configured storage providers",
+    "Icon": "fa-solid fa-folder-tree",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 99,
+    "Color": "#42a5f5",
+    "DefaultNavItems": [
+      {
+        "Label": "Files",
+        "Icon": "fa-solid fa-folder-tree",
+        "ResourceType": "Custom",
+        "DriverClass": "FileBrowserResource",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "E501E909-29B9-413E-B7EC-274D72B9E7DC"
+  },
+  "sync": {
+    "lastModified": "2026-01-14T15:55:28.423Z",
+    "checksum": "209114f0eefdff5b9c1f91e4bfdbc09313085df0a6be0592b751a5ee55fc31b9"
+  }
+}

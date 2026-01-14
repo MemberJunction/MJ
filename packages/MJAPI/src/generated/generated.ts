@@ -11489,6 +11489,17 @@ export class spotifyPlaylistSong_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Month (1-12) this song is recommended for in yearly emotional playlists.`}) 
+    RecommendationMonth?: number;
+        
+    @Field({nullable: true, description: `The emotion from the user journey that this song was matched to.`}) 
+    @MaxLength(100)
+    MatchedEmotion?: string;
+        
+    @Field({nullable: true, description: `AI-generated explanation of why this song was recommended.`}) 
+    @MaxLength(1000)
+    AIReason?: string;
+        
     @Field() 
     @MaxLength(510)
     Playlist: string;
@@ -11521,6 +11532,15 @@ export class CreatespotifyPlaylistSongInput {
 
     @Field({ nullable: true })
     PopularityReason: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RecommendationMonth: number | null;
+
+    @Field({ nullable: true })
+    MatchedEmotion: string | null;
+
+    @Field({ nullable: true })
+    AIReason: string | null;
 }
     
 
@@ -11546,6 +11566,15 @@ export class UpdatespotifyPlaylistSongInput {
 
     @Field({ nullable: true })
     PopularityReason?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RecommendationMonth?: number | null;
+
+    @Field({ nullable: true })
+    MatchedEmotion?: string | null;
+
+    @Field({ nullable: true })
+    AIReason?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11682,6 +11711,16 @@ export class spotifyPlaylist_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `The year from which emotional patterns were analyzed to generate this playlist.`}) 
+    SourceYear?: number;
+        
+    @Field(() => Int, {nullable: true, description: `The year this playlist is intended to accompany the user through.`}) 
+    TargetYear?: number;
+        
+    @Field({nullable: true, description: `Type of playlist: YearlyEmotional, Custom, General, etc.`}) 
+    @MaxLength(100)
+    PlaylistType?: string;
+        
     @Field() 
     @MaxLength(200)
     User: string;
@@ -11722,6 +11761,15 @@ export class CreatespotifyPlaylistInput {
 
     @Field(() => Int, { nullable: true })
     TotalDuration: number | null;
+
+    @Field(() => Int, { nullable: true })
+    SourceYear: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TargetYear: number | null;
+
+    @Field({ nullable: true })
+    PlaylistType: string | null;
 }
     
 
@@ -11756,6 +11804,15 @@ export class UpdatespotifyPlaylistInput {
 
     @Field(() => Int, { nullable: true })
     TotalDuration?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    SourceYear?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TargetYear?: number | null;
+
+    @Field({ nullable: true })
+    PlaylistType?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

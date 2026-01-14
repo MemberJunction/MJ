@@ -7547,7 +7547,7 @@ export const FileStorageProviderSchema = z.object({
         * * Description: Priority order for selecting storage providers, lower numbers are preferred.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this storage provider is currently available for use.`),
@@ -7567,6 +7567,10 @@ export const FileStorageProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)`),
 });
 
 export type FileStorageProviderEntityType = z.infer<typeof FileStorageProviderSchema>;
@@ -38375,7 +38379,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this storage provider is currently available for use.
@@ -38419,6 +38423,18 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     }
     set SupportsSearch(value: boolean) {
         this.Set('SupportsSearch', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
     }
 }
 

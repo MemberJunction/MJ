@@ -15,7 +15,10 @@ export class PlaylistFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'visibilityOwnership', sectionName: 'Visibility & Ownership', isExpanded: true },
+            { sectionKey: 'playlistDetails', sectionName: 'Playlist Details', isExpanded: true },
+            { sectionKey: 'aIGeneration', sectionName: 'AI Generation', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'playlistSongs', sectionName: 'Playlist Songs', isExpanded: false }
         ]);
     }
