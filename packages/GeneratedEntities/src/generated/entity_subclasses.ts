@@ -4993,6 +4993,14 @@ export const RiderSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    FirstName: z.string().nullable().describe(`
+        * * Field Name: FirstName
+        * * Display Name: First Name
+        * * SQL Data Type: nvarchar(100)`),
+    LastName: z.string().nullable().describe(`
+        * * Field Name: LastName
+        * * Display Name: Last Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type RiderEntityType = z.infer<typeof RiderSchema>;
@@ -18006,6 +18014,30 @@ export class RiderEntity extends BaseEntity<RiderEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: FirstName
+    * * Display Name: First Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get FirstName(): string | null {
+        return this.Get('FirstName');
+    }
+    set FirstName(value: string | null) {
+        this.Set('FirstName', value);
+    }
+
+    /**
+    * * Field Name: LastName
+    * * Display Name: Last Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LastName(): string | null {
+        return this.Get('LastName');
+    }
+    set LastName(value: string | null) {
+        this.Set('LastName', value);
     }
 }
 

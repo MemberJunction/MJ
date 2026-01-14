@@ -15238,6 +15238,14 @@ export class MJBikingAppRider_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    FirstName?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    LastName?: string;
+        
     @Field(() => [MJBikingAppRiderStats_])
     Rider_Stats_rider_idArray: MJBikingAppRiderStats_[]; // Link to Rider_Stats
     
@@ -15277,6 +15285,12 @@ export class CreateMJBikingAppRiderInput {
 
     @Field({ nullable: true })
     created_at?: Date;
+
+    @Field({ nullable: true })
+    FirstName: string | null;
+
+    @Field({ nullable: true })
+    LastName: string | null;
 }
     
 
@@ -15308,6 +15322,12 @@ export class UpdateMJBikingAppRiderInput {
 
     @Field({ nullable: true })
     created_at?: Date;
+
+    @Field({ nullable: true })
+    FirstName?: string | null;
+
+    @Field({ nullable: true })
+    LastName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
