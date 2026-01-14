@@ -18,6 +18,9 @@ import { LoadCredentialsAuditResource } from './Credentials/components/credentia
 import { LoadSystemDiagnosticsResource } from './SystemDiagnostics/system-diagnostics.component';
 // Lists Dashboard
 import { LoadListsResources } from './Lists';
+// Spotify Wrapped Dashboard
+import { LoadSpotifyWrappedYearResource } from './SpotifyWrapped/components/wrapped-year-resource.component';
+import { LoadMusicReflectionResource } from './SpotifyWrapped/components/music-reflection-resource.component';
 
 import {
   LoadActionsOverviewResource,
@@ -57,6 +60,18 @@ export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
 export * from './Lists';
+
+// Export Spotify Wrapped components as resources (BaseResourceComponent-based)
+export {
+  SpotifyWrappedYearResourceComponent,
+  LoadSpotifyWrappedYearResource
+} from './SpotifyWrapped/components/wrapped-year-resource.component';
+export {
+  MusicReflectionResourceComponent,
+  LoadMusicReflectionResource
+} from './SpotifyWrapped/components/music-reflection-resource.component';
+export * from './SpotifyWrapped/components/wrapped-year.component';
+export * from './SpotifyWrapped/components/music-reflection.component';
 
 // Export AI components as resources (BaseResourceComponent-based)
 export {
@@ -199,3 +214,7 @@ LoadSystemDiagnosticsResource();
 
 // Lists Dashboard resource loaders
 LoadListsResources();
+
+// Spotify Wrapped resource loaders
+LoadSpotifyWrappedYearResource();
+LoadMusicReflectionResource();

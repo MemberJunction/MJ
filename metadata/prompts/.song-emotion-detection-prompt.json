@@ -1,0 +1,64 @@
+[
+  {
+    "fields": {
+      "Name": "Song Journal Emotion Detection",
+      "Description": "Analyzes a user's journal entry about a song and detects the primary emotion expressed. Used by the Spotify Wrapped Song Journal feature to classify emotional connections to music.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/spotify/detect-song-emotion.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "{\"emotion\": \"Nostalgia\", \"confidence\": 0.85, \"reasoning\": \"Brief explanation of why this emotion was detected\", \"secondaryEmotion?\": \"Joy\"}",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "BB133E3B-A59C-4479-A37C-9DCF1E39FC5D"
+          },
+          "sync": {
+            "lastModified": "2026-01-14T00:39:15.908Z",
+            "checksum": "b7f9171aaec23e10fa0d1925552a9455d156c4a5c046a442e530258dcbb7a1d5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "8B95579D-EC75-4A1A-AD59-735397EDCA00"
+          },
+          "sync": {
+            "lastModified": "2026-01-14T00:39:15.917Z",
+            "checksum": "e2b256d3d733d3c7724e51abb5478966b6ed1d1850a1518e53252a91509d1ec0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "814233E5-8046-4691-80C5-955F839B357B"
+    },
+    "sync": {
+      "lastModified": "2026-01-14T03:09:36.802Z",
+      "checksum": "8b9dcabda673154861abe5261909b6c8c570d39d91ed1e6ae67031f7b2d2b7fa"
+    }
+  }
+]

@@ -33,6 +33,7 @@
     "@memberjunction/global": "2.133.0",
     "@memberjunction/skip-types": "2.133.0",
     "@memberjunction/sqlserver-dataprovider": "2.133.0",
+    "mj_generatedentities": "*",
     "node-sql-parser": "^5.3.13",
     "nunjucks": "^3.2.4",
     "zod": "^3.23.8"

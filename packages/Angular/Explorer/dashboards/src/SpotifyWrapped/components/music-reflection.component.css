@@ -1,0 +1,684 @@
+.music-reflection {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* No Data State */
+.no-data-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.no-data-content {
+  text-align: center;
+  padding: 3rem;
+  background: #282828;
+  border-radius: 16px;
+  max-width: 500px;
+}
+
+.no-data-content i {
+  font-size: 4rem;
+  color: #1db954;
+  margin-bottom: 1.5rem;
+}
+
+.no-data-content h2 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 1rem;
+}
+
+.no-data-content p {
+  font-size: 1.1rem;
+  color: #b3b3b3;
+  line-height: 1.6;
+}
+
+/* Header */
+.reflection-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.header-title-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.reflection-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1db954;
+  margin-bottom: 0.5rem;
+}
+
+.reflection-header h1 i {
+  margin-right: 0.5rem;
+}
+
+/* Year Selector */
+.year-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.year-selector label {
+  font-size: 1rem;
+  color: #b3b3b3;
+}
+
+.year-selector select {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  background: #282828;
+  color: white;
+  border: 2px solid #404040;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.year-selector select:hover {
+  border-color: #1db954;
+}
+
+.year-selector select:focus {
+  outline: none;
+  border-color: #1db954;
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  color: #b3b3b3;
+  margin-bottom: 2rem;
+}
+
+/* Progress Section */
+.progress-section {
+  background: linear-gradient(135deg, #1db954 0%, #1ed760 100%);
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(29, 185, 84, 0.3);
+}
+
+.progress-stats {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.progress-stats .completed {
+  font-size: 3rem;
+  font-weight: 700;
+  color: white;
+}
+
+.progress-stats .separator {
+  font-size: 2rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0.5rem;
+}
+
+.progress-stats .total {
+  font-size: 3rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.progress-stats .label {
+  display: block;
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 0.5rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: white;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.progress-percentage {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: white;
+}
+
+/* Months Container */
+.months-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Month Card */
+.month-card {
+  background: #282828;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.month-card:hover {
+  border-color: #1db954;
+  box-shadow: 0 4px 16px rgba(29, 185, 84, 0.2);
+}
+
+.month-card.expanded {
+  border-color: #1db954;
+}
+
+.month-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.month-header:hover {
+  background: rgba(29, 185, 84, 0.1);
+}
+
+.month-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.month-title i {
+  font-size: 1.5rem;
+  color: #1db954;
+}
+
+.month-title h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.month-stats {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.completion-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  font-weight: 600;
+  color: white;
+}
+
+.completion-badge.complete {
+  background: #1db954;
+  color: white;
+}
+
+.completion-badge i {
+  font-size: 1.1rem;
+}
+
+.expand-icon {
+  font-size: 1.2rem;
+  color: #b3b3b3;
+  transition: transform 0.3s ease;
+}
+
+.month-card.expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+/* Month Content */
+.month-content {
+  padding: 0 1.5rem 1.5rem 1.5rem;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.month-description {
+  font-size: 1rem;
+  color: #b3b3b3;
+  margin-bottom: 1.5rem;
+}
+
+/* Song Reflection */
+.song-reflection {
+  background: #181818;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.song-reflection:last-child {
+  margin-bottom: 0;
+}
+
+.song-reflection.completed {
+  border-color: rgba(29, 185, 84, 0.5);
+  background: rgba(29, 185, 84, 0.05);
+}
+
+.song-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.song-rank {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1db954;
+  min-width: 50px;
+  text-align: center;
+}
+
+.song-info {
+  flex: 1;
+}
+
+.song-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 0.25rem;
+}
+
+.song-artist {
+  font-size: 1rem;
+  color: #b3b3b3;
+  margin-bottom: 0.25rem;
+}
+
+.song-plays {
+  font-size: 0.9rem;
+  color: #1db954;
+}
+
+.completed-badge {
+  color: #1db954;
+  font-size: 2rem;
+}
+
+/* Journal Section */
+.journal-section {
+  margin-top: 1rem;
+}
+
+.journal-label {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.journal-input {
+  width: 100%;
+  padding: 1rem;
+  background: #282828;
+  border: 2px solid #404040;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: all 0.3s ease;
+}
+
+.journal-input:focus {
+  outline: none;
+  border-color: #1db954;
+  background: #1a1a1a;
+}
+
+.journal-input::placeholder {
+  color: #666;
+}
+
+.journal-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.journal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.saved-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #1db954;
+  font-size: 0.9rem;
+}
+
+.saved-indicator i {
+  font-size: 1rem;
+}
+
+/* Emotion Badges */
+.emotion-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+}
+
+.emotion-badge i {
+  font-size: 0.9rem;
+}
+
+.song-emotion {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  background: rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+  border-radius: 16px;
+  font-size: 0.85rem;
+  color: #a78bfa;
+}
+
+.song-emotion i {
+  font-size: 0.85rem;
+}
+
+/* Completion Message */
+.completion-message {
+  margin-top: 3rem;
+  background: linear-gradient(135deg, #1db954 0%, #1ed760 100%);
+  border-radius: 16px;
+  padding: 3rem;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(29, 185, 84, 0.3);
+}
+
+.completion-content i {
+  font-size: 4rem;
+  color: white;
+  margin-bottom: 1rem;
+}
+
+.completion-content h2 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 1rem;
+}
+
+.completion-content p {
+  font-size: 1.2rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 2rem;
+}
+
+.generate-btn {
+  font-size: 1.2rem;
+  padding: 1rem 2rem;
+  background: white !important;
+  color: #1db954 !important;
+  border: none;
+  font-weight: 600;
+}
+
+.generate-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.generate-btn i {
+  margin-right: 0.5rem;
+}
+
+/* Subtitle text in completion message */
+.subtitle-text {
+  font-size: 1rem !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  margin-bottom: 1.5rem !important;
+}
+
+/* Error message */
+.error-message {
+  background: rgba(220, 53, 69, 0.2);
+  border: 1px solid rgba(220, 53, 69, 0.5);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.error-message i {
+  font-size: 1.2rem !important;
+  margin-bottom: 0 !important;
+}
+
+/* Generated Playlist Section */
+.generated-playlist {
+  margin-top: 3rem;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 20px;
+  padding: 2.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.playlist-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.playlist-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.playlist-title-row i {
+  font-size: 2.5rem;
+  color: #1db954;
+  animation: spin 8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.playlist-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+}
+
+.playlist-description {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 1.5rem;
+}
+
+.regenerate-btn {
+  font-size: 0.95rem;
+  padding: 0.6rem 1.2rem;
+}
+
+.regenerate-btn i {
+  margin-right: 0.5rem;
+}
+
+/* Playlist Grid */
+.playlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.playlist-month-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.playlist-month-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(29, 185, 84, 0.5);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(29, 185, 84, 0.2);
+}
+
+.month-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 1rem;
+}
+
+.month-badge i {
+  font-size: 0.9rem;
+}
+
+.recommendation-content {
+  color: white;
+}
+
+.recommendation-content .song-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 0.25rem;
+}
+
+.recommendation-content .song-artist {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.75rem;
+}
+
+.emotion-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  background: rgba(29, 185, 84, 0.2);
+  border: 1px solid rgba(29, 185, 84, 0.4);
+  border-radius: 16px;
+  font-size: 0.8rem;
+  color: #1db954;
+  margin-bottom: 0.75rem;
+}
+
+.emotion-tag i {
+  font-size: 0.8rem;
+}
+
+.recommendation-reason {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .music-reflection {
+    padding: 1rem;
+  }
+
+  .reflection-header h1 {
+    font-size: 2rem;
+  }
+
+  .progress-stats .completed,
+  .progress-stats .total {
+    font-size: 2rem;
+  }
+
+  .month-title h2 {
+    font-size: 1.2rem;
+  }
+
+  .song-rank {
+    font-size: 1.5rem;
+    min-width: 40px;
+  }
+
+  .song-name {
+    font-size: 1rem;
+  }
+
+  .generated-playlist {
+    padding: 1.5rem;
+  }
+
+  .playlist-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .playlist-grid {
+    grid-template-columns: 1fr;
+  }
+}

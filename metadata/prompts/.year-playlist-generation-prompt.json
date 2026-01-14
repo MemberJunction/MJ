@@ -1,0 +1,64 @@
+[
+  {
+    "fields": {
+      "Name": "Year Playlist Generation",
+      "Description": "Generates personalized song recommendations for each month of the upcoming year based on the user's emotional patterns from the previous year. Used by the Spotify Wrapped feature to create curated playlists.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/spotify/generate-year-playlist.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "{\"playlistName\": \"Your 2026 Emotional Journey\", \"playlistDescription\": \"A curated playlist based on your emotional patterns\", \"recommendations\": [{\"month\": 1, \"monthName\": \"January\", \"songName\": \"Song Title\", \"artist\": \"Artist Name\", \"emotion\": \"Nostalgia\", \"reason\": \"Brief explanation\"}]}",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "7E50EFE4-8B9A-4EB1-9EFA-618796ADFA10"
+          },
+          "sync": {
+            "lastModified": "2026-01-14T03:09:38.310Z",
+            "checksum": "3eca5b86bd978e497a3962d5e7620d832f92357141432a9ef5d145a3b9da6e7a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "8D088332-D7CB-46AD-AA3D-AB282F57DB4C"
+          },
+          "sync": {
+            "lastModified": "2026-01-14T03:09:38.320Z",
+            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1C7A8DBC-DD9A-4C0A-A0A4-FBB63EDCC5A5"
+    },
+    "sync": {
+      "lastModified": "2026-01-14T03:09:38.272Z",
+      "checksum": "a90b4cce9dca20bcf3694ac8bc8515df4bfa54959c5fcfb96b473a48d00db840"
+    }
+  }
+]

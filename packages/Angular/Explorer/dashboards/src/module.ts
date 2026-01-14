@@ -123,6 +123,11 @@ import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnosti
 import { ListsMyListsResource } from './Lists/components/lists-my-lists-resource.component';
 import { ListsBrowseResource } from './Lists/components/lists-browse-resource.component';
 import { ListsCategoriesResource } from './Lists/components/lists-categories-resource.component';
+// Spotify Wrapped Dashboard Components
+import { SpotifyWrappedYearResourceComponent } from './SpotifyWrapped/components/wrapped-year-resource.component';
+import { SpotifyWrappedYearComponent } from './SpotifyWrapped/components/wrapped-year.component';
+import { MusicReflectionComponent } from './SpotifyWrapped/components/music-reflection.component';
+import { MusicReflectionResourceComponent } from './SpotifyWrapped/components/music-reflection-resource.component';
 
 
 
@@ -218,7 +223,12 @@ import { ListsCategoriesResource } from './Lists/components/lists-categories-res
     // Lists Dashboard Components
     ListsMyListsResource,
     ListsBrowseResource,
-    ListsCategoriesResource
+    ListsCategoriesResource,
+    // Spotify Wrapped Dashboard
+    SpotifyWrappedYearResourceComponent,
+    SpotifyWrappedYearComponent,
+    MusicReflectionComponent,
+    MusicReflectionResourceComponent
   ],
   imports: [
     CommonModule,
@@ -317,7 +327,12 @@ import { ListsCategoriesResource } from './Lists/components/lists-categories-res
     // Lists Dashboard Components
     ListsMyListsResource,
     ListsBrowseResource,
-    ListsCategoriesResource
+    ListsCategoriesResource,
+    // Spotify Wrapped Dashboard
+    SpotifyWrappedYearResourceComponent,
+    SpotifyWrappedYearComponent,
+    MusicReflectionComponent,
+    MusicReflectionResourceComponent
   ]
 })
 export class DashboardsModule { }

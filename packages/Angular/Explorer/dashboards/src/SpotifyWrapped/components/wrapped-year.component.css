@@ -1,0 +1,287 @@
+.wrapped-year {
+  max-width: 1200px;
+  margin: 0 auto;
+  color: white;
+}
+
+.wrapped-header {
+  text-align: center;
+  margin-bottom: 40px;
+  animation: fadeIn 0.8s ease-in;
+}
+
+.wrapped-header h1 {
+  font-size: 3rem;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  background: linear-gradient(90deg, #1db954, #1ed760);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  opacity: 0.8;
+  margin: 0 0 20px 0;
+}
+
+.user-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-selector label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-selector label i {
+  color: #1db954;
+}
+
+.user-dropdown {
+  padding: 8px 16px;
+  font-size: 0.95rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 250px;
+}
+
+.user-dropdown:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: #1db954;
+}
+
+.user-dropdown:focus {
+  outline: none;
+  border-color: #1db954;
+  box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.2);
+}
+
+.user-dropdown option {
+  background: #191414;
+  color: white;
+  padding: 8px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+  animation: slideUp 0.8s ease-out 0.2s both;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(29, 185, 84, 0.3);
+}
+
+.stat-icon {
+  font-size: 2.5rem;
+  opacity: 0.9;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.top-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+  animation: slideUp 0.8s ease-out 0.4s both;
+}
+
+.top-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  transition: transform 0.3s ease;
+}
+
+.top-card:hover {
+  transform: scale(1.02);
+}
+
+.top-card h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0.7;
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.top-card h2 i {
+  margin-right: 8px;
+  color: #1db954;
+}
+
+.top-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.top-songs-section {
+  animation: slideUp 0.8s ease-out 0.6s both;
+}
+
+.top-songs-section h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 24px 0;
+}
+
+.top-songs-section h2 i {
+  margin-right: 12px;
+  color: #1db954;
+}
+
+.songs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.song-item {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transition: background 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.song-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.song-rank {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1db954;
+  min-width: 40px;
+  text-align: center;
+}
+
+.song-info {
+  flex: 1;
+}
+
+.song-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.song-artist {
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.song-stats {
+  text-align: right;
+}
+
+.play-count {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1db954;
+}
+
+.play-time {
+  font-size: 0.85rem;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+
+.no-data {
+  text-align: center;
+  padding: 60px 20px;
+  opacity: 0.6;
+}
+
+.no-data i {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.no-data h2 {
+  margin: 0 0 12px 0;
+  font-size: 1.8rem;
+}
+
+.no-data p {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,114 @@
+<div class="wrapped-year">
+  @if (loading) {
+    <mj-loading text="Loading your 2024 Wrapped..."></mj-loading>
+  } @else if (yearSummary) {
+    <div class="wrapped-header">
+      <h1>{{ selectedUserName }}'s 2024 Wrapped</h1>
+      <p class="subtitle">A year of music in review</p>
+
+      @if (availableUsers.length > 1) {
+        <div class="user-selector">
+          <label for="userSelect">
+            <i class="fa-solid fa-users"></i> View other users:
+          </label>
+          <select
+            id="userSelect"
+            [value]="selectedUserId || ''"
+            (change)="onUserChange($any($event.target).value)"
+            class="user-dropdown">
+            <option value="">My Wrapped</option>
+            @for (user of availableUsers; track user.ID) {
+              <option [value]="user.ID">{{ user.Name }} ({{ user.Email }})</option>
+            }
+          </select>
+        </div>
+      }
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card total-listens">
+        <div class="stat-icon">
+          <i class="fa-solid fa-headphones"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ yearSummary.TotalListens | number:'1.0-0' }}</div>
+          <div class="stat-label">Total Listens</div>
+        </div>
+      </div>
+
+      <div class="stat-card listening-time">
+        <div class="stat-icon">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ formatMinutes(yearSummary.TotalMinutesListened) }}</div>
+          <div class="stat-label">Time Listening</div>
+        </div>
+      </div>
+
+      <div class="stat-card unique-artists">
+        <div class="stat-icon">
+          <i class="fa-solid fa-user-group"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ yearSummary.UniqueArtists | number:'1.0-0' }}</div>
+          <div class="stat-label">Artists Discovered</div>
+        </div>
+      </div>
+
+      <div class="stat-card unique-songs">
+        <div class="stat-icon">
+          <i class="fa-solid fa-music"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ yearSummary.UniqueSongs | number:'1.0-0' }}</div>
+          <div class="stat-label">Different Songs</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-items">
+      <div class="top-card">
+        <h2><i class="fa-solid fa-crown"></i> Top Genre</h2>
+        <div class="top-value">{{ yearSummary.TopGenre }}</div>
+      </div>
+
+      <div class="top-card">
+        <h2><i class="fa-solid fa-microphone"></i> Top Artist</h2>
+        <div class="top-value">{{ yearSummary.TopArtist }}</div>
+      </div>
+
+      <div class="top-card">
+        <h2><i class="fa-solid fa-compact-disc"></i> Top Song</h2>
+        <div class="top-value">{{ yearSummary.TopSong }}</div>
+      </div>
+    </div>
+
+    @if (topSongs.length > 0) {
+      <div class="top-songs-section">
+        <h2><i class="fa-solid fa-ranking-star"></i> Top Songs</h2>
+        <div class="songs-list">
+          @for (song of topSongs; track song.Name) {
+            <div class="song-item">
+              <div class="song-rank">{{ $index + 1 }}</div>
+              <div class="song-info">
+                <div class="song-name">{{ song.Name }}</div>
+                <div class="song-artist">{{ song.Artist }}</div>
+              </div>
+              <div class="song-stats">
+                <div class="play-count">{{ song.PlayCount }} plays</div>
+                <div class="play-time">{{ formatMinutes(song.TotalMinutes) }}</div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  } @else {
+    <div class="no-data">
+      <i class="fa-solid fa-music-slash"></i>
+      <h2>No listening data for 2024</h2>
+      <p>Start listening to see your Wrapped summary!</p>
+    </div>
+  }
+</div>

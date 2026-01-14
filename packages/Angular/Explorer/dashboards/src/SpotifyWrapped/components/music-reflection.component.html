@@ -1,0 +1,194 @@
+<div class="music-reflection">
+  @if (loading) {
+    <mj-loading text="Loading your music journey..."></mj-loading>
+  } @else if (noDataMessage) {
+    <div class="no-data-container">
+      <div class="no-data-content">
+        <i class="fa-solid fa-music-slash"></i>
+        <h2>No Music Data Found</h2>
+        <p>{{ noDataMessage }}</p>
+      </div>
+    </div>
+  } @else {
+    <div class="reflection-header">
+      <div class="header-title-row">
+        <h1><i class="fa-solid fa-book-heart"></i> Your {{ reflectionYear }} Music Reflection</h1>
+        @if (availableYears.length > 1) {
+          <div class="year-selector">
+            <label>Year:</label>
+            <select [value]="reflectionYear" (change)="onYearChange(+$any($event.target).value)">
+              @for (year of availableYears; track year) {
+                <option [value]="year" [selected]="year === reflectionYear">{{ year }}</option>
+              }
+            </select>
+          </div>
+        }
+      </div>
+      <p class="subtitle">Reflect on your top songs from each month</p>
+
+      <div class="progress-section">
+        <div class="progress-stats">
+          <span class="completed">{{ completedSongs }}</span>
+          <span class="separator">/</span>
+          <span class="total">{{ totalSongs }}</span>
+          <span class="label">songs reflected on</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
+        </div>
+        <div class="progress-percentage">{{ getProgressPercentage() }}% Complete</div>
+      </div>
+    </div>
+
+    <div class="months-container">
+      @for (monthData of months; track monthData.Month) {
+        @if (monthData.Songs.length > 0) {
+          <div class="month-card" [class.expanded]="monthData.IsExpanded">
+            <div class="month-header" (click)="toggleMonth(monthData)">
+              <div class="month-title">
+                <i class="fa-solid {{ getMonthIcon(monthData.Month) }}"></i>
+                <h2>{{ monthData.MonthName }} {{ monthData.Year }}</h2>
+              </div>
+              <div class="month-stats">
+                @if (monthData.DominantEmotion) {
+                  <span class="emotion-badge" [title]="'Dominant emotion: ' + monthData.DominantEmotion">
+                    <i class="fa-solid {{ getEmotionIcon(monthData.DominantEmotion) }}"></i>
+                    {{ monthData.DominantEmotion }}
+                  </span>
+                }
+                <span class="completion-badge" [class.complete]="monthData.CompletedCount === monthData.Songs.length">
+                  {{ monthData.CompletedCount }}/{{ monthData.Songs.length }}
+                  @if (monthData.CompletedCount === monthData.Songs.length) {
+                    <i class="fa-solid fa-check-circle"></i>
+                  }
+                </span>
+                <i class="fa-solid fa-chevron-down expand-icon"></i>
+              </div>
+            </div>
+
+            @if (monthData.IsExpanded) {
+              <div class="month-content">
+                <p class="month-description">Your top 3 songs for {{ monthData.MonthName }}:</p>
+
+                @for (song of monthData.Songs; track song.SongID) {
+                  <div class="song-reflection" [class.completed]="song.HasJournal">
+                    <div class="song-header">
+                      <div class="song-rank">#{{ song.Rank }}</div>
+                      <div class="song-info">
+                        <div class="song-name">{{ song.SongName }}</div>
+                        <div class="song-artist">{{ song.Artist }}</div>
+                        <div class="song-plays">{{ song.PlayCount }} plays</div>
+                      </div>
+                      @if (song.HasJournal) {
+                        <div class="completed-badge">
+                          <i class="fa-solid fa-circle-check"></i>
+                        </div>
+                      }
+                    </div>
+
+                    <div class="journal-section">
+                      <label class="journal-label">
+                        How did this song make you feel?
+                      </label>
+                      <textarea
+                        class="journal-input"
+                        [value]="song.JournalEntry || ''"
+                        (blur)="saveJournal(monthData, song, $any($event.target).value)"
+                        placeholder="Write about what this song means to you, the memories it brings back, or how it made you feel..."
+                        rows="4"
+                        [disabled]="savingJournal"></textarea>
+                      @if (song.HasJournal) {
+                        <div class="journal-footer">
+                          <div class="saved-indicator">
+                            <i class="fa-solid fa-check"></i> Saved
+                          </div>
+                          @if (song.DetectedEmotion) {
+                            <div class="song-emotion">
+                              <i class="fa-solid {{ getEmotionIcon(song.DetectedEmotion) }}"></i>
+                              {{ song.DetectedEmotion }}
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+
+    @if (completedSongs === totalSongs && totalSongs > 0) {
+      <!-- Show playlist generation section when all journals are complete -->
+      @if (!generatedPlaylist) {
+        <div class="completion-message">
+          <div class="completion-content">
+            <i class="fa-solid fa-party-horn"></i>
+            <h2>All Done!</h2>
+            <p>You've reflected on all your top songs from {{ reflectionYear }}.</p>
+            <p class="subtitle-text">Now let's create your personalized playlist for {{ reflectionYear + 1 }} based on your emotional journey!</p>
+
+            @if (playlistError) {
+              <div class="error-message">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                {{ playlistError }}
+              </div>
+            }
+
+            <button
+              kendoButton
+              themeColor="primary"
+              class="generate-btn"
+              (click)="generatePlaylist()"
+              [disabled]="generatingPlaylist">
+              @if (generatingPlaylist) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Generating Your Playlist...
+              } @else {
+                <i class="fa-solid fa-sparkles"></i>
+                Generate My {{ reflectionYear + 1 }} Playlist
+              }
+            </button>
+          </div>
+        </div>
+      } @else {
+        <!-- Display generated playlist -->
+        <div class="generated-playlist">
+          <div class="playlist-header">
+            <div class="playlist-title-row">
+              <i class="fa-solid fa-record-vinyl"></i>
+              <h2>{{ generatedPlaylist.playlistName }}</h2>
+            </div>
+            <p class="playlist-description">{{ generatedPlaylist.playlistDescription }}</p>
+            <button kendoButton themeColor="secondary" class="regenerate-btn" (click)="clearPlaylist()">
+              <i class="fa-solid fa-refresh"></i>
+              Generate New Playlist
+            </button>
+          </div>
+
+          <div class="playlist-grid">
+            @for (rec of generatedPlaylist.recommendations; track rec.month) {
+              <div class="playlist-month-card">
+                <div class="month-badge">
+                  <i class="fa-solid {{ getMonthIcon(rec.month) }}"></i>
+                  <span>{{ rec.monthName }}</span>
+                </div>
+                <div class="recommendation-content">
+                  <div class="song-title">{{ rec.songName }}</div>
+                  <div class="song-artist">{{ rec.artist }}</div>
+                  <div class="emotion-tag">
+                    <i class="fa-solid {{ getEmotionIcon(rec.emotion) }}"></i>
+                    {{ rec.emotion }}
+                  </div>
+                  <p class="recommendation-reason">{{ rec.reason }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    }
+  }
+</div>
