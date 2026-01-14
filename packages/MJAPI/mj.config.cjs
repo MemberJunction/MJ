@@ -389,6 +389,15 @@ const mcpServerConfig = {
         delete: true,
         runView: true,
       },
+      {
+        schemaName: 'MJ_Biking_App',
+        entityName: '*',
+        get: true,
+        create: true,
+        update: true,
+        delete: true,
+        runView: true,
+      },
     ]
   }
 }

@@ -382,7 +382,8 @@ const mcpServerConfig = {
     ],
     entityTools: [
       {
-        schemaName: 'CRM',
+        // Expose all entities with full CRUD access
+        schemaName: '*',
         entityName: '*',
         get: true,
         create: true,

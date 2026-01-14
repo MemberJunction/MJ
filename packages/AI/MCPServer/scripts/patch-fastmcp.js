@@ -43,14 +43,17 @@ console.log(`Patching fastmcp at: ${fastmcpPath}`);
 
 const content = readFileSync(fastmcpPath, 'utf-8');
 
-// Check if already patched
-if (content.includes('this.#capabilities.completions = {};')) {
+// Check if already patched (check for both patches)
+const hasCompletionsPatch = content.includes('this.#capabilities.completions = {};');
+const hasStdioPatch = !content.includes('console.warn("[warning] FastMCP could not infer client capabilities")');
+
+if (hasCompletionsPatch && hasStdioPatch) {
     console.log('fastmcp already patched, skipping.');
     process.exit(0);
 }
 
 // Apply patch: add completions capability after logging capability
-const patched = content.replace(
+let patched = content.replace(
     'this.#capabilities.logging = {};',
     'this.#capabilities.logging = {};\n    this.#capabilities.completions = {};'
 );
@@ -60,5 +63,17 @@ if (patched === content) {
     process.exit(1);
 }
 
+// Also patch console.warn to use console.error for stdio transport compatibility
+// FastMCP's console.warn outputs to stdout which breaks the JSON-RPC protocol
+patched = patched.replace(
+    'console.warn("[warning] FastMCP could not infer client capabilities")',
+    'console.error("[warning] FastMCP could not infer client capabilities")'
+);
+
+patched = patched.replace(
+    'console.error(`[error] FastMCP received error listing roots.',
+    'console.error(`[error] FastMCP received error listing roots.'
+);
+
 writeFileSync(fastmcpPath, patched, 'utf-8');
-console.log('Successfully patched fastmcp to add completions capability.');
+console.log('Successfully patched fastmcp to add completions capability and fix stdio logging.');

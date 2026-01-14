@@ -1,3 +1,10 @@
+// CRITICAL: When using stdio transport, redirect console.log to stderr BEFORE any imports
+// This prevents MemberJunction core libraries from writing to stdout and breaking the JSON-RPC protocol
+if (process.env.MCP_TRANSPORT === 'stdio') {
+    console.log = (...args: unknown[]) => console.error(...args);
+    console.warn = (...args: unknown[]) => console.error(...args);
+}
+
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { FastMCP, type Tool, type ToolParameters } from "fastmcp";
@@ -48,6 +55,40 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
 const server = new FastMCP({
     name: "MemberJunction",
     version: "1.0.0"
+});
+
+// Handle errors from SSE sessions to prevent server crashes when clients disconnect
+// FastMCPSession emits 'error' events when ping fails (e.g., client closes connection)
+// These are normal during SSE disconnects and should not crash the server
+server.on('connect', (event: { session: any }) => {
+    if (event.session && typeof event.session.on === 'function') {
+        event.session.on('error', (err: any) => {
+            // Connection closed errors are expected when clients disconnect
+            const errorCode = err?.error?.code;
+            if (errorCode === -32000) {
+                // Connection closed - this is normal, log at debug level
+                mcpLog(`[MCP Session] Client connection closed gracefully`);
+            } else {
+                console.warn('[MCP Session] Session error:', err?.error?.message || err);
+            }
+        });
+    }
+});
+
+// Global process error handlers as a safety net
+process.on('uncaughtException', (error: Error) => {
+    // Check if this is an MCP connection close error - these are expected
+    if (error.message?.includes('Connection closed') ||
+        (error as any).code === 'ERR_UNHANDLED_ERROR' &&
+        (error as any).context?.error?.code === -32000) {
+        mcpLog('[MCP] Client disconnected');
+    } else {
+        console.error('[MCP Server] Uncaught exception:', error);
+    }
+});
+
+process.on('unhandledRejection', (reason: any) => {
+    console.error('[MCP Server] Unhandled rejection:', reason);
 });
 
 // Add a prompt to enable completion capability (required by fastmcp)
@@ -194,12 +235,58 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
 
         addToolWithFilter({
             name: "Get_All_Entities",
-            description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
-            parameters: z.object({}),
-            async execute() {
+            description: "Retrieves a summary list of all Entities from MemberJunction Metadata. Returns entity names, schemas, and descriptions. Use Get_Entity_Details for full field information on a specific entity.",
+            parameters: z.object({
+                schemaFilter: z.string().optional().describe("Optional schema name filter (supports wildcards: *, CRM*, *sales)")
+            }),
+            async execute(props: { schemaFilter?: string }) {
                 const md = new Metadata();
-                const output = JSON.stringify(md.Entities, null, 2);
-                return output;
+                let entities = md.Entities;
+
+                // Apply schema filter if provided
+                if (props.schemaFilter && props.schemaFilter !== '*') {
+                    const pattern = props.schemaFilter.toLowerCase();
+                    entities = entities.filter(e => {
+                        const schema = e.SchemaName.toLowerCase();
+                        if (pattern.startsWith('*') && pattern.endsWith('*')) {
+                            return schema.includes(pattern.slice(1, -1));
+                        } else if (pattern.startsWith('*')) {
+                            return schema.endsWith(pattern.slice(1));
+                        } else if (pattern.endsWith('*')) {
+                            return schema.startsWith(pattern.slice(0, -1));
+                        }
+                        return schema === pattern;
+                    });
+                }
+
+                // Return a summary instead of full metadata to avoid size limits
+                const summary = entities.map(e => ({
+                    name: e.Name,
+                    schema: e.SchemaName,
+                    description: e.Description || '',
+                    fieldCount: e.Fields.length,
+                    baseTable: e.BaseTable
+                }));
+                return JSON.stringify(summary, null, 2);
+            }
+        });
+
+        addToolWithFilter({
+            name: "Get_Entity_Details",
+            description: "Retrieves detailed information about a specific entity including all fields, relationships, and metadata",
+            parameters: z.object({
+                entityName: z.string().describe("The exact name of the entity to retrieve details for")
+            }),
+            async execute(props: { entityName: string }) {
+                const md = new Metadata();
+                const entity = md.Entities.find(e => e.Name.toLowerCase() === props.entityName.toLowerCase());
+
+                if (!entity) {
+                    return JSON.stringify({ error: `Entity '${props.entityName}' not found` });
+                }
+
+                // Return full entity details
+                return JSON.stringify(entity, null, 2);
             }
         });
 
@@ -250,7 +337,7 @@ async function loadActionTools(contextUser: UserInfo) {
     // not yet supported but don't throw log error unless the config has action tools in it
     const actionTools = mcpServerSettings?.actionTools;
     if (actionTools && actionTools.length > 0) {
-        console.warn("Action tools are not yet supported");
+        mcpLog("Action tools are not yet supported");
     }
 }
 
@@ -995,11 +1082,16 @@ function addSingleParamToObject(theObject: any, field: EntityFieldInfo, optional
                 }
                 else {
                     newParam = z.union([z.enum(enumList as [string, ...string[]]), z.string()]);
-                }    
+                }
             }
             break;
     }
-    if (optional) {
+    // Mark as optional if:
+    // 1. explicitly requested (e.g., for update operations)
+    // 2. the field allows NULL in the database
+    // 3. the field has a default value (system will populate it)
+    const isOptional = optional || field.AllowsNull || (field.DefaultValue !== null && field.DefaultValue !== undefined && field.DefaultValue !== '');
+    if (isOptional) {
         theObject[field.Name] = newParam.optional();
     }
     else {
