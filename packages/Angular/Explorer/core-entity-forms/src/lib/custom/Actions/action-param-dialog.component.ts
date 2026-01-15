@@ -15,7 +15,7 @@ export class ActionParamDialogComponent implements OnInit {
     // Form fields
     public paramName: string = '';
     public paramType: 'Input' | 'Output' | 'Both' = 'Input';
-    public valueType: 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other' = 'Scalar';
+    public valueType: 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' = 'Scalar';
     public description: string = '';
     public defaultValue: string = '';
     public isRequired: boolean = false;
@@ -26,6 +26,7 @@ export class ActionParamDialogComponent implements OnInit {
         { text: 'Scalar', value: 'Scalar' },
         { text: 'Simple Object', value: 'Simple Object' },
         { text: 'BaseEntity Sub-Class', value: 'BaseEntity Sub-Class' },
+        { text: 'MediaOutput', value: 'MediaOutput' },
         { text: 'Other', value: 'Other' }
     ];
     

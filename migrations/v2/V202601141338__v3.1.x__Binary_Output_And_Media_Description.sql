@@ -42,7 +42,11 @@ GO
 -- UPDATE VALUETYPE CHECK CONSTRAINT
 -- ============================================
 
--- Drop existing CHECK constraint for ValueType
+-- Drop original auto-generated CHECK constraint for ValueType (from V202407171600__v2.0.x.sql)
+ALTER TABLE ${flyway:defaultSchema}.ActionParam DROP CONSTRAINT [CK__ActionPar__Value__7058A9C7];
+GO
+
+-- Drop named CHECK constraint if it exists (added by CodeGen)
 ALTER TABLE ${flyway:defaultSchema}.ActionParam DROP CONSTRAINT [CK_ValueType];
 GO
 
