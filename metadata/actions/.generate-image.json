@@ -228,16 +228,17 @@
             "ActionID": "@parent:ID",
             "Name": "Images",
             "Type": "Output",
-            "ValueType": "Simple Object",
+            "ValueType": "MediaOutput",
+            "MediaModality": "Image",
             "IsArray": true,
-            "Description": "Array of generated images, each containing: index, base64/url, format, width, height."
+            "Description": "Array of generated images as MediaOutput objects with modality, mimeType, data/url, width, height, and label."
           },
           "primaryKey": {
             "ID": "917DC4F8-8BF4-43AA-A9BC-C7EBFE692E37"
           },
           "sync": {
-            "lastModified": "2026-01-13T19:01:10.865Z",
-            "checksum": "7f58b41857a8255f41160172114566060e3d5af1e4e8218fc84428ca04fa0663"
+            "lastModified": "2026-01-15T07:33:59.651Z",
+            "checksum": "9a2d2635364380339d2803cd41fcb1ecf1c33c9e5bdcfb47003bdff3d08671b1"
           },
           "__mj_sync_notes": [
             {

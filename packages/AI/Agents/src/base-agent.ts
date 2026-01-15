@@ -312,18 +312,19 @@ export class BaseAgent {
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
 
     /**
-     * Intercepts large binary content in action results and replaces with placeholder references.
+     * Intercepts large media content in action results and replaces with placeholder references.
      * This prevents context overflow when action results contain large base64 data (images, audio, video).
      *
-     * The method scans output parameters for known binary content patterns (Images array, Base64 strings)
-     * and stores them in _pendingMediaReferences with a unique reference ID.
+     * Uses generic ValueType=MediaOutput detection from action metadata to identify media output params.
+     * Intercepted media is stored in _mediaOutputs with refId and persist=false (not saved unless used).
      *
      * @param actionParams - The output parameters from an action result
-     * @returns Sanitized parameters with large binary content replaced by ${media:ref-id} placeholders
+     * @param actionEntity - Optional action entity metadata for ValueType checking
+     * @returns Sanitized parameters with large media content replaced by ${media:ref-id} placeholders
      * @private
      * @since 3.1.0
      */
-    private interceptLargeBinaryContent(actionParams: ActionParam[]): ActionParam[] {
+    private interceptLargeBinaryContent(actionParams: ActionParam[], actionEntity?: ActionEntityExtended): ActionParam[] {
         if (!actionParams || actionParams.length === 0) {
             return actionParams;
         }
@@ -337,27 +338,31 @@ export class BaseAgent {
                 continue;
             }
 
-            // Check for Images array (from Generate Image action)
-            if (param.Name === 'Images' && Array.isArray(param.Value)) {
-                // Note: Generate Image action uses lowercase property names (base64, width, height, format)
-                const images = param.Value as Array<{ base64?: string; width?: number; height?: number; format?: string }>;
+            // Check if this param is marked as MediaOutput in action metadata
+            // Note: 'MediaOutput' ValueType is added in v3.1.x migration.
+            // Before CodeGen runs, this property may not exist on the entity type.
+            const paramMetadata = actionEntity?.Params?.find(p => p.Name === param.Name);
+            const valueType = paramMetadata?.ValueType as string | undefined;
+            const isMediaOutputParam = valueType === 'MediaOutput';
+
+            // Handle MediaOutput params (e.g., Generate Image action)
+            if (isMediaOutputParam && Array.isArray(param.Value)) {
+                const mediaItems = param.Value as MediaOutput[];
                 const references: string[] = [];
                 let extractedCount = 0;
 
-                for (let i = 0; i < images.length; i++) {
-                    const img = images[i];
-                    if (img.base64 && img.base64.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
+                for (let i = 0; i < mediaItems.length; i++) {
+                    const media = mediaItems[i];
+                    // Only intercept if there's substantial data
+                    if (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
                         // Generate unique reference ID
-                        const refId = `img-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
+                        const refId = `media-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
 
-                        // Store in media registry
-                        this._pendingMediaReferences.set(refId, {
-                            modality: 'Image',
-                            mimeType: img.format ? `image/${img.format}` : 'image/png',
-                            data: img.base64,
-                            width: img.width,
-                            height: img.height,
-                            label: `Generated image ${i + 1}`
+                        // Store in unified media outputs with persist=false (won't be saved unless placeholder is used)
+                        this._mediaOutputs.push({
+                            ...media,
+                            refId,
+                            persist: false  // Not persisted unless placeholder is resolved in final output
                         });
 
                         references.push(`\${media:${refId}}`);
@@ -366,34 +371,36 @@ export class BaseAgent {
                 }
 
                 if (extractedCount > 0) {
-                    // Replace Images array with references
+                    // Replace array with references
                     sanitizedParams.push({
                         Name: param.Name,
                         Type: param.Type,
                         Value: {
-                            imageReferences: references,
-                            count: images.length,
-                            note: `${extractedCount} image(s) extracted to media references. Use the placeholder syntax in your response: <img src="${references[0]}" alt="description" />`
+                            mediaReferences: references,
+                            count: mediaItems.length,
+                            note: `${extractedCount} media item(s) extracted. Use placeholder syntax in your response: <img src="${references[0]}" alt="description" />`
                         }
                     });
-                    this.logStatus(`📦 Extracted ${extractedCount} large image(s) to media references`, true);
+                    this.logStatus(`📦 Extracted ${extractedCount} ${param.Name} item(s) to media references`, true);
                     continue;
                 }
             }
 
-            // Check for standalone Base64 strings in other params
+            // Fallback: Check for standalone Base64 strings in MediaOutput or other params
             if (typeof param.Value === 'string' && param.Value.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
                 // Check if it looks like base64 (no spaces, alphanumeric with +/=)
                 const base64Pattern = /^[A-Za-z0-9+/]+=*$/;
-                if (base64Pattern.test(param.Value.substring(0, 1000))) { // Check first 1000 chars
+                if (isMediaOutputParam || base64Pattern.test(param.Value.substring(0, 1000))) {
                     const refId = `data-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`;
 
-                    // Store in media registry (unknown type - will need mime detection)
-                    this._pendingMediaReferences.set(refId, {
+                    // Store in unified media outputs with persist=false
+                    this._mediaOutputs.push({
                         modality: 'Image', // Default to image, could be enhanced with mime detection
                         mimeType: 'application/octet-stream',
                         data: param.Value,
-                        label: `Binary data from ${param.Name}`
+                        label: `Media data from ${param.Name}`,
+                        refId,
+                        persist: false
                     });
 
                     sanitizedParams.push({
@@ -416,7 +423,7 @@ export class BaseAgent {
     /**
      * Resolves media placeholders in a string.
      * Replaces ${media:ref-id} with actual data URIs (data:mime;base64,...).
-     * Also promotes resolved media to _mediaOutputs for persistence.
+     * Sets persist=true on resolved media so it will be saved to AIAgentRunMedia.
      *
      * @param text - The string that may contain media placeholders
      * @returns String with placeholders resolved to actual data URIs
@@ -424,7 +431,9 @@ export class BaseAgent {
      * @since 3.1.0
      */
     private resolveMediaPlaceholdersInString(text: string): string {
-        if (!text || this._pendingMediaReferences.size === 0) {
+        // Check if any media has a refId (meaning we have intercepted media to resolve)
+        const hasRefIds = this._mediaOutputs.some(m => m.refId);
+        if (!text || !hasRefIds) {
             return text;
         }
 
@@ -432,10 +441,10 @@ export class BaseAgent {
         const placeholderRegex = /\$\{media:([a-z0-9-]+)\}/g;
 
         return text.replace(placeholderRegex, (match, refId: string) => {
-            const media = this._pendingMediaReferences.get(refId);
+            const media = this._mediaOutputs.find(m => m.refId === refId);
             if (media?.data) {
-                // Promote to mediaOutputs for persistence to AIAgentRunMedia
-                this.promoteMediaOutputs([media]);
+                // Mark for persistence since it's being used in final output
+                media.persist = true;
                 return `data:${media.mimeType};base64,${media.data}`;
             }
             // Keep placeholder if not found (shouldn't happen in normal flow)
@@ -456,13 +465,18 @@ export class BaseAgent {
      * @since 3.1.0
      */
     private resolveMediaPlaceholdersInPayload<T>(payload: T): T {
-        if (this._pendingMediaReferences.size === 0) {
+        // Check if any media has a refId (meaning we have intercepted media to resolve)
+        const hasRefIds = this._mediaOutputs.some(m => m.refId);
+        if (!hasRefIds) {
             return payload;
         }
 
-        const initialMediaCount = this._mediaOutputs.length;
+        // Count how many media items have persist=false before resolution
+        const unpersisted = this._mediaOutputs.filter(m => m.refId && m.persist === false).length;
         const resolved = this.resolveMediaPlaceholdersRecursive(payload);
-        const resolvedCount = this._mediaOutputs.length - initialMediaCount;
+        // Count how many were marked for persistence (persist changed from false to true)
+        const persistedAfter = this._mediaOutputs.filter(m => m.refId && m.persist === true).length;
+        const resolvedCount = persistedAfter - (unpersisted - this._mediaOutputs.filter(m => m.refId && m.persist === false).length);
 
         if (resolvedCount > 0) {
             this.logStatus(`✅ Resolved ${resolvedCount} media placeholder(s) in final payload`, true);
@@ -553,16 +567,6 @@ export class BaseAgent {
      */
     private _mediaOutputs: MediaOutput[] = [];
 
-    /**
-     * Registry for large binary content extracted from action results.
-     * Maps reference IDs to MediaOutput objects containing the actual data.
-     * Used by the placeholder pattern to keep large content (images, audio, video)
-     * out of LLM context while allowing agents to reference it.
-     * Placeholders like ${media:img-abc123} are resolved in finalizeAgentRun().
-     * @private
-     * @since 3.1.0
-     */
-    private _pendingMediaReferences: Map<string, MediaOutput> = new Map();
 
     /**
      * Payload manager for handling payload access control.
@@ -907,10 +911,8 @@ export class BaseAgent {
             this._dynamicActionLimits = {};
 
             // Reset media outputs accumulator for this run
+            // (unified array now includes both promoted media and intercepted binary with refIds)
             this._mediaOutputs = [];
-
-            // Reset pending media references for placeholder pattern
-            this._pendingMediaReferences = new Map();
 
             // Store message lifecycle callback if provided
             this._messageLifecycleCallback = params.onMessageLifecycle;
@@ -5415,13 +5417,14 @@ The context is now within limits. Please retry your request with the recovered c
             // Store sub-agent run for complete tracking
             this._subAgentRuns.push(subAgentResult);
 
-            // Merge sub-agent's pending media references into parent's registry.
-            // This enables the root agent to resolve all placeholders at the end.
-            if (subAgentResult.pendingMediaReferences?.length) {
-                for (const { refId, media } of subAgentResult.pendingMediaReferences) {
-                    this._pendingMediaReferences.set(refId, media);
+            // Merge sub-agent's media outputs into parent's array.
+            // This includes both promoted media and intercepted binary (with refIds) for placeholder resolution.
+            if (subAgentResult.mediaOutputs?.length) {
+                this._mediaOutputs.push(...subAgentResult.mediaOutputs);
+                const refCount = subAgentResult.mediaOutputs.filter(m => m.refId).length;
+                if (refCount > 0) {
+                    this.logStatus(`📦 Collected ${refCount} media reference(s) from sub-agent '${subAgentRequest.name}'`, true);
                 }
-                this.logStatus(`📦 Collected ${subAgentResult.pendingMediaReferences.length} media reference(s) from sub-agent '${subAgentRequest.name}'`, true);
             }
 
             // Determine if we should terminate after sub-agent
@@ -5733,13 +5736,14 @@ The context is now within limits. Please retry your request with the recovered c
                 stepCount
             );
 
-            // Merge sub-agent's pending media references into parent's registry.
-            // This enables the root agent to resolve all placeholders at the end.
-            if (subAgentResult.pendingMediaReferences?.length) {
-                for (const { refId, media } of subAgentResult.pendingMediaReferences) {
-                    this._pendingMediaReferences.set(refId, media);
+            // Merge sub-agent's media outputs into parent's array.
+            // This includes both promoted media and intercepted binary (with refIds) for placeholder resolution.
+            if (subAgentResult.mediaOutputs?.length) {
+                this._mediaOutputs.push(...subAgentResult.mediaOutputs);
+                const refCount = subAgentResult.mediaOutputs.filter(m => m.refId).length;
+                if (refCount > 0) {
+                    this.logStatus(`📦 Collected ${refCount} media reference(s) from related sub-agent '${subAgentRequest.name}'`, true);
                 }
-                this.logStatus(`📦 Collected ${subAgentResult.pendingMediaReferences.length} media reference(s) from related sub-agent '${subAgentRequest.name}'`, true);
             }
 
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
@@ -6325,9 +6329,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Filter to output params only
                 const outputParams = result.result?.Params?.filter(p => p.Type === 'Both' || p.Type === 'Output') || [];
 
-                // Intercept large binary content (images, audio, video) and replace with placeholders
+                // Intercept large media content (images, audio, video) and replace with placeholders
                 // This prevents context overflow from base64 data (~700K tokens per 1024x1024 image)
-                const sanitizedParams = this.interceptLargeBinaryContent(outputParams);
+                // Pass actionEntity for generic ValueType=MediaOutput detection from metadata
+                const sanitizedParams = this.interceptLargeBinaryContent(outputParams, result.actionEntity);
 
                 return {
                     actionName: result.action.name,
@@ -7325,13 +7330,10 @@ The context is now within limits. Please retry your request with the recovered c
             this.promoteMediaOutputs(finalStep.promoteMediaOutputs);
         }
 
-        // For sub-agents (depth > 0), include pending media references so parent can collect them.
-        // Root agents resolve placeholders above, so their references are consumed.
-        // Convert Map to array format for serialization in ExecuteAgentResult.
-        const pendingRefs = (!isRootAgent && this._pendingMediaReferences.size > 0)
-            ? Array.from(this._pendingMediaReferences.entries()).map(([refId, media]) => ({ refId, media }))
-            : undefined;
-
+        // Return unified media outputs array which includes:
+        // - Explicitly promoted media (persist defaults to true)
+        // - Intercepted binary with refIds (persist=false unless placeholder was resolved)
+        // Sub-agents pass their full mediaOutputs to parent for merging and placeholder resolution.
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload: resolvedPayload,
@@ -7342,8 +7344,7 @@ The context is now within limits. Please retry your request with the recovered c
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
                 : undefined,
-            mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
-            pendingMediaReferences: pendingRefs
+            mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined
         };
     }
 

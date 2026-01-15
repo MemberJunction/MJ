@@ -392,12 +392,14 @@ export class AgentRunner {
             // Step 7: Save media outputs to AIAgentRunMedia and create conversation attachments
             let mediaIds: string[] = [];
             if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
-                LogStatus(`Processing ${agentResult.mediaOutputs.length} media outputs`);
+                // Filter to only media that should be persisted (persist !== false)
+                const mediaToSave = agentResult.mediaOutputs.filter(m => m.persist !== false);
+                LogStatus(`Processing ${mediaToSave.length} of ${agentResult.mediaOutputs.length} media outputs (filtered by persist flag)`);
 
                 // Save to AIAgentRunMedia for permanent storage
                 mediaIds = await this.SaveAgentRunMedia(
                     agentResult.agentRun.ID,
-                    agentResult.mediaOutputs,
+                    mediaToSave,  // Pass filtered array
                     contextUser
                 );
 
@@ -405,7 +407,7 @@ export class AgentRunner {
                 if (agentResponseDetailId && mediaIds.length > 0) {
                     await this.CreateConversationMediaAttachments(
                         agentResponseDetailId,
-                        agentResult.mediaOutputs,
+                        mediaToSave,  // Pass same filtered array to keep indices aligned
                         mediaIds,
                         contextUser
                     );
@@ -776,6 +778,9 @@ export class AgentRunner {
      * Saves media outputs to AIAgentRunMedia table for permanent storage.
      * This creates records for each media output promoted during agent execution.
      *
+     * Only media with `persist !== false` is saved. Media items with `persist: false`
+     * are typically intercepted binary content that was never used in the final output.
+     *
      * @param agentRunId - The ID of the agent run
      * @param mediaOutputs - Array of media outputs to save
      * @param contextUser - User context for the operation
@@ -802,6 +807,18 @@ export class AgentRunner {
             return [];
         }
 
+        // Filter to only persist media that should be saved
+        // persist=false means intercepted but unused binary content (e.g., images not used in response)
+        const mediaToSave = mediaOutputs.filter(m => m.persist !== false);
+        if (mediaToSave.length === 0) {
+            LogStatus(`All ${mediaOutputs.length} media outputs have persist=false, skipping save`);
+            return [];
+        }
+
+        if (mediaToSave.length < mediaOutputs.length) {
+            LogStatus(`Filtering: ${mediaToSave.length} of ${mediaOutputs.length} media outputs will be persisted`);
+        }
+
         const savedIds: string[] = [];
         const md = new Metadata();
 
@@ -809,8 +826,8 @@ export class AgentRunner {
             // Use AIEngine's cached modalities instead of a fresh DB call
             const aiEngine = AIEngine.Instance;
 
-            for (let i = 0; i < mediaOutputs.length; i++) {
-                const mediaOutput = mediaOutputs[i];
+            for (let i = 0; i < mediaToSave.length; i++) {
+                const mediaOutput = mediaToSave[i];
 
                 try {
                     const mediaEntity = await md.GetEntityObject<AIAgentRunMediaEntity>(
@@ -860,6 +877,11 @@ export class AgentRunner {
                         mediaEntity.Metadata = JSON.stringify(mediaOutput.metadata);
                     }
 
+                    // Set description if available
+                    if (mediaOutput.description) {
+                        mediaEntity.Description = mediaOutput.description;
+                    }
+
                     mediaEntity.DisplayOrder = i;
 
                     const saved = await mediaEntity.Save();
@@ -874,7 +896,7 @@ export class AgentRunner {
                 }
             }
 
-            LogStatus(`Saved ${savedIds.length} of ${mediaOutputs.length} media outputs for agent run ${agentRunId}`);
+            LogStatus(`Saved ${savedIds.length} of ${mediaToSave.length} media outputs for agent run ${agentRunId}`);
             return savedIds;
 
         } catch (error) {
@@ -971,6 +993,11 @@ export class AgentRunner {
                     }
                     if (mediaOutput.durationSeconds) {
                         attachment.DurationSeconds = Math.ceil(mediaOutput.durationSeconds);
+                    }
+
+                    // Set description if available
+                    if (mediaOutput.description) {
+                        attachment.Description = mediaOutput.description;
                     }
 
                     const saved = await attachment.Save();

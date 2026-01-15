@@ -10,7 +10,7 @@ import {
     GeneratedImage,
     GetAIAPIKey
 } from "@memberjunction/ai";
-import { AIModelEntityExtended } from "@memberjunction/ai-core-plus";
+import { AIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 
 /**
@@ -271,30 +271,18 @@ export class GenerateImageAction extends BaseAction {
     }
 
     /**
-     * Format a generated image for output
+     * Format a generated image for output as MediaOutput
      */
-    private formatImageOutput(img: GeneratedImage, index: number): Record<string, unknown> {
-        const output: Record<string, unknown> = {
-            index: index
+    private formatImageOutput(img: GeneratedImage, index: number): MediaOutput {
+        return {
+            modality: 'Image',
+            mimeType: img.format ? `image/${img.format}` : 'image/png',
+            data: img.base64,
+            url: img.url,
+            width: img.width,
+            height: img.height,
+            label: `Generated image ${index + 1}`
         };
-
-        if (img.base64) {
-            output.base64 = img.base64;
-        }
-        if (img.url) {
-            output.url = img.url;
-        }
-        if (img.format) {
-            output.format = img.format;
-        }
-        if (img.width) {
-            output.width = img.width;
-        }
-        if (img.height) {
-            output.height = img.height;
-        }
-
-        return output;
     }
 
     /**

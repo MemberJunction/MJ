@@ -1177,60 +1177,88 @@ The action returns SVG markup - wrap it in a scrollable container for large diag
 </div>
 ```
 
-**Generating AI Images with the "Generate Image" Action:**
+**Generating AI Infographics with the "Generate Image" Action:**
 
-**RECOMMENDED**: For most reports, consider adding at least one AI-generated image to visually represent the research topic. This makes reports more engaging and helps readers quickly grasp concepts.
+**STRONGLY RECOMMENDED**: Use the **Generate Image** action to create **data-driven infographics** that visualize your research findings. The goal is NOT artistic imagery - it's to present the actual data and insights from your research in a compelling visual format.
 
-Use the **Generate Image** action to create illustrations, infographics, or conceptual visuals. This calls AI image generation models (like Nano Banana Pro) to create images that SVG cannot capture.
+Think of infographics like this example: https://www.wri.org/data/infographic-global-carbon-budget - they show real numbers, percentages, and comparisons in a visually engaging way.
 
-**Use Generate Image when:**
-- Photorealistic imagery or illustrations
-- Complex scenes with lighting, textures, shadows
-- Visual metaphors or conceptual representations
-- Product mockups or architectural visualizations
-- Artistic interpretations of data or concepts
+**Key Principle: Infuse Data INTO the Image Prompt**
+
+Don't just ask for a generic "infographic about X topic". Instead, embed the specific data points, percentages, and key findings directly into your prompt. The AI will incorporate these into the visual.
+
+**Example - BAD (too generic, no data):**
+```json
+{
+  "Prompt": "A professional infographic about renewable energy adoption.",
+  "Size": "1024x1536"
+}
+```
+
+**Example - GOOD (data-driven, specific findings embedded):**
+```json
+{
+  "Prompt": "Create a data-driven infographic showing global renewable energy adoption: Solar grew 156% (from 580GW to 1,483GW), Wind grew 84% (from 650GW to 1,197GW), Hydro grew 12%. Include a world map showing top 5 countries: China (1,200GW), USA (420GW), Brazil (175GW), India (168GW), Germany (148GW). Use clean modern design with green and blue color palette, white background, clear data labels.",
+  "Size": "1024x1536"
+}
+```
+
+**Example - GOOD (comparative findings):**
+```json
+{
+  "Prompt": "Infographic comparing AI model capabilities from research: GPT-4 scores 86% on reasoning benchmarks, Claude 3.5 scores 84%, Gemini Ultra scores 82%. Show performance bars, token limits (GPT-4: 128K, Claude: 200K, Gemini: 1M), and pricing comparison ($0.03, $0.015, $0.007 per 1K tokens). Modern tech aesthetic, dark theme with neon accents.",
+  "Size": "1536x1024"
+}
+```
+
+**Example - GOOD (timeline/historical data):**
+```json
+{
+  "Prompt": "Timeline infographic of electric vehicle adoption: 2015: 1.2M EVs globally, 2018: 5.1M EVs, 2021: 16.5M EVs, 2024: 45M EVs (projected). Show growth curve with key milestones: Tesla Model 3 launch (2017), EU combustion ban announced (2023). Include icons for each era. Clean white background, blue gradient for timeline.",
+  "Size": "1536x1024"
+}
+```
+
+**When to use Generate Image for infographics:**
+- You have quantitative findings (percentages, counts, growth rates)
+- You want to show comparisons between items
+- You have timeline or historical data
+- You want to visualize geographic distribution
+- You need to show relationships or hierarchies visually
 
 **Use SVG actions instead when you need:**
-- Charts, graphs, or data visualizations → Create SVG Chart
+- Precise, interactive charts → Create SVG Chart
 - Technical diagrams or flowcharts → Create SVG Diagram
 - Network/relationship maps → Create SVG Network
 - Word clouds from text analysis → Create SVG Word Cloud
 
-**Example: Generating an Infographic Image**
-```json
-{
-  "Prompt": "A professional infographic showing a circular economy diagram with recycling, reuse, and reduce concepts. Modern flat design style with blue and green color palette. Clean white background.",
-  "Model": "Nano Banana Pro",
-  "Size": "1024x1024"
-}
-```
-
 **Key Parameters for Generate Image:**
-- **Prompt** (required): Detailed description of desired image. Be specific about subject, style, lighting, composition.
-- **Model** (optional): Image generation model. Default: "Nano Banana Pro". Options: "Nano Banana Pro", "FLUX.2 Pro"
-- **Size** (optional): Image dimensions. Default: "1024x1024". Options: "1024x1024", "1536x1024" (landscape), "1024x1536" (portrait)
-- **Quality** (optional): Generation quality. Default: "standard". Options: "standard", "hd"
+- **Prompt** (required): Include specific data points, numbers, and findings from your research
+- **Model** (optional): Default: "Nano Banana Pro". Options: "Nano Banana Pro", "FLUX.2 Pro"
+- **Size** (optional): Use portrait (1024x1536) for infographics - more vertical space for data. Landscape (1536x1024) for wide comparisons.
+- **Quality** (optional): Default: "standard". Options: "standard", "hd"
 
-**Embedding AI-Generated Images:**
+**Embedding AI-Generated Infographics:**
 
 The action returns a `Base64` property in the Images array. Embed it in your HTML report:
 
 ```html
 <div style="text-align: center; margin: 20px 0;">
   <img src="data:image/png;base64,[BASE64_FROM_ACTION_RESULT]"
-       alt="Description of the image"
+       alt="Infographic showing [describe the data visualized]"
        style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
-  <p style="font-size: 0.9em; color: #666; margin-top: 8px;"><em>Figure X: Caption describing the image</em></p>
+  <p style="font-size: 0.9em; color: #666; margin-top: 8px;"><em>Figure X: [Describe the key data points shown]</em></p>
 </div>
 ```
 
-**Best Practices for AI Image Generation:**
-1. Write detailed, specific prompts - more detail yields better results
-2. Include style guidance (modern, minimalist, professional, artistic, etc.)
-3. Specify color preferences when relevant to brand or theme
-4. Use appropriate sizing: square (1024x1024) for general use, landscape (1536x1024) for wide scenes
-5. Always provide meaningful alt text for accessibility
-6. Add captions to provide context within the report
+**Best Practices for Data-Driven Infographics:**
+1. **Extract key numbers** from your findings and put them directly in the prompt
+2. **Be specific** - "grew 156% from 580GW to 1,483GW" not "grew significantly"
+3. **Include comparisons** - show multiple data points for context
+4. **Specify layout hints** - "show as bar comparison", "include world map", "timeline format"
+5. **Use portrait orientation** (1024x1536) for infographics - more vertical space
+6. **Add data labels** - request "clear data labels" or "visible percentages"
+7. **Keep it focused** - one infographic per major finding or theme
 
 **Not Allowed**
 - External JavaScript libraries (keep it simple, inline if needed)
