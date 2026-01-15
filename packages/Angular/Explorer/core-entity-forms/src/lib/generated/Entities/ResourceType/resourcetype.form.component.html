@@ -156,17 +156,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('workspaceItems')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('workspaceItems')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Workspace Items')"
                 [AllowLoad]="IsSectionExpanded('workspaceItems')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('workspaceItems', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('workspaceItems', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -178,17 +177,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('userNotifications')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('userNotifications')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('User Notifications')"
                 [AllowLoad]="IsSectionExpanded('userNotifications')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('userNotifications', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('userNotifications', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -200,17 +198,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('resourceLinks')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('resourceLinks')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Resource Links')"
                 [AllowLoad]="IsSectionExpanded('resourceLinks')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('resourceLinks', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('resourceLinks', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -222,17 +219,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('resourcePermissions')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('resourcePermissions')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','ResourceTypeID')"
                 [NewRecordValues]="NewRecordValues('Resource Permissions')"
                 [AllowLoad]="IsSectionExpanded('resourcePermissions')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('resourcePermissions', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

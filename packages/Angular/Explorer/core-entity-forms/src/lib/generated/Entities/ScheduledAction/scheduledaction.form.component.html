@@ -194,17 +194,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('scheduledActionParams')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('scheduledActionParams')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ScheduledActionID')"
                 [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
                 [AllowLoad]="IsSectionExpanded('scheduledActionParams')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

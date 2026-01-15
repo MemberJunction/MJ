@@ -142,17 +142,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('communicationLogs')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('communicationLogs')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs','CommunicationProviderID')"
                 [NewRecordValues]="NewRecordValues('Communication Logs')"
                 [AllowLoad]="IsSectionExpanded('communicationLogs')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('communicationLogs', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('communicationLogs', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -164,8 +163,7 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('messageTypes')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('messageTypes')">
         <div *ngIf="record.IsSaved">
             <mj-join-grid
                 [ShowSaveButton]="false"

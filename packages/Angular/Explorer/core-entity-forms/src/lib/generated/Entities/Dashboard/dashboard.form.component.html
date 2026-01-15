@@ -206,17 +206,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJDashboardUserStates')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJDashboardUserStates')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User States','DashboardID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard User States')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardUserStates')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJDashboardUserStates', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJDashboardUserStates', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -228,17 +227,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJDashboardUserPreferences')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJDashboardUserPreferences')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User Preferences','DashboardID')"
                 [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardUserPreferences')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJDashboardUserPreferences', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJDashboardUserPreferences', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

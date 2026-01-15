@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { AIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-entity-viewer"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Run Steps') // Tell MemberJunction about this class
 @Component({
@@ -19,7 +19,6 @@ export class AIAgentRunStepFormComponent extends BaseFormComponent {
             { sectionKey: 'executionStatusValidation', sectionName: 'Execution Status & Validation', isExpanded: true },
             { sectionKey: 'dataPayload', sectionName: 'Data & Payload', isExpanded: false },
             { sectionKey: 'notesSystemMetadata', sectionName: 'Notes & System Metadata', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentRunSteps', sectionName: 'MJ: AI Agent Run Steps', isExpanded: false }
         ]);

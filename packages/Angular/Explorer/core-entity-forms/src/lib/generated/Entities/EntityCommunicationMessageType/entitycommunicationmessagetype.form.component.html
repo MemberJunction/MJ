@@ -104,17 +104,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityCommunicationFields')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('entityCommunicationFields')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Fields','EntityCommunicationMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('Entity Communication Fields')"
                 [AllowLoad]="IsSectionExpanded('entityCommunicationFields')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('entityCommunicationFields', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('entityCommunicationFields', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

@@ -252,17 +252,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('dataContextItems')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('dataContextItems')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','QueryID')"
                 [NewRecordValues]="NewRecordValues('Data Context Items')"
                 [AllowLoad]="IsSectionExpanded('dataContextItems')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('dataContextItems', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('dataContextItems', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -274,17 +273,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queryFields')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('queryFields')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Fields','QueryID')"
                 [NewRecordValues]="NewRecordValues('Query Fields')"
                 [AllowLoad]="IsSectionExpanded('queryFields')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('queryFields', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('queryFields', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -296,17 +294,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queryPermissions')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('queryPermissions')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"
                 [NewRecordValues]="NewRecordValues('Query Permissions')"
                 [AllowLoad]="IsSectionExpanded('queryPermissions')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('queryPermissions', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('queryPermissions', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -318,17 +315,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJQueryParameters')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJQueryParameters')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Parameters','QueryID')"
                 [NewRecordValues]="NewRecordValues('MJ: Query Parameters')"
                 [AllowLoad]="IsSectionExpanded('mJQueryParameters')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJQueryParameters', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJQueryParameters', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -340,17 +336,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queryEntities')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('queryEntities')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Entities','QueryID')"
                 [NewRecordValues]="NewRecordValues('Query Entities')"
                 [AllowLoad]="IsSectionExpanded('queryEntities')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('queryEntities', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('queryEntities', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

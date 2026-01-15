@@ -120,17 +120,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('auditLogTypes')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('auditLogTypes')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Audit Log Types','ParentID')"
                 [NewRecordValues]="NewRecordValues('Audit Log Types')"
                 [AllowLoad]="IsSectionExpanded('auditLogTypes')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('auditLogTypes', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('auditLogTypes', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -142,17 +141,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('auditLogs')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('auditLogs')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs','AuditLogTypeName')"
                 [NewRecordValues]="NewRecordValues('Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('auditLogs')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('auditLogs', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('auditLogs', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

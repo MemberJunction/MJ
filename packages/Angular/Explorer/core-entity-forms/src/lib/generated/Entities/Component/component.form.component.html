@@ -298,17 +298,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJComponentDependencies')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJComponentDependencies')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','DependencyComponentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJComponentDependencies')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJComponentDependencies', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJComponentDependencies', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -320,17 +319,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJComponentLibraryLinks')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJComponentLibraryLinks')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','ComponentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
                 [AllowLoad]="IsSectionExpanded('mJComponentLibraryLinks')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJComponentLibraryLinks', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJComponentLibraryLinks', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -342,17 +340,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJComponentDependencies')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJComponentDependencies')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','ComponentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJComponentDependencies')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJComponentDependencies', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJComponentDependencies', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

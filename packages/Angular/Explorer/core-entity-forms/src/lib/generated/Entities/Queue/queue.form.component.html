@@ -208,17 +208,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queueTasks')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('queueTasks')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Queue Tasks','QueueID')"
                 [NewRecordValues]="NewRecordValues('Queue Tasks')"
                 [AllowLoad]="IsSectionExpanded('queueTasks')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('queueTasks', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('queueTasks', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

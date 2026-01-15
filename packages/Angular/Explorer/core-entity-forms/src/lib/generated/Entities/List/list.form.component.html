@@ -156,17 +156,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('duplicateRuns')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('duplicateRuns')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Runs','SourceListID')"
                 [NewRecordValues]="NewRecordValues('Duplicate Runs')"
                 [AllowLoad]="IsSectionExpanded('duplicateRuns')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('duplicateRuns', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('duplicateRuns', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -178,17 +177,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('details')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('details')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('List Details','ListID')"
                 [NewRecordValues]="NewRecordValues('List Details')"
                 [AllowLoad]="IsSectionExpanded('details')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('details', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('details', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -200,17 +198,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJListInvitations')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJListInvitations')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Invitations','ListID')"
                 [NewRecordValues]="NewRecordValues('MJ: List Invitations')"
                 [AllowLoad]="IsSectionExpanded('mJListInvitations')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJListInvitations', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJListInvitations', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -222,17 +219,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJListShares')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJListShares')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Shares','ListID')"
                 [NewRecordValues]="NewRecordValues('MJ: List Shares')"
                 [AllowLoad]="IsSectionExpanded('mJListShares')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJListShares', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJListShares', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

@@ -170,17 +170,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('companyIntegrationRunAPILogs')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('companyIntegrationRunAPILogs')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run API Logs','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('Company Integration Run API Logs')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrationRunAPILogs')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('companyIntegrationRunAPILogs', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('companyIntegrationRunAPILogs', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -192,17 +191,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('companyIntegrationRunDetails')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('companyIntegrationRunDetails')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run Details','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('Company Integration Run Details')"
                 [AllowLoad]="IsSectionExpanded('companyIntegrationRunDetails')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('companyIntegrationRunDetails', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('companyIntegrationRunDetails', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -214,17 +212,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('errorLogs')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('errorLogs')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Error Logs','CompanyIntegrationRunID')"
                 [NewRecordValues]="NewRecordValues('Error Logs')"
                 [AllowLoad]="IsSectionExpanded('errorLogs')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('errorLogs', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('errorLogs', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { UserViewRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-entity-viewer"
+import {  } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'User View Runs') // Tell MemberJunction about this class
 @Component({

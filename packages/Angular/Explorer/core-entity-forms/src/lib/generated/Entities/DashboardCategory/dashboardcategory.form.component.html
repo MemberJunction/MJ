@@ -120,17 +120,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('dashboardCategories')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('dashboardCategories')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Dashboard Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('Dashboard Categories')"
                 [AllowLoad]="IsSectionExpanded('dashboardCategories')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('dashboardCategories', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('dashboardCategories', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -142,17 +141,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('dashboards')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('dashboards')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Dashboards','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Dashboards')"
                 [AllowLoad]="IsSectionExpanded('dashboards')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('dashboards', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('dashboards', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

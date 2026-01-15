@@ -180,17 +180,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('duplicateRunDetailMatches')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('duplicateRunDetailMatches')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','RecordMergeLogID')"
                 [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
                 [AllowLoad]="IsSectionExpanded('duplicateRunDetailMatches')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('duplicateRunDetailMatches', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('duplicateRunDetailMatches', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -202,17 +201,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('recordMergeDeletionLogs')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('recordMergeDeletionLogs')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs','RecordMergeLogID')"
                 [NewRecordValues]="NewRecordValues('Record Merge Deletion Logs')"
                 [AllowLoad]="IsSectionExpanded('recordMergeDeletionLogs')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('recordMergeDeletionLogs', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('recordMergeDeletionLogs', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

@@ -110,17 +110,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('taggedItems')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('taggedItems')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Tagged Items','TagID')"
                 [NewRecordValues]="NewRecordValues('Tagged Items')"
                 [AllowLoad]="IsSectionExpanded('taggedItems')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('taggedItems', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('taggedItems', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -132,17 +131,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('tags')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('tags')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Tags','ParentID')"
                 [NewRecordValues]="NewRecordValues('Tags')"
                 [AllowLoad]="IsSectionExpanded('tags')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('tags', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('tags', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

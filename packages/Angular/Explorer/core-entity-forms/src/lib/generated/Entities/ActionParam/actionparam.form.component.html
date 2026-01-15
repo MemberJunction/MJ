@@ -94,6 +94,14 @@
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MediaModality"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -134,17 +142,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityActionParams')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('entityActionParams')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Params','ActionParamID')"
                 [NewRecordValues]="NewRecordValues('Entity Action Params')"
                 [AllowLoad]="IsSectionExpanded('entityActionParams')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('entityActionParams', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('entityActionParams', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -156,17 +163,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('scheduledActionParams')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('scheduledActionParams')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Scheduled Action Params','ActionParamID')"
                 [NewRecordValues]="NewRecordValues('Scheduled Action Params')"
                 [AllowLoad]="IsSectionExpanded('scheduledActionParams')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

@@ -112,17 +112,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIModels')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('aIModels')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Models','AIModelTypeID')"
                 [NewRecordValues]="NewRecordValues('AI Models')"
                 [AllowLoad]="IsSectionExpanded('aIModels')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('aIModels', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIModels', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -134,17 +133,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('aIPrompts')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('aIPrompts')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','AIModelTypeID')"
                 [NewRecordValues]="NewRecordValues('AI Prompts')"
                 [AllowLoad]="IsSectionExpanded('aIPrompts')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('aIPrompts', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

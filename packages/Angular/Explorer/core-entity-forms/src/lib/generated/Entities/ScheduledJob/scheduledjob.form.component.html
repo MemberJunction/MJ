@@ -320,17 +320,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJScheduledJobRuns')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('mJScheduledJobRuns')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Job Runs','ScheduledJobID')"
                 [NewRecordValues]="NewRecordValues('MJ: Scheduled Job Runs')"
                 [AllowLoad]="IsSectionExpanded('mJScheduledJobRuns')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJScheduledJobRuns', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('mJScheduledJobRuns', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

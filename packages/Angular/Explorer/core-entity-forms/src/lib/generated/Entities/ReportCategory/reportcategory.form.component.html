@@ -120,17 +120,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('reportCategories')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('reportCategories')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Report Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('Report Categories')"
                 [AllowLoad]="IsSectionExpanded('reportCategories')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('reportCategories', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('reportCategories', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -142,17 +141,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('reports')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('reports')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Reports','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Reports')"
                 [AllowLoad]="IsSectionExpanded('reports')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('reports', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

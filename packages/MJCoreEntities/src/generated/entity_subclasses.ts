@@ -367,12 +367,12 @@ export const ActionParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     ActionID: z.string().describe(`
         * * Field Name: ActionID
-        * * Display Name: Action ID
+        * * Display Name: Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Parameter Name
         * * SQL Data Type: nvarchar(255)`),
     DefaultValue: z.string().nullable().describe(`
         * * Field Name: DefaultValue
@@ -381,7 +381,7 @@ export const ActionParamSchema = z.object({
         * * Description: The default value for this parameter if not provided during action execution, can be a literal value or JSON for complex types.`),
     Type: z.union([z.literal('Both'), z.literal('Input'), z.literal('Output')]).describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Parameter Direction
         * * SQL Data Type: nchar(10)
     * * Value List Type: List
     * * Possible Values 
@@ -389,7 +389,7 @@ export const ActionParamSchema = z.object({
     *   * Input
     *   * Output
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
-    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
+    ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('MediaOutput'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(30)
@@ -398,6 +398,7 @@ export const ActionParamSchema = z.object({
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
     *   * Other
+    *   * MediaOutput
     *   * Other
     *   * Scalar
     *   * Scalar
@@ -430,6 +431,16 @@ export const ActionParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    MediaModality: z.union([z.literal('Audio'), z.literal('Image'), z.literal('Video')]).nullable().describe(`
+        * * Field Name: MediaModality
+        * * Display Name: Media Modality
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Image
+    *   * Video
+        * * Description: Specifies the type of media this parameter outputs when ValueType is MediaOutput. Used for action discovery and validation.`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
@@ -1091,14 +1102,6 @@ export const AIAgentNoteSchema = z.object({
     SourceConversation: z.string().nullable().describe(`
         * * Field Name: SourceConversation
         * * Display Name: Source Conversation
-        * * SQL Data Type: nvarchar(255)`),
-    SourceConversationDetail: z.string().nullable().describe(`
-        * * Field Name: SourceConversationDetail
-        * * Display Name: Source Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
-    SourceAIAgentRun: z.string().nullable().describe(`
-        * * Field Name: SourceAIAgentRun
-        * * Display Name: Source AI Agent Run
         * * SQL Data Type: nvarchar(255)`),
     Company: z.string().nullable().describe(`
         * * Field Name: Company
@@ -2398,10 +2401,6 @@ export const AIResultCacheSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
-    PromptRun: z.string().nullable().describe(`
-        * * Field Name: PromptRun
-        * * Display Name: Prompt Run
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIResultCacheEntityType = z.infer<typeof AIResultCacheSchema>;
@@ -4471,10 +4470,6 @@ export const ConversationSchema = z.object({
         * * Field Name: Project
         * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
-    TestRun: z.string().nullable().describe(`
-        * * Field Name: TestRun
-        * * Display Name: Test Run
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ConversationEntityType = z.infer<typeof ConversationSchema>;
@@ -5059,10 +5054,6 @@ export const DuplicateRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DuplicateRun: z.string().describe(`
-        * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type DuplicateRunDetailEntityType = z.infer<typeof DuplicateRunDetailSchema>;
@@ -5207,10 +5198,6 @@ export const EmployeeCompanyIntegrationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Employee: z.string().nullable().describe(`
-        * * Field Name: Employee
-        * * Display Name: Employee
-        * * SQL Data Type: nvarchar(81)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Company Integration
@@ -5248,10 +5235,6 @@ export const EmployeeRoleSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Employee: z.string().nullable().describe(`
-        * * Field Name: Employee
-        * * Display Name: Employee
-        * * SQL Data Type: nvarchar(81)`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
@@ -5289,10 +5272,6 @@ export const EmployeeSkillSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Employee: z.string().nullable().describe(`
-        * * Field Name: Employee
-        * * Display Name: Employee
-        * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
@@ -5797,14 +5776,6 @@ export const EntityActionFilterSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action
-        * * SQL Data Type: nvarchar(425)`),
-    ActionFilter: z.string().describe(`
-        * * Field Name: ActionFilter
-        * * Display Name: Action Filter
-        * * SQL Data Type: nvarchar(MAX)`),
 });
 
 export type EntityActionFilterEntityType = z.infer<typeof EntityActionFilterSchema>;
@@ -5888,10 +5859,6 @@ export const EntityActionInvocationSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action
-        * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
         * * Display Name: Invocation Type
@@ -5950,10 +5917,6 @@ export const EntityActionParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action
-        * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
         * * Display Name: Action Param
@@ -6156,10 +6119,6 @@ export const EntityCommunicationFieldSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityCommunicationMessageType: z.string().describe(`
-        * * Field Name: EntityCommunicationMessageType
-        * * Display Name: Entity Communication Message Type
-        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type EntityCommunicationFieldEntityType = z.infer<typeof EntityCommunicationFieldSchema>;
@@ -7398,14 +7357,6 @@ export const ErrorLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CompanyIntegrationRun: z.string().nullable().describe(`
-        * * Field Name: CompanyIntegrationRun
-        * * Display Name: Company Integration Run
-        * * SQL Data Type: nvarchar(100)`),
-    CompanyIntegrationRunDetail: z.string().nullable().describe(`
-        * * Field Name: CompanyIntegrationRunDetail
-        * * Display Name: Company Integration Run Detail
-        * * SQL Data Type: nvarchar(450)`),
 });
 
 export type ErrorLogEntityType = z.infer<typeof ErrorLogSchema>;
@@ -8749,14 +8700,6 @@ export const AIAgentExampleSchema = z.object({
         * * Field Name: SourceConversation
         * * Display Name: Source Conversation
         * * SQL Data Type: nvarchar(255)`),
-    SourceConversationDetail: z.string().nullable().describe(`
-        * * Field Name: SourceConversationDetail
-        * * Display Name: Source Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
-    SourceAIAgentRun: z.string().nullable().describe(`
-        * * Field Name: SourceAIAgentRun
-        * * Display Name: Source AI Agent Run
-        * * SQL Data Type: nvarchar(255)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model
@@ -9119,7 +9062,7 @@ export const AIAgentRunMediaSchema = z.object({
         * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
     MimeType: z.string().describe(`
         * * Field Name: MimeType
-        * * Display Name: MIME Type
+        * * Display Name: Mime Type
         * * SQL Data Type: nvarchar(100)`),
     FileName: z.string().nullable().describe(`
         * * Field Name: FileName
@@ -9127,7 +9070,7 @@ export const AIAgentRunMediaSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     FileSizeBytes: z.number().nullable().describe(`
         * * Field Name: FileSizeBytes
-        * * Display Name: File Size (Bytes)
+        * * Display Name: File Size Bytes
         * * SQL Data Type: int`),
     Width: z.number().nullable().describe(`
         * * Field Name: Width
@@ -9139,7 +9082,7 @@ export const AIAgentRunMediaSchema = z.object({
         * * SQL Data Type: int`),
     DurationSeconds: z.number().nullable().describe(`
         * * Field Name: DurationSeconds
-        * * Display Name: Duration (Seconds)
+        * * Display Name: Duration Seconds
         * * SQL Data Type: decimal(10, 2)`),
     InlineData: z.string().nullable().describe(`
         * * Field Name: InlineData
@@ -9152,7 +9095,7 @@ export const AIAgentRunMediaSchema = z.object({
         * * Related Entity/Foreign Key: Files (vwFiles.ID)`),
     ThumbnailBase64: z.string().nullable().describe(`
         * * Field Name: ThumbnailBase64
-        * * Display Name: Thumbnail (Base64)
+        * * Display Name: Thumbnail Base64
         * * SQL Data Type: nvarchar(MAX)`),
     Label: z.string().nullable().describe(`
         * * Field Name: Label
@@ -9177,13 +9120,22 @@ export const AIAgentRunMediaSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Agent notes describing what this media represents. Used for internal tracking and can be displayed in UI.`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run
         * * SQL Data Type: nvarchar(255)`),
+    SourcePromptRunMedia: z.string().nullable().describe(`
+        * * Field Name: SourcePromptRunMedia
+        * * Display Name: Source Prompt Run Media
+        * * SQL Data Type: nvarchar(255)`),
     Modality: z.string().describe(`
         * * Field Name: Modality
-        * * Display Name: Modality Name
+        * * Display Name: Modality
         * * SQL Data Type: nvarchar(50)`),
     File: z.string().nullable().describe(`
         * * Field Name: File
@@ -9342,14 +9294,6 @@ detailed information about what validation rules failed.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run step`),
-    AgentRun: z.string().nullable().describe(`
-        * * Field Name: AgentRun
-        * * Display Name: Agent Run
-        * * SQL Data Type: nvarchar(255)`),
-    Parent: z.string().nullable().describe(`
-        * * Field Name: Parent
-        * * Display Name: Parent
-        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -9648,10 +9592,6 @@ each time the agent processes a prompt step.`),
         * * Field Name: ScheduledJobRun
         * * Display Name: Scheduled Job Run
         * * SQL Data Type: nvarchar(200)`),
-    TestRun: z.string().nullable().describe(`
-        * * Field Name: TestRun
-        * * Display Name: Test Run
-        * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
         * * Display Name: Root Parent Run ID
@@ -10986,6 +10926,11 @@ export const AIPromptRunMediaSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the media generated during prompt execution. Provides context for audit trail.`),
     PromptRun: z.string().nullable().describe(`
         * * Field Name: PromptRun
         * * Display Name: Prompt Run
@@ -12935,10 +12880,6 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ConversationDetail: z.string().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
@@ -12979,32 +12920,32 @@ export const ConversationDetailAttachmentSchema = z.object({
         * * Description: Original filename of the attachment. Supports long cloud storage paths up to 4000 characters.`),
     FileSizeBytes: z.number().describe(`
         * * Field Name: FileSizeBytes
-        * * Display Name: File Size (bytes)
+        * * Display Name: File Size (Bytes)
         * * SQL Data Type: int
         * * Description: Size of the attachment in bytes.`),
     Width: z.number().nullable().describe(`
         * * Field Name: Width
-        * * Display Name: Width (px)
+        * * Display Name: Width
         * * SQL Data Type: int
         * * Description: Width in pixels for images and videos.`),
     Height: z.number().nullable().describe(`
         * * Field Name: Height
-        * * Display Name: Height (px)
+        * * Display Name: Height
         * * SQL Data Type: int
         * * Description: Height in pixels for images and videos.`),
     DurationSeconds: z.number().nullable().describe(`
         * * Field Name: DurationSeconds
-        * * Display Name: Duration (seconds)
+        * * Display Name: Duration (Seconds)
         * * SQL Data Type: int
         * * Description: Duration in seconds for audio and video files.`),
     InlineData: z.string().nullable().describe(`
         * * Field Name: InlineData
-        * * Display Name: Inline Data (Base64)
+        * * Display Name: Inline Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Base64-encoded file data for small attachments stored inline. Mutually exclusive with FileID - exactly one must be populated.`),
     FileID: z.string().nullable().describe(`
         * * Field Name: FileID
-        * * Display Name: File
+        * * Display Name: File ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Files (vwFiles.ID)
         * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.`),
@@ -13016,7 +12957,7 @@ export const ConversationDetailAttachmentSchema = z.object({
         * * Description: Display order for multiple attachments in a message. Lower numbers appear first.`),
     ThumbnailBase64: z.string().nullable().describe(`
         * * Field Name: ThumbnailBase64
-        * * Display Name: Thumbnail (Base64)
+        * * Display Name: Thumbnail
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Base64-encoded thumbnail image for quick preview display. Max 200px on longest side.`),
     __mj_CreatedAt: z.date().describe(`
@@ -13029,17 +12970,22 @@ export const ConversationDetailAttachmentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the attachment providing context about its content and purpose.`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Text
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(MAX)`),
     Modality: z.string().describe(`
         * * Field Name: Modality
-        * * Display Name: Modality Name
+        * * Display Name: Modality
         * * SQL Data Type: nvarchar(50)`),
     File: z.string().nullable().describe(`
         * * Field Name: File
-        * * Display Name: File Reference
+        * * Display Name: File
         * * SQL Data Type: nvarchar(500)`),
 });
 
@@ -13086,10 +13032,6 @@ export const ConversationDetailRatingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ConversationDetail: z.string().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -14765,10 +14707,6 @@ export const TaskSchema = z.object({
         * * Field Name: Project
         * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
-    ConversationDetail: z.string().nullable().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -16393,10 +16331,6 @@ export const RecommendationItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Recommendation: z.string().describe(`
-        * * Field Name: Recommendation
-        * * Display Name: Recommendation
-        * * SQL Data Type: nvarchar(MAX)`),
     DestinationEntity: z.string().describe(`
         * * Field Name: DestinationEntity
         * * Display Name: Destination Entity
@@ -16537,10 +16471,6 @@ export const RecommendationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecommendationRun: z.string().describe(`
-        * * Field Name: RecommendationRun
-        * * Display Name: Recommendation Run
-        * * SQL Data Type: nvarchar(255)`),
     SourceEntity: z.string().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
@@ -16715,10 +16645,6 @@ export const RecordChangeSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    ReplayRun: z.string().nullable().describe(`
-        * * Field Name: ReplayRun
-        * * Display Name: Replay Run
-        * * SQL Data Type: nvarchar(100)`),
     Integration: z.string().nullable().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -16771,10 +16697,6 @@ export const RecordMergeDeletionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecordMergeLog: z.string().describe(`
-        * * Field Name: RecordMergeLog
-        * * Display Name: Record Merge Log
-        * * SQL Data Type: nvarchar(450)`),
 });
 
 export type RecordMergeDeletionLogEntityType = z.infer<typeof RecordMergeDeletionLogSchema>;
@@ -17096,10 +17018,6 @@ export const ReportSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
-    ConversationDetail: z.string().nullable().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
@@ -18027,10 +17945,6 @@ export const TemplateParamSchema = z.object({
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)`),
-    TemplateContent: z.string().nullable().describe(`
-        * * Field Name: TemplateContent
-        * * Display Name: Template Content
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -20267,7 +20181,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
 
     /**
     * * Field Name: ActionID
-    * * Display Name: Action ID
+    * * Display Name: Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
@@ -20280,7 +20194,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Parameter Name
     * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {
@@ -20305,7 +20219,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Parameter Direction
     * * SQL Data Type: nchar(10)
     * * Value List Type: List
     * * Possible Values 
@@ -20330,6 +20244,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     *   * BaseEntity Sub-Class
     *   * BaseEntity Sub-Class
     *   * Other
+    *   * MediaOutput
     *   * Other
     *   * Scalar
     *   * Scalar
@@ -20337,10 +20252,10 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
+    get ValueType(): 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
+    set ValueType(value: 'BaseEntity Sub-Class' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput' | 'Other' | 'Scalar' | 'Scalar' | 'Simple Object' | 'Simple Object') {
         this.Set('ValueType', value);
     }
 
@@ -20402,6 +20317,24 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MediaModality
+    * * Display Name: Media Modality
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Image
+    *   * Video
+    * * Description: Specifies the type of media this parameter outputs when ValueType is MediaOutput. Used for action discovery and validation.
+    */
+    get MediaModality(): 'Audio' | 'Image' | 'Video' | null {
+        return this.Get('MediaModality');
+    }
+    set MediaModality(value: 'Audio' | 'Image' | 'Video' | null) {
+        this.Set('MediaModality', value);
     }
 
     /**
@@ -22147,24 +22080,6 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     */
     get SourceConversation(): string | null {
         return this.Get('SourceConversation');
-    }
-
-    /**
-    * * Field Name: SourceConversationDetail
-    * * Display Name: Source Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get SourceConversationDetail(): string | null {
-        return this.Get('SourceConversationDetail');
-    }
-
-    /**
-    * * Field Name: SourceAIAgentRun
-    * * Display Name: Source AI Agent Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get SourceAIAgentRun(): string | null {
-        return this.Get('SourceAIAgentRun');
     }
 
     /**
@@ -25481,15 +25396,6 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
-    }
-
-    /**
-    * * Field Name: PromptRun
-    * * Display Name: Prompt Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get PromptRun(): string | null {
-        return this.Get('PromptRun');
     }
 }
 
@@ -30938,15 +30844,6 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     get Project(): string | null {
         return this.Get('Project');
     }
-
-    /**
-    * * Field Name: TestRun
-    * * Display Name: Test Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get TestRun(): string | null {
-        return this.Get('TestRun');
-    }
 }
 
 
@@ -32411,15 +32308,6 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
-
-    /**
-    * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get DuplicateRun(): string {
-        return this.Get('DuplicateRun');
-    }
 }
 
 
@@ -32782,15 +32670,6 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     }
 
     /**
-    * * Field Name: Employee
-    * * Display Name: Employee
-    * * SQL Data Type: nvarchar(81)
-    */
-    get Employee(): string | null {
-        return this.Get('Employee');
-    }
-
-    /**
     * * Field Name: CompanyIntegration
     * * Display Name: Company Integration
     * * SQL Data Type: nvarchar(255)
@@ -32891,15 +32770,6 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     }
 
     /**
-    * * Field Name: Employee
-    * * Display Name: Employee
-    * * SQL Data Type: nvarchar(81)
-    */
-    get Employee(): string | null {
-        return this.Get('Employee');
-    }
-
-    /**
     * * Field Name: Role
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
@@ -32997,15 +32867,6 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Employee
-    * * Display Name: Employee
-    * * SQL Data Type: nvarchar(81)
-    */
-    get Employee(): string | null {
-        return this.Get('Employee');
     }
 
     /**
@@ -34251,24 +34112,6 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
-
-    /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
-    * * Field Name: ActionFilter
-    * * Display Name: Action Filter
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ActionFilter(): string {
-        return this.Get('ActionFilter');
-    }
 }
 
 
@@ -34486,15 +34329,6 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     }
 
     /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
     * * Field Name: InvocationType
     * * Display Name: Invocation Type
     * * SQL Data Type: nvarchar(255)
@@ -34637,15 +34471,6 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
     }
 
     /**
@@ -35154,15 +34979,6 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: EntityCommunicationMessageType
-    * * Display Name: Entity Communication Message Type
-    * * SQL Data Type: nvarchar(100)
-    */
-    get EntityCommunicationMessageType(): string {
-        return this.Get('EntityCommunicationMessageType');
     }
 }
 
@@ -38230,24 +38046,6 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: CompanyIntegrationRun
-    * * Display Name: Company Integration Run
-    * * SQL Data Type: nvarchar(100)
-    */
-    get CompanyIntegrationRun(): string | null {
-        return this.Get('CompanyIntegrationRun');
-    }
-
-    /**
-    * * Field Name: CompanyIntegrationRunDetail
-    * * Display Name: Company Integration Run Detail
-    * * SQL Data Type: nvarchar(450)
-    */
-    get CompanyIntegrationRunDetail(): string | null {
-        return this.Get('CompanyIntegrationRunDetail');
     }
 }
 
@@ -41717,24 +41515,6 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
     }
 
     /**
-    * * Field Name: SourceConversationDetail
-    * * Display Name: Source Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get SourceConversationDetail(): string | null {
-        return this.Get('SourceConversationDetail');
-    }
-
-    /**
-    * * Field Name: SourceAIAgentRun
-    * * Display Name: Source AI Agent Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get SourceAIAgentRun(): string | null {
-        return this.Get('SourceAIAgentRun');
-    }
-
-    /**
     * * Field Name: EmbeddingModel
     * * Display Name: Embedding Model
     * * SQL Data Type: nvarchar(50)
@@ -42702,7 +42482,7 @@ export class AIAgentRunMediaEntity extends BaseEntity<AIAgentRunMediaEntityType>
 
     /**
     * * Field Name: MimeType
-    * * Display Name: MIME Type
+    * * Display Name: Mime Type
     * * SQL Data Type: nvarchar(100)
     */
     get MimeType(): string {
@@ -42726,7 +42506,7 @@ export class AIAgentRunMediaEntity extends BaseEntity<AIAgentRunMediaEntityType>
 
     /**
     * * Field Name: FileSizeBytes
-    * * Display Name: File Size (Bytes)
+    * * Display Name: File Size Bytes
     * * SQL Data Type: int
     */
     get FileSizeBytes(): number | null {
@@ -42762,7 +42542,7 @@ export class AIAgentRunMediaEntity extends BaseEntity<AIAgentRunMediaEntityType>
 
     /**
     * * Field Name: DurationSeconds
-    * * Display Name: Duration (Seconds)
+    * * Display Name: Duration Seconds
     * * SQL Data Type: decimal(10, 2)
     */
     get DurationSeconds(): number | null {
@@ -42799,7 +42579,7 @@ export class AIAgentRunMediaEntity extends BaseEntity<AIAgentRunMediaEntityType>
 
     /**
     * * Field Name: ThumbnailBase64
-    * * Display Name: Thumbnail (Base64)
+    * * Display Name: Thumbnail Base64
     * * SQL Data Type: nvarchar(MAX)
     */
     get ThumbnailBase64(): string | null {
@@ -42867,6 +42647,19 @@ export class AIAgentRunMediaEntity extends BaseEntity<AIAgentRunMediaEntityType>
     }
 
     /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Agent notes describing what this media represents. Used for internal tracking and can be displayed in UI.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run
     * * SQL Data Type: nvarchar(255)
@@ -42876,8 +42669,17 @@ export class AIAgentRunMediaEntity extends BaseEntity<AIAgentRunMediaEntityType>
     }
 
     /**
+    * * Field Name: SourcePromptRunMedia
+    * * Display Name: Source Prompt Run Media
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourcePromptRunMedia(): string | null {
+        return this.Get('SourcePromptRunMedia');
+    }
+
+    /**
     * * Field Name: Modality
-    * * Display Name: Modality Name
+    * * Display Name: Modality
     * * SQL Data Type: nvarchar(50)
     */
     get Modality(): string {
@@ -43265,24 +43067,6 @@ detailed information about what validation rules failed.
     }
     set Comments(value: string | null) {
         this.Set('Comments', value);
-    }
-
-    /**
-    * * Field Name: AgentRun
-    * * Display Name: Agent Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get AgentRun(): string | null {
-        return this.Get('AgentRun');
-    }
-
-    /**
-    * * Field Name: Parent
-    * * Display Name: Parent
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Parent(): string | null {
-        return this.Get('Parent');
     }
 
     /**
@@ -44010,15 +43794,6 @@ each time the agent processes a prompt step.
     */
     get ScheduledJobRun(): string | null {
         return this.Get('ScheduledJobRun');
-    }
-
-    /**
-    * * Field Name: TestRun
-    * * Display Name: Test Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get TestRun(): string | null {
-        return this.Get('TestRun');
     }
 
     /**
@@ -47864,6 +47639,19 @@ export class AIPromptRunMediaEntity extends BaseEntity<AIPromptRunMediaEntityTyp
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of the media generated during prompt execution. Provides context for audit trail.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
     }
 
     /**
@@ -52893,15 +52681,6 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
     }
 
     /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConversationDetail(): string {
-        return this.Get('ConversationDetail');
-    }
-
-    /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
     * * SQL Data Type: nvarchar(255)
@@ -53043,7 +52822,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: FileSizeBytes
-    * * Display Name: File Size (bytes)
+    * * Display Name: File Size (Bytes)
     * * SQL Data Type: int
     * * Description: Size of the attachment in bytes.
     */
@@ -53056,7 +52835,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: Width
-    * * Display Name: Width (px)
+    * * Display Name: Width
     * * SQL Data Type: int
     * * Description: Width in pixels for images and videos.
     */
@@ -53069,7 +52848,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: Height
-    * * Display Name: Height (px)
+    * * Display Name: Height
     * * SQL Data Type: int
     * * Description: Height in pixels for images and videos.
     */
@@ -53082,7 +52861,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: DurationSeconds
-    * * Display Name: Duration (seconds)
+    * * Display Name: Duration (Seconds)
     * * SQL Data Type: int
     * * Description: Duration in seconds for audio and video files.
     */
@@ -53095,7 +52874,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: InlineData
-    * * Display Name: Inline Data (Base64)
+    * * Display Name: Inline Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Base64-encoded file data for small attachments stored inline. Mutually exclusive with FileID - exactly one must be populated.
     */
@@ -53108,7 +52887,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: FileID
-    * * Display Name: File
+    * * Display Name: File ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Files (vwFiles.ID)
     * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.
@@ -53136,7 +52915,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: ThumbnailBase64
-    * * Display Name: Thumbnail (Base64)
+    * * Display Name: Thumbnail
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Base64-encoded thumbnail image for quick preview display. Max 200px on longest side.
     */
@@ -53168,8 +52947,21 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
     }
 
     /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of the attachment providing context about its content and purpose.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Text
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -53178,7 +52970,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: Modality
-    * * Display Name: Modality Name
+    * * Display Name: Modality
     * * SQL Data Type: nvarchar(50)
     */
     get Modality(): string {
@@ -53187,7 +52979,7 @@ export class ConversationDetailAttachmentEntity extends BaseEntity<ConversationD
 
     /**
     * * Field Name: File
-    * * Display Name: File Reference
+    * * Display Name: File
     * * SQL Data Type: nvarchar(500)
     */
     get File(): string | null {
@@ -53338,15 +53130,6 @@ export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetai
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConversationDetail(): string {
-        return this.Get('ConversationDetail');
     }
 
     /**
@@ -57725,15 +57508,6 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
     }
 
     /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConversationDetail(): string | null {
-        return this.Get('ConversationDetail');
-    }
-
-    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -62021,15 +61795,6 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     }
 
     /**
-    * * Field Name: Recommendation
-    * * Display Name: Recommendation
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Recommendation(): string {
-        return this.Get('Recommendation');
-    }
-
-    /**
     * * Field Name: DestinationEntity
     * * Display Name: Destination Entity
     * * SQL Data Type: nvarchar(255)
@@ -62396,15 +62161,6 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: RecommendationRun
-    * * Display Name: Recommendation Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get RecommendationRun(): string {
-        return this.Get('RecommendationRun');
     }
 
     /**
@@ -62830,15 +62586,6 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     }
 
     /**
-    * * Field Name: ReplayRun
-    * * Display Name: Replay Run
-    * * SQL Data Type: nvarchar(100)
-    */
-    get ReplayRun(): string | null {
-        return this.Get('ReplayRun');
-    }
-
-    /**
     * * Field Name: Integration
     * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
@@ -62967,15 +62714,6 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: RecordMergeLog
-    * * Display Name: Record Merge Log
-    * * SQL Data Type: nvarchar(450)
-    */
-    get RecordMergeLog(): string {
-        return this.Get('RecordMergeLog');
     }
 }
 
@@ -63827,15 +63565,6 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
-    }
-
-    /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConversationDetail(): string | null {
-        return this.Get('ConversationDetail');
     }
 
     /**
@@ -66299,15 +66028,6 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     */
     get Entity(): string | null {
         return this.Get('Entity');
-    }
-
-    /**
-    * * Field Name: TemplateContent
-    * * Display Name: Template Content
-    * * SQL Data Type: nvarchar(255)
-    */
-    get TemplateContent(): string | null {
-        return this.Get('TemplateContent');
     }
 }
 

@@ -130,17 +130,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('listCategories')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('listCategories')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('List Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('List Categories')"
                 [AllowLoad]="IsSectionExpanded('listCategories')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('listCategories', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('listCategories', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -152,17 +151,16 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('lists')"
-        [defaultExpanded]="false">
+        [badgeCount]="GetSectionRowCount('lists')">
         <div *ngIf="record.IsSaved">
-            <mj-explorer-entity-data-grid
+            <mj-user-view-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Lists','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Lists')"
                 [AllowLoad]="IsSectionExpanded('lists')"
-                [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('lists', $event.totalRowCount)"
+                [EditMode]="GridEditMode()"
+                (dataLoaded)="SetSectionRowCount('lists', $event.totalRowCount)"
                 >
-            </mj-explorer-entity-data-grid>
+            </mj-user-view-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>
