@@ -444,9 +444,21 @@ const configInfoSchema = z.object({
  * Default CodeGen configuration - provides sensible defaults for all CodeGen settings.
  * These defaults can be overridden in user's mj.config.cjs file.
  *
- * Note: Database connection settings (dbHost, dbDatabase, etc.) come from DEFAULT_SERVER_CONFIG
+ * Database connection settings come from environment variables.
  */
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
+  // Database connection settings (from environment variables)
+  dbHost: process.env.DB_HOST ?? 'localhost',
+  dbPort: 1433,
+  dbDatabase: process.env.DB_DATABASE ?? '',
+  codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
+  codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
+  dbInstanceName: process.env.DB_INSTANCE_NAME,
+  dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true' ? 'Y' : 'N',
+  mjCoreSchema: '__mj',
+  graphqlPort: 4000,
+  verboseOutput: false,
+
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
     { name: 'skip_database_generation', value: false },
@@ -552,10 +564,6 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     indexes: false,
     fullTextSearch: false,
   },
-  mjCoreSchema: '__mj',
-  dbPort: 1433,
-  graphqlPort: 4000,
-  verboseOutput: false,
 };
 
 /**
