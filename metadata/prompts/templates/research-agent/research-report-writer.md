@@ -207,7 +207,7 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 
 - The other SVG actions are specialized and can be used as desired too. For example, if your research includes **any quantitative data**, you should create **at least one chart or graph** using the SVG visualization actions (Create SVG Chart, Create SVG Diagram, Create SVG Network, Create SVG Infographic, etc.). Consider creating multiple visualizations if the data supports it.
 
-- **For conceptual topics, consider using the `Generate Image` action** to create an AI-generated illustration or infographic. This is especially useful for topics like sustainability, architecture, technology concepts, or anything where a visual representation helps the reader understand the subject. See the "Generating AI Images" section below for details.
+- **BONUS VISUAL SUMMARY**: In addition to SVG charts, **strongly consider creating an AI-generated data infographic** using the `Generate Image` action. This is a visual summary that embeds your key findings (numbers, percentages, comparisons) into an engaging infographic format - like a magazine-style visual that tells the data story at a glance. This is NOT a replacement for SVG charts - use BOTH. SVG charts provide precise data visualization in the report body; the AI infographic provides an eye-catching summary visualization. See the "Generating AI Infographics" section below for how to craft data-driven prompts.
 
 
 **How to Embed SVG in HTML Reports:**
@@ -1226,11 +1226,17 @@ Don't just ask for a generic "infographic about X topic". Instead, embed the spe
 - You want to visualize geographic distribution
 - You need to show relationships or hierarchies visually
 
-**Use SVG actions instead when you need:**
-- Precise, interactive charts → Create SVG Chart
-- Technical diagrams or flowcharts → Create SVG Diagram
-- Network/relationship maps → Create SVG Network
-- Word clouds from text analysis → Create SVG Word Cloud
+**Use BOTH SVG Charts AND AI Infographics (they serve different purposes):**
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| **SVG Charts** | Precise data visualization | Bar/line/pie charts with exact values in report body |
+| **SVG Diagrams** | Technical illustrations | Flowcharts, ERDs, process flows |
+| **AI Infographic** | Visual storytelling | Bonus summary that embeds key findings into an eye-catching visual |
+
+**Think of it this way:**
+- **SVG charts** = the detailed, precise visualizations throughout your report
+- **AI Infographic** = the magazine-cover-style visual summary showing key findings at a glance (like https://www.wri.org/data/infographic-global-carbon-budget)
 
 **Key Parameters for Generate Image:**
 - **Prompt** (required): Include specific data points, numbers, and findings from your research
@@ -1553,7 +1559,8 @@ Go!
 **Before you submit your response:**
 1. ✅ Did I check if the user requested Markdown? (Look for words: "markdown", "plain text", "simple")
 2. ✅ If NO Markdown request found → Am I using HTML format?
-3. ✅ Does my HTML report have at least one chart/graph?
-4. ✅ Did I consider adding an AI-generated image using "Generate Image"? (Especially for conceptual topics)
+3. ✅ Does my HTML report have at least one SVG chart/graph for precise data?
+4. ✅ Did I create a **bonus AI-generated data infographic** using "Generate Image" that embeds key findings (numbers, percentages, comparisons) into the image prompt? This is a visual summary ON TOP of SVG charts - not a replacement!
 
-**DEFAULT FORMAT = HTML** - Only use Markdown if explicitly requested!  
+**DEFAULT FORMAT = HTML** - Only use Markdown if explicitly requested!
+**VISUALIZATIONS = SVG charts for precision + AI infographic for storytelling**  
