@@ -8,7 +8,7 @@
 validate_migrations() {
     local MIGRATION_DIRS=("$@")
     if [ ${#MIGRATION_DIRS[@]} -eq 0 ]; then
-        MIGRATION_DIRS=("migrations/v2" "migrations")
+        MIGRATION_DIRS=("migrations/v2" "migrations/v3" "migrations")
     fi
     
     echo "::notice::Validating migration file naming conventions..."
