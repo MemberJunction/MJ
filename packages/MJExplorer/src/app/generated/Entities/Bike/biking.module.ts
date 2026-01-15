@@ -22,6 +22,7 @@ import { BikingDashboardResourceComponent, LoadBikingDashboardResource } from '.
 import { BikingRidesResourceComponent, LoadBikingRidesResource } from './components/biking-rides-resource.component';
 import { BikingLocationsResourceComponent, LoadBikingLocationsResource } from './components/biking-locations-resource.component';
 import { BikingFleetResourceComponent, LoadBikingFleetResource } from './components/biking-fleet-resource.component';
+import { BikingFindResourceComponent, LoadBikingFindResource } from './components/biking-find-resource.component';
 import { BikingRouteRecommendationsResourceComponent, LoadBikingRouteRecommendationsResource } from './components/biking-route-recommendations-resource.component';
 
 // Services
@@ -35,6 +36,7 @@ import { RouteRecommendationService } from './services/route-recommendation.serv
     BikingRidesResourceComponent,
     BikingLocationsResourceComponent,
     BikingFleetResourceComponent,
+    BikingFindResourceComponent,
     BikingRouteRecommendationsResourceComponent
   ],
   imports: [
@@ -59,6 +61,7 @@ import { RouteRecommendationService } from './services/route-recommendation.serv
     BikingRidesResourceComponent,
     BikingLocationsResourceComponent,
     BikingFleetResourceComponent,
+    BikingFindResourceComponent,
     BikingRouteRecommendationsResourceComponent
   ]
 })
@@ -73,5 +76,6 @@ export function LoadBikingModule(): void {
   LoadBikingRidesResource();
   LoadBikingLocationsResource();
   LoadBikingFleetResource();
+  LoadBikingFindResource();
   LoadBikingRouteRecommendationsResource();
 }

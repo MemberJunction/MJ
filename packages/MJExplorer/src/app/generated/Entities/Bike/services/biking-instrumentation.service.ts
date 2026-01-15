@@ -17,6 +17,10 @@ export interface RiderRecord {
   preferred_terrain: 'road' | 'gravel' | 'mountain' | 'urban' | 'mixed' | null;
   lifetime_stats: string | null;
   created_at: Date;
+  __mj_CreatedAt: Date;
+  __mj_UpdatedAt: Date;
+  FirstName: string | null;
+  LastName: string | null;
 }
 
 // Bike table fields
@@ -29,6 +33,8 @@ export interface BikeRecord {
   wheel_size_in: number | null;
   total_distance_m: number;
   last_serviced: Date | null;
+  __mj_CreatedAt: Date;
+  __mj_UpdatedAt: Date;
 }
 
 // Location table fields
@@ -44,6 +50,8 @@ export interface LocationRecord {
   difficulty_rating: number | null;
   visit_count: number;
   first_visited: Date;
+  __mj_CreatedAt: Date;
+  __mj_UpdatedAt: Date;
 }
 
 // Weather table fields
@@ -58,6 +66,9 @@ export interface WeatherRecord {
   cloud_cover_pct: number | null;
   visibility_km: number | null;
   observed_at: Date;
+  __mj_CreatedAt: Date;
+  __mj_UpdatedAt: Date;
+  location_id_Virtual: string | null;
 }
 
 // Rider_Stats table fields
@@ -78,6 +89,10 @@ export interface RiderStatsRecord {
   calories_burned: number | null;
   effort_rating: number | null;
   recorded_at: Date;
+  __mj_CreatedAt: Date;
+  __mj_UpdatedAt: Date;
+  location_id_Virtual: string | null;
+  bike_id_Virtual: string | null;
 }
 
 /**
@@ -213,22 +228,22 @@ export interface TimeSeriesDataPoint {
 }
 
 /**
- * Entity name constants - update these after MJ CodeGen registers the entities
- * These follow MemberJunction naming conventions
+ * Entity name constants - these match the registered entity names in the database
+ * Entity names from __mj.Entity table
  */
 const ENTITY_NAMES = {
-  RIDER: 'MJ Biking App Riders',
-  BIKE: 'MJ Biking App Bikes',
-  LOCATION: 'MJ Biking App Locations',
-  WEATHER: 'MJ Biking App Weathers',
-  RIDER_STATS: 'MJ Biking App Rider Stats'
+  RIDER: 'Riders',
+  BIKE: 'Bikes',
+  LOCATION: 'Locations',
+  WEATHER: 'Weathers',
+  RIDER_STATS: 'Rider _ Stats'
 };
 
 /**
  * Set to true to use sample data instead of querying MJ entities
  * This allows the dashboard to function before entities are registered via CodeGen
  */
-const USE_SAMPLE_DATA = true;
+const USE_SAMPLE_DATA = false;
 
 /**
  * Service for loading and managing biking dashboard data from MJ_Biking_App database tables

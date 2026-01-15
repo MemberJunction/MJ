@@ -29,10 +29,10 @@
         "isDefault": false
       },
       {
-        "Label": "Fleet",
-        "Icon": "fa-solid fa-bicycle",
+        "Label": "Find",
+        "Icon": "fa-solid fa-magnifying-glass",
         "ResourceType": "Custom",
-        "DriverClass": "BikingFleetResource",
+        "DriverClass": "BikingFindResource",
         "isDefault": false
       },
       {
@@ -51,7 +51,7 @@
     "ID": "B970816F-E276-4F38-BA0E-F23AE0771CC9"
   },
   "sync": {
-    "lastModified": "2026-01-13T22:55:06.310Z",
-    "checksum": "f6c4359d3a0716fb4b506c50f87ef800c4bec0053cd3146822775af8cecc29d8"
+    "lastModified": "2026-01-15T14:45:28.805Z",
+    "checksum": "02efd3297c33bea5fff5b007598e9bfa2d75769a4fb724fca9edfd52b8def7a5"
   }
 }
