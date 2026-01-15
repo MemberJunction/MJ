@@ -42,6 +42,7 @@
     "@memberjunction/communication-ms-graph": "2.133.0",
     "@memberjunction/communication-sendgrid": "2.133.0",
     "@memberjunction/component-registry-client-sdk": "2.133.0",
+    "@memberjunction/config": "2.133.0",
     "@memberjunction/core": "2.133.0",
     "@memberjunction/core-actions": "2.133.0",
     "@memberjunction/core-entities": "2.133.0",

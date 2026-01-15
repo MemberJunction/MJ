@@ -5,8 +5,11 @@
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
     "esModuleInterop": true,
     "target": "es2022"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "**/*.spec.ts", "dist"]
 }

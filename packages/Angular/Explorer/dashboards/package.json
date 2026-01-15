@@ -15,19 +15,19 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2",
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14",
     "@types/d3": "^7.4.0",
     "sass": "^1.77.2"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2"
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/forms": "18.2.14"
   },
   "dependencies": {
-    "@angular/animations": "18.0.2",
-    "@angular/router": "18.0.2",
+    "@angular/animations": "18.2.14",
+    "@angular/router": "18.2.14",
     "@codemirror/language-data": "^6.5.1",
     "@codemirror/merge": "^6.6.3",
     "@memberjunction/ai-engine-base": "2.133.0",

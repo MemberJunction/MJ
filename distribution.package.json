@@ -1,0 +1,39 @@
+{
+  "name": "memberjunction-distribution",
+  "version": "1.0.0",
+  "license": "ISC",
+  "description": "MemberJunction distribution monorepo - includes MJAPI, MJExplorer, and code generation tools",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "postinstall": "echo 'MemberJunction installation complete. Please configure your environment using install.config.json or mj.config.cjs before proceeding.'",
+    "build": "npm run build:stream",
+    "build:stream": "turbo --log-order=stream build",
+    "build:generated": "turbo --log-order=stream build --filter=\"mj_generatedentities\" --filter=\"mj_generatedactions\"",
+    "build:api": "turbo --log-order=stream build --filter=\"mj_api\"",
+    "build:explorer": "turbo --log-order=stream build --filter=\"mj_explorer\"",
+    "start": "turbo start --filter=mj_explorer --filter=mj_api",
+    "start:api": "turbo start --filter=mj_api",
+    "start:explorer": "turbo start --filter=mj_explorer",
+    "mj": "node apps/MJAPI/node_modules/@memberjunction/cli/bin/run.js",
+    "mj:migrate": "node apps/MJAPI/node_modules/@memberjunction/cli/bin/run.js migrate",
+    "mj:codegen": "node apps/MJAPI/node_modules/@memberjunction/cli/bin/run.js codegen",
+    "install:deps": "npm install",
+    "setup": "echo 'Please run: npm run mj:migrate && npm run mj:codegen && npm run build'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "packageManager": "npm@10.5.0",
+  "devDependencies": {
+    "turbo": "^2.7.3",
+    "typescript": "5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=10.0.0"
+  }
+}
