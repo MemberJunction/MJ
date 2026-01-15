@@ -332,3 +332,4 @@ _Use this section to track progress across sessions_
 3. For **alt row color**: Should this be per-view or global user preference?
 4. For **recent items limits**: Are current limits (5 displayed, 10-20 stored) appropriate?
 5. For **additional preferences**: Which of the proposed items in Task 10 are highest priority?
+
