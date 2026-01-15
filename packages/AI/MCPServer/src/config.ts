@@ -45,6 +45,13 @@ const mcpServerAgentToolInfoSchema = z.object({
   cancel: z.boolean().optional().default(false),
 });
 
+const tlsSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  certPath: z.string().optional(),
+  keyPath: z.string().optional(),
+  selfSigned: z.boolean().default(false),
+});
+
 const mcpServerInfoSchema = z.object({
   port: z.coerce.number().optional().default(3100),
   transport: z.enum(['stdio', 'sse']).optional().default('sse'),
@@ -54,6 +61,7 @@ const mcpServerInfoSchema = z.object({
   enableMCPServer: z.boolean().optional().default(false),
   requireAuthentication: z.boolean().optional().default(true), // Enable API key authentication
   allowAnonymousForStdio: z.boolean().optional().default(false), // Allow unauthenticated access for stdio transport
+  tls: tlsSettingsSchema.optional(), // TLS/HTTPS configuration
 });
 
 const configInfoSchema = z.object({

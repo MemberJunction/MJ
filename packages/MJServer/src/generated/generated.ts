@@ -34173,6 +34173,12 @@ export class MJAPIKey_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Maximum number of requests allowed within the rate limit window. Default: 1000 requests per hour.`}) 
+    RateLimitRequests?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Time window in seconds for rate limiting. Default: 3600 (1 hour). Common values: 60 (1 min), 300 (5 min), 3600 (1 hour), 86400 (1 day).`}) 
+    RateLimitWindowSeconds?: number;
+        
     @Field() 
     @MaxLength(200)
     User: string;
@@ -34217,6 +34223,12 @@ export class CreateMJAPIKeyInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitRequests?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitWindowSeconds?: number | null;
 }
     
 
@@ -34248,6 +34260,12 @@ export class UpdateMJAPIKeyInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitRequests?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitWindowSeconds?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

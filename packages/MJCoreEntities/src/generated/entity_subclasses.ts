@@ -11627,6 +11627,18 @@ export const APIKeySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RateLimitRequests: z.number().nullable().describe(`
+        * * Field Name: RateLimitRequests
+        * * Display Name: Rate Limit Requests
+        * * SQL Data Type: int
+        * * Default Value: 1000
+        * * Description: Maximum number of requests allowed within the rate limit window. Default: 1000 requests per hour.`),
+    RateLimitWindowSeconds: z.number().nullable().describe(`
+        * * Field Name: RateLimitWindowSeconds
+        * * Display Name: Rate Limit Window Seconds
+        * * SQL Data Type: int
+        * * Default Value: 3600
+        * * Description: Time window in seconds for rate limiting. Default: 3600 (1 hour). Common values: 60 (1 min), 300 (5 min), 3600 (1 hour), 86400 (1 day).`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -49543,6 +49555,34 @@ export class APIKeyEntity extends BaseEntity<APIKeyEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RateLimitRequests
+    * * Display Name: Rate Limit Requests
+    * * SQL Data Type: int
+    * * Default Value: 1000
+    * * Description: Maximum number of requests allowed within the rate limit window. Default: 1000 requests per hour.
+    */
+    get RateLimitRequests(): number | null {
+        return this.Get('RateLimitRequests');
+    }
+    set RateLimitRequests(value: number | null) {
+        this.Set('RateLimitRequests', value);
+    }
+
+    /**
+    * * Field Name: RateLimitWindowSeconds
+    * * Display Name: Rate Limit Window Seconds
+    * * SQL Data Type: int
+    * * Default Value: 3600
+    * * Description: Time window in seconds for rate limiting. Default: 3600 (1 hour). Common values: 60 (1 min), 300 (5 min), 3600 (1 hour), 86400 (1 day).
+    */
+    get RateLimitWindowSeconds(): number | null {
+        return this.Get('RateLimitWindowSeconds');
+    }
+    set RateLimitWindowSeconds(value: number | null) {
+        this.Set('RateLimitWindowSeconds', value);
     }
 
     /**

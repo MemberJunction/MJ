@@ -148,6 +148,27 @@ async function generateKey(argv: any): Promise<void> {
             process.exit(1);
         }
 
+        // Set rate limits if provided (requires migration V202601152000 to be run)
+        if (argv.rateLimit || argv.rateWindow) {
+            try {
+                const md = new Metadata();
+                const apiKeyEntity = await md.GetEntityObject<APIKeyEntity>('MJ: API Keys', adminUser);
+                await apiKeyEntity.Load(result.keyId!);
+
+                // Try to set rate limit fields (will work if migration was run)
+                if (apiKeyEntity.GetFieldByName('RateLimitRequests')) {
+                    apiKeyEntity.Set('RateLimitRequests', argv.rateLimit || 1000);
+                    apiKeyEntity.Set('RateLimitWindowSeconds', argv.rateWindow || 3600);
+                    await apiKeyEntity.Save();
+                    console.log(`✅ Rate limit configured: ${argv.rateLimit} requests per ${argv.rateWindow}s\n`);
+                } else {
+                    console.log(`⚠️  Rate limit fields not available. Run migration V202601152000 to enable rate limiting.\n`);
+                }
+            } catch (error) {
+                console.log(`⚠️  Could not set rate limits: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+        }
+
         console.log('🎉 API Key Generated Successfully!\n');
         console.log('='.repeat(70));
         console.log('⚠️  IMPORTANT: Save this key now - it will never be shown again!');
@@ -323,6 +344,16 @@ yargs(hideBin(process.argv))
                     type: 'number',
                     description: 'Expiration in days (0 = never expires)',
                     default: 0
+                })
+                .option('rate-limit', {
+                    type: 'number',
+                    description: 'Maximum requests per window (default: 1000)',
+                    default: 1000
+                })
+                .option('rate-window', {
+                    type: 'number',
+                    description: 'Rate limit window in seconds (default: 3600 = 1 hour)',
+                    default: 3600
                 });
         },
         generateKey

@@ -89,6 +89,22 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="RateLimitRequests"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RateLimitWindowSeconds"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"

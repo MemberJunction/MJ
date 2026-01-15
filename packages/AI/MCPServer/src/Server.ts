@@ -19,6 +19,8 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
 import { AuthMiddleware, AuthContext } from './AuthMiddleware.js';
 import { APIKeyService } from './APIKeyService.js';
+import { getRequiredScopes, hasRequiredScope } from './config/tool-scopes.js';
+import { RateLimitService } from './RateLimitService.js';
 
 // Tool filtering types
 export interface ToolFilterOptions {
@@ -166,7 +168,7 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
 }
 
 /**
- * Wrapper to add a tool with filtering support and usage logging
+ * Wrapper to add a tool with filtering support, scope-based authorization, and usage logging
  */
 function addToolWithFilter<Params extends ToolParameters>(toolConfig: Tool<undefined, Params>): void {
     const toolName = toolConfig.name;
@@ -179,7 +181,24 @@ function addToolWithFilter<Params extends ToolParameters>(toolConfig: Tool<undef
         return; // Skip this tool
     }
 
-    // Wrap the execute function to add usage logging
+    // NEW: Scope-based authorization filtering
+    if (authenticationEnabled && globalAuthContext && globalAuthContext.authenticated) {
+        const requiredScopes = getRequiredScopes(toolName);
+
+        if (requiredScopes.length > 0) {
+            const userScopes = globalAuthContext.scopes || [];
+            const hasPermission = hasRequiredScope(userScopes, requiredScopes);
+
+            if (!hasPermission) {
+                mcpLog(`Tool ${toolName} filtered out - user lacks required scopes: ${requiredScopes.join(' OR ')}`);
+                return; // Don't register this tool for this user
+            } else {
+                mcpLog(`Tool ${toolName} authorized - user has scope: ${requiredScopes.join(' OR ')}`);
+            }
+        }
+    }
+
+    // Wrap the execute function to add rate limiting and usage logging
     const originalExecute = toolConfig.execute;
     toolConfig.execute = async function(args: any, context: any) {
         const startTime = Date.now();
@@ -187,10 +206,39 @@ function addToolWithFilter<Params extends ToolParameters>(toolConfig: Tool<undef
         let errorMessage: string | undefined;
 
         try {
+            // NEW: Rate limit check
+            if (globalAuthContext?.apiKeyId && authenticationEnabled) {
+                const rateLimitResult = await RateLimitService.CheckRateLimit(
+                    globalAuthContext.apiKeyId,
+                    globalAuthContext.user
+                );
+
+                if (!rateLimitResult.allowed) {
+                    statusCode = 429; // Too Many Requests
+                    const resetTime = rateLimitResult.resetTime.toISOString();
+                    errorMessage = `Rate limit exceeded. Limit: ${rateLimitResult.limit.requests} requests per ${rateLimitResult.limit.windowSeconds}s. Try again after ${resetTime}`;
+
+                    // Log the rate limit rejection
+                    await APIKeyService.LogAPIKeyUsage({
+                        apiKeyId: globalAuthContext.apiKeyId,
+                        operationName: toolName,
+                        statusCode: 429,
+                        responseTimeMs: Date.now() - startTime,
+                        errorMessage
+                    }, globalAuthContext.user).catch(err => {
+                        mcpLog(`Failed to log rate limit rejection: ${err.message}`);
+                    });
+
+                    throw new Error(errorMessage);
+                }
+            }
+
             const result = await originalExecute.call(this, args, context);
             return result;
         } catch (error) {
-            statusCode = 500;
+            if (statusCode !== 429) {
+                statusCode = 500;
+            }
             errorMessage = error instanceof Error ? error.message : String(error);
             throw error;
         } finally {
