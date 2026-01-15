@@ -122,6 +122,8 @@ export class WorkspaceStateManager {
     const engine = UserInfoEngine.Instance;
     const workspaces = engine.Workspaces;
 
+    console.log('[WorkspaceStateManager.loadWorkspace] 📂 Loading workspace for user:', userId);
+
     if (workspaces.length > 0) {
       const workspace = workspaces[0];
       this.workspace$.next(workspace);
@@ -132,6 +134,13 @@ export class WorkspaceStateManager {
       const config = configJson
         ? JSON.parse(configJson) as WorkspaceConfiguration
         : createDefaultWorkspaceConfiguration();
+
+      console.log('[WorkspaceStateManager.loadWorkspace] 📋 Loaded configuration:', {
+        tabCount: config.tabs?.length || 0,
+        tabs: config.tabs?.map(t => ({ id: t.id, title: t.title, appId: t.applicationId, resourceType: t.configuration?.resourceType, resourceRecordId: t.resourceRecordId, isPinned: t.isPinned })),
+        activeTabId: config.activeTabId,
+        hasLayout: !!config.layout?.root?.content?.length
+      });
 
       this.configuration$.next(config);
     }
@@ -296,9 +305,31 @@ export class WorkspaceStateManager {
       throw new Error('Configuration not initialized');
     }
 
+    // DEBUG LOGGING - Tab matching decision
+    console.log('[WorkspaceStateManager.OpenTab] 🔍 START - Request:', {
+      title: request.Title,
+      appId: request.ApplicationId,
+      resourceType: request.Configuration?.resourceType,
+      resourceRecordId: request.ResourceRecordId,
+      configRecordId: request.Configuration?.recordId
+    });
+    console.log('[WorkspaceStateManager.OpenTab] 📋 Existing tabs:', config.tabs.map(t => ({
+      id: t.id,
+      title: t.title,
+      appId: t.applicationId,
+      resourceType: t.configuration?.resourceType,
+      resourceRecordId: t.resourceRecordId,
+      configRecordId: t.configuration?.recordId,
+      isPinned: t.isPinned
+    })));
+
     // Check for existing tab - match by resource type and record ID for resource-based tabs
     const existingTab = config.tabs.find(tab => {
-      if (tab.applicationId !== request.ApplicationId) return false;
+      const appIdMatch = tab.applicationId === request.ApplicationId;
+      if (!appIdMatch) {
+        console.log(`[WorkspaceStateManager.OpenTab] ❌ Tab "${tab.title}" (${tab.id}): AppId mismatch - tab has "${tab.applicationId}", request has "${request.ApplicationId}"`);
+        return false;
+      }
 
       // For resource-based tabs, match by resourceType in configuration
       if (request.Configuration?.resourceType) {
@@ -316,9 +347,11 @@ export class WorkspaceStateManager {
           const requestDriverClass = request.Configuration.driverClass || '';
           const tabDriverClass = tab.configuration?.driverClass || '';
 
-          return tab.configuration.resourceType === request.Configuration.resourceType &&
+          const match = tab.configuration.resourceType === request.Configuration.resourceType &&
                  tabRecordId === requestRecordId &&
                  (requestNavItem === tabNavItem || requestDriverClass === tabDriverClass);
+          console.log(`[WorkspaceStateManager.OpenTab] Tab "${tab.title}" (${tab.id}): Custom match=${match}, resourceType=${tab.configuration.resourceType}==${request.Configuration.resourceType}, recordId=${tabRecordId}==${requestRecordId}, navItem=${tabNavItem}==${requestNavItem}, driverClass=${tabDriverClass}==${requestDriverClass}`);
+          return match;
         }
 
         // For Records resource type, also match by Entity name to distinguish between different entity records
@@ -326,26 +359,34 @@ export class WorkspaceStateManager {
           const requestEntity = (request.Configuration.Entity as string)?.trim().toLowerCase() || '';
           const tabEntity = (tab.configuration?.Entity as string)?.trim().toLowerCase() || '';
 
-          return tab.configuration.resourceType === request.Configuration.resourceType &&
+          const match = tab.configuration.resourceType === request.Configuration.resourceType &&
                  tabRecordId === requestRecordId &&
                  requestEntity === tabEntity;
+          console.log(`[WorkspaceStateManager.OpenTab] Tab "${tab.title}" (${tab.id}): Records match=${match}, resourceType=${tab.configuration.resourceType}==${request.Configuration.resourceType}, recordId=${tabRecordId}==${requestRecordId}, entity=${tabEntity}==${requestEntity}`);
+          return match;
         }
 
         // For other standard resource types, match by resourceType and recordId
-        return tab.configuration.resourceType === request.Configuration.resourceType &&
-               tabRecordId === requestRecordId;
+        const resourceTypeMatch = tab.configuration.resourceType === request.Configuration.resourceType;
+        const recordIdMatch = tabRecordId === requestRecordId;
+        const match = resourceTypeMatch && recordIdMatch;
+        console.log(`[WorkspaceStateManager.OpenTab] Tab "${tab.title}" (${tab.id}): Standard match=${match}, resourceType=${tab.configuration.resourceType}==${request.Configuration.resourceType} (${resourceTypeMatch}), recordId=${tabRecordId}==${requestRecordId} (${recordIdMatch})`);
+        return match;
       }
 
       // Legacy: match by entity and viewId
       const requestRecordId = request.ResourceRecordId || '';
       const tabRecordId = tab.resourceRecordId || '';
-      return tab.configuration.entity === request.Configuration?.entity &&
+      const match = tab.configuration.entity === request.Configuration?.entity &&
              tab.configuration.viewId === request.Configuration?.viewId &&
              tabRecordId === requestRecordId;
+      console.log(`[WorkspaceStateManager.OpenTab] Tab "${tab.title}" (${tab.id}): Legacy match=${match}`);
+      return match;
     });
 
     if (existingTab) {
       // Focus existing tab
+      console.log(`[WorkspaceStateManager.OpenTab] ✅ FOUND existing tab: "${existingTab.title}" (${existingTab.id}) - focusing`);
       const updatedConfig = {
         ...config,
         activeTabId: existingTab.id
@@ -359,6 +400,7 @@ export class WorkspaceStateManager {
 
     if (tempTab) {
       // Replace temporary tab
+      console.log(`[WorkspaceStateManager.OpenTab] 🔄 REPLACING temporary tab: "${tempTab.title}" (${tempTab.id}) with "${request.Title}"`);
       const updatedTabs = config.tabs.map(tab =>
         tab.id === tempTab.id
           ? {
@@ -382,6 +424,7 @@ export class WorkspaceStateManager {
     }
 
     // Create new tab
+    console.log(`[WorkspaceStateManager.OpenTab] ➕ CREATING new tab: "${request.Title}" - no existing match, no temp tab to replace`);
     const newTab: WorkspaceTab = {
       id: this.generateUUID(),
       applicationId: request.ApplicationId,

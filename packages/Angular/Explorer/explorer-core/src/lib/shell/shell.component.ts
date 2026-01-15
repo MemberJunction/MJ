@@ -303,8 +303,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     );
 
     // Subscribe to tab open requests from TabService
+    console.log('[ShellComponent.initializeShell] 📡 Subscribing to TabService.TabRequests');
     this.subscriptions.push(
       this.tabService.TabRequests.subscribe(async request => {
+        console.log('[ShellComponent] 📥 Received TabRequest via subscription:', request.Title);
         await this.processTabRequest(request);
       })
     );
@@ -312,8 +314,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Replay any tab requests that were queued before we subscribed
     // This handles the case where ResourceResolver creates requests before shell is ready
     const queuedRequests = this.tabService.GetQueuedRequests();
+    console.log(`[ShellComponent.initializeShell] 📋 Queued requests to replay: ${queuedRequests.length}`, queuedRequests.map(r => r.Title));
     if (queuedRequests.length > 0) {
       for (const request of queuedRequests) {
+        console.log('[ShellComponent] 🔁 Replaying queued request:', request.Title);
         await this.processTabRequest(request);
       }
       this.tabService.ClearQueue();
@@ -403,6 +407,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Process a tab request (from subscription or replay)
    */
   private async processTabRequest(request: any): Promise<void> {
+    console.log('[ShellComponent.processTabRequest] 📬 Processing tab request:', {
+      title: request.Title,
+      appId: request.ApplicationId,
+      resourceType: request.Configuration?.resourceType,
+      resourceRecordId: request.ResourceRecordId,
+      configRecordId: request.Configuration?.recordId,
+      initialized: this.initialized,
+      urlBasedNavigation: this.urlBasedNavigation
+    });
+
     const app = this.appManager.GetAppById(request.ApplicationId);
     const appColor = app?.GetColor() || '#757575';
 
@@ -427,6 +441,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.appManager.SetActiveApp(request.ApplicationId);
     }
 
+    console.log('[ShellComponent.processTabRequest] 📤 Calling workspaceManager.OpenTab()');
     this.workspaceManager.OpenTab(request, appColor);
   }
 

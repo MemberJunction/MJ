@@ -314,6 +314,12 @@ export class ResourceResolver implements Resolve<void> {
       const viewId = route.params['viewId'];
 
       // Queue tab request via TabService
+      console.log('[ResourceResolver] 🔗 Creating tab request for view:', {
+        viewId,
+        appId: SYSTEM_APP_ID,
+        resourceType: 'User Views',
+        url: state.url
+      });
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
         Title: `View - ${viewId}`,
