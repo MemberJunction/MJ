@@ -17,6 +17,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
+import { AuthMiddleware, AuthContext } from './AuthMiddleware.js';
+import { APIKeyService } from './APIKeyService.js';
 
 // Tool filtering types
 export interface ToolFilterOptions {
@@ -27,6 +29,10 @@ export interface ToolFilterOptions {
 // Track registered tool names for listing and filtering
 const registeredToolNames: string[] = [];
 let activeFilterOptions: ToolFilterOptions = {};
+
+// Global authentication context (set during server initialization or per-session)
+let globalAuthContext: AuthContext | null = null;
+let authenticationEnabled = false;
 
 
 const mcpServerPort = mcpServerSettings?.port || 3100;
@@ -160,7 +166,7 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
 }
 
 /**
- * Wrapper to add a tool with filtering support
+ * Wrapper to add a tool with filtering support and usage logging
  */
 function addToolWithFilter<Params extends ToolParameters>(toolConfig: Tool<undefined, Params>): void {
     const toolName = toolConfig.name;
@@ -172,6 +178,37 @@ function addToolWithFilter<Params extends ToolParameters>(toolConfig: Tool<undef
     if (!shouldIncludeTool(toolName, activeFilterOptions)) {
         return; // Skip this tool
     }
+
+    // Wrap the execute function to add usage logging
+    const originalExecute = toolConfig.execute;
+    toolConfig.execute = async function(args: any, context: any) {
+        const startTime = Date.now();
+        let statusCode = 200;
+        let errorMessage: string | undefined;
+
+        try {
+            const result = await originalExecute.call(this, args, context);
+            return result;
+        } catch (error) {
+            statusCode = 500;
+            errorMessage = error instanceof Error ? error.message : String(error);
+            throw error;
+        } finally {
+            // Log usage asynchronously (don't block the response)
+            if (globalAuthContext?.apiKeyId) {
+                const responseTime = Date.now() - startTime;
+                APIKeyService.LogAPIKeyUsage({
+                    apiKeyId: globalAuthContext.apiKeyId,
+                    operationName: toolName,
+                    statusCode,
+                    responseTimeMs: responseTime,
+                    errorMessage
+                }, globalAuthContext.user).catch(err => {
+                    console.error('Failed to log API key usage:', err);
+                });
+            }
+        }
+    };
 
     server.addTool(toolConfig);
 }
@@ -212,7 +249,7 @@ function mcpLog(message: string) {
     }
 }
 
-export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
+export async function initializeServer(filterOptions: ToolFilterOptions = {}, authHeader?: string) {
     try {
         // Store filter options for use by addToolWithFilter
         activeFilterOptions = filterOptions;
@@ -232,6 +269,67 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
         await setupSQLServerClient(config);
         mcpLog("Database connection setup completed.");
+
+        // Determine if authentication is required
+        const useStdio = process.env.MCP_TRANSPORT === 'stdio' || mcpServerSettings?.transport === 'stdio';
+        authenticationEnabled = mcpServerSettings?.requireAuthentication !== false;
+        const allowAnonymousStdio = mcpServerSettings?.allowAnonymousForStdio === true;
+
+        // Get context user for tool operations
+        let contextUser: UserInfo;
+
+        if (authenticationEnabled && !(useStdio && allowAnonymousStdio)) {
+            // Authentication required
+            mcpLog("API key authentication is enabled");
+
+            if (useStdio) {
+                // For stdio transport, authenticate during initialization
+                if (authHeader) {
+                    // Authenticate with provided header
+                    globalAuthContext = await AuthMiddleware.Authenticate(authHeader);
+
+                    if (!globalAuthContext.authenticated) {
+                        throw new Error(`Authentication failed: ${globalAuthContext.errorMessage}`);
+                    }
+
+                    contextUser = globalAuthContext.user!;
+                    mcpLog(`Authenticated as user: ${contextUser.Email || contextUser.Name}`);
+                } else {
+                    // Stdio transport without auth header - fall back to first user for backward compatibility
+                    mcpLog("Warning: stdio transport without authentication - using first available user");
+                    contextUser = UserCache.Instance.Users[0];
+                    globalAuthContext = {
+                        authenticated: true,
+                        user: contextUser,
+                        scopes: ['admin:*']
+                    };
+                }
+            } else {
+                // For SSE transport, authentication happens per-request
+                // Use first user for tool initialization, actual auth will happen on each request
+                mcpLog("SSE transport - authentication will be validated per request");
+                contextUser = UserCache.Instance.Users[0];
+                globalAuthContext = {
+                    authenticated: false, // Will be set per-request
+                    user: contextUser,
+                    scopes: []
+                };
+            }
+        } else {
+            // Authentication disabled or anonymous stdio allowed
+            if (authenticationEnabled) {
+                mcpLog("Anonymous access allowed for stdio transport");
+            } else {
+                mcpLog("Warning: API key authentication is DISABLED - using first available user");
+            }
+
+            contextUser = UserCache.Instance.Users[0];
+            globalAuthContext = {
+                authenticated: true,
+                user: contextUser,
+                scopes: ['admin:*'] // Grant all scopes when auth is disabled
+            };
+        }
 
         addToolWithFilter({
             name: "Get_All_Entities",
@@ -290,15 +388,12 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
             }
         });
 
-        const contextUser = UserCache.Instance.Users[0];
+        // Load tools with authenticated context user
         await loadEntityTools(contextUser);
         await loadActionTools(contextUser);
         await loadAgentTools(contextUser);
         loadAgentRunDiagnosticTools(contextUser);
         mcpLog("Tools loaded successfully.");
-
-        // Check for transport type from environment or config
-        const useStdio = process.env.MCP_TRANSPORT === 'stdio' || mcpServerSettings?.transport === 'stdio';
 
         if (useStdio) {
             // Use stdio transport for Claude Desktop integration

@@ -2,14 +2,16 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env from project root (4 levels up from dist/config.js)
+const projectRoot = join(__dirname, '..', '..', '..', '..');
+dotenv.config({ path: join(projectRoot, '.env') });
 
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError } from '@memberjunction/core';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -50,6 +52,8 @@ const mcpServerInfoSchema = z.object({
   actionTools: z.array(mcpServerActionToolInfoSchema).optional(),
   agentTools: z.array(mcpServerAgentToolInfoSchema).optional(),
   enableMCPServer: z.boolean().optional().default(false),
+  requireAuthentication: z.boolean().optional().default(true), // Enable API key authentication
+  allowAnonymousForStdio: z.boolean().optional().default(false), // Allow unauthenticated access for stdio transport
 });
 
 const configInfoSchema = z.object({
