@@ -113,10 +113,17 @@ jobs:
           # Use MJServer package as version reference since core and global are pinned at 2.100.3
           CURRENT_VERSION=$(jq -r .version packages/MJServer/package.json)
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          NEXT_MAJOR_VERSION="$(( ${VERSION_PARTS[0]} + 1 )).0.0"
           NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
           NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
+
+          # Check changeset files for major bump type (exclude README.md)
+          MAJOR_CHANGESETS=$(grep -l '": major' .changeset/*.md 2>/dev/null | grep -v README.md || true)
           NEW_MIGRATION_FILES=$(git --no-pager diff --name-only v${CURRENT_VERSION} ${{ github.sha }} -- migrations/)
-          if [ -n "$NEW_MIGRATION_FILES" ]; then
+
+          if [ -n "$MAJOR_CHANGESETS" ]; then
+            echo "EXPECTED_NEXT_VERSION=$NEXT_MAJOR_VERSION" >> $GITHUB_OUTPUT
+          elif [ -n "$NEW_MIGRATION_FILES" ]; then
             echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
           else
             echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
