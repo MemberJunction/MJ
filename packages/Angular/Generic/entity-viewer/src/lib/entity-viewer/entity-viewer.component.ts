@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, OnInit, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnInit, OnDestroy, SimpleChanges, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams } from '@memberjunction/core';
@@ -30,6 +30,7 @@ import {
   AfterSortEventArgs
 } from '../entity-data-grid/events/grid-events';
 import { GridToolbarConfig, GridSelectionMode } from '../entity-data-grid/models/grid-types';
+import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.component';
 
 /**
  * EntityViewerComponent - Full-featured composite component for viewing entity data
@@ -363,7 +364,22 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   /** Track if this is the first load (vs. load more) */
   private isInitialLoad: boolean = true;
 
+  /** Reference to the data grid component for flushing pending changes */
+  @ViewChild(EntityDataGridComponent) private dataGridRef: EntityDataGridComponent | undefined;
+
   constructor(private cdr: ChangeDetectorRef) {}
+
+  // ========================================
+  // PUBLIC METHODS
+  // ========================================
+
+  /**
+   * Ensures any pending grid state changes are saved immediately without waiting for debounce.
+   * Call this before switching views or entities to ensure changes are saved.
+   */
+  public EnsurePendingChangesSaved(): void {
+    this.dataGridRef?.EnsurePendingChangesSaved();
+  }
 
   // ========================================
   // COMPUTED PROPERTIES
@@ -1438,3 +1454,4 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     return firstOther?.Name || null;
   }
 }
+
