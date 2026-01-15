@@ -507,6 +507,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const newUrl = resourceUrl.split('?')[0];
 
       if (currentUrl !== newUrl) {
+        // Suppress ResourceResolver for this navigation - we're just syncing the URL
+        // to reflect the current active tab, not requesting a new tab to be opened
+        this.tabService.SuppressNextResolve();
+
         // Replace URL on first sync (initialization), push new history entries after that
         const replaceUrl = this.firstUrlSync;
         this.firstUrlSync = false;

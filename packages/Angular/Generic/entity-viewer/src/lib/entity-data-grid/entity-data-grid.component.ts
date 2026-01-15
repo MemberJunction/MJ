@@ -1216,7 +1216,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     // Flush any pending state persistence immediately before destroying
-    this.flushPendingPersistence();
+    this.EnsurePendingChangesSaved();
 
     this.destroy$.next();
     this.destroy$.complete();
@@ -1225,8 +1225,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   /**
    * Immediately persists any pending state changes without waiting for debounce.
    * Called on component destroy to ensure changes aren't lost.
+   * Also exposed publicly so parent components can flush before view/entity switches.
    */
-  private flushPendingPersistence(): void {
+  public EnsurePendingChangesSaved(): void {
     // Flush pending view state
     if (this._pendingViewStateToPersist && this._viewEntity) {
       this.persistGridStateToView(this._pendingViewStateToPersist);
@@ -3679,3 +3680,4 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       .sort((a, b) => a.order - b.order);
   }
 }
+
