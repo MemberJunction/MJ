@@ -208,7 +208,9 @@ async function createMJDistribution() {
   const installConfigJson = fs.readFileSync('install.config.json', 'utf8');
   archive.append(installConfigJson, { name: 'install.config.json' });
 
-  // Add the distribution default config file to the root of the zip
+  // Add the distribution config file to the root of the zip
+  // v3.0+ uses minimal config with DEFAULT_CODEGEN_CONFIG from @memberjunction/codegen-lib
+  // Database settings come from environment variables, not from config file
   console.log('Adding distribution.config.cjs to zip file...');
   const distributionConfig = fs.readFileSync('distribution.config.cjs', 'utf8');
   archive.append(distributionConfig, { name: 'mj.config.cjs' });

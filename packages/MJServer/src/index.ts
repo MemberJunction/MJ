@@ -77,7 +77,7 @@ const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInt
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
-export { configInfo } from './config.js';
+export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export * from './directives/index.js';
 export * from './entitySubclasses/entityPermissions.server.js';
 export * from './types.js';

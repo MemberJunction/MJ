@@ -38,6 +38,8 @@ cd /path/to/your/project
 
 ### 2. Configure Your Environment
 
+MemberJunction uses a **minimal configuration** approach - most settings have sensible defaults from the packages themselves, and you only need to configure what's specific to your environment.
+
 Choose one of two configuration methods:
 
 #### Option A: Using install.config.json (Interactive Setup)
@@ -50,14 +52,14 @@ npm install
 npm run setup
 ```
 
-#### Option B: Using mj.config.cjs (Manual Setup)
+#### Option B: Using Environment Variables (Recommended)
 
-1. Copy `.env.example` to `.env` (if provided) or create a new `.env` file
-2. Edit `mj.config.cjs` with your configuration
-3. Set environment variables in `.env`:
+The simplest approach is to use a `.env` file. MemberJunction automatically loads configuration from environment variables:
+
+1. Create a `.env` file in the root directory:
 
 ```bash
-# Database Configuration
+# Database Configuration (REQUIRED)
 DB_HOST=localhost
 DB_PORT=1433
 DB_DATABASE=YourDatabase
@@ -65,23 +67,36 @@ DB_USERNAME=your_username
 DB_PASSWORD=your_password
 DB_TRUST_SERVER_CERTIFICATE=true
 
-# CodeGen Database User (needs elevated permissions)
+# CodeGen Database User (REQUIRED - needs elevated permissions for schema changes)
 CODEGEN_DB_USERNAME=codegen_user
 CODEGEN_DB_PASSWORD=codegen_password
 
-# GraphQL Server
+# GraphQL Server (Optional - defaults shown)
 GRAPHQL_PORT=4000
 GRAPHQL_ROOT_PATH=/
+GRAPHQL_BASE_URL=http://localhost
 
-# Authentication (MSAL Example)
-WEB_CLIENT_ID=your-client-id
-TENANT_ID=your-tenant-id
+# Authentication (Choose one provider)
+# Option 1: Microsoft Azure/Entra ID (MSAL)
+WEB_CLIENT_ID=your-azure-client-id
+TENANT_ID=your-azure-tenant-id
 
-# Or Auth0
+# Option 2: Auth0
 # AUTH0_DOMAIN=your-domain.auth0.com
-# AUTH0_CLIENT_ID=your-client-id
-# AUTH0_CLIENT_SECRET=your-client-secret
+# AUTH0_CLIENT_ID=your-auth0-client-id
+# AUTH0_CLIENT_SECRET=your-auth0-client-secret
+
+# Option 3: Okta
+# OKTA_DOMAIN=your-domain.okta.com
+# OKTA_CLIENT_ID=your-okta-client-id
+# OKTA_CLIENT_SECRET=your-okta-client-secret
 ```
+
+2. **That's it!** The included `mj.config.cjs` uses MemberJunction's minimal configuration system - it already references these environment variables and all other settings come from sensible defaults in the framework packages.
+
+#### Option C: Customizing mj.config.cjs
+
+If you need to override specific settings beyond environment variables, edit `mj.config.cjs`. The file includes extensive comments showing all available options and their defaults. You only need to uncomment and modify settings you want to override.
 
 ### 3. Install Dependencies
 
@@ -219,19 +234,61 @@ npm run build
 
 ## Configuration Files
 
-- **mj.config.cjs** - Main configuration for CodeGen, MJAPI, and MJCLI
-- **install.config.json** - Installation configuration template
-- **.env** - Environment variables (create from .env.example)
+MemberJunction uses a **minimal configuration** approach where most settings come from package defaults:
+
+- **mj.config.cjs** - Minimal configuration file with CodeGen settings and optional overrides
+  - Most database/server settings come from `DEFAULT_SERVER_CONFIG` in `@memberjunction/server`
+  - Authentication providers auto-configure from environment variables
+  - Only uncomment settings you need to override
+
+- **.env** - Environment variables (recommended approach)
+  - Required: Database connection settings (`DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, etc.)
+  - Required: CodeGen credentials (`CODEGEN_DB_USERNAME`, `CODEGEN_DB_PASSWORD`)
+  - Optional: Server settings (`GRAPHQL_PORT`, `GRAPHQL_ROOT_PATH`)
+  - Optional: Auth provider settings (`TENANT_ID`/`WEB_CLIENT_ID` or `AUTH0_DOMAIN`/`AUTH0_CLIENT_ID`)
+
+- **install.config.json** - Interactive installation configuration template
+  - Alternative to manual `.env` setup
+  - Run `npm run setup` after editing
+
+### Benefits of Minimal Configuration (New in v3.0!)
+
+MemberJunction v3.0 introduces a minimal configuration system that dramatically simplifies deployment:
+
+- **Less Boilerplate**: Typical deployments need only ~10 environment variables instead of 250+ lines of config
+- **Clearer Intent**: Only see settings you've customized - everything else uses sensible defaults
+- **Automatic Defaults**: Package updates can improve defaults without requiring config changes
+- **Environment-First**: Follows 12-factor app principles for modern cloud deployments
+- **Self-Documenting**: Config file includes extensive comments showing all available options
 
 ## Authentication
 
-MemberJunction supports multiple authentication providers:
+MemberJunction supports multiple authentication providers with automatic configuration from environment variables:
 
-- **MSAL** (Microsoft Entra ID / Azure AD)
-- **Auth0**
-- **Okta**
+### Microsoft Azure / Entra ID (MSAL)
+Set these environment variables in `.env`:
+```bash
+TENANT_ID=your-azure-tenant-id
+WEB_CLIENT_ID=your-azure-client-id
+```
 
-Configure your provider in `mj.config.cjs` and set the appropriate environment variables.
+### Auth0
+Set these environment variables in `.env`:
+```bash
+AUTH0_DOMAIN=your-domain.auth0.com
+AUTH0_CLIENT_ID=your-auth0-client-id
+AUTH0_CLIENT_SECRET=your-auth0-client-secret  # Optional
+```
+
+### Okta
+Set these environment variables in `.env`:
+```bash
+OKTA_DOMAIN=your-domain.okta.com
+OKTA_CLIENT_ID=your-okta-client-id
+OKTA_CLIENT_SECRET=your-okta-client-secret  # Optional
+```
+
+Authentication providers are automatically configured when their environment variables are present. You can enable multiple providers simultaneously - MemberJunction will accept tokens from any configured provider.
 
 ## Need Help?
 

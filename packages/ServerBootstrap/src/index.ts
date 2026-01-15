@@ -11,7 +11,7 @@
  * - Server startup with proper lifecycle hooks
  */
 
-import { serve, MJServerOptions } from '@memberjunction/server';
+import { serve, MJServerOptions, configInfo } from '@memberjunction/server';
 import { cosmiconfigSync } from 'cosmiconfig';
 
 /**
@@ -53,13 +53,13 @@ export interface MJServerConfig {
  *
  * @param config - The loaded MemberJunction configuration
  */
-async function discoverAndLoadGeneratedPackages(config: any): Promise<void> {
-  if (!config?.config?.codeGeneration?.packages) {
+async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void> {
+  if (!configResult?.config?.codeGeneration?.packages) {
     console.warn('No codeGeneration.packages configuration found - skipping auto-import of generated packages');
     return;
   }
 
-  const packages = config.config.codeGeneration.packages;
+  const packages = configResult.config.codeGeneration.packages;
 
   // Attempt to import each configured generated package
   // These imports trigger class registration via @RegisterClass decorators
@@ -126,24 +126,23 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   console.log('🚀 MemberJunction 3.0 Server Bootstrap');
   console.log('=====================================\n');
 
-  // Load configuration using cosmiconfig (searches for mj.config.cjs, .mjrc, etc.)
-  const explorer = cosmiconfigSync('mj');
-  const searchPath = options.configPath || process.cwd();
-  const config = explorer.search(searchPath);
+  // Configuration has already been loaded and merged by MJServer's config.ts at module init time
+  // We just need to load the raw user config to access codeGeneration.packages setting
+  console.log('');
+  const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
+  const configSearchResult = explorer.search(options.configPath || process.cwd());
 
-  if (!config) {
-    throw new Error(
-      `No MemberJunction configuration found. ` +
-      `Create mj.config.cjs or .mjrc in your project root, or specify configPath in options.`
-    );
-  }
-
-  console.log(`✓ Configuration loaded from: ${config.filepath}\n`);
+  // Create a result object for backward compatibility with discoverAndLoadGeneratedPackages
+  const configResult = {
+    config: configSearchResult?.config || {},
+    hasUserConfig: configSearchResult && !configSearchResult.isEmpty,
+    configFilePath: configSearchResult?.filepath
+  };
 
   // Discover and load generated packages automatically
   // This triggers their @RegisterClass decorators to register entities, actions, etc.
   console.log('Loading generated packages...');
-  await discoverAndLoadGeneratedPackages(config);
+  await discoverAndLoadGeneratedPackages(configResult);
   console.log('');
 
   // Build resolver paths - auto-discover standard locations if not provided
