@@ -804,6 +804,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle entity selection from navigation panel or home screen
    */
   public onEntitySelected(entity: EntityInfo): void {
+    // Ensure any pending grid state changes are saved before switching entities
+    // This ensures column resizes/reorders are saved to the current entity's view before switching
+    this.entityViewerRef?.EnsurePendingChangesSaved();
+
     this.resetRecordCounts();
     this.selectedEntity = entity;
     // Load user's saved default grid state for this entity (if any)
@@ -844,6 +848,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle view selection from view selector dropdown
    */
   public onViewSelected(event: ViewSelectedEvent): void {
+    // Ensure any pending grid state changes are saved before switching views
+    // This ensures column resizes/reorders are saved to the current view before switching
+    this.entityViewerRef?.EnsurePendingChangesSaved();
+
     this.selectedViewEntity = event.view;
     this.stateService.selectView(event.viewId);
 
@@ -868,6 +876,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.stateService.setSmartFilterPrompt('');
       this.debouncedFilterText = '';
     }
+
+    // Force refresh to ensure the grid reloads with the new view configuration
+    // This fixes the issue where switching from a filtered view to default shows no results
+    this.cdr.detectChanges();
+    this.entityViewerRef?.refresh();
   }
 
   /**
