@@ -704,8 +704,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.debouncedFilterText = newFilter;
 
       // If server-side filtering and filter changed, reload from page 1
+      // Keep existing records visible during refresh for better UX
       if (this.effectiveConfig.serverSideFiltering && newFilter !== oldFilter && !this.records) {
-        this.resetPaginationState();
+        this.resetPaginationState(false);
         this.loadData();
       } else {
         this.updateFilteredCount();
@@ -724,13 +725,14 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.internalSortState = this.sortState;
 
       // If sort changed and using server-side sorting, reload
+      // Keep existing records visible during refresh for better UX
       if (this.effectiveConfig.serverSideSorting && !this.records) {
         const sortChanged = !oldSort || !this.sortState ||
           oldSort.field !== this.sortState.field ||
           oldSort.direction !== this.sortState.direction;
 
         if (sortChanged) {
-          this.resetPaginationState();
+          this.resetPaginationState(false);
           this.loadData();
         }
       }
@@ -786,8 +788,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         this.filterTextChange.emit(filterText);
 
         // If server-side filtering and filter changed, reload from page 1
+        // Keep existing records visible during refresh for better UX
         if (this.effectiveConfig.serverSideFiltering && filterText !== oldFilter && !this.records) {
-          this.resetPaginationState();
+          this.resetPaginationState(false);
           this.loadData();
         } else {
           this.updateFilteredCount();
@@ -812,19 +815,22 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
   /**
    * Reset pagination state for a fresh load.
-   * Clears all record data and counts to prevent stale data display during entity switches.
+   * When clearRecords is true (default), clears all record data - use for entity switches.
+   * When clearRecords is false, keeps existing records visible during refresh - use for sort/filter changes.
    */
-  private resetPaginationState(): void {
+  private resetPaginationState(clearRecords: boolean = true): void {
     this.pagination = {
       currentPage: 0,
       pageSize: this.effectiveConfig.pageSize,
-      totalRecords: 0,
+      totalRecords: clearRecords ? 0 : this.pagination.totalRecords,
       hasMore: false,
       isLoading: false
     };
-    this.internalRecords = [];
-    this.totalRecordCount = 0;
-    this.filteredRecordCount = 0;
+    if (clearRecords) {
+      this.internalRecords = [];
+      this.totalRecordCount = 0;
+      this.filteredRecordCount = 0;
+    }
     this.isInitialLoad = true;
   }
 
@@ -954,10 +960,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
   /**
    * Refresh data (re-load from server, starting at page 1)
+   * Keeps existing records visible during refresh for better UX
    */
   public refresh(): void {
     if (!this.records) {
-      this.resetPaginationState();
+      this.resetPaginationState(false);
       this.loadData();
     }
   }
@@ -1011,13 +1018,14 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     this.sortChanged.emit(event);
 
     // If server-side sorting, reload from page 1
+    // Keep existing records visible during refresh for better UX
     if (this.effectiveConfig.serverSideSorting && !this.records) {
       const sortChanged = !oldSort || !event.sort ||
         oldSort.field !== event.sort?.field ||
         oldSort.direction !== event.sort?.direction;
 
       if (sortChanged) {
-        this.resetPaginationState();
+        this.resetPaginationState(false);
         this.loadData();
       }
     }
@@ -1092,6 +1100,8 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Maps to sortChanged event for parent components
    */
   onDataGridSortChanged(event: AfterSortEventArgs): void {
+    console.log('[SORT DEBUG] entity-viewer onDataGridSortChanged, event.newSortState:', JSON.stringify(event.newSortState));
+
     // Convert the data grid's sort state to our SortState format
     const newSort: SortState | null = event.newSortState && event.newSortState.length > 0
       ? {
@@ -1104,8 +1114,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     this.sortChanged.emit({ sort: newSort });
 
     // If server-side sorting, reload from page 1
+    // Keep existing records visible during refresh for better UX
+    console.log('[SORT DEBUG] entity-viewer serverSideSorting:', this.effectiveConfig.serverSideSorting, 'records:', !!this.records);
     if (this.effectiveConfig.serverSideSorting && !this.records) {
-      this.resetPaginationState();
+      console.log('[SORT DEBUG] entity-viewer triggering loadData for server-side sort');
+      this.resetPaginationState(false);
       this.loadData();
     }
   }
