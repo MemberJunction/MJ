@@ -3,5 +3,12 @@
   "dest": "./dist",
   "lib": {
     "entryFile": "src/public-api.ts"
-  }
+  },
+  "allowedNonPeerDependencies": [
+    "@memberjunction/core",
+    "@memberjunction/graphql-dataprovider",
+    "@memberjunction/ng-auth-services",
+    "@memberjunction/ng-shared",
+    "rxjs"
+  ]
 }
