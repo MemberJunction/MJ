@@ -343,20 +343,21 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
 
         // Apply initial state if provided via Input
         if (this.InitialGridState) {
-            this.ApplyGridState(this.InitialGridState);
+            this.applyFullGridState(this.InitialGridState);
         }
         // Otherwise apply pending state from persistence
         else if (this._pendingState) {
-            this.applySortStateToGrid(this._pendingState);
+            this.applyFullGridState(this._pendingState);
             this._pendingState = null;
         }
-
-        // Auto-size columns initially
-        setTimeout(() => {
-            if (this.GridApi) {
-                this.GridApi.autoSizeAllColumns();
-            }
-        }, 100);
+        // Only auto-size if no persisted state was applied
+        else {
+            setTimeout(() => {
+                if (this.GridApi) {
+                    this.GridApi.autoSizeAllColumns();
+                }
+            }, 100);
+        }
     }
 
     private onQueryInfoChanged(): void {
@@ -379,6 +380,12 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
 
         // Build AG Grid column definitions
         this.buildColumnDefs();
+
+        // If grid is already initialized and we have pending state, apply it now
+        if (this.GridApi && this._pendingState) {
+            this.applyFullGridState(this._pendingState);
+            this._pendingState = null;
+        }
 
         this.cdr.markForCheck();
     }
@@ -770,7 +777,9 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * Loads persisted grid state from User Settings
      */
     private loadPersistedState(): void {
-        if (!this.PersistState || !this._queryInfo) return;
+        if (!this.PersistState || !this._queryInfo) {
+            return;
+        }
 
         try {
             const settingKey = getQueryGridStateKey(this._queryInfo.ID);
@@ -782,12 +791,12 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
                 // Apply column state immediately (affects buildColumnDefs)
                 this.applyColumnStateFromGridState(state);
 
-                // Store for applying sort when grid is ready
+                // Store for applying via Grid API when ready
                 this._pendingState = state;
 
-                // If grid is already ready, apply sort state now
+                // If grid is already ready, apply full state now
                 if (this.GridApi) {
-                    this.applySortStateToGrid(state);
+                    this.applyFullGridState(state);
                     this._pendingState = null;
                 }
             }
@@ -797,24 +806,63 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Applies sort state to the grid API
+     * Applies the full grid state (column widths, order, and sort) via the Grid API.
+     * This is called after grid is ready to ensure all state is applied correctly.
      */
-    private applySortStateToGrid(state: QueryGridState): void {
-        if (!this.GridApi || !state.sort || state.sort.length === 0) return;
+    private applyFullGridState(state: QueryGridState): void {
+        if (!this.GridApi) {
+            return;
+        }
 
-        const columnState = state.sort.map(s => ({
-            colId: s.field,
-            sort: s.direction,
-            sortIndex: s.index
-        }));
-        this.GridApi.applyColumnState({ state: columnState });
+        // Build column state array that includes widths and sort
+        const columnState: Array<{
+            colId: string;
+            width?: number;
+            sort?: 'asc' | 'desc' | null;
+            sortIndex?: number | null;
+        }> = [];
+
+        // First, add column widths from saved state
+        if (state.columns) {
+            for (const col of state.columns) {
+                const stateItem: {
+                    colId: string;
+                    width?: number;
+                    sort?: 'asc' | 'desc' | null;
+                    sortIndex?: number | null;
+                } = { colId: col.field };
+
+                if (col.width !== undefined) {
+                    stateItem.width = col.width;
+                }
+
+                // Check if this column has sort state
+                const sortInfo = state.sort?.find(s => s.field === col.field);
+                if (sortInfo) {
+                    stateItem.sort = sortInfo.direction;
+                    stateItem.sortIndex = sortInfo.index;
+                }
+
+                columnState.push(stateItem);
+            }
+        }
+
+        // Apply all column state at once
+        if (columnState.length > 0) {
+            this.GridApi.applyColumnState({
+                state: columnState,
+                applyOrder: true // Apply column order as well
+            });
+        }
     }
 
     /**
      * Persists grid state to User Settings
      */
     private async persistGridState(state: QueryGridState): Promise<void> {
-        if (!this.PersistState || !this._queryInfo) return;
+        if (!this.PersistState || !this._queryInfo) {
+            return;
+        }
 
         try {
             const settingKey = getQueryGridStateKey(this._queryInfo.ID);
@@ -830,7 +878,9 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * to ensure all state changes are persisted.
      */
     public FlushState(): void {
-        if (!this.PersistState || !this._queryInfo) return;
+        if (!this.PersistState || !this._queryInfo) {
+            return;
+        }
 
         // Get current state and persist immediately
         const state = this.GetGridState();
@@ -854,15 +904,16 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         if (this._mergedVisualConfig.selectionBackground) {
             el.style.setProperty('--grid-selection-bg', this._mergedVisualConfig.selectionBackground);
         }
+    }
 
-        // Apply alternate row contrast
-        let altRowAlpha = '0.03';
-        switch (this._mergedVisualConfig.alternateRowContrast) {
-            case 'subtle': altRowAlpha = '0.02'; break;
-            case 'medium': altRowAlpha = '0.04'; break;
-            case 'strong': altRowAlpha = '0.06'; break;
-        }
-        el.style.setProperty('--grid-alt-row-alpha', altRowAlpha);
+    /**
+     * Returns CSS classes for the container based on visual config
+     */
+    public GetContainerClasses(): Record<string, boolean> {
+        const contrast = this._mergedVisualConfig.alternateRowContrast || 'medium';
+        return {
+            [`alternate-rows-${contrast}`]: true
+        };
     }
 
     // ========================================

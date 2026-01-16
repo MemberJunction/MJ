@@ -231,11 +231,42 @@
 ::ng-deep .ag-theme-alpine {
     --ag-header-background-color: #fafafa;
     --ag-header-foreground-color: #333;
-    --ag-odd-row-background-color: #f8f9fa;
-    --ag-row-hover-color: #f0f7ff;
+    --ag-row-hover-color: #e8f4fd;
     --ag-selected-row-background-color: var(--grid-selection-bg);
     --ag-font-size: 13px;
-    --ag-row-border-color: #f0f0f0;
+    --ag-row-border-color: #e8e8e8;
+}
+
+/* ========================================
+   Visual Config: Zebra Striping
+   (copied from entity-data-grid pattern)
+   ======================================== */
+
+/* Subtle contrast */
+.alternate-rows-subtle ::ng-deep .ag-row-odd {
+    background-color: rgba(0, 0, 0, 0.015);
+}
+
+.alternate-rows-subtle ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+    background-color: var(--grid-row-hover-bg, #f5f5f5);
+}
+
+/* Medium contrast (default) */
+.alternate-rows-medium ::ng-deep .ag-row-odd {
+    background-color: rgba(0, 0, 0, 0.025);
+}
+
+.alternate-rows-medium ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+    background-color: var(--grid-row-hover-bg, #f5f5f5);
+}
+
+/* Strong contrast */
+.alternate-rows-strong ::ng-deep .ag-row-odd {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+.alternate-rows-strong ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+    background-color: var(--grid-row-hover-bg, #f5f5f5);
 }
 
 ::ng-deep .ag-theme-alpine .ag-header-cell {

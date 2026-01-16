@@ -1,5 +1,5 @@
 <!-- Query Data Grid Component -->
-<div class="query-data-grid-container" [style.height]="Height">
+<div class="query-data-grid-container" [ngClass]="GetContainerClasses()" [style.height]="Height">
     <!-- Toolbar -->
     <div class="grid-toolbar" *ngIf="ShowToolbar">
         <div class="toolbar-left">
