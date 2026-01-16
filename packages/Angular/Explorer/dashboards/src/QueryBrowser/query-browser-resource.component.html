@@ -77,11 +77,11 @@
         <!-- Query Viewer -->
         <mj-query-viewer
             *ngIf="selectedQuery"
-            [queryId]="selectedQuery.ID"
-            [autoRun]="true"
-            [selectionMode]="'single'"
-            (entityLinkClick)="onEntityLinkClick($event)"
-            (rowDoubleClick)="onRowDoubleClick($event)">
+            [QueryId]="selectedQuery.ID"
+            [AutoRun]="true"
+            [SelectionMode]="'single'"
+            (EntityLinkClick)="onEntityLinkClick($event)"
+            (RowDoubleClick)="onRowDoubleClick($event)">
         </mj-query-viewer>
     </div>
 </div>
@@ -115,11 +115,6 @@
                     <span class="query-description" *ngIf="query.Description">{{ query.Description }}</span>
                 </div>
                 <i class="fa-solid fa-sliders param-icon" *ngIf="query.UsesTemplate" title="Has parameters"></i>
-                <button class="query-details-btn"
-                        (click)="openQueryDetails(query, $event)"
-                        title="View query details">
-                    <i class="fa-solid fa-info-circle"></i>
-                </button>
             </div>
         </div>
 

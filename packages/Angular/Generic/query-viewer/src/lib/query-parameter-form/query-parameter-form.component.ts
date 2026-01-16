@@ -36,11 +36,11 @@ interface ParameterField {
  * @example
  * ```html
  * <mj-query-parameter-form
- *   [queryInfo]="query"
- *   [initialValues]="savedParams"
- *   [isOpen]="showParams"
- *   (parametersSubmit)="onRunQuery($event)"
- *   (close)="showParams = false">
+ *   [QueryInfo]="query"
+ *   [InitialValues]="savedParams"
+ *   [IsOpen]="showParams"
+ *   (ParametersSubmit)="onRunQuery($event)"
+ *   (Close)="showParams = false">
  * </mj-query-parameter-form>
  * ```
  */
@@ -78,27 +78,27 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     /**
      * The query metadata containing parameter definitions
      */
-    @Input() queryInfo: QueryInfo | null = null;
+    @Input() QueryInfo: QueryInfo | null = null;
 
     /**
      * Initial values to populate the form (e.g., from saved state)
      */
-    @Input() initialValues: QueryParameterValues = {};
+    @Input() InitialValues: QueryParameterValues = {};
 
     /**
      * Whether the panel is open/visible
      */
-    @Input() isOpen: boolean = false;
+    @Input() IsOpen: boolean = false;
 
     /**
      * Panel width in pixels
      */
-    @Input() panelWidth: number = 400;
+    @Input() PanelWidth: number = 400;
 
     /**
      * Whether to show the overlay backdrop
      */
-    @Input() showOverlay: boolean = true;
+    @Input() ShowOverlay: boolean = true;
 
     // ========================================
     // Outputs
@@ -107,20 +107,20 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     /**
      * Fired when user submits the form with valid parameters
      */
-    @Output() parametersSubmit = new EventEmitter<QueryParameterValues>();
+    @Output() ParametersSubmit = new EventEmitter<QueryParameterValues>();
 
     /**
      * Fired when panel is closed
      */
-    @Output() close = new EventEmitter<void>();
+    @Output() Close = new EventEmitter<void>();
 
     // ========================================
     // Internal State
     // ========================================
 
-    public fields: ParameterField[] = [];
-    public hasRequiredParams: boolean = false;
-    public allRequiredFilled: boolean = false;
+    public Fields: ParameterField[] = [];
+    public HasRequiredParams: boolean = false;
+    public AllRequiredFilled: boolean = false;
 
     constructor(private cdr: ChangeDetectorRef) {}
 
@@ -129,7 +129,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     }
 
     ngOnChanges(changes: SimpleChanges): void {
-        if (changes['queryInfo'] || changes['initialValues']) {
+        if (changes['QueryInfo'] || changes['InitialValues']) {
             this.buildForm();
         }
     }
@@ -141,15 +141,15 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     // ========================================
 
     private buildForm(): void {
-        if (!this.queryInfo) {
-            this.fields = [];
-            this.hasRequiredParams = false;
+        if (!this.QueryInfo) {
+            this.Fields = [];
+            this.HasRequiredParams = false;
             return;
         }
 
-        const parameters = this.queryInfo.Parameters || [];
+        const parameters = this.QueryInfo.Parameters || [];
 
-        this.fields = parameters.map(param => {
+        this.Fields = parameters.map(param => {
             const initialValue = this.getInitialValue(param);
 
             return {
@@ -160,15 +160,15 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
             };
         });
 
-        this.hasRequiredParams = this.fields.some(f => f.info.IsRequired);
+        this.HasRequiredParams = this.Fields.some(f => f.info.IsRequired);
         this.validateAllFields();
         this.cdr.markForCheck();
     }
 
     private getInitialValue(param: QueryParameterInfo): string | number | boolean | Date | string[] | null {
         // Check initial values first
-        if (this.initialValues && this.initialValues[param.Name] !== undefined) {
-            return this.initialValues[param.Name];
+        if (this.InitialValues && this.InitialValues[param.Name] !== undefined) {
+            return this.InitialValues[param.Name];
         }
 
         // Fall back to default value
@@ -213,7 +213,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     // Value Handling
     // ========================================
 
-    public onValueChange(field: ParameterField, value: unknown): void {
+    public OnValueChange(field: ParameterField, value: unknown): void {
         field.value = value as ParameterField['value'];
         field.touched = true;
         this.validateField(field);
@@ -221,7 +221,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         this.cdr.markForCheck();
     }
 
-    public onDateChange(field: ParameterField, value: Date | null): void {
+    public OnDateChange(field: ParameterField, value: Date | null): void {
         field.value = value;
         field.touched = true;
         this.validateField(field);
@@ -229,7 +229,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         this.cdr.markForCheck();
     }
 
-    public onCheckboxChange(field: ParameterField, event: Event): void {
+    public OnCheckboxChange(field: ParameterField, event: Event): void {
         const input = event.target as HTMLInputElement;
         field.value = input.checked;
         field.touched = true;
@@ -278,14 +278,14 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     }
 
     private validateAllFields(): void {
-        for (const field of this.fields) {
+        for (const field of this.Fields) {
             this.validateField(field);
         }
         this.updateAllRequiredFilled();
     }
 
     private updateAllRequiredFilled(): void {
-        this.allRequiredFilled = this.fields
+        this.AllRequiredFilled = this.Fields
             .filter(f => f.info.IsRequired)
             .every(f => {
                 const value = f.value;
@@ -295,46 +295,46 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
             });
     }
 
-    public get hasErrors(): boolean {
-        return this.fields.some(f => f.error !== null);
+    public get HasErrors(): boolean {
+        return this.Fields.some(f => f.error !== null);
     }
 
-    public get canSubmit(): boolean {
-        return !this.hasErrors && this.allRequiredFilled;
+    public get CanSubmit(): boolean {
+        return !this.HasErrors && this.AllRequiredFilled;
     }
 
     // ========================================
     // Form Submission
     // ========================================
 
-    public submit(): void {
+    public Submit(): void {
         // Mark all fields as touched
-        for (const field of this.fields) {
+        for (const field of this.Fields) {
             field.touched = true;
         }
         this.validateAllFields();
 
-        if (!this.canSubmit) {
+        if (!this.CanSubmit) {
             this.cdr.markForCheck();
             return;
         }
 
         // Build parameter values object
         const values: QueryParameterValues = {};
-        for (const field of this.fields) {
+        for (const field of this.Fields) {
             if (field.value !== null && field.value !== undefined) {
                 values[field.info.Name] = field.value;
             }
         }
 
-        this.parametersSubmit.emit(values);
+        this.ParametersSubmit.emit(values);
     }
 
-    public cancel(): void {
-        this.close.emit();
+    public Cancel(): void {
+        this.Close.emit();
     }
 
-    public reset(): void {
+    public Reset(): void {
         this.buildForm();
     }
 
@@ -342,7 +342,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     // UI Helpers
     // ========================================
 
-    public getInputType(param: QueryParameterInfo): string {
+    public GetInputType(param: QueryParameterInfo): string {
         switch (param.Type) {
             case 'number':
                 return 'number';
@@ -355,14 +355,14 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         }
     }
 
-    public getPlaceholder(param: QueryParameterInfo): string {
+    public GetPlaceholder(param: QueryParameterInfo): string {
         if (param.SampleValue) {
             return `e.g., ${param.SampleValue}`;
         }
         return param.Description || '';
     }
 
-    public trackByField(index: number, field: ParameterField): string {
+    public TrackByField(index: number, field: ParameterField): string {
         return field.info.Name;
     }
 
@@ -370,20 +370,20 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     // Type-Safe Value Getters for Template
     // ========================================
 
-    public getStringValue(value: ParameterField['value']): string {
+    public GetStringValue(value: ParameterField['value']): string {
         if (value === null || value === undefined) return '';
         if (typeof value === 'string') return value;
         return String(value);
     }
 
-    public getNumberValue(value: ParameterField['value']): number | null {
+    public GetNumberValue(value: ParameterField['value']): number | null {
         if (value === null || value === undefined) return null;
         if (typeof value === 'number') return value;
         const num = Number(value);
         return isNaN(num) ? null : num;
     }
 
-    public getDateValue(value: ParameterField['value']): string {
+    public GetDateValue(value: ParameterField['value']): string {
         if (value === null || value === undefined) return '';
         if (value instanceof Date) {
             // Format as YYYY-MM-DD for HTML date input
@@ -399,12 +399,12 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         return '';
     }
 
-    public getBooleanValue(value: ParameterField['value']): boolean {
+    public GetBooleanValue(value: ParameterField['value']): boolean {
         if (value === null || value === undefined) return false;
         return Boolean(value);
     }
 
-    public getArrayDisplayValue(value: ParameterField['value']): string {
+    public GetArrayDisplayValue(value: ParameterField['value']): string {
         if (value === null || value === undefined) return '';
         if (Array.isArray(value)) {
             return value.join(', ');
@@ -416,28 +416,28 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     // Input Event Handlers
     // ========================================
 
-    public onInputChange(field: ParameterField, event: Event): void {
+    public OnInputChange(field: ParameterField, event: Event): void {
         const input = event.target as HTMLInputElement;
-        this.onValueChange(field, input.value);
+        this.OnValueChange(field, input.value);
     }
 
-    public onNumberInputChange(field: ParameterField, event: Event): void {
+    public OnNumberInputChange(field: ParameterField, event: Event): void {
         const input = event.target as HTMLInputElement;
         const value = input.value === '' ? null : Number(input.value);
-        this.onValueChange(field, value);
+        this.OnValueChange(field, value);
     }
 
-    public onDateInputChange(field: ParameterField, event: Event): void {
+    public OnDateInputChange(field: ParameterField, event: Event): void {
         const input = event.target as HTMLInputElement;
         const value = input.value ? new Date(input.value) : null;
-        this.onDateChange(field, value);
+        this.OnDateChange(field, value);
     }
 
-    public onArrayInputChange(field: ParameterField, event: Event): void {
+    public OnArrayInputChange(field: ParameterField, event: Event): void {
         const input = event.target as HTMLInputElement;
         const value = input.value
             ? input.value.split(',').map(s => s.trim()).filter(s => s)
             : [];
-        this.onValueChange(field, value);
+        this.OnValueChange(field, value);
     }
 }

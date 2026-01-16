@@ -1,24 +1,24 @@
 <!-- Query Parameter Form - Slide-in Panel -->
 <div class="param-form-overlay"
-     *ngIf="isOpen && showOverlay"
+     *ngIf="IsOpen && ShowOverlay"
      @fadeIn
-     (click)="cancel()">
+     (click)="Cancel()">
 </div>
 
 <div class="param-form-panel"
-     *ngIf="isOpen"
+     *ngIf="IsOpen"
      @slideIn
-     [style.width.px]="panelWidth">
+     [style.width.px]="PanelWidth">
     <!-- Header -->
     <div class="panel-header">
         <div class="header-content">
             <i class="fa-solid fa-sliders header-icon"></i>
             <div class="header-text">
                 <h3 class="header-title">Query Parameters</h3>
-                <span class="header-subtitle" *ngIf="queryInfo">{{ queryInfo.Name }}</span>
+                <span class="header-subtitle" *ngIf="QueryInfo">{{ QueryInfo.Name }}</span>
             </div>
         </div>
-        <button class="close-btn" (click)="cancel()" title="Close">
+        <button class="close-btn" (click)="Cancel()" title="Close">
             <i class="fa-solid fa-times"></i>
         </button>
     </div>
@@ -26,18 +26,18 @@
     <!-- Form Content -->
     <div class="panel-content">
         <!-- No parameters message -->
-        <div class="no-params" *ngIf="fields.length === 0">
+        <div class="no-params" *ngIf="Fields.length === 0">
             <i class="fa-solid fa-check-circle no-params-icon"></i>
             <p>This query has no parameters</p>
-            <button class="btn btn-primary" (click)="submit()">
+            <button class="btn btn-primary" (click)="Submit()">
                 Run Query
             </button>
         </div>
 
         <!-- Parameter fields -->
-        <div class="param-fields" *ngIf="fields.length > 0">
+        <div class="param-fields" *ngIf="Fields.length > 0">
             <div class="param-field"
-                 *ngFor="let field of fields; trackBy: trackByField"
+                 *ngFor="let field of Fields; trackBy: TrackByField"
                  [class.has-error]="field.error && field.touched"
                  [class.required]="field.info.IsRequired">
 
@@ -58,9 +58,9 @@
                     <input type="text"
                            class="form-input"
                            [id]="'param-' + field.info.Name"
-                           [value]="getStringValue(field.value)"
-                           [placeholder]="getPlaceholder(field.info)"
-                           (input)="onInputChange(field, $event)">
+                           [value]="GetStringValue(field.value)"
+                           [placeholder]="GetPlaceholder(field.info)"
+                           (input)="OnInputChange(field, $event)">
                 </ng-container>
 
                 <!-- Number input -->
@@ -68,9 +68,9 @@
                     <input type="number"
                            class="form-input"
                            [id]="'param-' + field.info.Name"
-                           [value]="getNumberValue(field.value)"
-                           [placeholder]="getPlaceholder(field.info)"
-                           (input)="onNumberInputChange(field, $event)">
+                           [value]="GetNumberValue(field.value)"
+                           [placeholder]="GetPlaceholder(field.info)"
+                           (input)="OnNumberInputChange(field, $event)">
                 </ng-container>
 
                 <!-- Date input -->
@@ -78,8 +78,8 @@
                     <input type="date"
                            class="form-input"
                            [id]="'param-' + field.info.Name"
-                           [value]="getDateValue(field.value)"
-                           (input)="onDateInputChange(field, $event)">
+                           [value]="GetDateValue(field.value)"
+                           (input)="OnDateInputChange(field, $event)">
                 </ng-container>
 
                 <!-- Boolean input -->
@@ -87,10 +87,10 @@
                     <div class="checkbox-wrapper">
                         <input type="checkbox"
                                [id]="'param-' + field.info.Name"
-                               [checked]="getBooleanValue(field.value)"
-                               (change)="onCheckboxChange(field, $event)">
+                               [checked]="GetBooleanValue(field.value)"
+                               (change)="OnCheckboxChange(field, $event)">
                         <label [for]="'param-' + field.info.Name" class="checkbox-label">
-                            {{ getBooleanValue(field.value) ? 'Yes' : 'No' }}
+                            {{ GetBooleanValue(field.value) ? 'Yes' : 'No' }}
                         </label>
                     </div>
                 </ng-container>
@@ -100,9 +100,9 @@
                     <input type="text"
                            class="form-input"
                            [id]="'param-' + field.info.Name"
-                           [value]="getArrayDisplayValue(field.value)"
-                           [placeholder]="getPlaceholder(field.info) || 'Enter values separated by commas'"
-                           (input)="onArrayInputChange(field, $event)">
+                           [value]="GetArrayDisplayValue(field.value)"
+                           [placeholder]="GetPlaceholder(field.info) || 'Enter values separated by commas'"
+                           (input)="OnArrayInputChange(field, $event)">
                     <span class="field-hint">Enter multiple values separated by commas</span>
                 </ng-container>
 
@@ -121,18 +121,18 @@
     </div>
 
     <!-- Footer -->
-    <div class="panel-footer" *ngIf="fields.length > 0">
-        <button class="btn btn-secondary" (click)="reset()" title="Reset to defaults">
+    <div class="panel-footer" *ngIf="Fields.length > 0">
+        <button class="btn btn-secondary" (click)="Reset()" title="Reset to defaults">
             <i class="fa-solid fa-undo"></i>
             Reset
         </button>
         <div class="footer-right">
-            <button class="btn btn-secondary" (click)="cancel()">
+            <button class="btn btn-secondary" (click)="Cancel()">
                 Cancel
             </button>
             <button class="btn btn-primary"
-                    [disabled]="!canSubmit"
-                    (click)="submit()">
+                    [disabled]="!CanSubmit"
+                    (click)="Submit()">
                 <i class="fa-solid fa-play"></i>
                 Run Query
             </button>

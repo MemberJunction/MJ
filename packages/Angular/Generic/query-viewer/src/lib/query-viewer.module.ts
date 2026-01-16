@@ -13,6 +13,8 @@ import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { QueryDataGridComponent } from './query-data-grid/query-data-grid.component';
 import { QueryParameterFormComponent } from './query-parameter-form/query-parameter-form.component';
 import { QueryViewerComponent } from './query-viewer/query-viewer.component';
+import { QueryRowDetailComponent } from './query-row-detail/query-row-detail.component';
+import { QueryInfoPanelComponent } from './query-info-panel/query-info-panel.component';
 
 /**
  * Prevents tree-shaking of the QueryViewer module.
@@ -26,7 +28,9 @@ export function LoadQueryViewerModule() {
     declarations: [
         QueryDataGridComponent,
         QueryParameterFormComponent,
-        QueryViewerComponent
+        QueryViewerComponent,
+        QueryRowDetailComponent,
+        QueryInfoPanelComponent
     ],
     imports: [
         CommonModule,
@@ -38,7 +42,9 @@ export function LoadQueryViewerModule() {
     exports: [
         QueryDataGridComponent,
         QueryParameterFormComponent,
-        QueryViewerComponent
+        QueryViewerComponent,
+        QueryRowDetailComponent,
+        QueryInfoPanelComponent
     ]
 })
 export class QueryViewerModule { }

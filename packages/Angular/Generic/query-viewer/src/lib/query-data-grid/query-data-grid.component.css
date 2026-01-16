@@ -6,7 +6,7 @@
     --grid-accent-color: #2196F3;
     --grid-selection-indicator: #f9a825;
     --grid-selection-bg: #fff9e6;
-    --grid-alt-row-alpha: 0.04;
+    --grid-sort-indicator-color: #2196F3;
 }
 
 .query-data-grid-container {
@@ -19,15 +19,18 @@
     overflow: hidden;
 }
 
-/* Toolbar */
+/* ========================================
+   Toolbar
+   ======================================== */
+
 .grid-toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    background: #f8f9fa;
+    background: #ffffff;
     border-bottom: 1px solid #e0e0e0;
-    min-height: 44px;
+    min-height: 48px;
     flex-shrink: 0;
 }
 
@@ -35,7 +38,7 @@
 .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 
 .row-count,
@@ -45,6 +48,7 @@
     gap: 6px;
     font-size: 13px;
     color: #666;
+    font-weight: 500;
 }
 
 .row-count i,
@@ -80,20 +84,48 @@
     color: #333;
 }
 
+/* Toolbar buttons - consistent styling */
 .toolbar-btn {
-    padding: 6px 12px !important;
-    font-size: 13px !important;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #333;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+    background: #eee;
+    border-color: #ccc;
+}
+
+.toolbar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .toolbar-btn i {
-    margin-right: 4px;
+    font-size: 14px;
 }
 
-.toolbar-btn i:only-child {
+/* Icon-only button */
+.toolbar-btn.icon-only {
+    padding: 6px 8px;
+}
+
+.toolbar-btn.icon-only i {
     margin-right: 0;
 }
 
-/* Grid wrapper */
+/* ========================================
+   Grid wrapper
+   ======================================== */
+
 .grid-wrapper {
     flex: 1;
     min-height: 0;
@@ -111,7 +143,10 @@
     height: 100%;
 }
 
-/* Loading overlay */
+/* ========================================
+   Loading overlay
+   ======================================== */
+
 .loading-overlay {
     position: absolute;
     top: 0;
@@ -125,7 +160,10 @@
     z-index: 100;
 }
 
-/* Empty state */
+/* ========================================
+   Empty state
+   ======================================== */
+
 .empty-state {
     position: absolute;
     top: 50%;
@@ -153,7 +191,10 @@
     margin: 0;
 }
 
-/* Entity link cell */
+/* ========================================
+   Entity link cell
+   ======================================== */
+
 ::ng-deep .entity-link-cell {
     display: flex;
     align-items: center;
@@ -183,36 +224,40 @@
     opacity: 1;
 }
 
-/* AG Grid customizations */
+/* ========================================
+   AG Grid customizations
+   ======================================== */
+
 ::ng-deep .ag-theme-alpine {
-    --ag-header-background-color: #f5f5f5;
+    --ag-header-background-color: #fafafa;
     --ag-header-foreground-color: #333;
     --ag-odd-row-background-color: #f8f9fa;
-    --ag-row-hover-color: #e8f4fc;
+    --ag-row-hover-color: #f0f7ff;
     --ag-selected-row-background-color: var(--grid-selection-bg);
     --ag-font-size: 13px;
-    --ag-row-border-color: #e9ecef;
+    --ag-row-border-color: #f0f0f0;
 }
 
 ::ng-deep .ag-theme-alpine .ag-header-cell {
     font-weight: 600;
     font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.3px;
+    color: #546e7a;
 }
 
-::ng-deep .ag-theme-alpine .ag-row-selected {
-    border-left: 3px solid var(--grid-selection-indicator);
+::ng-deep .ag-theme-alpine .ag-header-cell:hover {
+    background-color: rgba(0, 0, 0, 0.04);
 }
 
-::ng-deep .ag-theme-alpine .ag-row-selected::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: var(--grid-selection-indicator);
+/* Selected row styling */
+::ng-deep .ag-row-selected {
+    box-shadow: inset 4px 0 0 0 var(--grid-selection-indicator);
+}
+
+/* Row border */
+::ng-deep .ag-theme-alpine .ag-row {
+    border-bottom: 1px solid var(--ag-row-border-color, #f0f0f0);
 }
 
 /* Header alignment */
@@ -224,18 +269,11 @@
     justify-content: center;
 }
 
-/* Multi-sort indicators */
-::ng-deep .ag-header-cell-sorted-asc .ag-sort-indicator-icon::after,
-::ng-deep .ag-header-cell-sorted-desc .ag-sort-indicator-icon::after {
-    content: attr(data-sort-index);
-    font-size: 9px;
-    margin-left: 2px;
-    opacity: 0.7;
-}
-
 /* Checkbox styling */
 ::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper {
     border-radius: 4px;
+    width: 18px;
+    height: 18px;
 }
 
 ::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper.ag-checked {
@@ -243,7 +281,68 @@
     border-color: var(--grid-accent-color);
 }
 
-/* Responsive adjustments */
+::ng-deep .ag-theme-alpine .ag-checkbox-input-wrapper.ag-checked::after {
+    color: #ffffff;
+}
+
+/* ========================================
+   Sort Indicators - Arrow Only
+   ======================================== */
+
+/* Sort icons - colored arrows only */
+:host ::ng-deep .ag-sort-ascending-icon {
+    color: #1976d2 !important;
+}
+
+:host ::ng-deep .ag-sort-descending-icon {
+    color: #d81b60 !important;
+}
+
+:host ::ng-deep .ag-sort-ascending-icon .ag-icon,
+:host ::ng-deep .ag-sort-descending-icon .ag-icon {
+    font-size: 14px !important;
+}
+
+/* Sort order number (for multi-sort) */
+:host ::ng-deep .ag-sort-order {
+    margin-left: 4px;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: #666 !important;
+}
+
+/* Hover state for sortable headers */
+:host ::ng-deep .ag-header-cell-sortable:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+/* ========================================
+   Scrollbar Styling
+   ======================================== */
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-track {
+    background: #f5f5f5;
+    border-radius: 4px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 4px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+}
+
+/* ========================================
+   Responsive adjustments
+   ======================================== */
+
 @media (max-width: 768px) {
     .grid-toolbar {
         flex-wrap: wrap;
@@ -253,5 +352,10 @@
     .toolbar-left,
     .toolbar-right {
         flex-wrap: wrap;
+    }
+
+    /* Hide button text on mobile */
+    .toolbar-btn .button-text {
+        display: none;
     }
 }

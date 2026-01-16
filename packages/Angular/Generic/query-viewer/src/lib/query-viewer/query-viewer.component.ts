@@ -43,9 +43,9 @@ import {
  * @example
  * ```html
  * <mj-query-viewer
- *   [queryId]="selectedQueryId"
- *   [autoRun]="true"
- *   (entityLinkClick)="openRecord($event)">
+ *   [QueryId]="selectedQueryId"
+ *   [AutoRun]="true"
+ *   (EntityLinkClick)="openRecord($event)">
  * </mj-query-viewer>
  * ```
  */
@@ -65,46 +65,46 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
      * The ID of the query to display
      */
     @Input()
-    set queryId(value: string | null) {
+    set QueryId(value: string | null) {
         const previous = this._queryId;
         this._queryId = value;
         if (value !== previous) {
             this.onQueryIdChanged();
         }
     }
-    get queryId(): string | null {
+    get QueryId(): string | null {
         return this._queryId;
     }
 
     /**
      * Whether to auto-run the query when all required params have saved values
      */
-    @Input() autoRun: boolean = true;
+    @Input() AutoRun: boolean = true;
 
     /**
      * Selection mode for the grid
      */
-    @Input() selectionMode: QueryGridSelectionMode = 'single';
+    @Input() SelectionMode: QueryGridSelectionMode = 'single';
 
     /**
      * Whether to show the toolbar
      */
-    @Input() showToolbar: boolean = true;
+    @Input() ShowToolbar: boolean = true;
 
     /**
      * Visual configuration for the grid
      */
-    @Input() visualConfig: QueryGridVisualConfig = {};
+    @Input() VisualConfig: QueryGridVisualConfig = {};
 
     /**
      * Whether to persist grid state
      */
-    @Input() persistState: boolean = true;
+    @Input() PersistState: boolean = true;
 
     /**
      * Whether to persist parameter values
      */
-    @Input() persistParameters: boolean = true;
+    @Input() PersistParameters: boolean = true;
 
     // ========================================
     // Outputs
@@ -113,53 +113,59 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
     /**
      * Fired when an entity link is clicked in the grid
      */
-    @Output() entityLinkClick = new EventEmitter<QueryEntityLinkClickEvent>();
+    @Output() EntityLinkClick = new EventEmitter<QueryEntityLinkClickEvent>();
 
     /**
      * Fired when a row is double-clicked
      */
-    @Output() rowDoubleClick = new EventEmitter<QueryRowClickEvent>();
+    @Output() RowDoubleClick = new EventEmitter<QueryRowClickEvent>();
 
     /**
      * Fired when selection changes
      */
-    @Output() selectionChange = new EventEmitter<QuerySelectionChangedEvent>();
+    @Output() SelectionChange = new EventEmitter<QuerySelectionChangedEvent>();
 
     /**
      * Fired when query execution starts
      */
-    @Output() queryStart = new EventEmitter<void>();
+    @Output() QueryStart = new EventEmitter<void>();
 
     /**
      * Fired when query execution completes
      */
-    @Output() queryComplete = new EventEmitter<RunQueryResult>();
+    @Output() QueryComplete = new EventEmitter<RunQueryResult>();
 
     /**
      * Fired when query execution fails
      */
-    @Output() queryError = new EventEmitter<Error>();
+    @Output() QueryError = new EventEmitter<Error>();
+
+    /**
+     * Fired when user wants to open the full query record
+     */
+    @Output() OpenQueryRecord = new EventEmitter<{ queryId: string; queryName: string }>();
 
     // ========================================
     // View Children
     // ========================================
 
-    @ViewChild(QueryDataGridComponent) dataGrid!: QueryDataGridComponent;
+    @ViewChild(QueryDataGridComponent) DataGrid!: QueryDataGridComponent;
 
     // ========================================
     // Internal State
     // ========================================
 
-    public queryInfo: QueryInfo | null = null;
-    public queryData: Record<string, unknown>[] = [];
-    public isLoading: boolean = false;
-    public showParamsPanel: boolean = false;
-    public hasRun: boolean = false;
-    public lastError: string | null = null;
-    public executionTimeMs: number | null = null;
+    public QueryInfo: QueryInfo | null = null;
+    public QueryData: Record<string, unknown>[] = [];
+    public IsLoading: boolean = false;
+    public ShowParamsPanel: boolean = false;
+    public ShowInfoPanel: boolean = false;
+    public HasRun: boolean = false;
+    public LastError: string | null = null;
+    public ExecutionTimeMs: number | null = null;
 
-    public savedGridState: QueryGridState | null = null;
-    public savedParams: QueryParameterValues = {};
+    public SavedGridState: QueryGridState | null = null;
+    public SavedParams: QueryParameterValues = {};
 
     private metadata = new Metadata();
     private destroy$ = new Subject<void>();
@@ -170,7 +176,7 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
     ngOnInit(): void {}
 
     ngOnChanges(changes: SimpleChanges): void {
-        if (changes['queryId']) {
+        if (changes['QueryId']) {
             // Handled by setter
         }
     }
@@ -186,14 +192,14 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
 
     private async onQueryIdChanged(): Promise<void> {
         // Reset state
-        this.queryInfo = null;
-        this.queryData = [];
-        this.hasRun = false;
-        this.lastError = null;
-        this.executionTimeMs = null;
-        this.savedGridState = null;
-        this.savedParams = {};
-        this.showParamsPanel = false;
+        this.QueryInfo = null;
+        this.QueryData = [];
+        this.HasRun = false;
+        this.LastError = null;
+        this.ExecutionTimeMs = null;
+        this.SavedGridState = null;
+        this.SavedParams = {};
+        this.ShowParamsPanel = false;
         this.cdr.markForCheck();
 
         if (!this._queryId) {
@@ -201,10 +207,10 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
         }
 
         // Load query info from metadata
-        this.queryInfo = this.metadata.Queries.find(q => q.ID === this._queryId) || null;
+        this.QueryInfo = this.metadata.Queries.find(q => q.ID === this._queryId) || null;
 
-        if (!this.queryInfo) {
-            this.lastError = `Query with ID ${this._queryId} not found`;
+        if (!this.QueryInfo) {
+            this.LastError = `Query with ID ${this._queryId} not found`;
             this.cdr.markForCheck();
             return;
         }
@@ -213,35 +219,35 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
         await this.loadSavedState();
 
         // Determine if we should show params or auto-run
-        const hasParams = this.queryInfo.Parameters && this.queryInfo.Parameters.length > 0;
-        const hasRequiredParams = hasParams && this.queryInfo.Parameters.some(p => p.IsRequired);
+        const hasParams = this.QueryInfo.Parameters && this.QueryInfo.Parameters.length > 0;
+        const hasRequiredParams = hasParams && this.QueryInfo.Parameters.some(p => p.IsRequired);
 
         if (hasParams) {
             // Check if all required params have saved values
-            const canAutoRun = this.autoRun && this.canAutoRunWithSavedParams();
+            const canAutoRun = this.AutoRun && this.canAutoRunWithSavedParams();
 
             if (canAutoRun) {
                 // Auto-run with saved parameters
-                await this.runQuery(this.savedParams);
+                await this.RunQuery(this.SavedParams);
             } else {
                 // Show parameter panel
-                this.showParamsPanel = true;
+                this.ShowParamsPanel = true;
             }
         } else {
             // No parameters - auto-run immediately
-            await this.runQuery({});
+            await this.RunQuery({});
         }
 
         this.cdr.markForCheck();
     }
 
     private canAutoRunWithSavedParams(): boolean {
-        if (!this.queryInfo) return false;
+        if (!this.QueryInfo) return false;
 
-        const requiredParams = this.queryInfo.Parameters?.filter(p => p.IsRequired) || [];
+        const requiredParams = this.QueryInfo.Parameters?.filter(p => p.IsRequired) || [];
 
         for (const param of requiredParams) {
-            const savedValue = this.savedParams[param.Name];
+            const savedValue = this.SavedParams[param.Name];
             if (savedValue === null || savedValue === undefined || savedValue === '') {
                 return false;
             }
@@ -262,20 +268,20 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
 
         try {
             // Load grid state
-            if (this.persistState) {
+            if (this.PersistState) {
                 const gridStateKey = getQueryGridStateKey(this._queryId);
                 const gridStateSetting = await this.getUserSetting(gridStateKey);
                 if (gridStateSetting) {
-                    this.savedGridState = JSON.parse(gridStateSetting) as QueryGridState;
+                    this.SavedGridState = JSON.parse(gridStateSetting) as QueryGridState;
                 }
             }
 
             // Load saved parameters
-            if (this.persistParameters) {
+            if (this.PersistParameters) {
                 const paramsKey = getQueryParamsKey(this._queryId);
                 const paramsSetting = await this.getUserSetting(paramsKey);
                 if (paramsSetting) {
-                    this.savedParams = JSON.parse(paramsSetting) as QueryParameterValues;
+                    this.SavedParams = JSON.parse(paramsSetting) as QueryParameterValues;
                 }
             }
         } catch (error) {
@@ -284,7 +290,7 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     private async saveGridState(state: QueryGridState): Promise<void> {
-        if (!this._queryId || !this.persistState) return;
+        if (!this._queryId || !this.PersistState) return;
 
         try {
             const key = getQueryGridStateKey(this._queryId);
@@ -295,7 +301,7 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     private async saveParameters(params: QueryParameterValues): Promise<void> {
-        if (!this._queryId || !this.persistParameters) return;
+        if (!this._queryId || !this.PersistParameters) return;
 
         try {
             const key = getQueryParamsKey(this._queryId);
@@ -317,16 +323,16 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
     // Query Execution
     // ========================================
 
-    public async runQuery(params: QueryParameterValues): Promise<void> {
-        if (!this.queryInfo || !this._queryId) return;
+    public async RunQuery(params: QueryParameterValues): Promise<void> {
+        if (!this.QueryInfo || !this._queryId) return;
 
-        this.isLoading = true;
-        this.lastError = null;
-        this.queryStart.emit();
+        this.IsLoading = true;
+        this.LastError = null;
+        this.QueryStart.emit();
         this.cdr.markForCheck();
 
         // Save parameters for next time
-        this.savedParams = params;
+        this.SavedParams = params;
         await this.saveParameters(params);
 
         const startTime = performance.now();
@@ -340,34 +346,34 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
 
             const result = await runQuery.RunQuery(runParams);
 
-            this.executionTimeMs = Math.round(performance.now() - startTime);
+            this.ExecutionTimeMs = Math.round(performance.now() - startTime);
 
             if (result.Success) {
-                this.queryData = result.Results || [];
-                this.hasRun = true;
-                this.showParamsPanel = false;
-                this.queryComplete.emit(result);
+                this.QueryData = result.Results || [];
+                this.HasRun = true;
+                this.ShowParamsPanel = false;
+                this.QueryComplete.emit(result);
             } else {
-                this.lastError = result.ErrorMessage || 'Query execution failed';
-                this.queryError.emit(new Error(this.lastError));
+                this.LastError = result.ErrorMessage || 'Query execution failed';
+                this.QueryError.emit(new Error(this.LastError));
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    this.lastError,
+                    this.LastError,
                     'error',
                     5000
                 );
             }
         } catch (error) {
-            this.executionTimeMs = Math.round(performance.now() - startTime);
+            this.ExecutionTimeMs = Math.round(performance.now() - startTime);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            this.lastError = errorMessage;
-            this.queryError.emit(error instanceof Error ? error : new Error(errorMessage));
+            this.LastError = errorMessage;
+            this.QueryError.emit(error instanceof Error ? error : new Error(errorMessage));
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Error running query: ${errorMessage}`,
                 'error',
                 5000
             );
         } finally {
-            this.isLoading = false;
+            this.IsLoading = false;
             this.cdr.markForCheck();
         }
     }
@@ -376,39 +382,39 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
     // Event Handlers
     // ========================================
 
-    public onParametersSubmit(params: QueryParameterValues): void {
-        this.runQuery(params);
+    public OnParametersSubmit(params: QueryParameterValues): void {
+        this.RunQuery(params);
     }
 
-    public onParamsPanelClose(): void {
-        this.showParamsPanel = false;
+    public OnParamsPanelClose(): void {
+        this.ShowParamsPanel = false;
         this.cdr.markForCheck();
     }
 
-    public onGridStateChange(event: QueryGridStateChangedEvent): void {
+    public OnGridStateChange(event: QueryGridStateChangedEvent): void {
         this.saveGridState(event.state);
     }
 
-    public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
-        this.entityLinkClick.emit(event);
+    public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+        this.EntityLinkClick.emit(event);
     }
 
-    public onRowDoubleClick(event: QueryRowClickEvent): void {
-        this.rowDoubleClick.emit(event);
+    public OnRowDoubleClick(event: QueryRowClickEvent): void {
+        this.RowDoubleClick.emit(event);
     }
 
-    public onSelectionChange(event: QuerySelectionChangedEvent): void {
-        this.selectionChange.emit(event);
+    public OnSelectionChange(event: QuerySelectionChangedEvent): void {
+        this.SelectionChange.emit(event);
     }
 
-    public onRefreshRequest(): void {
-        if (this.hasRun) {
-            this.runQuery(this.savedParams);
-        } else if (this.queryInfo?.Parameters?.length) {
-            this.showParamsPanel = true;
+    public OnRefreshRequest(): void {
+        if (this.HasRun) {
+            this.RunQuery(this.SavedParams);
+        } else if (this.QueryInfo?.Parameters?.length) {
+            this.ShowParamsPanel = true;
             this.cdr.markForCheck();
         } else {
-            this.runQuery({});
+            this.RunQuery({});
         }
     }
 
@@ -416,16 +422,30 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
     // Public API
     // ========================================
 
-    public openParametersPanel(): void {
-        this.showParamsPanel = true;
+    public OpenParametersPanel(): void {
+        this.ShowParamsPanel = true;
         this.cdr.markForCheck();
     }
 
-    public refresh(): void {
-        this.onRefreshRequest();
+    public OpenInfoPanel(): void {
+        this.ShowInfoPanel = true;
+        this.cdr.markForCheck();
     }
 
-    public get hasParameters(): boolean {
-        return (this.queryInfo?.Parameters?.length || 0) > 0;
+    public CloseInfoPanel(): void {
+        this.ShowInfoPanel = false;
+        this.cdr.markForCheck();
+    }
+
+    public OnOpenQueryRecord(event: { queryId: string; queryName: string }): void {
+        this.OpenQueryRecord.emit(event);
+    }
+
+    public Refresh(): void {
+        this.OnRefreshRequest();
+    }
+
+    public get HasParameters(): boolean {
+        return (this.QueryInfo?.Parameters?.length || 0) > 0;
     }
 }

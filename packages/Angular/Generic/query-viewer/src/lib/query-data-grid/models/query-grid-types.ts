@@ -37,6 +37,9 @@ export interface QueryGridColumnConfig {
     /** Display title (defaults to field name) */
     title: string;
 
+    /** Description/tooltip for the column header */
+    description?: string;
+
     /** Column width in pixels */
     width?: number;
 
@@ -297,8 +300,8 @@ export interface QueryEntityLinkClickEvent {
     entityName: string;
     /** Record ID (primary key value) */
     recordId: string;
-    /** The column config */
-    column: QueryGridColumnConfig;
+    /** The column config (null if clicked from row detail panel) */
+    column: QueryGridColumnConfig | null;
     /** The row data */
     rowData: Record<string, unknown>;
 }
@@ -419,6 +422,7 @@ export function buildColumnsFromQueryFields(fields: QueryFieldInfo[]): QueryGrid
             return {
                 field: field.Name,
                 title: field.Name, // Could be enhanced to parse CamelCase
+                description: field.Description || undefined,
                 width: undefined,
                 minWidth: 80,
                 maxWidth: 500,

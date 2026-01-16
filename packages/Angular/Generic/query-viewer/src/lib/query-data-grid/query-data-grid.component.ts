@@ -60,6 +60,7 @@ import {
     buildColumnsFromQueryFields,
     getQueryGridStateKey
 } from './models/query-grid-types';
+import { RowDetailEntityLinkEvent } from '../query-row-detail/query-row-detail.component';
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -112,14 +113,18 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * Used to derive column configurations and entity linking.
      */
     @Input()
-    set queryInfo(value: QueryInfo | null) {
+    set QueryInfo(value: QueryInfo | null) {
         const previous = this._queryInfo;
+        // Flush state for the previous query before switching
+        if (previous && value !== previous) {
+            this.FlushState();
+        }
         this._queryInfo = value;
         if (value && value !== previous) {
             this.onQueryInfoChanged();
         }
     }
-    get queryInfo(): QueryInfo | null {
+    get QueryInfo(): QueryInfo | null {
         return this._queryInfo;
     }
 
@@ -128,86 +133,86 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * The query result data to display in the grid.
      */
     @Input()
-    set data(value: Record<string, unknown>[]) {
+    set Data(value: Record<string, unknown>[]) {
         this._data = value || [];
-        if (this.gridApi) {
-            this.gridApi.setGridOption('rowData', this._data);
+        if (this.GridApi) {
+            this.GridApi.setGridOption('rowData', this._data);
         }
         this.cdr.markForCheck();
     }
-    get data(): Record<string, unknown>[] {
+    get Data(): Record<string, unknown>[] {
         return this._data;
     }
 
     /**
      * Selection mode for the grid
      */
-    @Input() selectionMode: QueryGridSelectionMode = 'single';
+    @Input() SelectionMode: QueryGridSelectionMode = 'multiple';
 
     /**
      * Whether to show the toolbar
      */
-    @Input() showToolbar: boolean = true;
+    @Input() ShowToolbar: boolean = true;
 
     /**
      * Whether to show row count in toolbar
      */
-    @Input() showRowCount: boolean = true;
+    @Input() ShowRowCount: boolean = true;
 
     /**
      * Whether to show selection count in toolbar
      */
-    @Input() showSelectionCount: boolean = true;
+    @Input() ShowSelectionCount: boolean = true;
 
     /**
      * Whether to show export button
      */
-    @Input() showExport: boolean = true;
+    @Input() ShowExport: boolean = true;
 
     /**
      * Whether to show refresh button
      */
-    @Input() showRefresh: boolean = true;
+    @Input() ShowRefresh: boolean = true;
 
     /**
      * Whether to allow sorting
      */
-    @Input() allowSorting: boolean = true;
+    @Input() AllowSorting: boolean = true;
 
     /**
      * Whether to allow column resizing
      */
-    @Input() allowColumnResize: boolean = true;
+    @Input() AllowColumnResize: boolean = true;
 
     /**
      * Whether to allow column reordering
      */
-    @Input() allowColumnReorder: boolean = true;
+    @Input() AllowColumnReorder: boolean = true;
 
     /**
      * Visual configuration
      */
-    @Input() visualConfig: QueryGridVisualConfig = {};
+    @Input() VisualConfig: QueryGridVisualConfig = {};
 
     /**
      * External loading state - when true, shows loading overlay
      */
-    @Input() isLoading: boolean = false;
+    @Input() IsLoading: boolean = false;
 
     /**
      * Height of the grid container
      */
-    @Input() height: string = '100%';
+    @Input() Height: string = '100%';
 
     /**
      * Initial grid state (for restoring from persistence)
      */
-    @Input() initialGridState: QueryGridState | null = null;
+    @Input() InitialGridState: QueryGridState | null = null;
 
     /**
      * Whether to automatically persist grid state (column widths, order, sort) to User Settings
      */
-    @Input() persistState: boolean = true;
+    @Input() PersistState: boolean = true;
 
     // ========================================
     // Outputs
@@ -216,43 +221,43 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     /**
      * Fired when a row is clicked
      */
-    @Output() rowClick = new EventEmitter<QueryRowClickEvent>();
+    @Output() RowClick = new EventEmitter<QueryRowClickEvent>();
 
     /**
      * Fired when a row is double-clicked
      */
-    @Output() rowDoubleClick = new EventEmitter<QueryRowClickEvent>();
+    @Output() RowDoubleClick = new EventEmitter<QueryRowClickEvent>();
 
     /**
      * Fired when an entity link is clicked
      */
-    @Output() entityLinkClick = new EventEmitter<QueryEntityLinkClickEvent>();
+    @Output() EntityLinkClick = new EventEmitter<QueryEntityLinkClickEvent>();
 
     /**
      * Fired when selection changes
      */
-    @Output() selectionChange = new EventEmitter<QuerySelectionChangedEvent>();
+    @Output() SelectionChange = new EventEmitter<QuerySelectionChangedEvent>();
 
     /**
      * Fired when grid state changes (for persistence)
      */
-    @Output() gridStateChange = new EventEmitter<QueryGridStateChangedEvent>();
+    @Output() GridStateChange = new EventEmitter<QueryGridStateChangedEvent>();
 
     /**
      * Fired when refresh is requested
      */
-    @Output() refreshRequest = new EventEmitter<void>();
+    @Output() RefreshRequest = new EventEmitter<void>();
 
     // ========================================
     // Internal State
     // ========================================
 
-    public gridApi: GridApi | null = null;
-    public columnDefs: ColDef[] = [];
-    public columns: QueryGridColumnConfig[] = [];
-    public sortState: QueryGridSortState[] = [];
-    public selectedRows: Record<string, unknown>[] = [];
-    public theme = themeAlpine;
+    public GridApi: GridApi | null = null;
+    public ColumnDefs: ColDef[] = [];
+    public Columns: QueryGridColumnConfig[] = [];
+    public SortState: QueryGridSortState[] = [];
+    public SelectedRows: Record<string, unknown>[] = [];
+    public Theme = themeAlpine;
 
     private destroy$ = new Subject<void>();
     private stateChangeSubject = new Subject<QueryGridStateChangedEvent>();
@@ -260,7 +265,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     private _mergedVisualConfig: Required<QueryGridVisualConfig> = DEFAULT_QUERY_VISUAL_CONFIG;
 
     // Grid options
-    public gridOptions: GridOptions = {
+    public GridOptions: GridOptions = {
         animateRows: true,
         rowHeight: 36,
         headerHeight: 40,
@@ -272,10 +277,10 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     };
 
     /** Default column settings - enables sorting, resizing */
-    public defaultColDef: ColDef = {
+    public DefaultColDef: ColDef = {
         sortable: true,
         resizable: true,
-        minWidth: 80
+        minWidth: 50
     };
 
     constructor(
@@ -288,9 +293,9 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             debounceTime(500),
             takeUntil(this.destroy$)
         ).subscribe(event => {
-            this.gridStateChange.emit(event);
+            this.GridStateChange.emit(event);
             // Also persist to User Settings if enabled
-            if (this.persistState && this._queryInfo) {
+            if (this.PersistState && this._queryInfo) {
                 this.statePersistSubject.next(event.state);
             }
         });
@@ -305,11 +310,13 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     }
 
     ngOnInit(): void {
-        this._mergedVisualConfig = { ...DEFAULT_QUERY_VISUAL_CONFIG, ...this.visualConfig };
+        this._mergedVisualConfig = { ...DEFAULT_QUERY_VISUAL_CONFIG, ...this.VisualConfig };
         this.applyVisualConfig();
     }
 
     ngOnDestroy(): void {
+        // Flush any pending state changes before destroy
+        this.FlushState();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -318,40 +325,40 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     // Grid Setup
     // ========================================
 
-    public onGridReady(event: GridReadyEvent): void {
-        this.gridApi = event.api;
+    public OnGridReady(event: GridReadyEvent): void {
+        this.GridApi = event.api;
 
         // Apply initial data if available
         if (this._data.length > 0) {
-            this.gridApi.setGridOption('rowData', this._data);
+            this.GridApi.setGridOption('rowData', this._data);
         }
 
         // Apply initial state if provided
-        if (this.initialGridState) {
-            this.applyGridState(this.initialGridState);
+        if (this.InitialGridState) {
+            this.ApplyGridState(this.InitialGridState);
         }
 
         // Auto-size columns initially
         setTimeout(() => {
-            if (this.gridApi) {
-                this.gridApi.autoSizeAllColumns();
+            if (this.GridApi) {
+                this.GridApi.autoSizeAllColumns();
             }
         }, 100);
     }
 
     private onQueryInfoChanged(): void {
         if (!this._queryInfo) {
-            this.columns = [];
-            this.columnDefs = [];
+            this.Columns = [];
+            this.ColumnDefs = [];
             return;
         }
 
         // Build columns from query fields
-        this.columns = buildColumnsFromQueryFields(this._queryInfo.Fields);
+        this.Columns = buildColumnsFromQueryFields(this._queryInfo.Fields);
 
         // Apply initial state if provided via prop (takes precedence)
-        if (this.initialGridState) {
-            this.applyColumnStateFromGridState(this.initialGridState);
+        if (this.InitialGridState) {
+            this.applyColumnStateFromGridState(this.InitialGridState);
         } else {
             // Otherwise try to load from User Settings
             this.loadPersistedState();
@@ -367,7 +374,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         if (!state.columns) return;
 
         for (const colState of state.columns) {
-            const column = this.columns.find(c => c.field === colState.field);
+            const column = this.Columns.find(c => c.field === colState.field);
             if (column) {
                 if (colState.width !== undefined) column.width = colState.width;
                 column.visible = colState.visible;
@@ -378,20 +385,20 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
 
         // Apply sort state
         if (state.sort) {
-            this.sortState = [...state.sort];
+            this.SortState = [...state.sort];
         }
 
         // Re-sort columns by order
-        this.columns.sort((a, b) => a.order - b.order);
+        this.Columns.sort((a, b) => a.order - b.order);
     }
 
     private buildColumnDefs(): void {
-        const visibleColumns = this.columns.filter(c => c.visible);
+        const visibleColumns = this.Columns.filter(c => c.visible);
 
         // Add checkbox column if needed
         const defs: ColDef[] = [];
 
-        if (this.selectionMode === 'checkbox') {
+        if (this.SelectionMode === 'checkbox') {
             defs.push({
                 headerName: '',
                 field: '__checkbox',
@@ -413,11 +420,12 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             const colDef: ColDef = {
                 field: col.field,
                 headerName: col.title,
+                headerTooltip: col.description || undefined,
                 width: col.width,
                 minWidth: col.minWidth,
                 maxWidth: col.maxWidth,
-                sortable: this.allowSorting && col.sortable,
-                resizable: this.allowColumnResize && col.resizable,
+                sortable: this.AllowSorting && col.sortable,
+                resizable: this.AllowColumnResize && col.resizable,
                 pinned: col.pinned || undefined,
                 flex: col.flex,
                 cellStyle: this.getCellStyle(col),
@@ -441,11 +449,11 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             defs.push(colDef);
         }
 
-        this.columnDefs = defs;
+        this.ColumnDefs = defs;
 
         // Apply to grid if ready
-        if (this.gridApi) {
-            this.gridApi.setGridOption('columnDefs', this.columnDefs);
+        if (this.GridApi) {
+            this.GridApi.setGridOption('columnDefs', this.ColumnDefs);
         }
     }
 
@@ -511,17 +519,23 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             return date.toISOString();
         }
 
-        // Number formatting
+        // Number formatting - check if value is actually numeric first
         if (['int', 'bigint', 'smallint', 'tinyint'].includes(baseType)) {
-            return Number(value).toLocaleString();
+            const num = Number(value);
+            if (isNaN(num)) return String(value);
+            return num.toLocaleString();
         }
 
         if (['decimal', 'numeric', 'float', 'real'].includes(baseType)) {
-            return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+            const num = Number(value);
+            if (isNaN(num)) return String(value);
+            return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
         }
 
         if (['money', 'smallmoney'].includes(baseType)) {
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value));
+            const num = Number(value);
+            if (isNaN(num)) return String(value);
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
         }
 
         return String(value);
@@ -544,7 +558,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.entityLinkClick.emit({
+            this.EntityLinkClick.emit({
                 entityName: col.targetEntityName!,
                 recordId: String(params.value),
                 column: col,
@@ -614,48 +628,51 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     // Event Handlers
     // ========================================
 
-    public onRowClicked(event: RowClickedEvent): void {
+    public OnRowClicked(event: RowClickedEvent): void {
         const clickEvent: QueryRowClickEvent = {
             rowData: event.data,
             rowIndex: event.rowIndex!,
             mouseEvent: event.event as MouseEvent
         };
-        this.rowClick.emit(clickEvent);
+        this.RowClick.emit(clickEvent);
+
+        // Open row detail panel on single click
+        this.OpenRowDetailPanel(event.data, event.rowIndex!);
     }
 
-    public onRowDoubleClicked(event: RowDoubleClickedEvent): void {
+    public OnRowDoubleClicked(event: RowDoubleClickedEvent): void {
         const clickEvent: QueryRowClickEvent = {
             rowData: event.data,
             rowIndex: event.rowIndex!,
             mouseEvent: event.event as MouseEvent
         };
-        this.rowDoubleClick.emit(clickEvent);
+        this.RowDoubleClick.emit(clickEvent);
     }
 
-    public onSelectionChanged(event: SelectionChangedEvent): void {
-        if (!this.gridApi) return;
+    public OnSelectionChanged(event: SelectionChangedEvent): void {
+        if (!this.GridApi) return;
 
-        this.selectedRows = this.gridApi.getSelectedRows();
+        this.SelectedRows = this.GridApi.getSelectedRows();
         const selectedIndices: number[] = [];
 
-        this.gridApi.forEachNode((node, index) => {
+        this.GridApi.forEachNode((node, index) => {
             if (node.isSelected()) {
                 selectedIndices.push(index);
             }
         });
 
-        this.selectionChange.emit({
+        this.SelectionChange.emit({
             selectedIndices,
-            selectedRows: this.selectedRows
+            selectedRows: this.SelectedRows
         });
 
         this.cdr.markForCheck();
     }
 
-    public onSortChanged(event: AgSortChangedEvent): void {
-        if (!this.gridApi) return;
+    public OnSortChanged(event: AgSortChangedEvent): void {
+        if (!this.GridApi) return;
 
-        const columnState = this.gridApi.getColumnState();
+        const columnState = this.GridApi.getColumnState();
         const newSortState: QueryGridSortState[] = [];
 
         columnState
@@ -669,28 +686,28 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
                 });
             });
 
-        this.sortState = newSortState;
+        this.SortState = newSortState;
         this.emitStateChange('sort');
     }
 
-    public onColumnResized(event: ColumnResizedEvent): void {
+    public OnColumnResized(event: ColumnResizedEvent): void {
         if (!event.finished || !event.column) return;
 
         const field = event.column.getColId();
-        const column = this.columns.find(c => c.field === field);
+        const column = this.Columns.find(c => c.field === field);
         if (column) {
             column.width = event.column.getActualWidth();
             this.emitStateChange('column-resize');
         }
     }
 
-    public onColumnMoved(event: ColumnMovedEvent): void {
-        if (!this.gridApi || !event.finished) return;
+    public OnColumnMoved(event: ColumnMovedEvent): void {
+        if (!this.GridApi || !event.finished) return;
 
         // Update column order from grid state
-        const columnState = this.gridApi.getColumnState();
+        const columnState = this.GridApi.getColumnState();
         columnState.forEach((cs, index) => {
-            const column = this.columns.find(c => c.field === cs.colId);
+            const column = this.Columns.find(c => c.field === cs.colId);
             if (column) {
                 column.order = index;
             }
@@ -704,35 +721,35 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     // ========================================
 
     private emitStateChange(changeType: 'column-resize' | 'column-move' | 'column-visibility' | 'sort'): void {
-        const state = this.getGridState();
+        const state = this.GetGridState();
         this.stateChangeSubject.next({ state, changeType });
     }
 
-    public getGridState(): QueryGridState {
+    public GetGridState(): QueryGridState {
         return {
-            columns: this.columns.map(c => ({
+            columns: this.Columns.map(c => ({
                 field: c.field,
                 width: c.width,
                 visible: c.visible,
                 order: c.order,
                 pinned: c.pinned
             })),
-            sort: this.sortState
+            sort: this.SortState
         };
     }
 
-    public applyGridState(state: QueryGridState): void {
+    public ApplyGridState(state: QueryGridState): void {
         this.applyColumnStateFromGridState(state);
         this.buildColumnDefs();
 
         // Apply sort state to grid
-        if (this.gridApi && state.sort.length > 0) {
+        if (this.GridApi && state.sort.length > 0) {
             const columnState = state.sort.map(s => ({
                 colId: s.field,
                 sort: s.direction,
                 sortIndex: s.index
             }));
-            this.gridApi.applyColumnState({ state: columnState });
+            this.GridApi.applyColumnState({ state: columnState });
         }
     }
 
@@ -740,7 +757,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * Loads persisted grid state from User Settings
      */
     private loadPersistedState(): void {
-        if (!this.persistState || !this._queryInfo) return;
+        if (!this.PersistState || !this._queryInfo) return;
 
         try {
             const settingKey = getQueryGridStateKey(this._queryInfo.ID);
@@ -748,7 +765,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
 
             if (savedState) {
                 const state = JSON.parse(savedState) as QueryGridState;
-                this.applyGridState(state);
+                this.ApplyGridState(state);
             }
         } catch (error) {
             console.error('[query-data-grid] Failed to load persisted state:', error);
@@ -759,7 +776,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * Persists grid state to User Settings
      */
     private async persistGridState(state: QueryGridState): Promise<void> {
-        if (!this.persistState || !this._queryInfo) return;
+        if (!this.PersistState || !this._queryInfo) return;
 
         try {
             const settingKey = getQueryGridStateKey(this._queryInfo.ID);
@@ -767,6 +784,19 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         } catch (error) {
             console.error('[query-data-grid] Failed to persist grid state:', error);
         }
+    }
+
+    /**
+     * Flushes any pending state changes immediately.
+     * Call this before destroying the component or switching queries
+     * to ensure all state changes are persisted.
+     */
+    public FlushState(): void {
+        if (!this.PersistState || !this._queryInfo) return;
+
+        // Get current state and persist immediately
+        const state = this.GetGridState();
+        this.persistGridState(state);
     }
 
     // ========================================
@@ -801,28 +831,36 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     // Export Dialog
     // ========================================
 
-    public showExportDialog: boolean = false;
-    public exportDialogConfig: ExportDialogConfig | null = null;
+    public ShowExportDialog: boolean = false;
+    public ExportDialogConfig: ExportDialogConfig | null = null;
+
+    // ========================================
+    // Row Detail Panel State
+    // ========================================
+
+    public ShowRowDetailPanel: boolean = false;
+    public RowDetailData: Record<string, unknown> | null = null;
+    public RowDetailIndex: number = 0;
 
     // ========================================
     // Toolbar Actions
     // ========================================
 
-    public refresh(): void {
-        this.refreshRequest.emit();
+    public Refresh(): void {
+        this.RefreshRequest.emit();
     }
 
     /**
      * Opens the export dialog with current grid data
      */
-    public openExportDialog(): void {
+    public OpenExportDialog(): void {
         if (!this._data.length) return;
 
         const data = this.getExportData();
         const columns = this.getExportColumns();
         const fileName = this._queryInfo?.Name || 'query-export';
 
-        this.exportDialogConfig = {
+        this.ExportDialogConfig = {
             data,
             columns,
             defaultFileName: fileName,
@@ -832,23 +870,23 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             defaultSamplingMode: 'all',
             dialogTitle: `Export ${this._queryInfo?.Name || 'Query Results'}`
         };
-        this.showExportDialog = true;
+        this.ShowExportDialog = true;
         this.cdr.detectChanges();
     }
 
     /**
      * Handle export dialog close
      */
-    public onExportDialogClosed(result: ExportDialogResult): void {
-        this.showExportDialog = false;
-        this.exportDialogConfig = null;
+    public OnExportDialogClosed(result: ExportDialogResult): void {
+        this.ShowExportDialog = false;
+        this.ExportDialogConfig = null;
         this.cdr.detectChanges();
     }
 
     /**
      * Export grid data directly without showing dialog
      */
-    public async export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
+    public async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
         const data = this.getExportData();
         const columns = this.getExportColumns();
         const fileName = options?.fileName || this._queryInfo?.Name || 'query-export';
@@ -875,7 +913,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      */
     private getExportData(): ExportData {
         // Use selected rows if any, otherwise all data
-        const rows = this.selectedRows.length > 0 ? this.selectedRows : this._data;
+        const rows = this.SelectedRows.length > 0 ? this.SelectedRows : this._data;
         return rows as ExportData;
     }
 
@@ -883,7 +921,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * Get column definitions for export based on current grid columns
      */
     private getExportColumns(): ExportColumn[] {
-        return this.columns
+        return this.Columns
             .filter(c => c.visible)
             .map(c => ({
                 name: c.field,
@@ -906,9 +944,9 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         return 'string';
     }
 
-    public clearSelection(): void {
-        if (this.gridApi) {
-            this.gridApi.deselectAll();
+    public ClearSelection(): void {
+        if (this.GridApi) {
+            this.GridApi.deselectAll();
         }
     }
 
@@ -916,35 +954,35 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     // Public API
     // ========================================
 
-    public getSelectedRows(): Record<string, unknown>[] {
-        return this.selectedRows;
+    public GetSelectedRows(): Record<string, unknown>[] {
+        return this.SelectedRows;
     }
 
-    public get rowCount(): number {
+    public get RowCount(): number {
         return this._data.length;
     }
 
-    public get selectionCount(): number {
-        return this.selectedRows.length;
+    public get SelectionCount(): number {
+        return this.SelectedRows.length;
     }
 
     // ========================================
     // AG Grid Configuration
     // ========================================
 
-    public getRowSelectionConfig(): RowSelectionOptions | undefined {
-        if (this.selectionMode === 'none') {
+    public GetRowSelectionConfig(): RowSelectionOptions | undefined {
+        if (this.SelectionMode === 'none') {
             return undefined;
         }
 
         return {
-            mode: this.selectionMode === 'single' ? 'singleRow' : 'multiRow',
+            mode: this.SelectionMode === 'single' ? 'singleRow' : 'multiRow',
             enableClickSelection: true,
-            checkboxes: this.selectionMode === 'checkbox'
+            checkboxes: this.SelectionMode === 'checkbox'
         };
     }
 
-    public getRowId = (params: GetRowIdParams): string => {
+    public GetRowId = (params: GetRowIdParams): string => {
         // Use data index as ID since query results don't have a guaranteed unique key
         // We use JSON stringify on a subset of the data to create a deterministic key
         const data = params.data as Record<string, unknown>;
@@ -963,4 +1001,69 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         const keys = Object.keys(data).slice(0, 3);
         return keys.map(k => String(data[k] ?? '')).join('_');
     };
+
+    // ========================================
+    // Row Detail Panel
+    // ========================================
+
+    /**
+     * Opens the row detail panel with the given row data
+     */
+    public OpenRowDetailPanel(rowData: Record<string, unknown>, rowIndex: number): void {
+        this.RowDetailData = rowData;
+        this.RowDetailIndex = rowIndex;
+        this.ShowRowDetailPanel = true;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Closes the row detail panel
+     */
+    public CloseRowDetailPanel(): void {
+        this.ShowRowDetailPanel = false;
+        this.RowDetailData = null;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Navigate to the previous row in the detail panel
+     */
+    public NavigateRowDetail(direction: 'prev' | 'next'): void {
+        if (!this._data.length) return;
+
+        if (direction === 'prev' && this.RowDetailIndex > 0) {
+            this.RowDetailIndex--;
+            this.RowDetailData = this._data[this.RowDetailIndex];
+        } else if (direction === 'next' && this.RowDetailIndex < this._data.length - 1) {
+            this.RowDetailIndex++;
+            this.RowDetailData = this._data[this.RowDetailIndex];
+        }
+
+        // Select the row in the grid
+        if (this.GridApi) {
+            this.GridApi.deselectAll();
+            const node = this.GridApi.getRowNode(String(this.RowDetailIndex));
+            if (node) {
+                node.setSelected(true);
+                this.GridApi.ensureNodeVisible(node);
+            }
+        }
+
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Handle entity link click from the row detail panel
+     */
+    public OnRowDetailEntityLinkClick(event: RowDetailEntityLinkEvent): void {
+        // Find the column config to include in the entity link event
+        const column = this.Columns.find(c => c.field === event.fieldName);
+
+        this.EntityLinkClick.emit({
+            entityName: event.entityName,
+            recordId: event.recordId,
+            column: column || null,
+            rowData: this.RowDetailData || {}
+        });
+    }
 }

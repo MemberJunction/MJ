@@ -276,7 +276,9 @@ Look for packages that depend on each other:
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces
-  - camelCase for variables, functions, methods
+  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`)
+  - **camelCase for private/protected class members**
+  - camelCase for local variables and function parameters
   - Use descriptive names and avoid abbreviations
 - Imports: group imports by type (external, internal, relative)
 - Error handling: use try/catch blocks and provide meaningful error messages
@@ -286,6 +288,50 @@ Look for packages that depend on each other:
   - Functions should have a clear, single purpose
   - Break complex operations into smaller, well-named helper functions
   - Aim for functions that fit on a single screen when possible
+
+### Class Member Naming Convention (IMPORTANT)
+
+MemberJunction uses **PascalCase for all public class members** and **camelCase for private/protected members**. This applies to:
+
+```typescript
+// ✅ CORRECT - MemberJunction naming convention
+export class MyComponent {
+    // Public properties - PascalCase
+    @Input() QueryId: string | null = null;
+    @Input() AutoRun: boolean = false;
+    @Output() EntityLinkClick = new EventEmitter<EntityLinkEvent>();
+
+    public IsLoading: boolean = false;
+    public SelectedRows: Record<string, unknown>[] = [];
+
+    // Private/protected properties - camelCase
+    private destroy$ = new Subject<void>();
+    private _internalState: string = '';
+    protected cdr: ChangeDetectorRef;
+
+    // Public methods - PascalCase
+    public LoadData(): void { }
+    public OnGridReady(event: GridReadyEvent): void { }
+    public GetSelectedRows(): Record<string, unknown>[] { }
+
+    // Private/protected methods - camelCase
+    private buildColumnDefs(): void { }
+    protected applyVisualConfig(): void { }
+}
+
+// ❌ WRONG - Standard TypeScript convention (not used in MJ)
+export class MyComponent {
+    @Input() queryId: string | null = null;  // Should be PascalCase
+    public isLoading: boolean = false;        // Should be PascalCase
+    public loadData(): void { }               // Should be PascalCase
+}
+```
+
+**Why this matters:**
+- Consistency across the entire MemberJunction codebase
+- Clear visual distinction between public API and internal implementation
+- Matches the naming style used in MJ's generated entity classes
+- HTML template bindings must match the PascalCase property names
 
 ## 🚨 IMPORTANT: FUNCTIONAL DECOMPOSITION IS MANDATORY 🚨
 
