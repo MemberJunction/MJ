@@ -133,35 +133,59 @@
                                 <div class="sort-header">
                                     <button kendoButton (click)="addSort()" [disabled]="!UserCanEdit">
                                         <span class="fa-solid fa-plus"></span>
-                                        Add
+                                        Add Sort Level
                                     </button>
+                                    <span class="sort-instructions" *ngIf="sortState.length > 1">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        Drag to reorder priority
+                                    </span>
                                 </div>
-                                <div *ngFor="let s of this.sortState"> 
-                                    <kendo-dropdownlist 
-                                        class="sort-column"
-                                        [data]="sortFields"
-                                        textField="Name"
-                                        valueField="Name"
-                                        (valueChange)="sortColumnValueChange(s, $event)"
-                                        [(ngModel)]="s.field"
-                                        [disabled]="!UserCanEdit"
-                                    >
-                                    </kendo-dropdownlist>
-                                    <kendo-dropdownlist
-                                        class="sort-direction"
-                                        [data]="sortDirections"
-                                        textField="Name"
-                                        valueField="Value"
-                                        (valueChange)="sortDirectionValueChange(s, $event)"
-                                        [(ngModel)]="s.direction"
-                                        [disabled]="!UserCanEdit"
-                                    >
-                                    </kendo-dropdownlist>
-                                    <button kendoButton (click)="removeSort(s)" [disabled]="!UserCanEdit">
-                                        <span class="fa-solid fa-xmark"></span>
-                                        Remove
-                                    </button>
-                                </div> 
+                                <kendo-sortable
+                                    *ngIf="sortState.length > 0"
+                                    [kendoSortableBinding]="sortState"
+                                    [animation]="true"
+                                    itemClass="sort-item"
+                                    activeItemClass="sort-item active"
+                                    (dragEnd)="onSortDragEnd($event)"
+                                    [disabled]="!UserCanEdit"
+                                >
+                                    <ng-template let-s="item" let-index="index">
+                                        <div class="sort-item-content">
+                                            <div class="sort-priority-badge">{{ index + 1 }}</div>
+                                            <span class="fa-solid fa-grip-vertical sort-drag-handle"></span>
+                                            <kendo-dropdownlist
+                                                class="sort-column"
+                                                [data]="sortFields"
+                                                textField="Name"
+                                                valueField="Name"
+                                                (valueChange)="sortColumnValueChange(s, $event)"
+                                                [(ngModel)]="s.field"
+                                                [disabled]="!UserCanEdit"
+                                            >
+                                            </kendo-dropdownlist>
+                                            <kendo-dropdownlist
+                                                class="sort-direction"
+                                                [data]="sortDirections"
+                                                textField="Name"
+                                                valueField="Value"
+                                                (valueChange)="sortDirectionValueChange(s, $event)"
+                                                [(ngModel)]="s.direction"
+                                                [disabled]="!UserCanEdit"
+                                            >
+                                            </kendo-dropdownlist>
+                                            <button kendoButton fillMode="flat" (click)="removeSort(s)" [disabled]="!UserCanEdit" title="Remove sort level">
+                                                <span class="fa-solid fa-xmark"></span>
+                                            </button>
+                                        </div>
+                                    </ng-template>
+                                </kendo-sortable>
+                                <div *ngIf="sortState.length === 0" class="sort-empty-state">
+                                    <i class="fa-solid fa-sort"></i>
+                                    <p>No sort levels defined</p>
+                                    <p class="sort-empty-hint">Click "Add Sort Level" to define how records should be ordered</p>
+                                </div>
+                                <!-- The overlay div, only visible when UserCanEdit is false -->
+                                <div *ngIf="!UserCanEdit" class="overlay"></div>
                             </ng-template>
                         </kendo-tabstrip-tab>
                         <kendo-tabstrip-tab>

@@ -1151,8 +1151,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       const gridState = this.buildGridState(event);
 
       if (gridState) {
-        // Build sort settings if present
-        if (event.sortField) {
+        // Build sort settings if present - prefer sortItems (multi-sort)
+        if (event.sortItems && event.sortItems.length > 0) {
+          gridState.sortSettings = event.sortItems.map(item => ({
+            field: item.field,
+            dir: item.direction
+          }));
+        } else if (event.sortField) {
+          // Fallback to deprecated sortField for backward compatibility
           gridState.sortSettings = [{
             field: event.sortField,
             dir: event.sortDirection
@@ -1219,12 +1225,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       return null;
     }
 
-    // Build sort settings - prefer event.sortField, fall back to currentGridState
+    // Build sort settings - prefer event.sortItems (multi-sort), fall back to currentGridState
     let sortSettings: object[] | undefined;
-    if (event.sortField) {
+    if (event.sortItems && event.sortItems.length > 0) {
+      sortSettings = event.sortItems.map(item => ({
+        field: item.field,
+        dir: item.direction // 'asc' or 'desc'
+      }));
+    } else if (event.sortField) {
+      // Fallback to deprecated sortField for backward compatibility
       sortSettings = [{
         field: event.sortField,
-        dir: event.sortDirection // 'asc' or 'desc'
+        dir: event.sortDirection
       }];
     } else if (this.currentGridState?.sortSettings && this.currentGridState.sortSettings.length > 0) {
       sortSettings = this.currentGridState.sortSettings;
@@ -1236,14 +1248,26 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Build SortState in Kendo-compatible format
    * Format: [{field, direction}] where direction is 'asc' or 'desc'
+   * Supports multi-column sorting via sortItems array
    */
   private buildSortState(event: ViewSaveEvent): object[] | null {
-    if (!event.sortField) return null;
+    // Prefer sortItems array (multi-sort) over deprecated sortField
+    if (event.sortItems && event.sortItems.length > 0) {
+      return event.sortItems.map(item => ({
+        field: item.field,
+        direction: item.direction // 'asc' or 'desc'
+      }));
+    }
 
-    return [{
-      field: event.sortField,
-      direction: event.sortDirection // 'asc' or 'desc'
-    }];
+    // Fallback to deprecated sortField for backward compatibility
+    if (event.sortField) {
+      return [{
+        field: event.sortField,
+        direction: event.sortDirection
+      }];
+    }
+
+    return null;
   }
 
   /**

@@ -17,7 +17,9 @@ import { TextBoxComponent, TextAreaComponent } from '@progress/kendo-angular-inp
 import { FindRecordDialogComponent } from '@memberjunction/ng-find-record';
 import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
 
-
+/**
+ * @deprecated
+ */
 @Component({
   selector: 'mj-user-view-properties-dialog',
   templateUrl: './user-view-properties.component.html',
@@ -492,6 +494,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   }
 
   addSort() {
+    console.log('[VIEW-PROPS] addSort called - NEW CODE LOADED');
     this.sortState = this.sortState.concat({field: this.ViewEntityInfo?.Fields[0], direction: this.sortDirections[0]}); // add a new sort item
   }
 
@@ -499,13 +502,22 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.sortState = this.sortState.filter((i) => i !== item);
   }
  
-  sortColumnValueChange(sortItem: any, newValue: EntityFieldInfo) { 
-    const idx = this.sortState.findIndex((i: any) => i === sortItem);
-
-    console.log(this.sortState)
-    console.log(newValue)
+  sortColumnValueChange(sortItem: any, newValue: EntityFieldInfo) {
+    // Value is already bound via ngModel, nothing else needed
   }
+
   sortDirectionValueChange(sortItem: any, newValue: any) {
+    // Value is already bound via ngModel, nothing else needed
+  }
+
+  /**
+   * Handle drag-drop reordering of sort levels.
+   * Kendo Sortable updates the array order automatically, we just need to detect it.
+   */
+  onSortDragEnd(e: DragEndEvent): void {
+    // The kendo-sortable already reorders the array in place when dragging
+    // Nothing additional needed here - the array order is automatically updated
+    // and will be saved when the user clicks Save
   }
 
 

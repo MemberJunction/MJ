@@ -20,8 +20,8 @@
   position: fixed;
   top: 0;
   right: 0;
-  width: 400px;
-  min-width: 320px;
+  width: 450px;
+  min-width: 360px;
   max-width: min(800px, 100vw);
   height: 100%;
   background: white;
@@ -155,6 +155,16 @@
   font-size: 12px;
 }
 
+.tab-badge {
+  background: #1976d2;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: 4px;
+}
+
 /* Panel Content */
 .panel-content {
   flex: 1;
@@ -252,6 +262,236 @@
   background: white;
   color: #1976d2;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ========================================
+   MULTI-SORT CONFIGURATION
+   ======================================== */
+
+.add-sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  background: transparent;
+  color: #666;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.add-sort-btn:hover:not(:disabled) {
+  border-color: #1976d2;
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.add-sort-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.add-sort-btn i {
+  font-size: 12px;
+}
+
+/* Sort Items List */
+.sort-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Sort Item */
+.sort-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.sort-item:hover {
+  border-color: #bdbdbd;
+  background: #fafafa;
+}
+
+.sort-item.dragging {
+  opacity: 0.5;
+  background: #e3f2fd;
+  border-color: #1976d2;
+}
+
+.sort-item.drop-target {
+  border-color: #1976d2;
+}
+
+/* Priority Badge */
+.sort-priority-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+/* Drag Handle */
+.sort-drag-handle {
+  color: #bdbdbd;
+  cursor: grab;
+  padding: 4px;
+  transition: color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sort-drag-handle:hover {
+  color: #757575;
+}
+
+.sort-item.dragging .sort-drag-handle {
+  cursor: grabbing;
+  color: #1976d2;
+}
+
+/* Sort Field Dropdown */
+.sort-field-dropdown {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+}
+
+.sort-field-dropdown:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+.sort-field-dropdown:disabled {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+/* Sort Remove Button */
+.sort-remove-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #bdbdbd;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sort-remove-btn:hover:not(:disabled) {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.sort-remove-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Sort Drop Indicator */
+.sort-drop-indicator {
+  height: 3px;
+  background: linear-gradient(90deg, #1976d2 0%, #42a5f5 50%, #1976d2 100%);
+  border-radius: 2px;
+  margin: 0 12px;
+  box-shadow: 0 0 8px rgba(25, 118, 210, 0.5);
+  animation: sortDropIndicatorPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes sortDropIndicatorPulse {
+  0%, 100% { opacity: 1; transform: scaleX(1); }
+  50% { opacity: 0.7; transform: scaleX(0.98); }
+}
+
+/* Sort Hint */
+.sort-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.sort-hint i {
+  color: #1976d2;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+/* Sorting Section Styles */
+.sorting-section {
+  padding-top: 0;
+}
+
+.sorting-header {
+  margin-bottom: 16px;
+}
+
+.sorting-description {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Sort Empty State */
+.sort-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: #999;
+  font-size: 14px;
+  text-align: center;
+}
+
+.sort-empty-state i {
+  font-size: 48px;
+  opacity: 0.4;
+  margin-bottom: 8px;
+}
+
+.sort-empty-hint {
+  font-size: 12px;
+  color: #bbb;
+  margin: 0;
 }
 
 /* Column Lists */

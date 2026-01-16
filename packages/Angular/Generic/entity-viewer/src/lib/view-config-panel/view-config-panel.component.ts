@@ -35,6 +35,14 @@ export interface ColumnConfig {
 }
 
 /**
+ * Sort item for multi-column sorting
+ */
+export interface SortItem {
+  field: string;
+  direction: 'asc' | 'desc';
+}
+
+/**
  * Event emitted when saving the view
  */
 export interface ViewSaveEvent {
@@ -43,8 +51,12 @@ export interface ViewSaveEvent {
   isShared: boolean;
   saveAsNew: boolean;
   columns: ColumnConfig[];
+  /** @deprecated Use sortItems instead for multi-sort support */
   sortField: string | null;
+  /** @deprecated Use sortItems instead for multi-sort support */
   sortDirection: 'asc' | 'desc';
+  /** Multi-column sort configuration (ordered by priority) */
+  sortItems: SortItem[];
   smartFilterEnabled: boolean;
   smartFilterPrompt: string;
   /** Traditional filter state in Kendo-compatible JSON format */
@@ -133,8 +145,23 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   public viewDescription: string = '';
   public isShared: boolean = false;
   public columns: ColumnConfig[] = [];
+  /** @deprecated Use sortItems instead */
   public sortField: string | null = null;
+  /** @deprecated Use sortItems instead */
   public sortDirection: 'asc' | 'desc' = 'asc';
+  /** Multi-column sort configuration (ordered by priority) */
+  public sortItems: SortItem[] = [];
+
+  // Sort drag state
+  public draggedSortItem: SortItem | null = null;
+  public dropTargetSortItem: SortItem | null = null;
+  public sortDropPosition: 'before' | 'after' | null = null;
+
+  // Available sort directions for dropdown
+  public sortDirections = [
+    { name: 'Ascending', value: 'asc' as const },
+    { name: 'Descending', value: 'desc' as const }
+  ];
 
   // Smart Filter state
   public smartFilterEnabled: boolean = false;
@@ -149,7 +176,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   public filterMode: 'smart' | 'traditional' = 'smart';
 
   // UI state
-  public activeTab: 'columns' | 'filters' | 'settings' = 'columns';
+  public activeTab: 'columns' | 'sorting' | 'filters' | 'settings' = 'columns';
   @Input() isSaving: boolean = false;
   public columnSearchText: string = '';
 
@@ -163,10 +190,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
 
   // Panel resize state
   public isResizing: boolean = false;
-  public panelWidth: number = 400;
-  private readonly MIN_PANEL_WIDTH = 320;
+  public panelWidth: number = 450;
+  private readonly MIN_PANEL_WIDTH = 360;
   private readonly MAX_PANEL_WIDTH = 800;
-  private readonly DEFAULT_PANEL_WIDTH = 400;
+  private readonly DEFAULT_PANEL_WIDTH = 450;
   private resizeStartX: number = 0;
   private resizeStartWidth: number = 0;
 
@@ -287,10 +314,17 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
       this.applyGridStateToColumns(this.currentGridState.columnSettings);
 
-      // Also apply sort from currentGridState
+      // Also apply sort from currentGridState (supports multi-sort)
       if (this.currentGridState.sortSettings && this.currentGridState.sortSettings.length > 0) {
+        this.sortItems = this.currentGridState.sortSettings.map(s => ({
+          field: s.field,
+          direction: s.dir
+        }));
+        // Keep legacy fields in sync for backward compatibility
         this.sortField = this.currentGridState.sortSettings[0].field;
         this.sortDirection = this.currentGridState.sortSettings[0].dir;
+      } else {
+        this.sortItems = [];
       }
     }
     // Priority 2: If we have a view, apply its column configuration
@@ -322,11 +356,18 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         this.columns.sort((a, b) => a.orderIndex - b.orderIndex);
       }
 
-      // Apply view's sort configuration
+      // Apply view's sort configuration (supports multi-sort)
       const sortInfo = this.viewEntity.ViewSortInfo;
       if (sortInfo && sortInfo.length > 0) {
+        this.sortItems = sortInfo.map(s => ({
+          field: s.field,
+          direction: s.direction === 'Desc' ? 'desc' as const : 'asc' as const
+        }));
+        // Keep legacy fields in sync for backward compatibility
         this.sortField = sortInfo[0].field;
         this.sortDirection = sortInfo[0].direction === 'Desc' ? 'desc' : 'asc';
+      } else {
+        this.sortItems = [];
       }
     }
 
@@ -366,6 +407,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       if (!this.currentGridState?.sortSettings?.length) {
         this.sortField = null;
         this.sortDirection = 'asc';
+        this.sortItems = [];
       }
       this.smartFilterPrompt = '';
       this.smartFilterExplanation = '';
@@ -777,6 +819,203 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   }
 
   // ========================================
+  // MULTI-SORT MANAGEMENT
+  // ========================================
+
+  /**
+   * Add a new sort level
+   */
+  addSortLevel(): void {
+    // Find the first sortable field not already in use
+    const usedFields = new Set(this.sortItems.map(s => s.field));
+    const availableField = this.sortableFields.find(f => !usedFields.has(f.Name));
+
+    if (availableField) {
+      this.sortItems.push({
+        field: availableField.Name,
+        direction: 'asc'
+      });
+      this.syncLegacySortFields();
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Remove a sort level
+   */
+  removeSortLevel(sortItem: SortItem): void {
+    const index = this.sortItems.indexOf(sortItem);
+    if (index > -1) {
+      this.sortItems.splice(index, 1);
+      this.syncLegacySortFields();
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Get the display name for a field
+   */
+  getFieldDisplayName(fieldName: string): string {
+    const field = this.sortableFields.find(f => f.Name === fieldName);
+    return field?.DisplayNameOrName || fieldName;
+  }
+
+  /**
+   * Get fields available for a sort item (excludes already selected fields except current)
+   */
+  getAvailableFieldsForSort(currentSortItem: SortItem): EntityFieldInfo[] {
+    const usedFields = new Set(this.sortItems.map(s => s.field));
+    return this.sortableFields.filter(f =>
+      f.Name === currentSortItem.field || !usedFields.has(f.Name)
+    );
+  }
+
+  /**
+   * Handle sort field change
+   */
+  onSortFieldChange(sortItem: SortItem, fieldName: string): void {
+    sortItem.field = fieldName;
+    this.syncLegacySortFields();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle sort direction change
+   */
+  onSortDirectionChange(sortItem: SortItem, direction: 'asc' | 'desc'): void {
+    sortItem.direction = direction;
+    this.syncLegacySortFields();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Keep legacy sortField/sortDirection in sync with sortItems[0]
+   */
+  private syncLegacySortFields(): void {
+    if (this.sortItems.length > 0) {
+      this.sortField = this.sortItems[0].field;
+      this.sortDirection = this.sortItems[0].direction;
+    } else {
+      this.sortField = null;
+      this.sortDirection = 'asc';
+    }
+  }
+
+  // ----------------------------------------
+  // Sort Drag & Drop
+  // ----------------------------------------
+
+  /**
+   * Handle drag start for sort item reordering
+   */
+  onSortDragStart(event: DragEvent, sortItem: SortItem): void {
+    this.draggedSortItem = sortItem;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', sortItem.field);
+    }
+    (event.target as HTMLElement).classList.add('dragging');
+  }
+
+  /**
+   * Handle drag over for sort item reordering
+   */
+  onSortDragOver(event: DragEvent, sortItem: SortItem): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+
+    if (!this.draggedSortItem || this.draggedSortItem === sortItem) {
+      this.dropTargetSortItem = null;
+      this.sortDropPosition = null;
+      return;
+    }
+
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const threshold = rect.height / 2;
+
+    this.dropTargetSortItem = sortItem;
+    this.sortDropPosition = y < threshold ? 'before' : 'after';
+  }
+
+  /**
+   * Handle drag leave for sort item
+   */
+  onSortDragLeave(event: DragEvent): void {
+    const relatedTarget = event.relatedTarget as HTMLElement;
+    const currentTarget = event.currentTarget as HTMLElement;
+    if (!currentTarget.contains(relatedTarget)) {
+      this.dropTargetSortItem = null;
+      this.sortDropPosition = null;
+    }
+  }
+
+  /**
+   * Handle drop for sort item reordering
+   */
+  onSortDrop(event: DragEvent, targetSortItem: SortItem): void {
+    event.preventDefault();
+
+    if (this.draggedSortItem && this.draggedSortItem !== targetSortItem && this.sortDropPosition) {
+      const draggedIndex = this.sortItems.indexOf(this.draggedSortItem);
+      let targetIndex = this.sortItems.indexOf(targetSortItem);
+
+      // Adjust target index based on drop position
+      if (this.sortDropPosition === 'after') {
+        targetIndex++;
+      }
+
+      // If dragging from before target, adjust for removal
+      if (draggedIndex < targetIndex) {
+        targetIndex--;
+      }
+
+      // Remove from old position
+      this.sortItems.splice(draggedIndex, 1);
+      // Insert at new position
+      this.sortItems.splice(targetIndex, 0, this.draggedSortItem);
+
+      this.syncLegacySortFields();
+    }
+
+    this.clearSortDragState();
+  }
+
+  /**
+   * Handle drag end for sort item
+   */
+  onSortDragEnd(event: DragEvent): void {
+    (event.target as HTMLElement).classList.remove('dragging');
+    this.clearSortDragState();
+  }
+
+  /**
+   * Clear sort drag state
+   */
+  private clearSortDragState(): void {
+    this.draggedSortItem = null;
+    this.dropTargetSortItem = null;
+    this.sortDropPosition = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Check if drop indicator should show before a sort item
+   */
+  isSortDropBefore(sortItem: SortItem): boolean {
+    return this.dropTargetSortItem === sortItem && this.sortDropPosition === 'before';
+  }
+
+  /**
+   * Check if drop indicator should show after a sort item
+   */
+  isSortDropAfter(sortItem: SortItem): boolean {
+    return this.dropTargetSortItem === sortItem && this.sortDropPosition === 'after';
+  }
+
+  // ========================================
   // COLUMN FORMAT EDITOR
   // ========================================
 
@@ -1017,6 +1256,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       columns: this.visibleColumns,
       sortField: this.sortField,
       sortDirection: this.sortDirection,
+      sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
       filterState: this.hasActiveFilters() ? this.filterState : null
@@ -1038,6 +1278,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       columns: this.visibleColumns,
       sortField: this.sortField,
       sortDirection: this.sortDirection,
+      sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
       filterState: this.hasActiveFilters() ? this.filterState : null
@@ -1060,6 +1301,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
       columns: this.visibleColumns,
       sortField: this.sortField,
       sortDirection: this.sortDirection,
+      sortItems: [...this.sortItems],
       smartFilterEnabled: this.smartFilterEnabled,
       smartFilterPrompt: this.smartFilterPrompt,
       filterState: this.hasActiveFilters() ? this.filterState : null
@@ -1078,7 +1320,7 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   /**
    * Set the active tab
    */
-  setActiveTab(tab: 'columns' | 'filters' | 'settings'): void {
+  setActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'settings'): void {
     this.activeTab = tab;
     this.formatEditingColumn = null; // Close format editor when switching tabs
     this.cdr.detectChanges();

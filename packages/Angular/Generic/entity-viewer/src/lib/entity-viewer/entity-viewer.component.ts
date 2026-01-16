@@ -1100,8 +1100,6 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Maps to sortChanged event for parent components
    */
   onDataGridSortChanged(event: AfterSortEventArgs): void {
-    console.log('[SORT DEBUG] entity-viewer onDataGridSortChanged, event.newSortState:', JSON.stringify(event.newSortState));
-
     // Convert the data grid's sort state to our SortState format
     const newSort: SortState | null = event.newSortState && event.newSortState.length > 0
       ? {
@@ -1115,9 +1113,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
     // If server-side sorting, reload from page 1
     // Keep existing records visible during refresh for better UX
-    console.log('[SORT DEBUG] entity-viewer serverSideSorting:', this.effectiveConfig.serverSideSorting, 'records:', !!this.records);
     if (this.effectiveConfig.serverSideSorting && !this.records) {
-      console.log('[SORT DEBUG] entity-viewer triggering loadData for server-side sort');
       this.resetPaginationState(false);
       this.loadData();
     }

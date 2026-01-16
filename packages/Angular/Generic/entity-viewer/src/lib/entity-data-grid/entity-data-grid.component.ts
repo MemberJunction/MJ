@@ -274,9 +274,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Input()
   set Data(value: BaseEntity[]) {
-    console.log('[SORT DEBUG] Data setter called, records count:', value?.length);
-    console.log('[SORT DEBUG] Current _sortState at Data setter entry:', JSON.stringify(this._sortState));
-
     const hadData = this._data.length > 0;
     this._data = value || [];
     this._useExternalData = this._data.length > 0;
@@ -284,7 +281,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Suppress sort events during data update to prevent AG Grid from clearing
       // our saved sort state when it processes the new row data
       const savedSortState = [...this._sortState];
-      console.log('[SORT DEBUG] Saved sort state before processData:', JSON.stringify(savedSortState));
       this.suppressSortEvents = true;
 
       try {
@@ -293,21 +289,14 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.suppressSortEvents = false;
       }
 
-      console.log('[SORT DEBUG] After processData, _sortState:', JSON.stringify(this._sortState));
-
       // Reapply sort state to grid after data changes to maintain visual indicators
       // Use microtask to ensure AG Grid has processed the new row data first
       if (this.gridApi && savedSortState.length > 0) {
         // Restore sort state in case it was cleared during processData
         this._sortState = savedSortState;
-        console.log('[SORT DEBUG] Restored _sortState:', JSON.stringify(this._sortState));
-        console.log('[SORT DEBUG] Scheduling applySortStateToGrid via microtask');
         Promise.resolve().then(() => {
-          console.log('[SORT DEBUG] Microtask executing applySortStateToGrid, _sortState:', JSON.stringify(this._sortState));
           this.applySortStateToGrid();
         });
-      } else {
-        console.log('[SORT DEBUG] Not applying sort state - gridApi:', !!this.gridApi, 'savedSortState.length:', savedSortState.length);
       }
     }
   }
@@ -1528,7 +1517,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
       // Apply sort if present - support multi-column sort
       if (this._gridState.sortSettings?.length && this.gridApi) {
-        console.log('[SORT DEBUG] onGridStateChanged applying sortSettings:', JSON.stringify(this._gridState.sortSettings));
         this._sortState = this._gridState.sortSettings.map((sortSetting, index) => ({
           field: sortSetting.field,
           direction: sortSetting.dir,
@@ -2682,9 +2670,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   onAgSortChanged(event: AgSortChangedEvent): void {
-    console.log('[SORT DEBUG] onAgSortChanged called, suppressSortEvents:', this.suppressSortEvents);
     if (this.suppressSortEvents) {
-      console.log('[SORT DEBUG] Suppressing sort event, returning early');
       return;
     }
 
@@ -2695,9 +2681,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         direction: col.sort as 'asc' | 'desc',
         index: col.sortIndex ?? 0
       }));
-
-    console.log('[SORT DEBUG] sortModel from AG Grid:', JSON.stringify(sortModel));
-    console.log('[SORT DEBUG] Current _sortState before update:', JSON.stringify(this._sortState));
 
     if (sortModel.length > 0) {
       // Find the column config
@@ -2715,14 +2698,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         this.BeforeSort.emit(beforeEvent);
         if (beforeEvent.cancel) {
           // Revert to previous sort state
-          console.log('[SORT DEBUG] BeforeSort cancelled, reverting');
           this.applySortStateToGrid();
           return;
         }
       }
 
       this._sortState = sortModel;
-      console.log('[SORT DEBUG] Updated _sortState to:', JSON.stringify(this._sortState));
 
       if (column) {
         // Fire after sort event
@@ -2733,7 +2714,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           this._sortState
         );
         this.AfterSort.emit(afterEvent);
-        console.log('[SORT DEBUG] AfterSort emitted with newSortState:', JSON.stringify(afterEvent.newSortState));
       }
 
       // User changed sort - mark as dirty and emit grid state changed
@@ -2743,17 +2723,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Determine if we need to reload data from server or can sort client-side
       // Client-side sorting is only possible if we have ALL the data loaded
       if (this._serverSideSorting && !this._useExternalData) {
-        console.log('[SORT DEBUG] Server-side sorting, calling loadData');
         this.loadData(true);
-      } else if (this._useExternalData) {
-        // Using external data - check if we have all data or just a page
-        // If totalRowCount > current data length, we only have partial data and parent must handle sorting
-        // Parent receives afterSort event and can reload with new sort order
-        // If we have all data, AG Grid handles client-side sorting automatically
-        console.log('[SORT DEBUG] Using external data, parent handles sorting');
       }
+      // When using external data, parent receives afterSort event and can reload with new sort order
+      // If we have all data, AG Grid handles client-side sorting automatically
     } else {
-      console.log('[SORT DEBUG] sortModel is EMPTY, clearing _sortState');
       this._sortState = [];
       // User cleared sort - mark as dirty and emit grid state changed
       this._isGridStateDirty = true;
@@ -3033,15 +3007,12 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   private applySortStateToGrid(): void {
-    console.log('[SORT DEBUG] applySortStateToGrid called, _sortState:', JSON.stringify(this._sortState));
     if (!this.gridApi || this._sortState.length === 0) {
-      console.log('[SORT DEBUG] applySortStateToGrid returning early - gridApi:', !!this.gridApi, '_sortState.length:', this._sortState.length);
       return;
     }
 
     const currentColumnState = this.gridApi.getColumnState();
     if (!currentColumnState) {
-      console.log('[SORT DEBUG] applySortStateToGrid returning early - no currentColumnState');
       return;
     }
 
@@ -3055,10 +3026,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           sortIndex: sort ? sort.index : null
         };
       });
-      const sortedCols = columnState.filter(c => c.sort);
-      console.log('[SORT DEBUG] Applying column state with sorted cols:', JSON.stringify(sortedCols.map(c => ({ colId: c.colId, sort: c.sort, sortIndex: c.sortIndex }))));
       this.gridApi.applyColumnState({ state: columnState });
-      console.log('[SORT DEBUG] applyColumnState completed');
     } finally {
       this.suppressSortEvents = false;
     }
