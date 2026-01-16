@@ -518,6 +518,61 @@ export class BaseAgent {
     }
 
     /**
+     * Processes media placeholders in agent messages for conversational agents.
+     *
+     * Unlike artifact-based agents (which embed images in HTML payload), conversational agents
+     * should display images via ConversationDetailAttachment. This method:
+     * 1. Detects ${media:xxx} placeholders in the message
+     * 2. Sets persist=true on referenced media (triggers save to AIAgentRunMedia)
+     * 3. Strips media HTML tags from the message (images display via attachment instead)
+     *
+     * @param message - The message that may contain media placeholders
+     * @returns Cleaned message with media tags stripped
+     * @private
+     * @since 3.1.0
+     */
+    private processMessageMediaPlaceholders(message: string): string {
+        if (!message) {
+            return message;
+        }
+
+        // Check if any media has a refId (meaning we have intercepted media)
+        const hasRefIds = this._mediaOutputs.some(m => m.refId);
+        if (!hasRefIds) {
+            return message;
+        }
+
+        // Find all ${media:xxx} placeholders and mark referenced media for persistence
+        const placeholderRegex = /\$\{media:([a-zA-Z0-9_-]+)\}/g;
+        let match;
+        let promotedCount = 0;
+
+        while ((match = placeholderRegex.exec(message)) !== null) {
+            const refId = match[1];
+            const media = this._mediaOutputs.find(m => m.refId === refId);
+            if (media && media.persist !== true) {
+                media.persist = true;  // Triggers save to AIAgentRunMedia
+                promotedCount++;
+            }
+        }
+
+        if (promotedCount > 0) {
+            this.logStatus(`📎 Auto-promoted ${promotedCount} media output(s) from message placeholders`, true);
+        }
+
+        // Strip <img>, <audio>, <video> tags containing media placeholders
+        // The media will display via ConversationDetailAttachment instead
+        let cleanedMessage = message
+            .replace(/<img[^>]*src=["']\$\{media:[^}]+\}["'][^>]*\/?>/gi, '')
+            .replace(/<audio[^>]*src=["']\$\{media:[^}]+\}["'][^>]*>.*?<\/audio>/gi, '')
+            .replace(/<video[^>]*src=["']\$\{media:[^}]+\}["'][^>]*>.*?<\/video>/gi, '')
+            .replace(/\n\s*\n\s*\n/g, '\n\n')  // Clean up excessive newlines
+            .trim();
+
+        return cleanedMessage;
+    }
+
+    /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
      * Tracked separately as it's display-only and doesn't need persistence.
      * @private
@@ -7285,6 +7340,13 @@ The context is now within limits. Please retry your request with the recovered c
             ? this.resolveMediaPlaceholdersInPayload(payload)
             : payload;
 
+        // For root agents: process message for media placeholders
+        // This promotes referenced media (sets persist=true) and strips media HTML tags
+        // so images display via ConversationDetailAttachment instead of embedded in message
+        const processedMessage = (finalStep.message && isRootAgent)
+            ? this.processMessageMediaPlaceholders(finalStep.message)
+            : finalStep.message;
+
         if (this._agentRun) {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
@@ -7306,7 +7368,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             this._agentRun.Result = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
             this._agentRun.FinalStep = finalStep.step;
-            this._agentRun.Message = finalStep.message;
+            this._agentRun.Message = processedMessage;
 
             // Set the FinalPayloadObject - this will automatically stringify for the DB
             this._agentRun.FinalPayloadObject = resolvedPayload;
