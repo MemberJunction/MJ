@@ -1,7 +1,7 @@
-import { Component, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
-import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity } from '@memberjunction/core-entities';
-import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity, UserNotificationTypeEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { SafeJSONParse } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -11,18 +11,45 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   templateUrl: './user-notifications.component.html',
   styleUrls: ['./user-notifications.component.css']
 })
-export class UserNotificationsComponent implements AfterViewInit {
+export class UserNotificationsComponent implements OnInit, AfterViewInit {
   @ViewChild('allRadio') allRadio!: ElementRef;
   @ViewChild('unreadRadio') unreadRadio!: ElementRef;
-  @ViewChild('readRadio') readRadio!: ElementRef;  
+  @ViewChild('readRadio') readRadio!: ElementRef;
 
   public radioSelected: string = 'all';
   public currentFilter: string = '';
+  public notificationTypes: UserNotificationTypeEntity[] = [];
+  public selectedTypeFilter: string | null = null;
+  public loadingTypes = true;
 
   constructor (public sharedService: SharedService, private router: Router) {}
 
+  async ngOnInit() {
+    await this.loadNotificationTypes();
+  }
+
   ngAfterViewInit(): void {
     this.sharedService.InvokeManualResize(); // make sure the notifications component is sized correctly
+  }
+
+  private async loadNotificationTypes() {
+    try {
+      this.loadingTypes = true;
+      const rv = new RunView();
+      const result = await rv.RunView<UserNotificationTypeEntity>({
+        EntityName: 'MJ: User Notification Types',
+        OrderBy: 'Priority ASC, Name ASC',
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results) {
+        this.notificationTypes = result.Results;
+      }
+    } catch (error) {
+      console.error('Failed to load notification types:', error);
+    } finally {
+      this.loadingTypes = false;
+    }
   }
 
   public get NotificationsToShow(): UserNotificationEntity[] {
@@ -37,10 +64,15 @@ export class UserNotificationsComponent implements AfterViewInit {
       temp = this.AllNotifications.filter(n => !n.Unread);
     }
 
-    // Apply filter if it is not empty
+    // Apply type filter if selected
+    if (this.selectedTypeFilter) {
+      temp = temp.filter(n => n.NotificationTypeID === this.selectedTypeFilter);
+    }
+
+    // Apply text filter if it is not empty
     if (this.currentFilter.trim().length > 0) {
       // check for inclusion of filter value in title or message
-      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.currentFilter.trim().toLowerCase()) || 
+      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.currentFilter.trim().toLowerCase()) ||
                               n.Message?.toLowerCase().includes(this.currentFilter.trim().toLowerCase())
                         );
     }
@@ -293,5 +325,35 @@ export class UserNotificationsComponent implements AfterViewInit {
         this.router.navigate(info.urlParts);
       }
     }
-  } 
+  }
+
+  public getNotificationType(typeId: string | null): UserNotificationTypeEntity | null {
+    if (!typeId) return null;
+    return this.notificationTypes.find(t => t.ID === typeId) || null;
+  }
+
+  public getTypeIcon(notification: UserNotificationEntity): string {
+    const type = this.getNotificationType(notification.NotificationTypeID);
+    if (type) {
+      return (type as any).Icon || 'fa-bell';
+    }
+    return 'fa-bell';
+  }
+
+  public getTypeColor(notification: UserNotificationEntity): string {
+    const type = this.getNotificationType(notification.NotificationTypeID);
+    if (type) {
+      return (type as any).Color || '#999';
+    }
+    return '#999';
+  }
+
+  public getTypeName(notification: UserNotificationEntity): string {
+    const type = this.getNotificationType(notification.NotificationTypeID);
+    return type ? type.Name : 'Notification';
+  }
+
+  public onTypeFilterChange(typeId: string | null): void {
+    this.selectedTypeFilter = typeId;
+  }
 }

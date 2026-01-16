@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: #4CAF50;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .header .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .content p {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+        }
+        .artifact-info {
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .artifact-info .title {
+            font-weight: 600;
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .artifact-info .version {
+            color: #666;
+            font-size: 14px;
+            font-style: italic;
+        }
+        .button {
+            display: inline-block;
+            background: #2196F3;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .button:hover {
+            background: #1976D2;
+        }
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-top: 1px solid #eee;
+        }
+        .footer a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="icon">🤖</div>
+            <h2>{{ agentName }} completed your request</h2>
+        </div>
+        <div class="content">
+            <p>Your AI agent has finished processing and created an artifact for you:</p>
+
+            <div class="artifact-info">
+                <div class="title">{{ artifactTitle }}</div>
+                {% if versionNumber %}
+                <div class="version">Version {{ versionNumber }}</div>
+                {% endif %}
+            </div>
+
+            <p>Click the button below to view the full conversation and access your artifact:</p>
+
+            <a href="{{ conversationUrl }}" class="button">View Result</a>
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from MemberJunction</p>
+            <p>Powered by <a href="https://memberjunction.org">MemberJunction</a></p>
+        </div>
+    </div>
+</body>
+</html>

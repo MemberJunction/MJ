@@ -62,6 +62,20 @@
           </div>
         </div>
         
+        <!-- Type Filter Dropdown -->
+        <div class="type-filter" *ngIf="AllNotifications.length > 0 && notificationTypes.length > 0">
+          <kendo-dropdownlist
+            [data]="notificationTypes"
+            textField="Name"
+            valueField="ID"
+            [valuePrimitive]="true"
+            [(ngModel)]="selectedTypeFilter"
+            (valueChange)="onTypeFilterChange($event)"
+            [defaultItem]="{ ID: null, Name: 'All Types' }"
+            class="type-filter-dropdown">
+          </kendo-dropdownlist>
+        </div>
+
         <!-- Search Filter -->
         <div class="mj-search filter-input" *ngIf="AllNotifications.length > 0">
           <kendo-textbox
@@ -96,17 +110,32 @@
     <!-- Notifications List -->
     <kendo-listview [data]="NotificationsToShow">
       <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
-        <div [class]="getItemWrapperClass(dataItem)">
+        <div [class]="getItemWrapperClass(dataItem)"
+             [style.border-left-color]="getTypeColor(dataItem)">
           <div class="notification-status"></div>
-          
-          <div [class]="getItemTitleClass(dataItem)" 
-               (click)="notificationClicked(dataItem)">
-            {{dataItem.Title}}
+
+          <div class="notification-header">
+            <div class="notification-type-badge"
+                 [style.background-color]="getTypeColor(dataItem) + '20'">
+              <i [class]="'fa-solid ' + getTypeIcon(dataItem)"
+                 [style.color]="getTypeColor(dataItem)"></i>
+            </div>
+
+            <div [class]="getItemTitleClass(dataItem)"
+                 (click)="notificationClicked(dataItem)">
+              {{dataItem.Title}}
+            </div>
           </div>
-          
+
           <div class="notification-body" (click)="notificationClicked(dataItem)">
-            <div class="notification-date">
-              {{dataItem.__mj_CreatedAt | date:'MMM d, y \'at\' h:mm a'}}
+            <div class="notification-metadata">
+              <span class="notification-type-label"
+                    [style.color]="getTypeColor(dataItem)">
+                {{getTypeName(dataItem)}}
+              </span>
+              <span class="notification-date">
+                {{dataItem.__mj_CreatedAt | date:'MMM d, y \'at\' h:mm a'}}
+              </span>
             </div>
             <div class="notification-message">{{dataItem.Message}}</div>
           </div>

@@ -78,6 +78,7 @@ export class UserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCollectionPermissions', sectionName: 'MJ: Collection Permissions', isExpanded: false },
             { sectionKey: 'mJScheduledJobs1', sectionName: 'MJ: Scheduled Jobs', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'MJ: Test Runs', isExpanded: false },
+            { sectionKey: 'mJUserNotificationPreferences', sectionName: 'MJ: User Notification Preferences', isExpanded: false },
             { sectionKey: 'resourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentPermissions', sectionName: 'MJ: AI Agent Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'MJ: AI Agent Runs', isExpanded: false },
