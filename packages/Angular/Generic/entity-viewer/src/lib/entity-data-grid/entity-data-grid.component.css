@@ -1006,15 +1006,20 @@
    ======================================== */
 
 /* Highlight sorted column headers with eye-catching background */
-:host ::ng-deep .ag-header-cell-sorted-asc,
-:host ::ng-deep .ag-header-cell-sorted-desc {
+/* Ascending = blue tint */
+:host ::ng-deep .ag-header-cell-sorted-asc {
   background: linear-gradient(180deg, rgba(25, 118, 210, 0.15) 0%, rgba(25, 118, 210, 0.08) 100%) !important;
   position: relative;
 }
 
-/* Bottom border accent for sorted columns */
-:host ::ng-deep .ag-header-cell-sorted-asc::after,
-:host ::ng-deep .ag-header-cell-sorted-desc::after {
+/* Descending = pink tint */
+:host ::ng-deep .ag-header-cell-sorted-desc {
+  background: linear-gradient(180deg, rgba(216, 27, 96, 0.15) 0%, rgba(216, 27, 96, 0.08) 100%) !important;
+  position: relative;
+}
+
+/* Bottom border accent for sorted columns - ascending = blue */
+:host ::ng-deep .ag-header-cell-sorted-asc::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -1024,17 +1029,38 @@
   background: #1976d2;
 }
 
-/* Sorted column header text - make it blue and bold */
-:host ::ng-deep .ag-header-cell-sorted-asc .ag-header-cell-text,
-:host ::ng-deep .ag-header-cell-sorted-desc .ag-header-cell-text {
+/* Bottom border accent for sorted columns - descending = pink */
+:host ::ng-deep .ag-header-cell-sorted-desc::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #d81b60;
+}
+
+/* Sorted column header text - ascending = blue, bold */
+:host ::ng-deep .ag-header-cell-sorted-asc .ag-header-cell-text {
   color: #1976d2 !important;
   font-weight: 700 !important;
 }
 
+/* Sorted column header text - descending = pink, bold */
+:host ::ng-deep .ag-header-cell-sorted-desc .ag-header-cell-text {
+  color: #d81b60 !important;
+  font-weight: 700 !important;
+}
+
 /* Sort icons - larger and more prominent */
-:host ::ng-deep .ag-sort-ascending-icon,
-:host ::ng-deep .ag-sort-descending-icon {
+/* Ascending = blue */
+:host ::ng-deep .ag-sort-ascending-icon {
   color: #1976d2 !important;
+}
+
+/* Descending = pink/magenta */
+:host ::ng-deep .ag-sort-descending-icon {
+  color: #d81b60 !important;
 }
 
 :host ::ng-deep .ag-sort-ascending-icon .ag-icon,
@@ -1042,22 +1068,20 @@
   font-size: 14px !important;
 }
 
-/* Sort order number (1, 2, 3) - style as a pill badge */
+/* Sort order number (1, 2, 3) - show as plain number, no bubble */
+/* This avoids AG Grid bug where .ag-sort-order is always present but empty when unsorted */
+/* The number is only visible when AG Grid populates it (i.e., when column is sorted) */
+/* Default blue for ascending */
 :host ::ng-deep .ag-sort-order {
-  display: inline-flex !important;
-  visibility: visible !important;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  margin-left: 3px;
-  font-size: 10px !important;
+  margin-left: 4px;
+  font-size: 11px !important;
   font-weight: 700 !important;
-  color: white !important;
-  background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%) !important;
-  border-radius: 9px;
-  box-shadow: 0 1px 3px rgba(25, 118, 210, 0.4);
+  color: #1976d2 !important;
+}
+
+/* Sort order number - pink for descending */
+:host ::ng-deep .ag-header-cell-sorted-desc .ag-sort-order {
+  color: #d81b60 !important;
 }
 
 /* Hover state for sortable headers */
