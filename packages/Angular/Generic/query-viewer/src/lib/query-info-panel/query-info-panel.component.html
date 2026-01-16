@@ -152,8 +152,8 @@
                 <span class="section-title">SQL Query</span>
             </div>
             <div class="section-content" *ngIf="IsSectionExpanded('sql')">
-                <div class="sql-container" *ngIf="QueryInfo.OriginalSQL; else noSql">
-                    <pre class="sql-code">{{ QueryInfo.OriginalSQL }}</pre>
+                <div class="sql-container" *ngIf="QueryInfo.SQL; else noSql">
+                    <pre class="sql-code">{{ QueryInfo.SQL }}</pre>
                 </div>
                 <ng-template #noSql>
                     <div class="empty-section">

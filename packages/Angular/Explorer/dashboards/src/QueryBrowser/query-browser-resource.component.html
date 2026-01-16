@@ -11,10 +11,10 @@
             </div>
             <div class="header-actions">
                 <button class="icon-btn" (click)="expandAll()" title="Expand all">
-                    <i class="fa-solid fa-expand"></i>
+                    <i class="fa-solid fa-folder-open"></i>
                 </button>
                 <button class="icon-btn" (click)="collapseAll()" title="Collapse all">
-                    <i class="fa-solid fa-compress"></i>
+                    <i class="fa-solid fa-folder"></i>
                 </button>
                 <button class="icon-btn" (click)="refresh()" title="Refresh">
                     <i class="fa-solid fa-refresh"></i>
@@ -79,9 +79,10 @@
             *ngIf="selectedQuery"
             [QueryId]="selectedQuery.ID"
             [AutoRun]="true"
-            [SelectionMode]="'single'"
+            [SelectionMode]="'multiple'"
             (EntityLinkClick)="onEntityLinkClick($event)"
-            (RowDoubleClick)="onRowDoubleClick($event)">
+            (RowDoubleClick)="onRowDoubleClick($event)"
+            (OpenQueryRecord)="onOpenQueryRecord($event)">
         </mj-query-viewer>
     </div>
 </div>

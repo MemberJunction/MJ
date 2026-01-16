@@ -50,6 +50,11 @@ interface DetailField {
 const PANEL_WIDTH_SETTING_KEY = 'QueryViewer_RowDetailPanel_Width';
 
 /**
+ * Settings key for hide empty fields preference
+ */
+const HIDE_EMPTY_FIELDS_KEY = 'QueryViewer_RowDetailPanel_HideEmptyFields';
+
+/**
  * Row detail slide-in panel component.
  * Displays a single row's data in a formatted, grouped view with entity links.
  */
@@ -121,6 +126,7 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
     public RegularFields: DetailField[] = [];
     public PanelWidth: number = 400;
     public IsResizing: boolean = false;
+    public HideEmptyFields: boolean = true;
 
     private destroy$ = new Subject<void>();
     private widthPersistSubject = new Subject<number>();
@@ -143,6 +149,7 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
 
     ngOnInit(): void {
         this.loadPersistedWidth();
+        this.loadHideEmptyFieldsPreference();
     }
 
     ngOnDestroy(): void {
@@ -394,6 +401,48 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
         } catch (error) {
             console.error('[query-row-detail] Failed to persist panel width:', error);
         }
+    }
+
+    private loadHideEmptyFieldsPreference(): void {
+        try {
+            const saved = UserInfoEngine.Instance.GetSetting(HIDE_EMPTY_FIELDS_KEY);
+            if (saved !== undefined) {
+                this.HideEmptyFields = saved === 'true';
+            }
+        } catch (error) {
+            console.error('[query-row-detail] Failed to load hide empty fields preference:', error);
+        }
+    }
+
+    private async persistHideEmptyFieldsPreference(): Promise<void> {
+        try {
+            await UserInfoEngine.Instance.SetSetting(HIDE_EMPTY_FIELDS_KEY, String(this.HideEmptyFields));
+        } catch (error) {
+            console.error('[query-row-detail] Failed to persist hide empty fields preference:', error);
+        }
+    }
+
+    public toggleHideEmptyFields(): void {
+        this.HideEmptyFields = !this.HideEmptyFields;
+        this.persistHideEmptyFieldsPreference();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Returns visible fields based on HideEmptyFields setting
+     */
+    public getVisibleFields(fields: DetailField[]): DetailField[] {
+        if (!this.HideEmptyFields) {
+            return fields;
+        }
+        return fields.filter(f => f.value !== null && f.value !== undefined && f.value !== '');
+    }
+
+    /**
+     * Returns count of empty fields for display
+     */
+    public getEmptyFieldCount(fields: DetailField[]): number {
+        return fields.filter(f => f.value === null || f.value === undefined || f.value === '').length;
     }
 
     // ========================================

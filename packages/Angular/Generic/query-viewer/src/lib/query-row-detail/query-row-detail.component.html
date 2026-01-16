@@ -13,9 +13,7 @@
     <!-- Header -->
     <div class="panel-header">
         <div class="header-left">
-            <button class="close-btn" (click)="onClose()" title="Close (Esc)">
-                <i class="fa-solid fa-times"></i>
-            </button>
+            <i class="fa-solid fa-table-cells-large header-icon"></i>
             <h3 class="panel-title">Row Details</h3>
         </div>
         <div class="header-right">
@@ -35,9 +33,20 @@
                     <i class="fa-solid fa-chevron-down"></i>
                 </button>
             </div>
+            <!-- Toggle empty fields -->
+            <button class="action-btn"
+                    (click)="toggleHideEmptyFields()"
+                    [class.active]="HideEmptyFields"
+                    [title]="HideEmptyFields ? 'Show empty fields' : 'Hide empty fields'">
+                <i class="fa-solid" [class.fa-eye]="!HideEmptyFields" [class.fa-eye-slash]="HideEmptyFields"></i>
+            </button>
             <!-- Copy JSON button -->
             <button class="action-btn" (click)="copyRowAsJson()" title="Copy row as JSON">
                 <i class="fa-solid fa-copy"></i>
+            </button>
+            <!-- Close button -->
+            <button class="close-btn" (click)="onClose()" title="Close (Esc)">
+                <i class="fa-solid fa-times"></i>
             </button>
         </div>
     </div>
@@ -45,13 +54,13 @@
     <!-- Content -->
     <div class="panel-content">
         <!-- Primary Keys Section -->
-        <div class="field-section" *ngIf="PrimaryKeyFields.length > 0">
+        <div class="field-section" *ngIf="getVisibleFields(PrimaryKeyFields).length > 0">
             <h4 class="section-title">
                 <i class="fa-solid fa-key section-icon pk-icon"></i>
                 Primary Key
             </h4>
             <div class="field-list">
-                <div class="field-item" *ngFor="let field of PrimaryKeyFields">
+                <div class="field-item" *ngFor="let field of getVisibleFields(PrimaryKeyFields)">
                     <div class="field-header">
                         <span class="field-name">{{ field.displayName }}</span>
                         <button class="copy-btn" (click)="copyValue(field)" title="Copy value">
@@ -73,13 +82,13 @@
         </div>
 
         <!-- Foreign Keys Section -->
-        <div class="field-section" *ngIf="ForeignKeyFields.length > 0">
+        <div class="field-section" *ngIf="getVisibleFields(ForeignKeyFields).length > 0">
             <h4 class="section-title">
                 <i class="fa-solid fa-link section-icon fk-icon"></i>
                 Related Records
             </h4>
             <div class="field-list">
-                <div class="field-item" *ngFor="let field of ForeignKeyFields">
+                <div class="field-item" *ngFor="let field of getVisibleFields(ForeignKeyFields)">
                     <div class="field-header">
                         <span class="field-name">{{ field.displayName }}</span>
                         <span class="target-entity" *ngIf="field.targetEntityName">
@@ -107,13 +116,16 @@
         </div>
 
         <!-- Regular Fields Section -->
-        <div class="field-section" *ngIf="RegularFields.length > 0">
+        <div class="field-section" *ngIf="getVisibleFields(RegularFields).length > 0">
             <h4 class="section-title">
                 <i class="fa-solid fa-list section-icon"></i>
                 Fields
+                <span class="hidden-count" *ngIf="HideEmptyFields && getEmptyFieldCount(RegularFields) > 0">
+                    ({{ getEmptyFieldCount(RegularFields) }} empty hidden)
+                </span>
             </h4>
             <div class="field-list">
-                <div class="field-item" *ngFor="let field of RegularFields">
+                <div class="field-item" *ngFor="let field of getVisibleFields(RegularFields)">
                     <div class="field-header">
                         <span class="field-name">{{ field.displayName }}</span>
                         <span class="field-type">{{ field.sqlType }}</span>

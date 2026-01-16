@@ -425,7 +425,7 @@ export function buildColumnsFromQueryFields(fields: QueryFieldInfo[]): QueryGrid
                 description: field.Description || undefined,
                 width: undefined,
                 minWidth: 80,
-                maxWidth: 500,
+                maxWidth: undefined, // No max width limit - let users resize freely
                 visible: true,
                 sortable: true,
                 resizable: true,
@@ -461,4 +461,69 @@ export function getQueryGridStateKey(queryId: string): string {
  */
 export function getQueryParamsKey(queryId: string): string {
     return `QueryViewer_${queryId}_LastParams`;
+}
+
+/**
+ * Infers column configuration from actual data when query has no field metadata.
+ * Examines the first row to determine column names and types.
+ */
+export function buildColumnsFromData(data: Record<string, unknown>[]): QueryGridColumnConfig[] {
+    if (!data || data.length === 0) {
+        return [];
+    }
+
+    // Get column names from first row
+    const firstRow = data[0];
+    const columnNames = Object.keys(firstRow);
+
+    return columnNames.map((name, index) => {
+        // Infer type from value
+        const value = firstRow[name];
+        let sqlBaseType = 'nvarchar';
+        let align: 'left' | 'center' | 'right' = 'left';
+
+        if (typeof value === 'number') {
+            sqlBaseType = Number.isInteger(value) ? 'int' : 'decimal';
+            align = 'right';
+        } else if (typeof value === 'boolean') {
+            sqlBaseType = 'bit';
+            align = 'center';
+        } else if (value instanceof Date) {
+            sqlBaseType = 'datetime';
+        } else if (typeof value === 'string') {
+            // Check if it looks like a date
+            const datePattern = /^\d{4}-\d{2}-\d{2}/;
+            if (datePattern.test(value)) {
+                sqlBaseType = 'datetime';
+            }
+        }
+
+        return {
+            field: name,
+            title: name,
+            description: undefined,
+            width: undefined,
+            minWidth: 80,
+            maxWidth: undefined,
+            visible: true,
+            sortable: true,
+            resizable: true,
+            reorderable: true,
+            sqlBaseType,
+            sqlFullType: sqlBaseType,
+            align,
+            order: index,
+            sourceEntityId: undefined,
+            sourceEntityName: undefined,
+            sourceFieldName: undefined,
+            isEntityLink: false,
+            targetEntityName: undefined,
+            targetEntityId: undefined,
+            isPrimaryKey: false,
+            isForeignKey: false,
+            targetEntityIcon: undefined,
+            pinned: null,
+            flex: undefined
+        };
+    });
 }

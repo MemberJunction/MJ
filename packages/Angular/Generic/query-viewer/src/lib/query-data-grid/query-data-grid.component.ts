@@ -58,6 +58,7 @@ import {
     QuerySelectionChangedEvent,
     QueryExportOptions,
     buildColumnsFromQueryFields,
+    buildColumnsFromData,
     getQueryGridStateKey
 } from './models/query-grid-types';
 import { RowDetailEntityLinkEvent } from '../query-row-detail/query-row-detail.component';
@@ -135,6 +136,13 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     @Input()
     set Data(value: Record<string, unknown>[]) {
         this._data = value || [];
+
+        // If we have data but no columns from metadata, build columns from the data itself
+        if (this._data.length > 0 && this.Columns.length === 0) {
+            this.Columns = buildColumnsFromData(this._data);
+            this.buildColumnDefs();
+        }
+
         if (this.GridApi) {
             this.GridApi.setGridOption('rowData', this._data);
         }
@@ -263,6 +271,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     private stateChangeSubject = new Subject<QueryGridStateChangedEvent>();
     private statePersistSubject = new Subject<QueryGridState>();
     private _mergedVisualConfig: Required<QueryGridVisualConfig> = DEFAULT_QUERY_VISUAL_CONFIG;
+    private _pendingState: QueryGridState | null = null;
 
     // Grid options
     public GridOptions: GridOptions = {
@@ -272,8 +281,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         suppressCellFocus: false,
         enableCellTextSelection: true,
         ensureDomOrder: true,
-        suppressRowClickSelection: false,
-        rowMultiSelectWithClick: false
+        suppressRowClickSelection: false
     };
 
     /** Default column settings - enables sorting, resizing */
@@ -333,9 +341,14 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             this.GridApi.setGridOption('rowData', this._data);
         }
 
-        // Apply initial state if provided
+        // Apply initial state if provided via Input
         if (this.InitialGridState) {
             this.ApplyGridState(this.InitialGridState);
+        }
+        // Otherwise apply pending state from persistence
+        else if (this._pendingState) {
+            this.applySortStateToGrid(this._pendingState);
+            this._pendingState = null;
         }
 
         // Auto-size columns initially
@@ -765,11 +778,36 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
 
             if (savedState) {
                 const state = JSON.parse(savedState) as QueryGridState;
-                this.ApplyGridState(state);
+
+                // Apply column state immediately (affects buildColumnDefs)
+                this.applyColumnStateFromGridState(state);
+
+                // Store for applying sort when grid is ready
+                this._pendingState = state;
+
+                // If grid is already ready, apply sort state now
+                if (this.GridApi) {
+                    this.applySortStateToGrid(state);
+                    this._pendingState = null;
+                }
             }
         } catch (error) {
             console.error('[query-data-grid] Failed to load persisted state:', error);
         }
+    }
+
+    /**
+     * Applies sort state to the grid API
+     */
+    private applySortStateToGrid(state: QueryGridState): void {
+        if (!this.GridApi || !state.sort || state.sort.length === 0) return;
+
+        const columnState = state.sort.map(s => ({
+            colId: s.field,
+            sort: s.direction,
+            sortIndex: s.index
+        }));
+        this.GridApi.applyColumnState({ state: columnState });
     }
 
     /**
@@ -975,10 +1013,19 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             return undefined;
         }
 
+        if (this.SelectionMode === 'single') {
+            return {
+                mode: 'singleRow',
+                enableClickSelection: true
+            };
+        }
+
+        // Multi-row selection (both 'multiple' and 'checkbox' modes)
         return {
-            mode: this.SelectionMode === 'single' ? 'singleRow' : 'multiRow',
+            mode: 'multiRow',
             enableClickSelection: true,
-            checkboxes: this.SelectionMode === 'checkbox'
+            checkboxes: this.SelectionMode === 'checkbox',
+            enableSelectionWithoutKeys: this.SelectionMode === 'multiple'
         };
     }
 

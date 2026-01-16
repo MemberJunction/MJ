@@ -2,7 +2,7 @@
 
 /* Overlay */
 .info-panel-overlay {
-    position: fixed;
+    position: absolute;
     top: 0;
     left: 0;
     right: 0;
@@ -13,10 +13,10 @@
 
 /* Panel Container */
 .info-panel {
-    position: fixed;
+    position: absolute;
     top: 0;
     right: 0;
-    height: 100vh;
+    height: 100%;
     background: #fff;
     box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
     z-index: 1000;

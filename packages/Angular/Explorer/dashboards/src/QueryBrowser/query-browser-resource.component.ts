@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, filter } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, QueryInfo, QueryCategoryInfo, CompositeKey } from '@memberjunction/core';
@@ -53,11 +53,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private metadata = new Metadata();
     private destroy$ = new Subject<void>();
     private dataLoaded = false;
+    private skipUrlUpdate = true; // Skip URL updates during initialization
+    private lastNavigatedUrl = ''; // Track URL to avoid reacting to our own navigation
 
     constructor(
         private cdr: ChangeDetectorRef,
         private navigationService: NavigationService,
-        private route: ActivatedRoute,
         private router: Router
     ) {
         super();
@@ -66,12 +67,16 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     ngOnInit(): void {
         this.loadData();
 
-        // Subscribe to query param changes for deep linking
-        this.route.queryParams
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(() => {
-                if (this.dataLoaded) {
-                    this.applyQueryParams();
+        // Subscribe to router NavigationEnd events for back/forward button support
+        this.router.events
+            .pipe(
+                filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+                takeUntil(this.destroy$)
+            )
+            .subscribe(event => {
+                const currentUrl = event.urlAfterRedirects || event.url;
+                if (currentUrl !== this.lastNavigatedUrl && this.dataLoaded) {
+                    this.onExternalNavigation(currentUrl);
                 }
             });
     }
@@ -109,7 +114,19 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
             // Mark data as loaded and apply any query params for deep linking
             this.dataLoaded = true;
-            this.applyQueryParams();
+
+            // Parse initial URL state
+            const urlState = this.parseUrlState();
+            if (urlState?.queryId) {
+                const query = this.queries.find(q => q.ID === urlState.queryId);
+                if (query) {
+                    this.selectedQuery = query;
+                    this.expandCategoryForQuery(query);
+                }
+            }
+
+            // Enable URL updates after initialization
+            this.skipUrlUpdate = false;
 
         } catch (error) {
             console.error('Error loading queries:', error);
@@ -253,7 +270,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             event.stopPropagation();
         }
         this.selectedQuery = query;
-        this.updateQueryParams();
+        this.updateUrl();
         this.cdr.markForCheck();
     }
 
@@ -287,6 +304,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public onRowDoubleClick(event: QueryRowClickEvent): void {
         // Could show record details or other action
+    }
+
+    public onOpenQueryRecord(event: { queryId: string; queryName: string }): void {
+        // Open the Query entity record using navigation service
+        const compositeKey = CompositeKey.FromID(event.queryId);
+        this.navigationService.OpenEntityRecord('Queries', compositeKey);
     }
 
     public openQueryDetails(query: QueryInfo, event: Event): void {
@@ -331,51 +354,103 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     /**
-     * Apply query parameters to component state (deep linking support)
-     * Supports: ?queryId=<UUID>
+     * Parse URL query string for query state.
+     * Query params: queryId
      */
-    private applyQueryParams(): void {
-        const params = this.route.snapshot.queryParams;
+    private parseUrlState(): { queryId?: string } | null {
+        const url = this.router.url;
+        const queryIndex = url.indexOf('?');
+        if (queryIndex === -1) return null;
 
-        // Query selection: ?queryId=<UUID>
-        if (params['queryId']) {
-            const queryId = params['queryId'] as string;
-            const query = this.queries.find(q => q.ID === queryId);
-            if (query) {
-                this.selectedQuery = query;
-                // Ensure the category containing this query is expanded
-                this.expandCategoryForQuery(query);
-            }
+        const queryString = url.substring(queryIndex + 1);
+        const params = new URLSearchParams(queryString);
+        const queryId = params.get('queryId');
+
+        if (!queryId) return null;
+
+        return { queryId };
+    }
+
+    /**
+     * Update URL query string to reflect current state.
+     * Uses Angular Router for proper browser history integration.
+     */
+    private updateUrl(): void {
+        if (this.skipUrlUpdate) return;
+
+        const params = new URLSearchParams();
+
+        // Add query ID if selected
+        if (this.selectedQuery?.ID) {
+            params.set('queryId', this.selectedQuery.ID);
         }
+
+        // Get current path without query string
+        const currentUrl = this.router.url;
+        const currentPath = currentUrl.split('?')[0];
+        const queryString = params.toString();
+        const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
+
+        // Track this URL so we don't react to our own navigation
+        this.lastNavigatedUrl = newUrl;
+
+        // Use Angular Router for proper browser history integration
+        this.router.navigateByUrl(newUrl, { replaceUrl: false });
+    }
+
+    /**
+     * Handle external navigation (back/forward buttons).
+     * Parses the URL and applies the state without triggering a new navigation.
+     */
+    private onExternalNavigation(url: string): void {
+        // Check if this URL is for our component (contains our base path)
+        const currentPath = this.router.url.split('?')[0];
+        const newPath = url.split('?')[0];
+
+        // Only handle if we're still on the same base path (same component instance)
+        if (currentPath !== newPath) {
+            return; // Different route entirely, shell will handle it
+        }
+
+        // Parse the new URL state
+        const urlState = this.parseUrlFromString(url);
+
+        // Apply the state without triggering URL updates
+        this.skipUrlUpdate = true;
+        if (urlState?.queryId) {
+            const query = this.queries.find(q => q.ID === urlState.queryId);
+            if (query) {
+                if (this.selectedQuery?.ID !== query.ID) {
+                    this.selectedQuery = query;
+                    this.expandCategoryForQuery(query);
+                }
+            }
+        } else {
+            // No queryId means clear selection
+            this.selectedQuery = null;
+        }
+        this.skipUrlUpdate = false;
+
+        // Update the tracked URL
+        this.lastNavigatedUrl = url;
 
         this.cdr.markForCheck();
     }
 
     /**
-     * Update query parameters to reflect current state (for deep linking)
-     * Updates URL without adding to browser history for state changes,
-     * but allows back/forward navigation
+     * Parse URL state from a URL string (used for external navigation).
      */
-    private updateQueryParams(): void {
-        const queryParams: Record<string, string | null> = {
-            queryId: this.selectedQuery?.ID || null
-        };
+    private parseUrlFromString(url: string): { queryId?: string } | null {
+        const queryIndex = url.indexOf('?');
+        if (queryIndex === -1) return null;
 
-        // Remove null values for cleaner URLs
-        const cleanParams: Record<string, string> = {};
-        for (const [key, value] of Object.entries(queryParams)) {
-            if (value !== null) {
-                cleanParams[key] = value;
-            }
-        }
+        const queryString = url.substring(queryIndex + 1);
+        const params = new URLSearchParams(queryString);
+        const queryId = params.get('queryId');
 
-        // Update URL - use replaceUrl: false to add to browser history
-        this.router.navigate([], {
-            relativeTo: this.route,
-            queryParams: cleanParams,
-            queryParamsHandling: '', // Replace all query params
-            replaceUrl: false // Add to browser history for back/forward support
-        });
+        if (!queryId) return null;
+
+        return { queryId };
     }
 
     /**
