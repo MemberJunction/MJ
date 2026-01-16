@@ -31,7 +31,7 @@ Do NOT include variables that are shown within {% raw %}{% raw %}{% endraw %}{% 
 
 For nested object references (like user.email), extract only the TOP-LEVEL variable name (user).
 
-## Output Format: 
+## Output Format:
 Return a JSON array of parameter objects with this structure:
 
 ```json
@@ -53,11 +53,41 @@ Return a JSON array of parameter objects with this structure:
         "dynamicName": true, // only true if the name of the field in the result is calculated in the nunjucks template. Uncommon but possible
         "description": "Description of what this field will contain",
         "type": "number|string|date|boolean",
-        "optional": false // usually false, only true if the field is part of an IF block and sometimes not emitted based on parameter values
+        "optional": false, // usually false, only true if the field is part of an IF block and sometimes not emitted based on parameter values
+        "sourceEntity": "EntityName or null", // The MJ entity name from the provided metadata that this field originates from. null if computed/aggregated.
+        "sourceFieldName": "FieldName or null", // The actual field name on the source entity. null if computed/aggregated.
+        "isComputed": false, // true if field is an expression/calculation rather than a direct column reference
+        "isSummary": false, // true if field uses an aggregate function (SUM, COUNT, AVG, MIN, MAX, etc.)
+        "computationDescription": "Explanation of computation" // Only include if isComputed or isSummary is true
     }
   ]
 }
 ```
+
+## Source Entity Tracking (for selectClause fields)
+For each field in the selectClause, identify where the data originates from by examining the SELECT clause and matching columns to the entity metadata provided above.
+
+**Fields to populate:**
+- **sourceEntity**: The MJ entity name (from the Entity Metadata section) that this field originates from
+- **sourceFieldName**: The actual field name on that entity (before any aliasing)
+
+**When to populate source fields (sourceEntity and sourceFieldName):**
+- Direct column references: `a.City` → sourceEntity matches the entity for alias 'a', sourceFieldName="City"
+- Aliased columns: `a.City AS CustomerCity` → Still maps to the source entity/field, name="CustomerCity"
+- Joined table columns: `i.Name` → sourceEntity matches the entity for alias 'i', sourceFieldName="Name"
+- Use the Entity Metadata section to match table aliases (like 'a', 'i') to their entity names
+
+**When to set sourceEntity and sourceFieldName to null:**
+- Aggregate functions: `COUNT(*)`, `SUM(a.Revenue)` → set both to null, isComputed=true, isSummary=true
+- Computed expressions: `a.Price * a.Quantity` → set both to null, isComputed=true
+- Subquery results: `(SELECT COUNT(*) FROM ...)` → set both to null, isComputed=true
+- Literal values: `'Active' AS Status` → set both to null, isComputed=true
+- CASE expressions: `CASE WHEN ... END` → set both to null, isComputed=true
+
+**isComputed vs isSummary:**
+- **isComputed=true**: The field value is calculated, not a direct column reference (includes aggregates, expressions, literals, subqueries)
+- **isSummary=true**: The field uses an aggregate function (COUNT, SUM, AVG, MIN, MAX, etc.) - always also set isComputed=true
+- **computationDescription**: Provide a brief explanation when isComputed or isSummary is true
 
 ## Rules:
 1. Only include each variable ONCE (deduplicate)
@@ -192,62 +222,106 @@ Example Output for the above template:
         "name": "TotalAccounts",
         "description": "Total number of accounts for each grouping",
         "type": "number",
-        "optional": false // field is always returned
+        "optional": false,
+        "sourceEntity": null,
+        "sourceFieldName": null,
+        "isComputed": true,
+        "isSummary": true,
+        "computationDescription": "COUNT(*) aggregate counting all records in each group"
     },
     {
         "name": "TotalAccountRevenue",
         "description": "Total revenue for all accounts, combined, for each grouping",
         "type": "number",
-        "optional": false
+        "optional": false,
+        "sourceEntity": null,
+        "sourceFieldName": null,
+        "isComputed": true,
+        "isSummary": true,
+        "computationDescription": "SUM(a.Revenue) - aggregates Revenue field from Accounts"
     },
     {
-        "name": "extraSumFieldAlias", // parameter name the field ends up having as its name 
-        "dynamicName": true, // indicates the name of the field in the result is dynamic, derived from the parameter specified
-        "description": "Additional Summary based on provided paramater: extraSumField",
+        "name": "extraSumFieldAlias",
+        "dynamicName": true,
+        "description": "Additional Summary based on provided parameter: extraSumField",
         "type": "number",
-        "optional": true
+        "optional": true,
+        "sourceEntity": null,
+        "sourceFieldName": null,
+        "isComputed": true,
+        "isSummary": true,
+        "computationDescription": "SUM() aggregate on dynamic field specified by extraSumField parameter"
     },
     {
         "name": "City",
         "description": "City name for the grouping",
         "type": "string",
-        "optional": false
+        "optional": false,
+        "sourceEntity": "Accounts",
+        "sourceFieldName": "City",
+        "isComputed": false,
+        "isSummary": false
     },
     {
         "name": "Country",
         "description": "Country name for the grouping",
         "type": "string",
-        "optional": false
+        "optional": false,
+        "sourceEntity": "Accounts",
+        "sourceFieldName": "Country",
+        "isComputed": false,
+        "isSummary": false
     },
     {
         "name": "Region",
         "description": "Region name for the grouping",
         "type": "string",
-        "optional": false
+        "optional": false,
+        "sourceEntity": "Accounts",
+        "sourceFieldName": "Region",
+        "isComputed": false,
+        "isSummary": false
     },
     {
         "name": "Industry",
         "description": "Name of the industry for the grouping",
         "type": "string",
-        "optional": false
+        "optional": false,
+        "sourceEntity": "Accounts",
+        "sourceFieldName": "Industry",
+        "isComputed": false,
+        "isSummary": false
     },
     {
         "name": "AverageFirmRevenue",
         "description": "Average Revenue for the industry in this grouping",
         "type": "number",
-        "optional": false
+        "optional": false,
+        "sourceEntity": "Industries",
+        "sourceFieldName": "AverageFirmRevenue",
+        "isComputed": false,
+        "isSummary": false
     },
     {
         "name": "NumFirms",
         "description": "Total # of firms for the industry in this grouping",
         "type": "number",
-        "optional": false
+        "optional": false,
+        "sourceEntity": "Industries",
+        "sourceFieldName": "NumFirms",
+        "isComputed": false,
+        "isSummary": false
     },
     {
-      "name": "CitiesInCountry",
-      "description": "Count of the # of cities in the country in this grouping",
-      "type": "number",
-      "optional": false
+        "name": "CitiesInCountry",
+        "description": "Count of the # of cities in the country in this grouping",
+        "type": "number",
+        "optional": false,
+        "sourceEntity": null,
+        "sourceFieldName": null,
+        "isComputed": true,
+        "isSummary": true,
+        "computationDescription": "Scalar subquery counting cities from Cities entity where Country matches"
     }
   ]
 }
