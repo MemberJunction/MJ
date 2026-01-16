@@ -126,6 +126,12 @@ import { ListsCategoriesResource } from './Lists/components/lists-categories-res
 import { ListsOperationsResource } from './Lists/components/lists-operations-resource.component';
 import { VennDiagramComponent } from './Lists/components/venn-diagram/venn-diagram.component';
 import { ListSetOperationsService } from './Lists/services/list-set-operations.service';
+// Query Browser Components
+import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
+// Dashboard Browser Components (Coming Soon Placeholder)
+import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
+// Query Viewer Module
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 
 
 
@@ -223,7 +229,11 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsOperationsResource,
-    VennDiagramComponent
+    VennDiagramComponent,
+    // Query Browser Components
+    QueryBrowserResourceComponent,
+    // Dashboard Browser Components
+    DashboardBrowserResourceComponent
   ],
   imports: [
     CommonModule,
@@ -258,7 +268,8 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     FilterBuilderModule,
     EntityRelationshipDiagramModule,
     ListManagementModule,
-    ExportServiceModule
+    ExportServiceModule,
+    QueryViewerModule
   ],
   providers: [
     AIInstrumentationService,
@@ -325,7 +336,11 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsOperationsResource,
-    VennDiagramComponent
+    VennDiagramComponent,
+    // Query Browser Components
+    QueryBrowserResourceComponent,
+    // Dashboard Browser Components
+    DashboardBrowserResourceComponent
   ]
 })
 export class DashboardsModule { }

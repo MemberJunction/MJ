@@ -229,34 +229,24 @@ This document tracks improvements to the MemberJunction viewing system, includin
 
 ---
 
-### 10. View Switching Race Condition - Filter Not Clearing
-**Status**: Not Started
+### ~~10. View Switching Race Condition - Filter Not Clearing~~
+**Status**: COMPLETED
 **Priority**: High
 **Complexity**: Medium
 
-**Current State**:
-- When rapidly switching between views for the same entity, filters sometimes don't clear properly
-- Symptom: View shows "0 records" with no error displayed
-- Likely a race condition between view load and filter state updates
-- Reproducible by switching between views with different filters back and forth quickly
+**Solution Implemented**:
+- Added `_loadSequence` counter to track which load request is current
+- Implemented `_pendingReload` queue to handle requests during in-flight loads
+- Stale responses are now discarded by comparing sequence numbers
+- Filter state is cleared synchronously before async operations
+- Loading overlay prevents rapid view switching during transitions
+- Fixed smart filter text leaking into user search string (completely decoupled)
 
-**Root Cause Hypothesis**:
-- Async operations (view load, filter clear, data refresh) may be completing out of order
-- Previous view's filter may be applied to new view's data request
-- Error handling may be swallowing exceptions silently
-
-**Implementation**:
-1. Add request cancellation when switching views (cancel in-flight requests)
-2. Use a view switch "lock" or sequence number to discard stale responses
-3. Ensure filter state is cleared synchronously before async data load begins
-4. Add error surfacing for failed view loads (don't fail silently)
-5. Consider adding a loading overlay during view transitions to prevent rapid switching
-
-**Files to Investigate**:
-- `packages/Angular/Explorer/dashboards/src/DataExplorer/data-explorer-dashboard.component.ts` (onViewSelected)
+**Files Modified**:
 - `packages/Angular/Generic/entity-viewer/src/lib/entity-viewer/entity-viewer.component.ts`
 - `packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts`
-- `packages/MJCoreEntities/src/custom/UserViewEntity.ts` (filter application logic)
+- `packages/Angular/Explorer/dashboards/src/DataExplorer/data-explorer-dashboard.component.ts`
+- `packages/Angular/Explorer/dashboards/src/DataExplorer/data-explorer-dashboard.component.html`
 
 ---
 
@@ -294,10 +284,10 @@ This document tracks improvements to the MemberJunction viewing system, includin
 1. ~~**Task 8**: View Switching Filter Bug~~ - DONE
 2. ~~**Task 9**: Immediate Save on View/Entity Switch~~ - DONE
 
-### Phase 2: High Value Improvements
+### Phase 2: High Value Improvements - COMPLETED
 3. ~~**Task 2**: Smart Filter AI Modernization~~ - DONE
-4. **Task 5**: Multi-Column Sorting Visual Indicators - power user feature
-5. **Task 10**: View Switching Race Condition - critical bug fix
+4. ~~**Task 5**: Multi-Column Sorting Visual Indicators~~ - DONE
+5. ~~**Task 10**: View Switching Race Condition~~ - DONE
 
 ### Phase 3: User Experience Polish
 5. **Task 1**: Multi-Select Mode Toggle - reduce UI clutter

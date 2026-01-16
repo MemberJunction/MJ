@@ -18,6 +18,10 @@ import { LoadCredentialsAuditResource } from './Credentials/components/credentia
 import { LoadSystemDiagnosticsResource } from './SystemDiagnostics/system-diagnostics.component';
 // Lists Dashboard
 import { LoadListsResources } from './Lists';
+// Query Browser
+import { LoadQueryBrowserResource } from './QueryBrowser/query-browser-resource.component';
+// Dashboard Browser
+import { LoadDashboardBrowserResource } from './DashboardBrowser/dashboard-browser-resource.component';
 
 import {
   LoadActionsOverviewResource,
@@ -141,6 +145,18 @@ export {
   LoadTestingFeedbackResource
 } from './Testing/components';
 
+// Query Browser
+export {
+  QueryBrowserResourceComponent,
+  LoadQueryBrowserResource
+} from './QueryBrowser/query-browser-resource.component';
+
+// Dashboard Browser
+export {
+  DashboardBrowserResourceComponent,
+  LoadDashboardBrowserResource
+} from './DashboardBrowser/dashboard-browser-resource.component';
+
 // Module
 export * from './module';
 
@@ -199,3 +215,9 @@ LoadSystemDiagnosticsResource();
 
 // Lists Dashboard resource loaders
 LoadListsResources();
+
+// Query Browser resource loader
+LoadQueryBrowserResource();
+
+// Dashboard Browser resource loader
+LoadDashboardBrowserResource();
