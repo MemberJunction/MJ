@@ -1,4 +1,4 @@
-import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { BaseEngine, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UserNotificationEntity, UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
@@ -15,27 +15,142 @@ interface UserNotificationTypeWithTemplates extends UserNotificationTypeEntity {
 }
 
 /**
- * Unified notification service that handles in-app, email, and SMS delivery
- * based on notification types and user preferences.
+ * Type alias for notification type with boolean delivery channel fields.
+ * These fields now exist in the generated entity after CodeGen.
  */
-export class NotificationService {
-  private static _instance: NotificationService;
+type UserNotificationTypeWithBooleans = UserNotificationTypeEntity & {
+  DefaultInApp?: boolean;
+  DefaultEmail?: boolean;
+  DefaultSMS?: boolean;
+};
+
+/**
+ * Type alias for preference with boolean channel fields.
+ * These fields now exist in the generated entity after CodeGen.
+ */
+type UserNotificationPreferenceWithBooleans = UserNotificationPreferenceEntity & {
+  InAppEnabled?: boolean | null;
+  EmailEnabled?: boolean | null;
+  SMSEnabled?: boolean | null;
+};
+
+/**
+ * Unified notification engine that handles in-app, email, and SMS delivery
+ * based on notification types and user preferences.
+ *
+ * Extends BaseEngine to provide:
+ * - Cached notification types (loaded once, auto-refreshed on changes)
+ * - Singleton pattern with proper MJ infrastructure
+ * - Integration with MJ startup system
+ *
+ * @example
+ * ```typescript
+ * // Initialize the engine (typically at server startup)
+ * await NotificationEngine.Instance.Config(false, contextUser);
+ *
+ * // Send a notification
+ * const result = await NotificationEngine.Instance.SendNotification({
+ *   userId: user.ID,
+ *   typeNameOrId: 'Agent Completion',
+ *   title: 'Task Complete',
+ *   message: 'Your AI agent has finished processing',
+ *   templateData: { agentName: 'My Agent' }
+ * }, contextUser);
+ * ```
+ */
+export class NotificationEngine extends BaseEngine<NotificationEngine> {
+  /**
+   * Cached notification types - loaded once and auto-refreshed when types change
+   */
+  public NotificationTypes: UserNotificationTypeEntity[] = [];
 
   /**
-   * Singleton instance of the notification service
+   * Lookup map for fast notification type retrieval by name (lowercase)
    */
-  static get Instance(): NotificationService {
-    if (!NotificationService._instance) {
-      NotificationService._instance = new NotificationService();
+  private _typesByName: Map<string, UserNotificationTypeEntity> = new Map();
+
+  /**
+   * Lookup map for fast notification type retrieval by ID
+   */
+  private _typesById: Map<string, UserNotificationTypeEntity> = new Map();
+
+  /**
+   * Returns the singleton instance of the NotificationEngine
+   */
+  public static get Instance(): NotificationEngine {
+    return super.getInstance<NotificationEngine>();
+  }
+
+  /**
+   * Configures the notification engine by loading notification types.
+   * Must be called before sending notifications.
+   *
+   * @param forceRefresh - If true, reloads data even if already loaded
+   * @param contextUser - User context for database operations (required on server)
+   * @param provider - Optional metadata provider override
+   */
+  public async Config(
+    forceRefresh: boolean = false,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<void> {
+    await this.Load(
+      [
+        {
+          PropertyName: 'NotificationTypes',
+          EntityName: 'MJ: User Notification Types',
+          Type: 'entity',
+          OrderBy: 'Priority ASC, Name ASC'
+        }
+      ],
+      provider ?? Metadata.Provider,
+      forceRefresh,
+      contextUser
+    );
+  }
+
+  /**
+   * Post-processing after loading notification types.
+   * Builds lookup maps for fast retrieval.
+   */
+  protected override async AdditionalLoading(_contextUser?: UserInfo): Promise<void> {
+    // Build lookup maps for fast retrieval
+    this._typesByName.clear();
+    this._typesById.clear();
+
+    for (const type of this.NotificationTypes) {
+      this._typesByName.set(type.Name.toLowerCase().trim(), type);
+      this._typesById.set(type.ID, type);
     }
-    return NotificationService._instance;
+
+    LogStatus(`NotificationEngine loaded ${this.NotificationTypes.length} notification types`);
+  }
+
+  /**
+   * Get a notification type by name (case-insensitive) or ID.
+   * Uses cached data for fast lookup.
+   *
+   * @param nameOrId - The notification type name or UUID
+   * @returns The notification type entity or null if not found
+   */
+  public getNotificationType(nameOrId: string): UserNotificationTypeEntity | null {
+    this.TryThrowIfNotLoaded();
+
+    // Check if it's a UUID
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(nameOrId);
+
+    if (isUuid) {
+      return this._typesById.get(nameOrId) ?? null;
+    } else {
+      return this._typesByName.get(nameOrId.toLowerCase().trim()) ?? null;
+    }
   }
 
   /**
    * Send a notification using the unified notification system.
    *
    * This method:
-   * 1. Loads the notification type definition
+   * 1. Looks up the notification type from cache
    * 2. Checks user preferences for delivery method
    * 3. Creates in-app notification if applicable
    * 4. Sends email/SMS using templates if applicable
@@ -44,7 +159,9 @@ export class NotificationService {
    * @param contextUser - User context for database operations
    * @returns Result indicating success and delivery details
    */
-  async SendNotification(params: SendNotificationParams, contextUser: UserInfo): Promise<NotificationResult> {
+  public async SendNotification(params: SendNotificationParams, contextUser: UserInfo): Promise<NotificationResult> {
+    this.TryThrowIfNotLoaded();
+
     const defaultChannels: DeliveryChannels = { inApp: false, email: false, sms: false };
     const result: NotificationResult = {
       success: true,
@@ -54,13 +171,13 @@ export class NotificationService {
     };
 
     try {
-      // 1. Load notification type
-      const type = await this.getNotificationType(params.typeNameOrId, contextUser);
+      // 1. Look up notification type from cache (fast!)
+      const type = this.getNotificationType(params.typeNameOrId);
       if (!type) {
         throw new Error(`Notification type not found: ${params.typeNameOrId}`);
       }
 
-      // 2. Load user preferences
+      // 2. Load user preferences (per-call, user-specific - not cached)
       const prefs = await this.getUserPreferences(params.userId, type.ID, contextUser);
 
       // 3. Check if user has opted out entirely
@@ -89,8 +206,9 @@ export class NotificationService {
         try {
           result.emailSent = await this.sendEmail(params, type, contextUser);
         } catch (error) {
-          result.errors?.push(`Email delivery failed: ${error.message}`);
-          LogError(`Email delivery failed for notification type ${type.Name}: ${error.message}`);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          result.errors?.push(`Email delivery failed: ${errorMessage}`);
+          LogError(`Email delivery failed for notification type ${type.Name}: ${errorMessage}`);
         }
       }
 
@@ -99,16 +217,18 @@ export class NotificationService {
         try {
           result.smsSent = await this.sendSMS(params, type, contextUser);
         } catch (error) {
-          result.errors?.push(`SMS delivery failed: ${error.message}`);
-          LogError(`SMS delivery failed for notification type ${type.Name}: ${error.message}`);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          result.errors?.push(`SMS delivery failed: ${errorMessage}`);
+          LogError(`SMS delivery failed for notification type ${type.Name}: ${errorMessage}`);
         }
       }
 
       return result;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       result.success = false;
-      result.errors?.push(error.message);
-      LogError(`Notification delivery failed: ${error.message}`);
+      result.errors?.push(errorMessage);
+      LogError(`Notification delivery failed: ${errorMessage}`);
       return result;
     }
   }
@@ -132,21 +252,9 @@ export class NotificationService {
       return this.deliveryMethodToChannels(params.forceDeliveryMethod);
     }
 
-    // Cast type to access new boolean fields (until CodeGen runs)
-    const typeWithBooleans = type as UserNotificationTypeEntity & {
-      DefaultInApp?: boolean;
-      DefaultEmail?: boolean;
-      DefaultSMS?: boolean;
-    };
-
-    // Cast prefs to access new boolean fields (until CodeGen runs)
-    const prefsWithBooleans = prefs as
-      | (UserNotificationPreferenceEntity & {
-          InAppEnabled?: boolean | null;
-          EmailEnabled?: boolean | null;
-          SMSEnabled?: boolean | null;
-        })
-      | null;
+    // Cast to access new boolean fields (until CodeGen runs)
+    const typeWithBooleans = type as UserNotificationTypeWithBooleans;
+    const prefsWithBooleans = prefs as UserNotificationPreferenceWithBooleans | null;
 
     // Determine each channel: user pref (if allowed and set) > type default
     const allowUserPref = type.AllowUserPreference !== false;
@@ -233,40 +341,14 @@ export class NotificationService {
   }
 
   /**
-   * Load notification type by name or ID
+   * Load user preferences for a notification type.
+   * This is NOT cached because preferences are user-specific and can change frequently.
    */
-  private async getNotificationType(nameOrId: string, contextUser: UserInfo): Promise<UserNotificationTypeEntity | null> {
-    const md = new Metadata();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(nameOrId);
-
-    if (isUuid) {
-      const entity = await md.GetEntityObject<UserNotificationTypeEntity>('MJ: User Notification Types', contextUser);
-      if (await entity.Load(nameOrId)) {
-        return entity;
-      }
-    } else {
-      const rv = new RunView();
-      const result = await rv.RunView<UserNotificationTypeEntity>(
-        {
-          EntityName: 'MJ: User Notification Types',
-          ExtraFilter: `Name='${nameOrId.replace(/'/g, "''")}'`,
-          ResultType: 'entity_object',
-        },
-        contextUser,
-      );
-
-      if (result.Success && result.Results && result.Results.length > 0) {
-        return result.Results[0];
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Load user preferences for a notification type
-   */
-  private async getUserPreferences(userId: string, typeId: string, contextUser: UserInfo): Promise<UserNotificationPreferenceEntity | null> {
+  private async getUserPreferences(
+    userId: string,
+    typeId: string,
+    contextUser: UserInfo
+  ): Promise<UserNotificationPreferenceEntity | null> {
     const rv = new RunView();
     const result = await rv.RunView<UserNotificationPreferenceEntity>(
       {
@@ -287,7 +369,11 @@ export class NotificationService {
   /**
    * Create in-app notification record
    */
-  private async createInAppNotification(params: SendNotificationParams, type: UserNotificationTypeEntity, contextUser: UserInfo): Promise<string> {
+  private async createInAppNotification(
+    params: SendNotificationParams,
+    type: UserNotificationTypeEntity,
+    contextUser: UserInfo
+  ): Promise<string> {
     const md = new Metadata();
     const notification = await md.GetEntityObject<UserNotificationEntity>('User Notifications', contextUser);
 
@@ -318,7 +404,11 @@ export class NotificationService {
   /**
    * Send email notification using template
    */
-  private async sendEmail(params: SendNotificationParams, type: UserNotificationTypeEntity, contextUser: UserInfo): Promise<boolean> {
+  private async sendEmail(
+    params: SendNotificationParams,
+    type: UserNotificationTypeEntity,
+    contextUser: UserInfo
+  ): Promise<boolean> {
     // Access EmailTemplateID (field exists at runtime but not yet in TypeScript types)
     const emailTemplateId = (type as UserNotificationTypeWithTemplates).EmailTemplateID;
 
@@ -329,7 +419,7 @@ export class NotificationService {
 
     // Load and configure template engine (loads all template metadata)
     const templateEngine = TemplateEngineServer.Instance;
-    await templateEngine.Config(true, contextUser);
+    await templateEngine.Config(false, contextUser);
 
     // Find the email template from the cached Templates array
     const templateEntity = templateEngine.Templates.find((t) => t.ID === emailTemplateId);
@@ -339,9 +429,9 @@ export class NotificationService {
 
     // Get highest priority HTML content from the template's Content array
     // The Content array is already loaded and associated by TemplateEngineBase.AdditionalLoading()
-    const htmlContent = templateEntity.Content?.filter((c) => c.IsActive && c.Type?.trim().toLowerCase() === 'html').sort(
-      (a, b) => (b.Priority || 0) - (a.Priority || 0),
-    )[0];
+    const htmlContent = templateEntity.Content?.filter(
+      (c) => c.IsActive && c.Type?.trim().toLowerCase() === 'html'
+    ).sort((a, b) => (b.Priority || 0) - (a.Priority || 0))[0];
 
     if (!htmlContent) {
       throw new Error('No active HTML content found for email template');
@@ -379,9 +469,9 @@ export class NotificationService {
     message.HTMLBody = renderResult.Output!;
     message.Subject = params.title;
 
-    const result = await commEngine.SendSingleMessage('SendGrid', 'Email', message, undefined, false);
+    const sendResult = await commEngine.SendSingleMessage('SendGrid', 'Email', message, undefined, false);
 
-    const success = result?.Success === true;
+    const success = sendResult?.Success === true;
 
     if (success) {
       LogStatus(`Email sent successfully to ${userEntity.Email} for notification type: ${type.Name}`);
@@ -393,7 +483,11 @@ export class NotificationService {
   /**
    * Send SMS notification using template
    */
-  private async sendSMS(params: SendNotificationParams, type: UserNotificationTypeEntity, contextUser: UserInfo): Promise<boolean> {
+  private async sendSMS(
+    params: SendNotificationParams,
+    type: UserNotificationTypeEntity,
+    contextUser: UserInfo
+  ): Promise<boolean> {
     // Access SMSTemplateID (field exists at runtime but not yet in TypeScript types)
     const smsTemplateId = (type as UserNotificationTypeWithTemplates).SMSTemplateID;
 
@@ -404,7 +498,7 @@ export class NotificationService {
 
     // Load and configure template engine (loads all template metadata)
     const templateEngine = TemplateEngineServer.Instance;
-    await templateEngine.Config(true, contextUser);
+    await templateEngine.Config(false, contextUser);
 
     // Find the SMS template from the cached Templates array
     const templateEntity = templateEngine.Templates.find((t) => t.ID === smsTemplateId);
@@ -414,16 +508,21 @@ export class NotificationService {
 
     // Get highest priority Text content from the template's Content array
     // The Content array is already loaded and associated by TemplateEngineBase.AdditionalLoading()
-    const textContent = templateEntity.Content?.filter((c) => c.IsActive && c.Type?.trim().toLowerCase() === 'text').sort(
-      (a, b) => (b.Priority || 0) - (a.Priority || 0),
-    )[0];
+    const textContent = templateEntity.Content?.filter(
+      (c) => c.IsActive && c.Type?.trim().toLowerCase() === 'text'
+    ).sort((a, b) => (b.Priority || 0) - (a.Priority || 0))[0];
 
     if (!textContent) {
       throw new Error('No active Text content found for SMS template');
     }
 
     // Render template
-    const renderResult = await templateEngine.RenderTemplate(templateEntity, textContent, params.templateData || {}, true);
+    const renderResult = await templateEngine.RenderTemplate(
+      templateEntity,
+      textContent,
+      params.templateData || {},
+      true
+    );
 
     if (!renderResult.Success) {
       throw new Error(`Template rendering failed: ${renderResult.Message}`);
@@ -447,13 +546,14 @@ export class NotificationService {
     // Send via CommunicationEngine
     // Use Twilio as default SMS provider (can be made configurable later)
     const commEngine = CommunicationEngine.Instance;
+    await commEngine.Config(false, contextUser);
     const message = new Message();
     message.To = userWithPhone.Phone;
     message.Body = renderResult.Output!;
 
-    const result = await commEngine.SendSingleMessage('Twilio', 'Standard SMS', message, undefined, false);
+    const sendResult = await commEngine.SendSingleMessage('Twilio', 'Standard SMS', message, undefined, false);
 
-    const success = result?.Success === true;
+    const success = sendResult?.Success === true;
 
     if (success) {
       LogStatus(`SMS sent successfully to ${userWithPhone.Phone} for notification type: ${type.Name}`);

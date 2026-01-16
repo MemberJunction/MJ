@@ -28157,11 +28157,11 @@ each time the agent processes a prompt step.`})
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_ParentRunIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
     
-    @Field(() => [MJAIAgentNote_])
-    AIAgentNotes_SourceAIAgentRunIDArray: MJAIAgentNote_[]; // Link to AIAgentNotes
-    
     @Field(() => [MJAIAgentExample_])
     MJ_AIAgentExamples_SourceAIAgentRunIDArray: MJAIAgentExample_[]; // Link to MJ_AIAgentExamples
+    
+    @Field(() => [MJAIAgentNote_])
+    AIAgentNotes_SourceAIAgentRunIDArray: MJAIAgentNote_[]; // Link to AIAgentNotes
     
     @Field(() => [MJAIPromptRun_])
     MJ_AIPromptRuns_AgentRunIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -28498,17 +28498,6 @@ export class MJAIAgentRunResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJAIAgentNote_])
-    async AIAgentNotes_SourceAIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [SourceAIAgentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIAgentExample_])
     async MJ_AIAgentExamples_SourceAIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Examples', userPayload);
@@ -28517,6 +28506,17 @@ export class MJAIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentExamples] WHERE [SourceAIAgentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Examples', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Examples', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentNote_])
+    async AIAgentNotes_SourceAIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [SourceAIAgentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -45426,9 +45426,14 @@ export class MJUserNotificationPreference_ {
     @MaxLength(16)
     NotificationTypeID: string;
         
-    @Field({nullable: true, description: `User-specific override for delivery method: InApp, Email, SMS, All, or None`}) 
-    @MaxLength(100)
-    DeliveryMethod?: string;
+    @Field(() => Boolean, {nullable: true, description: `User preference for in-app notifications (NULL = use default)`}) 
+    InAppEnabled?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `User preference for email notifications (NULL = use default)`}) 
+    EmailEnabled?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `User preference for SMS notifications (NULL = use default)`}) 
+    SMSEnabled?: boolean;
         
     @Field(() => Boolean, {nullable: true}) 
     Enabled?: boolean;
@@ -45440,15 +45445,6 @@ export class MJUserNotificationPreference_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field(() => Boolean, {nullable: true, description: `User preference for in-app notifications (NULL = use default)`}) 
-    InAppEnabled?: boolean;
-        
-    @Field(() => Boolean, {nullable: true, description: `User preference for email notifications (NULL = use default)`}) 
-    EmailEnabled?: boolean;
-        
-    @Field(() => Boolean, {nullable: true, description: `User preference for SMS notifications (NULL = use default)`}) 
-    SMSEnabled?: boolean;
         
     @Field() 
     @MaxLength(200)
@@ -45474,12 +45470,6 @@ export class CreateMJUserNotificationPreferenceInput {
     @Field({ nullable: true })
     NotificationTypeID?: string;
 
-    @Field({ nullable: true })
-    DeliveryMethod: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    Enabled?: boolean | null;
-
     @Field(() => Boolean, { nullable: true })
     InAppEnabled: boolean | null;
 
@@ -45488,6 +45478,9 @@ export class CreateMJUserNotificationPreferenceInput {
 
     @Field(() => Boolean, { nullable: true })
     SMSEnabled: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Enabled?: boolean | null;
 }
     
 
@@ -45505,12 +45498,6 @@ export class UpdateMJUserNotificationPreferenceInput {
     @Field({ nullable: true })
     NotificationTypeID?: string;
 
-    @Field({ nullable: true })
-    DeliveryMethod?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    Enabled?: boolean | null;
-
     @Field(() => Boolean, { nullable: true })
     InAppEnabled?: boolean | null;
 
@@ -45519,6 +45506,9 @@ export class UpdateMJUserNotificationPreferenceInput {
 
     @Field(() => Boolean, { nullable: true })
     SMSEnabled?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Enabled?: boolean | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -45628,9 +45618,14 @@ export class MJUserNotificationType_ {
     @MaxLength(1000)
     Description?: string;
         
-    @Field({description: `Default delivery method: InApp, Email, SMS, All, or None`}) 
-    @MaxLength(100)
-    DefaultDeliveryMethod: string;
+    @Field(() => Boolean, {description: `Whether in-app notifications are enabled by default for this type`}) 
+    DefaultInApp: boolean;
+        
+    @Field(() => Boolean, {description: `Whether email notifications are enabled by default for this type`}) 
+    DefaultEmail: boolean;
+        
+    @Field(() => Boolean, {description: `Whether SMS notifications are enabled by default for this type`}) 
+    DefaultSMS: boolean;
         
     @Field(() => Boolean, {nullable: true, description: `Whether users can override the default delivery method`}) 
     AllowUserPreference?: boolean;
@@ -45665,15 +45660,6 @@ export class MJUserNotificationType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => Boolean, {description: `Whether in-app notifications are enabled by default for this type`}) 
-    DefaultInApp: boolean;
-        
-    @Field(() => Boolean, {description: `Whether email notifications are enabled by default for this type`}) 
-    DefaultEmail: boolean;
-        
-    @Field(() => Boolean, {description: `Whether SMS notifications are enabled by default for this type`}) 
-    DefaultSMS: boolean;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     EmailTemplate?: string;
@@ -45704,8 +45690,14 @@ export class CreateMJUserNotificationTypeInput {
     @Field({ nullable: true })
     Description: string | null;
 
-    @Field({ nullable: true })
-    DefaultDeliveryMethod?: string;
+    @Field(() => Boolean, { nullable: true })
+    DefaultInApp?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultEmail?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultSMS?: boolean;
 
     @Field(() => Boolean, { nullable: true })
     AllowUserPreference?: boolean | null;
@@ -45727,15 +45719,6 @@ export class CreateMJUserNotificationTypeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number | null;
-
-    @Field(() => Boolean, { nullable: true })
-    DefaultInApp?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    DefaultEmail?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    DefaultSMS?: boolean;
 }
     
 
@@ -45753,8 +45736,14 @@ export class UpdateMJUserNotificationTypeInput {
     @Field({ nullable: true })
     Description?: string | null;
 
-    @Field({ nullable: true })
-    DefaultDeliveryMethod?: string;
+    @Field(() => Boolean, { nullable: true })
+    DefaultInApp?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultEmail?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultSMS?: boolean;
 
     @Field(() => Boolean, { nullable: true })
     AllowUserPreference?: boolean | null;
@@ -45776,15 +45765,6 @@ export class UpdateMJUserNotificationTypeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number | null;
-
-    @Field(() => Boolean, { nullable: true })
-    DefaultInApp?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    DefaultEmail?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    DefaultSMS?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -56602,11 +56582,11 @@ export class MJUser_ {
     @Field(() => [MJDashboardUserState_])
     MJ_DashboardUserStates_UserIDArray: MJDashboardUserState_[]; // Link to MJ_DashboardUserStates
     
-    @Field(() => [MJPublicLink_])
-    MJ_PublicLinks_UserIDArray: MJPublicLink_[]; // Link to MJ_PublicLinks
-    
     @Field(() => [MJArtifactVersion_])
     MJ_ArtifactVersions_UserIDArray: MJArtifactVersion_[]; // Link to MJ_ArtifactVersions
+    
+    @Field(() => [MJPublicLink_])
+    MJ_PublicLinks_UserIDArray: MJPublicLink_[]; // Link to MJ_PublicLinks
     
     @Field(() => [MJScheduledJobRun_])
     MJ_ScheduledJobRuns_ExecutedByUserIDArray: MJScheduledJobRun_[]; // Link to MJ_ScheduledJobRuns
@@ -56632,11 +56612,14 @@ export class MJUser_ {
     @Field(() => [MJUserSetting_])
     MJ_UserSettings_UserIDArray: MJUserSetting_[]; // Link to MJ_UserSettings
     
+    @Field(() => [MJListInvitation_])
+    MJ_ListInvitations_CreatedByUserIDArray: MJListInvitation_[]; // Link to MJ_ListInvitations
+    
     @Field(() => [MJListShare_])
     MJ_ListShares_UserIDArray: MJListShare_[]; // Link to MJ_ListShares
     
-    @Field(() => [MJListInvitation_])
-    MJ_ListInvitations_CreatedByUserIDArray: MJListInvitation_[]; // Link to MJ_ListInvitations
+    @Field(() => [MJUserNotificationPreference_])
+    MJ_UserNotificationPreferences_UserIDArray: MJUserNotificationPreference_[]; // Link to MJ_UserNotificationPreferences
     
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
@@ -56664,9 +56647,6 @@ export class MJUser_ {
     
     @Field(() => [MJTestRun_])
     MJ_TestRuns_RunByUserIDArray: MJTestRun_[]; // Link to MJ_TestRuns
-    
-    @Field(() => [MJUserNotificationPreference_])
-    MJ_UserNotificationPreferences_UserIDArray: MJUserNotificationPreference_[]; // Link to MJ_UserNotificationPreferences
     
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -57278,17 +57258,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJPublicLink_])
-    async MJ_PublicLinks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Public Links', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwPublicLinks] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Public Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Public Links', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJArtifactVersion_])
     async MJ_ArtifactVersions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Versions', userPayload);
@@ -57297,6 +57266,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifactVersions] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Versions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJPublicLink_])
+    async MJ_PublicLinks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Public Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwPublicLinks] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Public Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Public Links', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -57388,6 +57368,17 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJListInvitation_])
+    async MJ_ListInvitations_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: List Invitations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListInvitations] WHERE [CreatedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Invitations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: List Invitations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJListShare_])
     async MJ_ListShares_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: List Shares', userPayload);
@@ -57399,14 +57390,14 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJListInvitation_])
-    async MJ_ListInvitations_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: List Invitations', userPayload);
+    @FieldResolver(() => [MJUserNotificationPreference_])
+    async MJ_UserNotificationPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Notification Preferences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListInvitations] WHERE [CreatedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Invitations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotificationPreferences] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Notification Preferences', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: List Invitations', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Notification Preferences', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -57506,17 +57497,6 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTestRuns] WHERE [RunByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Test Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJUserNotificationPreference_])
-    async MJ_UserNotificationPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Notification Preferences', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotificationPreferences] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Notification Preferences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Notification Preferences', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

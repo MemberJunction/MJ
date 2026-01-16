@@ -4,13 +4,12 @@
     "ID": "1523E018-CD35-4A64-AB00-F86DD3AEBA0C"
   },
   "sync": {
-    "lastModified": "2026-01-16T15:00:16.103Z",
-    "checksum": "28fed1023d727e45b7adf845a9058209c1df58eab2e615f7ced00a4189d153dd"
+    "lastModified": "2026-01-16T21:58:48.094Z",
+    "checksum": "866597e0883169ae38fba85b4ecd60d50abf05e60802ad7e7bff3460fe3e51d5"
   },
   "fields": {
     "Name": "Agent Completion",
     "Description": "Notifications sent when an AI agent completes a task and creates an artifact",
-    "DefaultDeliveryMethod": "InApp",
     "DefaultInApp": true,
     "DefaultEmail": false,
     "DefaultSMS": false,

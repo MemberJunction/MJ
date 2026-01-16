@@ -12,7 +12,7 @@ import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse } from '@memberjunction/global';
 import { getAttachmentService } from '@memberjunction/aiengine';
-import { NotificationService } from '@memberjunction/notifications';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -660,8 +660,10 @@ export class RunAIAgentResolver extends ResolverBase {
                 ? `${agentName} has finished processing and created version ${artifactInfo.versionNumber}`
                 : `${agentName} has finished processing and created a new artifact`;
 
-            // Use unified notification service
-            const result = await NotificationService.Instance.SendNotification({
+            // Use unified notification engine (Config called to ensure loaded)
+            const notificationEngine = NotificationEngine.Instance;
+            await notificationEngine.Config(false, contextUser);
+            const result = await notificationEngine.SendNotification({
                 userId: contextUser.ID,
                 typeNameOrId: 'Agent Completion',
                 title: `${agentName} completed your request`,

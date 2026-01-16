@@ -15,12 +15,12 @@ export class UserNotificationTypeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'notificationBasics', sectionName: 'Notification Basics', isExpanded: true },
+            { sectionKey: 'coreDetails', sectionName: 'Core Details', isExpanded: true },
             { sectionKey: 'deliverySettings', sectionName: 'Delivery Settings', isExpanded: true },
-            { sectionKey: 'templateBindings', sectionName: 'Template Bindings', isExpanded: false },
+            { sectionKey: 'templateSettings', sectionName: 'Template Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJUserNotificationPreferences', sectionName: 'MJ: User Notification Preferences', isExpanded: false },
-            { sectionKey: 'userNotifications', sectionName: 'User Notifications', isExpanded: false }
+            { sectionKey: 'userNotifications', sectionName: 'User Notifications', isExpanded: false },
+            { sectionKey: 'mJUserNotificationPreferences', sectionName: 'MJ: User Notification Preferences', isExpanded: false }
         ]);
     }
 }

@@ -15397,26 +15397,6 @@ export const UserNotificationPreferenceSchema = z.object({
         * * Display Name: Notification Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User Notification Types (vwUserNotificationTypes.ID)`),
-    DeliveryMethod: z.string().nullable().describe(`
-        * * Field Name: DeliveryMethod
-        * * Display Name: Delivery Method
-        * * SQL Data Type: nvarchar(50)
-        * * Description: User-specific override for delivery method: InApp, Email, SMS, All, or None`),
-    Enabled: z.boolean().nullable().describe(`
-        * * Field Name: Enabled
-        * * Display Name: Enabled
-        * * SQL Data Type: bit
-        * * Default Value: 1`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
     InAppEnabled: z.boolean().nullable().describe(`
         * * Field Name: InAppEnabled
         * * Display Name: In-App Enabled
@@ -15432,6 +15412,21 @@ export const UserNotificationPreferenceSchema = z.object({
         * * Display Name: SMS Enabled
         * * SQL Data Type: bit
         * * Description: User preference for SMS notifications (NULL = use default)`),
+    Enabled: z.boolean().nullable().describe(`
+        * * Field Name: Enabled
+        * * Display Name: Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -15462,11 +15457,24 @@ export const UserNotificationTypeSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(500)`),
-    DefaultDeliveryMethod: z.string().describe(`
-        * * Field Name: DefaultDeliveryMethod
-        * * Display Name: Default Delivery Method
-        * * SQL Data Type: nvarchar(50)
-        * * Description: Default delivery method: InApp, Email, SMS, All, or None`),
+    DefaultInApp: z.boolean().describe(`
+        * * Field Name: DefaultInApp
+        * * Display Name: Default In-App
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether in-app notifications are enabled by default for this type`),
+    DefaultEmail: z.boolean().describe(`
+        * * Field Name: DefaultEmail
+        * * Display Name: Default Email
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether email notifications are enabled by default for this type`),
+    DefaultSMS: z.boolean().describe(`
+        * * Field Name: DefaultSMS
+        * * Display Name: Default SMS
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether SMS notifications are enabled by default for this type`),
     AllowUserPreference: z.boolean().nullable().describe(`
         * * Field Name: AllowUserPreference
         * * Display Name: Allow User Preference
@@ -15510,24 +15518,6 @@ export const UserNotificationTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DefaultInApp: z.boolean().describe(`
-        * * Field Name: DefaultInApp
-        * * Display Name: Default In-App
-        * * SQL Data Type: bit
-        * * Default Value: 1
-        * * Description: Whether in-app notifications are enabled by default for this type`),
-    DefaultEmail: z.boolean().describe(`
-        * * Field Name: DefaultEmail
-        * * Display Name: Default Email
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Whether email notifications are enabled by default for this type`),
-    DefaultSMS: z.boolean().describe(`
-        * * Field Name: DefaultSMS
-        * * Display Name: Default SMS
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Whether SMS notifications are enabled by default for this type`),
     EmailTemplate: z.string().nullable().describe(`
         * * Field Name: EmailTemplate
         * * Display Name: Email Template
@@ -18238,7 +18228,7 @@ export const UserNotificationSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     Title: z.string().nullable().describe(`
@@ -18299,11 +18289,11 @@ export const UserNotificationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     ResourceType: z.string().nullable().describe(`
         * * Field Name: ResourceType
-        * * Display Name: Resource Type Name
+        * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)`),
     NotificationType: z.string().nullable().describe(`
         * * Field Name: NotificationType
-        * * Display Name: Notification Type Name
+        * * Display Name: Notification Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -59309,52 +59299,6 @@ export class UserNotificationPreferenceEntity extends BaseEntity<UserNotificatio
     }
 
     /**
-    * * Field Name: DeliveryMethod
-    * * Display Name: Delivery Method
-    * * SQL Data Type: nvarchar(50)
-    * * Description: User-specific override for delivery method: InApp, Email, SMS, All, or None
-    */
-    get DeliveryMethod(): string | null {
-        return this.Get('DeliveryMethod');
-    }
-    set DeliveryMethod(value: string | null) {
-        this.Set('DeliveryMethod', value);
-    }
-
-    /**
-    * * Field Name: Enabled
-    * * Display Name: Enabled
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    */
-    get Enabled(): boolean | null {
-        return this.Get('Enabled');
-    }
-    set Enabled(value: boolean | null) {
-        this.Set('Enabled', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
     * * Field Name: InAppEnabled
     * * Display Name: In-App Enabled
     * * SQL Data Type: bit
@@ -59391,6 +59335,39 @@ export class UserNotificationPreferenceEntity extends BaseEntity<UserNotificatio
     }
     set SMSEnabled(value: boolean | null) {
         this.Set('SMSEnabled', value);
+    }
+
+    /**
+    * * Field Name: Enabled
+    * * Display Name: Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    */
+    get Enabled(): boolean | null {
+        return this.Get('Enabled');
+    }
+    set Enabled(value: boolean | null) {
+        this.Set('Enabled', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 
     /**
@@ -59482,16 +59459,45 @@ export class UserNotificationTypeEntity extends BaseEntity<UserNotificationTypeE
     }
 
     /**
-    * * Field Name: DefaultDeliveryMethod
-    * * Display Name: Default Delivery Method
-    * * SQL Data Type: nvarchar(50)
-    * * Description: Default delivery method: InApp, Email, SMS, All, or None
+    * * Field Name: DefaultInApp
+    * * Display Name: Default In-App
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether in-app notifications are enabled by default for this type
     */
-    get DefaultDeliveryMethod(): string {
-        return this.Get('DefaultDeliveryMethod');
+    get DefaultInApp(): boolean {
+        return this.Get('DefaultInApp');
     }
-    set DefaultDeliveryMethod(value: string) {
-        this.Set('DefaultDeliveryMethod', value);
+    set DefaultInApp(value: boolean) {
+        this.Set('DefaultInApp', value);
+    }
+
+    /**
+    * * Field Name: DefaultEmail
+    * * Display Name: Default Email
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether email notifications are enabled by default for this type
+    */
+    get DefaultEmail(): boolean {
+        return this.Get('DefaultEmail');
+    }
+    set DefaultEmail(value: boolean) {
+        this.Set('DefaultEmail', value);
+    }
+
+    /**
+    * * Field Name: DefaultSMS
+    * * Display Name: Default SMS
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether SMS notifications are enabled by default for this type
+    */
+    get DefaultSMS(): boolean {
+        return this.Get('DefaultSMS');
+    }
+    set DefaultSMS(value: boolean) {
+        this.Set('DefaultSMS', value);
     }
 
     /**
@@ -59601,48 +59607,6 @@ export class UserNotificationTypeEntity extends BaseEntity<UserNotificationTypeE
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: DefaultInApp
-    * * Display Name: Default In-App
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    * * Description: Whether in-app notifications are enabled by default for this type
-    */
-    get DefaultInApp(): boolean {
-        return this.Get('DefaultInApp');
-    }
-    set DefaultInApp(value: boolean) {
-        this.Set('DefaultInApp', value);
-    }
-
-    /**
-    * * Field Name: DefaultEmail
-    * * Display Name: Default Email
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Whether email notifications are enabled by default for this type
-    */
-    get DefaultEmail(): boolean {
-        return this.Get('DefaultEmail');
-    }
-    set DefaultEmail(value: boolean) {
-        this.Set('DefaultEmail', value);
-    }
-
-    /**
-    * * Field Name: DefaultSMS
-    * * Display Name: Default SMS
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Whether SMS notifications are enabled by default for this type
-    */
-    get DefaultSMS(): boolean {
-        return this.Get('DefaultSMS');
-    }
-    set DefaultSMS(value: boolean) {
-        this.Set('DefaultSMS', value);
     }
 
     /**
@@ -66819,7 +66783,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
@@ -66967,7 +66931,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
 
     /**
     * * Field Name: ResourceType
-    * * Display Name: Resource Type Name
+    * * Display Name: Resource Type
     * * SQL Data Type: nvarchar(255)
     */
     get ResourceType(): string | null {
@@ -66976,7 +66940,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
 
     /**
     * * Field Name: NotificationType
-    * * Display Name: Notification Type Name
+    * * Display Name: Notification Type
     * * SQL Data Type: nvarchar(100)
     */
     get NotificationType(): string | null {

@@ -3,11 +3,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- User Information Section -->
+    <!-- Preference Mapping Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="userInformation"
-        sectionName="User Information"
-        icon="fa fa-user"
+        sectionKey="preferenceMapping"
+        sectionName="Preference Mapping"
+        icon="fa fa-link"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
@@ -23,24 +23,6 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="User"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Notification Preferences Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="notificationPreferences"
-        sectionName="Notification Preferences"
-        icon="fa fa-bell"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="NotificationTypeID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -51,7 +33,7 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DeliveryMethod"
+            FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -59,11 +41,21 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Enabled"
-            Type="checkbox"
+            FieldName="NotificationType"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Channel Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="channelSettings"
+        sectionName="Channel Settings"
+        icon="fa fa-sliders-h"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
@@ -91,8 +83,8 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="NotificationType"
-            Type="textbox"
+            FieldName="Enabled"
+            Type="checkbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>

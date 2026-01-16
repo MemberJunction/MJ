@@ -1,20 +1,25 @@
 /**
  * @memberjunction/notifications
  *
- * Unified notification system for MemberJunction with multi-channel delivery support.
+ * Unified notification engine for MemberJunction with multi-channel delivery support.
+ * Extends BaseEngine for cached notification types and auto-refresh capabilities.
  *
  * Features:
- * - Notification type categorization
- * - User delivery preferences (In-App, Email, SMS, All, None)
+ * - Cached notification types (loaded once, auto-refreshed on changes)
+ * - User delivery preferences (In-App, Email, SMS per channel)
  * - Template-based email/SMS formatting
  * - Integration with CommunicationEngine for external delivery
  * - Automatic in-app notification creation
  *
  * @example
  * ```typescript
- * import { NotificationService } from '@memberjunction/notifications';
+ * import { NotificationEngine } from '@memberjunction/notifications';
  *
- * const result = await NotificationService.Instance.SendNotification({
+ * // Initialize at server startup
+ * await NotificationEngine.Instance.Config(false, contextUser);
+ *
+ * // Send a notification
+ * const result = await NotificationEngine.Instance.SendNotification({
  *   userId: contextUser.ID,
  *   typeNameOrId: 'Agent Completion',
  *   title: 'Task Complete',
@@ -27,9 +32,5 @@
  * ```
  */
 
-export { NotificationService } from './NotificationService';
-export {
-    SendNotificationParams,
-    NotificationResult,
-    DeliveryMethod
-} from './types';
+export { NotificationEngine } from './NotificationEngine';
+export { SendNotificationParams, NotificationResult, DeliveryMethod, DeliveryChannels } from './types';

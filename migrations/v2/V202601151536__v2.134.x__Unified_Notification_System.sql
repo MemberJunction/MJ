@@ -12,9 +12,11 @@ CREATE TABLE [${flyway:defaultSchema}].UserNotificationType (
     Name NVARCHAR(100) NOT NULL UNIQUE,
     Description NVARCHAR(500),
 
-    -- Delivery Configuration
-    DefaultDeliveryMethod NVARCHAR(50) NOT NULL,  -- 'InApp', 'Email', 'SMS', 'All', 'None'
-    AllowUserPreference BIT DEFAULT 1,            -- Can users override?
+    -- Delivery Configuration (boolean flags for flexibility)
+    DefaultInApp BIT NOT NULL DEFAULT 1,   -- In-app notifications enabled by default
+    DefaultEmail BIT NOT NULL DEFAULT 0,   -- Email notifications enabled by default
+    DefaultSMS BIT NOT NULL DEFAULT 0,     -- SMS notifications enabled by default
+    AllowUserPreference BIT DEFAULT 1,     -- Can users override?
 
     -- Template Associations (nullable - templates are optional)
     EmailTemplateID UNIQUEIDENTIFIER NULL CONSTRAINT FK_UserNotificationType_EmailTemplate FOREIGN KEY REFERENCES [${flyway:defaultSchema}].Template(ID),
@@ -48,10 +50,26 @@ GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Default delivery method: InApp, Email, SMS, All, or None',
+    @value = N'Whether in-app notifications are enabled by default for this type',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = 'UserNotificationType',
-    @level2type = N'COLUMN', @level2name = 'DefaultDeliveryMethod';
+    @level2type = N'COLUMN', @level2name = 'DefaultInApp';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Whether email notifications are enabled by default for this type',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'UserNotificationType',
+    @level2type = N'COLUMN', @level2name = 'DefaultEmail';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Whether SMS notifications are enabled by default for this type',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'UserNotificationType',
+    @level2type = N'COLUMN', @level2name = 'DefaultSMS';
 GO
 
 EXEC sp_addextendedproperty
@@ -70,7 +88,10 @@ CREATE TABLE [${flyway:defaultSchema}].UserNotificationPreference (
     UserID UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_UserNotificationPreference_User FOREIGN KEY REFERENCES [${flyway:defaultSchema}].[User](ID),
     NotificationTypeID UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_UserNotificationPreference_NotificationType FOREIGN KEY REFERENCES [${flyway:defaultSchema}].UserNotificationType(ID),
 
-    DeliveryMethod NVARCHAR(50),  -- Override: 'InApp', 'Email', 'SMS', 'All', 'None'
+    -- User preference overrides (NULL = use default from NotificationType)
+    InAppEnabled BIT NULL,
+    EmailEnabled BIT NULL,
+    SMSEnabled BIT NULL,
     Enabled BIT DEFAULT 1,        -- Opt-out of this type entirely
 
     CONSTRAINT UQ_UserNotificationPreference_UserType UNIQUE(UserID, NotificationTypeID)
@@ -87,10 +108,26 @@ GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'User-specific override for delivery method: InApp, Email, SMS, All, or None',
+    @value = N'User preference for in-app notifications (NULL = use default)',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = 'UserNotificationPreference',
-    @level2type = N'COLUMN', @level2name = 'DeliveryMethod';
+    @level2type = N'COLUMN', @level2name = 'InAppEnabled';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'User preference for email notifications (NULL = use default)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'UserNotificationPreference',
+    @level2type = N'COLUMN', @level2name = 'EmailEnabled';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'User preference for SMS notifications (NULL = use default)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'UserNotificationPreference',
+    @level2type = N'COLUMN', @level2name = 'SMSEnabled';
 GO
 
 -- =============================================

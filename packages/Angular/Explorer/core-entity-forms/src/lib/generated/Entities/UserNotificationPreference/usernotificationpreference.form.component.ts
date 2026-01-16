@@ -14,8 +14,8 @@ export class UserNotificationPreferenceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'userInformation', sectionName: 'User Information', isExpanded: true },
-            { sectionKey: 'notificationPreferences', sectionName: 'Notification Preferences', isExpanded: true },
+            { sectionKey: 'preferenceMapping', sectionName: 'Preference Mapping', isExpanded: true },
+            { sectionKey: 'channelSettings', sectionName: 'Channel Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
