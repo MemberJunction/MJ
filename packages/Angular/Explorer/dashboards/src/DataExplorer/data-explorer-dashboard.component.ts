@@ -527,10 +527,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     await this.stateService.setContext(this.entityFilter);
     this.state = this.stateService.CurrentState;
 
-    // Initialize debounced filter from persisted state (only if no URL state)
-    if (!urlState && this.state.smartFilterPrompt) {
-      this.debouncedFilterText = this.state.smartFilterPrompt;
-    }
+    // User search text starts empty - it's separate from smart filter
+    this.debouncedFilterText = '';
 
     // Load available entities (async to support applicationId filter)
     // Pass urlState so we don't restore persisted entity if URL specifies one
@@ -553,9 +551,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         this.state = state;
 
-        // When entity changes, immediately update the debounced filter text
-        if (entityChanged && state.smartFilterPrompt !== this.debouncedFilterText) {
-          this.debouncedFilterText = state.smartFilterPrompt;
+        // When entity changes, clear user search text
+        if (entityChanged) {
+          this.debouncedFilterText = '';
         }
 
         this.onStateChanged();
@@ -844,10 +842,22 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // VIEW MANAGEMENT
   // ========================================
 
+  // Counter to track view switch sequence for debugging race conditions
+  private _viewSwitchSequence = 0;
+
   /**
    * Handle view selection from view selector dropdown
    */
   public onViewSelected(event: ViewSelectedEvent): void {
+    const switchId = ++this._viewSwitchSequence;
+    const previousViewName = this.selectedViewEntity?.Name || '(default)';
+    const newViewName = event.view?.Name || '(default)';
+    const newViewId = event.viewId || '(none)';
+
+    console.log(`[ViewSwitch #${switchId}] START: "${previousViewName}" → "${newViewName}" (viewId: ${newViewId})`);
+    console.log(`[ViewSwitch #${switchId}] Previous WhereClause: "${this.selectedViewEntity?.WhereClause || '(none)'}"`);
+    console.log(`[ViewSwitch #${switchId}] New WhereClause: "${event.view?.WhereClause || '(none)'}"`);
+
     // Ensure any pending grid state changes are saved before switching views
     // This ensures column resizes/reorders are saved to the current view before switching
     this.entityViewerRef?.EnsurePendingChangesSaved();
@@ -864,23 +874,28 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // For regular filter views, the WhereClause is applied in the entity-viewer
       if (event.view.SmartFilterEnabled && event.view.SmartFilterPrompt) {
         this.stateService.setSmartFilterPrompt(event.view.SmartFilterPrompt);
-        this.debouncedFilterText = event.view.SmartFilterPrompt;
+        console.log(`[ViewSwitch #${switchId}] Applied SmartFilterPrompt: "${event.view.SmartFilterPrompt}"`);
       } else {
-        // Clear the quick filter when switching to a view with regular filters
+        // Clear the smart filter when switching to a view with regular filters
         this.stateService.setSmartFilterPrompt('');
-        this.debouncedFilterText = '';
+        console.log(`[ViewSwitch #${switchId}] Cleared smart filter (view has WhereClause filter)`);
       }
+      // Always clear user search text when switching views - smart filter is separate
+      this.debouncedFilterText = '';
     } else {
       // Switching to default view - load user's saved defaults from UserInfoEngine
       this.currentGridState = this.loadUserDefaultGridState();
       this.stateService.setSmartFilterPrompt('');
       this.debouncedFilterText = '';
+      console.log(`[ViewSwitch #${switchId}] Switched to default view, cleared filters`);
     }
 
     // Force refresh to ensure the grid reloads with the new view configuration
     // This fixes the issue where switching from a filtered view to default shows no results
+    console.log(`[ViewSwitch #${switchId}] Calling detectChanges and refresh...`);
     this.cdr.detectChanges();
     this.entityViewerRef?.refresh();
+    console.log(`[ViewSwitch #${switchId}] END: refresh() called`);
   }
 
   /**
@@ -1698,10 +1713,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // The filter is in SQL format like "ParentID='xxx'" - we just show it in the filter box
     // The entity viewer will apply it as a smart filter
     if (event.filter) {
-      // For now, we'll apply the filter as-is
-      // A future enhancement could parse and display it more user-friendly
+      // Apply the filter to the smart filter state (separate from user search)
       this.stateService.setSmartFilterPrompt(event.filter);
-      this.debouncedFilterText = event.filter;
     }
   }
 
@@ -1841,10 +1854,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedEntity = entity;
         this.stateService.selectEntity(entity.Name);
 
-        // Apply filter if specified
+        // Apply filter if specified (to smart filter state, not user search)
         if (deepLink.filter) {
           this.stateService.setSmartFilterPrompt(deepLink.filter);
-          this.debouncedFilterText = deepLink.filter;
         }
 
         // Note: Record selection is handled after data loads via onDataLoaded
@@ -2008,15 +2020,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.selectEntity(entity.Name);
         }
 
-        // Apply filter if specified
+        // Apply filter if specified (to smart filter state, not user search)
         if (urlState.filter) {
           this.stateService.setSmartFilterPrompt(urlState.filter);
-          this.debouncedFilterText = urlState.filter;
         } else if (entityChanged) {
           // Only clear filter if entity changed (selectEntity already handles this)
           this.stateService.setSmartFilterPrompt('');
-          this.debouncedFilterText = '';
         }
+        // User search text is always cleared when applying URL state
+        this.debouncedFilterText = '';
 
         // Handle record selection
         if (urlState.record) {

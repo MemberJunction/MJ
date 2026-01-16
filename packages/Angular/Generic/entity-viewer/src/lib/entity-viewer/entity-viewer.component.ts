@@ -740,6 +740,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
     // Handle viewEntity changes - reload data when view changes
     if (changes['viewEntity']) {
+      const prevView = changes['viewEntity'].previousValue;
+      const newView = changes['viewEntity'].currentValue;
+      console.log(`[EntityViewer ngOnChanges] viewEntity changed: "${prevView?.Name || '(default)'}" → "${newView?.Name || '(default)'}"`);
+      console.log(`[EntityViewer ngOnChanges] New WhereClause: "${newView?.WhereClause || '(none)'}"`);
+
       if (this.entity && !this.records) {
         // Apply view's sort state if available
         if (this.viewEntity) {
@@ -751,8 +756,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
             };
           }
         }
+        console.log(`[EntityViewer ngOnChanges] Triggering loadData for view change`);
         this.resetPaginationState();
         this.loadData();
+      } else {
+        console.log(`[EntityViewer ngOnChanges] Skipping loadData: entity=${!!this.entity}, records=${!!this.records}`);
       }
     }
   }
@@ -838,6 +846,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   // DATA LOADING
   // ========================================
 
+  // Sequence counter for tracking load requests and detecting stale responses
+  private _loadSequence = 0;
+  // Flag to indicate a reload is pending (requested while another load was in progress)
+  private _pendingReload = false;
+
   /**
    * Load data for the current entity with server-side filtering/sorting/pagination
    */
@@ -849,8 +862,20 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       return;
     }
 
-    // Prevent concurrent loads which can cause duplicate records
+    // Increment sequence to track this load request
+    const loadId = ++this._loadSequence;
+    const viewName = this.viewEntity?.Name || '(default)';
+    const whereClause = this.viewEntity?.WhereClause || '(none)';
+
+    console.log(`[EntityViewer Load #${loadId}] START: view="${viewName}", entity="${this.entity.Name}"`);
+    console.log(`[EntityViewer Load #${loadId}] WhereClause: "${whereClause}"`);
+    console.log(`[EntityViewer Load #${loadId}] isLoading=${this.isLoading}, isInitialLoad=${this.isInitialLoad}`);
+
+    // If a load is already in progress, mark that we need to reload when it completes
+    // This handles the case where view/filter changes occur during an active load
     if (this.isLoading) {
+      console.warn(`[EntityViewer Load #${loadId}] QUEUED: Another load is in progress, will reload after completion`);
+      this._pendingReload = true;
       return;
     }
 
@@ -884,6 +909,8 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       // The view's WhereClause is the "business filter" - UserSearchString is additive
       const extraFilter = this.viewEntity?.WhereClause || undefined;
 
+      console.log(`[EntityViewer Load #${loadId}] Executing RunView with ExtraFilter: "${extraFilter || '(none)'}"`);
+
       const result = await rv.RunView({
         EntityName: this.entity.Name,
         ResultType: 'entity_object',
@@ -891,10 +918,22 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         StartRow: startRow,
         OrderBy: orderBy,
         ExtraFilter: extraFilter,
-        UserSearchString: config.serverSideFiltering ? this.debouncedFilterText || undefined : undefined
+        // Only use UserSearchString for regular text search, NOT for smart filters
+        // Smart filters generate WhereClause via AI on the server, so the prompt text should not be passed as UserSearchString
+        UserSearchString: config.serverSideFiltering && !this.viewEntity?.SmartFilterEnabled
+          ? this.debouncedFilterText || undefined
+          : undefined
       });
 
+      // Check if this load is still the current one (detect stale responses)
+      if (loadId !== this._loadSequence) {
+        console.warn(`[EntityViewer Load #${loadId}] STALE: Discarding results (current sequence is #${this._loadSequence})`);
+        return;
+      }
+
       if (result.Success) {
+        console.log(`[EntityViewer Load #${loadId}] SUCCESS: ${result.TotalRowCount} total rows, ${result.Results?.length || 0} loaded`);
+
         // Append or replace records based on whether this is initial load
         if (this.isInitialLoad) {
           this.internalRecords = result.Results;
@@ -924,7 +963,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         // Update timeline groups with new data
         this.updateTimelineGroups();
       } else {
-        console.error('Failed to load records:', result.ErrorMessage);
+        console.error(`[EntityViewer Load #${loadId}] FAILED: ${result.ErrorMessage}`);
         if (this.isInitialLoad) {
           this.internalRecords = [];
         }
@@ -932,7 +971,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         this.filteredRecordCount = 0;
       }
     } catch (error) {
-      console.error('Error loading records:', error);
+      console.error(`[EntityViewer Load #${loadId}] ERROR:`, error);
       if (this.isInitialLoad) {
         this.internalRecords = [];
       }
@@ -943,6 +982,16 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.pagination.isLoading = false;
       this.isInitialLoad = false;
       this.cdr.detectChanges();
+      console.log(`[EntityViewer Load #${loadId}] END: isLoading=false`);
+
+      // If a reload was requested while we were loading, trigger it now
+      if (this._pendingReload) {
+        console.log(`[EntityViewer Load #${loadId}] Processing pending reload request`);
+        this._pendingReload = false;
+        this.resetPaginationState();
+        // Use setTimeout to break the call stack and allow Angular to process
+        setTimeout(() => this.loadData(), 0);
+      }
     }
   }
 
@@ -963,9 +1012,14 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Keeps existing records visible during refresh for better UX
    */
   public refresh(): void {
+    const viewName = this.viewEntity?.Name || '(default)';
+    console.log(`[EntityViewer refresh()] Called for view="${viewName}", records=${!!this.records}`);
+
     if (!this.records) {
       this.resetPaginationState(false);
       this.loadData();
+    } else {
+      console.log(`[EntityViewer refresh()] Skipped: using external records`);
     }
   }
 

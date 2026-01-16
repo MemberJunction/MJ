@@ -30,35 +30,25 @@ This document tracks improvements to the MemberJunction viewing system, includin
 
 ---
 
-### 2. Smart Filter WHERE Clause Generation - Modern AI Patterns
-**Status**: Not Started
+### ~~2. Smart Filter WHERE Clause Generation - Modern AI Patterns~~
+**Status**: COMPLETED
 **Priority**: High
 **Complexity**: Medium-High
 
-**Current State**:
-- Implementation in `packages/MJCoreEntitiesServer/src/custom/userViewEntity.server.ts`
-- Hardcoded to use OpenAI (`AIVendorName` returns `'OpenAI'`)
-- Does NOT use modern MJ patterns (AIPromptRunner, stored prompts)
-- Direct LLM instantiation via `ClassFactory.CreateInstance<BaseLLM>`
-- No vendor fallback mechanism
+**Solution Implemented**:
+- Created metadata-driven prompt: `metadata/prompts/.smart-filter-prompt.json`
+- Created markdown template: `metadata/prompts/templates/views/smart-filter-generation.template.md`
+- Refactored `userViewEntity.server.ts` to use `AIPromptRunner.ExecutePrompt()`
+- Removed hardcoded OpenAI dependency
+- Model priority fallback chain configured:
+  - GPT-OSS-120B on Cerebras (Priority 3 - fastest)
+  - GPT-OSS-120B on Groq (Priority 2 - fast backup)
+  - Claude Haiku 4.5 on Anthropic (Priority 1 - quality fallback)
 
-**Implementation**:
-1. Create stored AI Prompt for smart filter generation in `/metadata/ai-prompts/`
-2. Refactor to use `AIPromptRunner.ExecutePrompt()` instead of direct LLM calls
-3. Implement vendor fallback chain: Cerebras (GPT-OSS-120B) → Groq → OpenAI
-4. Override `GetAIModel()` to search for `gpt-oss` models first
-5. Leverage AIEngine's centralized model management
-
-**Model Priority**:
-```
-1. Cerebras - GPT-OSS-120B (fastest inference)
-2. Groq - GPT-OSS models (fast inference)
-3. OpenAI - fallback (reliable but slower/costlier)
-```
-
-**Files to Modify**:
+**Files Modified**:
 - `packages/MJCoreEntitiesServer/src/custom/userViewEntity.server.ts`
-- Create: `/metadata/ai-prompts/.smart-filter-generation.json`
+- Created: `metadata/prompts/.smart-filter-prompt.json`
+- Created: `metadata/prompts/templates/views/smart-filter-generation.template.md`
 
 ---
 
@@ -239,7 +229,38 @@ This document tracks improvements to the MemberJunction viewing system, includin
 
 ---
 
-### 10. Additional User Preference Persistence (Proposed)
+### 10. View Switching Race Condition - Filter Not Clearing
+**Status**: Not Started
+**Priority**: High
+**Complexity**: Medium
+
+**Current State**:
+- When rapidly switching between views for the same entity, filters sometimes don't clear properly
+- Symptom: View shows "0 records" with no error displayed
+- Likely a race condition between view load and filter state updates
+- Reproducible by switching between views with different filters back and forth quickly
+
+**Root Cause Hypothesis**:
+- Async operations (view load, filter clear, data refresh) may be completing out of order
+- Previous view's filter may be applied to new view's data request
+- Error handling may be swallowing exceptions silently
+
+**Implementation**:
+1. Add request cancellation when switching views (cancel in-flight requests)
+2. Use a view switch "lock" or sequence number to discard stale responses
+3. Ensure filter state is cleared synchronously before async data load begins
+4. Add error surfacing for failed view loads (don't fail silently)
+5. Consider adding a loading overlay during view transitions to prevent rapid switching
+
+**Files to Investigate**:
+- `packages/Angular/Explorer/dashboards/src/DataExplorer/data-explorer-dashboard.component.ts` (onViewSelected)
+- `packages/Angular/Generic/entity-viewer/src/lib/entity-viewer/entity-viewer.component.ts`
+- `packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts`
+- `packages/MJCoreEntities/src/custom/UserViewEntity.ts` (filter application logic)
+
+---
+
+### 11. Additional User Preference Persistence (Proposed)
 **Status**: Not Started
 **Priority**: Low
 **Complexity**: Varies
@@ -274,8 +295,9 @@ This document tracks improvements to the MemberJunction viewing system, includin
 2. ~~**Task 9**: Immediate Save on View/Entity Switch~~ - DONE
 
 ### Phase 2: High Value Improvements
-3. **Task 2**: Smart Filter AI Modernization - use better/faster models
+3. ~~**Task 2**: Smart Filter AI Modernization~~ - DONE
 4. **Task 5**: Multi-Column Sorting Visual Indicators - power user feature
+5. **Task 10**: View Switching Race Condition - critical bug fix
 
 ### Phase 3: User Experience Polish
 5. **Task 1**: Multi-Select Mode Toggle - reduce UI clutter
@@ -322,6 +344,14 @@ _Use this section to track progress across sessions_
 - **Task 8 (View Switching Filter Bug)**: Fixed by adding explicit `refresh()` call after clearing filter
 - **Task 9 (Immediate Save on View/Entity Switch)**: Fixed by exposing `flushPendingChanges()` method and calling it before view/entity switches
 - Both packages built successfully (`ng-entity-viewer` and `ng-dashboards`)
+
+### Session 2 - Smart Filter AI Modernization
+- **Task 2 (Smart Filter AI)**: Modernized to use metadata-driven prompts
+  - Created `metadata/prompts/.smart-filter-prompt.json` with model fallback chain
+  - Created `metadata/prompts/templates/views/smart-filter-generation.template.md` with well-structured markdown
+  - Refactored `userViewEntity.server.ts` to use `AIPromptRunner.ExecutePrompt()`
+  - Removed hardcoded OpenAI dependency, now uses Cerebras/Groq/Anthropic fallback
+- **Task 10 (View Switching Race Condition)**: Added to plan - high priority bug to investigate
 
 ---
 
