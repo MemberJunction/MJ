@@ -11,7 +11,7 @@ SELECT
     av.VersionNumber,
     av.ArtifactID,
     a.Name as ArtifactName, 
-    a.Type as ArtifactType,
+    a.Type as ArtifactType, 
     a.Description as ArtifactDescription
 FROM [__mj].[vwConversationDetailArtifacts] cda
 INNER JOIN [__mj].[vwArtifactVersions] av ON cda.ArtifactVersionID = av.ID
