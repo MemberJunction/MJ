@@ -10,6 +10,46 @@ import {
     ErrorAnalyzer
 } from "@memberjunction/ai";
 import OpenAI from "openai";
+import { Uploadable } from "openai/core";
+
+/**
+ * Extended image generation params for GPT Image models (gpt-image-1, gpt-image-1.5).
+ * The OpenAI SDK v5.x doesn't include these types yet, so we define them locally.
+ * These match the OpenAI API spec for GPT Image models introduced in 2025.
+ */
+interface GptImageGenerateParams {
+    prompt: string;
+    model: string;
+    n?: number;
+    size?: string;
+    output_format?: 'png' | 'jpeg' | 'webp';
+    quality?: 'high' | 'medium' | 'low';
+    user?: string;
+}
+
+/**
+ * Extended image edit params for GPT Image models.
+ */
+interface GptImageEditParams {
+    image: Uploadable;
+    prompt: string;
+    model: string;
+    n?: number;
+    size?: string;
+    output_format?: 'png' | 'jpeg' | 'webp';
+    mask?: Uploadable;
+}
+
+/**
+ * Extended image variation params for GPT Image models.
+ */
+interface GptImageVariationParams {
+    image: Uploadable;
+    model: string;
+    n?: number;
+    size?: string;
+    output_format?: 'png' | 'jpeg' | 'webp';
+}
 
 /**
  * OpenAI GPT-4o Image implementation of the BaseImageGenerator class.
@@ -47,7 +87,13 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
 
         try {
             const openAIParams = this.buildGenerationParams(params);
-            const response = await this._openAI.images.generate(openAIParams);
+
+            // The OpenAI SDK v5.x types don't include GPT Image model parameters (output_format, etc.)
+            // but the API accepts them. We cast here at the API boundary since we've validated
+            // our params match the actual API spec. SDK v6.x includes proper GPT Image types.
+            const response = await this._openAI.images.generate(
+                openAIParams as OpenAI.Images.ImageGenerateParams
+            );
 
             // Handle the response - ensure it's not a stream
             if ('data' in response) {
@@ -74,26 +120,64 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
 
             // Create File objects for OpenAI API
             const imageFile = new File([imageInput.buffer], 'image.png', { type: 'image/png' });
+            const maskFile = maskInput
+                ? new File([maskInput.buffer], 'mask.png', { type: 'image/png' })
+                : undefined;
 
-            const openAIParams: OpenAI.Images.ImageEditParams = {
-                image: imageFile,
-                prompt: params.prompt,
-                model: params.model || 'gpt-image-1.5',
-                n: params.n || 1,
-                size: this.normalizeSize(params.size) as '1024x1024' | '1536x1024' | '1024x1536' | 'auto',
-                response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
-            };
+            const openAIParams = this.buildEditParams(params, imageFile, maskFile);
 
-            if (maskInput) {
-                const maskFile = new File([maskInput.buffer], 'mask.png', { type: 'image/png' });
-                openAIParams.mask = maskFile;
+            // Cast at API boundary - see comment in GenerateImage for rationale
+            const response = await this._openAI.images.edit(
+                openAIParams as OpenAI.Images.ImageEditParams
+            );
+
+            // Handle the response - ensure it's not a stream
+            if ('data' in response) {
+                return this.processEditResponse(response, startTime, params);
+            } else {
+                return this.createErrorResult(startTime, 'Unexpected streaming response from OpenAI');
             }
-
-            const response = await this._openAI.images.edit(openAIParams);
-
-            return this.processEditResponse(response, startTime, params);
         } catch (error) {
             return this.handleError(error, startTime);
+        }
+    }
+
+    /**
+     * Build edit params for either GPT Image or DALL-E models
+     */
+    private buildEditParams(
+        params: ImageEditParams,
+        imageFile: File,
+        maskFile?: File
+    ): GptImageEditParams | OpenAI.Images.ImageEditParams {
+        const model = params.model || 'gpt-image-1.5';
+
+        if (this.isGptImageModel(model)) {
+            const gptParams: GptImageEditParams = {
+                image: imageFile,
+                prompt: params.prompt,
+                model: model,
+                n: params.n || 1,
+                size: this.normalizeSize(params.size),
+                output_format: 'png'
+            };
+            if (maskFile) {
+                gptParams.mask = maskFile;
+            }
+            return gptParams;
+        } else {
+            const dalleParams: OpenAI.Images.ImageEditParams = {
+                image: imageFile,
+                prompt: params.prompt,
+                model: model,
+                n: params.n || 1,
+                size: this.normalizeSize(params.size) as OpenAI.Images.ImageEditParams['size'],
+                response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
+            };
+            if (maskFile) {
+                dalleParams.mask = maskFile;
+            }
+            return dalleParams;
         }
     }
 
@@ -110,22 +194,45 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             // Create File object for OpenAI API
             const imageFile = new File([imageInput.buffer], 'image.png', { type: 'image/png' });
 
-            // Note: The variations API only supports limited sizes
-            const variationSize = this.normalizeVariationSize(params.size);
+            const openAIParams = this.buildVariationParams(params, imageFile);
 
-            const openAIParams: OpenAI.Images.ImageCreateVariationParams = {
-                image: imageFile,
-                model: params.model || 'gpt-image-1.5',
-                n: params.n || 1,
-                size: variationSize,
-                response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
-            };
-
-            const response = await this._openAI.images.createVariation(openAIParams);
+            // Cast at API boundary - see comment in GenerateImage for rationale
+            const response = await this._openAI.images.createVariation(
+                openAIParams as OpenAI.Images.ImageCreateVariationParams
+            );
 
             return this.processVariationResponse(response, startTime, params);
         } catch (error) {
             return this.handleError(error, startTime);
+        }
+    }
+
+    /**
+     * Build variation params for either GPT Image or DALL-E models
+     */
+    private buildVariationParams(
+        params: ImageVariationParams,
+        imageFile: File
+    ): GptImageVariationParams | OpenAI.Images.ImageCreateVariationParams {
+        const model = params.model || 'gpt-image-1.5';
+        const variationSize = this.normalizeVariationSize(params.size);
+
+        if (this.isGptImageModel(model)) {
+            return {
+                image: imageFile,
+                model: model,
+                n: params.n || 1,
+                size: variationSize,
+                output_format: 'png'
+            };
+        } else {
+            return {
+                image: imageFile,
+                model: model,
+                n: params.n || 1,
+                size: variationSize as OpenAI.Images.ImageCreateVariationParams['size'],
+                response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
+            };
         }
     }
 
@@ -167,12 +274,48 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Build OpenAI-specific generation parameters
+     * Build OpenAI-specific generation parameters.
+     * Returns either GPT Image params or DALL-E params based on model.
      */
-    private buildGenerationParams(params: ImageGenerationParams): OpenAI.Images.ImageGenerateParams {
+    private buildGenerationParams(params: ImageGenerationParams): GptImageGenerateParams | OpenAI.Images.ImageGenerateParams {
         const model = params.model || 'gpt-image-1.5';
 
-        const openAIParams: OpenAI.Images.ImageGenerateParams = {
+        if (this.isGptImageModel(model)) {
+            return this.buildGptImageGenerateParams(params, model);
+        } else {
+            return this.buildDalleGenerateParams(params, model);
+        }
+    }
+
+    /**
+     * Build params for GPT Image models (gpt-image-1, gpt-image-1.5)
+     */
+    private buildGptImageGenerateParams(params: ImageGenerationParams, model: string): GptImageGenerateParams {
+        const gptParams: GptImageGenerateParams = {
+            prompt: params.prompt,
+            model: model,
+            n: params.n || 1,
+            size: this.normalizeSize(params.size),
+            output_format: 'png'
+        };
+
+        // GPT Image models use: high, medium, low
+        if (params.quality) {
+            gptParams.quality = params.quality === 'hd' ? 'high' : 'medium';
+        }
+
+        if (params.user) {
+            gptParams.user = params.user;
+        }
+
+        return gptParams;
+    }
+
+    /**
+     * Build params for DALL-E models (dall-e-2, dall-e-3)
+     */
+    private buildDalleGenerateParams(params: ImageGenerationParams, model: string): OpenAI.Images.ImageGenerateParams {
+        const dalleParams: OpenAI.Images.ImageGenerateParams = {
             prompt: params.prompt,
             model: model,
             n: params.n || 1,
@@ -180,21 +323,28 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             response_format: params.outputFormat === 'url' ? 'url' : 'b64_json'
         };
 
-        // Quality parameter for HD output
+        // DALL-E models use: hd, standard
         if (params.quality) {
-            openAIParams.quality = params.quality === 'hd' ? 'hd' : 'standard';
+            dalleParams.quality = params.quality === 'hd' ? 'hd' : 'standard';
         }
 
-        // Style parameter
+        // Style parameter (DALL-E 3 only)
         if (params.style) {
-            openAIParams.style = params.style === 'natural' ? 'natural' : 'vivid';
+            dalleParams.style = params.style === 'natural' ? 'natural' : 'vivid';
         }
 
         if (params.user) {
-            openAIParams.user = params.user;
+            dalleParams.user = params.user;
         }
 
-        return openAIParams;
+        return dalleParams;
+    }
+
+    /**
+     * Check if the model is a GPT Image model
+     */
+    private isGptImageModel(model: string): boolean {
+        return model.startsWith('gpt-image');
     }
 
     /**
