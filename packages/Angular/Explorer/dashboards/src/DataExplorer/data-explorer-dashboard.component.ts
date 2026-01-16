@@ -842,22 +842,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // VIEW MANAGEMENT
   // ========================================
 
-  // Counter to track view switch sequence for debugging race conditions
-  private _viewSwitchSequence = 0;
-
   /**
    * Handle view selection from view selector dropdown
    */
   public onViewSelected(event: ViewSelectedEvent): void {
-    const switchId = ++this._viewSwitchSequence;
-    const previousViewName = this.selectedViewEntity?.Name || '(default)';
-    const newViewName = event.view?.Name || '(default)';
-    const newViewId = event.viewId || '(none)';
-
-    console.log(`[ViewSwitch #${switchId}] START: "${previousViewName}" → "${newViewName}" (viewId: ${newViewId})`);
-    console.log(`[ViewSwitch #${switchId}] Previous WhereClause: "${this.selectedViewEntity?.WhereClause || '(none)'}"`);
-    console.log(`[ViewSwitch #${switchId}] New WhereClause: "${event.view?.WhereClause || '(none)'}"`);
-
     // Ensure any pending grid state changes are saved before switching views
     // This ensures column resizes/reorders are saved to the current view before switching
     this.entityViewerRef?.EnsurePendingChangesSaved();
@@ -874,11 +862,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // For regular filter views, the WhereClause is applied in the entity-viewer
       if (event.view.SmartFilterEnabled && event.view.SmartFilterPrompt) {
         this.stateService.setSmartFilterPrompt(event.view.SmartFilterPrompt);
-        console.log(`[ViewSwitch #${switchId}] Applied SmartFilterPrompt: "${event.view.SmartFilterPrompt}"`);
       } else {
         // Clear the smart filter when switching to a view with regular filters
         this.stateService.setSmartFilterPrompt('');
-        console.log(`[ViewSwitch #${switchId}] Cleared smart filter (view has WhereClause filter)`);
       }
       // Always clear user search text when switching views - smart filter is separate
       this.debouncedFilterText = '';
@@ -887,15 +873,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.currentGridState = this.loadUserDefaultGridState();
       this.stateService.setSmartFilterPrompt('');
       this.debouncedFilterText = '';
-      console.log(`[ViewSwitch #${switchId}] Switched to default view, cleared filters`);
     }
 
     // Force refresh to ensure the grid reloads with the new view configuration
-    // This fixes the issue where switching from a filtered view to default shows no results
-    console.log(`[ViewSwitch #${switchId}] Calling detectChanges and refresh...`);
     this.cdr.detectChanges();
     this.entityViewerRef?.refresh();
-    console.log(`[ViewSwitch #${switchId}] END: refresh() called`);
   }
 
   /**
