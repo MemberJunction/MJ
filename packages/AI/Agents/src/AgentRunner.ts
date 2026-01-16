@@ -831,7 +831,7 @@ export class AgentRunner {
 
                 try {
                     const mediaEntity = await md.GetEntityObject<AIAgentRunMediaEntity>(
-                        'MJ: AI Agent Run Media',
+                        'MJ: AI Agent Run Medias',
                         contextUser
                     );
 
