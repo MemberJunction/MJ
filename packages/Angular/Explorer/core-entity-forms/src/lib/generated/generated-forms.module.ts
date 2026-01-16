@@ -183,6 +183,7 @@ import { ConversationDetailRatingFormComponent, LoadConversationDetailRatingForm
 import { CredentialCategoryFormComponent, LoadCredentialCategoryFormComponent } from "./Entities/CredentialCategory/credentialcategory.form.component";
 import { CredentialTypeFormComponent, LoadCredentialTypeFormComponent } from "./Entities/CredentialType/credentialtype.form.component";
 import { CredentialFormComponent, LoadCredentialFormComponent } from "./Entities/Credential/credential.form.component";
+import { DashboardPartTypeFormComponent, LoadDashboardPartTypeFormComponent } from "./Entities/DashboardPartType/dashboardparttype.form.component";
 import { DashboardUserPreferenceFormComponent, LoadDashboardUserPreferenceFormComponent } from "./Entities/DashboardUserPreference/dashboarduserpreference.form.component";
 import { DashboardUserStateFormComponent, LoadDashboardUserStateFormComponent } from "./Entities/DashboardUserState/dashboarduserstate.form.component";
 import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent } from "./Entities/EncryptionAlgorithm/encryptionalgorithm.form.component";
@@ -606,9 +607,9 @@ declarations: [
     CredentialCategoryFormComponent,
     CredentialTypeFormComponent,
     CredentialFormComponent,
+    DashboardPartTypeFormComponent,
     DashboardUserPreferenceFormComponent,
-    DashboardUserStateFormComponent,
-    EncryptionAlgorithmFormComponent],
+    DashboardUserStateFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -634,6 +635,7 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    EncryptionAlgorithmFormComponent,
     EncryptionKeySourceFormComponent,
     EncryptionKeyFormComponent,
     EnvironmentFormComponent,
@@ -652,8 +654,7 @@ declarations: [
     TaskTypeFormComponent,
     TaskFormComponent,
     TestRubricFormComponent,
-    TestRunFeedbackFormComponent,
-    TestRunFormComponent],
+    TestRunFeedbackFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -679,6 +680,7 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    TestRunFormComponent,
     TestSuiteRunFormComponent,
     TestSuiteTestFormComponent,
     TestSuiteFormComponent,
@@ -697,8 +699,7 @@ declarations: [
     QueueTypeFormComponent,
     QueueFormComponent,
     RecommendationItemFormComponent,
-    RecommendationProviderFormComponent,
-    RecommendationRunFormComponent],
+    RecommendationProviderFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -724,6 +725,7 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    RecommendationRunFormComponent,
     RecommendationFormComponent,
     RecordChangeReplayRunFormComponent,
     RecordChangeFormComponent,
@@ -742,8 +744,7 @@ declarations: [
     SchemaInfoFormComponent,
     SkillFormComponent,
     TaggedItemFormComponent,
-    TagFormComponent,
-    TemplateCategoryFormComponent],
+    TagFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -769,6 +770,7 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
     TemplateContentFormComponent,
     TemplateParamFormComponent,
@@ -787,8 +789,7 @@ declarations: [
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
-    WorkflowEngineFormComponent,
-    WorkflowRunFormComponent],
+    WorkflowEngineFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -814,6 +815,7 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    WorkflowRunFormComponent,
     WorkflowFormComponent,
     WorkspaceItemFormComponent,
     WorkspaceFormComponent],
@@ -1024,6 +1026,7 @@ export function LoadCoreGeneratedForms() {
     LoadCredentialCategoryFormComponent();
     LoadCredentialTypeFormComponent();
     LoadCredentialFormComponent();
+    LoadDashboardPartTypeFormComponent();
     LoadDashboardUserPreferenceFormComponent();
     LoadDashboardUserStateFormComponent();
     LoadEncryptionAlgorithmFormComponent();

@@ -13111,6 +13111,72 @@ export const CredentialSchema = z.object({
 export type CredentialEntityType = z.infer<typeof CredentialSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Dashboard Part Types
+ */
+export const DashboardPartTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name for the panel type (e.g., View, Query, Artifact, WebURL, Custom)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this panel type displays and its capabilities`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for the panel type (e.g., fa-solid fa-table)`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The @RegisterClass name for the panel renderer component that extends DashboardBasePanelRenderer`),
+    ConfigDialogClass: z.string().nullable().describe(`
+        * * Field Name: ConfigDialogClass
+        * * Display Name: Configuration Dialog Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The @RegisterClass name for the configuration dialog component that extends DashboardBasePanelConfigDialog`),
+    DefaultConfig: z.string().nullable().describe(`
+        * * Field Name: DefaultConfig
+        * * Display Name: Default Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing default configuration values for new panels of this type`),
+    SortOrder: z.number().describe(`
+        * * Field Name: SortOrder
+        * * Display Name: Sort Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order in panel type selection UI (lower numbers appear first)`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this panel type is currently available for use`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type DashboardPartTypeEntityType = z.infer<typeof DashboardPartTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Dashboard User Preferences
  */
 export const DashboardUserPreferenceSchema = z.object({
@@ -53155,6 +53221,178 @@ export class CredentialEntity extends BaseEntity<CredentialEntityType> {
     */
     get Category(): string | null {
         return this.Get('Category');
+    }
+}
+
+
+/**
+ * MJ: Dashboard Part Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardPartType
+ * * Base View: vwDashboardPartTypes
+ * * @description Stores available panel types for metadata-driven dashboards. Each panel type defines a driver class for rendering content and an optional config dialog for setup UI.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard Part Types')
+export class DashboardPartTypeEntity extends BaseEntity<DashboardPartTypeEntityType> {
+    /**
+    * Loads the MJ: Dashboard Part Types record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard Part Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardPartTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name for the panel type (e.g., View, Query, Artifact, WebURL, Custom)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this panel type displays and its capabilities
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for the panel type (e.g., fa-solid fa-table)
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The @RegisterClass name for the panel renderer component that extends DashboardBasePanelRenderer
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: ConfigDialogClass
+    * * Display Name: Configuration Dialog Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The @RegisterClass name for the configuration dialog component that extends DashboardBasePanelConfigDialog
+    */
+    get ConfigDialogClass(): string | null {
+        return this.Get('ConfigDialogClass');
+    }
+    set ConfigDialogClass(value: string | null) {
+        this.Set('ConfigDialogClass', value);
+    }
+
+    /**
+    * * Field Name: DefaultConfig
+    * * Display Name: Default Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing default configuration values for new panels of this type
+    */
+    get DefaultConfig(): string | null {
+        return this.Get('DefaultConfig');
+    }
+    set DefaultConfig(value: string | null) {
+        this.Set('DefaultConfig', value);
+    }
+
+    /**
+    * * Field Name: SortOrder
+    * * Display Name: Sort Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order in panel type selection UI (lower numbers appear first)
+    */
+    get SortOrder(): number {
+        return this.Get('SortOrder');
+    }
+    set SortOrder(value: number) {
+        this.Set('SortOrder', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this panel type is currently available for use
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

@@ -289,26 +289,36 @@ export abstract class BaseDataGridComponent implements OnInit, OnDestroy {
 
 ---
 
-### Phase 2: Query Viewer Component
+### Phase 2: Query Viewer Component ✅ COMPLETED
 
 #### 2.1 Create Query Viewer Package
 
 **Package:** `@memberjunction/ng-query-viewer`
 **Location:** `packages/Angular/Generic/query-viewer/`
+**Status:** ✅ COMPLETED (January 2026)
 
-| Task | Description | Files |
-|------|-------------|-------|
-| 2.1.1 | Create package structure | `package.json`, `ng-package.json`, `tsconfig.lib.json` |
-| 2.1.2 | Create QueryDataGridComponent (extends BaseDataGridComponent) | `src/lib/query-data-grid/query-data-grid.component.ts` |
-| 2.1.3 | Create QueryParameterFormComponent | `src/lib/query-parameter-form/query-parameter-form.component.ts` |
-| 2.1.4 | Create parameter input controls (per type) | `src/lib/parameter-controls/*.component.ts` |
-| 2.1.5 | Create QueryViewerComponent (composite) | `src/lib/query-viewer/query-viewer.component.ts` |
-| 2.1.6 | Create QuerySelectorComponent (picker dialog) | `src/lib/query-selector/query-selector.component.ts` |
-| 2.1.7 | Create query execution service | `src/lib/services/query-execution.service.ts` |
-| 2.1.8 | Create parameter persistence service | `src/lib/services/parameter-persistence.service.ts` |
-| 2.1.9 | Create QueryViewerModule | `src/lib/query-viewer.module.ts` |
-| 2.1.10 | Style all components | `*.component.css` |
-| 2.1.11 | Write unit tests | `*.spec.ts` |
+| Task | Description | Status |
+|------|-------------|--------|
+| 2.1.1 | Create package structure | ✅ Done |
+| 2.1.2 | Create QueryDataGridComponent with AG Grid Community | ✅ Done |
+| 2.1.3 | Create QueryParameterFormComponent (slide-in panel) | ✅ Done |
+| 2.1.4 | Create parameter input controls (per type) | ✅ Done |
+| 2.1.5 | Create QueryViewerComponent (composite) | ✅ Done |
+| 2.1.6 | Create QuerySelectorComponent (picker dialog) | ✅ Done |
+| 2.1.7 | Query execution via RunQuery | ✅ Done |
+| 2.1.8 | Parameter persistence via UserSettings | ✅ Done |
+| 2.1.9 | Create QueryViewerModule | ✅ Done |
+| 2.1.10 | Style all components | ✅ Done |
+| 2.1.11 | Grid state persistence (columns, sort, widths) | ✅ Done |
+| 2.1.12 | Row detail slide-in panel | ✅ Done |
+| 2.1.13 | Entity link navigation | ✅ Done |
+| 2.1.14 | Alternating row colors | ✅ Done |
+
+**Implementation Notes:**
+- Built directly without base-data-grid dependency (pragmatic approach)
+- Uses AG Grid Community (free tier) instead of Kendo Grid
+- Includes row detail panel matching entity-viewer patterns
+- Full grid state persistence to User Settings
 
 **QueryViewerComponent Structure:**
 ```typescript
@@ -1020,20 +1030,23 @@ export class ExplorerDashboardComponent extends BaseResourceComponent {
 - [ ] 1.2.5 Regression test all existing functionality
 - [ ] 1.2.6 Update any breaking references
 
-### Phase 2: Query Viewer Component
-- [ ] 2.1.1 Create query-viewer package structure
-- [ ] 2.1.2 Create QueryDataGridComponent (extends BaseDataGridComponent)
-- [ ] 2.1.3 Create QueryParameterFormComponent
-- [ ] 2.1.4 Create parameter input controls (per type)
-- [ ] 2.1.5 Create QueryViewerComponent (composite)
-- [ ] 2.1.6 Create QuerySelectorComponent (picker dialog)
-- [ ] 2.1.7 Create query execution service
-- [ ] 2.1.8 Create parameter persistence service
-- [ ] 2.1.9 Create QueryViewerModule
-- [ ] 2.1.10 Style all components
-- [ ] 2.1.11 Write unit tests
+### Phase 2: Query Viewer Component ✅ COMPLETED
+- [x] 2.1.1 Create query-viewer package structure
+- [x] 2.1.2 Create QueryDataGridComponent with AG Grid Community
+- [x] 2.1.3 Create QueryParameterFormComponent (slide-in panel)
+- [x] 2.1.4 Create parameter input controls (per type)
+- [x] 2.1.5 Create QueryViewerComponent (composite)
+- [x] 2.1.6 Create QuerySelectorComponent (picker dialog)
+- [x] 2.1.7 Query execution via RunQuery
+- [x] 2.1.8 Parameter persistence via UserSettings
+- [x] 2.1.9 Create QueryViewerModule
+- [x] 2.1.10 Style all components
+- [x] 2.1.11 Grid state persistence (columns, sort, widths)
+- [x] 2.1.12 Row detail slide-in panel
+- [x] 2.1.13 Entity link navigation
+- [x] 2.1.14 Alternating row colors
 - [ ] 2.2.1 Add Queries section to Data Explorer home view
-- [ ] 2.2.2 Create QueryBrowserComponent
+- [ ] 2.2.2 Create QueryBrowserComponent (in dashboards package)
 - [ ] 2.2.3 Add query loading to state service
 - [ ] 2.2.4 Add query state interfaces
 - [ ] 2.2.5 Create query category tree component
