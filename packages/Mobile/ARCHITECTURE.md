@@ -119,7 +119,16 @@ These should remain web-only or link to web:
 
 ## Part 2: Technical Architecture
 
-### Recommended Technology: React Native + TypeScript
+### Recommended Technology: Plain React Native + TypeScript
+
+**Stack:** React Native (no Expo) with best-of-breed MIT-licensed libraries.
+
+**Why Plain React Native (Not Expo):**
+- **No proprietary dependencies** - All libraries are MIT/Apache licensed
+- **Full native control** - Direct access to Xcode/Android Studio projects
+- **AI-assisted development** - AI coding agents reduce the complexity Expo abstracts
+- **Standard tooling** - Any React Native developer can contribute
+- **No vendor lock-in** - Build with standard iOS/Android toolchains
 
 **Why React Native:**
 1. **Maximum Code Reuse** - All MJ TypeScript packages work directly
@@ -128,6 +137,19 @@ These should remain web-only or link to web:
 4. **Type Safety** - Full TypeScript support maintained
 5. **Hot Reload** - Fast development iteration
 6. **Proven at Scale** - Used by Meta, Microsoft, Shopify
+
+### Native Library Selection (All MIT/Apache Licensed)
+
+| Feature | Library | License |
+|---------|---------|---------|
+| SQLite | `react-native-sqlite-storage` | MIT |
+| Secure Storage | `react-native-keychain` | MIT |
+| Voice Recording | `@react-native-voice/voice` | MIT |
+| Audio Playback | `react-native-sound` | MIT |
+| Biometrics | `react-native-biometrics` | MIT |
+| Camera | `react-native-camera` | MIT |
+| Push Notifications | `@react-native-firebase/messaging` | Apache 2.0 |
+| Navigation | `@react-navigation/native` | MIT |
 
 ### Architecture Layers
 
@@ -1306,63 +1328,102 @@ interface MobilePermissions {
 
 ## Part 10: Package Structure
 
-### New Packages to Create
+### Repository Organization
+
+Following the existing MJ pattern where `/packages/Angular/` contains library packages and `/packages/MJExplorer/` is the runnable app:
 
 ```
 packages/
-├── Mobile/
-│   ├── mobile-core/                    # Mobile-specific utilities
+├── Mobile/                              # Mobile-specific LIBRARY packages
+│   ├── ARCHITECTURE.md                  # This document
+│   │
+│   ├── core/                            # @memberjunction/mobile-core
 │   │   ├── src/
 │   │   │   ├── providers/
-│   │   │   │   ├── MobileDataProvider.ts
+│   │   │   │   ├── SQLiteStorageProvider.ts   # ILocalStorageProvider impl
 │   │   │   │   └── OfflineSyncEngine.ts
 │   │   │   ├── storage/
-│   │   │   │   ├── SecureStorage.ts
 │   │   │   │   └── SQLiteCache.ts
 │   │   │   └── index.ts
-│   │   └── package.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
 │   │
-│   ├── mobile-voice/                   # Voice input/output
+│   ├── voice/                           # @memberjunction/mobile-voice
 │   │   ├── src/
-│   │   │   ├── VoiceRecorder.ts
-│   │   │   ├── WhisperClient.ts
-│   │   │   ├── TTSPlayer.ts
+│   │   │   ├── VoiceRecorder.ts         # Uses @react-native-voice/voice
+│   │   │   ├── WhisperClient.ts         # Transcription via MJ AI packages
+│   │   │   ├── TTSPlayer.ts             # Uses react-native-sound
 │   │   │   └── index.ts
-│   │   └── package.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
 │   │
-│   ├── mobile-push/                    # Push notifications
+│   ├── push/                            # @memberjunction/mobile-push
 │   │   ├── src/
 │   │   │   ├── PushNotificationHandler.ts
 │   │   │   ├── DeepLinkRouter.ts
 │   │   │   └── index.ts
-│   │   └── package.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
 │   │
-│   └── mobile-auth/                    # Mobile authentication
+│   └── auth/                            # @memberjunction/mobile-auth
 │       ├── src/
-│       │   ├── BiometricAuth.ts
-│       │   ├── OAuthManager.ts
-│       │   ├── TokenStorage.ts
+│       │   ├── BiometricAuth.ts         # Uses react-native-biometrics
+│       │   ├── OAuthManager.ts          # Auth0/MSAL integration
+│       │   ├── TokenStorage.ts          # Uses react-native-keychain
 │       │   └── index.ts
-│       └── package.json
+│       ├── package.json
+│       └── tsconfig.json
 │
-├── MJServer/
-│   └── src/
-│       └── mobile/                     # Server-side mobile support
-│           ├── pushNotifications.ts    # APNs/FCM integration
-│           └── mobileConfig.ts         # Mobile-specific settings
+├── MJMobile/                            # React Native APPLICATION (like MJExplorer)
+│   ├── src/
+│   │   ├── screens/                     # Screen components
+│   │   │   ├── AssistantScreen.tsx      # AI chat/voice interface
+│   │   │   ├── SearchScreen.tsx
+│   │   │   ├── RecordScreen.tsx
+│   │   │   ├── NotificationsScreen.tsx
+│   │   │   └── DashboardScreen.tsx
+│   │   ├── components/                  # Reusable UI components
+│   │   │   ├── VoiceButton.tsx
+│   │   │   ├── EntityCard.tsx
+│   │   │   ├── KPICard.tsx
+│   │   │   └── ...
+│   │   ├── navigation/                  # React Navigation setup
+│   │   │   └── AppNavigator.tsx
+│   │   ├── hooks/                       # React hooks
+│   │   │   ├── useEntity.ts
+│   │   │   ├── useRunView.ts
+│   │   │   └── useVoice.ts
+│   │   ├── services/                    # MJ integration services
+│   │   │   ├── MJInitializer.ts
+│   │   │   └── NotificationService.ts
+│   │   └── App.tsx
+│   ├── ios/                             # Xcode project (standard RN)
+│   │   └── MJMobile.xcworkspace
+│   ├── android/                         # Android Studio project (standard RN)
+│   │   └── app/
+│   ├── index.js                         # Entry point
+│   ├── app.json                         # App configuration
+│   ├── metro.config.js                  # Metro bundler config
+│   ├── babel.config.js
+│   ├── package.json
+│   └── tsconfig.json
 │
-└── apps/
-    └── mobile/                         # React Native app
-        ├── src/
-        │   ├── screens/
-        │   ├── components/
-        │   ├── navigation/
-        │   ├── hooks/
-        │   └── services/
-        ├── ios/
-        ├── android/
-        └── package.json
+└── MJServer/
+    └── src/
+        └── mobile/                      # Server-side mobile support
+            ├── pushNotifications.ts     # APNs/FCM integration
+            └── mobileConfig.ts          # Mobile-specific settings
 ```
+
+### Package Naming Convention
+
+| Package | NPM Name | Purpose |
+|---------|----------|---------|
+| `Mobile/core` | `@memberjunction/mobile-core` | SQLite storage, offline sync |
+| `Mobile/voice` | `@memberjunction/mobile-voice` | Voice recording, TTS |
+| `Mobile/push` | `@memberjunction/mobile-push` | Push notifications |
+| `Mobile/auth` | `@memberjunction/mobile-auth` | Biometrics, secure storage |
+| `MJMobile` | (not published) | The React Native app itself |
 
 ---
 
