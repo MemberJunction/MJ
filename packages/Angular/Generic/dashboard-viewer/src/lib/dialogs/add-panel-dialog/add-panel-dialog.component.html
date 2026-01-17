@@ -1,0 +1,172 @@
+<!-- Add Part Dialog -->
+<div class="add-part-dialog-overlay" *ngIf="visible" (click)="onCancel()">
+    <div class="add-part-dialog" (click)="$event.stopPropagation()">
+        <!-- Step 1: Select Part Type -->
+        <ng-container *ngIf="step === 'select-type'">
+            <!-- Header -->
+            <div class="dialog-header">
+                <h3>
+                    <i class="fa-solid fa-plus-circle"></i>
+                    Add Part
+                </h3>
+                <button class="close-button" (click)="onCancel()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="dialog-content">
+                <p class="instruction">Select a part type to add to your dashboard:</p>
+
+                <div class="part-type-grid">
+                    <div
+                        *ngFor="let partType of partTypes"
+                        class="part-type-card"
+                        (click)="onPartTypeSelect(partType)">
+                        <div class="card-icon">
+                            <i [class]="partType.Icon || 'fa-solid fa-puzzle-piece'"></i>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-title">{{ partType.Name }}</span>
+                            <span class="card-description" *ngIf="partType.Description">
+                                {{ partType.Description }}
+                            </span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right card-arrow"></i>
+                    </div>
+                </div>
+
+                <div class="no-types" *ngIf="partTypes.length === 0">
+                    <div class="warning-icon">
+                        <i class="fa-solid fa-exclamation-triangle"></i>
+                    </div>
+                    <h4>No part types available</h4>
+                    <p>Dashboard part types have not been configured in the system.</p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="dialog-footer">
+                <button class="btn-secondary" (click)="onCancel()">Cancel</button>
+            </div>
+        </ng-container>
+
+        <!-- Step 2: Configure Part -->
+        <ng-container *ngIf="step === 'configure'">
+            <!-- Header -->
+            <div class="dialog-header">
+                <button class="back-button" (click)="goBack()">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3>
+                    <i [class]="selectedPartType?.Icon || 'fa-solid fa-puzzle-piece'"></i>
+                    Configure {{ getConfigTypeName() }} Part
+                </h3>
+                <button class="close-button" (click)="onCancel()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="dialog-content config-content">
+                <!-- Part Title (common to all types) -->
+                <div class="form-group">
+                    <label for="partTitle">Part Title</label>
+                    <input
+                        type="text"
+                        id="partTitle"
+                        [(ngModel)]="partTitle"
+                        placeholder="Enter a title for this part">
+                </div>
+
+                <!-- WebURL Configuration -->
+                <ng-container *ngIf="selectedPartType?.Name === 'WebURL'">
+                    <div class="form-group">
+                        <label for="webUrl">URL</label>
+                        <input
+                            type="url"
+                            id="webUrl"
+                            [(ngModel)]="webUrlValue"
+                            placeholder="https://example.com">
+                        <span class="form-hint">Enter the URL to embed in this part</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sandboxMode">Security Mode</label>
+                        <select id="sandboxMode" [(ngModel)]="webUrlSandboxMode">
+                            <option value="standard">Standard (Recommended)</option>
+                            <option value="strict">Strict (Most Secure)</option>
+                            <option value="permissive">Permissive (Least Secure)</option>
+                        </select>
+                        <span class="form-hint">Controls iframe sandbox permissions</span>
+                    </div>
+                </ng-container>
+
+                <!-- View Configuration -->
+                <ng-container *ngIf="selectedPartType?.Name === 'View'">
+                    <div class="form-group">
+                        <label for="entityName">Entity Name</label>
+                        <input
+                            type="text"
+                            id="entityName"
+                            [(ngModel)]="viewEntityName"
+                            placeholder="e.g., Contacts, Orders">
+                        <span class="form-hint">The entity to display in this view</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="displayMode">Display Mode</label>
+                        <select id="displayMode" [(ngModel)]="viewDisplayMode">
+                            <option value="grid">Grid</option>
+                            <option value="cards">Cards</option>
+                            <option value="timeline">Timeline</option>
+                        </select>
+                    </div>
+                </ng-container>
+
+                <!-- Query Configuration -->
+                <ng-container *ngIf="selectedPartType?.Name === 'Query'">
+                    <div class="form-group">
+                        <label for="queryName">Query Name</label>
+                        <input
+                            type="text"
+                            id="queryName"
+                            [(ngModel)]="queryName"
+                            placeholder="Enter query name">
+                        <span class="form-hint">The saved query to execute</span>
+                    </div>
+                </ng-container>
+
+                <!-- Artifact Configuration -->
+                <ng-container *ngIf="selectedPartType?.Name === 'Artifact'">
+                    <div class="form-group">
+                        <label for="artifactId">Artifact ID</label>
+                        <input
+                            type="text"
+                            id="artifactId"
+                            [(ngModel)]="artifactId"
+                            placeholder="Enter artifact ID">
+                        <span class="form-hint">The conversation artifact to display</span>
+                    </div>
+                </ng-container>
+
+                <!-- Custom/Other Configuration -->
+                <ng-container *ngIf="selectedPartType?.Name !== 'WebURL' && selectedPartType?.Name !== 'View' && selectedPartType?.Name !== 'Query' && selectedPartType?.Name !== 'Artifact'">
+                    <div class="config-placeholder">
+                        <i class="fa-solid fa-cog"></i>
+                        <p>This part type uses default configuration.</p>
+                    </div>
+                </ng-container>
+            </div>
+
+            <!-- Footer -->
+            <div class="dialog-footer">
+                <button class="btn-secondary" (click)="onCancel()">Cancel</button>
+                <button class="btn-primary" (click)="addPart()">
+                    <i class="fa-solid fa-plus"></i>
+                    Add Part
+                </button>
+            </div>
+        </ng-container>
+    </div>
+</div>

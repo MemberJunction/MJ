@@ -1,0 +1,181 @@
+<!-- Query Config Dialog -->
+<div class="config-dialog-overlay" *ngIf="visible" (click)="cancel()">
+    <div class="config-dialog" (click)="$event.stopPropagation()">
+        <!-- Header -->
+        <div class="dialog-header">
+            <div class="header-icon">
+                <i class="fa-solid fa-flask"></i>
+            </div>
+            <h3>Configure Query Part</h3>
+            <button class="close-button" (click)="cancel()">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="dialog-content">
+            <!-- Title -->
+            <div class="form-group">
+                <label for="partTitle">
+                    <i class="fa-solid fa-heading"></i>
+                    Part Title
+                </label>
+                <input
+                    type="text"
+                    id="partTitle"
+                    [(ngModel)]="title"
+                    placeholder="Enter a title for this part"
+                    class="form-input">
+            </div>
+
+            <!-- Query Name -->
+            <div class="form-group">
+                <label for="queryName">
+                    <i class="fa-solid fa-flask"></i>
+                    Query Name
+                    <span class="required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="queryName"
+                    [(ngModel)]="queryName"
+                    placeholder="Enter the query name"
+                    class="form-input"
+                    [class.error]="queryError">
+                <span class="form-error" *ngIf="queryError">{{ queryError }}</span>
+                <span class="form-hint" *ngIf="!queryError">
+                    Enter the name of the saved query to run
+                </span>
+            </div>
+
+            <!-- Query ID (Optional) -->
+            <div class="form-group">
+                <label for="queryId">
+                    <i class="fa-solid fa-fingerprint"></i>
+                    Query ID
+                    <span style="font-weight: 400; color: #888;">(optional)</span>
+                </label>
+                <input
+                    type="text"
+                    id="queryId"
+                    [(ngModel)]="queryId"
+                    placeholder="Enter query ID if known"
+                    class="form-input">
+                <span class="form-hint">
+                    Alternative to query name - use if you know the exact ID
+                </span>
+            </div>
+
+            <!-- Parameter Layout -->
+            <div class="form-group">
+                <label>
+                    <i class="fa-solid fa-sliders"></i>
+                    Parameter Layout
+                </label>
+                <div class="radio-group">
+                    <label class="radio-option" [class.selected]="parameterLayout === 'header'">
+                        <input
+                            type="radio"
+                            name="parameterLayout"
+                            value="header"
+                            [(ngModel)]="parameterLayout">
+                        <span class="radio-mark"></span>
+                        <span class="radio-content">
+                            <span class="radio-label">
+                                <i class="fa-solid fa-arrow-up-from-bracket" style="margin-right: 8px; color: #5c6bc0;"></i>
+                                Header
+                            </span>
+                            <span class="radio-badge recommended">Recommended</span>
+                        </span>
+                    </label>
+                    <label class="radio-option" [class.selected]="parameterLayout === 'sidebar'">
+                        <input
+                            type="radio"
+                            name="parameterLayout"
+                            value="sidebar"
+                            [(ngModel)]="parameterLayout">
+                        <span class="radio-mark"></span>
+                        <span class="radio-content">
+                            <span class="radio-label">
+                                <i class="fa-solid fa-table-columns" style="margin-right: 8px; color: #5c6bc0;"></i>
+                                Sidebar
+                            </span>
+                        </span>
+                    </label>
+                    <label class="radio-option" [class.selected]="parameterLayout === 'dialog'">
+                        <input
+                            type="radio"
+                            name="parameterLayout"
+                            value="dialog"
+                            [(ngModel)]="parameterLayout">
+                        <span class="radio-mark"></span>
+                        <span class="radio-content">
+                            <span class="radio-label">
+                                <i class="fa-solid fa-window-restore" style="margin-right: 8px; color: #5c6bc0;"></i>
+                                Dialog
+                            </span>
+                        </span>
+                    </label>
+                </div>
+                <span class="form-hint">{{ getParameterLayoutDescription() }}</span>
+            </div>
+
+            <!-- Auto Refresh -->
+            <div class="form-group">
+                <label for="autoRefresh">
+                    <i class="fa-solid fa-rotate"></i>
+                    Auto Refresh
+                </label>
+                <select class="form-select" [(ngModel)]="autoRefreshSeconds">
+                    <option [ngValue]="0">Disabled</option>
+                    <option [ngValue]="30">Every 30 seconds</option>
+                    <option [ngValue]="60">Every minute</option>
+                    <option [ngValue]="300">Every 5 minutes</option>
+                    <option [ngValue]="600">Every 10 minutes</option>
+                </select>
+                <span class="form-hint">
+                    Automatically re-run the query at the specified interval
+                </span>
+            </div>
+
+            <!-- Options -->
+            <div class="form-group">
+                <label>
+                    <i class="fa-solid fa-gear"></i>
+                    Options
+                </label>
+                <div class="checkbox-group">
+                    <label class="checkbox-option">
+                        <input
+                            type="checkbox"
+                            [(ngModel)]="showParameterControls">
+                        <span class="checkbox-mark"></span>
+                        <span class="checkbox-content">
+                            <span class="checkbox-label">Show Parameter Controls</span>
+                            <span class="checkbox-desc">Display controls for modifying query parameters</span>
+                        </span>
+                    </label>
+                    <label class="checkbox-option">
+                        <input
+                            type="checkbox"
+                            [(ngModel)]="showExecutionMetadata">
+                        <span class="checkbox-mark"></span>
+                        <span class="checkbox-content">
+                            <span class="checkbox-label">Show Execution Metadata</span>
+                            <span class="checkbox-desc">Display execution time and row count</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="dialog-footer">
+            <button class="btn-secondary" (click)="cancel()">Cancel</button>
+            <button class="btn-primary" (click)="save()">
+                <i class="fa-solid fa-check"></i>
+                {{ panel ? 'Save Changes' : 'Add Part' }}
+            </button>
+        </div>
+    </div>
+</div>

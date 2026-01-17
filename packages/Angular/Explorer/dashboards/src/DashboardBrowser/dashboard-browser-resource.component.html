@@ -1,45 +1,263 @@
-<!-- Dashboard Browser Resource - Coming Soon Placeholder -->
-<div class="dashboard-browser-placeholder">
-    <div class="placeholder-content">
-        <!-- Animated dashboard icon -->
-        <div class="icon-container">
-            <i class="fa-solid fa-gauge-high main-icon"></i>
-            <div class="pulse-ring"></div>
-            <div class="pulse-ring delay-1"></div>
-            <div class="pulse-ring delay-2"></div>
-        </div>
-
-        <!-- Message -->
-        <h2 class="coming-soon-title">Dashboards Coming Soon</h2>
-        <p class="coming-soon-description">
-            Create and manage interactive dashboards with drag-and-drop widgets,
-            real-time data visualizations, and customizable layouts.
-        </p>
-
-        <!-- Feature preview -->
-        <div class="feature-preview">
-            <div class="feature-item">
-                <i class="fa-solid fa-chart-line"></i>
-                <span>Charts & Graphs</span>
-            </div>
-            <div class="feature-item">
-                <i class="fa-solid fa-table-columns"></i>
-                <span>Flexible Layouts</span>
-            </div>
-            <div class="feature-item">
-                <i class="fa-solid fa-bolt"></i>
-                <span>Real-time Updates</span>
-            </div>
-            <div class="feature-item">
-                <i class="fa-solid fa-share-nodes"></i>
-                <span>Share & Collaborate</span>
-            </div>
-        </div>
-
-        <!-- Status badge -->
-        <div class="status-badge">
-            <i class="fa-solid fa-code-branch"></i>
-            <span>Phase 3 of Metadata Dashboards v2</span>
-        </div>
+<!-- Dashboard Browser Resource -->
+<div class="dashboard-browser">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" *ngIf="isLoading">
+        <mj-loading text="Loading dashboards..."></mj-loading>
     </div>
+
+    <!-- List Mode -->
+    <ng-container *ngIf="mode === 'list'">
+        <!-- Header -->
+        <div class="browser-header">
+            <div class="header-left">
+                <h2>
+                    <i class="fa-solid fa-gauge-high"></i>
+                    Dashboards
+                </h2>
+                <span class="dashboard-count">{{ filteredDashboards.length }} dashboards</span>
+            </div>
+            <div class="header-right">
+                <button class="btn-primary" (click)="createDashboard()">
+                    <i class="fa-solid fa-plus"></i>
+                    New Dashboard
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="browser-filters">
+            <div class="search-box">
+                <i class="fa-solid fa-search"></i>
+                <input
+                    type="text"
+                    [(ngModel)]="searchText"
+                    (input)="onSearchChange()"
+                    placeholder="Search dashboards...">
+                <button
+                    class="clear-btn"
+                    *ngIf="searchText"
+                    (click)="searchText = ''; onSearchChange()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <div class="category-filter" *ngIf="categories.length > 0">
+                <select [(ngModel)]="selectedCategoryId" (change)="onCategoryChange(selectedCategoryId)">
+                    <option [ngValue]="null">All Categories</option>
+                    <option *ngFor="let cat of categories" [ngValue]="cat.ID">
+                        {{ cat.Name }}
+                    </option>
+                </select>
+            </div>
+
+            <button
+                class="clear-filters-btn"
+                *ngIf="searchText || selectedCategoryId"
+                (click)="clearFilters()">
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+                Clear Filters
+            </button>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid" *ngIf="filteredDashboards.length > 0">
+            <div
+                *ngFor="let dashboard of filteredDashboards"
+                class="dashboard-card"
+                (click)="openDashboard(dashboard)">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <div class="card-actions">
+                        <button
+                            class="action-btn"
+                            title="Edit"
+                            (click)="editDashboard(dashboard); $event.stopPropagation()">
+                            <i class="fa-solid fa-edit"></i>
+                        </button>
+                        <button
+                            class="action-btn danger"
+                            title="Delete"
+                            (click)="deleteDashboard(dashboard, $event)">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <h3 class="card-title">{{ dashboard.Name }}</h3>
+                    <p class="card-description" *ngIf="dashboard.Description">
+                        {{ dashboard.Description }}
+                    </p>
+                    <div class="card-meta">
+                        <span class="meta-item">
+                            <i class="fa-solid fa-folder"></i>
+                            {{ getCategoryName(dashboard.CategoryID) }}
+                        </span>
+                        <span class="meta-item">
+                            <i class="fa-solid fa-clock"></i>
+                            {{ formatDate(dashboard.__mj_UpdatedAt) }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" *ngIf="filteredDashboards.length === 0 && !isLoading">
+            <div class="empty-icon">
+                <i class="fa-solid fa-chart-pie"></i>
+            </div>
+            <h3 *ngIf="dashboards.length === 0">No dashboards yet</h3>
+            <h3 *ngIf="dashboards.length > 0">No matching dashboards</h3>
+            <p *ngIf="dashboards.length === 0">
+                Create your first dashboard to visualize and monitor your data.
+            </p>
+            <p *ngIf="dashboards.length > 0">
+                Try adjusting your search or filters.
+            </p>
+            <button
+                class="btn-primary"
+                *ngIf="dashboards.length === 0"
+                (click)="createDashboard()">
+                <i class="fa-solid fa-plus"></i>
+                Create Dashboard
+            </button>
+            <button
+                class="btn-secondary"
+                *ngIf="dashboards.length > 0"
+                (click)="clearFilters()">
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+                Clear Filters
+            </button>
+        </div>
+    </ng-container>
+
+    <!-- View/Edit Mode -->
+    <ng-container *ngIf="mode === 'view' || mode === 'edit'">
+        <!-- Viewer Header -->
+        <div class="viewer-header">
+            <div class="header-left">
+                <button class="back-btn" (click)="backToList()">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2>{{ selectedDashboard?.Name }}</h2>
+            </div>
+            <div class="header-right">
+                <button
+                    class="btn-secondary"
+                    *ngIf="mode === 'edit'"
+                    (click)="openAddPartDialog()">
+                    <i class="fa-solid fa-plus"></i>
+                    Add Part
+                </button>
+                <button
+                    class="btn-icon"
+                    [class.active]="mode === 'edit'"
+                    title="Toggle Edit Mode"
+                    (click)="toggleEditMode()">
+                    <i class="fa-solid fa-edit"></i>
+                </button>
+                <button
+                    class="btn-primary"
+                    *ngIf="mode === 'edit'"
+                    (click)="saveDashboard()">
+                    <i class="fa-solid fa-save"></i>
+                    Save
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Viewer -->
+        <div class="viewer-content">
+            <mj-dashboard-viewer
+                #dashboardViewer
+                [dashboard]="selectedDashboard"
+                [isEditing]="mode === 'edit'"
+                [showToolbar]="false"
+                (panelInteraction)="onPanelInteraction($event)"
+                (navigationRequested)="onNavigationRequested($event)">
+            </mj-dashboard-viewer>
+        </div>
+
+        <!-- Add Panel Dialog -->
+        <mj-add-panel-dialog
+            *ngIf="dashboardViewer"
+            [visible]="showAddPanelDialog"
+            [partTypes]="dashboardViewer.getPartTypes()"
+            (panelAdded)="onPanelAdded($event)"
+            (cancelled)="onAddPanelCancelled()">
+        </mj-add-panel-dialog>
+
+        <!-- Config Dialogs for each part type -->
+        <ng-container *ngIf="showConfigDialog && configDialogPartType">
+            <!-- WebURL Config Dialog -->
+            <mj-weburl-config-dialog
+                *ngIf="configDialogClass === 'WebURLPanelConfigDialog'"
+                [visible]="showConfigDialog"
+                [partType]="configDialogPartType"
+                [panel]="configDialogPanel"
+                [config]="configDialogPanel?.config || null"
+                (saved)="onConfigDialogSaved($event)"
+                (cancelled)="onConfigDialogCancelled()">
+            </mj-weburl-config-dialog>
+
+            <!-- View Config Dialog -->
+            <mj-view-config-dialog
+                *ngIf="configDialogClass === 'ViewPanelConfigDialog'"
+                [visible]="showConfigDialog"
+                [partType]="configDialogPartType"
+                [panel]="configDialogPanel"
+                [config]="configDialogPanel?.config || null"
+                (saved)="onConfigDialogSaved($event)"
+                (cancelled)="onConfigDialogCancelled()">
+            </mj-view-config-dialog>
+
+            <!-- Query Config Dialog -->
+            <mj-query-config-dialog
+                *ngIf="configDialogClass === 'QueryPanelConfigDialog'"
+                [visible]="showConfigDialog"
+                [partType]="configDialogPartType"
+                [panel]="configDialogPanel"
+                [config]="configDialogPanel?.config || null"
+                (saved)="onConfigDialogSaved($event)"
+                (cancelled)="onConfigDialogCancelled()">
+            </mj-query-config-dialog>
+
+            <!-- Artifact Config Dialog -->
+            <mj-artifact-config-dialog
+                *ngIf="configDialogClass === 'ArtifactPanelConfigDialog'"
+                [visible]="showConfigDialog"
+                [partType]="configDialogPartType"
+                [panel]="configDialogPanel"
+                [config]="configDialogPanel?.config || null"
+                (saved)="onConfigDialogSaved($event)"
+                (cancelled)="onConfigDialogCancelled()">
+            </mj-artifact-config-dialog>
+        </ng-container>
+
+        <!-- Remove Part Confirmation Dialog -->
+        <mj-confirm-dialog
+            [visible]="showConfirmDialog"
+            type="danger"
+            title="Remove Part"
+            [message]="'Are you sure you want to remove \'' + confirmPanelTitle + '\' from this dashboard?'"
+            confirmText="Remove"
+            cancelText="Cancel"
+            (confirmed)="onRemoveConfirmed()"
+            (cancelled)="onRemoveCancelled()">
+        </mj-confirm-dialog>
+    </ng-container>
+
+    <!-- Delete Dashboard Confirmation Dialog -->
+    <mj-confirm-dialog
+        [visible]="showDeleteDashboardConfirm"
+        type="danger"
+        title="Delete Dashboard"
+        [message]="'Are you sure you want to delete \'' + (dashboardToDelete?.Name || '') + '\'? This action cannot be undone.'"
+        confirmText="Delete"
+        cancelText="Cancel"
+        (confirmed)="confirmDeleteDashboard()"
+        (cancelled)="cancelDeleteDashboard()">
+    </mj-confirm-dialog>
 </div>

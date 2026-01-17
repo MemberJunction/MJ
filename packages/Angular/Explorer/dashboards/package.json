@@ -45,6 +45,7 @@
     "@memberjunction/ng-code-editor": "2.133.0",
     "@memberjunction/ng-container-directives": "2.133.0",
     "@memberjunction/ng-core-entity-forms": "2.133.0",
+    "@memberjunction/ng-dashboard-viewer": "2.133.0",
     "@memberjunction/ng-entity-viewer": "2.133.0",
     "@memberjunction/ng-export-service": "2.133.0",
     "@memberjunction/ng-filter-builder": "2.133.0",

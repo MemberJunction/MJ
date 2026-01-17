@@ -1,0 +1,192 @@
+<!-- View Config Dialog -->
+<div class="config-dialog-overlay" *ngIf="visible" (click)="cancel()">
+    <div class="config-dialog" (click)="$event.stopPropagation()">
+        <!-- Header -->
+        <div class="dialog-header">
+            <div class="header-icon">
+                <i class="fa-solid fa-table"></i>
+            </div>
+            <h3>Configure View Part</h3>
+            <button class="close-button" (click)="cancel()">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="dialog-content">
+            <!-- Title -->
+            <div class="form-group">
+                <label for="partTitle">
+                    <i class="fa-solid fa-heading"></i>
+                    Part Title
+                </label>
+                <input
+                    type="text"
+                    id="partTitle"
+                    [(ngModel)]="title"
+                    placeholder="Enter a title for this part"
+                    class="form-input">
+            </div>
+
+            <!-- Entity Name -->
+            <div class="form-group">
+                <label for="entityName">
+                    <i class="fa-solid fa-database"></i>
+                    Entity Name
+                    <span class="required">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="entityName"
+                    [(ngModel)]="entityName"
+                    placeholder="e.g., Accounts, Contacts, Users"
+                    class="form-input"
+                    [class.error]="entityError">
+                <span class="form-error" *ngIf="entityError">{{ entityError }}</span>
+                <span class="form-hint" *ngIf="!entityError">
+                    Enter the name of the entity to display
+                </span>
+            </div>
+
+            <!-- View ID (Optional) -->
+            <div class="form-group">
+                <label for="viewId">
+                    <i class="fa-solid fa-eye"></i>
+                    Saved View ID
+                    <span style="font-weight: 400; color: #888;">(optional)</span>
+                </label>
+                <input
+                    type="text"
+                    id="viewId"
+                    [(ngModel)]="viewId"
+                    placeholder="Enter a saved view ID"
+                    class="form-input">
+                <span class="form-hint">
+                    If provided, uses a specific saved view instead of the default
+                </span>
+            </div>
+
+            <!-- Display Mode -->
+            <div class="form-group">
+                <label>
+                    <i class="fa-solid fa-grip"></i>
+                    Display Mode
+                </label>
+                <div class="radio-group">
+                    <label class="radio-option" [class.selected]="displayMode === 'grid'">
+                        <input
+                            type="radio"
+                            name="displayMode"
+                            value="grid"
+                            [(ngModel)]="displayMode">
+                        <span class="radio-mark"></span>
+                        <span class="radio-content">
+                            <span class="radio-label">
+                                <i class="fa-solid fa-table-cells" style="margin-right: 8px; color: #5c6bc0;"></i>
+                                Grid
+                            </span>
+                        </span>
+                    </label>
+                    <label class="radio-option" [class.selected]="displayMode === 'cards'">
+                        <input
+                            type="radio"
+                            name="displayMode"
+                            value="cards"
+                            [(ngModel)]="displayMode">
+                        <span class="radio-mark"></span>
+                        <span class="radio-content">
+                            <span class="radio-label">
+                                <i class="fa-solid fa-id-card" style="margin-right: 8px; color: #5c6bc0;"></i>
+                                Cards
+                            </span>
+                        </span>
+                    </label>
+                    <label class="radio-option" [class.selected]="displayMode === 'timeline'">
+                        <input
+                            type="radio"
+                            name="displayMode"
+                            value="timeline"
+                            [(ngModel)]="displayMode">
+                        <span class="radio-mark"></span>
+                        <span class="radio-content">
+                            <span class="radio-label">
+                                <i class="fa-solid fa-timeline" style="margin-right: 8px; color: #5c6bc0;"></i>
+                                Timeline
+                            </span>
+                        </span>
+                    </label>
+                </div>
+                <span class="form-hint">{{ getDisplayModeDescription() }}</span>
+            </div>
+
+            <!-- Options -->
+            <div class="form-group">
+                <label>
+                    <i class="fa-solid fa-sliders"></i>
+                    Options
+                </label>
+                <div class="checkbox-group">
+                    <label class="checkbox-option">
+                        <input
+                            type="checkbox"
+                            [(ngModel)]="allowModeSwitch">
+                        <span class="checkbox-mark"></span>
+                        <span class="checkbox-content">
+                            <span class="checkbox-label">Allow Mode Switch</span>
+                            <span class="checkbox-desc">Let users toggle between display modes</span>
+                        </span>
+                    </label>
+                    <label class="checkbox-option">
+                        <input
+                            type="checkbox"
+                            [(ngModel)]="enableSelection">
+                        <span class="checkbox-mark"></span>
+                        <span class="checkbox-content">
+                            <span class="checkbox-label">Enable Selection</span>
+                            <span class="checkbox-desc">Allow users to select rows</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Selection Mode -->
+            <div class="form-group" *ngIf="enableSelection">
+                <label>
+                    <i class="fa-solid fa-hand-pointer"></i>
+                    Selection Mode
+                </label>
+                <select class="form-select" [(ngModel)]="selectionMode">
+                    <option value="single">Single Selection</option>
+                    <option value="multiple">Multiple Selection</option>
+                </select>
+            </div>
+
+            <!-- Extra Filter (Advanced) -->
+            <div class="form-group">
+                <label for="extraFilter">
+                    <i class="fa-solid fa-filter"></i>
+                    Extra Filter
+                    <span style="font-weight: 400; color: #888;">(advanced)</span>
+                </label>
+                <input
+                    type="text"
+                    id="extraFilter"
+                    [(ngModel)]="extraFilter"
+                    placeholder="e.g., Status = 'Active'"
+                    class="form-input">
+                <span class="form-hint">
+                    Optional SQL WHERE clause to filter records
+                </span>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="dialog-footer">
+            <button class="btn-secondary" (click)="cancel()">Cancel</button>
+            <button class="btn-primary" (click)="save()">
+                <i class="fa-solid fa-check"></i>
+                {{ panel ? 'Save Changes' : 'Add Part' }}
+            </button>
+        </div>
+    </div>
+</div>

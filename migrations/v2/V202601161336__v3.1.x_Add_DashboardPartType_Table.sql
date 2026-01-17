@@ -33,7 +33,7 @@ EXEC sp_addextendedproperty
     @value = N'Stores available panel types for metadata-driven dashboards. Each panel type defines a driver class for rendering content and an optional config dialog for setup UI.',
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType';
-GO
+ 
 
 -- =============================================
 -- Extended Properties: Column Descriptions
@@ -44,7 +44,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'ID';
-GO
+ 
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -52,7 +52,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'Name';
-GO
+ 
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -60,7 +60,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'Description';
-GO
+ 
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -68,7 +68,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'Icon';
-GO
+ 
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -76,7 +76,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'DriverClass';
-GO
+ 
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -84,7 +84,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'ConfigDialogClass';
-GO
+ 
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -92,7 +92,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'DefaultConfig';
-GO
+ 
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -100,7 +100,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'SortOrder';
-GO
+ 
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -109,63 +109,7 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE', @level1name = N'DashboardPartType',
     @level2type = N'COLUMN', @level2name = N'IsActive';
 GO
-
--- =============================================
--- Data: Insert Built-in Panel Types
--- =============================================
-INSERT INTO ${flyway:defaultSchema}.DashboardPartType
-    (ID, Name, Description, Icon, DriverClass, ConfigDialogClass, SortOrder, IsActive)
-VALUES
-    -- View Panel: Display entity data using saved views
-    ('6C975185-297C-420D-BD59-F5402AF35399',
-     'View',
-     'Display entity data using saved views with grid, cards, or timeline layout. Supports filtering, sorting, and selection.',
-     'fa-solid fa-table',
-     'ViewPanelRenderer',
-     'ViewPanelConfigDialog',
-     1,
-     1),
-
-    -- Query Panel: Execute and display query results
-    ('0EBDB415-EE18-46D4-B12E-03F3770921BA',
-     'Query',
-     'Execute and display query results with parameter controls. Supports parameter persistence and auto-refresh.',
-     'fa-solid fa-flask',
-     'QueryPanelRenderer',
-     'QueryPanelConfigDialog',
-     2,
-     1),
-
-    -- Artifact Panel: Display conversation artifacts (reports, charts, etc.)
-    ('7191FBEE-C686-4D5F-94BA-1B4C6BF700C5',
-     'Artifact',
-     'Display conversation artifacts including reports, charts, and AI-generated content. Supports version selection.',
-     'fa-solid fa-palette',
-     'ArtifactPanelRenderer',
-     'ArtifactPanelConfigDialog',
-     3,
-     1),
-
-    -- WebURL Panel: Embed external web content via iframe
-    ('549188C0-01B3-453C-9985-D6B5AF8F789C',
-     'WebURL',
-     'Embed external web content via iframe with configurable sandbox permissions and refresh behavior.',
-     'fa-solid fa-globe',
-     'WebURLPanelRenderer',
-     'WebURLPanelConfigDialog',
-     4,
-     1),
-
-    -- Custom Panel: Use a custom registered component
-    ('95BF1C3D-F42F-4116-812D-1E549F2EA84C',
-     'Custom',
-     'Use a custom registered component for specialized panel content. Allows third-party extensions.',
-     'fa-solid fa-puzzle-piece',
-     'CustomPanelRenderer',
-     'CustomPanelConfigDialog',
-     5,
-     1);
-GO
+ 
 
 
 

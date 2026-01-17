@@ -1,0 +1,64 @@
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+
+// MJ Shared Components
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+
+// Main Component
+import { DashboardViewerComponent } from './dashboard-viewer/dashboard-viewer.component';
+
+// Dialogs
+import { AddPanelDialogComponent } from './dialogs/add-panel-dialog/add-panel-dialog.component';
+
+// Config Dialogs
+import { ConfirmDialogComponent } from './config-dialogs/confirm-dialog.component';
+import { WebURLConfigDialogComponent } from './config-dialogs/weburl-config-dialog.component';
+import { ViewConfigDialogComponent } from './config-dialogs/view-config-dialog.component';
+import { QueryConfigDialogComponent } from './config-dialogs/query-config-dialog.component';
+import { ArtifactConfigDialogComponent } from './config-dialogs/artifact-config-dialog.component';
+
+/**
+ * Prevents tree-shaking of the DashboardViewer module.
+ * Import this in your application's module to ensure components are available.
+ */
+export function LoadDashboardViewerModule() {
+    // This function exists to prevent tree-shaking
+}
+
+@NgModule({
+    declarations: [
+        // Main Component
+        DashboardViewerComponent,
+
+        // Dialogs
+        AddPanelDialogComponent,
+
+        // Config Dialogs
+        ConfirmDialogComponent,
+        WebURLConfigDialogComponent,
+        ViewConfigDialogComponent,
+        QueryConfigDialogComponent,
+        ArtifactConfigDialogComponent
+    ],
+    imports: [
+        CommonModule,
+        FormsModule,
+        SharedGenericModule
+    ],
+    exports: [
+        // Main Component
+        DashboardViewerComponent,
+
+        // Dialogs
+        AddPanelDialogComponent,
+
+        // Config Dialogs
+        ConfirmDialogComponent,
+        WebURLConfigDialogComponent,
+        ViewConfigDialogComponent,
+        QueryConfigDialogComponent,
+        ArtifactConfigDialogComponent
+    ]
+})
+export class DashboardViewerModule { }

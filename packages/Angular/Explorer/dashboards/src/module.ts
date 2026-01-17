@@ -132,6 +132,8 @@ import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-reso
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
 // Query Viewer Module
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+// Dashboard Viewer Module
+import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 
 
 
@@ -269,7 +271,8 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
     EntityRelationshipDiagramModule,
     ListManagementModule,
     ExportServiceModule,
-    QueryViewerModule
+    QueryViewerModule,
+    DashboardViewerModule
   ],
   providers: [
     AIInstrumentationService,

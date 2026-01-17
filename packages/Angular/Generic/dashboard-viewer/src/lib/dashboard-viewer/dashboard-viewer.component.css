@@ -1,0 +1,278 @@
+/**
+ * Dashboard Viewer Component Styles
+ */
+
+.dashboard-viewer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: var(--dashboard-bg, #f5f5f5);
+}
+
+.dashboard-viewer.editing .layout-container {
+    outline: 2px dashed var(--dashboard-edit-outline, #5c6bc0);
+    outline-offset: -2px;
+}
+
+/* ========================================
+   Toolbar
+   ======================================== */
+
+.dashboard-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--dashboard-toolbar-bg, #ffffff);
+    border-bottom: 1px solid var(--dashboard-border, #e0e0e0);
+    min-height: 48px;
+    flex-shrink: 0;
+}
+
+.toolbar-left,
+.toolbar-center,
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toolbar-left {
+    flex: 1;
+}
+
+.toolbar-center {
+    flex: 0 0 auto;
+}
+
+.toolbar-right {
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.dashboard-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--dashboard-title-color, #333);
+}
+
+.dashboard-title i {
+    margin-right: 8px;
+    color: var(--dashboard-title-icon, #5c6bc0);
+}
+
+.unsaved-indicator {
+    font-size: 12px;
+    color: var(--dashboard-unsaved-color, #ff9800);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.unsaved-indicator i {
+    font-size: 8px;
+}
+
+.toolbar-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--dashboard-button-border, #ddd);
+    border-radius: 4px;
+    background: var(--dashboard-button-bg, #fff);
+    color: var(--dashboard-button-color, #333);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.toolbar-button:hover {
+    background: var(--dashboard-button-hover-bg, #f5f5f5);
+    border-color: var(--dashboard-button-hover-border, #ccc);
+}
+
+.toolbar-button.active {
+    background: var(--dashboard-button-active-bg, #e8eaf6);
+    border-color: var(--dashboard-button-active-border, #5c6bc0);
+    color: var(--dashboard-button-active-color, #5c6bc0);
+}
+
+.toolbar-button.primary {
+    background: var(--dashboard-button-primary-bg, #5c6bc0);
+    border-color: var(--dashboard-button-primary-border, #3f51b5);
+    color: var(--dashboard-button-primary-color, #fff);
+}
+
+.toolbar-button.primary:hover {
+    background: var(--dashboard-button-primary-hover-bg, #3f51b5);
+}
+
+.toolbar-button i {
+    font-size: 14px;
+}
+
+/* ========================================
+   Layout Container
+   ======================================== */
+
+.layout-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+}
+
+:host ::ng-deep .gl-row {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+}
+
+:host ::ng-deep .gl-column {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+:host ::ng-deep .gl-stack {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+:host ::ng-deep .gl-component {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--dashboard-panel-border, #e0e0e0);
+    background: var(--dashboard-panel-bg, #fff);
+    margin: 2px;
+    border-radius: 4px;
+}
+
+:host ::ng-deep .dashboard-panel-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* ========================================
+   Loading Overlay
+   ======================================== */
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.9);
+    z-index: 100;
+}
+
+/* ========================================
+   Empty State
+   ======================================== */
+
+.empty-state {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--dashboard-empty-color, #666);
+    max-width: 400px;
+    padding: 40px;
+}
+
+.empty-state .empty-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+}
+
+.empty-state .empty-icon i {
+    font-size: 36px;
+    color: #5c6bc0;
+}
+
+.empty-state h3 {
+    margin: 0 0 12px 0;
+    font-size: 20px;
+    font-weight: 500;
+    color: #333;
+}
+
+.empty-state p {
+    margin: 0 0 24px 0;
+    font-size: 14px;
+    color: var(--dashboard-empty-text, #666);
+    line-height: 1.5;
+}
+
+.add-part-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #5c6bc0 0%, #3f51b5 100%);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(92, 107, 192, 0.3);
+}
+
+.add-part-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(92, 107, 192, 0.4);
+}
+
+.add-part-button i {
+    font-size: 14px;
+}
+
+/* ========================================
+   Panel Error State
+   ======================================== */
+
+:host ::ng-deep .panel-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 24px;
+    text-align: center;
+    color: var(--dashboard-error-color, #d32f2f);
+    background: var(--dashboard-error-bg, #ffebee);
+}
+
+:host ::ng-deep .panel-error i {
+    font-size: 32px;
+    margin-bottom: 12px;
+}
+
+:host ::ng-deep .panel-error span {
+    font-size: 14px;
+}
