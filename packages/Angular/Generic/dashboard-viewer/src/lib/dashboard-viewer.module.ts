@@ -5,6 +5,9 @@ import { FormsModule } from '@angular/forms';
 // MJ Shared Components
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
+// MJ Trees for hierarchical selection
+import { NgTreesModule } from '@memberjunction/ng-trees';
+
 // Main Component
 import { DashboardViewerComponent } from './dashboard-viewer/dashboard-viewer.component';
 
@@ -17,6 +20,12 @@ import { WebURLConfigDialogComponent } from './config-dialogs/weburl-config-dial
 import { ViewConfigDialogComponent } from './config-dialogs/view-config-dialog.component';
 import { QueryConfigDialogComponent } from './config-dialogs/query-config-dialog.component';
 import { ArtifactConfigDialogComponent } from './config-dialogs/artifact-config-dialog.component';
+
+// Config Panels (standalone form components)
+import { WebURLConfigPanelComponent } from './config-panels/weburl-config-panel.component';
+import { ViewConfigPanelComponent } from './config-panels/view-config-panel.component';
+import { QueryConfigPanelComponent } from './config-panels/query-config-panel.component';
+import { ArtifactConfigPanelComponent } from './config-panels/artifact-config-panel.component';
 
 /**
  * Prevents tree-shaking of the DashboardViewer module.
@@ -39,12 +48,19 @@ export function LoadDashboardViewerModule() {
         WebURLConfigDialogComponent,
         ViewConfigDialogComponent,
         QueryConfigDialogComponent,
-        ArtifactConfigDialogComponent
+        ArtifactConfigDialogComponent,
+
+        // Config Panels (standalone form components)
+        WebURLConfigPanelComponent,
+        ViewConfigPanelComponent,
+        QueryConfigPanelComponent,
+        ArtifactConfigPanelComponent
     ],
     imports: [
         CommonModule,
         FormsModule,
-        SharedGenericModule
+        SharedGenericModule,
+        NgTreesModule
     ],
     exports: [
         // Main Component
@@ -58,7 +74,13 @@ export function LoadDashboardViewerModule() {
         WebURLConfigDialogComponent,
         ViewConfigDialogComponent,
         QueryConfigDialogComponent,
-        ArtifactConfigDialogComponent
+        ArtifactConfigDialogComponent,
+
+        // Config Panels (standalone form components)
+        WebURLConfigPanelComponent,
+        ViewConfigPanelComponent,
+        QueryConfigPanelComponent,
+        ArtifactConfigPanelComponent
     ]
 })
 export class DashboardViewerModule { }

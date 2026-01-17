@@ -1,0 +1,386 @@
+/**
+ * Tree Dropdown Component Styles
+ *
+ * Uses CSS custom properties for easy theming.
+ * Containers can override these variables to customize appearance.
+ */
+
+/* ========================================
+   CSS Variables (Theming)
+   ======================================== */
+
+:host {
+    /* Colors */
+    --dropdown-bg: #ffffff;
+    --dropdown-border-color: #d0d0d0;
+    --dropdown-border-hover: #999999;
+    --dropdown-border-focus: #2196f3;
+    --dropdown-text-color: #333333;
+    --dropdown-text-placeholder: #999999;
+    --dropdown-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+
+    /* Trigger */
+    --dropdown-trigger-bg: #ffffff;
+    --dropdown-trigger-height: 40px;
+    --dropdown-trigger-padding: 8px 12px;
+    --dropdown-trigger-radius: 8px;
+
+    /* Search */
+    --dropdown-search-bg: #f5f5f5;
+    --dropdown-search-height: 36px;
+
+    /* Animation */
+    --dropdown-animation-duration: 150ms;
+    --dropdown-animation-easing: ease-out;
+
+    display: block;
+    position: relative;
+    width: 100%;
+}
+
+/* ========================================
+   Container
+   ======================================== */
+
+.tree-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.tree-dropdown--disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ========================================
+   Trigger
+   ======================================== */
+
+.tree-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: var(--dropdown-trigger-height);
+    padding: var(--dropdown-trigger-padding);
+    background: var(--dropdown-trigger-bg);
+    border: 1px solid var(--dropdown-border-color);
+    border-radius: var(--dropdown-trigger-radius);
+    cursor: pointer;
+    outline: none;
+    transition: all var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-trigger:hover {
+    border-color: var(--dropdown-border-hover);
+}
+
+.tree-dropdown-trigger:focus,
+.tree-dropdown-trigger--open {
+    border-color: var(--dropdown-border-focus);
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.15);
+}
+
+.tree-dropdown-trigger--disabled {
+    cursor: not-allowed;
+    background: #f5f5f5;
+}
+
+.tree-dropdown-trigger__content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.tree-dropdown-trigger__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.tree-dropdown-trigger__text {
+    flex: 1;
+    font-size: 14px;
+    color: var(--dropdown-text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-dropdown-trigger__text--placeholder {
+    color: var(--dropdown-text-placeholder);
+}
+
+.tree-dropdown-trigger__loading {
+    display: flex;
+    align-items: center;
+    color: var(--dropdown-border-focus);
+    font-size: 12px;
+}
+
+.tree-dropdown-trigger__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.tree-dropdown-trigger__clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #e0e0e0;
+    color: #666;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-trigger__clear:hover {
+    background: #d0d0d0;
+    color: #333;
+}
+
+.tree-dropdown-trigger__chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    color: var(--dropdown-text-placeholder);
+    font-size: 12px;
+    transition: transform var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-trigger--open .tree-dropdown-trigger__chevron {
+    transform: rotate(180deg);
+}
+
+/* ========================================
+   Dropdown Panel
+   ======================================== */
+
+.tree-dropdown-panel {
+    position: fixed;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    background: var(--dropdown-bg);
+    border: 1px solid var(--dropdown-border-color);
+    border-radius: 8px;
+    box-shadow: var(--dropdown-shadow);
+    overflow: hidden;
+    animation: dropdown-open var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+    /* Ensure the panel respects its maxHeight and allows child scrolling */
+    box-sizing: border-box;
+}
+
+.tree-dropdown-panel--above {
+    transform-origin: bottom center;
+}
+
+.tree-dropdown-panel--below {
+    transform-origin: top center;
+}
+
+@keyframes dropdown-open {
+    from {
+        opacity: 0;
+        transform: scaleY(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scaleY(1);
+    }
+}
+
+/* ========================================
+   Search
+   ======================================== */
+
+.tree-dropdown-search {
+    padding: 8px;
+    border-bottom: 1px solid #e8e8e8;
+    background: var(--dropdown-search-bg);
+}
+
+.tree-dropdown-search__input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: var(--dropdown-search-height);
+    padding: 0 10px;
+    background: var(--dropdown-bg);
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    transition: all var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-search__input-wrapper:focus-within {
+    border-color: var(--dropdown-border-focus);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.tree-dropdown-search__icon {
+    color: #999;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.tree-dropdown-search__input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    color: var(--dropdown-text-color);
+    outline: none;
+    min-width: 0;
+}
+
+.tree-dropdown-search__input::placeholder {
+    color: var(--dropdown-text-placeholder);
+}
+
+.tree-dropdown-search__clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #e0e0e0;
+    color: #666;
+    cursor: pointer;
+    font-size: 9px;
+    flex-shrink: 0;
+    transition: all var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-search__clear:hover {
+    background: #d0d0d0;
+    color: #333;
+}
+
+/* ========================================
+   Tree Container
+   ======================================== */
+
+.tree-dropdown-tree {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    max-height: 100%;
+}
+
+.tree-dropdown-tree mj-tree {
+    display: block;
+    height: auto;
+    max-height: 100%;
+}
+
+/* Override tree styles for dropdown context */
+.tree-dropdown-tree ::ng-deep .tree-container {
+    border-radius: 0;
+    height: auto;
+    max-height: none;
+}
+
+.tree-dropdown-tree ::ng-deep .tree-content {
+    padding: 4px 0;
+}
+
+.tree-dropdown-tree ::ng-deep .tree-node {
+    padding: 6px 12px;
+    min-height: 32px;
+}
+
+.tree-dropdown-tree ::ng-deep .tree-empty {
+    padding: 24px 16px;
+}
+
+.tree-dropdown-tree ::ng-deep .tree-loading {
+    padding: 24px 16px;
+}
+
+/* ========================================
+   Portal Container (in body)
+   ======================================== */
+
+:host ::ng-deep .mj-tree-dropdown-portal {
+    pointer-events: none;
+}
+
+:host ::ng-deep .mj-tree-dropdown-portal > * {
+    pointer-events: auto;
+}
+
+/* ========================================
+   Multiple Selection Pills
+   ======================================== */
+
+.tree-dropdown-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+}
+
+.tree-dropdown-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: #e3f2fd;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #1976d2;
+}
+
+.tree-dropdown-pill__remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #1976d2;
+    cursor: pointer;
+    font-size: 8px;
+    transition: background var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-pill__remove:hover {
+    background: rgba(25, 118, 210, 0.2);
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+
+@media (max-width: 480px) {
+    :host {
+        --dropdown-trigger-height: 44px;
+    }
+
+    .tree-dropdown-trigger__text {
+        font-size: 15px;
+    }
+
+    .tree-dropdown-search__input {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+}

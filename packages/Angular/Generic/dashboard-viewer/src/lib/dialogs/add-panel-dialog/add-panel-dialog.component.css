@@ -375,3 +375,42 @@
 .btn-primary i {
     font-size: 12px;
 }
+
+.btn-primary:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.btn-primary:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* ========================================
+   Validation Errors
+   ======================================== */
+
+.validation-errors {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: #fff5f5;
+    border: 1px solid #ffcdd2;
+    border-radius: 8px;
+}
+
+.error-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #d32f2f;
+}
+
+.error-item i {
+    font-size: 14px;
+}
+
+.error-item + .error-item {
+    margin-top: 8px;
+}

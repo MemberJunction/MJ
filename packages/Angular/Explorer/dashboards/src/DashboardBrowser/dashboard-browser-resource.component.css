@@ -458,6 +458,64 @@
 }
 
 /* ========================================
+   Dashboard Info Edit (Edit Mode)
+   ======================================== */
+
+.dashboard-info-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dashboard-name-input {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+    background: #f5f5f5;
+    outline: none;
+    min-width: 300px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.dashboard-name-input:hover {
+    background: #eeeeee;
+}
+
+.dashboard-name-input:focus {
+    background: #fff;
+    border-color: #5c6bc0;
+}
+
+.dashboard-description-input {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 13px;
+    color: #666;
+    background: #f5f5f5;
+    outline: none;
+    min-width: 300px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.dashboard-description-input:hover {
+    background: #eeeeee;
+}
+
+.dashboard-description-input:focus {
+    background: #fff;
+    border-color: #5c6bc0;
+}
+
+.dashboard-description-input::placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+/* ========================================
    Viewer Content
    ======================================== */
 

@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ng-dashboard-viewer",
+  "name": "@memberjunction/ng-trees",
   "version": "2.133.0",
-  "description": "MemberJunction: Angular components for metadata-driven dashboards with Golden Layout panels, supporting views, queries, artifacts, and custom content",
+  "description": "MemberJunction: Angular tree and tree dropdown components for hierarchical entity selection",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -12,13 +12,11 @@
     "build": "ngc"
   },
   "keywords": [
-    "memberjunction",
     "angular",
-    "dashboard",
-    "golden-layout",
-    "panels",
-    "metadata-driven",
-    "configurable"
+    "tree",
+    "dropdown",
+    "hierarchical",
+    "memberjunction"
   ],
   "author": "",
   "license": "ISC",
@@ -29,20 +27,12 @@
   "peerDependencies": {
     "@angular/common": "18.0.2",
     "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/animations": "18.0.2",
-    "@angular/platform-browser": "18.0.2",
-    "golden-layout": "^2.6.0"
+    "@angular/forms": "18.0.2"
   },
   "dependencies": {
+    "@memberjunction/core": "2.133.0",
     "@memberjunction/core-entities": "2.133.0",
     "@memberjunction/global": "2.133.0",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/ng-shared-generic": "2.133.0",
-    "@memberjunction/ng-entity-viewer": "2.133.0",
-    "@memberjunction/ng-query-viewer": "2.133.0",
-    "@memberjunction/ng-trees": "2.133.0",
-    "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

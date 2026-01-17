@@ -66,6 +66,13 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public showDeleteDashboardConfirm = false;
     public dashboardToDelete: DashboardEntity | null = null;
 
+    // Edit mode state for name/description
+    public editingName = '';
+    public editingDescription = '';
+    private originalName = '';
+    private originalDescription = '';
+    private originalConfig = '';
+
     private readonly _destroy$ = new Subject<void>();
 
     @ViewChild('dashboardViewer') dashboardViewer!: DashboardViewerComponent;
@@ -122,6 +129,16 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public editDashboard(dashboard: DashboardEntity): void {
         this.selectedDashboard = dashboard;
         this.mode = 'edit';
+
+        // Initialize editing fields
+        this.editingName = dashboard.Name;
+        this.editingDescription = dashboard.Description || '';
+
+        // Store originals for cancel
+        this.originalName = dashboard.Name;
+        this.originalDescription = dashboard.Description || '';
+        this.originalConfig = dashboard.UIConfigDetails || '';
+
         this.cdr.detectChanges();
     }
 
@@ -138,12 +155,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Toggle edit mode for current dashboard
      */
     public toggleEditMode(): void {
-        if (this.mode === 'view') {
-            this.mode = 'edit';
+        if (this.mode === 'view' && this.selectedDashboard) {
+            // Enter edit mode
+            this.editDashboard(this.selectedDashboard);
         } else if (this.mode === 'edit') {
+            // Exit edit mode (go to view)
             this.mode = 'view';
+            this.cdr.detectChanges();
         }
-        this.cdr.detectChanges();
     }
 
     // ========================================
@@ -205,8 +224,71 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Save the current dashboard
      */
     public async saveDashboard(): Promise<void> {
-        if (this.dashboardViewer) {
-            await this.dashboardViewer.save();
+        if (!this.selectedDashboard) return;
+
+        try {
+            this.isLoading = true;
+            this.cdr.detectChanges();
+
+            // Update name and description from editing fields
+            this.selectedDashboard.Name = this.editingName;
+            this.selectedDashboard.Description = this.editingDescription;
+
+            // Save through the viewer (which saves the config)
+            if (this.dashboardViewer) {
+                await this.dashboardViewer.save();
+            }
+
+            // Update originals after successful save
+            this.originalName = this.editingName;
+            this.originalDescription = this.editingDescription;
+            this.originalConfig = this.selectedDashboard.UIConfigDetails || '';
+
+            // Update the dashboard in the list
+            const index = this.dashboards.findIndex(d => d.ID === this.selectedDashboard?.ID);
+            if (index >= 0) {
+                this.filterDashboards();
+            }
+
+            // Switch to view mode after save
+            this.mode = 'view';
+        } catch (err) {
+            console.error('Failed to save dashboard:', err);
+        } finally {
+            this.isLoading = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Cancel editing and revert changes
+     */
+    public cancelEdit(): void {
+        if (!this.selectedDashboard) {
+            this.backToList();
+            return;
+        }
+
+        // Revert name and description
+        this.selectedDashboard.Name = this.originalName;
+        this.selectedDashboard.Description = this.originalDescription;
+        this.selectedDashboard.UIConfigDetails = this.originalConfig;
+
+        // Clear editing state
+        this.editingName = '';
+        this.editingDescription = '';
+
+        // Go back to view mode
+        this.mode = 'view';
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handle name input blur - validate name is not empty
+     */
+    public onNameBlur(): void {
+        if (!this.editingName.trim()) {
+            this.editingName = this.originalName || 'Untitled Dashboard';
         }
     }
 

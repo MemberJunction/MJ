@@ -19,6 +19,13 @@ export * from './lib/config-dialogs/view-config-dialog.component';
 export * from './lib/config-dialogs/query-config-dialog.component';
 export * from './lib/config-dialogs/artifact-config-dialog.component';
 
+// Config Panels (standalone form components)
+export * from './lib/config-panels/base-config-panel';
+export * from './lib/config-panels/weburl-config-panel.component';
+export * from './lib/config-panels/view-config-panel.component';
+export * from './lib/config-panels/query-config-panel.component';
+export * from './lib/config-panels/artifact-config-panel.component';
+
 // Types and Models
 export * from './lib/models/dashboard-types';
 
@@ -28,5 +35,15 @@ export * from './lib/services/golden-layout-wrapper.service';
 // Tree-shaking prevention - call load functions for module
 import { LoadDashboardViewerModule } from './lib/dashboard-viewer.module';
 import { LoadConfigDialogs } from './lib/config-dialogs';
+import {
+    LoadWebURLConfigPanel,
+    LoadViewConfigPanel,
+    LoadQueryConfigPanel,
+    LoadArtifactConfigPanel
+} from './lib/config-panels';
 LoadDashboardViewerModule();
 LoadConfigDialogs();
+LoadWebURLConfigPanel();
+LoadViewConfigPanel();
+LoadQueryConfigPanel();
+LoadArtifactConfigPanel();

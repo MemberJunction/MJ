@@ -125,44 +125,251 @@
     min-height: 0;
 }
 
-:host ::ng-deep .gl-row {
-    display: flex;
-    flex-direction: row;
-    flex: 1;
-    min-height: 0;
+/* ========================================
+   Golden Layout Base Styles
+   These are required for Golden Layout 2.6.0
+   ======================================== */
+
+/* Main container */
+:host ::ng-deep .lm_goldenlayout {
+    background: var(--dashboard-bg, #f5f5f5);
 }
 
-:host ::ng-deep .gl-column {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-width: 0;
-}
-
-:host ::ng-deep .gl-stack {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-}
-
-:host ::ng-deep .gl-component {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
+/* Row and column containers */
+:host ::ng-deep .lm_row,
+:host ::ng-deep .lm_column {
     overflow: hidden;
-    position: relative;
-    border: 1px solid var(--dashboard-panel-border, #e0e0e0);
+}
+
+/* Stack (tabbed container) */
+:host ::ng-deep .lm_stack {
     background: var(--dashboard-panel-bg, #fff);
-    margin: 2px;
+    border: 1px solid var(--dashboard-panel-border, #e0e0e0);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 4px;
+}
+
+/* Tab header bar */
+:host ::ng-deep .lm_header {
+    display: flex;
+    align-items: stretch;
+    height: 36px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid var(--dashboard-panel-border, #e0e0e0);
+    overflow: hidden;
+    user-select: none;
+}
+
+/* Tab strip container */
+:host ::ng-deep .lm_tabs {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    align-items: stretch;
+}
+
+/* Individual tab */
+:host ::ng-deep .lm_tab {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    cursor: pointer;
+    border-right: 1px solid var(--dashboard-panel-border, #e0e0e0);
+    background: transparent;
+    transition: background 0.15s ease;
+    min-width: 100px;
+    max-width: 200px;
+    position: relative;
+}
+
+:host ::ng-deep .lm_tab:hover {
+    background: rgba(92, 107, 192, 0.08);
+}
+
+:host ::ng-deep .lm_tab.lm_active {
+    background: #fff;
+    border-bottom: 2px solid #5c6bc0;
+}
+
+/* Tab title */
+:host ::ng-deep .lm_title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+:host ::ng-deep .lm_tab.lm_active .lm_title {
+    color: #333;
+}
+
+/* Tab close button */
+:host ::ng-deep .lm_close_tab {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    border-radius: 3px;
+    background: transparent;
+    color: #999;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 12px;
+}
+
+:host ::ng-deep .lm_close_tab:hover {
+    background: rgba(211, 47, 47, 0.1);
+    color: #d32f2f;
+}
+
+/* Control buttons (maximize, etc) */
+:host ::ng-deep .lm_controls {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 4px;
+}
+
+:host ::ng-deep .lm_maximise,
+:host ::ng-deep .lm_popout,
+:host ::ng-deep .lm_close {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: transparent;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+:host ::ng-deep .lm_maximise:hover,
+:host ::ng-deep .lm_close:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #333;
+}
+
+/* Content area */
+:host ::ng-deep .lm_content {
+    overflow: hidden;
+    background: var(--dashboard-panel-bg, #fff);
+}
+
+/* Drag proxy (when dragging tabs) */
+:host ::ng-deep .lm_dragProxy {
+    position: absolute;
+    background: #fff;
+    border: 2px solid #5c6bc0;
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    pointer-events: none;
+    z-index: 1000;
+}
+
+:host ::ng-deep .lm_dragProxy .lm_header {
+    background: #5c6bc0;
+    color: #fff;
+}
+
+:host ::ng-deep .lm_dragProxy .lm_title {
+    color: #fff;
+}
+
+/* Drop zones */
+:host ::ng-deep .lm_drop_tab_placeholder {
+    background: rgba(92, 107, 192, 0.2);
+    border: 2px dashed #5c6bc0;
     border-radius: 4px;
 }
 
-:host ::ng-deep .dashboard-panel-container {
+:host ::ng-deep .lm_dropTargetIndicator {
+    position: absolute;
+    background: rgba(92, 107, 192, 0.3);
+    border: 2px solid #5c6bc0;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    pointer-events: none;
+    z-index: 999;
+}
+
+/* Splitter (resize bar) */
+:host ::ng-deep .lm_splitter {
+    background: transparent;
+    opacity: 1;
+    transition: background 0.15s ease;
+}
+
+:host ::ng-deep .lm_splitter:hover {
+    background: rgba(92, 107, 192, 0.3);
+}
+
+:host ::ng-deep .lm_splitter.lm_dragging {
+    background: #5c6bc0;
+}
+
+/* Horizontal splitter */
+:host ::ng-deep .lm_splitter.lm_horizontal {
+    height: 8px;
+    cursor: row-resize;
+}
+
+/* Vertical splitter */
+:host ::ng-deep .lm_splitter.lm_vertical {
+    width: 8px;
+    cursor: col-resize;
+}
+
+/* Maximized state */
+:host ::ng-deep .lm_maximised {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+}
+
+/* Dashboard panel container inside GL */
+:host ::ng-deep .dashboard-panel-gl-container {
     width: 100%;
     height: 100%;
     overflow: hidden;
+    background: #fff;
+}
+
+/* Dashboard panel wrapper (header + content) */
+:host ::ng-deep .dashboard-part-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #fff;
+}
+
+/* Dashboard part header */
+:host ::ng-deep .dashboard-part-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #e0e0e0;
+    min-height: 40px;
+    flex-shrink: 0;
+}
+
+/* Dashboard part content */
+:host ::ng-deep .dashboard-part-content {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
 }
 
 /* ========================================

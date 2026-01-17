@@ -67,105 +67,60 @@
                 </button>
             </div>
 
-            <!-- Content -->
+            <!-- Content - Embedded Config Panels -->
             <div class="dialog-content config-content">
-                <!-- Part Title (common to all types) -->
-                <div class="form-group">
-                    <label for="partTitle">Part Title</label>
-                    <input
-                        type="text"
-                        id="partTitle"
-                        [(ngModel)]="partTitle"
-                        placeholder="Enter a title for this part">
-                </div>
+                <!-- WebURL Configuration Panel -->
+                <mj-weburl-config-panel
+                    *ngIf="selectedPartType?.Name === 'WebURL'"
+                    [partType]="selectedPartType"
+                    (configChanged)="onConfigChanged($event)">
+                </mj-weburl-config-panel>
 
-                <!-- WebURL Configuration -->
-                <ng-container *ngIf="selectedPartType?.Name === 'WebURL'">
-                    <div class="form-group">
-                        <label for="webUrl">URL</label>
-                        <input
-                            type="url"
-                            id="webUrl"
-                            [(ngModel)]="webUrlValue"
-                            placeholder="https://example.com">
-                        <span class="form-hint">Enter the URL to embed in this part</span>
-                    </div>
+                <!-- View Configuration Panel -->
+                <mj-view-config-panel
+                    *ngIf="selectedPartType?.Name === 'View'"
+                    [partType]="selectedPartType"
+                    (configChanged)="onConfigChanged($event)">
+                </mj-view-config-panel>
 
-                    <div class="form-group">
-                        <label for="sandboxMode">Security Mode</label>
-                        <select id="sandboxMode" [(ngModel)]="webUrlSandboxMode">
-                            <option value="standard">Standard (Recommended)</option>
-                            <option value="strict">Strict (Most Secure)</option>
-                            <option value="permissive">Permissive (Least Secure)</option>
-                        </select>
-                        <span class="form-hint">Controls iframe sandbox permissions</span>
-                    </div>
-                </ng-container>
+                <!-- Query Configuration Panel -->
+                <mj-query-config-panel
+                    *ngIf="selectedPartType?.Name === 'Query'"
+                    [partType]="selectedPartType"
+                    (configChanged)="onConfigChanged($event)">
+                </mj-query-config-panel>
 
-                <!-- View Configuration -->
-                <ng-container *ngIf="selectedPartType?.Name === 'View'">
-                    <div class="form-group">
-                        <label for="entityName">Entity Name</label>
-                        <input
-                            type="text"
-                            id="entityName"
-                            [(ngModel)]="viewEntityName"
-                            placeholder="e.g., Contacts, Orders">
-                        <span class="form-hint">The entity to display in this view</span>
-                    </div>
+                <!-- Artifact Configuration Panel -->
+                <mj-artifact-config-panel
+                    *ngIf="selectedPartType?.Name === 'Artifact'"
+                    [partType]="selectedPartType"
+                    (configChanged)="onConfigChanged($event)">
+                </mj-artifact-config-panel>
 
-                    <div class="form-group">
-                        <label for="displayMode">Display Mode</label>
-                        <select id="displayMode" [(ngModel)]="viewDisplayMode">
-                            <option value="grid">Grid</option>
-                            <option value="cards">Cards</option>
-                            <option value="timeline">Timeline</option>
-                        </select>
-                    </div>
-                </ng-container>
-
-                <!-- Query Configuration -->
-                <ng-container *ngIf="selectedPartType?.Name === 'Query'">
-                    <div class="form-group">
-                        <label for="queryName">Query Name</label>
-                        <input
-                            type="text"
-                            id="queryName"
-                            [(ngModel)]="queryName"
-                            placeholder="Enter query name">
-                        <span class="form-hint">The saved query to execute</span>
-                    </div>
-                </ng-container>
-
-                <!-- Artifact Configuration -->
-                <ng-container *ngIf="selectedPartType?.Name === 'Artifact'">
-                    <div class="form-group">
-                        <label for="artifactId">Artifact ID</label>
-                        <input
-                            type="text"
-                            id="artifactId"
-                            [(ngModel)]="artifactId"
-                            placeholder="Enter artifact ID">
-                        <span class="form-hint">The conversation artifact to display</span>
-                    </div>
-                </ng-container>
-
-                <!-- Custom/Other Configuration -->
-                <ng-container *ngIf="selectedPartType?.Name !== 'WebURL' && selectedPartType?.Name !== 'View' && selectedPartType?.Name !== 'Query' && selectedPartType?.Name !== 'Artifact'">
+                <!-- Custom/Other Configuration (no panel available) -->
+                <ng-container *ngIf="!isKnownPartType()">
                     <div class="config-placeholder">
                         <i class="fa-solid fa-cog"></i>
                         <p>This part type uses default configuration.</p>
                     </div>
                 </ng-container>
+
+                <!-- Validation Errors -->
+                <div class="validation-errors" *ngIf="currentResult && currentResult.errors.length > 0">
+                    <div class="error-item" *ngFor="let error of currentResult.errors">
+                        <i class="fa-solid fa-exclamation-circle"></i>
+                        {{ error }}
+                    </div>
+                </div>
             </div>
 
             <!-- Footer -->
             <div class="dialog-footer">
-                <button class="btn-secondary" (click)="onCancel()">Cancel</button>
-                <button class="btn-primary" (click)="addPart()">
+                <button class="btn-primary" (click)="addPart()" [disabled]="!canAddPart && isKnownPartType()">
                     <i class="fa-solid fa-plus"></i>
                     Add Part
                 </button>
+                <button class="btn-secondary" (click)="onCancel()">Cancel</button>
             </div>
         </ng-container>
     </div>

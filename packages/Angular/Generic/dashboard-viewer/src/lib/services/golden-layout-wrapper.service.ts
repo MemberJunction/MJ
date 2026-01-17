@@ -1,4 +1,4 @@
-import { Injectable, ComponentRef, ViewContainerRef, Type } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import {
     GoldenLayoutConfig,
@@ -6,6 +6,68 @@ import {
     DashboardPanel,
     LayoutChangedEvent
 } from '../models/dashboard-types';
+
+// Golden Layout interfaces - defined here to match GL 2.6.0 API
+interface GLComponentContainer {
+    state: Record<string, unknown>;
+    tab?: { element: HTMLElement };
+    on(event: string, callback: () => void): void;
+    close(): void;
+    focus(): void;
+    setTitle(title: string): void;
+    element: HTMLElement;
+}
+
+interface GLVirtualLayout {
+    rootItem: GLLayoutItem | null;
+    on(event: string, callback: (item?: unknown) => void): void;
+    destroy(): void;
+    loadLayout(config: GLLayoutConfig): void;
+    saveLayout(): GLResolvedLayoutConfig;
+    addItemAtLocation(config: GLComponentItemConfig, location: Array<{ typeId: number }>): void;
+    addComponent(componentType: string, componentState: Record<string, unknown>, title: string): void;
+    setSize(width: number, height: number): void;
+}
+
+interface GLLayoutItem {
+    type: string;
+    contentItems?: GLLayoutItem[];
+    container?: GLComponentContainer;
+    addItem(config: GLComponentItemConfig): void;
+}
+
+interface GLLayoutConfig {
+    root: GLLayoutNode;
+    header?: {
+        show: string;
+        popout: boolean;
+        maximise: boolean;
+        close: string;
+    };
+}
+
+interface GLResolvedLayoutConfig {
+    root: GLLayoutNode;
+}
+
+interface GLLayoutNode {
+    type: string;
+    content?: GLLayoutNode[];
+    componentType?: string;
+    componentState?: Record<string, unknown>;
+    width?: number;
+    height?: number;
+    isClosable?: boolean;
+    title?: string;
+}
+
+interface GLComponentItemConfig {
+    type: 'component';
+    componentType: string;
+    componentState: Record<string, unknown>;
+    title: string;
+    isClosable?: boolean;
+}
 
 /**
  * Location specifier for adding panels
@@ -23,12 +85,18 @@ export interface LayoutLocation {
 export type PanelComponentFactory = (panelId: string, container: HTMLElement) => void;
 
 /**
+ * State stored in each Golden Layout component
+ */
+export interface DashboardPanelState {
+    panelId: string;
+    title: string;
+    icon?: string;
+    partTypeId: string;
+}
+
+/**
  * Service that wraps Golden Layout for Angular integration.
- * Handles all Golden Layout operations and converts between GL config and our types.
- *
- * NOTE: This is a simplified implementation that can be enhanced with
- * actual Golden Layout integration later. For now, it provides the
- * interface and basic layout management.
+ * Uses the real Golden Layout VirtualLayout for proper drag-and-drop, tabs, and resizing.
  */
 @Injectable()
 export class GoldenLayoutWrapperService {
@@ -39,8 +107,10 @@ export class GoldenLayoutWrapperService {
     private _initialized = false;
     private _container: HTMLElement | null = null;
     private _config: GoldenLayoutConfig | null = null;
-    private _panelContainers = new Map<string, HTMLElement>();
+    private _layout: GLVirtualLayout | null = null;
     private _componentFactory: PanelComponentFactory | null = null;
+    private _containerMap = new Map<string, GLComponentContainer>();
+    private _panelElements = new Map<string, HTMLElement>();
 
     // ========================================
     // Observables
@@ -76,10 +146,71 @@ export class GoldenLayoutWrapperService {
         this._container = container;
         this._config = config;
         this._componentFactory = componentFactory;
-        this._initialized = true;
 
-        // Build the initial layout
-        this.buildLayout();
+        // Import Golden Layout dynamically at runtime
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { VirtualLayout } = require('golden-layout');
+
+        // Convert our config to GL format
+        const glConfig = this.convertToGLConfig(config);
+
+        // Create Virtual Layout with bind/unbind component handlers
+        this._layout = new VirtualLayout(
+            container,
+            this.bindComponentEventListener.bind(this),
+            this.unbindComponentEventListener.bind(this)
+        ) as GLVirtualLayout;
+
+        // Enable automatic resize when container size changes
+        (this._layout as unknown as { resizeWithContainerAutomatically: boolean }).resizeWithContainerAutomatically = true;
+
+        // Configure debounce for responsive resizing
+        (this._layout as unknown as { resizeDebounceInterval: number }).resizeDebounceInterval = 50;
+        (this._layout as unknown as { resizeDebounceExtendedWhenPossible: boolean }).resizeDebounceExtendedWhenPossible = false;
+
+        // Subscribe to state changes
+        this._layout.on('stateChanged', () => {
+            if (this._layout) {
+                this.emitLayoutChanged('resize');
+            }
+        });
+
+        this._layout.on('activeContentItemChanged', (item: unknown) => {
+            const typedItem = item as { container?: { state?: DashboardPanelState } };
+            const state = typedItem?.container?.state;
+            if (state?.panelId) {
+                this.onPanelSelected.next(state.panelId);
+            }
+        });
+
+        // Load the configuration
+        this._layout.loadLayout(glConfig);
+
+        // Set initial size
+        const rect = container.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+            this._layout.setSize(rect.width, rect.height);
+        }
+
+        // Retry size updates for timing issues with flexbox
+        setTimeout(() => this.updateSize(), 50);
+        setTimeout(() => this.updateSize(), 150);
+        setTimeout(() => this.updateSize(), 300);
+
+        this._initialized = true;
+        this.updatePanelsList();
+    }
+
+    /**
+     * Update layout size to match container
+     */
+    public updateSize(): void {
+        if (this._layout && this._container) {
+            const rect = this._container.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                this._layout.setSize(rect.width, rect.height);
+            }
+        }
     }
 
     /**
@@ -93,16 +224,13 @@ export class GoldenLayoutWrapperService {
      * Destroy Golden Layout and clean up
      */
     public destroy(): void {
-        // Clean up panel containers
-        this._panelContainers.forEach((container, panelId) => {
-            container.remove();
-        });
-        this._panelContainers.clear();
-
-        // Clear container
-        if (this._container) {
-            this._container.innerHTML = '';
+        if (this._layout) {
+            this._layout.destroy();
+            this._layout = null;
         }
+
+        this._containerMap.clear();
+        this._panelElements.clear();
 
         this._initialized = false;
         this._container = null;
@@ -118,51 +246,53 @@ export class GoldenLayoutWrapperService {
      * Add a panel to the layout
      */
     public addPanel(panel: DashboardPanel, location?: LayoutLocation): void {
-        if (!this._config || !this._container) return;
+        if (!this._layout) return;
 
-        // Create a component node for this panel
-        const componentNode: LayoutNode = {
-            type: 'component',
-            componentState: { panelId: panel.id },
-            title: panel.title
+        const state: DashboardPanelState = {
+            panelId: panel.id,
+            title: panel.title,
+            icon: panel.icon,
+            partTypeId: panel.partTypeId
         };
 
-        // Add to layout based on location
-        if (location?.targetPanelId && location.position) {
-            this.insertPanelAtLocation(componentNode, location);
-        } else {
-            // Default: add to root row
-            this.addToRootRow(componentNode);
+        try {
+            // Try to find existing stack to add to
+            const existingStack = this.findFirstStack();
+
+            if (existingStack) {
+                // Add to existing stack (creates tabbed interface)
+                const componentConfig: GLComponentItemConfig = {
+                    type: 'component',
+                    componentType: 'dashboard-panel',
+                    componentState: state as unknown as Record<string, unknown>,
+                    title: panel.title,
+                    isClosable: true
+                };
+                existingStack.addItem(componentConfig);
+            } else {
+                // No existing stack - use addComponent which will create one
+                this._layout.addComponent(
+                    'dashboard-panel',
+                    state as unknown as Record<string, unknown>,
+                    panel.title
+                );
+            }
+
+            this.updatePanelsList();
+            this.emitLayoutChanged('resize');
+        } catch (error) {
+            console.error('GoldenLayoutWrapperService: Failed to add panel', error);
         }
-
-        // Create container and render panel
-        this.createPanelContainer(panel.id);
-
-        // Update observables
-        this.updatePanelsList();
-        this.emitLayoutChanged('resize');
     }
 
     /**
      * Remove a panel from the layout
      */
     public removePanel(panelId: string): void {
-        if (!this._config) return;
-
-        // Remove from layout tree
-        this.removePanelFromLayout(this._config.root, panelId);
-
-        // Remove container
-        const container = this._panelContainers.get(panelId);
+        const container = this._containerMap.get(panelId);
         if (container) {
-            container.remove();
-            this._panelContainers.delete(panelId);
+            container.close();
         }
-
-        // Emit events
-        this.onPanelClosed.next(panelId);
-        this.updatePanelsList();
-        this.emitLayoutChanged('close');
     }
 
     /**
@@ -200,6 +330,16 @@ export class GoldenLayoutWrapperService {
         this.onPanelMaximized.next({ panelId, maximized: false });
     }
 
+    /**
+     * Focus a panel by ID
+     */
+    public focusPanel(panelId: string): void {
+        const container = this._containerMap.get(panelId);
+        if (container) {
+            container.focus();
+        }
+    }
+
     // ========================================
     // State Management
     // ========================================
@@ -208,7 +348,14 @@ export class GoldenLayoutWrapperService {
      * Get the current layout configuration
      */
     public getLayoutConfig(): GoldenLayoutConfig | null {
-        return this._config;
+        if (!this._layout) return this._config;
+
+        try {
+            const resolved = this._layout.saveLayout();
+            return this.convertFromGLConfig(resolved);
+        } catch {
+            return this._config;
+        }
     }
 
     /**
@@ -216,269 +363,206 @@ export class GoldenLayoutWrapperService {
      */
     public applyLayoutConfig(config: GoldenLayoutConfig): void {
         this._config = config;
-        this.rebuildLayout();
+        if (this._layout) {
+            const glConfig = this.convertToGLConfig(config);
+            this._layout.loadLayout(glConfig);
+        }
     }
 
     /**
      * Get the container element for a panel
      */
     public getPanelContainer(panelId: string): HTMLElement | null {
-        return this._panelContainers.get(panelId) || null;
+        return this._panelElements.get(panelId) || null;
     }
 
     /**
      * Get all panel IDs in the current layout
      */
     public getPanelIds(): string[] {
-        return Array.from(this._panelContainers.keys());
+        return Array.from(this._containerMap.keys());
     }
 
     // ========================================
-    // Private Methods
+    // Private Methods - GL Event Handlers
     // ========================================
 
-    private buildLayout(): void {
-        if (!this._config || !this._container) return;
+    /**
+     * Bind component event listener (called by Golden Layout)
+     */
+    private bindComponentEventListener(
+        container: GLComponentContainer,
+        itemConfig: { componentState: Record<string, unknown> }
+    ): { component: HTMLElement; virtual: boolean } {
+        const state = container.state as unknown as DashboardPanelState;
 
-        // Clear existing
-        this._container.innerHTML = '';
-        this._panelContainers.clear();
-
-        // Build DOM structure from config
-        this.buildLayoutNode(this._config.root, this._container);
-
-        this.updatePanelsList();
-    }
-
-    private rebuildLayout(): void {
-        // Save current panel IDs
-        const existingPanels = new Set(this._panelContainers.keys());
-
-        // Rebuild
-        this.buildLayout();
-
-        // Emit close events for removed panels
-        existingPanels.forEach(panelId => {
-            if (!this._panelContainers.has(panelId)) {
-                this.onPanelClosed.next(panelId);
-            }
-        });
-    }
-
-    private buildLayoutNode(node: LayoutNode, parentElement: HTMLElement): void {
+        // Create container element for the panel
         const element = document.createElement('div');
+        element.className = 'dashboard-panel-gl-container';
+        element.style.cssText = 'width: 100%; height: 100%; overflow: hidden; background: #fff;';
 
-        switch (node.type) {
-            case 'row':
-                element.className = 'gl-row';
-                element.style.cssText = 'display: flex; flex-direction: row; flex: 1; min-height: 0;';
-                break;
-            case 'column':
-                element.className = 'gl-column';
-                element.style.cssText = 'display: flex; flex-direction: column; flex: 1; min-width: 0;';
-                break;
-            case 'stack':
-                element.className = 'gl-stack';
-                element.style.cssText = 'display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0;';
-                break;
-            case 'component':
-                element.className = 'gl-component';
-                element.style.cssText = 'flex: 1; min-width: 0; min-height: 0; overflow: hidden; position: relative;';
-                if (node.componentState?.panelId) {
-                    this.createPanelContainer(node.componentState.panelId, element);
-                }
-                break;
-        }
+        if (state?.panelId) {
+            this._containerMap.set(state.panelId, container);
+            this._panelElements.set(state.panelId, element);
 
-        // Apply size hints
-        if (node.width) {
-            element.style.flex = `${node.width} 1 0%`;
-        }
-        if (node.height) {
-            element.style.flex = `${node.height} 1 0%`;
-        }
-
-        parentElement.appendChild(element);
-
-        // Recursively build children
-        if (node.content) {
-            node.content.forEach(child => this.buildLayoutNode(child, element));
-        }
-    }
-
-    private createPanelContainer(panelId: string, parentElement?: HTMLElement): void {
-        if (!this._container || !this._componentFactory) return;
-
-        const container = document.createElement('div');
-        container.className = 'dashboard-panel-container';
-        container.style.cssText = 'width: 100%; height: 100%; overflow: hidden;';
-        container.setAttribute('data-panel-id', panelId);
-
-        if (parentElement) {
-            parentElement.appendChild(container);
-        } else {
-            // If no parent specified, this is a standalone panel being added
-            this._container.appendChild(container);
-        }
-
-        this._panelContainers.set(panelId, container);
-
-        // Call the factory to render the component
-        this._componentFactory(panelId, container);
-    }
-
-    private addToRootRow(node: LayoutNode): void {
-        if (!this._config) return;
-
-        // Ensure root is a row
-        if (this._config.root.type !== 'row') {
-            // Wrap existing root in a row
-            const existingRoot = { ...this._config.root };
-            this._config.root = {
-                type: 'row',
-                content: [existingRoot, node]
-            };
-        } else {
-            // Add to existing row
-            if (!this._config.root.content) {
-                this._config.root.content = [];
-            }
-            this._config.root.content.push(node);
-        }
-    }
-
-    private insertPanelAtLocation(node: LayoutNode, location: LayoutLocation): void {
-        if (!this._config || !location.targetPanelId) return;
-
-        // Find the target panel in the layout
-        const result = this.findPanelNode(this._config.root, location.targetPanelId, null);
-        if (!result) {
-            // Target not found, add to root
-            this.addToRootRow(node);
-            return;
-        }
-
-        const { parent, index } = result;
-        if (!parent || !parent.content) {
-            this.addToRootRow(node);
-            return;
-        }
-
-        switch (location.position) {
-            case 'right':
-            case 'left':
-                // Create or use a row
-                if (parent.type === 'row') {
-                    const insertIndex = location.position === 'right' ? index + 1 : index;
-                    parent.content.splice(insertIndex, 0, node);
-                } else {
-                    // Wrap in a row
-                    const targetNode = parent.content[index];
-                    const newRow: LayoutNode = {
-                        type: 'row',
-                        content: location.position === 'right'
-                            ? [targetNode, node]
-                            : [node, targetNode]
-                    };
-                    parent.content[index] = newRow;
-                }
-                break;
-
-            case 'top':
-            case 'bottom':
-                // Create or use a column
-                if (parent.type === 'column') {
-                    const insertIndex = location.position === 'bottom' ? index + 1 : index;
-                    parent.content.splice(insertIndex, 0, node);
-                } else {
-                    // Wrap in a column
-                    const targetNode = parent.content[index];
-                    const newColumn: LayoutNode = {
-                        type: 'column',
-                        content: location.position === 'bottom'
-                            ? [targetNode, node]
-                            : [node, targetNode]
-                    };
-                    parent.content[index] = newColumn;
-                }
-                break;
-
-            case 'tab':
-                // Create or use a stack
-                if (parent.type === 'stack') {
-                    parent.content.push(node);
-                } else {
-                    // Wrap in a stack
-                    const targetNode = parent.content[index];
-                    const newStack: LayoutNode = {
-                        type: 'stack',
-                        content: [targetNode, node]
-                    };
-                    parent.content[index] = newStack;
-                }
-                break;
-        }
-    }
-
-    private findPanelNode(
-        node: LayoutNode,
-        panelId: string,
-        parent: LayoutNode | null,
-        parentIndex: number = 0
-    ): { node: LayoutNode; parent: LayoutNode | null; index: number } | null {
-        if (node.type === 'component' && node.componentState?.panelId === panelId) {
-            return { node, parent, index: parentIndex };
-        }
-
-        if (node.content) {
-            for (let i = 0; i < node.content.length; i++) {
-                const result = this.findPanelNode(node.content[i], panelId, node, i);
-                if (result) return result;
-            }
-        }
-
-        return null;
-    }
-
-    private removePanelFromLayout(node: LayoutNode, panelId: string): boolean {
-        if (!node.content) return false;
-
-        for (let i = 0; i < node.content.length; i++) {
-            const child = node.content[i];
-
-            if (child.type === 'component' && child.componentState?.panelId === panelId) {
-                node.content.splice(i, 1);
-
-                // Clean up empty containers
-                if (node.content.length === 0 && node !== this._config?.root) {
-                    // This container is now empty, should be removed by parent
-                }
-
-                return true;
+            // Call the factory to render panel content
+            if (this._componentFactory) {
+                this._componentFactory(state.panelId, element);
             }
 
-            if (this.removePanelFromLayout(child, panelId)) {
-                // Clean up single-child containers
-                if (child.content && child.content.length === 1) {
-                    node.content[i] = child.content[0];
-                } else if (child.content && child.content.length === 0) {
-                    node.content.splice(i, 1);
-                }
-                return true;
-            }
+            // Listen for show events
+            container.on('show', () => {
+                this.onPanelSelected.next(state.panelId);
+            });
+
+            // Listen for close events
+            container.on('beforeComponentRelease', () => {
+                this._containerMap.delete(state.panelId);
+                this._panelElements.delete(state.panelId);
+                this.onPanelClosed.next(state.panelId);
+                this.updatePanelsList();
+            });
         }
 
-        return false;
+        // Return the bindable component object
+        return {
+            component: element,
+            virtual: false // false means actual DOM content
+        };
+    }
+
+    /**
+     * Unbind component event listener (called by Golden Layout)
+     */
+    private unbindComponentEventListener(container: GLComponentContainer): void {
+        // Cleanup is handled in beforeComponentRelease
+    }
+
+    // ========================================
+    // Private Methods - Configuration
+    // ========================================
+
+    /**
+     * Convert our config format to Golden Layout format
+     */
+    private convertToGLConfig(config: GoldenLayoutConfig): GLLayoutConfig {
+        return {
+            root: this.convertLayoutNode(config.root),
+            header: {
+                show: 'top',
+                popout: false,
+                maximise: true,
+                close: 'tab'
+            }
+        };
+    }
+
+    /**
+     * Convert a layout node to GL format
+     */
+    private convertLayoutNode(node: LayoutNode): GLLayoutNode {
+        const glNode: GLLayoutNode = {
+            type: node.type
+        };
+
+        // Convert component nodes
+        if (node.type === 'component' && node.componentState?.panelId) {
+            glNode.componentType = 'dashboard-panel';
+            glNode.componentState = node.componentState;
+            glNode.title = node.title || 'Panel';
+            glNode.isClosable = true;
+        }
+
+        // Add size hints
+        if (node.width !== undefined) {
+            glNode.width = node.width;
+        }
+        if (node.height !== undefined) {
+            glNode.height = node.height;
+        }
+
+        // Convert children
+        if (node.content && node.content.length > 0) {
+            glNode.content = node.content.map(child => this.convertLayoutNode(child));
+        }
+
+        return glNode;
+    }
+
+    /**
+     * Convert Golden Layout config back to our format
+     */
+    private convertFromGLConfig(resolved: GLResolvedLayoutConfig): GoldenLayoutConfig {
+        return {
+            root: this.convertFromGLNode(resolved.root)
+        };
+    }
+
+    /**
+     * Convert a GL node back to our format
+     */
+    private convertFromGLNode(glNode: GLLayoutNode): LayoutNode {
+        const node: LayoutNode = {
+            type: glNode.type as LayoutNode['type']
+        };
+
+        // Convert component nodes
+        if (glNode.type === 'component' && glNode.componentState) {
+            node.componentState = glNode.componentState as { panelId: string };
+            node.title = glNode.title;
+        }
+
+        // Add size hints
+        if (glNode.width !== undefined) {
+            node.width = glNode.width;
+        }
+        if (glNode.height !== undefined) {
+            node.height = glNode.height;
+        }
+
+        // Convert children
+        if (glNode.content && glNode.content.length > 0) {
+            node.content = glNode.content.map(child => this.convertFromGLNode(child));
+        }
+
+        return node;
+    }
+
+    // ========================================
+    // Private Methods - Utilities
+    // ========================================
+
+    /**
+     * Find first stack in layout for adding tabs
+     */
+    private findFirstStack(): GLLayoutItem | null {
+        if (!this._layout || !this._layout.rootItem) return null;
+
+        const findStack = (item: GLLayoutItem): GLLayoutItem | null => {
+            if (item.type === 'stack') {
+                return item;
+            }
+            if (item.contentItems) {
+                for (const child of item.contentItems) {
+                    const found = findStack(child);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+
+        return findStack(this._layout.rootItem);
     }
 
     private updatePanelsList(): void {
-        this.panels$.next(Array.from(this._panelContainers.keys()));
+        this.panels$.next(Array.from(this._containerMap.keys()));
     }
 
     private emitLayoutChanged(changeType: LayoutChangedEvent['changeType']): void {
-        if (this._config) {
+        const layoutConfig = this.getLayoutConfig();
+        if (layoutConfig) {
             this.onLayoutChanged.next({
-                layout: this._config,
+                layout: layoutConfig,
                 changeType
             });
         }

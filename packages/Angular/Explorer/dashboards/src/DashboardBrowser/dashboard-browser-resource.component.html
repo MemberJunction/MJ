@@ -138,33 +138,59 @@
         <!-- Viewer Header -->
         <div class="viewer-header">
             <div class="header-left">
-                <button class="back-btn" (click)="backToList()">
+                <!-- Back button only in view mode -->
+                <button class="back-btn" *ngIf="mode === 'view'" (click)="backToList()">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <h2>{{ selectedDashboard?.Name }}</h2>
+
+                <!-- View mode: static title -->
+                <h2 *ngIf="mode === 'view'">{{ selectedDashboard?.Name }}</h2>
+
+                <!-- Edit mode: editable name/description -->
+                <div class="dashboard-info-edit" *ngIf="mode === 'edit'">
+                    <input
+                        type="text"
+                        class="dashboard-name-input"
+                        [(ngModel)]="editingName"
+                        placeholder="Dashboard name"
+                        (blur)="onNameBlur()">
+                    <input
+                        type="text"
+                        class="dashboard-description-input"
+                        [(ngModel)]="editingDescription"
+                        placeholder="Description (optional)">
+                </div>
             </div>
             <div class="header-right">
-                <button
-                    class="btn-secondary"
-                    *ngIf="mode === 'edit'"
-                    (click)="openAddPartDialog()">
-                    <i class="fa-solid fa-plus"></i>
-                    Add Part
-                </button>
+                <!-- View mode: Edit button -->
                 <button
                     class="btn-icon"
-                    [class.active]="mode === 'edit'"
-                    title="Toggle Edit Mode"
+                    *ngIf="mode === 'view'"
+                    title="Edit Dashboard"
                     (click)="toggleEditMode()">
                     <i class="fa-solid fa-edit"></i>
                 </button>
-                <button
-                    class="btn-primary"
-                    *ngIf="mode === 'edit'"
-                    (click)="saveDashboard()">
-                    <i class="fa-solid fa-save"></i>
-                    Save
-                </button>
+
+                <!-- Edit mode: Add Part, Save, Cancel buttons -->
+                <ng-container *ngIf="mode === 'edit'">
+                    <button
+                        class="btn-secondary"
+                        (click)="openAddPartDialog()">
+                        <i class="fa-solid fa-plus"></i>
+                        Add Part
+                    </button>
+                    <button
+                        class="btn-primary"
+                        (click)="saveDashboard()">
+                        <i class="fa-solid fa-save"></i>
+                        Save
+                    </button>
+                    <button
+                        class="btn-secondary"
+                        (click)="cancelEdit()">
+                        Cancel
+                    </button>
+                </ng-container>
             </div>
         </div>
 

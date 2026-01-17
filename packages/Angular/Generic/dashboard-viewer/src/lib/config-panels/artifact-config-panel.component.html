@@ -1,0 +1,106 @@
+<!-- Artifact Config Panel - Compact layout with tree dropdown and collapsible sections -->
+<div class="config-panel config-panel--compact">
+    <!-- Artifact Selection (Primary) -->
+    <div class="form-group">
+        <label>
+            <i class="fa-solid fa-cube"></i>
+            Select Artifact
+            <span class="required">*</span>
+        </label>
+        <mj-tree-dropdown
+            #artifactDropdown
+            [BranchConfig]="CollectionConfig"
+            [LeafConfig]="ArtifactLeafConfig"
+            [Value]="artifactId"
+            [SelectableTypes]="'leaf'"
+            [SelectionMode]="'single'"
+            [Placeholder]="'Search or browse artifacts...'"
+            [EnableSearch]="true"
+            (SelectionChange)="onArtifactSelection($event)"
+            [class.error]="artifactError">
+        </mj-tree-dropdown>
+        <span class="form-error" *ngIf="artifactError">{{ artifactError }}</span>
+        <span class="form-hint" *ngIf="!artifactError && !artifactId">
+            Browse collections or search to find an artifact
+        </span>
+        <span class="form-hint form-hint--selected" *ngIf="!artifactError && artifactId">
+            <i class="fa-solid fa-check"></i>
+            Selected: {{ artifactName }}
+        </span>
+    </div>
+
+    <!-- Title (Optional) -->
+    <div class="form-group">
+        <label for="partTitle">
+            <i class="fa-solid fa-heading"></i>
+            Part Title
+            <span class="optional-tag">(optional)</span>
+        </label>
+        <input
+            type="text"
+            id="partTitle"
+            [(ngModel)]="title"
+            (input)="onTitleChange()"
+            [placeholder]="artifactName ? 'Default: ' + artifactName : 'Enter a custom title'"
+            class="form-input">
+        <span class="form-hint">Leave empty to use artifact name as title</span>
+    </div>
+
+    <!-- Version Number (Optional) -->
+    <div class="form-group">
+        <label for="versionNumber">
+            <i class="fa-solid fa-code-branch"></i>
+            Version
+            <span class="optional-tag">(optional)</span>
+        </label>
+        <input
+            type="number"
+            id="versionNumber"
+            [(ngModel)]="versionNumber"
+            (input)="onVersionChange()"
+            placeholder="Leave empty for latest version"
+            class="form-input"
+            min="1">
+        <span class="form-hint">
+            Specify a version number or leave empty to always show the latest
+        </span>
+    </div>
+
+    <!-- Display Options (Collapsible) -->
+    <div class="collapsible-section">
+        <button
+            type="button"
+            class="collapsible-header"
+            (click)="toggleOptions()"
+            [attr.aria-expanded]="showOptions">
+            <span class="collapsible-title">
+                <i class="fa-solid fa-sliders"></i>
+                Display Options
+            </span>
+            <i class="collapsible-chevron fa-solid"
+               [class.fa-chevron-down]="!showOptions"
+               [class.fa-chevron-up]="showOptions"></i>
+        </button>
+
+        <div class="collapsible-content" *ngIf="showOptions">
+            <div class="checkbox-group checkbox-group--compact">
+                <label class="checkbox-option checkbox-option--compact">
+                    <input
+                        type="checkbox"
+                        [(ngModel)]="showVersionSelector"
+                        (change)="onOptionChange()">
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label">Show Version Selector</span>
+                </label>
+                <label class="checkbox-option checkbox-option--compact">
+                    <input
+                        type="checkbox"
+                        [(ngModel)]="showMetadata"
+                        (change)="onOptionChange()">
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label">Show Metadata</span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
