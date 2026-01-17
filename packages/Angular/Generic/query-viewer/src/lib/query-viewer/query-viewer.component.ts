@@ -5,8 +5,6 @@ import {
     EventEmitter,
     OnInit,
     OnDestroy,
-    OnChanges,
-    SimpleChanges,
     ChangeDetectorRef,
     ChangeDetectionStrategy,
     ViewChild
@@ -55,7 +53,7 @@ import {
     styleUrls: ['./query-viewer.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
+export class QueryViewerComponent implements OnInit, OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -174,12 +172,6 @@ export class QueryViewerComponent implements OnInit, OnChanges, OnDestroy {
     constructor(private cdr: ChangeDetectorRef) {}
 
     ngOnInit(): void {}
-
-    ngOnChanges(changes: SimpleChanges): void {
-        if (changes['QueryId']) {
-            // Handled by setter
-        }
-    }
 
     ngOnDestroy(): void {
         this.destroy$.next();

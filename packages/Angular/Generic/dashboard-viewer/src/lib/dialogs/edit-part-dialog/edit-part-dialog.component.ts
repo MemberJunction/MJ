@@ -7,8 +7,6 @@ import {
     ViewChild,
     ViewContainerRef,
     ComponentRef,
-    OnChanges,
-    SimpleChanges,
     OnDestroy,
     AfterViewInit
 } from '@angular/core';
@@ -43,7 +41,7 @@ export interface EditPartDialogResult {
     templateUrl: './edit-part-dialog.component.html',
     styleUrls: ['./edit-part-dialog.component.css']
 })
-export class EditPartDialogComponent implements OnChanges, OnDestroy, AfterViewInit {
+export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
     /**
      * Whether the dialog is visible
      */
@@ -53,6 +51,10 @@ export class EditPartDialogComponent implements OnChanges, OnDestroy, AfterViewI
         this._visible = value;
         if (value && !previous) {
             this.onDialogOpened();
+            // Load config panel if view is initialized
+            if (this.viewInitialized) {
+                this.loadConfigPanel();
+            }
         } else if (!value && previous) {
             this.onDialogClosed();
         }
@@ -125,12 +127,6 @@ export class EditPartDialogComponent implements OnChanges, OnDestroy, AfterViewI
     ngAfterViewInit(): void {
         this.viewInitialized = true;
         if (this.Visible) {
-            this.loadConfigPanel();
-        }
-    }
-
-    ngOnChanges(changes: SimpleChanges): void {
-        if (changes['Visible'] && this.Visible && this.viewInitialized) {
             this.loadConfigPanel();
         }
     }

@@ -11,8 +11,8 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 // MJ Entity Viewer for displaying entity data in grid/cards/timeline
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 
-// MJ Query Grid for displaying query results
-import { QueryGridModule } from '@memberjunction/ng-query-grid';
+// MJ Query Viewer for displaying query results
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 
 // MJ Artifacts for displaying conversation artifacts
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
@@ -77,7 +77,7 @@ export function LoadDashboardViewerModule() {
         SharedGenericModule,
         NgTreesModule,
         EntityViewerModule,
-        QueryGridModule,
+        QueryViewerModule,
         ArtifactsModule
     ],
     exports: [

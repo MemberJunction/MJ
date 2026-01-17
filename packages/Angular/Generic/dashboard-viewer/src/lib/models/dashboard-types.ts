@@ -283,7 +283,7 @@ export function createDefaultDashboardConfig(): DashboardConfigV2 {
         version: 2,
         layout: {
             root: {
-                type: 'row',
+                type: 'stack',
                 content: []
             }
         },

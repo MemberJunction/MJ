@@ -4,12 +4,11 @@ import { BaseDashboardPart } from './base-dashboard-part';
 import { QueryPanelConfig } from '../models/dashboard-types';
 import { Metadata } from '@memberjunction/core';
 import { QueryEntity } from '@memberjunction/core-entities';
-import { RunQueryParams } from '@memberjunction/core';
-import { QueryGridComponent, GridRowClickedEvent } from '@memberjunction/ng-query-grid';
+import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction/ng-query-viewer';
 
 /**
  * Runtime renderer for Query dashboard parts.
- * Displays query results using mj-query-grid with parameter controls and auto-refresh support.
+ * Displays query results using mj-query-viewer with parameter controls and auto-refresh support.
  */
 @RegisterClass(BaseDashboardPart, 'QueryPanelRenderer')
 @Component({
@@ -34,35 +33,18 @@ import { QueryGridComponent, GridRowClickedEvent } from '@memberjunction/ng-quer
                 <p>Click the configure button to select a query for this part.</p>
             </div>
 
-            <!-- Query header with refresh controls -->
-            <div class="query-header" *ngIf="!IsLoading && !ErrorMessage && hasQuery">
-                <div class="query-info">
-                    <i class="fa-solid fa-flask"></i>
-                    <div class="query-details">
-                        <span class="query-name">{{ queryName }}</span>
-                        <span class="query-category" *ngIf="categoryName">{{ categoryName }}</span>
-                    </div>
-                </div>
-                <div class="query-actions">
-                    <button class="refresh-btn" (click)="refreshQuery()" [disabled]="isRefreshing" title="Refresh">
-                        <i class="fa-solid fa-sync-alt" [class.fa-spin]="isRefreshing"></i>
-                    </button>
-                    <span class="auto-refresh-badge" *ngIf="autoRefreshSeconds > 0">
-                        <i class="fa-solid fa-clock"></i>
-                        {{ autoRefreshLabel }}
-                    </span>
-                </div>
-            </div>
-
-            <!-- Query Grid -->
-            <div class="query-content" *ngIf="!IsLoading && !ErrorMessage && hasQuery">
-                <mj-query-grid
-                    #queryGrid
-                    [Params]="queryParams"
-                    [AllowLoad]="allowLoad"
-                    [AutoNavigate]="false"
-                    (rowClicked)="onRowClicked($event)">
-                </mj-query-grid>
+            <!-- Query Viewer -->
+            <div class="query-content" *ngIf="!IsLoading && !ErrorMessage && hasQuery && queryId">
+                <mj-query-viewer
+                    #queryViewer
+                    [QueryId]="queryId"
+                    [AutoRun]="true"
+                    [ShowToolbar]="showToolbar"
+                    [PersistState]="true"
+                    [PersistParameters]="true"
+                    (EntityLinkClick)="onEntityLinkClick($event)"
+                    (QueryError)="onQueryError($event)">
+                </mj-query-viewer>
             </div>
         </div>
     `,
@@ -115,97 +97,13 @@ import { QueryGridComponent, GridRowClickedEvent } from '@memberjunction/ng-quer
             font-size: 13px;
         }
 
-        .query-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 16px;
-            border-bottom: 1px solid #e0e0e0;
-            background: #fafafa;
-            flex-shrink: 0;
-        }
-
-        .query-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .query-info > i {
-            font-size: 20px;
-            color: #5c6bc0;
-        }
-
-        .query-details {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .query-name {
-            font-weight: 500;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .query-category {
-            font-size: 12px;
-            color: #666;
-        }
-
-        .query-actions {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .refresh-btn {
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            background: #fff;
-            color: #666;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .refresh-btn:hover:not(:disabled) {
-            background: #e8eaf6;
-            border-color: #5c6bc0;
-            color: #5c6bc0;
-        }
-
-        .refresh-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .auto-refresh-badge {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 10px;
-            background: #e8f5e9;
-            color: #2e7d32;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-
-        .auto-refresh-badge i {
-            font-size: 10px;
-        }
-
         .query-content {
             flex: 1;
             min-height: 0;
             overflow: hidden;
         }
 
-        mj-query-grid {
+        mj-query-viewer {
             display: block;
             width: 100%;
             height: 100%;
@@ -213,16 +111,11 @@ import { QueryGridComponent, GridRowClickedEvent } from '@memberjunction/ng-quer
     `]
 })
 export class QueryPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
-    @ViewChild('queryGrid') queryGrid!: QueryGridComponent;
+    @ViewChild('queryViewer') queryViewer!: QueryViewerComponent;
 
     public hasQuery = false;
-    public queryName = '';
-    public categoryName = '';
-    public autoRefreshSeconds = 0;
-    public autoRefreshLabel = '';
-    public isRefreshing = false;
-    public allowLoad = false;
-    public queryParams: RunQueryParams | undefined;
+    public queryId: string | null = null;
+    public showToolbar = true;
 
     private queryEntity: QueryEntity | null = null;
     private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -248,13 +141,12 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
         this.setLoading(true);
         this.stopAutoRefresh();
-        this.allowLoad = false;
 
         try {
             const md = new Metadata();
 
             if (config.queryId) {
-                // Load query by ID
+                // Load query by ID to verify it exists
                 this.queryEntity = await md.GetEntityObject<QueryEntity>('Queries');
                 const loaded = await this.queryEntity.Load(config.queryId);
 
@@ -262,71 +154,57 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
                     throw new Error('Query not found');
                 }
 
-                this.queryName = this.queryEntity.Name;
-                this.categoryName = this.queryEntity.Category || '';
-
-                // Build query params
-                this.queryParams = {
-                    QueryID: config.queryId
-                };
-
-                // Note: Default parameters can be passed via the query's built-in parameter system
-                // The mj-query-grid component handles parameter binding internally
+                this.queryId = config.queryId;
             } else if (config.queryName) {
-                // Query by name - need to find the query first
-                this.queryName = config.queryName;
-                this.queryParams = undefined; // Will need to implement query lookup by name
+                // Query by name - find the query ID from metadata
+                const queryInfo = md.Queries.find(q => q.Name === config.queryName);
+                if (queryInfo) {
+                    this.queryId = queryInfo.ID;
+                } else {
+                    throw new Error(`Query "${config.queryName}" not found`);
+                }
             }
 
             this.hasQuery = true;
+            this.showToolbar = config.showParameterControls !== false;
 
-            // Set auto-refresh
-            this.autoRefreshSeconds = config.autoRefreshSeconds || 0;
-            this.autoRefreshLabel = this.getAutoRefreshLabel(this.autoRefreshSeconds);
-
-            // Allow the grid to load
-            this.allowLoad = true;
-            this.setLoading(false);
-
-            // Start auto-refresh if configured
-            if (this.autoRefreshSeconds > 0) {
-                this.startAutoRefresh();
+            // Set auto-refresh if configured
+            const autoRefreshSeconds = config.autoRefreshSeconds || 0;
+            if (autoRefreshSeconds > 0) {
+                this.startAutoRefresh(autoRefreshSeconds);
             }
+
+            this.setLoading(false);
         } catch (error) {
             this.setError(error instanceof Error ? error.message : 'Failed to load query');
         }
     }
 
-    public refreshQuery(): void {
-        if (this.queryGrid && this.queryParams) {
-            this.isRefreshing = true;
-            this.cdr.detectChanges();
-
-            this.queryGrid.Refresh(this.queryParams);
-
-            // Reset refreshing state after a short delay
-            setTimeout(() => {
-                this.isRefreshing = false;
-                this.cdr.detectChanges();
-            }, 1000);
-        }
-    }
-
-    public onRowClicked(event: GridRowClickedEvent): void {
-        // Emit data change event with clicked row data
+    public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+        // Emit data change event with clicked entity info
         this.emitDataChanged({
-            type: 'row-clicked',
-            entityId: event.entityId,
+            type: 'entity-link-click',
             entityName: event.entityName,
-            keyValuePairs: event.KeyValuePairs
+            recordId: event.recordId
         });
     }
 
-    private startAutoRefresh(): void {
-        if (this.autoRefreshSeconds > 0) {
+    public onQueryError(error: Error): void {
+        console.error('[QueryPart] Query error:', error.message);
+    }
+
+    public refreshQuery(): void {
+        if (this.queryViewer) {
+            this.queryViewer.Refresh();
+        }
+    }
+
+    private startAutoRefresh(seconds: number): void {
+        this.stopAutoRefresh();
+        if (seconds > 0) {
             this.autoRefreshTimer = setInterval(() => {
                 this.refreshQuery();
-            }, this.autoRefreshSeconds * 1000);
+            }, seconds * 1000);
         }
     }
 
@@ -337,17 +215,10 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         }
     }
 
-    private getAutoRefreshLabel(seconds: number): string {
-        if (seconds === 0) return '';
-        if (seconds < 60) return `${seconds}s`;
-        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-        return `${Math.floor(seconds / 3600)}h`;
-    }
-
     protected override cleanup(): void {
         this.stopAutoRefresh();
         this.queryEntity = null;
-        this.queryParams = undefined;
+        this.queryId = null;
     }
 }
 

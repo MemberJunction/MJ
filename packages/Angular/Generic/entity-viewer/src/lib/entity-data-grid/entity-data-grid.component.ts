@@ -1311,7 +1311,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       if (this._params.ViewEntity) {
         // ViewEntity was provided directly
         this._viewEntity = this._params.ViewEntity as UserViewEntityExtended;
-        this._entityInfo = this._viewEntity.ViewEntityInfo;
+        this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
         this.applyViewEntitySettings();
       } else if (this._params.ViewID) {
         // Load view entity by ID from engine
@@ -1322,7 +1322,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           // View not in cache - use ViewInfo (which also uses engine)
           this._viewEntity = await ViewInfo.GetViewEntity(this._params.ViewID);
         }
-        this._entityInfo = this._viewEntity.ViewEntityInfo;
+        this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
         this.applyViewEntitySettings();
       } else if (this._params.ViewName) {
         // Load view entity by name from engine
@@ -1333,7 +1333,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           // View not in cache - use ViewInfo (which also uses engine)
           this._viewEntity = await ViewInfo.GetViewEntityByName(this._params.ViewName);
         }
-        this._entityInfo = this._viewEntity.ViewEntityInfo;
+        this._entityInfo = this.getEntityInfoFromViewEntity(this._viewEntity);
         this.applyViewEntitySettings();
       } else if (this._params.EntityName) {
         // Dynamic view - just get entity metadata
@@ -1396,6 +1396,43 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Engine may not be initialized yet
       return undefined;
     }
+  }
+
+  /**
+   * Gets EntityInfo from a ViewEntity with multiple fallback strategies.
+   * Priority: 1) ViewEntityInfo property (set by Load)
+   *           2) Entity name lookup (virtual field)
+   *           3) EntityID lookup
+   * Returns null if entity cannot be determined.
+   */
+  private getEntityInfoFromViewEntity(viewEntity: UserViewEntityExtended | null): EntityInfo | null {
+    if (!viewEntity) return null;
+
+    // First try: ViewEntityInfo is the preferred source (set by UserViewEntityExtended.Load)
+    if (viewEntity.ViewEntityInfo) {
+      return viewEntity.ViewEntityInfo;
+    }
+
+    const md = new Metadata();
+
+    // Second try: Look up by Entity name (virtual field that returns entity name)
+    if (viewEntity.Entity) {
+      const entityByName = md.Entities.find(e => e.Name === viewEntity.Entity);
+      if (entityByName) {
+        return entityByName;
+      }
+    }
+
+    // Third try: Look up by EntityID
+    if (viewEntity.EntityID) {
+      const entityById = md.Entities.find(e => e.ID === viewEntity.EntityID);
+      if (entityById) {
+        return entityById;
+      }
+    }
+
+    console.warn(`[EntityDataGrid] Could not determine entity for view "${viewEntity.Name}" (ID: ${viewEntity.ID})`);
+    return null;
   }
 
   /**
