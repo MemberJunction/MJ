@@ -8,24 +8,36 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 // MJ Trees for hierarchical selection
 import { NgTreesModule } from '@memberjunction/ng-trees';
 
+// MJ Entity Viewer for displaying entity data in grid/cards/timeline
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
+
+// MJ Query Grid for displaying query results
+import { QueryGridModule } from '@memberjunction/ng-query-grid';
+
+// MJ Artifacts for displaying conversation artifacts
+import { ArtifactsModule } from '@memberjunction/ng-artifacts';
+
 // Main Component
 import { DashboardViewerComponent } from './dashboard-viewer/dashboard-viewer.component';
 
 // Dialogs
 import { AddPanelDialogComponent } from './dialogs/add-panel-dialog/add-panel-dialog.component';
+import { EditPartDialogComponent } from './dialogs/edit-part-dialog/edit-part-dialog.component';
 
-// Config Dialogs
+// Confirm Dialog (generic utility)
 import { ConfirmDialogComponent } from './config-dialogs/confirm-dialog.component';
-import { WebURLConfigDialogComponent } from './config-dialogs/weburl-config-dialog.component';
-import { ViewConfigDialogComponent } from './config-dialogs/view-config-dialog.component';
-import { QueryConfigDialogComponent } from './config-dialogs/query-config-dialog.component';
-import { ArtifactConfigDialogComponent } from './config-dialogs/artifact-config-dialog.component';
 
-// Config Panels (standalone form components)
+// Config Panels (pluggable form components for each part type)
 import { WebURLConfigPanelComponent } from './config-panels/weburl-config-panel.component';
 import { ViewConfigPanelComponent } from './config-panels/view-config-panel.component';
 import { QueryConfigPanelComponent } from './config-panels/query-config-panel.component';
 import { ArtifactConfigPanelComponent } from './config-panels/artifact-config-panel.component';
+
+// Runtime Part Components (pluggable renderers for each part type)
+import { WebURLPartComponent } from './parts/weburl-part.component';
+import { ViewPartComponent } from './parts/view-part.component';
+import { QueryPartComponent } from './parts/query-part.component';
+import { ArtifactPartComponent } from './parts/artifact-part.component';
 
 /**
  * Prevents tree-shaking of the DashboardViewer module.
@@ -40,47 +52,54 @@ export function LoadDashboardViewerModule() {
         // Main Component
         DashboardViewerComponent,
 
-        // Dialogs
+        // Generic Dialogs
         AddPanelDialogComponent,
-
-        // Config Dialogs
+        EditPartDialogComponent,
         ConfirmDialogComponent,
-        WebURLConfigDialogComponent,
-        ViewConfigDialogComponent,
-        QueryConfigDialogComponent,
-        ArtifactConfigDialogComponent,
 
-        // Config Panels (standalone form components)
+        // Config Panels (pluggable form components)
+        // These are registered with @RegisterClass and loaded dynamically via ClassFactory
         WebURLConfigPanelComponent,
         ViewConfigPanelComponent,
         QueryConfigPanelComponent,
-        ArtifactConfigPanelComponent
+        ArtifactConfigPanelComponent,
+
+        // Runtime Part Components (pluggable renderers)
+        // These are registered with @RegisterClass and loaded dynamically via ClassFactory
+        WebURLPartComponent,
+        ViewPartComponent,
+        QueryPartComponent,
+        ArtifactPartComponent
     ],
     imports: [
         CommonModule,
         FormsModule,
         SharedGenericModule,
-        NgTreesModule
+        NgTreesModule,
+        EntityViewerModule,
+        QueryGridModule,
+        ArtifactsModule
     ],
     exports: [
         // Main Component
         DashboardViewerComponent,
 
-        // Dialogs
+        // Generic Dialogs
         AddPanelDialogComponent,
-
-        // Config Dialogs
+        EditPartDialogComponent,
         ConfirmDialogComponent,
-        WebURLConfigDialogComponent,
-        ViewConfigDialogComponent,
-        QueryConfigDialogComponent,
-        ArtifactConfigDialogComponent,
 
-        // Config Panels (standalone form components)
+        // Config Panels - exported for potential direct use
         WebURLConfigPanelComponent,
         ViewConfigPanelComponent,
         QueryConfigPanelComponent,
-        ArtifactConfigPanelComponent
+        ArtifactConfigPanelComponent,
+
+        // Runtime Part Components - exported for potential direct use
+        WebURLPartComponent,
+        ViewPartComponent,
+        QueryPartComponent,
+        ArtifactPartComponent
     ]
 })
 export class DashboardViewerModule { }

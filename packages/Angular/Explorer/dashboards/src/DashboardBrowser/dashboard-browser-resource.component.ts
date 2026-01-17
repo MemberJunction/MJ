@@ -12,8 +12,7 @@ import {
     createDefaultDashboardConfig,
     DashboardPanel,
     PanelConfig,
-    BaseConfigDialog,
-    ConfigDialogResult
+    EditPartDialogResult
 } from '@memberjunction/ng-dashboard-viewer';
 
 export function LoadDashboardBrowserResource() {
@@ -373,10 +372,10 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public onPanelAdded(result: AddPanelResult): void {
         if (this.dashboardViewer) {
             this.dashboardViewer.addPanel(
-                result.partType.ID,
-                result.config,
-                result.title,
-                result.icon
+                result.PartType.ID,
+                result.Config,
+                result.Title,
+                result.Icon
             );
         }
         this.showAddPanelDialog = false;
@@ -419,13 +418,13 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Handle config dialog save
      */
-    public onConfigDialogSaved(result: ConfigDialogResult): void {
+    public onConfigDialogSaved(result: EditPartDialogResult): void {
         if (this.dashboardViewer && this.configDialogPanel) {
             this.dashboardViewer.updatePanelConfig(
                 this.configDialogPanel.id,
-                result.config,
-                result.title,
-                result.icon
+                result.Config,
+                result.Title,
+                result.Icon
             );
         }
         this.closeConfigDialog();

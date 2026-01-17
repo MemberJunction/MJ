@@ -7,12 +7,19 @@ import {
     OnDestroy,
     ViewChild,
     ElementRef,
-    ChangeDetectorRef
+    ChangeDetectorRef,
+    ApplicationRef,
+    Injector,
+    ComponentRef,
+    createComponent,
+    EnvironmentInjector,
+    Type
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
-import { DashboardEntity, DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { MJGlobal } from '@memberjunction/global';
+import { DashboardEngine, DashboardEntity, DashboardPartTypeEntity } from '@memberjunction/core-entities';
 import {
     DashboardConfigV2,
     DashboardPanel,
@@ -22,12 +29,13 @@ import {
     LayoutChangedEvent,
     createDefaultDashboardConfig,
     generatePanelId,
-    WebURLPanelConfig,
     ViewPanelConfig,
     QueryPanelConfig,
-    ArtifactPanelConfig
+    ArtifactPanelConfig,
+    WebURLPanelConfig
 } from '../models/dashboard-types';
 import { GoldenLayoutWrapperService, LayoutLocation } from '../services/golden-layout-wrapper.service';
+import { BaseDashboardPart } from '../parts/base-dashboard-part';
 
 /**
  * Event emitted when navigation is requested from a panel
@@ -60,7 +68,7 @@ export interface DashboardNavigationEvent {
     templateUrl: './dashboard-viewer.component.html',
     styleUrls: ['./dashboard-viewer.component.css']
 })
-export class DashboardViewerComponent implements OnInit, OnDestroy {
+export class DashboardViewerComponent implements OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -141,24 +149,29 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
     public hasUnsavedChanges = false;
 
     private readonly _destroy$ = new Subject<void>();
-    private readonly _panelComponents = new Map<string, HTMLElement>();
+    private readonly _panelComponents = new Map<string, { wrapper: HTMLElement; componentRef?: ComponentRef<BaseDashboardPart> }>();
     private _glService: GoldenLayoutWrapperService | null = null;
+
+    /** Promise that resolves when part types are loaded - used to ensure layout waits for part types */
+    private _partTypesLoaded: Promise<void> | null = null;
 
     // ========================================
     // Constructor
     // ========================================
 
     constructor(
-        private readonly cdr: ChangeDetectorRef
-    ) {}
+        private readonly cdr: ChangeDetectorRef,
+        private readonly appRef: ApplicationRef,
+        private readonly injector: Injector,
+        private readonly environmentInjector: EnvironmentInjector
+    ) {
+        // Store the promise so layout initialization can wait for it
+        this._partTypesLoaded = this.loadPartTypes();
+    }
 
     // ========================================
     // Lifecycle
     // ========================================
-
-    ngOnInit(): void {
-        this.loadPartTypes();
-    }
 
     ngOnDestroy(): void {
         this._destroy$.next();
@@ -189,9 +202,20 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
         icon?: string,
         location?: LayoutLocation
     ): Promise<void> {
-        if (!this.config || !this._glService) return;
+        console.log('[DashboardViewer] addPanel() called');
+        console.log('[DashboardViewer] partTypeId:', partTypeId);
+        console.log('[DashboardViewer] panelConfig:', panelConfig);
+        console.log('[DashboardViewer] title:', title);
+        console.log('[DashboardViewer] config exists:', !!this.config);
+        console.log('[DashboardViewer] _glService exists:', !!this._glService);
+
+        if (!this.config || !this._glService) {
+            console.log('[DashboardViewer] addPanel() early return - missing config or glService');
+            return;
+        }
 
         const partType = this.partTypes.find(pt => pt.ID === partTypeId);
+        console.log('[DashboardViewer] Found partType:', partType?.Name || 'NOT FOUND');
         if (!partType) {
             this.error.emit({ message: `Unknown panel type: ${partTypeId}` });
             return;
@@ -204,9 +228,22 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
             icon: icon || partType.Icon || 'fa-solid fa-window-maximize',
             config: panelConfig
         };
+        console.log('[DashboardViewer] Created panel:', panel);
 
         this.config.panels.push(panel);
+        console.log('[DashboardViewer] config.panels now has', this.config.panels.length, 'panels');
+
+        console.log('[DashboardViewer] Calling _glService.addPanel()');
         this._glService.addPanel(panel, location);
+        console.log('[DashboardViewer] _glService.addPanel() complete');
+
+        // Sync the layout config from Golden Layout to capture the new panel's position
+        // This is critical for persistence - without this, the new panel's layout info is lost
+        const currentLayout = this._glService.getLayoutConfig();
+        if (currentLayout) {
+            this.config.layout = currentLayout;
+            console.log('[DashboardViewer] Synced layout config after adding panel');
+        }
 
         this.markDirty();
     }
@@ -323,6 +360,15 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
 
         this.markDirty();
 
+        // Sync the layout config from Golden Layout before reinitializing
+        // This preserves all panels that were added dynamically
+        if (this._glService && this.config) {
+            const currentLayout = this._glService.getLayoutConfig();
+            if (currentLayout) {
+                this.config.layout = currentLayout;
+            }
+        }
+
         // Refresh the panel to show updated content
         if (this._glService) {
             this.initializeLayout();
@@ -348,17 +394,8 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
 
     private async loadPartTypes(): Promise<void> {
         try {
-            const rv = new RunView();
-            const result = await rv.RunView<DashboardPartTypeEntity>({
-                EntityName: 'MJ: Dashboard Part Types',
-                ExtraFilter: 'IsActive = 1',
-                OrderBy: 'SortOrder ASC',
-                ResultType: 'entity_object'
-            });
-
-            if (result.Success) {
-                this.partTypes = result.Results;
-            }
+            await DashboardEngine.Instance.Config(false);
+            this.partTypes = DashboardEngine.Instance.DashboardPartTypes;
         } catch (err) {
             console.error('Failed to load dashboard part types:', err);
         }
@@ -388,11 +425,17 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
         }
     }
 
-    private onDashboardChanged(): void {
+    private async onDashboardChanged(): Promise<void> {
         if (!this._dashboard) return;
 
         // Parse or create config
         this.config = this.parseOrCreateConfig();
+
+        // Wait for part types to be loaded before initializing layout
+        // This ensures partTypes array is populated when createPanelComponent is called
+        if (this._partTypesLoaded) {
+            await this._partTypesLoaded;
+        }
 
         // Initialize layout
         this.initializeLayout();
@@ -430,28 +473,44 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
     // ========================================
 
     private initializeLayout(): void {
-        if (!this.config || !this.layoutContainer?.nativeElement) return;
+        console.log('[DashboardViewer] initializeLayout() called');
+        console.log('[DashboardViewer] config:', this.config);
+        console.log('[DashboardViewer] layoutContainer:', !!this.layoutContainer?.nativeElement);
+
+        if (!this.config || !this.layoutContainer?.nativeElement) {
+            console.log('[DashboardViewer] initializeLayout() early return - missing config or container');
+            return;
+        }
+
+        console.log('[DashboardViewer] config.panels:', this.config.panels);
+        console.log('[DashboardViewer] config.layout:', this.config.layout);
 
         // Destroy existing layout
         this.destroyLayout();
 
         // Create new Golden Layout service
         this._glService = new GoldenLayoutWrapperService();
+        console.log('[DashboardViewer] Created GoldenLayoutWrapperService');
 
         // Subscribe to layout events
         this.subscribeToLayoutEvents();
 
         // Initialize Golden Layout
+        console.log('[DashboardViewer] Calling _glService.initialize()');
         this._glService.initialize(
             this.layoutContainer.nativeElement,
             this.config.layout,
-            (panelId, container) => this.createPanelComponent(panelId, container)
+            (panelId, container) => {
+                console.log('[DashboardViewer] Panel factory called for panelId:', panelId);
+                this.createPanelComponent(panelId, container);
+            }
         );
+        console.log('[DashboardViewer] initializeLayout() complete');
     }
 
     private destroyLayout(): void {
         // Destroy all panel components
-        this._panelComponents.forEach((componentRef, panelId) => {
+        this._panelComponents.forEach((entry, panelId) => {
             this.destroyPanelComponent(panelId);
         });
         this._panelComponents.clear();
@@ -522,10 +581,18 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
     // ========================================
 
     private createPanelComponent(panelId: string, container: HTMLElement): void {
-        const panel = this.config?.panels.find(p => p.id === panelId);
-        if (!panel) return;
+        console.log('[DashboardViewer] createPanelComponent() panelId:', panelId);
+        console.log('[DashboardViewer] Available panels in config:', this.config?.panels.map(p => ({ id: p.id, title: p.title })));
 
+        const panel = this.config?.panels.find(p => p.id === panelId);
+        if (!panel) {
+            console.log('[DashboardViewer] Panel not found in config for panelId:', panelId);
+            return;
+        }
+
+        console.log('[DashboardViewer] Found panel:', panel);
         const partType = this.partTypes.find(pt => pt.ID === panel.partTypeId);
+        console.log('[DashboardViewer] Part type:', partType?.Name || 'NOT FOUND');
 
         // Create the panel wrapper with header and content
         const wrapper = document.createElement('div');
@@ -541,14 +608,84 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
         content.className = 'dashboard-part-content';
         content.style.cssText = 'flex: 1; overflow: auto; min-height: 0;';
 
-        // Render part content based on type
-        this.renderPartContent(panel, content, partType);
+        // Try to create dynamic component via ClassFactory
+        const componentRef = this.createDynamicPartComponent(panel, partType, content);
+
+        if (!componentRef) {
+            // Fallback to static rendering if no DriverClass or component creation failed
+            this.renderPartContent(panel, content, partType);
+        }
 
         wrapper.appendChild(content);
         container.appendChild(wrapper);
 
         // Store reference for cleanup
-        this._panelComponents.set(panelId, wrapper);
+        this._panelComponents.set(panelId, { wrapper, componentRef: componentRef || undefined });
+    }
+
+    /**
+     * Create a dynamic part component using ClassFactory
+     */
+    private createDynamicPartComponent(
+        panel: DashboardPanel,
+        partType: DashboardPartTypeEntity | undefined,
+        container: HTMLElement
+    ): ComponentRef<BaseDashboardPart> | null {
+        if (!partType?.DriverClass) {
+            console.log('[DashboardViewer] No DriverClass for part type:', partType?.Name);
+            return null;
+        }
+
+        try {
+            console.log('[DashboardViewer] Creating dynamic component via ClassFactory:', partType.DriverClass);
+
+            // Use ClassFactory to create instance and get the component class
+            const partInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDashboardPart>(
+                BaseDashboardPart,
+                partType.DriverClass
+            );
+
+            if (!partInstance) {
+                console.warn('[DashboardViewer] ClassFactory returned null for:', partType.DriverClass);
+                return null;
+            }
+
+            // Get the Angular component class from the instance
+            // The constructor is a concrete class that extends BaseDashboardPart
+            const componentClass = (partInstance as object).constructor as Type<BaseDashboardPart>;
+
+            // Create the component dynamically
+            const componentRef = createComponent(componentClass, {
+                environmentInjector: this.environmentInjector,
+                elementInjector: this.injector
+            });
+
+            // Set inputs on the component
+            const instance = componentRef.instance;
+            instance.Panel = panel;
+            instance.PartType = partType;
+            instance.IsEditing = this.isEditing;
+
+            // Subscribe to events
+            instance.ConfigureRequested.subscribe(() => {
+                this.onConfigurePart(panel.id);
+            });
+            instance.RemoveRequested.subscribe(() => {
+                this.onRemovePart(panel.id);
+            });
+
+            // Attach component to DOM
+            container.appendChild(componentRef.location.nativeElement);
+
+            // Attach to Angular's change detection
+            this.appRef.attachView(componentRef.hostView);
+
+            console.log('[DashboardViewer] Successfully created dynamic component for:', partType.DriverClass);
+            return componentRef;
+        } catch (error) {
+            console.error('[DashboardViewer] Failed to create dynamic component:', error);
+            return null;
+        }
     }
 
     private createPartHeader(panel: DashboardPanel, panelId: string): HTMLElement {
@@ -696,35 +833,105 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
     }
 
     private renderViewPart(panel: DashboardPanel, container: HTMLElement, config: ViewPanelConfig): void {
-        const viewInfo = config.viewId ? `View ID: ${config.viewId}` : (config.entityName ? `Entity: ${config.entityName}` : 'Not configured');
+        if (!config.viewId && !config.entityName) {
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
+                    <i class="fa-solid fa-table" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
+                    <h4 style="margin: 0 0 8px 0; color: #333;">No View Selected</h4>
+                    <p style="margin: 0; font-size: 13px;">Click configure to select a view for this part.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const viewInfo = config.viewId ? config.viewId.substring(0, 8) + '...' : config.entityName;
+        const displayMode = config.displayMode === 'grid' ? 'Grid View' : config.displayMode === 'cards' ? 'Card View' : 'Timeline View';
         container.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
-                <i class="fa-solid fa-table" style="font-size: 48px; color: #5c6bc0; margin-bottom: 16px;"></i>
-                <h4 style="margin: 0 0 8px 0; color: #333;">View Part</h4>
-                <p style="margin: 0 0 4px 0; font-size: 13px;">${viewInfo}</p>
-                <p style="margin: 0; font-size: 12px; color: #999;">Display mode: ${config.displayMode}</p>
+            <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
+                <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fa-solid fa-table" style="font-size: 20px; color: #5c6bc0;"></i>
+                        <div>
+                            <div style="font-weight: 500; color: #333; font-size: 14px;">Entity View</div>
+                            <div style="font-size: 12px; color: #666;">${config.entityName || 'View ' + viewInfo}</div>
+                        </div>
+                        <span style="margin-left: auto; padding: 4px 10px; background: #e3f2fd; color: #1976d2; border-radius: 12px; font-size: 11px; font-weight: 500;">${displayMode}</span>
+                    </div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 24px;">
+                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                    <p style="margin: 0; font-size: 13px;">Entity grid loading...</p>
+                    <p style="margin: 8px 0 0 0; font-size: 11px; color: #bbb;">Full implementation pending Angular integration</p>
+                </div>
             </div>
         `;
     }
 
     private renderQueryPart(panel: DashboardPanel, container: HTMLElement, config: QueryPanelConfig): void {
-        const queryInfo = config.queryId || config.queryName || 'Not configured';
+        if (!config.queryId && !config.queryName) {
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
+                    <i class="fa-solid fa-database" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
+                    <h4 style="margin: 0 0 8px 0; color: #333;">No Query Selected</h4>
+                    <p style="margin: 0; font-size: 13px;">Click configure to select a query for this part.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const queryInfo = config.queryName || (config.queryId ? config.queryId.substring(0, 8) + '...' : 'Unknown');
         container.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
-                <i class="fa-solid fa-flask" style="font-size: 48px; color: #5c6bc0; margin-bottom: 16px;"></i>
-                <h4 style="margin: 0 0 8px 0; color: #333;">Query Part</h4>
-                <p style="margin: 0; font-size: 13px;">Query: ${queryInfo}</p>
+            <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
+                <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fa-solid fa-database" style="font-size: 20px; color: #5c6bc0;"></i>
+                        <div>
+                            <div style="font-weight: 500; color: #333; font-size: 14px;">Query Results</div>
+                            <div style="font-size: 12px; color: #666;">${queryInfo}</div>
+                        </div>
+                        <span style="margin-left: auto; padding: 4px 10px; background: #e8f5e9; color: #388e3c; border-radius: 12px; font-size: 11px; font-weight: 500;">${config.autoRefreshSeconds > 0 ? 'Refresh: ' + config.autoRefreshSeconds + 's' : 'Manual refresh'}</span>
+                    </div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 24px;">
+                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                    <p style="margin: 0; font-size: 13px;">Query grid loading...</p>
+                    <p style="margin: 8px 0 0 0; font-size: 11px; color: #bbb;">Full implementation pending Angular integration</p>
+                </div>
             </div>
         `;
     }
 
     private renderArtifactPart(panel: DashboardPanel, container: HTMLElement, config: ArtifactPanelConfig): void {
-        const artifactInfo = config.artifactId || 'Not configured';
+        if (!config.artifactId) {
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
+                    <i class="fa-solid fa-cube" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
+                    <h4 style="margin: 0 0 8px 0; color: #333;">No Artifact Selected</h4>
+                    <p style="margin: 0; font-size: 13px;">Click configure to select an artifact for this part.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const artifactInfo = config.artifactId.substring(0, 8) + '...';
+        const versionInfo = config.versionNumber ? `v${config.versionNumber}` : 'Latest';
         container.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
-                <i class="fa-solid fa-palette" style="font-size: 48px; color: #5c6bc0; margin-bottom: 16px;"></i>
-                <h4 style="margin: 0 0 8px 0; color: #333;">Artifact Part</h4>
-                <p style="margin: 0; font-size: 13px;">Artifact: ${artifactInfo}</p>
+            <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
+                <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fa-solid fa-cube" style="font-size: 20px; color: #5c6bc0;"></i>
+                        <div>
+                            <div style="font-weight: 500; color: #333; font-size: 14px;">Artifact</div>
+                            <div style="font-size: 12px; color: #666;">ID: ${artifactInfo}</div>
+                        </div>
+                        <span style="margin-left: auto; padding: 4px 10px; background: #fce4ec; color: #c2185b; border-radius: 12px; font-size: 11px; font-weight: 500;">${versionInfo}</span>
+                    </div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 24px;">
+                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                    <p style="margin: 0; font-size: 13px;">Artifact viewer loading...</p>
+                    <p style="margin: 8px 0 0 0; font-size: 11px; color: #bbb;">Full implementation pending Angular integration</p>
+                </div>
             </div>
         `;
     }
@@ -770,12 +977,26 @@ export class DashboardViewerComponent implements OnInit, OnDestroy {
     }
 
     private destroyPanelComponent(panelId: string): void {
-        // For placeholder implementation, just remove from the DOM if present
-        this._panelComponents.delete(panelId);
+        const entry = this._panelComponents.get(panelId);
+        if (entry) {
+            // Destroy the Angular component if present
+            if (entry.componentRef) {
+                this.appRef.detachView(entry.componentRef.hostView);
+                entry.componentRef.destroy();
+            }
+            this._panelComponents.delete(panelId);
+        }
     }
 
     private updatePanelEditModes(): void {
-        // For placeholder implementation, refresh the layout
+        // Update IsEditing on all dynamic components
+        this._panelComponents.forEach((entry) => {
+            if (entry.componentRef) {
+                entry.componentRef.instance.IsEditing = this.isEditing;
+            }
+        });
+
+        // Reinitialize layout to update headers (which show/hide edit buttons)
         if (this._glService) {
             this.initializeLayout();
         }

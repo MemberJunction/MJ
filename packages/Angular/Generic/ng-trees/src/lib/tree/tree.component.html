@@ -83,10 +83,10 @@
             </span>
         </span>
 
-        <!-- Leaf Spacer (to align with branches) -->
+        <!-- Leaf Spacer (to align with branches, only when not at root level) -->
         <span
             class="tree-node-leaf-spacer"
-            *ngIf="node.Type === 'leaf'">
+            *ngIf="node.Type === 'leaf' && node.Level > 0">
         </span>
 
         <!-- Icon -->
@@ -99,12 +99,8 @@
 
         <!-- Content -->
         <span class="tree-node-content">
-            <!-- Label -->
-            <span
-                class="tree-node-label"
-                [class.tree-node-label--match]="node.MatchesSearch">
-                {{ node.Label }}
-            </span>
+            <!-- Label with search highlight -->
+            <span class="tree-node-label" [innerHTML]="getHighlightedLabel(node)"></span>
 
             <!-- Description -->
             <span

@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { DashboardEntityExtended } from "../custom/DashboardEntityExtended";
-import { DashboardCategoryEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity } from "../generated/entity_subclasses";
+import { DashboardCategoryEntity, DashboardPartTypeEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity } from "../generated/entity_subclasses";
 
 /**
  * Caching of metadata for dashboards and related data
@@ -15,12 +15,19 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
     }
 
     private _dashboards: DashboardEntityExtended[];
+    private _partTypes: DashboardPartTypeEntity[];
     private _dashboardUserPreferences: DashboardUserPreferenceEntity[];
     private _dashboardCategories: DashboardCategoryEntity[];
     private _dashboardUserStates: DashboardUserStateEntity[];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
+            {
+                Type: 'entity',
+                EntityName: "MJ: Dashboard Part Types",
+                PropertyName: "_partTypes",
+                CacheLocal: true
+            },
             {
                 Type: 'entity',
                 EntityName: 'Dashboards',
@@ -51,6 +58,10 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
 
     public get Dashboards(): DashboardEntityExtended[] {
         return this._dashboards;
+    }
+
+    public get DashboardPartTypes(): DashboardPartTypeEntity[] {
+        return this._partTypes;
     }
 
     public get DashboardUserPreferences(): DashboardUserPreferenceEntity[] {

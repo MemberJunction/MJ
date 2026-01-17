@@ -251,7 +251,9 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Open the dropdown
      */
     public Open(): void {
+        console.log('[TreeDropdown] Open() called, Disabled:', this.Disabled, 'IsOpen:', this.IsOpen);
         if (this.Disabled || this.IsOpen) {
+            console.log('[TreeDropdown] Open() early return - already open or disabled');
             return;
         }
 
@@ -260,15 +262,20 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         this.BeforeDropdownOpen.emit(beforeEvent);
 
         if (beforeEvent.Cancel) {
+            console.log('[TreeDropdown] Open() cancelled by BeforeDropdownOpen event');
             return;
         }
 
+        console.log('[TreeDropdown] Setting IsOpen = true');
         this.IsOpen = true;
         this.calculatePosition();
+        console.log('[TreeDropdown] Position calculated:', this.Position);
         this.attachEventListeners();
+        console.log('[TreeDropdown] Event listeners attached');
 
         // Focus search input after opening
         setTimeout(() => {
+            console.log('[TreeDropdown] Focus timeout fired, EnableSearch:', this.EnableSearch, 'searchInput exists:', !!this.searchInput);
             if (this.EnableSearch && this.searchInput) {
                 this.searchInput.nativeElement.focus();
             }
@@ -281,6 +288,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         );
         this.AfterDropdownOpen.emit(afterEvent);
 
+        console.log('[TreeDropdown] Open() complete, calling detectChanges');
         this.cdr.detectChanges();
     }
 
@@ -288,7 +296,9 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Close the dropdown
      */
     public Close(reason: 'selection' | 'escape' | 'outsideClick' | 'programmatic' = 'programmatic'): void {
+        console.log('[TreeDropdown] Close() called with reason:', reason, 'IsOpen:', this.IsOpen);
         if (!this.IsOpen) {
+            console.log('[TreeDropdown] Close() early return - already closed');
             return;
         }
 
@@ -297,9 +307,11 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         this.BeforeDropdownClose.emit(beforeEvent);
 
         if (beforeEvent.Cancel) {
+            console.log('[TreeDropdown] Close() cancelled by BeforeDropdownClose event');
             return;
         }
 
+        console.log('[TreeDropdown] Setting IsOpen = false');
         this.IsOpen = false;
         this.SearchText = '';
         this.clearSearch();
@@ -309,6 +321,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         const afterEvent = new AfterDropdownCloseEventArgs(this, reason);
         this.AfterDropdownClose.emit(afterEvent);
 
+        console.log('[TreeDropdown] Close() complete');
         this.cdr.detectChanges();
     }
 
@@ -360,6 +373,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Handle trigger click
      */
     public onTriggerClick(): void {
+        console.log('[TreeDropdown] onTriggerClick(), Disabled:', this.Disabled, 'IsOpen:', this.IsOpen);
         if (!this.Disabled) {
             this.Toggle();
         }
@@ -437,6 +451,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Handle tree selection change
      */
     public onTreeSelectionChange(nodes: TreeNode[]): void {
+        console.log('[TreeDropdown] onTreeSelectionChange(), nodes.length:', nodes.length, 'SelectionMode:', this.SelectionMode);
         this.SelectedNodes = nodes;
 
         // Update value
@@ -446,7 +461,10 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
             this.SelectionChange.emit(nodes.length > 0 ? nodes[0] : null);
 
             // Close on selection in single mode (unless disabled)
-            if (this.DropdownConfig.CloseOnSelect !== false) {
+            // Only close if user actually selected something (not on empty selection from sync)
+            console.log('[TreeDropdown] CloseOnSelect:', this.DropdownConfig.CloseOnSelect, 'nodes.length:', nodes.length);
+            if (this.DropdownConfig.CloseOnSelect !== false && nodes.length > 0) {
+                console.log('[TreeDropdown] Closing due to selection');
                 this.Close('selection');
             }
         } else {
@@ -462,17 +480,25 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Handle tree data load events
      */
     public onTreeBeforeDataLoad(event: BeforeDataLoadEventArgs): void {
+        console.log('[TreeDropdown] onTreeBeforeDataLoad(), IsOpen:', this.IsOpen);
         this.IsLoading = true;
         this.BeforeDataLoad.emit(event);
         this.cdr.detectChanges();
     }
 
     public onTreeAfterDataLoad(event: AfterDataLoadEventArgs): void {
+        console.log('[TreeDropdown] onTreeAfterDataLoad(), Success:', event.Success, 'BranchCount:', event.BranchCount, 'LeafCount:', event.LeafCount);
+        console.log('[TreeDropdown] IsOpen at onTreeAfterDataLoad:', this.IsOpen);
         this.IsLoading = false;
         this.IsLoaded = true;
 
         // Sync selection after load - defer to next microtask to ensure ViewChild is resolved
         Promise.resolve().then(() => {
+            console.log('[TreeDropdown] Post-load sync, treeComponent exists:', !!this.treeComponent);
+            if (this.treeComponent) {
+                console.log('[TreeDropdown] treeComponent.Nodes.length:', this.treeComponent.Nodes.length);
+                console.log('[TreeDropdown] treeComponent.Nodes:', this.treeComponent.Nodes);
+            }
             this.syncValueToSelection();
             this.cdr.detectChanges();
         });
@@ -595,31 +621,46 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Attach event listeners for click outside, scroll, resize
      */
     private attachEventListeners(): void {
+        console.log('[TreeDropdown] attachEventListeners() called');
         // Click outside - defer with a small timeout to:
         // 1. Allow the opening click event to complete
         // 2. Ensure the dropdown panel DOM element is fully rendered
         // 3. Allow Angular change detection to complete
         if (this.DropdownConfig.CloseOnOutsideClick !== false) {
+            console.log('[TreeDropdown] Setting up click outside listener with 100ms delay');
             setTimeout(() => {
+                console.log('[TreeDropdown] Click outside timeout fired, IsOpen:', this.IsOpen);
                 // Only attach if still open (could have been closed in the meantime)
                 if (!this.IsOpen) {
+                    console.log('[TreeDropdown] Not attaching click listener - dropdown already closed');
                     return;
                 }
+                console.log('[TreeDropdown] Attaching click outside listener now');
                 this.clickOutsideListener = this.renderer.listen('document', 'click', (event: MouseEvent) => {
+                    const target = event.target as HTMLElement;
+                    console.log('[TreeDropdown] Document click detected, target:', target.tagName, target.className);
+                    console.log('[TreeDropdown] IsOpen:', this.IsOpen);
                     // Double check we're still open
                     if (!this.IsOpen) {
+                        console.log('[TreeDropdown] Click ignored - dropdown not open');
                         return;
                     }
-                    const target = event.target as HTMLElement;
                     const isInsideTrigger = this.triggerElement?.nativeElement?.contains(target);
                     // Check if click is inside the dropdown panel (rendered inline, not in portal)
                     const isInsideDropdown = this.dropdownPanel?.nativeElement?.contains(target);
+                    console.log('[TreeDropdown] isInsideTrigger:', isInsideTrigger, 'isInsideDropdown:', isInsideDropdown);
+                    console.log('[TreeDropdown] dropdownPanel exists:', !!this.dropdownPanel, 'dropdownPanel.nativeElement:', !!this.dropdownPanel?.nativeElement);
 
                     if (!isInsideTrigger && !isInsideDropdown) {
+                        console.log('[TreeDropdown] Click outside detected - closing');
                         this.Close('outsideClick');
+                    } else {
+                        console.log('[TreeDropdown] Click inside - not closing');
                     }
                 });
             }, 100); // 100ms delay to ensure DOM is stable
+        } else {
+            console.log('[TreeDropdown] CloseOnOutsideClick is disabled');
         }
 
         // Escape key
@@ -670,6 +711,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Handle escape key
      */
     private handleEscapeKey = (event: KeyboardEvent): void => {
+        console.log('[TreeDropdown] handleEscapeKey(), key:', event.key, 'IsOpen:', this.IsOpen);
         if (event.key === 'Escape' && this.IsOpen) {
             this.Close('escape');
         }
@@ -772,7 +814,9 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
             ? this._value
             : this._value ? [this._value] : [];
 
-        this.treeComponent.SelectNodes(ids);
+        // Pass emitChange=false to avoid emitting SelectionChange during sync
+        // This prevents unnecessary events and parent component confusion
+        this.treeComponent.SelectNodes(ids, false);
 
         // Use try-catch as defensive measure since tree component may not be fully ready
         try {

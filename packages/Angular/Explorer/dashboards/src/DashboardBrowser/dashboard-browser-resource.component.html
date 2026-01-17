@@ -136,17 +136,29 @@
     <!-- View/Edit Mode -->
     <ng-container *ngIf="mode === 'view' || mode === 'edit'">
         <!-- Viewer Header -->
-        <div class="viewer-header">
+        <div class="viewer-header" [class.editing]="mode === 'edit'">
             <div class="header-left">
                 <!-- Back button only in view mode -->
                 <button class="back-btn" *ngIf="mode === 'view'" (click)="backToList()">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
 
+                <!-- Edit mode: Add Part button on the left -->
+                <button
+                    class="btn-add-part"
+                    *ngIf="mode === 'edit'"
+                    (click)="openAddPartDialog()">
+                    <i class="fa-solid fa-plus"></i>
+                    Add Part
+                </button>
+
+                <!-- Separator in edit mode -->
+                <div class="header-separator" *ngIf="mode === 'edit'"></div>
+
                 <!-- View mode: static title -->
                 <h2 *ngIf="mode === 'view'">{{ selectedDashboard?.Name }}</h2>
 
-                <!-- Edit mode: editable name/description -->
+                <!-- Edit mode: editable name/description (compact inline style) -->
                 <div class="dashboard-info-edit" *ngIf="mode === 'edit'">
                     <input
                         type="text"
@@ -158,7 +170,7 @@
                         type="text"
                         class="dashboard-description-input"
                         [(ngModel)]="editingDescription"
-                        placeholder="Description (optional)">
+                        placeholder="Add a description...">
                 </div>
             </div>
             <div class="header-right">
@@ -171,14 +183,8 @@
                     <i class="fa-solid fa-edit"></i>
                 </button>
 
-                <!-- Edit mode: Add Part, Save, Cancel buttons -->
+                <!-- Edit mode: Save, Cancel buttons -->
                 <ng-container *ngIf="mode === 'edit'">
-                    <button
-                        class="btn-secondary"
-                        (click)="openAddPartDialog()">
-                        <i class="fa-solid fa-plus"></i>
-                        Add Part
-                    </button>
                     <button
                         class="btn-primary"
                         (click)="saveDashboard()">
@@ -186,7 +192,7 @@
                         Save
                     </button>
                     <button
-                        class="btn-secondary"
+                        class="btn-cancel"
                         (click)="cancelEdit()">
                         Cancel
                     </button>
@@ -215,52 +221,15 @@
             (cancelled)="onAddPanelCancelled()">
         </mj-add-panel-dialog>
 
-        <!-- Config Dialogs for each part type -->
-        <ng-container *ngIf="showConfigDialog && configDialogPartType">
-            <!-- WebURL Config Dialog -->
-            <mj-weburl-config-dialog
-                *ngIf="configDialogClass === 'WebURLPanelConfigDialog'"
-                [visible]="showConfigDialog"
-                [partType]="configDialogPartType"
-                [panel]="configDialogPanel"
-                [config]="configDialogPanel?.config || null"
-                (saved)="onConfigDialogSaved($event)"
-                (cancelled)="onConfigDialogCancelled()">
-            </mj-weburl-config-dialog>
-
-            <!-- View Config Dialog -->
-            <mj-view-config-dialog
-                *ngIf="configDialogClass === 'ViewPanelConfigDialog'"
-                [visible]="showConfigDialog"
-                [partType]="configDialogPartType"
-                [panel]="configDialogPanel"
-                [config]="configDialogPanel?.config || null"
-                (saved)="onConfigDialogSaved($event)"
-                (cancelled)="onConfigDialogCancelled()">
-            </mj-view-config-dialog>
-
-            <!-- Query Config Dialog -->
-            <mj-query-config-dialog
-                *ngIf="configDialogClass === 'QueryPanelConfigDialog'"
-                [visible]="showConfigDialog"
-                [partType]="configDialogPartType"
-                [panel]="configDialogPanel"
-                [config]="configDialogPanel?.config || null"
-                (saved)="onConfigDialogSaved($event)"
-                (cancelled)="onConfigDialogCancelled()">
-            </mj-query-config-dialog>
-
-            <!-- Artifact Config Dialog -->
-            <mj-artifact-config-dialog
-                *ngIf="configDialogClass === 'ArtifactPanelConfigDialog'"
-                [visible]="showConfigDialog"
-                [partType]="configDialogPartType"
-                [panel]="configDialogPanel"
-                [config]="configDialogPanel?.config || null"
-                (saved)="onConfigDialogSaved($event)"
-                (cancelled)="onConfigDialogCancelled()">
-            </mj-artifact-config-dialog>
-        </ng-container>
+        <!-- Generic Edit Part Dialog - dynamically loads config panels via ClassFactory -->
+        <mj-edit-part-dialog
+            [Visible]="showConfigDialog"
+            [PartType]="configDialogPartType"
+            [Panel]="configDialogPanel"
+            [Config]="configDialogPanel?.config || null"
+            (Saved)="onConfigDialogSaved($event)"
+            (Cancelled)="onConfigDialogCancelled()">
+        </mj-edit-part-dialog>
 
         <!-- Remove Part Confirmation Dialog -->
         <mj-confirm-dialog

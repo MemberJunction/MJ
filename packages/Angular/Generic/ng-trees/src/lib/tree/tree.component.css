@@ -238,10 +238,12 @@
     outline-offset: -2px;
 }
 
-.tree-node--match .tree-node-label {
+/* Search highlight for matching text portion */
+.tree-search-highlight {
     background: var(--tree-node-match-bg);
-    padding: 1px 4px;
-    border-radius: 3px;
+    padding: 1px 2px;
+    border-radius: 2px;
+    font-weight: 500;
 }
 
 /* ========================================

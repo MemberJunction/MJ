@@ -2,6 +2,12 @@
  * Dashboard Viewer Component Styles
  */
 
+:host {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
 .dashboard-viewer {
     display: flex;
     flex-direction: column;
@@ -123,6 +129,9 @@
     position: relative;
     overflow: hidden;
     min-height: 0;
+    /* Ensure the container has explicit dimensions for Golden Layout */
+    width: 100%;
+    height: 100%;
 }
 
 /* ========================================
@@ -130,9 +139,11 @@
    These are required for Golden Layout 2.6.0
    ======================================== */
 
-/* Main container */
+/* Main container - ensure it takes full space */
 :host ::ng-deep .lm_goldenlayout {
     background: var(--dashboard-bg, #f5f5f5);
+    width: 100% !important;
+    height: 100% !important;
 }
 
 /* Row and column containers */
@@ -143,6 +154,8 @@
 
 /* Stack (tabbed container) */
 :host ::ng-deep .lm_stack {
+    display: flex !important;
+    flex-direction: column;
     background: var(--dashboard-panel-bg, #fff);
     border: 1px solid var(--dashboard-panel-border, #e0e0e0);
     border-radius: 6px;
@@ -150,15 +163,25 @@
     margin: 4px;
 }
 
+/* Ensure items container fills remaining space */
+:host ::ng-deep .lm_items {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+}
+
 /* Tab header bar */
 :host ::ng-deep .lm_header {
-    display: flex;
+    display: flex !important;
     align-items: stretch;
     height: 36px;
+    min-height: 36px;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-bottom: 1px solid var(--dashboard-panel-border, #e0e0e0);
-    overflow: hidden;
+    overflow: visible;
     user-select: none;
+    position: relative;
+    z-index: 1;
 }
 
 /* Tab strip container */

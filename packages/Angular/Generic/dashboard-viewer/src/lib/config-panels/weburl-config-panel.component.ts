@@ -7,7 +7,7 @@ import { PanelConfig, WebURLPanelConfig, createDefaultWebURLPanelConfig } from '
  * Configuration panel for WebURL parts.
  * Contains only the form content - no dialog chrome.
  */
-@RegisterClass(BaseConfigPanel, 'WebURLConfigPanel')
+@RegisterClass(BaseConfigPanel, 'WebURLPanelConfigDialog')
 @Component({
     selector: 'mj-weburl-config-panel',
     templateUrl: './weburl-config-panel.component.html',

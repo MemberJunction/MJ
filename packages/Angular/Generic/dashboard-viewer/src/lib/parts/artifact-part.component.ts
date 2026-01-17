@@ -1,0 +1,214 @@
+import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@angular/core';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseDashboardPart } from './base-dashboard-part';
+import { ArtifactPanelConfig } from '../models/dashboard-types';
+import { UserInfo } from '@memberjunction/core';
+import { Subject } from 'rxjs';
+
+/**
+ * Runtime renderer for Artifact dashboard parts.
+ * Displays artifacts using mj-artifact-viewer-panel including reports, charts, and AI-generated content.
+ */
+@RegisterClass(BaseDashboardPart, 'ArtifactPanelRenderer')
+@Component({
+    selector: 'mj-artifact-part',
+    template: `
+        <div class="artifact-part" [class.loading]="IsLoading" [class.error]="ErrorMessage">
+            <!-- Loading state -->
+            <div class="loading-state" *ngIf="IsLoading">
+                <mj-loading text="Loading artifact..."></mj-loading>
+            </div>
+
+            <!-- Error state -->
+            <div class="error-state" *ngIf="ErrorMessage && !IsLoading">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                <span>{{ ErrorMessage }}</span>
+            </div>
+
+            <!-- No artifact configured -->
+            <div class="empty-state" *ngIf="!IsLoading && !ErrorMessage && !hasArtifact">
+                <i class="fa-solid fa-palette"></i>
+                <h4>No Artifact Selected</h4>
+                <p>Click the configure button to select an artifact for this part.</p>
+            </div>
+
+            <!-- Artifact Viewer Panel -->
+            <mj-artifact-viewer-panel
+                *ngIf="!IsLoading && !ErrorMessage && hasArtifact && artifactId"
+                [artifactId]="artifactId"
+                [currentUser]="currentUser"
+                [environmentId]="environmentId"
+                [versionNumber]="versionNumber"
+                [showSaveToCollection]="false"
+                [viewContext]="null"
+                [canShare]="false"
+                [canEdit]="false"
+                [isMaximized]="false"
+                [refreshTrigger]="refreshTrigger"
+                (navigateToLink)="onNavigateToLink($event)"
+                (openEntityRecord)="onOpenEntityRecord($event)">
+            </mj-artifact-viewer-panel>
+        </div>
+    `,
+    styles: [`
+        :host {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .artifact-part {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+        }
+
+        .loading-state,
+        .error-state,
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            text-align: center;
+            padding: 24px;
+        }
+
+        .error-state i,
+        .empty-state i {
+            font-size: 48px;
+            color: #ccc;
+            margin-bottom: 16px;
+        }
+
+        .error-state i {
+            color: #d32f2f;
+        }
+
+        .empty-state h4 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+
+        .empty-state p {
+            margin: 0;
+            font-size: 13px;
+        }
+
+        mj-artifact-viewer-panel {
+            flex: 1;
+            min-height: 0;
+        }
+    `]
+})
+export class ArtifactPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
+    /**
+     * Current user - required by the artifact viewer panel.
+     * Should be provided by the dashboard host or retrieved from a service.
+     */
+    @Input() CurrentUser: UserInfo | null = null;
+
+    /**
+     * Environment ID - required by the artifact viewer panel.
+     * Should be provided by the dashboard host.
+     */
+    @Input() EnvironmentId: string = '';
+
+    public hasArtifact = false;
+    public artifactId: string | null = null;
+    public versionNumber: number | undefined;
+    public refreshTrigger = new Subject<{ artifactId: string; versionNumber: number }>();
+
+    // Expose for template
+    public get currentUser(): UserInfo {
+        // Return a default user if not provided - the artifact viewer will handle this
+        return this.CurrentUser || ({} as UserInfo);
+    }
+
+    public get environmentId(): string {
+        return this.EnvironmentId || '';
+    }
+
+    constructor(cdr: ChangeDetectorRef) {
+        super(cdr);
+    }
+
+    ngAfterViewInit(): void {
+        if (this.Panel) {
+            this.loadContent();
+        }
+    }
+
+    public async loadContent(): Promise<void> {
+        const config = this.getConfig<ArtifactPanelConfig>();
+
+        if (!config?.artifactId) {
+            this.hasArtifact = false;
+            this.cdr.detectChanges();
+            return;
+        }
+
+        this.setLoading(true);
+
+        try {
+            // Set artifact ID and version from config
+            this.artifactId = config.artifactId;
+            this.versionNumber = config.versionNumber;
+            this.hasArtifact = true;
+
+            this.setLoading(false);
+        } catch (error) {
+            this.setError(error instanceof Error ? error.message : 'Failed to load artifact');
+        }
+    }
+
+    /**
+     * Refresh the artifact display
+     */
+    public refresh(): void {
+        if (this.artifactId && this.versionNumber) {
+            this.refreshTrigger.next({
+                artifactId: this.artifactId,
+                versionNumber: this.versionNumber
+            });
+        }
+    }
+
+    public onNavigateToLink(event: { type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string }): void {
+        // Emit data change event for navigation
+        this.emitDataChanged({
+            type: 'navigate-to-link',
+            linkType: event.type,
+            linkId: event.id,
+            artifactId: event.artifactId,
+            versionNumber: event.versionNumber,
+            versionId: event.versionId
+        });
+    }
+
+    public onOpenEntityRecord(event: { entityName: string; compositeKey: unknown }): void {
+        // Emit data change event for entity record navigation
+        this.emitDataChanged({
+            type: 'open-entity-record',
+            entityName: event.entityName,
+            compositeKey: event.compositeKey
+        });
+    }
+
+    protected override cleanup(): void {
+        this.refreshTrigger.complete();
+        this.artifactId = null;
+        this.versionNumber = undefined;
+    }
+}
+
+/**
+ * Tree-shaking prevention function
+ */
+export function LoadArtifactPart() {
+    // Prevents tree-shaking of the component
+}

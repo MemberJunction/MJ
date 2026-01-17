@@ -386,6 +386,21 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   // ========================================
 
   /**
+   * Get the effective entity - uses entity input if provided, otherwise derives from viewEntity
+   * This allows callers to provide just a viewEntity without explicitly setting the entity input
+   */
+  get effectiveEntity(): EntityInfo | null {
+    if (this.entity) {
+      return this.entity;
+    }
+    // Auto-derive from viewEntity if available
+    if (this.viewEntity) {
+      return this.viewEntity.ViewEntityInfo || null;
+    }
+    return null;
+  }
+
+  /**
    * Get the effective view mode (external or internal)
    */
   get effectiveViewMode(): EntityViewMode {
@@ -454,19 +469,20 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * which would cause the grid to reinitialize
    */
   get gridParams(): RunViewParams | null {
-    if (!this.entity) {
+    const entity = this.effectiveEntity;
+    if (!entity) {
       return null;
     }
 
     // Check if we need to recreate the params object
-    const entityChanged = this._lastGridParamsEntity !== this.entity.Name;
+    const entityChanged = this._lastGridParamsEntity !== entity.Name;
     const viewEntityChanged = this._lastGridParamsViewEntity !== this.viewEntity;
 
     if (entityChanged || viewEntityChanged || !this._cachedGridParams) {
-      this._lastGridParamsEntity = this.entity.Name;
+      this._lastGridParamsEntity = entity.Name;
       this._lastGridParamsViewEntity = this.viewEntity ?? null;
       this._cachedGridParams = {
-        EntityName: this.entity.Name,
+        EntityName: entity.Name,
         ViewEntity: this.viewEntity || undefined
       };
     }
@@ -847,7 +863,8 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Load data for the current entity with server-side filtering/sorting/pagination
    */
   public async loadData(): Promise<void> {
-    if (!this.entity) {
+    const entity = this.effectiveEntity;
+    if (!entity) {
       this.internalRecords = [];
       this.totalRecordCount = 0;
       this.filteredRecordCount = 0;
@@ -867,7 +884,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     this.isLoading = true;
     this.pagination.isLoading = true;
     this.loadingMessage = this.isInitialLoad
-      ? `Loading ${this.entity.Name}...`
+      ? `Loading ${entity.Name}...`
       : 'Loading more records...';
     this.cdr.detectChanges();
 
@@ -895,7 +912,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       const extraFilter = this.viewEntity?.WhereClause || undefined;
 
       const result = await rv.RunView({
-        EntityName: this.entity.Name,
+        EntityName: entity.Name,
         ResultType: 'entity_object',
         MaxRows: config.pageSize,
         StartRow: startRow,
@@ -1098,11 +1115,12 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Maps to recordSelected event for parent components
    */
   onDataGridRowClick(event: AfterRowClickEventArgs): void {
-    if (!this.entity || !event.row) return;
+    const entity = this.effectiveEntity;
+    if (!entity || !event.row) return;
 
     this.recordSelected.emit({
       record: event.row,
-      entity: this.entity,
+      entity: entity,
       compositeKey: event.row.PrimaryKey
     });
   }
@@ -1112,11 +1130,12 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Maps to recordOpened event for parent components
    */
   onDataGridRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
-    if (!this.entity || !event.row) return;
+    const entity = this.effectiveEntity;
+    if (!entity || !event.row) return;
 
     this.recordOpened.emit({
       record: event.row,
-      entity: this.entity,
+      entity: entity,
       compositeKey: event.row.PrimaryKey
     });
   }
@@ -1211,10 +1230,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   onTimelineEventClick(event: AfterEventClickArgs): void {
     const record = event.event.entity as BaseEntity;
-    if (record && this.entity) {
+    const entity = this.effectiveEntity;
+    if (record && entity) {
       this.recordSelected.emit({
         record,
-        entity: this.entity,
+        entity: entity,
         compositeKey: record.PrimaryKey
       });
     }

@@ -143,6 +143,10 @@ export class GoldenLayoutWrapperService {
         config: GoldenLayoutConfig,
         componentFactory: PanelComponentFactory
     ): void {
+        console.log('[GLWrapper] initialize() called');
+        console.log('[GLWrapper] container:', container);
+        console.log('[GLWrapper] config:', config);
+
         this._container = container;
         this._config = config;
         this._componentFactory = componentFactory;
@@ -150,9 +154,11 @@ export class GoldenLayoutWrapperService {
         // Import Golden Layout dynamically at runtime
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { VirtualLayout } = require('golden-layout');
+        console.log('[GLWrapper] VirtualLayout imported:', !!VirtualLayout);
 
         // Convert our config to GL format
         const glConfig = this.convertToGLConfig(config);
+        console.log('[GLWrapper] Converted GL config:', glConfig);
 
         // Create Virtual Layout with bind/unbind component handlers
         this._layout = new VirtualLayout(
@@ -184,12 +190,18 @@ export class GoldenLayoutWrapperService {
         });
 
         // Load the configuration
+        console.log('[GLWrapper] Calling loadLayout()');
         this._layout.loadLayout(glConfig);
+        console.log('[GLWrapper] loadLayout() complete');
 
         // Set initial size
         const rect = container.getBoundingClientRect();
+        console.log('[GLWrapper] Container rect:', rect);
         if (rect.width > 0 && rect.height > 0) {
             this._layout.setSize(rect.width, rect.height);
+            console.log('[GLWrapper] Set size to', rect.width, 'x', rect.height);
+        } else {
+            console.log('[GLWrapper] Container has no size yet, will retry');
         }
 
         // Retry size updates for timing issues with flexbox
@@ -199,6 +211,7 @@ export class GoldenLayoutWrapperService {
 
         this._initialized = true;
         this.updatePanelsList();
+        console.log('[GLWrapper] initialize() complete, panels:', this.getPanelIds());
     }
 
     /**
@@ -246,7 +259,14 @@ export class GoldenLayoutWrapperService {
      * Add a panel to the layout
      */
     public addPanel(panel: DashboardPanel, location?: LayoutLocation): void {
-        if (!this._layout) return;
+        console.log('[GLWrapper] addPanel() called, panel:', panel);
+        console.log('[GLWrapper] _layout exists:', !!this._layout);
+        console.log('[GLWrapper] Current panels before add:', this.getPanelIds());
+
+        if (!this._layout) {
+            console.log('[GLWrapper] addPanel() early return - no layout');
+            return;
+        }
 
         const state: DashboardPanelState = {
             panelId: panel.id,
@@ -254,23 +274,47 @@ export class GoldenLayoutWrapperService {
             icon: panel.icon,
             partTypeId: panel.partTypeId
         };
+        console.log('[GLWrapper] Panel state:', state);
 
         try {
-            // Try to find existing stack to add to
-            const existingStack = this.findFirstStack();
+            // Create the component config
+            const componentConfig: GLComponentItemConfig = {
+                type: 'component',
+                componentType: 'dashboard-panel',
+                componentState: state as unknown as Record<string, unknown>,
+                title: panel.title,
+                isClosable: true
+            };
 
-            if (existingStack) {
-                // Add to existing stack (creates tabbed interface)
-                const componentConfig: GLComponentItemConfig = {
-                    type: 'component',
-                    componentType: 'dashboard-panel',
-                    componentState: state as unknown as Record<string, unknown>,
-                    title: panel.title,
-                    isClosable: true
-                };
-                existingStack.addItem(componentConfig);
+            // Try to find an existing stack or row to add to
+            const rootItem = this._layout.rootItem;
+            console.log('[GLWrapper] rootItem:', rootItem);
+            console.log('[GLWrapper] rootItem?.type:', rootItem?.type);
+            console.log('[GLWrapper] rootItem?.contentItems?.length:', rootItem?.contentItems?.length);
+
+            if (rootItem && rootItem.contentItems && rootItem.contentItems.length > 0) {
+                // Layout has existing content - find a place to add the new component
+                // First try to find a stack to add as a tab
+                const stack = this.findFirstStack();
+                if (stack) {
+                    console.log('[GLWrapper] Found stack, adding item to stack');
+                    stack.addItem(componentConfig);
+                } else if (rootItem.type === 'row' || rootItem.type === 'column') {
+                    // Add directly to the root row/column
+                    console.log('[GLWrapper] Adding item to root', rootItem.type);
+                    rootItem.addItem(componentConfig);
+                } else {
+                    // Fallback to addComponent
+                    console.log('[GLWrapper] Fallback to addComponent()');
+                    this._layout.addComponent(
+                        'dashboard-panel',
+                        state as unknown as Record<string, unknown>,
+                        panel.title
+                    );
+                }
             } else {
-                // No existing stack - use addComponent which will create one
+                // Layout is empty - use addComponent which will create the necessary structure
+                console.log('[GLWrapper] Layout empty, using addComponent()');
                 this._layout.addComponent(
                     'dashboard-panel',
                     state as unknown as Record<string, unknown>,
@@ -280,8 +324,9 @@ export class GoldenLayoutWrapperService {
 
             this.updatePanelsList();
             this.emitLayoutChanged('resize');
+            console.log('[GLWrapper] addPanel() complete, panels now:', this.getPanelIds());
         } catch (error) {
-            console.error('GoldenLayoutWrapperService: Failed to add panel', error);
+            console.error('[GLWrapper] Failed to add panel', error);
         }
     }
 
@@ -394,7 +439,13 @@ export class GoldenLayoutWrapperService {
         container: GLComponentContainer,
         itemConfig: { componentState: Record<string, unknown> }
     ): { component: HTMLElement; virtual: boolean } {
+        console.log('[GLWrapper] bindComponentEventListener() called');
+        console.log('[GLWrapper] container.state:', container.state);
+        console.log('[GLWrapper] container.element:', container.element);
+        console.log('[GLWrapper] itemConfig:', itemConfig);
+
         const state = container.state as unknown as DashboardPanelState;
+        console.log('[GLWrapper] Parsed state:', state);
 
         // Create container element for the panel
         const element = document.createElement('div');
@@ -402,12 +453,17 @@ export class GoldenLayoutWrapperService {
         element.style.cssText = 'width: 100%; height: 100%; overflow: hidden; background: #fff;';
 
         if (state?.panelId) {
+            console.log('[GLWrapper] Registering panel:', state.panelId);
             this._containerMap.set(state.panelId, container);
             this._panelElements.set(state.panelId, element);
 
             // Call the factory to render panel content
             if (this._componentFactory) {
+                console.log('[GLWrapper] Calling componentFactory for:', state.panelId);
                 this._componentFactory(state.panelId, element);
+                console.log('[GLWrapper] componentFactory complete, element.children.length:', element.children.length);
+            } else {
+                console.log('[GLWrapper] WARNING: No componentFactory set!');
             }
 
             // Listen for show events
@@ -422,9 +478,18 @@ export class GoldenLayoutWrapperService {
                 this.onPanelClosed.next(state.panelId);
                 this.updatePanelsList();
             });
+        } else {
+            console.log('[GLWrapper] WARNING: No panelId in state!');
         }
 
+        // IMPORTANT: For VirtualLayout, we must manually append to container.element
+        // The returned component is not automatically appended by GL VirtualLayout
+        console.log('[GLWrapper] Appending element to container.element');
+        container.element.appendChild(element);
+        console.log('[GLWrapper] container.element.children.length:', container.element.children.length);
+
         // Return the bindable component object
+        console.log('[GLWrapper] Returning bound component element');
         return {
             component: element,
             virtual: false // false means actual DOM content

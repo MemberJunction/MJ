@@ -314,7 +314,7 @@ export function createDefaultTreeNode(partial: Partial<TreeNode> = {}): TreeNode
         Level: 0,
         Loading: false,
         Visible: true,
-        MatchesSearch: true,
+        MatchesSearch: false,
         EntityName: '',
         ...partial
     };

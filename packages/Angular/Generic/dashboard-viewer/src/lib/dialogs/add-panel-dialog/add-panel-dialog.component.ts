@@ -4,27 +4,28 @@ import {
     Output,
     EventEmitter,
     ChangeDetectorRef,
-    ViewChild
+    ViewChild,
+    ViewContainerRef,
+    ComponentRef,
+    AfterViewInit,
+    OnDestroy
 } from '@angular/core';
+import { MJGlobal } from '@memberjunction/global';
 import { DashboardPartTypeEntity } from '@memberjunction/core-entities';
 import {
     PanelConfig,
     createDefaultCustomPanelConfig
 } from '../../models/dashboard-types';
 import { BaseConfigPanel, ConfigPanelResult } from '../../config-panels/base-config-panel';
-import { WebURLConfigPanelComponent } from '../../config-panels/weburl-config-panel.component';
-import { ViewConfigPanelComponent } from '../../config-panels/view-config-panel.component';
-import { QueryConfigPanelComponent } from '../../config-panels/query-config-panel.component';
-import { ArtifactConfigPanelComponent } from '../../config-panels/artifact-config-panel.component';
 
 /**
  * Result when a panel is added
  */
 export interface AddPanelResult {
-    partType: DashboardPartTypeEntity;
-    config: PanelConfig;
-    title: string;
-    icon?: string;
+    PartType: DashboardPartTypeEntity;
+    Config: PanelConfig;
+    Title: string;
+    Icon?: string;
 }
 
 /**
@@ -34,14 +35,17 @@ type DialogStep = 'select-type' | 'configure';
 
 /**
  * Dialog for adding a new part to the dashboard.
- * Two-step flow: first select the part type, then configure using embedded config panels.
+ * Two-step flow: first select the part type, then configure using dynamically loaded config panels.
+ *
+ * Config panels are loaded via ClassFactory using DashboardPartType.ConfigDialogClass,
+ * allowing new part types to be added without modifying this component.
  */
 @Component({
     selector: 'mj-add-panel-dialog',
     templateUrl: './add-panel-dialog.component.html',
     styleUrls: ['./add-panel-dialog.component.css']
 })
-export class AddPanelDialogComponent {
+export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -50,7 +54,19 @@ export class AddPanelDialogComponent {
     @Input() partTypes: DashboardPartTypeEntity[] = [];
 
     /** Whether the dialog is visible */
-    @Input() visible = false;
+    @Input()
+    set visible(value: boolean) {
+        const previous = this._visible;
+        this._visible = value;
+        if (!value && previous) {
+            // Dialog closing - cleanup
+            this.destroyConfigPanel();
+        }
+    }
+    get visible(): boolean {
+        return this._visible;
+    }
+    private _visible = false;
 
     // ========================================
     // Outputs
@@ -63,13 +79,11 @@ export class AddPanelDialogComponent {
     @Output() cancelled = new EventEmitter<void>();
 
     // ========================================
-    // ViewChild references to config panels
+    // ViewChild for dynamic component loading
     // ========================================
 
-    @ViewChild(WebURLConfigPanelComponent) webUrlPanel?: WebURLConfigPanelComponent;
-    @ViewChild(ViewConfigPanelComponent) viewPanel?: ViewConfigPanelComponent;
-    @ViewChild(QueryConfigPanelComponent) queryPanel?: QueryConfigPanelComponent;
-    @ViewChild(ArtifactConfigPanelComponent) artifactPanel?: ArtifactConfigPanelComponent;
+    @ViewChild('configPanelContainer', { read: ViewContainerRef, static: false })
+    configPanelContainer!: ViewContainerRef;
 
     // ========================================
     // State
@@ -84,11 +98,35 @@ export class AddPanelDialogComponent {
     /** Whether the Add Part button should be enabled */
     public canAddPart = false;
 
+    /** Reference to dynamically created config panel */
+    private configPanelRef: ComponentRef<BaseConfigPanel> | null = null;
+
+    /** Whether the view has been initialized */
+    private viewInitialized = false;
+
+    /** Error loading the config panel */
+    public loadError: string | null = null;
+
+    /** Whether config panel is loading */
+    public isLoadingPanel = false;
+
     // ========================================
     // Constructor
     // ========================================
 
     constructor(private readonly cdr: ChangeDetectorRef) {}
+
+    // ========================================
+    // Lifecycle
+    // ========================================
+
+    ngAfterViewInit(): void {
+        this.viewInitialized = true;
+    }
+
+    ngOnDestroy(): void {
+        this.destroyConfigPanel();
+    }
 
     // ========================================
     // Public Methods
@@ -102,6 +140,9 @@ export class AddPanelDialogComponent {
         this.selectedPartType = null;
         this.currentResult = null;
         this.canAddPart = false;
+        this.loadError = null;
+        this.isLoadingPanel = false;
+        this.destroyConfigPanel();
         this.cdr.detectChanges();
     }
 
@@ -112,8 +153,12 @@ export class AddPanelDialogComponent {
         this.selectedPartType = partType;
         this.currentResult = null;
         this.canAddPart = false;
+        this.loadError = null;
         this.step = 'configure';
         this.cdr.detectChanges();
+
+        // Load the config panel after view updates
+        setTimeout(() => this.loadConfigPanel(), 0);
     }
 
     /**
@@ -123,6 +168,8 @@ export class AddPanelDialogComponent {
         this.step = 'select-type';
         this.currentResult = null;
         this.canAddPart = false;
+        this.loadError = null;
+        this.destroyConfigPanel();
         this.cdr.detectChanges();
     }
 
@@ -141,38 +188,36 @@ export class AddPanelDialogComponent {
     public addPart(): void {
         if (!this.selectedPartType) return;
 
-        // Get the active config panel
-        const panel = this.getActiveConfigPanel();
-        if (!panel) {
-            // Handle custom/unknown types without a panel
+        // Get result from the dynamic panel
+        if (this.configPanelRef) {
+            const panel = this.configPanelRef.instance;
+            const result = panel.getResult();
+
+            if (!result.isValid) {
+                this.currentResult = result;
+                this.canAddPart = false;
+                this.cdr.detectChanges();
+                return;
+            }
+
             this.panelAdded.emit({
-                partType: this.selectedPartType,
-                config: createDefaultCustomPanelConfig(),
-                title: this.selectedPartType.Name,
-                icon: this.selectedPartType.Icon || 'fa-solid fa-puzzle-piece'
+                PartType: this.selectedPartType,
+                Config: result.config,
+                Title: result.title,
+                Icon: result.icon || this.selectedPartType.Icon || 'fa-solid fa-puzzle-piece'
             });
+
             this.reset();
             return;
         }
 
-        // Get the final result from the panel
-        const result = panel.getResult();
-
-        if (!result.isValid) {
-            // Validation failed - don't emit
-            this.currentResult = result;
-            this.canAddPart = false;
-            this.cdr.detectChanges();
-            return;
-        }
-
+        // Handle types without a config panel
         this.panelAdded.emit({
-            partType: this.selectedPartType,
-            config: result.config,
-            title: result.title,
-            icon: result.icon || this.selectedPartType.Icon || 'fa-solid fa-puzzle-piece'
+            PartType: this.selectedPartType,
+            Config: createDefaultCustomPanelConfig(),
+            Title: this.selectedPartType.Name,
+            Icon: this.selectedPartType.Icon || 'fa-solid fa-puzzle-piece'
         });
-
         this.reset();
     }
 
@@ -195,12 +240,10 @@ export class AddPanelDialogComponent {
     }
 
     /**
-     * Check if the selected part type is a known type with a config panel
+     * Check if the selected part type has a config panel class
      */
-    public isKnownPartType(): boolean {
-        if (!this.selectedPartType) return false;
-        const name = this.selectedPartType.Name;
-        return ['WebURL', 'View', 'Query', 'Artifact'].includes(name);
+    public hasConfigPanel(): boolean {
+        return !!this.selectedPartType?.ConfigDialogClass;
     }
 
     // ========================================
@@ -208,22 +251,78 @@ export class AddPanelDialogComponent {
     // ========================================
 
     /**
-     * Get the currently active config panel based on selected part type
+     * Dynamically load the config panel component
      */
-    private getActiveConfigPanel(): BaseConfigPanel | null {
-        if (!this.selectedPartType) return null;
+    private loadConfigPanel(): void {
+        this.destroyConfigPanel();
 
-        switch (this.selectedPartType.Name) {
-            case 'WebURL':
-                return this.webUrlPanel || null;
-            case 'View':
-                return this.viewPanel || null;
-            case 'Query':
-                return this.queryPanel || null;
-            case 'Artifact':
-                return this.artifactPanel || null;
-            default:
-                return null;
+        if (!this.selectedPartType?.ConfigDialogClass) {
+            // No config panel for this type - that's okay, use defaults
+            this.canAddPart = true;
+            this.cdr.detectChanges();
+            return;
+        }
+
+        if (!this.viewInitialized || !this.configPanelContainer) {
+            this.loadError = 'View container not ready';
+            this.cdr.detectChanges();
+            return;
+        }
+
+        this.isLoadingPanel = true;
+        this.cdr.detectChanges();
+
+        try {
+            // Use ClassFactory to create the config panel instance
+            const panelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseConfigPanel>(
+                BaseConfigPanel,
+                this.selectedPartType.ConfigDialogClass
+            );
+
+            if (!panelInstance) {
+                this.loadError = `Could not create config panel: ${this.selectedPartType.ConfigDialogClass}`;
+                this.isLoadingPanel = false;
+                this.canAddPart = true; // Allow adding with default config
+                this.cdr.detectChanges();
+                return;
+            }
+
+            // Get the component class from the instance
+            const componentClass = (panelInstance as object).constructor as typeof BaseConfigPanel;
+
+            // Clear the container and create the component
+            this.configPanelContainer.clear();
+            this.configPanelRef = this.configPanelContainer.createComponent(componentClass as never);
+
+            // Set inputs on the component
+            const panel = this.configPanelRef.instance;
+            panel.partType = this.selectedPartType;
+            panel.panel = null; // New panel, not editing
+            panel.config = null; // Start with defaults
+
+            // Subscribe to config changes
+            panel.configChanged.subscribe((result: ConfigPanelResult) => {
+                this.onConfigChanged(result);
+            });
+
+            this.isLoadingPanel = false;
+            this.cdr.detectChanges();
+
+        } catch (error) {
+            this.loadError = `Failed to load config panel: ${error instanceof Error ? error.message : String(error)}`;
+            this.isLoadingPanel = false;
+            this.canAddPart = true; // Allow adding with default config
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Destroy the dynamically created config panel
+     */
+    private destroyConfigPanel(): void {
+        if (this.configPanelRef) {
+            this.configPanelRef.destroy();
+            this.configPanelRef = null;
         }
     }
 }

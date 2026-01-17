@@ -13,7 +13,7 @@ import {
  * Configuration panel for Query parts.
  * Uses tree dropdown for category-based query selection.
  */
-@RegisterClass(BaseConfigPanel, 'QueryConfigPanel')
+@RegisterClass(BaseConfigPanel, 'QueryPanelConfigDialog')
 @Component({
     selector: 'mj-query-config-panel',
     templateUrl: './query-config-panel.component.html',
@@ -132,9 +132,14 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
      * Handle query selection from tree dropdown
      */
     public onQuerySelection(node: TreeNode | TreeNode[] | null): void {
+        // Ignore null/empty selections (these happen during sync, not user interaction)
+        if (!node || (Array.isArray(node) && node.length === 0)) {
+            return;
+        }
+
         this.queryError = '';
 
-        if (node && !Array.isArray(node)) {
+        if (!Array.isArray(node)) {
             // Only accept leaf nodes (actual queries, not categories)
             if (node.Type === 'leaf') {
                 this.queryId = node.ID;
@@ -145,9 +150,6 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
                     this.title = node.Label;
                 }
             }
-        } else {
-            this.queryId = '';
-            this.queryName = '';
         }
 
         this.emitConfigChanged();

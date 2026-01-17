@@ -13,7 +13,7 @@ import {
  * Configuration panel for View parts.
  * Uses tree dropdown for category-based view selection.
  */
-@RegisterClass(BaseConfigPanel, 'ViewConfigPanel')
+@RegisterClass(BaseConfigPanel, 'ViewPanelConfigDialog')
 @Component({
     selector: 'mj-view-config-panel',
     templateUrl: './view-config-panel.component.html',
@@ -143,9 +143,14 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
      * Handle view selection from tree dropdown
      */
     public onViewSelection(node: TreeNode | TreeNode[] | null): void {
+        // Ignore null/empty selections (these happen during sync, not user interaction)
+        if (!node || (Array.isArray(node) && node.length === 0)) {
+            return;
+        }
+
         this.viewError = '';
 
-        if (node && !Array.isArray(node)) {
+        if (!Array.isArray(node)) {
             // Only accept leaf nodes (actual views, not categories)
             if (node.Type === 'leaf') {
                 this.viewId = node.ID;
@@ -161,9 +166,6 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
                     this.title = node.Label;
                 }
             }
-        } else {
-            this.viewId = '';
-            this.viewName = '';
         }
 
         this.emitConfigChanged();

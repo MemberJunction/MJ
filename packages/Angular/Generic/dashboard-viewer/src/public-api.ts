@@ -8,23 +8,26 @@ export * from './lib/dashboard-viewer.module';
 // Main Component
 export * from './lib/dashboard-viewer/dashboard-viewer.component';
 
-// Dialogs
+// Generic Dialogs
 export * from './lib/dialogs/add-panel-dialog/add-panel-dialog.component';
-
-// Config Dialogs
-export * from './lib/config-dialogs/base-config-dialog';
+export * from './lib/dialogs/edit-part-dialog/edit-part-dialog.component';
 export * from './lib/config-dialogs/confirm-dialog.component';
-export * from './lib/config-dialogs/weburl-config-dialog.component';
-export * from './lib/config-dialogs/view-config-dialog.component';
-export * from './lib/config-dialogs/query-config-dialog.component';
-export * from './lib/config-dialogs/artifact-config-dialog.component';
 
-// Config Panels (standalone form components)
+// Base Classes for Extensibility
 export * from './lib/config-panels/base-config-panel';
+export * from './lib/parts/base-dashboard-part';
+
+// Config Panels (pluggable form components loaded via ClassFactory)
 export * from './lib/config-panels/weburl-config-panel.component';
 export * from './lib/config-panels/view-config-panel.component';
 export * from './lib/config-panels/query-config-panel.component';
 export * from './lib/config-panels/artifact-config-panel.component';
+
+// Runtime Part Components (pluggable renderers loaded via ClassFactory)
+export * from './lib/parts/weburl-part.component';
+export * from './lib/parts/view-part.component';
+export * from './lib/parts/query-part.component';
+export * from './lib/parts/artifact-part.component';
 
 // Types and Models
 export * from './lib/models/dashboard-types';
@@ -34,16 +37,17 @@ export * from './lib/services/golden-layout-wrapper.service';
 
 // Tree-shaking prevention - call load functions for module
 import { LoadDashboardViewerModule } from './lib/dashboard-viewer.module';
-import { LoadConfigDialogs } from './lib/config-dialogs';
 import {
     LoadWebURLConfigPanel,
     LoadViewConfigPanel,
     LoadQueryConfigPanel,
     LoadArtifactConfigPanel
 } from './lib/config-panels';
+import { LoadAllDashboardParts } from './lib/parts';
+
 LoadDashboardViewerModule();
-LoadConfigDialogs();
 LoadWebURLConfigPanel();
 LoadViewConfigPanel();
 LoadQueryConfigPanel();
 LoadArtifactConfigPanel();
+LoadAllDashboardParts();

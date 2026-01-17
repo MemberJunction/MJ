@@ -318,6 +318,9 @@ export class TreeComponent implements OnInit, OnDestroy {
     /** Has data been loaded */
     public IsLoaded: boolean = false;
 
+    /** Current search text (for highlighting) */
+    public CurrentSearchText: string = '';
+
     // ========================================
     // Private State
     // ========================================
@@ -345,8 +348,10 @@ export class TreeComponent implements OnInit, OnDestroy {
     // ========================================
 
     ngOnInit(): void {
+        console.log('[TreeComponent] ngOnInit(), autoLoad:', this._autoLoad, 'branchConfig:', !!this._branchConfig);
         this.isInitialized = true;
         if (this._autoLoad && this._branchConfig) {
+            console.log('[TreeComponent] Auto-loading data');
             this.loadData(false);
         }
     }
@@ -383,9 +388,12 @@ export class TreeComponent implements OnInit, OnDestroy {
 
     /**
      * Programmatically select node(s)
+     * @param emitChange Whether to emit SelectionChange event (default: true).
+     *                   Set to false during sync operations to avoid unnecessary events.
      */
-    public SelectNodes(ids: string[]): void {
+    public SelectNodes(ids: string[], emitChange: boolean = true): void {
         const previousSelection = [...this.SelectedNodes];
+        const previousIds = previousSelection.map(n => n.ID).sort().join(',');
 
         if (this._selectionMode === 'single' && ids.length > 0) {
             ids = [ids[0]];
@@ -407,7 +415,11 @@ export class TreeComponent implements OnInit, OnDestroy {
             }
         }
 
-        this.SelectionChange.emit([...this.SelectedNodes]);
+        // Only emit if selection actually changed
+        const newIds = this.SelectedNodes.map(n => n.ID).sort().join(',');
+        if (emitChange && previousIds !== newIds) {
+            this.SelectionChange.emit([...this.SelectedNodes]);
+        }
         this.cdr.detectChanges();
     }
 
@@ -498,6 +510,9 @@ export class TreeComponent implements OnInit, OnDestroy {
             searchLeaves = true,
             searchDescription = false
         } = options;
+
+        // Store search text for highlighting
+        this.CurrentSearchText = searchText.trim();
 
         if (!searchText.trim()) {
             // Reset all nodes to visible
@@ -732,18 +747,21 @@ export class TreeComponent implements OnInit, OnDestroy {
      * Load tree data
      */
     private async loadData(forceRefresh: boolean): Promise<void> {
+        console.log('[TreeComponent] loadData() called, forceRefresh:', forceRefresh);
         if (!this._branchConfig) {
-            console.warn('TreeComponent: BranchConfig is required');
+            console.warn('[TreeComponent] loadData() - BranchConfig is required');
             return;
         }
 
         // Prevent concurrent loads
         if (this.isCurrentlyLoading) {
+            console.log('[TreeComponent] loadData() - Already loading, skipping');
             return;
         }
 
         // Check instance cache first (unless force refresh)
         if (!forceRefresh && this.cachedNodes) {
+            console.log('[TreeComponent] loadData() - Using cached data');
             this.Nodes = this.cloneNodes(this.cachedNodes);
             this.AllBranches = this.cloneNodes(this.cachedBranches || []);
             this.AllLeaves = this.cloneNodes(this.cachedLeaves || []);
@@ -756,10 +774,12 @@ export class TreeComponent implements OnInit, OnDestroy {
         }
 
         // Fire before event
+        console.log('[TreeComponent] Firing BeforeDataLoad event');
         const beforeEvent = new BeforeDataLoadEventArgs(this, this._branchConfig, this._leafConfig);
         this.BeforeDataLoad.emit(beforeEvent);
 
         if (beforeEvent.Cancel) {
+            console.log('[TreeComponent] loadData() cancelled by BeforeDataLoad event');
             return;
         }
 
@@ -782,17 +802,22 @@ export class TreeComponent implements OnInit, OnDestroy {
         }
 
         try {
+            console.log('[TreeComponent] Loading branches from:', branchConfig.EntityName);
+            console.log('[TreeComponent] Loading leaves from:', leafConfig?.EntityName || 'none');
             // Load branches and leaves in parallel
             const [branchData, leafData] = await Promise.all([
                 this.loadBranches(branchConfig),
                 leafConfig ? this.loadLeaves(leafConfig) : Promise.resolve([])
             ]);
+            console.log('[TreeComponent] Loaded branchData.length:', branchData.length, 'leafData.length:', leafData.length);
 
             // Build tree structure
             const { rootNodes, allBranches, branchMap } = this.buildBranchHierarchy(branchData, branchConfig);
+            console.log('[TreeComponent] Built hierarchy, rootNodes.length:', rootNodes.length, 'allBranches.length:', allBranches.length);
 
             // Attach leaves to branches (or root if orphans)
             const allLeaves = this.attachLeavesToBranches(rootNodes, branchMap, leafData, leafConfig);
+            console.log('[TreeComponent] Attached leaves, allLeaves.length:', allLeaves.length, 'rootNodes.length after:', rootNodes.length);
 
             const loadTimeMs = performance.now() - startTime;
 
@@ -810,6 +835,9 @@ export class TreeComponent implements OnInit, OnDestroy {
             this.IsLoaded = true;
             this.isCurrentlyLoading = false;
 
+            console.log('[TreeComponent] Final this.Nodes.length:', this.Nodes.length);
+            console.log('[TreeComponent] First few nodes:', this.Nodes.slice(0, 3).map(n => ({ ID: n.ID, Label: n.Label, Type: n.Type, Visible: n.Visible })));
+
             // Apply initial expansion
             this.applyInitialExpansion();
 
@@ -817,6 +845,7 @@ export class TreeComponent implements OnInit, OnDestroy {
             this.syncSelectionFromIDs();
 
             // Fire after event
+            console.log('[TreeComponent] Firing AfterDataLoad event, success');
             const afterEvent = new AfterDataLoadEventArgs(
                 this,
                 true,
@@ -830,6 +859,7 @@ export class TreeComponent implements OnInit, OnDestroy {
         } catch (error) {
             const loadTimeMs = performance.now() - startTime;
             const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[TreeComponent] loadData() error:', errorMessage, error);
 
             this.IsLoading = false;
             this.IsLoaded = true;
@@ -851,6 +881,7 @@ export class TreeComponent implements OnInit, OnDestroy {
             this.AfterDataLoad.emit(afterEvent);
         }
 
+        console.log('[TreeComponent] loadData() complete, calling detectChanges');
         this.cdr.detectChanges();
     }
 
@@ -1457,7 +1488,13 @@ export class TreeComponent implements OnInit, OnDestroy {
      * Get the padding for a node based on its level
      */
     public getNodePadding(node: TreeNode): string {
-        return `${node.Level * this._indentSize}px`;
+        const basePadding = node.Level * this._indentSize;
+        // Root-level leaves need a small indent since they have no toggle button
+        // to align them with nested items
+        if (node.Type === 'leaf' && node.Level === 0) {
+            return `${basePadding + 8}px`;
+        }
+        return `${basePadding}px`;
     }
 
     /**
@@ -1468,6 +1505,7 @@ export class TreeComponent implements OnInit, OnDestroy {
             'tree-node': true,
             'tree-node--branch': node.Type === 'branch',
             'tree-node--leaf': node.Type === 'leaf',
+            'tree-node--root-level': node.Level === 0,
             'tree-node--selected': node.Selected,
             'tree-node--focused': node === this.FocusedNode,
             'tree-node--expanded': node.Expanded,
@@ -1498,5 +1536,42 @@ export class TreeComponent implements OnInit, OnDestroy {
      */
     public trackNode(index: number, node: TreeNode): string {
         return node.ID;
+    }
+
+    /**
+     * Get label HTML with search text highlighted
+     */
+    public getHighlightedLabel(node: TreeNode): string {
+        const label = node.Label;
+
+        // No search text or node doesn't match - return plain label (escaped)
+        if (!this.CurrentSearchText || !node.MatchesSearch) {
+            return this.escapeHtml(label);
+        }
+
+        // Find and highlight the matching portion (case-insensitive)
+        const searchLower = this.CurrentSearchText.toLowerCase();
+        const labelLower = label.toLowerCase();
+        const matchIndex = labelLower.indexOf(searchLower);
+
+        if (matchIndex === -1) {
+            return this.escapeHtml(label);
+        }
+
+        // Split into before, match, and after parts
+        const before = label.substring(0, matchIndex);
+        const match = label.substring(matchIndex, matchIndex + this.CurrentSearchText.length);
+        const after = label.substring(matchIndex + this.CurrentSearchText.length);
+
+        return `${this.escapeHtml(before)}<mark class="tree-search-highlight">${this.escapeHtml(match)}</mark>${this.escapeHtml(after)}`;
+    }
+
+    /**
+     * Escape HTML special characters to prevent XSS
+     */
+    private escapeHtml(text: string): string {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }

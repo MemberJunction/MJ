@@ -13,7 +13,7 @@ import {
  * Configuration panel for Artifact parts.
  * Uses tree dropdown for collection-based artifact selection.
  */
-@RegisterClass(BaseConfigPanel, 'ArtifactConfigPanel')
+@RegisterClass(BaseConfigPanel, 'ArtifactPanelConfigDialog')
 @Component({
     selector: 'mj-artifact-config-panel',
     templateUrl: './artifact-config-panel.component.html',
@@ -135,9 +135,14 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel {
      * Handle artifact selection from tree dropdown
      */
     public onArtifactSelection(node: TreeNode | TreeNode[] | null): void {
+        // Ignore null/empty selections (these happen during sync, not user interaction)
+        if (!node || (Array.isArray(node) && node.length === 0)) {
+            return;
+        }
+
         this.artifactError = '';
 
-        if (node && !Array.isArray(node)) {
+        if (!Array.isArray(node)) {
             // Only accept leaf nodes (actual artifacts, not collections)
             if (node.Type === 'leaf') {
                 this.artifactId = node.ID;
@@ -148,9 +153,6 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel {
                     this.title = node.Label;
                 }
             }
-        } else {
-            this.artifactId = '';
-            this.artifactName = '';
         }
 
         this.emitConfigChanged();
