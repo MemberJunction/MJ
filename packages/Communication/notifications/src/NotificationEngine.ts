@@ -1,14 +1,13 @@
-import { BaseEngine, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { UserNotificationEntity, UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserEntity } from '@memberjunction/core-entities';
+import { BaseEngine, IMetadataProvider, Metadata, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UserNotificationEntity, UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { SendNotificationParams, NotificationResult, DeliveryMethod, DeliveryChannels } from './types';
 
-/**
- * Extended UserNotificationTypeEntity with template fields that exist at runtime
- * but aren't yet in CodeGen-generated types
- */
+
+
+//Ties templates to notification types
 interface UserNotificationTypeWithTemplates extends UserNotificationTypeEntity {
   EmailTemplateID: string | null;
   SMSTemplateID: string | null;
@@ -60,21 +59,6 @@ type UserNotificationPreferenceWithBooleans = UserNotificationPreferenceEntity &
  */
 export class NotificationEngine extends BaseEngine<NotificationEngine> {
   /**
-   * Cached notification types - loaded once and auto-refreshed when types change
-   */
-  public NotificationTypes: UserNotificationTypeEntity[] = [];
-
-  /**
-   * Lookup map for fast notification type retrieval by name (lowercase)
-   */
-  private _typesByName: Map<string, UserNotificationTypeEntity> = new Map();
-
-  /**
-   * Lookup map for fast notification type retrieval by ID
-   */
-  private _typesById: Map<string, UserNotificationTypeEntity> = new Map();
-
-  /**
    * Returns the singleton instance of the NotificationEngine
    */
   public static get Instance(): NotificationEngine {
@@ -82,8 +66,8 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
   }
 
   /**
-   * Configures the notification engine by loading notification types.
-   * Must be called before sending notifications.
+   * Configures the notification engine by delegating to UserInfoEngine.
+   * UserInfoEngine now handles caching of notification types and preferences.
    *
    * @param forceRefresh - If true, reloads data even if already loaded
    * @param contextUser - User context for database operations (required on server)
@@ -94,56 +78,24 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     contextUser?: UserInfo,
     provider?: IMetadataProvider
   ): Promise<void> {
-    await this.Load(
-      [
-        {
-          PropertyName: 'NotificationTypes',
-          EntityName: 'MJ: User Notification Types',
-          Type: 'entity',
-          OrderBy: 'Priority ASC, Name ASC'
-        }
-      ],
-      provider ?? Metadata.Provider,
-      forceRefresh,
-      contextUser
-    );
-  }
+    // Delegate to UserInfoEngine which now handles notification metadata
+    await UserInfoEngine.Instance.Config(forceRefresh, contextUser, provider);
 
-  /**
-   * Post-processing after loading notification types.
-   * Builds lookup maps for fast retrieval.
-   */
-  protected override async AdditionalLoading(_contextUser?: UserInfo): Promise<void> {
-    // Build lookup maps for fast retrieval
-    this._typesByName.clear();
-    this._typesById.clear();
-
-    for (const type of this.NotificationTypes) {
-      this._typesByName.set(type.Name.toLowerCase().trim(), type);
-      this._typesById.set(type.ID, type);
-    }
-
-    LogStatus(`NotificationEngine loaded ${this.NotificationTypes.length} notification types`);
+    // Call Load() with empty configs to properly mark engine as loaded
+    // NotificationEngine has no configs of its own - all data comes from UserInfoEngine
+    await this.Load([], provider || Metadata.Provider, forceRefresh, contextUser);
   }
 
   /**
    * Get a notification type by name (case-insensitive) or ID.
-   * Uses cached data for fast lookup.
+   * Delegates to UserInfoEngine's cached data for fast lookup.
    *
    * @param nameOrId - The notification type name or UUID
    * @returns The notification type entity or null if not found
    */
-  public getNotificationType(nameOrId: string): UserNotificationTypeEntity | null {
-    this.TryThrowIfNotLoaded();
-
-    // Check if it's a UUID
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(nameOrId);
-
-    if (isUuid) {
-      return this._typesById.get(nameOrId) ?? null;
-    } else {
-      return this._typesByName.get(nameOrId.toLowerCase().trim()) ?? null;
-    }
+  private getNotificationType(nameOrId: string): UserNotificationTypeEntity | null {
+    // Delegate to UserInfoEngine's cached types
+    return UserInfoEngine.Instance.GetNotificationType(nameOrId) ?? null;
   }
 
   /**
@@ -178,7 +130,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
       }
 
       // 2. Load user preferences (per-call, user-specific - not cached)
-      const prefs = await this.getUserPreferences(params.userId, type.ID, contextUser);
+      const prefs = this.getUserPreferences(params.userId, type.ID, contextUser);
 
       // 3. Check if user has opted out entirely
       if (prefs && !prefs.Enabled) {
@@ -341,28 +293,30 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
   }
 
   /**
-   * Load user preferences for a notification type.
-   * This is NOT cached because preferences are user-specific and can change frequently.
+   * Get user preferences for a notification type from UserInfoEngine's cache.
+   * Preferences are now cached in UserInfoEngine for better performance.
    */
-  private async getUserPreferences(
+  private getUserPreferences(
     userId: string,
     typeId: string,
-    contextUser: UserInfo
-  ): Promise<UserNotificationPreferenceEntity | null> {
-    const rv = new RunView();
-    const result = await rv.RunView<UserNotificationPreferenceEntity>(
-      {
-        EntityName: 'MJ: User Notification Preferences',
-        ExtraFilter: `UserID='${userId}' AND NotificationTypeID='${typeId}'`,
-        ResultType: 'entity_object',
-      },
-      contextUser,
-    );
+    _contextUser: UserInfo
+  ): UserNotificationPreferenceEntity | null {
+    // Use cached preferences from UserInfoEngine
+    const pref = UserInfoEngine.Instance.GetUserPreferenceForType(userId, typeId);
 
-    if (result.Success && result.Results && result.Results.length > 0) {
-      return result.Results[0];
+    // If preference exists, return it
+    if (pref) {
+      return pref;
     }
 
+    // If no preference exists and the type doesn't allow user preferences, return null
+    const type = UserInfoEngine.Instance.GetNotificationTypeById(typeId);
+    if (type && !type.AllowUserPreference) {
+      return null;
+    }
+
+    // If we reach here, the user hasn't set a preference yet
+    // Return null to use type defaults
     return null;
   }
 
@@ -426,7 +380,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     if (!templateEntity) {
       throw new Error(`Email template not found: ${emailTemplateId}`);
     }
-
+    /*
     // Get highest priority HTML content from the template's Content array
     // The Content array is already loaded and associated by TemplateEngineBase.AdditionalLoading()
     const htmlContent = templateEntity.Content?.filter(
@@ -448,7 +402,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     if (!renderResult.Success) {
       throw new Error(`Template rendering failed: ${renderResult.Message}`);
     }
-
+    */
     // Load user entity to get email address
     const md = new Metadata();
     const userEntity = await md.GetEntityObject<UserEntity>('Users', contextUser);
@@ -466,7 +420,9 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     const message = new Message();
     message.From = process.env.NOTIFICATION_FROM_EMAIL || 'notifications@memberjunction.com';
     message.To = 'madhavrsubramaniyam@gmail.com'; //userEntity.Email;
-    message.HTMLBody = renderResult.Output!;
+    //message.HTMLBody = renderResult.Output!;
+    message.HTMLBodyTemplate = templateEntity;
+    message.ContextData = params.templateData || {};
     message.Subject = params.title;
 
     const sendResult = await commEngine.SendSingleMessage('SendGrid', 'Email', message, undefined, false);

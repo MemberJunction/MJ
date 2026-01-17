@@ -13,7 +13,9 @@ import {
     UserApplicationEntity,
     UserFavoriteEntity,
     UserRecordLogEntity,
-    UserSettingEntity
+    UserSettingEntity,
+    UserNotificationTypeEntity,
+    UserNotificationPreferenceEntity
 } from "../generated/entity_subclasses";
 
 /**
@@ -54,6 +56,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     private _UserFavorites: UserFavoriteEntity[] = [];
     private _UserRecordLogs: UserRecordLogEntity[] = [];
     private _UserSettings: UserSettingEntity[] = [];
+
+    // Notification metadata
+    private _NotificationTypes: UserNotificationTypeEntity[] = [];
+    private _UserNotificationPreferences: UserNotificationPreferenceEntity[] = [];
+
+    // Notification type lookups for O(1) access
+    private _notificationTypesByName: Map<string, UserNotificationTypeEntity> = new Map();
+    private _notificationTypesById: Map<string, UserNotificationTypeEntity> = new Map();
 
     // Track the user ID we loaded data for
     private _loadedForUserId: string | null = null;
@@ -124,11 +134,40 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
                 EntityName: 'User Record Logs',
                 PropertyName: '_UserRecordLogs',
                 CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: User Notification Types',
+                PropertyName: '_NotificationTypes',
+                CacheLocal: true,
+                AutoRefresh: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: User Notification Preferences',
+                PropertyName: '_UserNotificationPreferences',
+                CacheLocal: true,
+                AutoRefresh: true
             }
         ];
 
         await super.Load(configs, provider, forceRefresh, contextUser);
         this._loadedForUserId = userId;
+    }
+
+    /**
+     * Additional loading logic called after the main Load() completes.
+     * Builds lookup maps for notification types for O(1) access.
+     */
+    protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // Build notification type lookup maps for O(1) access
+        this._notificationTypesByName.clear();
+        this._notificationTypesById.clear();
+
+        for (const type of this._NotificationTypes || []) {
+            this._notificationTypesById.set(type.ID, type);
+            this._notificationTypesByName.set(type.Name.toLowerCase(), type);
+        }
     }
 
     // ========================================================================
@@ -251,6 +290,90 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
             console.error('UserInfoEngine.DeleteSetting: Error:', error instanceof Error ? error.message : String(error));
             return false;
         }
+    }
+
+    /**
+     * All notification types (global metadata, not user-specific)
+     */
+    public get NotificationTypes(): UserNotificationTypeEntity[] {
+        return this._NotificationTypes || [];
+    }
+
+    /**
+     * All notification types unfiltered (for admin/server scenarios)
+     */
+    public get AllNotificationTypes(): UserNotificationTypeEntity[] {
+        return this._NotificationTypes || [];
+    }
+
+    /**
+     * Current user's notification preferences
+     */
+    public get UserNotificationPreferences(): UserNotificationPreferenceEntity[] {
+        if (!this._loadedForUserId) return [];
+        return (this._UserNotificationPreferences || [])
+            .filter(p => p.UserID === this._loadedForUserId);
+    }
+
+    /**
+     * All user notification preferences unfiltered (for admin/server scenarios)
+     */
+    public get AllUserNotificationPreferences(): UserNotificationPreferenceEntity[] {
+        return this._UserNotificationPreferences || [];
+    }
+
+    /**
+     * Get preferences for all users for a specific notification type
+     */
+    public GetPreferencesForNotificationType(typeId: string): UserNotificationPreferenceEntity[] {
+        return (this._UserNotificationPreferences || [])
+            .filter(p => p.NotificationTypeID === typeId);
+    }
+
+    /**
+     * Get preferences for a specific user
+     */
+    public GetUserPreferences(userId: string): UserNotificationPreferenceEntity[] {
+        return (this._UserNotificationPreferences || [])
+            .filter(p => p.UserID === userId);
+    }
+
+    /**
+     * Get a specific user's preference for a specific notification type
+     */
+    public GetUserPreferenceForType(userId: string, typeId: string): UserNotificationPreferenceEntity | undefined {
+        return (this._UserNotificationPreferences || [])
+            .find(p => p.UserID === userId && p.NotificationTypeID === typeId);
+    }
+
+    /**
+     * Get current user's preference for a specific notification type
+     */
+    public GetCurrentUserPreferenceForType(typeId: string): UserNotificationPreferenceEntity | undefined {
+        if (!this._loadedForUserId) return undefined;
+        return this.GetUserPreferenceForType(this._loadedForUserId, typeId);
+    }
+
+    /**
+     * Fast O(1) lookup of notification type by ID
+     */
+    public GetNotificationTypeById(id: string): UserNotificationTypeEntity | undefined {
+        return this._notificationTypesById.get(id);
+    }
+
+    /**
+     * Fast O(1) lookup of notification type by name (case-insensitive)
+     */
+    public GetNotificationTypeByName(name: string): UserNotificationTypeEntity | undefined {
+        return this._notificationTypesByName.get(name.toLowerCase());
+    }
+
+    /**
+     * Get notification type by either ID or name
+     */
+    public GetNotificationType(idOrName: string): UserNotificationTypeEntity | undefined {
+        return this.GetNotificationTypeById(idOrName) ||
+               this.GetNotificationTypeByName(idOrName);
     }
 
     /**
