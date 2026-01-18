@@ -39,6 +39,9 @@ import { ViewPartComponent } from './parts/view-part.component';
 import { QueryPartComponent } from './parts/query-part.component';
 import { ArtifactPartComponent } from './parts/artifact-part.component';
 
+// Dashboard Browser Component (generic, no routing dependencies)
+import { DashboardBrowserComponent } from './dashboard-browser/dashboard-browser.component';
+
 /**
  * Prevents tree-shaking of the DashboardViewer module.
  * Import this in your application's module to ensure components are available.
@@ -51,6 +54,9 @@ export function LoadDashboardViewerModule() {
     declarations: [
         // Main Component
         DashboardViewerComponent,
+
+        // Dashboard Browser Component
+        DashboardBrowserComponent,
 
         // Generic Dialogs
         AddPanelDialogComponent,
@@ -83,6 +89,9 @@ export function LoadDashboardViewerModule() {
     exports: [
         // Main Component
         DashboardViewerComponent,
+
+        // Dashboard Browser Component
+        DashboardBrowserComponent,
 
         // Generic Dialogs
         AddPanelDialogComponent,

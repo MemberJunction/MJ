@@ -32,35 +32,62 @@ import { WebURLPanelConfig } from '../models/dashboard-types';
                 <p>Click the configure button to set a URL for this part.</p>
             </div>
 
-            <!-- Iframe container - sandbox must be static, so we use ng-container to switch -->
+            <!-- Iframe container - sandbox and allowfullscreen must be static, so we use ng-container to switch -->
             <ng-container *ngIf="!IsLoading && !ErrorMessage && SafeUrl">
-                <!-- Standard sandbox mode -->
+                <!-- Standard sandbox + fullscreen enabled -->
                 <iframe
-                    *ngIf="sandboxMode === 'standard'"
+                    *ngIf="sandboxMode === 'standard' && allowFullscreen"
                     #iframe
                     [src]="SafeUrl"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                    [attr.allowfullscreen]="allowFullscreen ? '' : null"
+                    allowfullscreen
                     [title]="Panel?.title || 'Embedded content'"
                     class="content-iframe">
                 </iframe>
-                <!-- Strict sandbox mode -->
+                <!-- Standard sandbox + fullscreen disabled -->
                 <iframe
-                    *ngIf="sandboxMode === 'strict'"
+                    *ngIf="sandboxMode === 'standard' && !allowFullscreen"
+                    #iframe
+                    [src]="SafeUrl"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                    [title]="Panel?.title || 'Embedded content'"
+                    class="content-iframe">
+                </iframe>
+                <!-- Strict sandbox + fullscreen enabled -->
+                <iframe
+                    *ngIf="sandboxMode === 'strict' && allowFullscreen"
                     #iframe
                     [src]="SafeUrl"
                     sandbox="allow-scripts"
-                    [attr.allowfullscreen]="allowFullscreen ? '' : null"
+                    allowfullscreen
                     [title]="Panel?.title || 'Embedded content'"
                     class="content-iframe">
                 </iframe>
-                <!-- Permissive sandbox mode -->
+                <!-- Strict sandbox + fullscreen disabled -->
                 <iframe
-                    *ngIf="sandboxMode === 'permissive'"
+                    *ngIf="sandboxMode === 'strict' && !allowFullscreen"
+                    #iframe
+                    [src]="SafeUrl"
+                    sandbox="allow-scripts"
+                    [title]="Panel?.title || 'Embedded content'"
+                    class="content-iframe">
+                </iframe>
+                <!-- Permissive sandbox + fullscreen enabled -->
+                <iframe
+                    *ngIf="sandboxMode === 'permissive' && allowFullscreen"
                     #iframe
                     [src]="SafeUrl"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
-                    [attr.allowfullscreen]="allowFullscreen ? '' : null"
+                    allowfullscreen
+                    [title]="Panel?.title || 'Embedded content'"
+                    class="content-iframe">
+                </iframe>
+                <!-- Permissive sandbox + fullscreen disabled -->
+                <iframe
+                    *ngIf="sandboxMode === 'permissive' && !allowFullscreen"
+                    #iframe
+                    [src]="SafeUrl"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
                     [title]="Panel?.title || 'Embedded content'"
                     class="content-iframe">
                 </iframe>

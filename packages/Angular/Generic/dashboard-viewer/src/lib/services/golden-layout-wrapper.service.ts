@@ -220,11 +220,13 @@ export class GoldenLayoutWrapperService {
             // Store reference to container
             this._containerMap.set(panel.id, container);
 
-            // Set the tab title with icon using GL's setTitle method
-            // This shows the icon in the GL tab header in view mode
+            // Set the tab title (plain text - GL escapes HTML)
+            container.setTitle(panel.title);
+
+            // Add icon to the tab title element via DOM manipulation
+            // This must happen after GL has created the tab element
             if (panel.icon) {
-                const titleWithIcon = `<i class="${panel.icon}" style="margin-right: 6px;"></i>${panel.title}`;
-                container.setTitle(titleWithIcon);
+                this.addIconToTabTitle(container, panel.icon);
             }
 
             // Create the panel content via factory - pass the full panel from componentState
@@ -446,5 +448,36 @@ export class GoldenLayoutWrapperService {
                 changeType
             });
         }
+    }
+
+    /**
+     * Add an icon to a tab's title element via DOM manipulation.
+     * Golden Layout escapes HTML in setTitle(), so we must manipulate the DOM directly.
+     */
+    private addIconToTabTitle(container: ComponentContainer, iconClass: string): void {
+        // Use setTimeout to ensure GL has created the tab element
+        setTimeout(() => {
+            // Find the tab element - GL creates .lm_tab elements with .lm_title inside
+            // The container.tab property gives us access to the Tab object
+            const tab = container.tab;
+            if (!tab) return;
+
+            const tabElement = tab.element;
+            if (!tabElement) return;
+
+            const titleElement = tabElement.querySelector('.lm_title') as HTMLElement;
+            if (!titleElement) return;
+
+            // Check if icon already added
+            if (titleElement.querySelector('.panel-icon')) return;
+
+            // Create icon element
+            const iconEl = document.createElement('i');
+            iconEl.className = `${iconClass} panel-icon`;
+            iconEl.style.marginRight = '6px';
+
+            // Insert icon before the text content
+            titleElement.insertBefore(iconEl, titleElement.firstChild);
+        }, 0);
     }
 }

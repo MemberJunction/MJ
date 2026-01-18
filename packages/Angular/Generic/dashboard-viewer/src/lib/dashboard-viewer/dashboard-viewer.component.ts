@@ -28,6 +28,7 @@ import {
     PanelInteractionEvent,
     DashboardConfigChangedEvent,
     LayoutChangedEvent,
+    DashboardNavRequestEvent,
     createDefaultDashboardConfig,
     generatePanelId,
     extractPanelsFromLayout,
@@ -39,25 +40,6 @@ import {
 } from '../models/dashboard-types';
 import { GoldenLayoutWrapperService, LayoutLocation } from '../services/golden-layout-wrapper.service';
 import { BaseDashboardPart } from '../parts/base-dashboard-part';
-
-/**
- * Event emitted when navigation is requested from a panel
- */
-export interface DashboardNavigationEvent {
-    /** Type of navigation (e.g., 'entity', 'record', 'query', 'dashboard') */
-    navigationType: string;
-    /** Navigation target details */
-    target: {
-        entityName?: string;
-        recordId?: string;
-        queryId?: string;
-        dashboardId?: string;
-        url?: string;
-        [key: string]: unknown;
-    };
-    /** Source panel that triggered navigation */
-    sourcePanelId: string;
-}
 
 /**
  * Main dashboard viewer component.
@@ -152,8 +134,8 @@ export class DashboardViewerComponent implements OnDestroy {
     /** Emitted when dashboard configuration changes */
     @Output() configChanged = new EventEmitter<DashboardConfigChangedEvent>();
 
-    /** Emitted when a panel requests navigation */
-    @Output() navigationRequested = new EventEmitter<DashboardNavigationEvent>();
+    /** Emitted when a panel requests navigation to another resource */
+    @Output() navigationRequested = new EventEmitter<DashboardNavRequestEvent>();
 
     /** Emitted when a panel interaction occurs */
     @Output() panelInteraction = new EventEmitter<PanelInteractionEvent>();
@@ -658,9 +640,11 @@ export class DashboardViewerComponent implements OnDestroy {
         wrapper.className = 'dashboard-part-wrapper';
         wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: #fff;';
 
-        // Create header
-        const header = this.createPartHeader(panel, panel.id);
-        wrapper.appendChild(header);
+        // Only show header in edit mode - GL tabs already display the title in view mode
+        if (this.isEditing) {
+            const header = this.createPartHeader(panel, panel.id);
+            wrapper.appendChild(header);
+        }
 
         // Create content area
         const content = document.createElement('div');
@@ -727,6 +711,9 @@ export class DashboardViewerComponent implements OnDestroy {
             });
             instance.RemoveRequested.subscribe(() => {
                 this.onRemovePart(panel.id);
+            });
+            instance.NavigationRequested.subscribe((event: DashboardNavRequestEvent) => {
+                this.navigationRequested.emit(event);
             });
 
             // Attach component to DOM

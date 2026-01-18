@@ -1,6 +1,17 @@
 import { Input, Output, EventEmitter, ChangeDetectorRef, Directive, OnInit, OnDestroy } from '@angular/core';
 import { DashboardPartTypeEntity } from '@memberjunction/core-entities';
-import { PanelConfig, DashboardPanel } from '../models/dashboard-types';
+import {
+    PanelConfig,
+    DashboardPanel,
+    DashboardNavRequest,
+    DashboardNavRequestEvent,
+    OpenRecordNavRequest,
+    OpenEntityNavRequest,
+    OpenDashboardNavRequest,
+    OpenQueryNavRequest,
+    OpenReportNavRequest,
+    OpenApplicationNavRequest
+} from '../models/dashboard-types';
 
 /**
  * Event emitted when a part requests configuration
@@ -100,6 +111,12 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
      * Emitted when the part's data changes (e.g., selection in a grid)
      */
     @Output() DataChanged = new EventEmitter<PartDataChangeEvent>();
+
+    /**
+     * Emitted when the part requests navigation to another resource.
+     * Parent component handles actual routing based on the request type.
+     */
+    @Output() NavigationRequested = new EventEmitter<DashboardNavRequestEvent>();
 
     /**
      * Whether the part is currently loading
@@ -220,5 +237,135 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
         this.ErrorMessage = message;
         this.IsLoading = false;
         this.cdr.detectChanges();
+    }
+
+    // ========================================
+    // Navigation Request Methods
+    // ========================================
+
+    /**
+     * Request navigation to open a specific record
+     */
+    public RequestOpenRecord(
+        entityName: string,
+        recordId: string,
+        mode: 'view' | 'edit' = 'view',
+        openInNewTab = false
+    ): void {
+        const request: OpenRecordNavRequest = {
+            type: 'OpenRecord',
+            sourcePanelId: this.Panel?.id ?? '',
+            entityName,
+            recordId,
+            mode,
+            openInNewTab
+        };
+        this.emitNavigationRequest(request);
+    }
+
+    /**
+     * Request navigation to an entity browser/list
+     */
+    public RequestOpenEntity(
+        entityName: string,
+        filter?: string,
+        viewId?: string,
+        openInNewTab = false
+    ): void {
+        const request: OpenEntityNavRequest = {
+            type: 'OpenEntity',
+            sourcePanelId: this.Panel?.id ?? '',
+            entityName,
+            filter,
+            viewId,
+            openInNewTab
+        };
+        this.emitNavigationRequest(request);
+    }
+
+    /**
+     * Request navigation to another dashboard
+     */
+    public RequestOpenDashboard(
+        dashboardId: string,
+        categoryId?: string,
+        openInNewTab = false
+    ): void {
+        const request: OpenDashboardNavRequest = {
+            type: 'OpenDashboard',
+            sourcePanelId: this.Panel?.id ?? '',
+            dashboardId,
+            categoryId,
+            openInNewTab
+        };
+        this.emitNavigationRequest(request);
+    }
+
+    /**
+     * Request navigation to a query
+     */
+    public RequestOpenQuery(
+        queryId: string,
+        parameters?: Record<string, unknown>,
+        autoExecute = true,
+        openInNewTab = false
+    ): void {
+        const request: OpenQueryNavRequest = {
+            type: 'OpenQuery',
+            sourcePanelId: this.Panel?.id ?? '',
+            queryId,
+            parameters,
+            autoExecute,
+            openInNewTab
+        };
+        this.emitNavigationRequest(request);
+    }
+
+    /**
+     * Request navigation to a report
+     */
+    public RequestOpenReport(
+        reportId: string,
+        parameters?: Record<string, unknown>,
+        openInNewTab = false
+    ): void {
+        const request: OpenReportNavRequest = {
+            type: 'OpenReport',
+            sourcePanelId: this.Panel?.id ?? '',
+            reportId,
+            parameters,
+            openInNewTab
+        };
+        this.emitNavigationRequest(request);
+    }
+
+    /**
+     * Request navigation to another application
+     */
+    public RequestOpenApplication(
+        applicationId: string,
+        resourceName?: string,
+        openInNewTab = false
+    ): void {
+        const request: OpenApplicationNavRequest = {
+            type: 'OpenApplication',
+            sourcePanelId: this.Panel?.id ?? '',
+            applicationId,
+            resourceName,
+            openInNewTab
+        };
+        this.emitNavigationRequest(request);
+    }
+
+    /**
+     * Emit a navigation request event
+     */
+    protected emitNavigationRequest(request: DashboardNavRequest): void {
+        if (this.Panel) {
+            this.NavigationRequested.emit({
+                request,
+                panel: this.Panel
+            });
+        }
     }
 }

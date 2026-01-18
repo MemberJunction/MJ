@@ -221,6 +221,116 @@ export interface LayoutChangedEvent {
 }
 
 // ========================================
+// Navigation Request Events
+// ========================================
+
+/**
+ * Union type for all navigation requests from dashboard parts.
+ * These are high-level abstractions - the parent component handles routing.
+ */
+export type DashboardNavRequest =
+    | OpenRecordNavRequest
+    | OpenEntityNavRequest
+    | OpenDashboardNavRequest
+    | OpenQueryNavRequest
+    | OpenReportNavRequest
+    | OpenApplicationNavRequest;
+
+/**
+ * Base interface for navigation requests
+ */
+export interface BaseNavRequest {
+    /** Type discriminator for the navigation request */
+    type: string;
+    /** Source panel ID that initiated the request */
+    sourcePanelId: string;
+    /** Whether to open in a new tab/window */
+    openInNewTab?: boolean;
+}
+
+/**
+ * Request to open a specific record by entity and ID
+ */
+export interface OpenRecordNavRequest extends BaseNavRequest {
+    type: 'OpenRecord';
+    /** Entity name */
+    entityName: string;
+    /** Record primary key value */
+    recordId: string;
+    /** Optional: Open in edit or view mode */
+    mode?: 'view' | 'edit';
+}
+
+/**
+ * Request to navigate to an entity browser/list
+ */
+export interface OpenEntityNavRequest extends BaseNavRequest {
+    type: 'OpenEntity';
+    /** Entity name */
+    entityName: string;
+    /** Optional: Pre-applied filter */
+    filter?: string;
+    /** Optional: Default view ID */
+    viewId?: string;
+}
+
+/**
+ * Request to navigate to another dashboard
+ */
+export interface OpenDashboardNavRequest extends BaseNavRequest {
+    type: 'OpenDashboard';
+    /** Dashboard ID */
+    dashboardId: string;
+    /** Optional: Dashboard category to navigate to first */
+    categoryId?: string;
+}
+
+/**
+ * Request to navigate to a query
+ */
+export interface OpenQueryNavRequest extends BaseNavRequest {
+    type: 'OpenQuery';
+    /** Query ID */
+    queryId: string;
+    /** Optional: Pre-filled parameter values */
+    parameters?: Record<string, unknown>;
+    /** Optional: Auto-execute on open */
+    autoExecute?: boolean;
+}
+
+/**
+ * Request to navigate to a report
+ */
+export interface OpenReportNavRequest extends BaseNavRequest {
+    type: 'OpenReport';
+    /** Report ID */
+    reportId: string;
+    /** Optional: Pre-filled parameter values */
+    parameters?: Record<string, unknown>;
+}
+
+/**
+ * Request to navigate to another application
+ */
+export interface OpenApplicationNavRequest extends BaseNavRequest {
+    type: 'OpenApplication';
+    /** Application name or ID */
+    applicationId: string;
+    /** Optional: Specific resource/tab within the app */
+    resourceName?: string;
+}
+
+/**
+ * Event wrapper for navigation requests emitted from dashboard parts
+ */
+export interface DashboardNavRequestEvent {
+    /** The navigation request */
+    request: DashboardNavRequest;
+    /** Panel data at time of request (for context) */
+    panel: DashboardPanel;
+}
+
+// ========================================
 // Validation
 // ========================================
 

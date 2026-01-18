@@ -8,6 +8,9 @@ export * from './lib/dashboard-viewer.module';
 // Main Component
 export * from './lib/dashboard-viewer/dashboard-viewer.component';
 
+// Dashboard Browser Component
+export * from './lib/dashboard-browser/dashboard-browser.component';
+
 // Generic Dialogs
 export * from './lib/dialogs/add-panel-dialog/add-panel-dialog.component';
 export * from './lib/dialogs/edit-part-dialog/edit-part-dialog.component';
@@ -44,6 +47,7 @@ import {
     LoadArtifactConfigPanel
 } from './lib/config-panels';
 import { LoadAllDashboardParts } from './lib/parts';
+import { LoadDashboardBrowser } from './lib/dashboard-browser/dashboard-browser.component';
 
 LoadDashboardViewerModule();
 LoadWebURLConfigPanel();
@@ -51,3 +55,4 @@ LoadViewConfigPanel();
 LoadQueryConfigPanel();
 LoadArtifactConfigPanel();
 LoadAllDashboardParts();
+LoadDashboardBrowser();
