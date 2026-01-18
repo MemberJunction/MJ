@@ -1,5 +1,6 @@
 import { Component, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
+import { CompositeKey } from '@memberjunction/core';
 import { BaseConfigPanel } from './base-config-panel';
 import { PanelConfig, ArtifactPanelConfig, createDefaultArtifactPanelConfig } from '../models/dashboard-types';
 import {
@@ -69,6 +70,13 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel {
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
+    }
+
+    /**
+     * Get the artifactId as a CompositeKey for the tree dropdown
+     */
+    public get ArtifactIdAsKey(): CompositeKey | null {
+        return this.artifactId ? CompositeKey.FromID(this.artifactId) : null;
     }
 
     public initFromConfig(config: PanelConfig | null): void {

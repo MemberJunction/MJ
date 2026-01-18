@@ -348,10 +348,8 @@ export class TreeComponent implements OnInit, OnDestroy {
     // ========================================
 
     ngOnInit(): void {
-        console.log('[TreeComponent] ngOnInit(), autoLoad:', this._autoLoad, 'branchConfig:', !!this._branchConfig);
         this.isInitialized = true;
         if (this._autoLoad && this._branchConfig) {
-            console.log('[TreeComponent] Auto-loading data');
             this.loadData(false);
         }
     }
@@ -747,7 +745,6 @@ export class TreeComponent implements OnInit, OnDestroy {
      * Load tree data
      */
     private async loadData(forceRefresh: boolean): Promise<void> {
-        console.log('[TreeComponent] loadData() called, forceRefresh:', forceRefresh);
         if (!this._branchConfig) {
             console.warn('[TreeComponent] loadData() - BranchConfig is required');
             return;
@@ -755,13 +752,11 @@ export class TreeComponent implements OnInit, OnDestroy {
 
         // Prevent concurrent loads
         if (this.isCurrentlyLoading) {
-            console.log('[TreeComponent] loadData() - Already loading, skipping');
             return;
         }
 
         // Check instance cache first (unless force refresh)
         if (!forceRefresh && this.cachedNodes) {
-            console.log('[TreeComponent] loadData() - Using cached data');
             this.Nodes = this.cloneNodes(this.cachedNodes);
             this.AllBranches = this.cloneNodes(this.cachedBranches || []);
             this.AllLeaves = this.cloneNodes(this.cachedLeaves || []);
@@ -774,12 +769,10 @@ export class TreeComponent implements OnInit, OnDestroy {
         }
 
         // Fire before event
-        console.log('[TreeComponent] Firing BeforeDataLoad event');
         const beforeEvent = new BeforeDataLoadEventArgs(this, this._branchConfig, this._leafConfig);
         this.BeforeDataLoad.emit(beforeEvent);
 
         if (beforeEvent.Cancel) {
-            console.log('[TreeComponent] loadData() cancelled by BeforeDataLoad event');
             return;
         }
 
@@ -802,22 +795,17 @@ export class TreeComponent implements OnInit, OnDestroy {
         }
 
         try {
-            console.log('[TreeComponent] Loading branches from:', branchConfig.EntityName);
-            console.log('[TreeComponent] Loading leaves from:', leafConfig?.EntityName || 'none');
             // Load branches and leaves in parallel
             const [branchData, leafData] = await Promise.all([
                 this.loadBranches(branchConfig),
                 leafConfig ? this.loadLeaves(leafConfig) : Promise.resolve([])
             ]);
-            console.log('[TreeComponent] Loaded branchData.length:', branchData.length, 'leafData.length:', leafData.length);
 
             // Build tree structure
             const { rootNodes, allBranches, branchMap } = this.buildBranchHierarchy(branchData, branchConfig);
-            console.log('[TreeComponent] Built hierarchy, rootNodes.length:', rootNodes.length, 'allBranches.length:', allBranches.length);
 
             // Attach leaves to branches (or root if orphans)
             const allLeaves = this.attachLeavesToBranches(rootNodes, branchMap, leafData, leafConfig);
-            console.log('[TreeComponent] Attached leaves, allLeaves.length:', allLeaves.length, 'rootNodes.length after:', rootNodes.length);
 
             const loadTimeMs = performance.now() - startTime;
 
@@ -835,9 +823,6 @@ export class TreeComponent implements OnInit, OnDestroy {
             this.IsLoaded = true;
             this.isCurrentlyLoading = false;
 
-            console.log('[TreeComponent] Final this.Nodes.length:', this.Nodes.length);
-            console.log('[TreeComponent] First few nodes:', this.Nodes.slice(0, 3).map(n => ({ ID: n.ID, Label: n.Label, Type: n.Type, Visible: n.Visible })));
-
             // Apply initial expansion
             this.applyInitialExpansion();
 
@@ -845,7 +830,6 @@ export class TreeComponent implements OnInit, OnDestroy {
             this.syncSelectionFromIDs();
 
             // Fire after event
-            console.log('[TreeComponent] Firing AfterDataLoad event, success');
             const afterEvent = new AfterDataLoadEventArgs(
                 this,
                 true,
@@ -881,7 +865,6 @@ export class TreeComponent implements OnInit, OnDestroy {
             this.AfterDataLoad.emit(afterEvent);
         }
 
-        console.log('[TreeComponent] loadData() complete, calling detectChanges');
         this.cdr.detectChanges();
     }
 

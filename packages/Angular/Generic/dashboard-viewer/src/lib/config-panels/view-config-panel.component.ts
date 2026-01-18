@@ -1,5 +1,6 @@
 import { Component, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
+import { CompositeKey } from '@memberjunction/core';
 import { BaseConfigPanel } from './base-config-panel';
 import { PanelConfig, ViewPanelConfig, createDefaultViewPanelConfig } from '../models/dashboard-types';
 import {
@@ -64,6 +65,13 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
+    }
+
+    /**
+     * Get the viewId as a CompositeKey for the tree dropdown
+     */
+    public get ViewIdAsKey(): CompositeKey | null {
+        return this.viewId ? CompositeKey.FromID(this.viewId) : null;
     }
 
     public initFromConfig(config: PanelConfig | null): void {

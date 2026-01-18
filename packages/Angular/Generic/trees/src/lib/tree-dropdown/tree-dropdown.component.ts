@@ -47,6 +47,7 @@ import {
 import { TreeComponent } from '../tree/tree.component';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 
 /**
  * Dropdown position calculation result
@@ -85,19 +86,53 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     // Value Inputs
     // ========================================
 
-    /** Current selected value (ID for single, IDs for multiple) */
-    private _value: string | string[] | null = null;
+    /** Current selected value (CompositeKey for single, CompositeKeys for multiple) */
+    private _value: CompositeKey | CompositeKey[] | null = null;
 
+    /**
+     * The selected value as a CompositeKey (single select) or array of CompositeKeys (multi-select).
+     * CompositeKey supports both simple single-field primary keys and composite primary keys.
+     *
+     * @example Single select with simple ID:
+     * ```typescript
+     * dropdown.Value = CompositeKey.FromID('some-guid');
+     * ```
+     *
+     * @example Single select with composite key:
+     * ```typescript
+     * dropdown.Value = new CompositeKey([
+     *   { FieldName: 'Field1', Value: 'value1' },
+     *   { FieldName: 'Field2', Value: 'value2' }
+     * ]);
+     * ```
+     *
+     * @example Multi-select:
+     * ```typescript
+     * dropdown.Value = [
+     *   CompositeKey.FromID('guid1'),
+     *   CompositeKey.FromID('guid2')
+     * ];
+     * ```
+     */
     @Input()
-    set Value(val: string | string[] | null) {
-        if (val !== this._value) {
+    set Value(val: CompositeKey | CompositeKey[] | null) {
+        if (!CompositeKey.EqualsEx(val, this._value)) {
             this._value = val;
-            this.syncValueToSelection();
+            // If tree is loaded, sync selection immediately
+            if (this.IsLoaded && this.treeComponent) {
+                this.syncValueToSelection();
+            } else {
+                // Tree not loaded yet - fetch display text directly via Metadata
+                this.fetchDisplayTextForValue(val);
+            }
         }
     }
-    get Value(): string | string[] | null {
+    get Value(): CompositeKey | CompositeKey[] | null {
         return this._value;
     }
+ 
+    /** Cached display text for showing in trigger before tree loads */
+    private _pendingDisplayText: string | null = null;
 
     // ========================================
     // Dropdown-specific Inputs
@@ -138,7 +173,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     // ========================================
 
     /** Emitted when value changes */
-    @Output() ValueChange = new EventEmitter<string | string[] | null>();
+    @Output() ValueChange = new EventEmitter<CompositeKey | CompositeKey[] | null>();
 
     /** Emitted with full node(s) when selection changes */
     @Output() SelectionChange = new EventEmitter<TreeNode | TreeNode[] | null>();
@@ -204,6 +239,9 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     /** Resize listener */
     private resizeListener: (() => void) | null = null;
 
+    /** Pending load promise resolvers */
+    private _loadResolvers: Array<() => void> = [];
+
     // ========================================
     // Constructor
     // ========================================
@@ -248,12 +286,39 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     // ========================================
 
     /**
+     * Returns a promise that resolves when the tree data has finished loading.
+     * If data is already loaded, the promise resolves immediately.
+     *
+     * Use this method when you need to perform operations that depend on the tree
+     * being fully loaded, such as programmatically selecting nodes or accessing
+     * the tree structure.
+     *
+     * Note: For setting initial values, you typically don't need this method -
+     * just set the `Value` input and the component will automatically display
+     * the correct text by looking up the record name via Metadata.
+     *
+     * @returns A promise that resolves when the tree data is loaded
+     * @example
+     * ```typescript
+     * // Wait for tree to load before accessing tree structure
+     * await treeDropdown.WaitForDataLoad();
+     * const nodes = treeDropdown.treeComponent.Nodes;
+     * ```
+     */
+    public WaitForDataLoad(): Promise<void> {
+        if (this.IsLoaded) {
+            return Promise.resolve();
+        }
+        return new Promise<void>((resolve) => {
+            this._loadResolvers.push(resolve);
+        });
+    }
+
+    /**
      * Open the dropdown
      */
     public Open(): void {
-        console.log('[TreeDropdown] Open() called, Disabled:', this.Disabled, 'IsOpen:', this.IsOpen);
         if (this.Disabled || this.IsOpen) {
-            console.log('[TreeDropdown] Open() early return - already open or disabled');
             return;
         }
 
@@ -262,20 +327,15 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         this.BeforeDropdownOpen.emit(beforeEvent);
 
         if (beforeEvent.Cancel) {
-            console.log('[TreeDropdown] Open() cancelled by BeforeDropdownOpen event');
             return;
         }
 
-        console.log('[TreeDropdown] Setting IsOpen = true');
         this.IsOpen = true;
         this.calculatePosition();
-        console.log('[TreeDropdown] Position calculated:', this.Position);
         this.attachEventListeners();
-        console.log('[TreeDropdown] Event listeners attached');
 
         // Focus search input after opening
         setTimeout(() => {
-            console.log('[TreeDropdown] Focus timeout fired, EnableSearch:', this.EnableSearch, 'searchInput exists:', !!this.searchInput);
             if (this.EnableSearch && this.searchInput) {
                 this.searchInput.nativeElement.focus();
             }
@@ -288,7 +348,6 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         );
         this.AfterDropdownOpen.emit(afterEvent);
 
-        console.log('[TreeDropdown] Open() complete, calling detectChanges');
         this.cdr.detectChanges();
     }
 
@@ -296,9 +355,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Close the dropdown
      */
     public Close(reason: 'selection' | 'escape' | 'outsideClick' | 'programmatic' = 'programmatic'): void {
-        console.log('[TreeDropdown] Close() called with reason:', reason, 'IsOpen:', this.IsOpen);
         if (!this.IsOpen) {
-            console.log('[TreeDropdown] Close() early return - already closed');
             return;
         }
 
@@ -307,11 +364,9 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         this.BeforeDropdownClose.emit(beforeEvent);
 
         if (beforeEvent.Cancel) {
-            console.log('[TreeDropdown] Close() cancelled by BeforeDropdownClose event');
             return;
         }
 
-        console.log('[TreeDropdown] Setting IsOpen = false');
         this.IsOpen = false;
         this.SearchText = '';
         this.clearSearch();
@@ -321,7 +376,6 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         const afterEvent = new AfterDropdownCloseEventArgs(this, reason);
         this.AfterDropdownClose.emit(afterEvent);
 
-        console.log('[TreeDropdown] Close() complete');
         this.cdr.detectChanges();
     }
 
@@ -345,7 +399,8 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         }
 
         this.SelectedNodes = [];
-        this._value = this.SelectionMode === 'multiple' ? [] : null;
+        this._value = null;
+        this._pendingDisplayText = null;
 
         if (this.treeComponent) {
             this.treeComponent.ClearSelection();
@@ -373,7 +428,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Handle trigger click
      */
     public onTriggerClick(): void {
-        console.log('[TreeDropdown] onTriggerClick(), Disabled:', this.Disabled, 'IsOpen:', this.IsOpen);
+        
         if (!this.Disabled) {
             this.Toggle();
         }
@@ -451,24 +506,27 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Handle tree selection change
      */
     public onTreeSelectionChange(nodes: TreeNode[]): void {
-        console.log('[TreeDropdown] onTreeSelectionChange(), nodes.length:', nodes.length, 'SelectionMode:', this.SelectionMode);
+        
         this.SelectedNodes = nodes;
 
-        // Update value
+        // Clear pending display text since we now have real nodes
+        this._pendingDisplayText = null;
+
+        // Update value - convert node IDs to CompositeKeys
         if (this.SelectionMode === 'single') {
-            this._value = nodes.length > 0 ? nodes[0].ID : null;
+            this._value = nodes.length > 0 ? CompositeKey.FromID(nodes[0].ID) : null;
             this.ValueChange.emit(this._value);
             this.SelectionChange.emit(nodes.length > 0 ? nodes[0] : null);
 
             // Close on selection in single mode (unless disabled)
             // Only close if user actually selected something (not on empty selection from sync)
-            console.log('[TreeDropdown] CloseOnSelect:', this.DropdownConfig.CloseOnSelect, 'nodes.length:', nodes.length);
+            
             if (this.DropdownConfig.CloseOnSelect !== false && nodes.length > 0) {
-                console.log('[TreeDropdown] Closing due to selection');
+                
                 this.Close('selection');
             }
         } else {
-            this._value = nodes.map(n => n.ID);
+            this._value = nodes.map(n => CompositeKey.FromID(n.ID));
             this.ValueChange.emit(this._value);
             this.SelectionChange.emit(nodes.length > 0 ? nodes : null);
         }
@@ -480,24 +538,31 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Handle tree data load events
      */
     public onTreeBeforeDataLoad(event: BeforeDataLoadEventArgs): void {
-        console.log('[TreeDropdown] onTreeBeforeDataLoad(), IsOpen:', this.IsOpen);
+        
         this.IsLoading = true;
         this.BeforeDataLoad.emit(event);
         this.cdr.detectChanges();
     }
 
     public onTreeAfterDataLoad(event: AfterDataLoadEventArgs): void {
-        console.log('[TreeDropdown] onTreeAfterDataLoad(), Success:', event.Success, 'BranchCount:', event.BranchCount, 'LeafCount:', event.LeafCount);
-        console.log('[TreeDropdown] IsOpen at onTreeAfterDataLoad:', this.IsOpen);
+        
+        
         this.IsLoading = false;
         this.IsLoaded = true;
 
+        // Resolve all pending WaitForDataLoad() promises
+        const resolvers = this._loadResolvers;
+        this._loadResolvers = [];
+        for (const resolve of resolvers) {
+            resolve();
+        }
+
         // Sync selection after load - defer to next microtask to ensure ViewChild is resolved
         Promise.resolve().then(() => {
-            console.log('[TreeDropdown] Post-load sync, treeComponent exists:', !!this.treeComponent);
+            
             if (this.treeComponent) {
-                console.log('[TreeDropdown] treeComponent.Nodes.length:', this.treeComponent.Nodes.length);
-                console.log('[TreeDropdown] treeComponent.Nodes:', this.treeComponent.Nodes);
+                
+                
             }
             this.syncValueToSelection();
             this.cdr.detectChanges();
@@ -621,46 +686,46 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Attach event listeners for click outside, scroll, resize
      */
     private attachEventListeners(): void {
-        console.log('[TreeDropdown] attachEventListeners() called');
+        
         // Click outside - defer with a small timeout to:
         // 1. Allow the opening click event to complete
         // 2. Ensure the dropdown panel DOM element is fully rendered
         // 3. Allow Angular change detection to complete
         if (this.DropdownConfig.CloseOnOutsideClick !== false) {
-            console.log('[TreeDropdown] Setting up click outside listener with 100ms delay');
+            
             setTimeout(() => {
-                console.log('[TreeDropdown] Click outside timeout fired, IsOpen:', this.IsOpen);
+                
                 // Only attach if still open (could have been closed in the meantime)
                 if (!this.IsOpen) {
-                    console.log('[TreeDropdown] Not attaching click listener - dropdown already closed');
+                    
                     return;
                 }
-                console.log('[TreeDropdown] Attaching click outside listener now');
+                
                 this.clickOutsideListener = this.renderer.listen('document', 'click', (event: MouseEvent) => {
                     const target = event.target as HTMLElement;
-                    console.log('[TreeDropdown] Document click detected, target:', target.tagName, target.className);
-                    console.log('[TreeDropdown] IsOpen:', this.IsOpen);
+                    
+                    
                     // Double check we're still open
                     if (!this.IsOpen) {
-                        console.log('[TreeDropdown] Click ignored - dropdown not open');
+                        
                         return;
                     }
                     const isInsideTrigger = this.triggerElement?.nativeElement?.contains(target);
                     // Check if click is inside the dropdown panel (rendered inline, not in portal)
                     const isInsideDropdown = this.dropdownPanel?.nativeElement?.contains(target);
-                    console.log('[TreeDropdown] isInsideTrigger:', isInsideTrigger, 'isInsideDropdown:', isInsideDropdown);
-                    console.log('[TreeDropdown] dropdownPanel exists:', !!this.dropdownPanel, 'dropdownPanel.nativeElement:', !!this.dropdownPanel?.nativeElement);
+                    
+                    
 
                     if (!isInsideTrigger && !isInsideDropdown) {
-                        console.log('[TreeDropdown] Click outside detected - closing');
+                        
                         this.Close('outsideClick');
                     } else {
-                        console.log('[TreeDropdown] Click inside - not closing');
+                        
                     }
                 });
             }, 100); // 100ms delay to ensure DOM is stable
         } else {
-            console.log('[TreeDropdown] CloseOnOutsideClick is disabled');
+            
         }
 
         // Escape key
@@ -711,7 +776,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Handle escape key
      */
     private handleEscapeKey = (event: KeyboardEvent): void => {
-        console.log('[TreeDropdown] handleEscapeKey(), key:', event.key, 'IsOpen:', this.IsOpen);
+        
         if (event.key === 'Escape' && this.IsOpen) {
             this.Close('escape');
         }
@@ -810,9 +875,8 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
             return;
         }
 
-        const ids: string[] = Array.isArray(this._value)
-            ? this._value
-            : this._value ? [this._value] : [];
+        // Convert CompositeKey(s) to string IDs for tree selection
+        const ids = this.getSelectedIDsArray();
 
         // Pass emitChange=false to avoid emitting SelectionChange during sync
         // This prevents unnecessary events and parent component confusion
@@ -823,6 +887,44 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
             this.SelectedNodes = this.treeComponent.GetSelectedNodes() || [];
         } catch {
             this.SelectedNodes = [];
+        }
+
+        // Clear pending display text since we now have real nodes
+        this._pendingDisplayText = null;
+
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Fetch display text for value before tree loads using Metadata.GetEntityRecordName
+     */
+    private async fetchDisplayTextForValue(val: CompositeKey | CompositeKey[] | null): Promise<void> {
+        if (!val || !this.LeafConfig) {
+            this._pendingDisplayText = null;
+            this.cdr.detectChanges();
+            return;
+        }
+
+        try {
+            const md = new Metadata();
+            const entityName = this.LeafConfig.EntityName;
+
+            if (Array.isArray(val)) {
+                // Multiple selection
+                if (val.length === 0) {
+                    this._pendingDisplayText = null;
+                } else if (val.length === 1) {
+                    this._pendingDisplayText = await md.GetEntityRecordName(entityName, val[0]);
+                } else {
+                    this._pendingDisplayText = `${val.length} items selected`;
+                }
+            } else {
+                // Single selection
+                this._pendingDisplayText = await md.GetEntityRecordName(entityName, val);
+            }
+        } catch (error) {
+            console.warn('[TreeDropdown] Failed to fetch display text:', error);
+            this._pendingDisplayText = null;
         }
 
         this.cdr.detectChanges();
@@ -836,20 +938,26 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Get display text for selected value(s)
      */
     public getDisplayText(): string {
-        if (this.SelectedNodes.length === 0) {
-            return '';
+        // If we have selected nodes from the tree, use those
+        if (this.SelectedNodes.length > 0) {
+            if (this.SelectionMode === 'single') {
+                return this.SelectedNodes[0].Label;
+            }
+
+            // Multiple selection
+            if (this.SelectedNodes.length === 1) {
+                return this.SelectedNodes[0].Label;
+            }
+
+            return `${this.SelectedNodes.length} items selected`;
         }
 
-        if (this.SelectionMode === 'single') {
-            return this.SelectedNodes[0].Label;
+        // If tree not loaded but we have pending display text from Metadata lookup
+        if (this._pendingDisplayText) {
+            return this._pendingDisplayText;
         }
 
-        // Multiple selection
-        if (this.SelectedNodes.length === 1) {
-            return this.SelectedNodes[0].Label;
-        }
-
-        return `${this.SelectedNodes.length} items selected`;
+        return '';
     }
 
     /**
@@ -876,7 +984,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Check if has selection
      */
     public hasSelection(): boolean {
-        return this.SelectedNodes.length > 0;
+        return this.SelectedNodes.length > 0 || this._pendingDisplayText != null;
     }
 
     /**
@@ -909,12 +1017,19 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     /**
-     * Get selected IDs as a string array for passing to tree component
+     * Get selected IDs as a string array for passing to tree component.
+     * Extracts the first key value from each CompositeKey (typically the ID field).
      */
     public getSelectedIDsArray(): string[] {
         if (!this._value) {
             return [];
         }
-        return Array.isArray(this._value) ? this._value : [this._value];
+
+        const keys = Array.isArray(this._value) ? this._value : [this._value];
+        return keys.map(key => {
+            // Get the first value from the composite key (usually the ID)
+            const firstValue = key.GetValueByIndex(0);
+            return firstValue != null ? String(firstValue) : '';
+        }).filter(id => id !== '');
     }
 }
