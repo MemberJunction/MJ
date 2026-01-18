@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import {
-    GoldenLayout,
     LayoutConfig,
     ResolvedLayoutConfig,
     ComponentContainer,
@@ -9,15 +8,34 @@ import {
     RowOrColumnItemConfig,
     StackItemConfig,
     ComponentItemConfig,
-    RootItemConfig,
-    LayoutManager
+    RootItemConfig
 } from 'golden-layout';
 import {
     GoldenLayoutConfig,
     LayoutNode,
+    LayoutComponentState,
     DashboardPanel,
     LayoutChangedEvent
 } from '../models/dashboard-types';
+
+// Golden Layout interfaces for VirtualLayout
+interface GLVirtualLayout {
+    rootItem: GLLayoutItem | null;
+    on(event: string, callback: (item?: unknown) => void): void;
+    destroy(): void;
+    loadLayout(config: LayoutConfig): void;
+    saveLayout(): ResolvedLayoutConfig;
+    addItemAtLocation(config: ComponentItemConfig, location: Array<{ typeId: number }>): void;
+    addComponent(componentType: string, componentState: Record<string, unknown>, title: string): void;
+    setSize(width: number, height: number): void;
+}
+
+interface GLLayoutItem {
+    type: string;
+    contentItems?: GLLayoutItem[];
+    container?: ComponentContainer;
+    addItem(config: ComponentItemConfig): void;
+}
 
 /**
  * Location specifier for adding panels
@@ -46,13 +64,13 @@ export interface DashboardPanelState {
 
 /**
  * Service that wraps Golden Layout for Angular integration.
- * Uses Golden Layout 2.6.0 with its standard API - no hacks or workarounds.
+ * Uses Golden Layout 2.6.0 VirtualLayout API like the shell's GoldenLayoutManager.
  */
 @Injectable()
 export class GoldenLayoutWrapperService {
     private _initialized = false;
-    private _container: HTMLElement | null = null;
-    private _goldenLayout: GoldenLayout | null = null;
+    private _layout: GLVirtualLayout | null = null;
+    private _containerElement: HTMLElement | null = null;
     private _componentFactory: PanelComponentFactory | null = null;
     private _containerMap = new Map<string, ComponentContainer>();
 
@@ -73,6 +91,7 @@ export class GoldenLayoutWrapperService {
 
     /**
      * Initialize Golden Layout in the specified container
+     * Uses VirtualLayout like the shell's GoldenLayoutManager
      */
     public initialize(
         container: HTMLElement,
@@ -80,73 +99,126 @@ export class GoldenLayoutWrapperService {
         componentFactory: PanelComponentFactory
     ): void {
         console.log('[GLWrapper] initialize() called');
-        this._container = container;
         this._componentFactory = componentFactory;
+        this._containerElement = container;
+
+        // Import VirtualLayout dynamically at runtime (like shell does)
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { VirtualLayout } = require('golden-layout');
 
         // Convert our config to Golden Layout's LayoutConfig format
         const glConfig = this.convertToGLConfig(config);
         console.log('[GLWrapper] Converted GL config:', JSON.stringify(glConfig, null, 2));
 
-        // Create Golden Layout instance
-        this._goldenLayout = new GoldenLayout(container);
+        // Create VirtualLayout instance with bind/unbind callbacks
+        this._layout = new VirtualLayout(
+            container,
+            this.bindComponentEventListener.bind(this),
+            this.unbindComponentEventListener.bind(this)
+        ) as GLVirtualLayout;
 
-        // Register the component type using factory function
-        this._goldenLayout.registerComponentFactoryFunction(
-            'dashboard-panel',
-            (glContainer: ComponentContainer, state: JsonValue | undefined) => {
-                this.handleComponentCreation(glContainer, state);
-                return undefined; // We handle the component directly
-            }
-        );
+        // Enable automatic resize when container size changes
+        (this._layout as unknown as { resizeWithContainerAutomatically: boolean }).resizeWithContainerAutomatically = true;
 
         // Subscribe to events
-        this._goldenLayout.on('stateChanged', () => {
+        this._layout.on('stateChanged', () => {
             this.emitLayoutChanged('resize');
         });
 
         // Load the layout configuration
-        this._goldenLayout.loadLayout(glConfig);
+        this._layout.loadLayout(glConfig);
+
+        // CRITICAL: Set the size of Golden Layout to match the container
+        // Without this, all internal elements will have height: 0
+        const rect = container.getBoundingClientRect();
+        this._layout.setSize(rect.width, rect.height);
+
+        // Retry setSize after delays to handle timing issues with flexbox layout
+        setTimeout(() => this.updateSize(), 50);
+        setTimeout(() => this.updateSize(), 150);
+        setTimeout(() => this.updateSize(), 300);
 
         this._initialized = true;
         this.updatePanelsList();
+
         console.log('[GLWrapper] initialize() complete');
     }
 
     /**
-     * Handle component creation when Golden Layout creates a component
+     * Update layout size to match container.
      */
-    private handleComponentCreation(container: ComponentContainer, state: JsonValue | undefined): void {
-        console.log('[GLWrapper] handleComponentCreation called');
-        const panelState = state as DashboardPanelState | undefined;
+    public updateSize(): void {
+        if (this._layout && this._containerElement) {
+            const rect = this._containerElement.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                this._layout.setSize(rect.width, rect.height);
+            }
+        }
+    }
 
-        if (!panelState?.panelId) {
+    /**
+     * Bind component event listener (called by Golden Layout VirtualLayout)
+     */
+    private bindComponentEventListener(
+        container: ComponentContainer,
+        itemConfig: { componentState: Record<string, unknown> }
+    ): { component: HTMLElement; virtual: boolean } {
+        const state = container.state as unknown as DashboardPanelState;
+        console.log('[GLWrapper] bindComponentEventListener called for panelId:', state?.panelId);
+
+        // Create a wrapper element for our panel content
+        const wrapper = document.createElement('div');
+        wrapper.className = 'dashboard-panel-content';
+        wrapper.style.width = '100%';
+        wrapper.style.height = '100%';
+        wrapper.style.overflow = 'auto';
+
+        if (!state?.panelId) {
             console.warn('[GLWrapper] No panelId in component state');
-            return;
-        }
+            wrapper.innerHTML = '<div class="panel-error">No panel ID provided</div>';
+        } else {
+            console.log('[GLWrapper] Creating component for panel:', state.panelId);
 
-        console.log('[GLWrapper] Creating component for panel:', panelState.panelId);
+            // Store reference to container
+            this._containerMap.set(state.panelId, container);
 
-        // Store reference to container
-        this._containerMap.set(panelState.panelId, container);
+            // Create the panel content via factory
+            if (this._componentFactory) {
+                this._componentFactory(state.panelId, wrapper);
+            }
 
-        // Create the panel content via factory
-        if (this._componentFactory) {
-            this._componentFactory(panelState.panelId, container.element);
-        }
+            // Listen for close events
+            container.on('beforeComponentRelease', () => {
+                this._containerMap.delete(state.panelId);
+                this.onPanelClosed.next(state.panelId);
+                this.updatePanelsList();
+            });
 
-        // Listen for close events
-        container.on('beforeComponentRelease', () => {
-            this._containerMap.delete(panelState.panelId);
-            this.onPanelClosed.next(panelState.panelId);
+            // Listen for show/focus events
+            container.on('show', () => {
+                this.onPanelSelected.next(state.panelId);
+            });
+
             this.updatePanelsList();
-        });
+        }
 
-        // Listen for show/focus events
-        container.on('show', () => {
-            this.onPanelSelected.next(panelState.panelId);
-        });
+        // CRITICAL: Append the wrapper to container.element (.lm_content)
+        // Golden Layout does NOT automatically append the returned component to the DOM
+        // We must do this ourselves - this is how the shell's tab-container works
+        container.element.appendChild(wrapper);
 
-        this.updatePanelsList();
+        // Return the bindable component object
+        return {
+            component: wrapper,
+            virtual: false  // false means actual DOM content
+        };
+    }
+
+    /**
+     * Unbind component event listener (called by Golden Layout VirtualLayout)
+     */
+    private unbindComponentEventListener(container: ComponentContainer): void {
+        // Cleanup handled in beforeComponentRelease
     }
 
     /**
@@ -160,24 +232,24 @@ export class GoldenLayoutWrapperService {
      * Destroy Golden Layout and clean up
      */
     public destroy(): void {
-        if (this._goldenLayout) {
-            this._goldenLayout.destroy();
-            this._goldenLayout = null;
+        if (this._layout) {
+            this._layout.destroy();
+            this._layout = null;
         }
 
         this._containerMap.clear();
         this._initialized = false;
-        this._container = null;
         this._componentFactory = null;
+        this._containerElement = null;
     }
 
     /**
      * Add a panel to the layout
      */
-    public addPanel(panel: DashboardPanel, location?: LayoutLocation): void {
+    public addPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
         console.log('[GLWrapper] addPanel() called, panel:', panel);
 
-        if (!this._goldenLayout) {
+        if (!this._layout) {
             console.warn('[GLWrapper] Golden Layout not initialized');
             return;
         }
@@ -189,32 +261,50 @@ export class GoldenLayoutWrapperService {
             partTypeId: panel.partTypeId
         };
 
-        const componentConfig: ComponentItemConfig = {
-            type: 'component',
-            componentType: 'dashboard-panel',
-            componentState: state as unknown as JsonValue,
-            title: panel.title,
-            isClosable: true
-        };
-
-        // Use location selectors to add as a new tab in an existing stack,
-        // or create a new row/column if needed
-        const locationSelectors: LayoutManager.LocationSelector[] = [
-            // First try: add to an existing stack (as a new tab)
-            { typeId: LayoutManager.LocationSelector.TypeId.FocusedStack },
-            // Second try: add to the first stack found
-            { typeId: LayoutManager.LocationSelector.TypeId.FirstStack },
-            // Third try: add to first row or column
-            { typeId: LayoutManager.LocationSelector.TypeId.FirstRowOrColumn },
-            // Last resort: create a new row at root
-            { typeId: LayoutManager.LocationSelector.TypeId.Root }
-        ];
-
-        // Add the component using location selectors
-        this._goldenLayout.addItemAtLocation(componentConfig, locationSelectors);
+        // Try to add to existing stack first, otherwise create new
+        const existingStack = this.findFirstStack();
+        if (existingStack) {
+            const componentConfig: ComponentItemConfig = {
+                type: 'component',
+                componentType: 'dashboard-panel',
+                componentState: state as unknown as JsonValue,
+                title: panel.title,
+                isClosable: true
+            };
+            existingStack.addItem(componentConfig);
+        } else {
+            // Use addComponent which will create a stack
+            this._layout.addComponent(
+                'dashboard-panel',
+                state as unknown as Record<string, unknown>,
+                panel.title
+            );
+        }
 
         this.emitLayoutChanged('resize');
         console.log('[GLWrapper] addPanel() complete');
+    }
+
+    /**
+     * Find first stack in layout
+     */
+    private findFirstStack(): GLLayoutItem | null {
+        if (!this._layout || !this._layout.rootItem) return null;
+
+        const findStack = (item: GLLayoutItem): GLLayoutItem | null => {
+            if (item.type === 'stack') {
+                return item;
+            }
+            if (item.contentItems) {
+                for (const child of item.contentItems) {
+                    const found = findStack(child);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+
+        return findStack(this._layout.rootItem);
     }
 
     /**
@@ -276,10 +366,10 @@ export class GoldenLayoutWrapperService {
      * Get the current layout configuration
      */
     public getLayoutConfig(): GoldenLayoutConfig | null {
-        if (!this._goldenLayout) return null;
+        if (!this._layout) return null;
 
         try {
-            const resolved = this._goldenLayout.saveLayout();
+            const resolved = this._layout.saveLayout();
             return this.convertFromGLConfig(resolved);
         } catch (error) {
             console.error('[GLWrapper] Failed to save layout:', error);
@@ -291,9 +381,9 @@ export class GoldenLayoutWrapperService {
      * Apply a layout configuration
      */
     public applyLayoutConfig(config: GoldenLayoutConfig): void {
-        if (this._goldenLayout) {
+        if (this._layout) {
             const glConfig = this.convertToGLConfig(config);
-            this._goldenLayout.loadLayout(glConfig);
+            this._layout.loadLayout(glConfig);
         }
     }
 
@@ -314,12 +404,16 @@ export class GoldenLayoutWrapperService {
 
     /**
      * Convert our config format to Golden Layout's LayoutConfig format
+     * Match shell's config pattern for proper header rendering
      */
     private convertToGLConfig(config: GoldenLayoutConfig): LayoutConfig {
         return {
             root: this.convertLayoutNode(config.root),
             header: {
-                popout: false
+                show: 'top',
+                popout: false,
+                maximise: false,
+                close: 'tab'
             }
         };
     }
@@ -329,11 +423,18 @@ export class GoldenLayoutWrapperService {
      */
     private convertLayoutNode(node: LayoutNode): RootItemConfig {
         if (node.type === 'component' && node.componentState?.panelId) {
+            // Build complete component state for Golden Layout
+            const state: DashboardPanelState = {
+                panelId: node.componentState.panelId,
+                title: node.componentState.title || node.title || 'Panel',
+                icon: node.componentState.icon,
+                partTypeId: node.componentState.partTypeId || ''
+            };
             const componentConfig: ComponentItemConfig = {
                 type: 'component',
                 componentType: 'dashboard-panel',
-                componentState: node.componentState as unknown as JsonValue,
-                title: node.title || 'Panel',
+                componentState: state as unknown as JsonValue,
+                title: state.title,
                 isClosable: true
             };
             return componentConfig;
@@ -398,11 +499,17 @@ export class GoldenLayoutWrapperService {
             type: glNode.type as LayoutNode['type']
         };
 
-        // Handle component nodes
+        // Handle component nodes - preserve full componentState for reload
         if (glNode.type === 'component') {
-            const componentNode = glNode as unknown as { componentState?: Record<string, unknown>; title?: string };
+            const componentNode = glNode as unknown as { componentState?: DashboardPanelState; title?: string };
             if (componentNode.componentState) {
-                node.componentState = componentNode.componentState as { panelId: string };
+                // Preserve full component state including panelId, title, icon, partTypeId
+                node.componentState = {
+                    panelId: componentNode.componentState.panelId,
+                    title: componentNode.componentState.title,
+                    icon: componentNode.componentState.icon,
+                    partTypeId: componentNode.componentState.partTypeId
+                };
             }
             node.title = componentNode.title;
         }

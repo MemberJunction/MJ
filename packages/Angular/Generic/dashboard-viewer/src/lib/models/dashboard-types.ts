@@ -71,13 +71,23 @@ export type LayoutNodeType = 'row' | 'column' | 'stack' | 'component';
 /**
  * Golden Layout node configuration
  */
+/**
+ * Component state stored in Golden Layout for panel components
+ */
+export interface LayoutComponentState {
+    panelId: string;
+    title?: string;
+    icon?: string;
+    partTypeId?: string;
+}
+
 export interface LayoutNode {
     /** Node type */
     type: LayoutNodeType;
     /** Child nodes (for row/column/stack) */
     content?: LayoutNode[];
-    /** Panel ID reference (for component nodes) */
-    componentState?: { panelId: string };
+    /** Component state (for component nodes) - includes panelId, title, icon, partTypeId */
+    componentState?: LayoutComponentState;
     /** Width percentage (for row children) */
     width?: number;
     /** Height percentage (for column children) */

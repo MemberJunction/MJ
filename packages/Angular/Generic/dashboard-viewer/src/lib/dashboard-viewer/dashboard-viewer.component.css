@@ -14,188 +14,15 @@
     display: block;
     width: 100%;
     height: 100%;
-}
-
-/* ========================================
-   Golden Layout Core Styles (Minimal)
-   These styles ensure basic Golden Layout functionality works.
-   For full theming, import the CSS files mentioned above.
-   ======================================== */
-
-:host ::ng-deep .lm_goldenlayout {
-    background: transparent;
-}
-
-:host ::ng-deep .lm_content {
-    overflow: hidden;
     position: relative;
-}
-
-:host ::ng-deep .lm_item {
-    position: absolute;
-    display: flex;
-    flex-direction: column;
-}
-
-:host ::ng-deep .lm_row > .lm_item {
-    flex-direction: row;
-}
-
-:host ::ng-deep .lm_root {
-    position: relative;
-    width: 100%;
-    height: 100%;
-}
-
-:host ::ng-deep .lm_header {
-    display: flex;
-    align-items: stretch;
-    overflow: hidden;
-    height: 25px;
-    user-select: none;
-    background: #f0f0f0;
-    border-bottom: 1px solid #ccc;
-}
-
-:host ::ng-deep .lm_tabs {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-    position: relative;
-}
-
-:host ::ng-deep .lm_tab {
-    display: flex;
-    align-items: center;
-    padding: 0 12px;
-    cursor: pointer;
-    background: #e0e0e0;
-    border-right: 1px solid #ccc;
-    white-space: nowrap;
-    font-size: 12px;
-}
-
-:host ::ng-deep .lm_tab:hover {
-    background: #eaeaea;
-}
-
-:host ::ng-deep .lm_tab.lm_active {
-    background: #fff;
-    border-bottom: 1px solid #fff;
-    margin-bottom: -1px;
-}
-
-:host ::ng-deep .lm_title {
-    padding-right: 8px;
-}
-
-:host ::ng-deep .lm_close_tab {
-    width: 14px;
-    height: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    opacity: 0.5;
-}
-
-:host ::ng-deep .lm_close_tab:hover {
-    opacity: 1;
-}
-
-:host ::ng-deep .lm_close_tab::before {
-    content: '×';
-    font-size: 16px;
-    line-height: 1;
-}
-
-:host ::ng-deep .lm_controls {
-    display: flex;
-    align-items: center;
-}
-
-:host ::ng-deep .lm_tabdropdown_list {
-    position: absolute;
-    background: #fff;
-    border: 1px solid #ccc;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    z-index: 10;
-}
-
-:host ::ng-deep .lm_splitter {
-    position: relative;
-    z-index: 2;
-}
-
-:host ::ng-deep .lm_splitter.lm_vertical {
-    width: 5px;
-    cursor: col-resize;
-    background: #f0f0f0;
-}
-
-:host ::ng-deep .lm_splitter.lm_horizontal {
-    height: 5px;
-    cursor: row-resize;
-    background: #f0f0f0;
-}
-
-:host ::ng-deep .lm_splitter:hover {
-    background: #5c6bc0;
-}
-
-:host ::ng-deep .lm_stack {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-}
-
-:host ::ng-deep .lm_stack > .lm_items {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-}
-
-:host ::ng-deep .lm_maximised {
-    position: fixed !important;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 999;
-}
-
-:host ::ng-deep .lm_maximise,
-:host ::ng-deep .lm_popout,
-:host ::ng-deep .lm_close {
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    opacity: 0.5;
-}
-
-:host ::ng-deep .lm_maximise:hover,
-:host ::ng-deep .lm_popout:hover,
-:host ::ng-deep .lm_close:hover {
-    opacity: 1;
-}
-
-:host ::ng-deep .lm_drag_handle {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
 }
 
 .dashboard-viewer {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: var(--dashboard-bg, #f5f5f5);
 }
 
@@ -209,14 +36,19 @@
    ======================================== */
 
 .dashboard-toolbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 8px 16px;
     background: var(--dashboard-toolbar-bg, #ffffff);
     border-bottom: 1px solid var(--dashboard-border, #e0e0e0);
-    min-height: 48px;
-    flex-shrink: 0;
+    box-sizing: border-box;
+    z-index: 10;
 }
 
 .toolbar-left,
@@ -306,19 +138,23 @@
    Layout Container
    ======================================== */
 
+/* Layout container uses absolute positioning for explicit dimensions */
 .layout-container {
-    flex: 1;
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     overflow: hidden;
-    min-height: 0;
-    /* Ensure the container has explicit dimensions for Golden Layout */
-    width: 100%;
-    height: 100%;
+}
+
+/* When toolbar is visible, offset the layout container */
+.dashboard-viewer.has-toolbar .layout-container {
+    top: 48px;
 }
 
 /* ========================================
-   Golden Layout Styles
-   Using Golden Layout's default behavior with minimal overrides
+   Dashboard Panel Content (our wrapper)
    ======================================== */
 
 /* Dashboard panel wrapper (header + content) */
@@ -458,4 +294,177 @@
 
 :host ::ng-deep .panel-error span {
     font-size: 14px;
+}
+
+/* ========================================
+   Golden Layout Overrides
+   These require ViewEncapsulation.None to work on dynamic GL elements
+   ======================================== */
+
+/* Override shell's hide-tab-bar rule that hides GL headers when dashboard is inside shell */
+/* The shell hides .lm_header when mj-tab-container has hide-tab-bar class */
+/* We need to ensure OUR Golden Layout headers are always visible */
+mj-dashboard-viewer .lm_header {
+    display: block !important;
+}
+
+/* Ensure GL root container fills available space */
+mj-dashboard-viewer .lm_goldenlayout {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Ensure the root layout item fills space */
+mj-dashboard-viewer .lm_root {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Ensure proper box-sizing for all GL layout elements */
+mj-dashboard-viewer .lm_item,
+mj-dashboard-viewer .lm_content,
+mj-dashboard-viewer .lm_stack,
+mj-dashboard-viewer .lm_row,
+mj-dashboard-viewer .lm_column {
+    box-sizing: border-box !important;
+}
+
+/* Ensure layout items don't overflow */
+mj-dashboard-viewer .lm_item {
+    overflow: hidden !important;
+}
+
+/* Fix for .lm_items - the content container inside stacks */
+mj-dashboard-viewer .lm_items {
+    width: 100% !important;
+    height: calc(100% - 38px) !important; /* Account for header height (38px) */
+    box-sizing: border-box !important;
+    position: relative !important;
+}
+
+/* When tabs are maximized, no header visible */
+mj-dashboard-viewer .lm_stack.lm_maximised > .lm_items {
+    height: 100% !important;
+}
+
+/* Target the ComponentItem div inside lm_items */
+mj-dashboard-viewer .lm_items > div {
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    flex-direction: column !important;
+}
+
+/* Only apply flex display to the active/visible tab content div */
+mj-dashboard-viewer .lm_items > div:not([style*="display: none"]) {
+    display: flex !important;
+}
+
+/* Clearfix for float-based row layout */
+mj-dashboard-viewer .lm_row::after {
+    content: "" !important;
+    display: table !important;
+    clear: both !important;
+}
+
+/* Force content children to respect parent bounds */
+mj-dashboard-viewer .lm_content > * {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+mj-dashboard-viewer .lm_content {
+    background: white !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    width: 100% !important;
+}
+
+mj-dashboard-viewer .lm_item_container {
+    background: white !important;
+}
+
+/* Tab header styling */
+mj-dashboard-viewer .lm_header {
+    height: 38px !important;
+    padding-top: 2px !important;
+    padding-left: 4px !important;
+    background: #f5f5f5 !important;
+    border-bottom: 1px solid #ebebeb !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+
+mj-dashboard-viewer .lm_tabs {
+    height: 36px !important;
+}
+
+/* Hide Golden Layout window controls (popout, maximize) */
+mj-dashboard-viewer .lm_controls {
+    display: none !important;
+}
+
+/* Tab styling */
+mj-dashboard-viewer .lm_header .lm_tab {
+    padding: 0 16px !important;
+    font-size: 13px !important;
+    height: 35px !important;
+    line-height: 35px !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid #ebebeb !important;
+    transition: all 0.15s ease !important;
+    position: relative !important;
+    z-index: 1 !important;
+    margin-right: 1px !important;
+}
+
+mj-dashboard-viewer .lm_header .lm_tab:hover {
+    background: #e8e8e8 !important;
+}
+
+mj-dashboard-viewer .lm_header .lm_tab.lm_active {
+    background: white !important;
+    height: 36px !important;
+    margin-bottom: -1px !important;
+    margin-right: 0 !important;
+    border: 1px solid #ebebeb !important;
+    border-bottom-color: white !important;
+    border-radius: 4px 4px 0 0 !important;
+    z-index: 2 !important;
+}
+
+mj-dashboard-viewer .lm_title {
+    cursor: pointer !important;
+    user-select: none !important;
+}
+
+mj-dashboard-viewer .lm_close_tab {
+    position: absolute !important;
+    right: 4px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 16px !important;
+    height: 16px !important;
+    cursor: pointer !important;
+    opacity: 0 !important;
+    transition: all 0.15s ease !important;
+}
+
+mj-dashboard-viewer .lm_header .lm_tab:hover .lm_close_tab {
+    opacity: 0.7 !important;
+}
+
+mj-dashboard-viewer .lm_close_tab:hover {
+    opacity: 1 !important;
+    color: #c62828 !important;
+}
+
+/* Add padding for close button */
+mj-dashboard-viewer .lm_header .lm_tab {
+    padding-right: 24px !important;
 }

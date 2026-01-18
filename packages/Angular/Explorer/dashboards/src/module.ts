@@ -89,6 +89,7 @@ import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 // Data Explorer Dashboard Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
+import { DataExplorerResourceComponent } from './DataExplorer/data-explorer-resource.component';
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
 import { ViewSelectorComponent } from './DataExplorer/components/view-selector/view-selector.component';
 // ViewConfigPanelComponent now imported from @memberjunction/ng-entity-viewer via EntityViewerModule
@@ -201,6 +202,7 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     TestRunDetailPanelComponent,
     // Data Explorer Dashboard Components
     DataExplorerDashboardComponent,
+    DataExplorerResourceComponent,
     ExplorerNavigationPanelComponent,
     ViewSelectorComponent,
     // ViewConfigPanelComponent now comes from EntityViewerModule
@@ -311,8 +313,9 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     TestingAnalyticsResourceComponent,
     TestingVersionResourceComponent,
     TestingFeedbackResourceComponent,
-    // Export Data Explorer Dashboard
+    // Export Data Explorer Dashboard and Resource
     DataExplorerDashboardComponent,
+    DataExplorerResourceComponent,
     // Export Home Dashboard
     HomeDashboardComponent,
     // Export Communication Dashboard

@@ -3,7 +3,6 @@ import {
     Input,
     Output,
     EventEmitter,
-    OnInit,
     OnDestroy,
     ViewChild,
     ElementRef,
@@ -13,7 +12,8 @@ import {
     ComponentRef,
     createComponent,
     EnvironmentInjector,
-    Type
+    Type,
+    ViewEncapsulation
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -27,6 +27,7 @@ import {
     PanelInteractionEvent,
     DashboardConfigChangedEvent,
     LayoutChangedEvent,
+    GoldenLayoutConfig,
     createDefaultDashboardConfig,
     generatePanelId,
     ViewPanelConfig,
@@ -66,7 +67,8 @@ export interface DashboardNavigationEvent {
 @Component({
     selector: 'mj-dashboard-viewer',
     templateUrl: './dashboard-viewer.component.html',
-    styleUrls: ['./dashboard-viewer.component.css']
+    styleUrls: ['./dashboard-viewer.component.css'],
+    encapsulation: ViewEncapsulation.None
 })
 export class DashboardViewerComponent implements OnDestroy {
     // ========================================
@@ -495,16 +497,32 @@ export class DashboardViewerComponent implements OnDestroy {
         // Subscribe to layout events
         this.subscribeToLayoutEvents();
 
-        // Initialize Golden Layout
-        console.log('[DashboardViewer] Calling _glService.initialize()');
+        // Initialize Golden Layout with EMPTY config (like shell does)
+        // Then add panels one-by-one
+        const emptyConfig: GoldenLayoutConfig = {
+            root: {
+                type: 'row',
+                content: []
+            }
+        };
+
+        console.log('[DashboardViewer] Calling _glService.initialize() with empty config');
         this._glService.initialize(
             this.layoutContainer.nativeElement,
-            this.config.layout,
+            emptyConfig,
             (panelId, container) => {
                 console.log('[DashboardViewer] Panel factory called for panelId:', panelId);
                 this.createPanelComponent(panelId, container);
             }
         );
+
+        // Now add panels one-by-one (like shell's createTab pattern)
+        console.log('[DashboardViewer] Adding panels:', this.config.panels.length);
+        for (const panel of this.config.panels) {
+            console.log('[DashboardViewer] Adding panel:', panel.id, panel.title);
+            this._glService.addPanel(panel);
+        }
+
         console.log('[DashboardViewer] initializeLayout() complete');
     }
 

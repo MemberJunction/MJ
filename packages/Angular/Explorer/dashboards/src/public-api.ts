@@ -7,6 +7,7 @@ import { LoadComponentStudioDashboard } from './ComponentStudio/component-studio
 import { LoadSchedulingDashboard } from './Scheduling/scheduling-dashboard.component';
 import { LoadTestingDashboard } from './Testing/testing-dashboard.component';
 import { LoadDataExplorerDashboard } from './DataExplorer/data-explorer-dashboard.component';
+import { LoadDataExplorerResource } from './DataExplorer/data-explorer-resource.component';
 import { LoadCommunicationDashboard } from './Communication/communication-dashboard.component';
 import { LoadCredentialsDashboard } from './Credentials/credentials-dashboard.component';
 import { LoadCredentialsOverviewResource } from './Credentials/components/credentials-overview-resource.component';
@@ -188,8 +189,9 @@ LoadTestingAnalyticsResource();
 LoadTestingVersionResource();
 LoadTestingFeedbackResource();
 
-// Data Explorer Dashboard loader
+// Data Explorer Dashboard and Resource loaders
 LoadDataExplorerDashboard();
+LoadDataExplorerResource();
 
 // Communication Dashboard loader
 LoadCommunicationDashboard();
