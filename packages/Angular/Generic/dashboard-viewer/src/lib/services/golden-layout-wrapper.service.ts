@@ -73,6 +73,7 @@ export class GoldenLayoutWrapperService {
     private _containerElement: HTMLElement | null = null;
     private _componentFactory: PanelComponentFactory | null = null;
     private _containerMap = new Map<string, ComponentContainer>();
+    private _isEditing = false;
 
     /** Emitted when layout configuration changes */
     public onLayoutChanged = new Subject<LayoutChangedEvent>();
@@ -89,18 +90,29 @@ export class GoldenLayoutWrapperService {
     /** Current panels in layout */
     public panels$ = new BehaviorSubject<string[]>([]);
 
+    /** Whether layout editing (drag/drop/resize/close) is enabled */
+    public get isEditing(): boolean {
+        return this._isEditing;
+    }
+
     /**
      * Initialize Golden Layout in the specified container
      * Uses VirtualLayout like the shell's GoldenLayoutManager
+     * @param container The HTML element to render Golden Layout in
+     * @param config The layout configuration
+     * @param componentFactory Factory function to create panel content
+     * @param isEditing Whether editing (drag/drop/resize/close) is enabled
      */
     public initialize(
         container: HTMLElement,
         config: GoldenLayoutConfig,
-        componentFactory: PanelComponentFactory
+        componentFactory: PanelComponentFactory,
+        isEditing = false
     ): void {
-        console.log('[GLWrapper] initialize() called');
+        console.log('[GLWrapper] initialize() called, isEditing:', isEditing);
         this._componentFactory = componentFactory;
         this._containerElement = container;
+        this._isEditing = isEditing;
 
         // Import VirtualLayout dynamically at runtime (like shell does)
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -366,11 +378,15 @@ export class GoldenLayoutWrapperService {
      * Get the current layout configuration
      */
     public getLayoutConfig(): GoldenLayoutConfig | null {
+        console.log('[GLWrapper] getLayoutConfig() called, _layout exists:', !!this._layout);
         if (!this._layout) return null;
 
         try {
             const resolved = this._layout.saveLayout();
-            return this.convertFromGLConfig(resolved);
+            console.log('[GLWrapper] saveLayout() returned:', resolved);
+            const converted = this.convertFromGLConfig(resolved);
+            console.log('[GLWrapper] Converted config:', converted);
+            return converted;
         } catch (error) {
             console.error('[GLWrapper] Failed to save layout:', error);
             return null;
@@ -403,17 +419,36 @@ export class GoldenLayoutWrapperService {
     }
 
     /**
+     * Set editing mode and update Golden Layout settings.
+     * When editing is disabled, drag/drop/resize/close are all locked.
+     * Note: This requires reinitializing the layout to apply settings changes.
+     * @param isEditing Whether to enable editing mode
+     */
+    public setEditingMode(isEditing: boolean): void {
+        this._isEditing = isEditing;
+        // Note: Golden Layout 2 doesn't support changing settings after initialization
+        // The layout must be reinitialized to apply new settings
+        // The component calling this should reinitialize the layout if settings need to change
+    }
+
+    /**
      * Convert our config format to Golden Layout's LayoutConfig format
      * Match shell's config pattern for proper header rendering
+     * Settings are controlled by isEditing mode
      */
     private convertToGLConfig(config: GoldenLayoutConfig): LayoutConfig {
         return {
             root: this.convertLayoutNode(config.root),
+            settings: {
+                // Disable drag reordering when not editing
+                reorderEnabled: this._isEditing
+            },
             header: {
                 show: 'top',
                 popout: false,
                 maximise: false,
-                close: 'tab'
+                // Only show close button when editing
+                close: this._isEditing ? 'tab' : false
             }
         };
     }

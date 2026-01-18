@@ -452,7 +452,41 @@ mj-dashboard-viewer .lm_close_tab:hover {
     color: #c62828 !important;
 }
 
-/* Add padding for close button */
-mj-dashboard-viewer .lm_header .lm_tab {
+/* Add padding for close button when editing */
+mj-dashboard-viewer .dashboard-viewer.editing .lm_header .lm_tab {
     padding-right: 24px !important;
+}
+
+/* ========================================
+   View Mode (Not Editing) - Lock Layout
+   ======================================== */
+
+/* Hide close buttons on tabs when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_close_tab {
+    display: none !important;
+}
+
+/* Remove extra padding for close button when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_header .lm_tab {
+    padding-right: 16px !important;
+}
+
+/* Disable splitter dragging when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_splitter {
+    pointer-events: none !important;
+    cursor: default !important;
+}
+
+/* Hide splitter drag handle visual when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_splitter .lm_drag_handle {
+    display: none !important;
+}
+
+/* Disable tab dragging cursor when not editing */
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_header .lm_tab {
+    cursor: default !important;
+}
+
+mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_title {
+    cursor: default !important;
 }

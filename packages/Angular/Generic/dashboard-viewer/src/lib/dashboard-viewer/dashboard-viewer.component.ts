@@ -106,13 +106,43 @@ export class DashboardViewerComponent implements OnDestroy {
     }
 
     /** Whether the dashboard is in edit mode */
-    @Input() isEditing = false;
+    private _isEditing = false;
+
+    @Input()
+    set isEditing(value: boolean) {
+        const previous = this._isEditing;
+        this._isEditing = value;
+        // When isEditing changes (and layout exists), reinitialize to apply GL settings
+        if (value !== previous && this._glService) {
+            console.log('[DashboardViewer] isEditing changed from', previous, 'to', value);
+            this.updatePanelEditModes();
+        }
+    }
+    get isEditing(): boolean {
+        return this._isEditing;
+    }
 
     /** Whether to show the toolbar */
-    @Input() showToolbar = true;
+    private _showToolbar = true;
+
+    @Input()
+    set showToolbar(value: boolean) {
+        this._showToolbar = value;
+    }
+    get showToolbar(): boolean {
+        return this._showToolbar;
+    }
 
     /** Whether to auto-save layout changes */
-    @Input() autoSave = false;
+    private _autoSave = false;
+
+    @Input()
+    set autoSave(value: boolean) {
+        this._autoSave = value;
+    }
+    get autoSave(): boolean {
+        return this._autoSave;
+    }
 
     // ========================================
     // Outputs
@@ -276,6 +306,10 @@ export class DashboardViewerComponent implements OnDestroy {
      * Save the current dashboard configuration
      */
     public async save(): Promise<boolean> {
+        console.log('[DashboardViewer] save() called');
+        console.log('[DashboardViewer] _dashboard:', !!this._dashboard);
+        console.log('[DashboardViewer] config:', !!this.config);
+
         if (!this._dashboard || !this.config) return false;
 
         try {
@@ -285,14 +319,18 @@ export class DashboardViewerComponent implements OnDestroy {
             // Update the layout config from Golden Layout
             if (this._glService) {
                 const glConfig = this._glService.getLayoutConfig();
+                console.log('[DashboardViewer] Got layout config from GL:', glConfig);
                 if (glConfig) {
                     this.config.layout = glConfig;
                 }
             }
 
             // Save to UIConfigDetails
-            this._dashboard.UIConfigDetails = JSON.stringify(this.config);
+            const configJson = JSON.stringify(this.config);
+            console.log('[DashboardViewer] Saving config:', configJson.substring(0, 500) + '...');
+            this._dashboard.UIConfigDetails = configJson;
             const saved = await this._dashboard.Save();
+            console.log('[DashboardViewer] Save result:', saved);
 
             if (saved) {
                 this.hasUnsavedChanges = false;
@@ -502,6 +540,12 @@ export class DashboardViewerComponent implements OnDestroy {
         const hasSavedLayout = this.hasSavedLayoutStructure(this.config.layout);
         console.log('[DashboardViewer] hasSavedLayout:', hasSavedLayout);
 
+        // Pass isEditing to control drag/drop/resize/close in Golden Layout
+        const panelFactory = (panelId: string, container: HTMLElement) => {
+            console.log('[DashboardViewer] Panel factory called for panelId:', panelId);
+            this.createPanelComponent(panelId, container);
+        };
+
         if (hasSavedLayout) {
             // RESTORE MODE: Use the saved layout structure which includes panel positions
             // This preserves user's custom arrangements (stacks, rows, columns, widths, heights)
@@ -509,10 +553,8 @@ export class DashboardViewerComponent implements OnDestroy {
             this._glService.initialize(
                 this.layoutContainer.nativeElement,
                 this.config.layout,
-                (panelId, container) => {
-                    console.log('[DashboardViewer] Panel factory called for panelId:', panelId);
-                    this.createPanelComponent(panelId, container);
-                }
+                panelFactory,
+                this.isEditing
             );
         } else {
             // FRESH MODE: Initialize with empty config and add panels one-by-one
@@ -528,10 +570,8 @@ export class DashboardViewerComponent implements OnDestroy {
             this._glService.initialize(
                 this.layoutContainer.nativeElement,
                 emptyConfig,
-                (panelId, container) => {
-                    console.log('[DashboardViewer] Panel factory called for panelId:', panelId);
-                    this.createPanelComponent(panelId, container);
-                }
+                panelFactory,
+                this.isEditing
             );
 
             // Add panels one-by-one (like shell's createTab pattern)
@@ -573,7 +613,13 @@ export class DashboardViewerComponent implements OnDestroy {
         return hasComponents(layout.root);
     }
 
+    /** Flag to prevent panel removal during layout reinit */
+    private _isReinitializing = false;
+
     private destroyLayout(): void {
+        // Set flag to prevent onPanelClosed from removing panels during reinit
+        this._isReinitializing = true;
+
         // Destroy all panel components
         this._panelComponents.forEach((entry, panelId) => {
             this.destroyPanelComponent(panelId);
@@ -585,6 +631,8 @@ export class DashboardViewerComponent implements OnDestroy {
             this._glService.destroy();
             this._glService = null;
         }
+
+        this._isReinitializing = false;
     }
 
     private subscribeToLayoutEvents(): void {
@@ -624,6 +672,11 @@ export class DashboardViewerComponent implements OnDestroy {
     }
 
     private onPanelClosed(panelId: string): void {
+        // Skip panel removal during layout reinit (panels are being recreated, not actually closed)
+        if (this._isReinitializing) {
+            return;
+        }
+
         // Remove from config
         if (this.config) {
             const index = this.config.panels.findIndex(p => p.id === panelId);
@@ -1054,6 +1107,9 @@ export class DashboardViewerComponent implements OnDestroy {
     }
 
     private updatePanelEditModes(): void {
+        console.log('[DashboardViewer] updatePanelEditModes() called, isEditing:', this.isEditing);
+        console.log('[DashboardViewer] Current _panelComponents count:', this._panelComponents.size);
+
         // Update IsEditing on all dynamic components
         this._panelComponents.forEach((entry) => {
             if (entry.componentRef) {
@@ -1061,10 +1117,23 @@ export class DashboardViewerComponent implements OnDestroy {
             }
         });
 
-        // Reinitialize layout to update headers (which show/hide edit buttons)
+        // Save current layout before reinitializing (preserves user's arrangement)
+        if (this._glService && this.config) {
+            const currentLayout = this._glService.getLayoutConfig();
+            console.log('[DashboardViewer] Saved layout before reinit:', JSON.stringify(currentLayout, null, 2));
+            if (currentLayout) {
+                this.config.layout = currentLayout;
+            }
+        }
+
+        console.log('[DashboardViewer] config.panels before reinit:', this.config?.panels.map(p => ({ id: p.id, title: p.title })));
+
+        // Reinitialize layout to apply new Golden Layout settings (edit mode lock/unlock)
         if (this._glService) {
             this.initializeLayout();
         }
+
+        console.log('[DashboardViewer] After reinit, _panelComponents count:', this._panelComponents.size);
     }
 
     // ========================================
