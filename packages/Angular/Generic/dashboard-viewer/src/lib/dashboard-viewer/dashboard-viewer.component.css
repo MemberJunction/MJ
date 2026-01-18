@@ -18,11 +18,10 @@
 }
 
 .dashboard-viewer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
     background: var(--dashboard-bg, #f5f5f5);
 }
 
@@ -36,11 +35,7 @@
    ======================================== */
 
 .dashboard-toolbar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 48px;
+    flex: 0 0 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -138,19 +133,12 @@
    Layout Container
    ======================================== */
 
-/* Layout container uses absolute positioning for explicit dimensions */
+/* Layout container fills remaining space in the flex column */
 .layout-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    flex: 1;
+    position: relative;
     overflow: hidden;
-}
-
-/* When toolbar is visible, offset the layout container */
-.dashboard-viewer.has-toolbar .layout-container {
-    top: 48px;
+    min-height: 0;
 }
 
 /* ========================================

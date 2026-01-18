@@ -28,6 +28,7 @@ import {
     DashboardConfigChangedEvent,
     LayoutChangedEvent,
     GoldenLayoutConfig,
+    LayoutNode,
     createDefaultDashboardConfig,
     generatePanelId,
     ViewPanelConfig,
@@ -497,33 +498,79 @@ export class DashboardViewerComponent implements OnDestroy {
         // Subscribe to layout events
         this.subscribeToLayoutEvents();
 
-        // Initialize Golden Layout with EMPTY config (like shell does)
-        // Then add panels one-by-one
-        const emptyConfig: GoldenLayoutConfig = {
-            root: {
-                type: 'row',
-                content: []
-            }
-        };
+        // Check if we have a saved layout to restore
+        const hasSavedLayout = this.hasSavedLayoutStructure(this.config.layout);
+        console.log('[DashboardViewer] hasSavedLayout:', hasSavedLayout);
 
-        console.log('[DashboardViewer] Calling _glService.initialize() with empty config');
-        this._glService.initialize(
-            this.layoutContainer.nativeElement,
-            emptyConfig,
-            (panelId, container) => {
-                console.log('[DashboardViewer] Panel factory called for panelId:', panelId);
-                this.createPanelComponent(panelId, container);
-            }
-        );
+        if (hasSavedLayout) {
+            // RESTORE MODE: Use the saved layout structure which includes panel positions
+            // This preserves user's custom arrangements (stacks, rows, columns, widths, heights)
+            console.log('[DashboardViewer] Restoring saved layout structure');
+            this._glService.initialize(
+                this.layoutContainer.nativeElement,
+                this.config.layout,
+                (panelId, container) => {
+                    console.log('[DashboardViewer] Panel factory called for panelId:', panelId);
+                    this.createPanelComponent(panelId, container);
+                }
+            );
+        } else {
+            // FRESH MODE: Initialize with empty config and add panels one-by-one
+            // This is for new dashboards or configs without layout structure
+            console.log('[DashboardViewer] No saved layout, adding panels fresh');
+            const emptyConfig: GoldenLayoutConfig = {
+                root: {
+                    type: 'row',
+                    content: []
+                }
+            };
 
-        // Now add panels one-by-one (like shell's createTab pattern)
-        console.log('[DashboardViewer] Adding panels:', this.config.panels.length);
-        for (const panel of this.config.panels) {
-            console.log('[DashboardViewer] Adding panel:', panel.id, panel.title);
-            this._glService.addPanel(panel);
+            this._glService.initialize(
+                this.layoutContainer.nativeElement,
+                emptyConfig,
+                (panelId, container) => {
+                    console.log('[DashboardViewer] Panel factory called for panelId:', panelId);
+                    this.createPanelComponent(panelId, container);
+                }
+            );
+
+            // Add panels one-by-one (like shell's createTab pattern)
+            console.log('[DashboardViewer] Adding panels:', this.config.panels.length);
+            for (const panel of this.config.panels) {
+                console.log('[DashboardViewer] Adding panel:', panel.id, panel.title);
+                this._glService.addPanel(panel);
+            }
         }
 
         console.log('[DashboardViewer] initializeLayout() complete');
+    }
+
+    /**
+     * Check if the saved layout has actual component structure to restore.
+     * A layout is considered "saved" if it has nested content with componentState.
+     * This indicates the user has arranged panels and we should preserve that.
+     */
+    private hasSavedLayoutStructure(layout: GoldenLayoutConfig | null | undefined): boolean {
+        if (!layout?.root) {
+            return false;
+        }
+
+        // Recursively check if any node has componentState (actual panel references)
+        const hasComponents = (node: LayoutNode): boolean => {
+            // If this node is a component with a panelId, we have saved structure
+            if (node.componentState?.panelId) {
+                return true;
+            }
+
+            // Check children
+            if (node.content && node.content.length > 0) {
+                return node.content.some((child: LayoutNode) => hasComponents(child));
+            }
+
+            return false;
+        };
+
+        return hasComponents(layout.root);
     }
 
     private destroyLayout(): void {
