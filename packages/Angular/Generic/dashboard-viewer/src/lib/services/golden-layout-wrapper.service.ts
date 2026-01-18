@@ -109,7 +109,6 @@ export class GoldenLayoutWrapperService {
         componentFactory: PanelComponentFactory,
         isEditing = false
     ): void {
-        console.log('[GLWrapper] initialize() called, isEditing:', isEditing);
         this._componentFactory = componentFactory;
         this._containerElement = container;
         this._isEditing = isEditing;
@@ -120,7 +119,6 @@ export class GoldenLayoutWrapperService {
 
         // Convert our config to Golden Layout's LayoutConfig format
         const glConfig = this.convertToGLConfig(config);
-        console.log('[GLWrapper] Converted GL config:', JSON.stringify(glConfig, null, 2));
 
         // Create VirtualLayout instance with bind/unbind callbacks
         this._layout = new VirtualLayout(
@@ -152,8 +150,6 @@ export class GoldenLayoutWrapperService {
 
         this._initialized = true;
         this.updatePanelsList();
-
-        console.log('[GLWrapper] initialize() complete');
     }
 
     /**
@@ -176,7 +172,6 @@ export class GoldenLayoutWrapperService {
         itemConfig: { componentState: Record<string, unknown> }
     ): { component: HTMLElement; virtual: boolean } {
         const state = container.state as unknown as DashboardPanelState;
-        console.log('[GLWrapper] bindComponentEventListener called for panelId:', state?.panelId);
 
         // Create a wrapper element for our panel content
         const wrapper = document.createElement('div');
@@ -186,10 +181,8 @@ export class GoldenLayoutWrapperService {
         wrapper.style.overflow = 'auto';
 
         if (!state?.panelId) {
-            console.warn('[GLWrapper] No panelId in component state');
             wrapper.innerHTML = '<div class="panel-error">No panel ID provided</div>';
         } else {
-            console.log('[GLWrapper] Creating component for panel:', state.panelId);
 
             // Store reference to container
             this._containerMap.set(state.panelId, container);
@@ -259,10 +252,7 @@ export class GoldenLayoutWrapperService {
      * Add a panel to the layout
      */
     public addPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
-        console.log('[GLWrapper] addPanel() called, panel:', panel);
-
         if (!this._layout) {
-            console.warn('[GLWrapper] Golden Layout not initialized');
             return;
         }
 
@@ -294,7 +284,6 @@ export class GoldenLayoutWrapperService {
         }
 
         this.emitLayoutChanged('resize');
-        console.log('[GLWrapper] addPanel() complete');
     }
 
     /**
@@ -378,15 +367,11 @@ export class GoldenLayoutWrapperService {
      * Get the current layout configuration
      */
     public getLayoutConfig(): GoldenLayoutConfig | null {
-        console.log('[GLWrapper] getLayoutConfig() called, _layout exists:', !!this._layout);
         if (!this._layout) return null;
 
         try {
             const resolved = this._layout.saveLayout();
-            console.log('[GLWrapper] saveLayout() returned:', resolved);
-            const converted = this.convertFromGLConfig(resolved);
-            console.log('[GLWrapper] Converted config:', converted);
-            return converted;
+            return this.convertFromGLConfig(resolved);
         } catch (error) {
             console.error('[GLWrapper] Failed to save layout:', error);
             return null;

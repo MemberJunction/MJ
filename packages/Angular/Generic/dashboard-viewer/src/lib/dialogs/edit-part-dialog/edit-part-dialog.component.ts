@@ -51,9 +51,10 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
         this._visible = value;
         if (value && !previous) {
             this.onDialogOpened();
-            // Load config panel if view is initialized
+            // Delay loadConfigPanel to next tick to ensure all inputs are set
+            // Angular doesn't guarantee input order, so PartType might not be set yet
             if (this.viewInitialized) {
-                this.loadConfigPanel();
+                setTimeout(() => this.loadConfigPanel(), 0);
             }
         } else if (!value && previous) {
             this.onDialogClosed();
@@ -162,9 +163,14 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
         this.destroyConfigPanel();
         this.LoadError = null; // Clear any previous error
 
+        console.log('[EditPartDialog] loadConfigPanel() called');
+        console.log('[EditPartDialog] PartType:', this.PartType?.Name);
+        console.log('[EditPartDialog] ConfigDialogClass:', this.PartType?.ConfigDialogClass);
+
         if (!this.PartType?.ConfigDialogClass) {
             // No config class specified - this is okay for simple part types
             // Just enable the save button with default config
+            console.log('[EditPartDialog] No ConfigDialogClass specified, using default');
             this.IsValid = true;
             this.cdr.detectChanges();
             return;
@@ -172,6 +178,7 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
 
         if (!this.configPanelContainer) {
             // Container not ready yet - will be called again from ngAfterViewInit
+            console.log('[EditPartDialog] Container not ready yet');
             return;
         }
 
@@ -180,13 +187,17 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
 
         try {
             // Use ClassFactory to create the config panel instance
+            console.log('[EditPartDialog] Attempting to create instance via ClassFactory:', this.PartType.ConfigDialogClass);
             const panelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseConfigPanel>(
                 BaseConfigPanel,
                 this.PartType.ConfigDialogClass
             );
 
+            console.log('[EditPartDialog] ClassFactory returned:', panelInstance);
+
             if (!panelInstance) {
                 this.LoadError = `Could not create config panel: ${this.PartType.ConfigDialogClass}`;
+                console.error('[EditPartDialog]', this.LoadError);
                 this.IsLoading = false;
                 this.IsValid = true; // Allow saving with default config
                 this.cdr.detectChanges();
@@ -196,10 +207,12 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
             // Get the component class from the instance
             // We need to find the Angular component class that was registered
             const componentClass = (panelInstance as object).constructor as typeof BaseConfigPanel;
+            console.log('[EditPartDialog] Component class:', componentClass.name);
 
             // Clear the container and create the component
             this.configPanelContainer.clear();
             this.configPanelRef = this.configPanelContainer.createComponent(componentClass as never);
+            console.log('[EditPartDialog] Component created successfully');
 
             // Set inputs on the component
             const panel = this.configPanelRef.instance;
@@ -218,6 +231,7 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
 
         } catch (error) {
             this.LoadError = `Failed to load config panel: ${error instanceof Error ? error.message : String(error)}`;
+            console.error('[EditPartDialog]', this.LoadError, error);
             this.IsLoading = false;
             this.IsValid = true; // Allow saving with default config
             this.cdr.detectChanges();
