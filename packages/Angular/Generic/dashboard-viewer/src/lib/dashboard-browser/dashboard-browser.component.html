@@ -285,7 +285,7 @@
         type="danger"
         title="Delete Dashboard{{ DashboardsPendingDelete.length > 1 ? 's' : '' }}"
         [message]="DashboardsPendingDelete.length === 1
-            ? 'Are you sure you want to delete \'' + DashboardsPendingDelete[0]?.Name + '\'? This action cannot be undone.'
+            ? 'Are you sure you want to delete \'' + DashboardsPendingDelete[0].Name + '\'? This action cannot be undone.'
             : 'Are you sure you want to delete ' + DashboardsPendingDelete.length + ' dashboards? This action cannot be undone.'"
         confirmText="Delete"
         cancelText="Cancel"
