@@ -103,7 +103,8 @@ export class NotificationPreferencesComponent implements OnInit {
       const currentUser = md.CurrentUser;
       const transGroup = await md.CreateTransactionGroup();
 
-      for (const vm of this.viewModels.filter((v) => v.changed)) {
+      // Prepare all saves in parallel
+      const savePromises = this.viewModels.filter((v) => v.changed).map(async (vm) => {
         let pref = vm.preference;
 
         if (!pref) {
@@ -123,8 +124,9 @@ export class NotificationPreferencesComponent implements OnInit {
         pref.SMSEnabled = vm.smsEnabled;
         pref.TransactionGroup = transGroup;
         await pref.Save();
-      }
+      });
 
+      await Promise.all(savePromises);
       const success = await transGroup.Submit();
 
       if (success) {

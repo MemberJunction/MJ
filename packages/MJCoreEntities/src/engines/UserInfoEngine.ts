@@ -20,6 +20,20 @@ import {
 } from "../generated/entity_subclasses";
 
 /**
+ * Cached representation of user notification preference.
+ * Uses plain object instead of BaseEntity to avoid getter/setter mutation issues.
+ */
+export interface CachedUserNotificationPreference {
+    ID: string;
+    UserID: string;
+    NotificationTypeID: string;
+    Enabled: boolean;
+    InAppEnabled: boolean | null;
+    EmailEnabled: boolean | null;
+    SMSEnabled: boolean | null;
+}
+
+/**
  * UserInfoEngine is a singleton engine that provides centralized access to user-specific data
  * including notifications, workspaces, applications, favorites, and record logs.
  *
@@ -64,7 +78,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
 
     // Notification metadata
     private _NotificationTypes: UserNotificationTypeEntity[] = [];
-    private _UserNotificationPreferences: UserNotificationPreferenceEntity[] = [];
+    private _UserNotificationPreferences: CachedUserNotificationPreference[] = [];
 
     // Notification type lookups
     private _notificationTypesByName: Map<string, UserNotificationTypeEntity> = new Map();
@@ -156,11 +170,25 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
                 EntityName: 'MJ: User Notification Preferences',
                 PropertyName: '_UserNotificationPreferences',
                 CacheLocal: true,
-                AutoRefresh: true
+                AutoRefresh: false  // Disabled - UpdatePreferenceInCache() handles cache updates explicitly
             }
         ];
 
         await super.Load(configs, provider, forceRefresh, contextUser);
+
+        // Convert loaded UserNotificationPreferenceEntity objects to plain CachedUserNotificationPreference objects
+        // This is necessary because BaseEngine.Load() loads BaseEntity instances with getters/setters
+        // but we need plain objects to avoid mutation issues when updating the cache
+        this._UserNotificationPreferences = (this._UserNotificationPreferences as unknown as UserNotificationPreferenceEntity[]).map(p => ({
+            ID: p.ID,
+            UserID: p.UserID,
+            NotificationTypeID: p.NotificationTypeID,
+            Enabled: p.Enabled,
+            InAppEnabled: p.InAppEnabled,
+            EmailEnabled: p.EmailEnabled,
+            SMSEnabled: p.SMSEnabled
+        }));
+
         this._loadedForUserId = userId;
     }
 
@@ -289,13 +317,86 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         if (result.Success) {
             // Merge refreshed user's preferences into existing array
             // Remove old preferences for this user, then add the fresh ones
-            const freshPrefs = result.Results || [];
+            // Convert entity objects to plain objects to avoid BaseEntity getter/setter issues
+            const freshPrefs = (result.Results || []).map(p => ({
+                ID: p.ID,
+                UserID: p.UserID,
+                NotificationTypeID: p.NotificationTypeID,
+                Enabled: p.Enabled,
+                InAppEnabled: p.InAppEnabled,
+                EmailEnabled: p.EmailEnabled,
+                SMSEnabled: p.SMSEnabled
+            }));
             this._UserNotificationPreferences = [
                 ...this._UserNotificationPreferences.filter(p => p.UserID !== targetUserId),
                 ...freshPrefs
             ];
         } else {
             console.error(`UserInfoEngine.RefreshUserPreferences: RunView failed - ${result.ErrorMessage}`);
+        }
+    }
+
+    /**
+     * Directly update a preference in the cache without querying the database.
+     * Called BEFORE database write to implement "arrow shot through" pattern.
+     *
+     * This method is called by the entity extension on both client and server:
+     * - On client: Updates client cache before GraphQL mutation is sent
+     * - On server: Updates server cache before SQL stored procedure executes
+     *
+     * @param id - The preference record ID
+     * @param userId - The user ID
+     * @param notificationTypeId - The notification type ID
+     * @param enabled - Master enable/disable switch
+     * @param inAppEnabled - In-app notification enabled
+     * @param emailEnabled - Email notification enabled
+     * @param smsEnabled - SMS notification enabled
+     */
+    public UpdatePreferenceInCache(
+        id: string,
+        userId: string,
+        notificationTypeId: string,
+        enabled: boolean,
+        inAppEnabled: boolean | null,
+        emailEnabled: boolean | null,
+        smsEnabled: boolean | null
+    ): void {
+        if (!id) return;
+
+        // Find existing preference in cache by ID
+        const existingIndex = this._UserNotificationPreferences.findIndex(p => p.ID === id);
+
+        // Create the new preference object
+        const newPref: CachedUserNotificationPreference = {
+            ID: id,
+            UserID: userId,
+            NotificationTypeID: notificationTypeId,
+            Enabled: enabled,
+            InAppEnabled: inAppEnabled,
+            EmailEnabled: emailEnabled,
+            SMSEnabled: smsEnabled
+        };
+
+        if (existingIndex >= 0) {
+            // REPLACE the entire object instead of mutating BaseEntity properties
+            // BaseEntity getters/setters don't work correctly when mutating cached instances
+            this._UserNotificationPreferences[existingIndex] = newPref;
+        } else {
+            // Add new preference to cache
+            this._UserNotificationPreferences.push(newPref);
+        }
+    }
+
+    /**
+     * Remove a preference from the cache.
+     * Called BEFORE database delete.
+     *
+     * @param preferenceId - The ID of the preference to remove
+     */
+    public RemovePreferenceFromCache(preferenceId: string): void {
+        const index = this._UserNotificationPreferences.findIndex(p => p.ID === preferenceId);
+        if (index >= 0) {
+            this._UserNotificationPreferences.splice(index, 1);
         }
     }
 
@@ -434,7 +535,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     /**
      * Current user's notification preferences
      */
-    public get UserNotificationPreferences(): UserNotificationPreferenceEntity[] {
+    public get UserNotificationPreferences(): CachedUserNotificationPreference[] {
         if (!this._loadedForUserId) return [];
         return (this._UserNotificationPreferences || [])
             .filter(p => p.UserID === this._loadedForUserId);
@@ -443,14 +544,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     /**
      * All user notification preferences unfiltered (for admin/server scenarios)
      */
-    public get AllUserNotificationPreferences(): UserNotificationPreferenceEntity[] {
+    public get AllUserNotificationPreferences(): CachedUserNotificationPreference[] {
         return this._UserNotificationPreferences || [];
     }
 
     /**
      * Get preferences for all users for a specific notification type
      */
-    public GetPreferencesForNotificationType(typeId: string): UserNotificationPreferenceEntity[] {
+    public GetPreferencesForNotificationType(typeId: string): CachedUserNotificationPreference[] {
         return (this._UserNotificationPreferences || [])
             .filter(p => p.NotificationTypeID === typeId);
     }
@@ -458,7 +559,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     /**
      * Get preferences for a specific user
      */
-    public GetUserPreferences(userId: string): UserNotificationPreferenceEntity[] {
+    public GetUserPreferences(userId: string): CachedUserNotificationPreference[] {
         return (this._UserNotificationPreferences || [])
             .filter(p => p.UserID === userId);
     }
@@ -466,7 +567,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     /**
      * Get a specific user's preference for a specific notification type
      */
-    public GetUserPreferenceForType(userId: string, typeId: string): UserNotificationPreferenceEntity | undefined {
+    public GetUserPreferenceForType(userId: string, typeId: string): CachedUserNotificationPreference | undefined {
         return (this._UserNotificationPreferences || [])
             .find(p => p.UserID === userId && p.NotificationTypeID === typeId);
     }
@@ -474,7 +575,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     /**
      * Get current user's preference for a specific notification type
      */
-    public GetCurrentUserPreferenceForType(typeId: string): UserNotificationPreferenceEntity | undefined {
+    public GetCurrentUserPreferenceForType(typeId: string): CachedUserNotificationPreference | undefined {
         if (!this._loadedForUserId) return undefined;
         return this.GetUserPreferenceForType(this._loadedForUserId, typeId);
     }

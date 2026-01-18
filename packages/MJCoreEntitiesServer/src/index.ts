@@ -12,6 +12,7 @@ import { LoadUserViewEntityServerSubClass } from './custom/userViewEntity.server
 import { LoadArtifactVersionExtendedServerSubClass } from './custom/ArtifactVersionExtended.server';
 import { LoadAIAgentNoteEntityServerSubClass } from './custom/AIAgentNoteEntity.server';
 import { LoadAIAgentExampleEntityServerSubClass } from './custom/AIAgentExampleEntity.server';
+import { LoadUserNotificationPreferenceEntityExtended } from '@memberjunction/core-entities';
 
 LoadAIProviders(); // Ensure all AI providers are loaded
 
@@ -46,5 +47,6 @@ export function LoadCoreEntitiesServerSubClasses(): void {
     LoadArtifactVersionExtendedServerSubClass();
     LoadAIAgentNoteEntityServerSubClass();
     LoadAIAgentExampleEntityServerSubClass();
+    LoadUserNotificationPreferenceEntityExtended();
 }
 LoadCoreEntitiesServerSubClasses();

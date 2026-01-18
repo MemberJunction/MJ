@@ -1,18 +1,13 @@
--- =============================================
 -- Migration: V202601151536__v2.134.0_unified_notification_system.sql
 -- Description: Add unified notification system with types, preferences, and template associations
--- Date: 2026-01-15
--- =============================================
+-- Date: 2026-01-18
 
--- =============================================
--- 1. Create UserNotificationType Table
--- =============================================
+-- Create UserNotificationType Table
 CREATE TABLE [${flyway:defaultSchema}].UserNotificationType (
     ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
     Name NVARCHAR(100) NOT NULL UNIQUE,
     Description NVARCHAR(500),
 
-    -- Delivery Configuration (boolean flags for flexibility)
     DefaultInApp BIT NOT NULL DEFAULT 1,   -- In-app notifications enabled by default
     DefaultEmail BIT NOT NULL DEFAULT 0,   -- Email notifications enabled by default
     DefaultSMS BIT NOT NULL DEFAULT 0,     -- SMS notifications enabled by default
@@ -31,6 +26,30 @@ CREATE TABLE [${flyway:defaultSchema}].UserNotificationType (
     Priority INT DEFAULT 0     -- Sort order (lower = higher priority)
 );
 GO
+
+-- Create UserNotificationPreference Table
+CREATE TABLE [${flyway:defaultSchema}].UserNotificationPreference (
+    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
+    UserID UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_UserNotificationPreference_User FOREIGN KEY REFERENCES [${flyway:defaultSchema}].[User](ID),
+    NotificationTypeID UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_UserNotificationPreference_NotificationType FOREIGN KEY REFERENCES [${flyway:defaultSchema}].UserNotificationType(ID),
+
+    InAppEnabled BIT NULL,
+    EmailEnabled BIT NULL,
+    SMSEnabled BIT NULL,
+    Enabled BIT DEFAULT 1,  
+
+    CONSTRAINT UQ_UserNotificationPreference_UserType UNIQUE(UserID, NotificationTypeID)
+);
+GO
+
+-- Update UserNotification Table
+ALTER TABLE [${flyway:defaultSchema}].UserNotification
+ADD NotificationTypeID UNIQUEIDENTIFIER NULL
+    CONSTRAINT FK_UserNotification_NotificationType
+    FOREIGN KEY REFERENCES [${flyway:defaultSchema}].UserNotificationType(ID);
+GO
+
+
 
 -- Add extended properties for documentation
 EXEC sp_addextendedproperty
@@ -80,24 +99,6 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'AllowUserPreference';
 GO
 
--- =============================================
--- 2. Create UserNotificationPreference Table
--- =============================================
-CREATE TABLE [${flyway:defaultSchema}].UserNotificationPreference (
-    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    UserID UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_UserNotificationPreference_User FOREIGN KEY REFERENCES [${flyway:defaultSchema}].[User](ID),
-    NotificationTypeID UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_UserNotificationPreference_NotificationType FOREIGN KEY REFERENCES [${flyway:defaultSchema}].UserNotificationType(ID),
-
-    -- User preference overrides (NULL = use default from NotificationType)
-    InAppEnabled BIT NULL,
-    EmailEnabled BIT NULL,
-    SMSEnabled BIT NULL,
-    Enabled BIT DEFAULT 1,        -- Opt-out of this type entirely
-
-    CONSTRAINT UQ_UserNotificationPreference_UserType UNIQUE(UserID, NotificationTypeID)
-);
-GO
-
 -- Add extended properties for documentation
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -130,15 +131,6 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'SMSEnabled';
 GO
 
--- =============================================
--- 3. Update UserNotification Table
--- =============================================
-ALTER TABLE [${flyway:defaultSchema}].UserNotification
-ADD NotificationTypeID UNIQUEIDENTIFIER NULL
-    CONSTRAINT FK_UserNotification_NotificationType
-    FOREIGN KEY REFERENCES [${flyway:defaultSchema}].UserNotificationType(ID);
-GO
-
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Optional reference to notification type for categorization and delivery preferences',
@@ -147,8 +139,3 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'NotificationTypeID';
 GO
 
--- =============================================
--- Migration Complete
--- =============================================
--- NOTE: Template and notification type data should be added via metadata files and mj-sync
--- See /metadata/notifications/ for the data definitions

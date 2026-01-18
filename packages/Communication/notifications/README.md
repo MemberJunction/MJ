@@ -4,184 +4,150 @@ Unified notification system for MemberJunction with multi-channel delivery suppo
 
 ## Overview
 
-The notification system provides a **single, unified API** for sending notifications to users across multiple channels:
-- **In-App** - UserNotification entities displayed in the MJ UI
-- **Email** - HTML-formatted emails with template support
-- **SMS** - Text messages for urgent notifications
-- **All** - Simultaneous delivery across all channels
+The notification system provides a **single API** for sending notifications to users across multiple channels:
 
-### Key Features
+- **In-App** - Stored in the database, displayed in the MJ UI
+- **Email** - HTML-formatted emails via SendGrid
+- **SMS** - Text messages via Twilio
 
-✅ **Type-based notifications** - Categorize notifications (Agent Completion, Report Ready, etc.)
-✅ **User preferences** - Users control delivery method per notification type
-✅ **Template-based delivery** - Email/SMS use Nunjucks templates for consistent formatting
-✅ **Multi-channel** - Single API sends to in-app, email, and/or SMS based on preferences
-✅ **Backward compatible** - Works alongside existing in-app notification system
+Key features:
+- **Type-based** - Categorize notifications (e.g., "Agent Completion", "Report Ready")
+- **User preferences** - Users control delivery method per notification type
+- **Template-driven** - Email/SMS use Nunjucks templates for consistent formatting
 
-## Installation
+## Architecture
 
-```bash
-npm install @memberjunction/notifications
+The notification system uses three related entities:
+
+```
+┌─────────────────────────────┐
+│   UserNotificationType      │  Defines notification categories
+│   (e.g., "Agent Completion")│  with default delivery settings
+└──────────────┬──────────────┘
+               │ referenced by
+               ▼
+┌─────────────────────────────┐
+│  UserNotificationPreference │  Per-user overrides for
+│  (one per user/type combo)  │  delivery channels
+└──────────────┬──────────────┘
+               │ links to
+               ▼
+┌─────────────────────────────┐
+│     UserNotification        │  Actual notification records
+│   (in-app notifications)    │  displayed in UI
+└─────────────────────────────┘
 ```
 
-## Quick Start
+**Flow**: When you call `SendNotification()`, the engine:
+1. Looks up the notification type
+2. Checks user preferences (if allowed)
+3. Resolves which channels to use
+4. Creates in-app record and/or sends email/SMS
+
+## Notification Types
+
+Notification types define categories with default delivery behavior. Managed via metadata files in `/metadata/notifications/`.
+
+| Field | Description |
+|-------|-------------|
+| `Name` | Unique identifier (e.g., "Agent Completion") |
+| `Description` | Human-readable explanation |
+| `DefaultInApp` | In-app enabled by default (default: true) |
+| `DefaultEmail` | Email enabled by default (default: false) |
+| `DefaultSMS` | SMS enabled by default (default: false) |
+| `AllowUserPreference` | Can users override defaults? (default: true) |
+| `EmailTemplateID` | FK to Template for email formatting |
+| `SMSTemplateID` | FK to Template for SMS formatting |
+| `Icon` | Font Awesome class (e.g., "fa-robot") |
+| `Color` | Hex color for UI badge (e.g., "#4CAF50") |
+| `AutoExpireDays` | Auto-mark as read after N days (NULL = never) |
+| `Priority` | Sort order (lower = higher priority) |
+
+## User Preferences
+
+Users can override delivery settings per notification type. Stored in `UserNotificationPreference`.
+
+| Field | Description |
+|-------|-------------|
+| `UserID` | User reference |
+| `NotificationTypeID` | Type reference |
+| `InAppEnabled` | Override for in-app (NULL = use type default) |
+| `EmailEnabled` | Override for email (NULL = use type default) |
+| `SMSEnabled` | Override for SMS (NULL = use type default) |
+| `Enabled` | Master switch - set to false to opt out entirely |
+
+**Key behavior**: NULL values inherit from the notification type's defaults. Only set a value when the user explicitly chooses differently.
+
+## NotificationEngine API
+
+### SendNotification
 
 ```typescript
-import { NotificationService } from '@memberjunction/notifications';
+import { NotificationEngine } from '@memberjunction/notifications';
 
-// Send a notification (delivery method determined by user preferences and type config)
-const result = await NotificationService.Instance.SendNotification({
-    userId: contextUser.ID,
-    typeNameOrId: 'Agent Completion',
+const result = await NotificationEngine.Instance.SendNotification({
+    userId: targetUserId,
+    typeNameOrId: 'Agent Completion',  // Name or UUID
     title: 'Task Complete',
     message: 'Your AI agent has finished processing',
     templateData: {
         agentName: 'My Agent',
         artifactTitle: 'Report.pdf',
-        conversationUrl: 'https://app.example.com/conversations/123',
-        versionNumber: 2
+        conversationUrl: 'https://app.example.com/conversations/123'
     }
 }, contextUser);
-
-if (result.success) {
-    console.log(`Notification channels: InApp=${result.deliveryChannels.inApp}, Email=${result.deliveryChannels.email}, SMS=${result.deliveryChannels.sms}`);
-    console.log(`In-app notification ID: ${result.inAppNotificationId}`);
-    console.log(`Email sent: ${result.emailSent}`);
-    console.log(`SMS sent: ${result.smsSent}`);
-}
 ```
 
-## Architecture
-
-### Database Schema
-
-#### UserNotificationType
-Defines categories of notifications with delivery configuration:
-
-- **Name** - Unique type name (e.g., "Agent Completion")
-- **DefaultDeliveryMethod** - 'InApp', 'Email', 'SMS', 'All', 'None'
-- **AllowUserPreference** - Can users override default?
-- **EmailTemplateID** - Optional email template reference
-- **SMSTemplateID** - Optional SMS template reference
-- **Icon** - Font Awesome icon class
-- **Color** - Badge color hex
-- **AutoExpireDays** - Auto-mark as read after N days
-- **Priority** - Sort order (lower = higher priority)
-
-#### UserNotificationPreference
-Per-user delivery preferences:
-
-- **UserID** - User reference
-- **NotificationTypeID** - Type reference
-- **DeliveryMethod** - User's override (InApp, Email, SMS, All, None)
-- **Enabled** - Opt-out flag
-
-#### UserNotification (Updated)
-Added field:
-- **NotificationTypeID** - Foreign key to notification type
-
-### Delivery Method Resolution
-
-The system resolves delivery method in this order:
-
-1. **Force parameter** (if provided) - Always wins
-2. **User preference** (if type allows) - User's custom choice
-3. **Type default** - Fallback to type configuration
+**Parameters:**
 
 ```typescript
-// Example: Force email and SMS only, even if user prefers in-app
-await NotificationEngine.Instance.SendNotification({
-    ...params,
-    forceDeliveryChannels: { inApp: false, email: true, sms: true }  // Override user preference
-}, contextUser);
-```
-
-## Adding New Notification Types
-
-### Step 1: Create Metadata Files
-
-MemberJunction uses `mj-sync` for data management - **never use raw SQL inserts for metadata**. Create files in two directories:
-
-```
-metadata/
-├── notifications/
-│   └── .your-type-name.json              # Notification type definition
-│
-└── templates/
-    ├── .your-type-email-template.json    # Email template entity
-    ├── .your-type-sms-template.json      # SMS template entity
-    └── templates/                         # Actual content files
-        ├── your-type-email.html           # HTML email body (Nunjucks)
-        └── your-type-sms.txt              # SMS text body (Nunjucks)
-```
-
-**Why two directories?**
-- `metadata/notifications/` - Contains **UserNotificationType** records (references templates by ID)
-- `metadata/templates/` - Contains **Template** entity records + the actual HTML/text content files
-
-**Example: `metadata/notifications/.your-type-name.json`**
-```json
-{
-  "entityName": "MJ: User Notification Types",
-  "primaryKey": { "ID": "YOUR-UUID-HERE" },
-  "fields": {
-    "Name": "Your Type Name",
-    "Description": "Description of when this notification is sent",
-    "DefaultDeliveryMethod": "InApp",
-    "AllowUserPreference": true,
-    "EmailTemplateID": "@lookup:Templates.Name=Your Type - Email",
-    "SMSTemplateID": "@lookup:Templates.Name=Your Type - SMS",
-    "Icon": "fa-bell",
-    "Color": "#2196F3",
-    "AutoExpireDays": null,
-    "Priority": 50
-  }
+interface SendNotificationParams {
+    userId: string;                     // Target user
+    typeNameOrId: string;               // Type name or UUID
+    title: string;                      // Short title (in-app + email subject)
+    message: string;                    // Full message (in-app display)
+    resourceTypeId?: string;            // Optional resource link
+    resourceRecordId?: string;          // Optional record link
+    resourceConfiguration?: object;     // Navigation context (JSON)
+    templateData?: Record<string, any>; // Data for template rendering
+    forceDeliveryChannels?: {           // Override user preferences
+        inApp: boolean;
+        email: boolean;
+        sms: boolean;
+    };
 }
 ```
 
-**Example: `metadata/templates/.your-type-email-template.json`**
+**Returns:**
 
-This creates a **Template** entity record with a related **TemplateContent** record:
-
-```json
-{
-  "entityName": "Templates",
-  "primaryKey": { "ID": "YOUR-UUID-HERE" },
-  "fields": {
-    "Name": "Your Type - Email",
-    "Description": "Email template for your notification type",
-    "UserID": "@lookup:Users.Name=your-user",
-    "IsActive": true
-  },
-  "relatedEntities": {
-    "Template Contents": [
-      {
-        "primaryKey": { "ID": "YOUR-UUID-HERE" },
-        "fields": {
-          "TemplateID": "@parent",
-          "TypeID": "@lookup:Template Content Types.Name=HTML",
-          "TemplateText": "@file:templates/your-type-email.html",
-          "Priority": 100,
-          "IsActive": true
-        }
-      }
-    ]
-  }
+```typescript
+interface NotificationResult {
+    success: boolean;
+    inAppNotificationId?: string;
+    emailSent?: boolean;
+    smsSent?: boolean;
+    deliveryChannels: { inApp: boolean; email: boolean; sms: boolean };
+    errors?: string[];
 }
 ```
 
-**How `@file:` works:** The `@file:templates/your-type-email.html` reference tells mj-sync to read the HTML file content and store it in the `TemplateText` field. This keeps large HTML/text content out of the JSON for cleaner version control.
+### Delivery Channel Resolution
 
-### Step 2: Create Templates
+The engine determines which channels to use in this order:
 
-**Email Template Guidelines:**
-- Use responsive HTML with inline styles (email clients don't support external CSS)
-- Include clear call-to-action button
-- Keep subject under 50 characters
-- Test with all required parameters
-- Use MemberJunction branding colors
+1. **forceDeliveryChannels** (if provided) - Always wins
+2. **User preference** (if type allows) - User's custom choice
+3. **Type default** - Fallback to notification type configuration
 
-**Example: `templates/your-type-email.html`**
+## Adding a Notification Template
+
+Follow these steps to add a new notification type with email/SMS templates.
+
+### Step 1: Create Template Content Files
+
+Create the actual template content in `/metadata/templates/templates/`:
+
+**Email template** (`metadata/templates/templates/your-type-email.html`):
 ```html
 <!DOCTYPE html>
 <html>
@@ -189,8 +155,8 @@ This creates a **Template** entity record with a related **TemplateContent** rec
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: #2196F3; color: white; padding: 30px 20px; text-align: center; }
-        .content { background: white; padding: 30px 20px; }
+        .header { background: #2196F3; color: white; padding: 30px; text-align: center; }
+        .content { padding: 30px; }
         .button { display: inline-block; background: #4CAF50; color: white;
                   padding: 14px 32px; text-decoration: none; border-radius: 6px; }
     </style>
@@ -209,132 +175,140 @@ This creates a **Template** entity record with a related **TemplateContent** rec
 </html>
 ```
 
-**SMS Template Guidelines:**
-- Maximum 160 characters for single SMS (longer messages are split)
-- Include only essential information
-- Always include a clickable link
-- Consider using URL shorteners for long links
-- Test rendering with all parameter combinations
-
-**Example: `templates/your-type-sms.txt`**
+**SMS template** (`metadata/templates/templates/your-type-sms.txt`):
 ```text
 {{ title }}: {{ shortMessage }} - {{ actionUrl }}
 ```
 
-### Step 3: Trigger Notification
+### Step 2: Create Template Metadata Files
+
+Create template entity records that reference the content files.
+
+**Email template** (`metadata/templates/.your-type-email-template.json`):
+```json
+{
+  "entityName": "Templates",
+  "primaryKey": { "ID": "YOUR-EMAIL-TEMPLATE-UUID" },
+  "fields": {
+    "Name": "Your Type - Email",
+    "Description": "Email template for your notification type",
+    "UserID": "@lookup:Users.Email=system@yourdomain.com",
+    "IsActive": true
+  },
+  "relatedEntities": {
+    "Template Contents": [
+      {
+        "primaryKey": { "ID": "YOUR-CONTENT-UUID" },
+        "fields": {
+          "TemplateID": "@parent",
+          "TypeID": "@lookup:Template Content Types.Name=HTML",
+          "TemplateText": "@file:templates/your-type-email.html",
+          "Priority": 100,
+          "IsActive": true
+        }
+      }
+    ]
+  }
+}
+```
+
+**SMS template** (`metadata/templates/.your-type-sms-template.json`):
+```json
+{
+  "entityName": "Templates",
+  "primaryKey": { "ID": "YOUR-SMS-TEMPLATE-UUID" },
+  "fields": {
+    "Name": "Your Type - SMS",
+    "Description": "SMS template for your notification type",
+    "UserID": "@lookup:Users.Email=system@yourdomain.com",
+    "IsActive": true
+  },
+  "relatedEntities": {
+    "Template Contents": [
+      {
+        "primaryKey": { "ID": "YOUR-SMS-CONTENT-UUID" },
+        "fields": {
+          "TemplateID": "@parent",
+          "TypeID": "@lookup:Template Content Types.Name=Text",
+          "TemplateText": "@file:templates/your-type-sms.txt",
+          "Priority": 100,
+          "IsActive": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### Step 3: Create Notification Type
+
+Create the notification type that references your templates.
+
+**Notification type** (`metadata/notifications/.your-type.json`):
+```json
+{
+  "entityName": "MJ: User Notification Types",
+  "primaryKey": { "ID": "YOUR-TYPE-UUID" },
+  "fields": {
+    "Name": "Your Type Name",
+    "Description": "When this notification is sent",
+    "DefaultInApp": true,
+    "DefaultEmail": false,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "EmailTemplateID": "YOUR-EMAIL-TEMPLATE-UUID",
+    "SMSTemplateID": "YOUR-SMS-TEMPLATE-UUID",
+    "Icon": "fa-bell",
+    "Color": "#2196F3",
+    "AutoExpireDays": 7,
+    "Priority": 50
+  }
+}
+```
+
+> **Tip**: Generate UUIDs with `uuidgen` or an online generator. Keep them consistent across files.
+
+### Step 4: Push Metadata
+
+Run mj-sync to push your metadata to the database:
+
+```bash
+# Push templates first (notification type references them)
+mj sync push --dir=metadata/templates
+
+# Then push notification type
+mj sync push --dir=metadata/notifications
+```
+
+### Step 5: Use in Code
 
 ```typescript
-import { NotificationService } from '@memberjunction/notifications';
-
-// In your code where the event occurs
-await NotificationService.Instance.SendNotification({
+await NotificationEngine.Instance.SendNotification({
     userId: targetUserId,
-    typeNameOrId: 'Your Type Name',  // Exact name from database
-    title: 'Short notification title',
-    message: 'Longer message for in-app display',
+    typeNameOrId: 'Your Type Name',
+    title: 'Notification Title',
+    message: 'Full message for in-app display',
     templateData: {
-        // Data for template rendering
-        title: 'Title for email',
-        message: 'Message for email',
-        shortMessage: 'Brief message for SMS',
-        actionUrl: 'https://...'
+        title: 'Email/SMS title',
+        message: 'Email message',
+        shortMessage: 'Brief SMS message',
+        actionUrl: 'https://app.example.com/...'
     }
 }, contextUser);
 ```
 
-### Step 4: Sync and Test
+### Step 6: Test
 
-1. **Push metadata to database**:
-   ```bash
-   npx mj-sync push --dir=metadata/notifications
-   npx mj-sync push --dir=metadata/templates
-   ```
-2. **Restart API server** to pick up new templates
-3. **Test notification**:
-   - Trigger event in your code
-   - Verify in-app notification appears
-   - Check email inbox (if configured)
-   - Check SMS delivery (if configured)
-
-> **Note:** No migration or CodeGen is needed for adding notification types - it's all metadata managed by `mj-sync`.
-
-## API Reference
-
-### NotificationService
-
-Singleton service for sending notifications.
-
-#### SendNotification
-
-```typescript
-async SendNotification(
-    params: SendNotificationParams,
-    contextUser: UserInfo
-): Promise<NotificationResult>
-```
-
-**Parameters:**
-
-```typescript
-interface SendNotificationParams {
-    userId: string;                    // User ID to send notification to
-    typeNameOrId: string;              // 'Type Name' or UUID
-    title: string;                     // Short title (in-app + email subject)
-    message: string;                   // Full message (in-app display)
-    resourceTypeId?: string;           // Optional resource link
-    resourceRecordId?: string;         // Optional record link
-    resourceConfiguration?: any;       // Navigation context (JSON)
-    templateData?: Record<string, any>; // Data for template rendering
-    forceDeliveryChannels?: { inApp: boolean; email: boolean; sms: boolean };
-}
-```
-
-**Returns:**
-
-```typescript
-interface NotificationResult {
-    success: boolean;              // Overall success
-    inAppNotificationId?: string;  // Created notification ID
-    emailSent?: boolean;           // Email delivery status
-    smsSent?: boolean;             // SMS delivery status
-    deliveryChannels: { inApp: boolean; email: boolean; sms: boolean };  // Actual channels used
-    errors?: string[];             // Any errors
-}
-```
-
-## Integration with CommunicationEngine
-
-The notification service integrates with the existing [CommunicationEngine](../engine/README.md) for external delivery:
-
-- Email sent via configured provider (SendGrid, Gmail, MSGraph)
-- SMS sent via configured provider (Twilio)
-- Templates rendered using [TemplateEngine](../../Templates/README.md)
-- Communication logs created for audit trail
-
-## Real-Time Updates
-
-In-app notifications trigger real-time PubSub events:
-
-```typescript
-// Automatically published by NotificationService
-pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-    type: 'notification',
-    notificationId: result.inAppNotificationId,
-    action: 'create',
-    title: '...',
-    message: '...'
-});
-```
-
-Clients listening to PubSub automatically refresh their notification list.
+1. **In-App**: Check notification appears in MJ UI
+2. **Email**: Verify email received with correct template rendering
+3. **SMS**: Confirm SMS delivery (requires Twilio configuration)
 
 ## Examples
 
-### Example 1: Simple In-App Notification
+### Simple In-App Only
 
 ```typescript
-// Default to in-app only (most common case)
-await NotificationService.Instance.SendNotification({
+await NotificationEngine.Instance.SendNotification({
     userId: contextUser.ID,
     typeNameOrId: 'Agent Completion',
     title: 'Agent Complete',
@@ -342,16 +316,15 @@ await NotificationService.Instance.SendNotification({
 }, contextUser);
 ```
 
-### Example 2: Force Email Delivery
+### Force Email Delivery
 
 ```typescript
-// Override user preference to always send email
 await NotificationEngine.Instance.SendNotification({
     userId: contextUser.ID,
     typeNameOrId: 'Critical Alert',
     title: 'System Error',
     message: 'A critical error occurred',
-    forceDeliveryChannels: { inApp: false, email: true, sms: false },  // Email only
+    forceDeliveryChannels: { inApp: false, email: true, sms: false },
     templateData: {
         errorDetails: '...',
         timestamp: new Date().toISOString()
@@ -359,240 +332,55 @@ await NotificationEngine.Instance.SendNotification({
 }, contextUser);
 ```
 
-### Example 3: Multi-Channel with Navigation
+### With Navigation Context
 
 ```typescript
-// Send to all channels with navigation context
 await NotificationEngine.Instance.SendNotification({
     userId: contextUser.ID,
     typeNameOrId: 'Report Ready',
     title: 'Monthly Report Ready',
-    message: 'Your monthly analytics report is ready',
+    message: 'Your analytics report is ready',
     resourceConfiguration: {
         reportId: '12345',
-        reportType: 'analytics',
-        month: 'January'
+        reportType: 'analytics'
     },
-    forceDeliveryChannels: { inApp: true, email: true, sms: true },  // All channels
     templateData: {
         reportTitle: 'January Analytics',
-        reportUrl: 'https://app.example.com/reports/12345',
-        summaryStats: {
-            revenue: '$50,000',
-            users: 1250
-        }
+        reportUrl: 'https://app.example.com/reports/12345'
     }
 }, contextUser);
 ```
-
-### Example 4: Conditional Delivery
-
-```typescript
-// Let user preferences determine delivery
-const isUrgent = calculateUrgency(task);
-
-await NotificationEngine.Instance.SendNotification({
-    userId: contextUser.ID,
-    typeNameOrId: 'Task Assignment',
-    title: `New task: ${task.name}`,
-    message: `You've been assigned a ${task.priority} priority task`,
-    // Force SMS only if urgent, otherwise respect user preference
-    forceDeliveryChannels: isUrgent ? { inApp: false, email: false, sms: true } : undefined,
-    templateData: {
-        taskName: task.name,
-        taskPriority: task.priority,
-        taskUrl: `https://app.example.com/tasks/${task.id}`
-    }
-}, contextUser);
-```
-
-## Testing
-
-### Unit Tests
-
-Test the notification service in isolation:
-
-```typescript
-import { NotificationEngine } from '@memberjunction/notifications';
-
-describe('NotificationEngine', () => {
-    it('should send in-app notification', async () => {
-        const result = await NotificationEngine.Instance.SendNotification({
-            userId: testUser.ID,
-            typeNameOrId: 'Test Type',
-            title: 'Test',
-            message: 'Test message'
-        }, testUser);
-
-        expect(result.success).toBe(true);
-        expect(result.deliveryChannels.inApp).toBe(true);
-        expect(result.inAppNotificationId).toBeDefined();
-    });
-});
-```
-
-### Integration Tests
-
-Test full notification flow with templates:
-
-```typescript
-it('should render email template and send', async () => {
-    const result = await NotificationEngine.Instance.SendNotification({
-        userId: testUser.ID,
-        typeNameOrId: 'Agent Completion',
-        title: 'Test Agent Complete',
-        message: 'Test agent finished',
-        forceDeliveryChannels: { inApp: false, email: true, sms: false },
-        templateData: {
-            agentName: 'Test Agent',
-            artifactTitle: 'Test Artifact',
-            conversationUrl: 'https://test.com/conversation/123'
-        }
-    }, testUser);
-
-    expect(result.emailSent).toBe(true);
-});
-```
-
-## Best Practices
-
-### 1. Use Descriptive Type Names
-```typescript
-// Good
-'Agent Completion'
-'Report Ready'
-'Task Assignment'
-
-// Bad
-'Notification1'
-'Alert'
-'Message'
-```
-
-### 2. Provide Complete Template Data
-```typescript
-// Always provide all required template parameters
-await NotificationService.Instance.SendNotification({
-    ...params,
-    templateData: {
-        agentName: agent.Name,           // Required
-        artifactTitle: artifact.Title,   // Required
-        conversationUrl: url,            // Required
-        versionNumber: version || 1      // Optional but included
-    }
-}, contextUser);
-```
-
-### 3. Handle Errors Gracefully
-```typescript
-try {
-    const result = await NotificationService.Instance.SendNotification(params, contextUser);
-
-    if (!result.success) {
-        LogError(`Notification failed: ${result.errors?.join(', ')}`);
-    }
-} catch (error) {
-    LogError(`Notification error: ${error.message}`);
-    // Don't throw - notification failures shouldn't break main flow
-}
-```
-
-### 4. Use Force Sparingly
-```typescript
-// Only force delivery channels when absolutely necessary
-// Let user preferences work most of the time
-await NotificationEngine.Instance.SendNotification({
-    ...params,
-    // Only force if critical/urgent
-    forceDeliveryChannels: isCritical ? { inApp: true, email: true, sms: true } : undefined
-}, contextUser);
-```
-
-### 5. Design Mobile-Friendly Templates
-- Email templates should be responsive (max-width: 600px)
-- SMS templates should be concise (< 160 characters ideal)
-- Always test on mobile devices
-- Use clear call-to-action buttons
 
 ## Troubleshooting
 
 ### Notification Not Appearing
 
-1. Check notification type exists: `SELECT * FROM __mj.UserNotificationType WHERE Name='...'`
+1. Check type exists: `SELECT * FROM __mj.UserNotificationType WHERE Name='...'`
 2. Check user preferences: `SELECT * FROM __mj.UserNotificationPreference WHERE UserID='...'`
-3. Verify delivery method resolution (check logs)
-4. Ensure UserInfoEngine cache is refreshed
+3. Verify delivery channel resolution in logs
 
 ### Email Not Sending
 
-1. Verify email template exists and is active
-2. Check user has email address configured
-3. Verify CommunicationEngine provider is configured
-4. Check Communication Logs table for errors
-5. Review template rendering errors in logs
+1. Verify template exists and `IsActive = true`
+2. Check user has email address
+3. Verify SendGrid provider is configured
+4. Check Communication Logs for errors
 
 ### SMS Not Sending
 
 1. Verify SMS template exists and is active
-2. Check user has phone number configured
-3. Verify Twilio or SMS provider is configured
-4. Check Communication Logs table for errors
-5. Ensure phone number format is correct
+2. Check user has phone number
+3. Verify Twilio provider is configured
+4. Check phone number format
 
 ### Template Rendering Errors
 
-1. Verify all required parameters are provided in `templateData`
-2. Check template syntax (Nunjucks format)
-3. Test template in isolation using TemplateEngine
-4. Review Template Params definitions for typos
-
-## Migration from Old System
-
-If you have existing direct `UserNotificationEntity` creation code:
-
-### Before:
-```typescript
-const notification = await md.GetEntityObject<UserNotificationEntity>('User Notifications', contextUser);
-notification.UserID = userId;
-notification.Title = title;
-notification.Message = message;
-await notification.Save();
-```
-
-### After:
-```typescript
-await NotificationService.Instance.SendNotification({
-    userId: userId,
-    typeNameOrId: 'Your Type Name',
-    title: title,
-    message: message
-}, contextUser);
-```
-
-**Benefits:**
-- Multi-channel delivery (email/SMS)
-- User preference support
-- Template-based formatting
-- Centralized notification logic
-- Better audit trail
+1. Verify all required `templateData` parameters are provided
+2. Check Nunjucks syntax in template files
+3. Test template in isolation
 
 ## Related Packages
 
-- [@memberjunction/core](../../MJCore/README.md) - Core metadata and entity system
 - [@memberjunction/communication-engine](../engine/README.md) - Multi-provider messaging
-- [@memberjunction/templates](../../Templates/README.md) - Template rendering engine
+- [@memberjunction/templates](../../Templates/README.md) - Template rendering
 - [@memberjunction/core-entities](../../MJCoreEntities/README.md) - Entity definitions
-
-## Contributing
-
-When adding new features to the notification system:
-
-1. Follow the established patterns (type-based, template-driven)
-2. Add comprehensive tests
-3. Update this README with examples
-4. Document all new parameters and return values
-5. Maintain backward compatibility
-
-## License
-
-ISC - MemberJunction.com

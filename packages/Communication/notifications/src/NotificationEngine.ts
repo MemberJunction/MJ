@@ -1,5 +1,5 @@
 import { BaseEngine, IMetadataProvider, Metadata, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { UserNotificationEntity, UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { UserNotificationEntity, UserNotificationTypeEntity, UserEntity, UserInfoEngine, CachedUserNotificationPreference } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
@@ -96,31 +96,27 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
         return result;
       }
 
-      // 5. Create in-app notification if enabled
+      // 5. Create in-app notification if enabled (awaited - fast DB insert)
       if (channels.inApp) {
         result.inAppNotificationId = await this.createInAppNotification(params, type, contextUser);
       }
 
-      // 6. Send email if enabled
+      // 6. Send email if enabled - fire and forget (don't block)
       if (channels.email) {
-        try {
-          result.emailSent = await this.sendEmail(params, type, contextUser);
-        } catch (error) {
+        result.emailSent = true; // Optimistically set - actual send is async
+        this.sendEmail(params, type, contextUser).catch((error) => {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          result.errors?.push(`Email delivery failed: ${errorMessage}`);
           LogError(`Email delivery failed for notification type ${type.Name}: ${errorMessage}`);
-        }
+        });
       }
 
-      // 7. Send SMS if enabled
+      // 7. Send SMS if enabled - fire and forget (don't block)
       if (channels.sms) {
-        try {
-          result.smsSent = await this.sendSMS(params, type, contextUser);
-        } catch (error) {
+        result.smsSent = true; // Optimistically set - actual send is async
+        this.sendSMS(params, type, contextUser).catch((error) => {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          result.errors?.push(`SMS delivery failed: ${errorMessage}`);
           LogError(`SMS delivery failed for notification type ${type.Name}: ${errorMessage}`);
-        }
+        });
       }
 
       return result;
@@ -139,7 +135,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private resolveDeliveryChannels(
     params: SendNotificationParams,
-    prefs: UserNotificationPreferenceEntity | null,
+    prefs: CachedUserNotificationPreference | null,
     type: UserNotificationTypeEntity,
   ): DeliveryChannels {
     // If forceDeliveryChannels is specified, use it directly
@@ -180,7 +176,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
   private getUserPreferences(
     userId: string,
     typeId: string
-  ): UserNotificationPreferenceEntity | null {
+  ): CachedUserNotificationPreference | null {
     // Use cached preferences from UserInfoEngine
     const pref = UserInfoEngine.Instance.GetUserPreferenceForType(userId, typeId);
 
@@ -278,7 +274,6 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     const message = new Message();
     message.From = process.env.NOTIFICATION_FROM_EMAIL || 'notifications@memberjunction.com';
     message.To = 'madhavrsubramaniyam@gmail.com'; //userEntity.Email;
-    //message.HTMLBody = renderResult.Output!;
     message.HTMLBodyTemplate = templateEntity;
     message.ContextData = params.templateData || {};
     message.Subject = params.title;
