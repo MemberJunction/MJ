@@ -189,12 +189,22 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
     }
 
     public onRecordOpened(event: RecordOpenedEvent): void {
-        // Emit data change event for record open
+        // Emit data change event for record open (for any listeners that need it)
         this.emitDataChanged({
             type: 'record-opened',
             record: event.record,
             primaryKey: event.record?.PrimaryKey
         });
+
+        // Request navigation to open the record
+        if (event.entity && event.compositeKey) {
+            this.RequestOpenRecord(
+                event.entity.Name,
+                event.compositeKey.ToURLSegment(),
+                'view',
+                false
+            );
+        }
     }
 
     protected override cleanup(): void {

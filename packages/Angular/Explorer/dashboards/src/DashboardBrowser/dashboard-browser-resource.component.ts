@@ -3,8 +3,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata } from '@memberjunction/core';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { Metadata, CompositeKey } from '@memberjunction/core';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, DashboardEntity, DashboardCategoryEntity, DashboardPartTypeEntity, DashboardEngine } from '@memberjunction/core-entities';
 import {
     DashboardViewerComponent,
@@ -92,7 +92,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     constructor(
         private cdr: ChangeDetectorRef,
         private router: Router,
-        private route: ActivatedRoute
+        private route: ActivatedRoute,
+        private navigationService: NavigationService
     ) {
         super();
     }
@@ -561,30 +562,71 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Handle navigation events from panels
      */
     public onNavigationRequested(event: DashboardNavRequestEvent): void {
-        // TODO: Integrate with NavigationService for proper routing
-        console.log('Navigation requested:', event.request);
+        const request = event.request;
+        const openInNewTab = request.openInNewTab || false;
 
-        switch (event.request.type) {
-            case 'OpenRecord':
+        switch (request.type) {
+            case 'OpenRecord': {
                 // Navigate to entity record
+                const compositeKey = new CompositeKey();
+                compositeKey.SimpleLoadFromURLSegment(request.recordId);
+                // If simple load didn't work (single ID without field name), create from ID field
+                if (compositeKey.KeyValuePairs.length === 0) {
+                    compositeKey.LoadFromSingleKeyValuePair('ID', request.recordId);
+                }
+                this.navigationService.OpenEntityRecord(
+                    request.entityName,
+                    compositeKey,
+                    { forceNewTab: openInNewTab }
+                );
                 break;
-            case 'OpenEntity':
-                // Navigate to entity browser
+            }
+            case 'OpenEntity': {
+                // Navigate to entity browser via a view
+                // TODO: Implement when we have OpenEntity method in NavigationService
+                console.log('OpenEntity navigation not yet implemented:', request);
                 break;
-            case 'OpenDashboard':
+            }
+            case 'OpenDashboard': {
                 // Navigate to another dashboard
-                const dashboardRequest = event.request;
-                const targetDashboard = this.dashboards.find(d => d.ID === dashboardRequest.dashboardId);
+                const targetDashboard = this.dashboards.find(d => d.ID === request.dashboardId);
                 if (targetDashboard) {
-                    this.openDashboard(targetDashboard);
+                    if (openInNewTab) {
+                        this.navigationService.OpenDashboard(
+                            targetDashboard.ID,
+                            targetDashboard.Name,
+                            { forceNewTab: true }
+                        );
+                    } else {
+                        this.openDashboard(targetDashboard);
+                    }
                 }
                 break;
-            case 'OpenQuery':
+            }
+            case 'OpenQuery': {
                 // Navigate to query viewer
+                const md = new Metadata();
+                const queryInfo = md.Queries.find(q => q.ID === request.queryId);
+                if (queryInfo) {
+                    this.navigationService.OpenQuery(
+                        request.queryId,
+                        queryInfo.Name,
+                        { forceNewTab: openInNewTab }
+                    );
+                }
                 break;
-            case 'OpenReport':
+            }
+            case 'OpenReport': {
                 // Navigate to report viewer
+                // We need the report name for the tab title
+                // For now, use the report ID as the name if we can't find it
+                this.navigationService.OpenReport(
+                    request.reportId,
+                    `Report ${request.reportId}`,
+                    { forceNewTab: openInNewTab }
+                );
                 break;
+            }
         }
     }
 

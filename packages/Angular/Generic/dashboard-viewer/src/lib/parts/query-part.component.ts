@@ -181,12 +181,22 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     }
 
     public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
-        // Emit data change event with clicked entity info
+        // Emit data change event with clicked entity info (for any listeners that need it)
         this.emitDataChanged({
             type: 'entity-link-click',
             entityName: event.entityName,
             recordId: event.recordId
         });
+
+        // Request navigation to open the record
+        if (event.entityName && event.recordId) {
+            this.RequestOpenRecord(
+                event.entityName,
+                event.recordId,
+                'view',
+                false
+            );
+        }
     }
 
     public onQueryError(error: Error): void {
