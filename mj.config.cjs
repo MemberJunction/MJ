@@ -374,6 +374,7 @@ const mcpServerConfig = {
   mcpServerSettings: {
     port: 3100,
     enableMCPServer: true,
+    systemApiKey: 'mj_sk_e520cf8d3d486d9abb20aeece80f3ef9b2e87dd913fe270926c203ae96582aa3',
     actionTools: [
       {
         actionName: 'NOT YET SUPPORTED',
@@ -382,7 +383,7 @@ const mcpServerConfig = {
     ],
     entityTools: [
       {
-        schemaName: 'CRM',
+        schemaName: '__mj',
         entityName: '*',
         get: true,
         create: true,
@@ -390,6 +391,14 @@ const mcpServerConfig = {
         delete: true,
         runView: true,
       },
+    ],
+    agentTools: [
+      {
+        agentName: '*',        // All agents (or specific name pattern)
+        execute: true,
+        status: true,
+        cancel: true
+      }
     ]
   }
 }

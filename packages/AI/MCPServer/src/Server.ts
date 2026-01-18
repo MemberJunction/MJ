@@ -1,7 +1,7 @@
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { FastMCP } from "fastmcp";
-import * as sql from "mssql";
+import sql from "mssql";
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
@@ -10,6 +10,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
+import { validateAPIKey } from "./auth/apiKeyAuth.js";
+import * as http from 'http';
 
 // Tool filtering types
 export interface ToolFilterOptions {
@@ -44,11 +46,15 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
     poolConfig.options!.instanceName = dbInstanceName;
 }
 
-// Create FastMCP server instance
-const server = new FastMCP({
-    name: "MemberJunction",
-    version: "1.0.0"
-});
+// // Create FastMCP server instance
+// const server = new FastMCP({
+//     name: "MemberJunction",
+//     version: "1.0.0"
+// });
+
+// Create FastMCP server instance with API key authentication
+// Note: authenticate callback will be set in initializeServer after pool is created
+let server: FastMCP<{ apiKey: string; apiKeyId: string; user: UserInfo }>;
 
 /**
  * Check if a tool name matches a glob-style pattern
@@ -166,6 +172,37 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         // Initialize database connection
         const pool = new sql.ConnectionPool(poolConfig);
         await pool.connect();
+
+        // Create FastMCP server with authentication
+        server = new FastMCP<{ apiKey: string; apiKeyId: string; user: UserInfo }>({
+            name: "MemberJunction",
+            version: "1.0.0",
+            authenticate: async (request: http.IncomingMessage) => {
+                const apiKey = request.headers['x-api-key'] as string
+                    || request.headers['x-mj-api-key'] as string;
+
+                // Backward compatibility: if no API key header but systemApiKey configured, use system user
+                if (!apiKey && mcpServerSettings?.systemApiKey) {
+                    const systemUser = UserCache.Instance.Users[0];
+                    console.log(`Authenticated via system API key for user: ${systemUser?.Email}`);
+                    return { apiKey: 'system', apiKeyId: 'system', user: systemUser };
+                }
+
+                if (!apiKey) {
+                    throw new Error('API key required. Provide via x-api-key header.');
+                }
+
+                const validation = await validateAPIKey(apiKey, pool, configInfo.mjCoreSchema);
+
+                if (!validation.isValid) {
+                    throw new Error(validation.error || 'Invalid API key');
+                }
+
+                console.log(`Authenticated via API key for user: ${validation.user?.Email}`);
+                return { apiKey, apiKeyId: validation.apiKeyId!, user: validation.user! };
+            }
+        });
+
         
         // Setup SQL Server client
         const config = new SQLServerProviderConfigData(pool, configInfo.mjCoreSchema);
@@ -184,26 +221,36 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}) {
         });
 
         const contextUser = UserCache.Instance.Users[0];
-        await loadEntityTools(contextUser);
+        await loadEntityTools();
         await loadActionTools(contextUser);
         await loadAgentTools(contextUser);
-        loadAgentRunDiagnosticTools(contextUser);
+        loadAgentRunDiagnosticTools();
         console.log("Tools loaded successfully.");
         
-        // Configure server options
+        // // Configure server options
+        // const serverOptions = {
+        //     transportType: "sse" as const,
+        //     sse: {
+        //         endpoint: "/mcp" as `/${string}`,
+        //         port: mcpServerPort
+        //     },
+        //     // Optional: Add auth configuration if needed
+        //     // auth: {
+        //     //   type: "basic",
+        //     //   username: "user",
+        //     //   password: "pass"
+        //     // }
+        // };
+
+        // Configure server options with API key authentication
         const serverOptions = {
             transportType: "sse" as const,
             sse: {
                 endpoint: "/mcp" as `/${string}`,
                 port: mcpServerPort
-            },
-            // Optional: Add auth configuration if needed
-            // auth: {
-            //   type: "basic",
-            //   username: "user",
-            //   password: "pass"
-            // }
+            }
         };
+
 
         // Start server with SSE transport
         server.start(serverOptions);
@@ -240,8 +287,14 @@ async function loadAgentTools(contextUser: UserInfo) {
                 parameters: z.object({
                     pattern: z.string().describe("Name pattern to match agents (supports wildcards: *, *Agent, Agent*, *Agent*)")
                 }),
-                async execute(props: any) {
-                    const agents = await discoverAgents(props.pattern, contextUser);
+                // async execute(props: any) {
+                //     const agents = await discoverAgents(props.pattern, contextUser);
+                async execute(props: any, context: any) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ error: "No authenticated user in session" });
+                    }
+                    const agents = await discoverAgents(props.pattern, sessionUser);
                     return JSON.stringify(agents.map(agent => ({
                         id: agent.ID,
                         name: agent.Name,
@@ -269,11 +322,15 @@ async function loadAgentTools(contextUser: UserInfo) {
                     data: z.record(z.any()).optional().describe("Template data for the agent"),
                     waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
                 }),
-                async execute(props: any) {
+                async execute(props: any, context: any) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ success: false, error: "No authenticated user in session" });
+                    }
                     try {
                         // Find the agent
                         const aiEngine = AIEngine.Instance;
-                        await aiEngine.Config(false, contextUser);
+                        await aiEngine.Config(false, sessionUser);
                         
                         let agent: AIAgentEntityExtended | null = null;
                         
@@ -311,7 +368,7 @@ async function loadAgentTools(contextUser: UserInfo) {
                         const result = await agentRunner.RunAgent({
                             agent,
                             conversationMessages: messages,
-                            contextUser,
+                            contextUser: sessionUser,
                             data: props.data
                         });
                         
@@ -350,7 +407,7 @@ async function loadAgentTools(contextUser: UserInfo) {
             // Add tools for each matching agent
             for (const agent of agents) {
                 if (tool.execute) {
-                    addAgentExecuteTool(agent, contextUser);
+                    addAgentExecuteTool(agent);
                 }
             }
         }
@@ -364,15 +421,19 @@ async function loadAgentTools(contextUser: UserInfo) {
                 parameters: z.object({
                     runId: z.string().describe("The agent run ID")
                 }),
-                async execute(props: any) {
+                async execute(props: any, context: any) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ error: "No authenticated user in session" });
+                    }
                     const md = new Metadata();
-                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
                     const loaded = await agentRun.Load(props.runId);
-                    
+
                     if (!loaded) {
                         return JSON.stringify({ error: "Run not found" });
                     }
-                    
+
                     return JSON.stringify({
                         runId: agentRun.ID,
                         agentName: agentRun.Agent,
@@ -385,7 +446,7 @@ async function loadAgentTools(contextUser: UserInfo) {
                 }
             });
         }
-        
+
         // Add cancel tool if any agent tool has cancel enabled
         const hasCancel = agentTools.some(tool => tool.cancel);
         if (hasCancel) {
@@ -395,22 +456,26 @@ async function loadAgentTools(contextUser: UserInfo) {
                 parameters: z.object({
                     runId: z.string().describe("The run ID of the agent execution to cancel")
                 }),
-                async execute(props: any) {
+                async execute(props: any, context: any) {
+                    const sessionUser = context.session?.user;
+                    if (!sessionUser) {
+                        return JSON.stringify({ success: false, message: "No authenticated user in session" });
+                    }
                     // Note: Actual cancellation would require the agent to check the cancellation token
                     // For now, we can update the status to indicate cancellation was requested
                     const md = new Metadata();
-                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
                     const loaded = await agentRun.Load(props.runId);
-                    
+
                     if (!loaded || agentRun.Status !== 'Running') {
                         return JSON.stringify({ success: false, message: "Run not found or not running" });
                     }
-                    
+
                     // Update status to indicate cancellation requested
                     agentRun.Status = 'Cancelled';
                     agentRun.CompletedAt = new Date();
                     const saved = await agentRun.Save();
-                    
+
                     return JSON.stringify({ success: saved });
                 }
             });
@@ -421,7 +486,7 @@ async function loadAgentTools(contextUser: UserInfo) {
 /**
  * Load agent run diagnostic tools for debugging and auditing agent executions
  */
-function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
+function loadAgentRunDiagnosticTools() {
     // Tool 1: List Recent Agent Runs
     addToolWithFilter({
         name: "List_Recent_Agent_Runs",
@@ -432,7 +497,11 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
             days: z.number().default(7).describe("Number of days to look back"),
             limit: z.number().default(10).describe("Maximum number of runs to return")
         }),
-        async execute(props: { agentName?: string; status: string; days: number; limit: number }) {
+        async execute(props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ error: "No authenticated user in session" });
+            }
             const rv = new RunView();
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - props.days);
@@ -452,7 +521,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
                 OrderBy: 'StartedAt DESC',
                 MaxRows: props.limit,
                 Fields: ['ID', 'AgentID', 'Agent', 'Status', 'StartedAt', 'CompletedAt', 'TotalTokensUsed', 'TotalCost', 'ErrorMessage']
-            }, contextUser);
+            }, sessionUser);
 
             if (!result.Success) {
                 return JSON.stringify({ error: result.ErrorMessage });
@@ -469,9 +538,13 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
         parameters: z.object({
             runId: z.string().describe("The agent run ID to summarize")
         }),
-        async execute(props: { runId: string }) {
+        async execute(props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ error: "No authenticated user in session" });
+            }
             const md = new Metadata();
-            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
             const loaded = await agentRun.Load(props.runId);
 
             if (!loaded) {
@@ -486,7 +559,7 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
                 OrderBy: 'StepNumber',
                 Fields: ['ID', 'StepNumber', 'StepName', 'StepType', 'Status', 'StartedAt', 'CompletedAt', 'ErrorMessage'],
                 ResultType: 'entity_object'
-            }, contextUser);
+            }, sessionUser);
 
             if (!stepsResult.Success) {
                 return JSON.stringify({ error: stepsResult.ErrorMessage });
@@ -541,14 +614,18 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
         }),
-        async execute(props: { runId: string; stepNumber: number; maxChars: number }) {
+        async execute(props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ error: "No authenticated user in session" });
+            }
             const rv = new RunView();
             const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID = '${props.runId}'`,
                 OrderBy: 'StepNumber',
                 ResultType: 'entity_object'
-            }, contextUser);
+            }, sessionUser);
 
             if (!stepsResult.Success) {
                 return JSON.stringify({ error: stepsResult.ErrorMessage });
@@ -600,14 +677,18 @@ function loadAgentRunDiagnosticTools(contextUser: UserInfo) {
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             outputFile: z.string().optional().describe("File path to write JSON output (optional)")
         }),
-        async execute(props: { runId: string; stepNumber: number; outputFile?: string }) {
+        async execute(props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ error: "No authenticated user in session" });
+            }
             const rv = new RunView();
             const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID = '${props.runId}'`,
                 OrderBy: 'StepNumber',
                 ResultType: 'entity_object'
-            }, contextUser);
+            }, sessionUser);
 
             if (!stepsResult.Success) {
                 return JSON.stringify({ error: stepsResult.ErrorMessage });
@@ -680,9 +761,9 @@ async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<
     return allAgents.filter(a => a.Name && regex.test(a.Name));
 }
 
-function addAgentExecuteTool(agent: AIAgentEntityExtended, contextUser: UserInfo) {
+function addAgentExecuteTool(agent: AIAgentEntityExtended) {
     const agentRunner = new AgentRunner();
-    
+
     addToolWithFilter({
         name: `Execute_${(agent.Name || 'Unknown').replace(/\s+/g, '_')}_Agent`,
         description: `Execute the ${agent.Name || 'Unknown'} agent. ${agent.Description || ''}`,
@@ -694,19 +775,23 @@ function addAgentExecuteTool(agent: AIAgentEntityExtended, contextUser: UserInfo
             data: z.record(z.any()).optional().describe("Template data for the agent"),
             waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
         }),
-        async execute(props: any) {
+        async execute(props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ success: false, error: "No authenticated user in session" });
+            }
             try {
                 // Convert conversation history to ChatMessage format
                 const messages: ChatMessage[] = props.conversationHistory?.map((msg: any) => ({
                     role: msg.role,
                     content: msg.content
                 })) || [];
-                
+
                 // Execute the agent
                 const result = await agentRunner.RunAgent({
                     agent,
                     conversationMessages: messages,
-                    contextUser,
+                    contextUser: sessionUser,
                     data: props.data
                 });
                 
@@ -737,7 +822,7 @@ function addAgentExecuteTool(agent: AIAgentEntityExtended, contextUser: UserInfo
     });
 }
 
-async function loadEntityTools(contextUser: UserInfo) {
+async function loadEntityTools() {
     // use the config metadata to load up the tools requested
     const entityTools = mcpServerSettings?.entityTools;
 
@@ -749,26 +834,26 @@ async function loadEntityTools(contextUser: UserInfo) {
             const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
             matchingEntities.forEach((entity) => {
                 if (tool.get) {
-                    addEntityGetTool(entity, contextUser);
+                    addEntityGetTool(entity);
                 }
                 if (tool.create) {
-                    addEntityCreateTool(entity, contextUser);
+                    addEntityCreateTool(entity);
                 }
                 if (tool.update) {
-                    addEntityUpdateTool(entity, contextUser);
+                    addEntityUpdateTool(entity);
                 }
                 if (tool.delete) {
-                    addEntityDeleteTool(entity, contextUser);
+                    addEntityDeleteTool(entity);
                 }
                 if (tool.runView) {
-                    addEntityRunViewTool(entity, contextUser);
+                    addEntityRunViewTool(entity);
                 }
             });
         });
     }
 }
 
-function addEntityRunViewTool(entity: EntityInfo, contextUser: UserInfo) {
+function addEntityRunViewTool(entity: EntityInfo) {
     const paramObject = z.object({
         extraFilter: z.string().optional(),
         orderBy: z.string().optional(),
@@ -778,21 +863,25 @@ function addEntityRunViewTool(entity: EntityInfo, contextUser: UserInfo) {
         name: `Run_${entity.ClassName}_View`,
         description: `Returns data from the ${entity.Name} entity, optionally filtered by extraFilter and ordered by orderBy`,
         parameters: paramObject,
-        async execute (props: any) {
+        async execute (props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ error: "No authenticated user in session" });
+            }
             const rv = new RunView();
             const result = await rv.RunView({
                 EntityName: entity.Name,
                 ExtraFilter: props.extraFilter ? props.extraFilter : undefined,
                 OrderBy: props.orderBy ? props.orderBy : undefined,
                 Fields: props.fields ? props.fields : undefined,
-            }, contextUser);
+            }, sessionUser);
             return JSON.stringify(result);
         }
     };
     addToolWithFilter(toolConfig);
 }
 
-function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
+function addEntityCreateTool(entity: EntityInfo) {
     // add a tool for getting records from the specified entity or wildcard
     const paramObject = getEntityParamObject(entity, true, false, false);
 
@@ -800,9 +889,13 @@ function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
         name: `Create_${entity.ClassName}_Record`,
         description: `Creates a new record in the ${entity.Name} entity`,
         parameters: z.object(paramObject),
-        async execute (props: any) {
+        async execute (props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ success: false, record: undefined, errorMessage: "No authenticated user in session" });
+            }
             const md = new Metadata();
-            const record = await md.GetEntityObject(entity.Name, contextUser);
+            const record = await md.GetEntityObject(entity.Name, sessionUser);
             record.SetMany(props, true);
             const success = await record.Save();
             if (!success) {
@@ -813,19 +906,23 @@ function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    addToolWithFilter(toolConfig);    
+    addToolWithFilter(toolConfig);
 }
 
-function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
+function addEntityUpdateTool(entity: EntityInfo) {
     const paramObject = getEntityParamObject(entity, true, true, true);
 
     const toolConfig = {
         name: `Update_${entity.ClassName}_Record`,
         description: `Updates the specified record in the ${entity.Name} entity`,
         parameters: z.object(paramObject),
-        async execute (props: any) {
+        async execute (props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ success: false, record: undefined, errorMessage: "No authenticated user in session" });
+            }
             const md = new Metadata();
-            const record = await md.GetEntityObject(entity.Name, contextUser);
+            const record = await md.GetEntityObject(entity.Name, sessionUser);
             const loaded = await record.InnerLoad(new CompositeKey(
                 // use the primary keys to load the record
                 entity.PrimaryKeys.map((pk) => {
@@ -850,18 +947,22 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
             }
         }
     };
-    addToolWithFilter(toolConfig);    
+    addToolWithFilter(toolConfig);
 }
 
-function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
+function addEntityDeleteTool(entity: EntityInfo) {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
     const toolConfig = {
         name: `Delete_${entity.ClassName}_Record`,
         description: `Deletes the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
-        async execute (props: any) {
+        async execute (props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ success: false, record: undefined, errorMessage: "No authenticated user in session" });
+            }
             const md = new Metadata();
-            const record = await md.GetEntityObject(entity.Name, contextUser);
+            const record = await md.GetEntityObject(entity.Name, sessionUser);
             const loaded = await record.InnerLoad(new CompositeKey(
                 // use the primary keys to load the record
                 entity.PrimaryKeys.map((pk) => {
@@ -874,7 +975,7 @@ function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
             if (loaded) {
                 const savedRecordJSON = await convertEntityObjectToJSON(record);
                 const success = await record.Delete();
-                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.CompleteMessage : undefined });    
+                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.CompleteMessage : undefined });
             }
             else {
                 return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
@@ -967,16 +1068,20 @@ function getEntityPrimaryKeyParamsObject(entity: EntityInfo) {
     return paramObject;
 }
 
-function addEntityGetTool(entity: EntityInfo, contextUser: UserInfo) {
+function addEntityGetTool(entity: EntityInfo) {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
 
     const toolConfig = {
         name: `Get_${entity.ClassName}_Record`,
         description: `Retrieves the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
-        async execute (props: any) {
+        async execute (props: any, context: any) {
+            const sessionUser = context.session?.user;
+            if (!sessionUser) {
+                return JSON.stringify({ error: "No authenticated user in session" });
+            }
             const md = new Metadata();
-            const record = await md.GetEntityObject(entity.Name, contextUser);
+            const record = await md.GetEntityObject(entity.Name, sessionUser);
             await record.InnerLoad(new CompositeKey(
                 // use the primary keys to load the record
                 entity.PrimaryKeys.map((pk) => {
