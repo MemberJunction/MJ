@@ -143,8 +143,9 @@ export class GoldenLayoutWrapperService {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { LayoutConfig: GLLayoutConfig } = require('golden-layout');
 
-        // Base settings based on edit mode
-        const editModeSettings: LayoutConfig = {
+        // Base settings - reorderEnabled is always true so users can click tabs and
+        // rearrange in view mode (changes won't be saved). Close button only in edit mode.
+        const baseSettings: LayoutConfig = {
             settings: {
                 reorderEnabled: this._isEditing
             },
@@ -162,21 +163,21 @@ export class GoldenLayoutWrapperService {
             // Use GL's built-in conversion from ResolvedLayoutConfig to LayoutConfig
             const convertedConfig = GLLayoutConfig.fromResolved(savedLayout) as LayoutConfig;
 
-            // Merge our edit mode settings with the converted config
+            // Merge our base settings with the converted config
             return {
                 ...convertedConfig,
                 settings: {
                     ...convertedConfig.settings,
-                    ...editModeSettings.settings
+                    ...baseSettings.settings
                 },
                 header: {
                     ...convertedConfig.header,
-                    ...editModeSettings.header
+                    ...baseSettings.header
                 }
             };
         }
 
-        return editModeSettings;
+        return baseSettings;
     }
 
     /**
