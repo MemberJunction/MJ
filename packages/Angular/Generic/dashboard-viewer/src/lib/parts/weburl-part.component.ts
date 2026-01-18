@@ -1,4 +1,5 @@
 import { Component, ChangeDetectorRef, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { WebURLPanelConfig } from '../models/dashboard-types';
@@ -25,22 +26,45 @@ import { WebURLPanelConfig } from '../models/dashboard-types';
             </div>
 
             <!-- No URL configured -->
-            <div class="empty-state" *ngIf="!IsLoading && !ErrorMessage && !url">
+            <div class="empty-state" *ngIf="!IsLoading && !ErrorMessage && !SafeUrl">
                 <i class="fa-solid fa-globe"></i>
                 <h4>No URL Configured</h4>
                 <p>Click the configure button to set a URL for this part.</p>
             </div>
 
-            <!-- Iframe container -->
-            <iframe
-                *ngIf="!IsLoading && !ErrorMessage && url"
-                #iframe
-                [src]="url"
-                [attr.sandbox]="sandboxValue"
-                [attr.allowfullscreen]="allowFullscreen ? '' : null"
-                [title]="Panel?.title || 'Embedded content'"
-                class="content-iframe">
-            </iframe>
+            <!-- Iframe container - sandbox must be static, so we use ng-container to switch -->
+            <ng-container *ngIf="!IsLoading && !ErrorMessage && SafeUrl">
+                <!-- Standard sandbox mode -->
+                <iframe
+                    *ngIf="sandboxMode === 'standard'"
+                    #iframe
+                    [src]="SafeUrl"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                    [attr.allowfullscreen]="allowFullscreen ? '' : null"
+                    [title]="Panel?.title || 'Embedded content'"
+                    class="content-iframe">
+                </iframe>
+                <!-- Strict sandbox mode -->
+                <iframe
+                    *ngIf="sandboxMode === 'strict'"
+                    #iframe
+                    [src]="SafeUrl"
+                    sandbox="allow-scripts"
+                    [attr.allowfullscreen]="allowFullscreen ? '' : null"
+                    [title]="Panel?.title || 'Embedded content'"
+                    class="content-iframe">
+                </iframe>
+                <!-- Permissive sandbox mode -->
+                <iframe
+                    *ngIf="sandboxMode === 'permissive'"
+                    #iframe
+                    [src]="SafeUrl"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
+                    [attr.allowfullscreen]="allowFullscreen ? '' : null"
+                    [title]="Panel?.title || 'Embedded content'"
+                    class="content-iframe">
+                </iframe>
+            </ng-container>
         </div>
     `,
     styles: [`
@@ -104,12 +128,15 @@ import { WebURLPanelConfig } from '../models/dashboard-types';
 export class WebURLPartComponent extends BaseDashboardPart implements AfterViewInit {
     @ViewChild('iframe') iframeRef!: ElementRef<HTMLIFrameElement>;
 
-    public url: string = '';
-    public sandboxValue: string = '';
+    public SafeUrl: SafeResourceUrl | null = null;
+    public sandboxMode: 'standard' | 'strict' | 'permissive' = 'standard';
     public allowFullscreen: boolean = true;
 
-    constructor(cdr: ChangeDetectorRef) {
+    private sanitizer: DomSanitizer;
+
+    constructor(cdr: ChangeDetectorRef, sanitizer: DomSanitizer) {
         super(cdr);
+        this.sanitizer = sanitizer;
     }
 
     ngAfterViewInit(): void {
@@ -123,7 +150,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         const config = this.getConfig<WebURLPanelConfig>();
 
         if (!config?.url) {
-            this.url = '';
+            this.SafeUrl = null;
             this.cdr.detectChanges();
             return;
         }
@@ -131,11 +158,11 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         this.setLoading(true);
 
         try {
-            // Set URL
-            this.url = config.url;
+            // Sanitize and set URL for iframe src binding
+            this.SafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(config.url);
 
-            // Determine sandbox permissions based on mode
-            this.sandboxValue = this.getSandboxValue(config.sandboxMode || 'standard');
+            // Set sandbox mode (used by template to select correct iframe)
+            this.sandboxMode = config.sandboxMode || 'standard';
 
             // Set fullscreen permission
             this.allowFullscreen = config.allowFullscreen ?? true;
@@ -143,17 +170,6 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
             this.setLoading(false);
         } catch (error) {
             this.setError(error instanceof Error ? error.message : 'Failed to load URL');
-        }
-    }
-
-    private getSandboxValue(mode: 'standard' | 'strict' | 'permissive'): string {
-        switch (mode) {
-            case 'strict':
-                return 'allow-scripts';
-            case 'permissive':
-                return 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation';
-            default:
-                return 'allow-scripts allow-same-origin allow-forms allow-popups';
         }
     }
 }
