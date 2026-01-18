@@ -220,6 +220,13 @@ export class GoldenLayoutWrapperService {
             // Store reference to container
             this._containerMap.set(panel.id, container);
 
+            // Set the tab title with icon using GL's setTitle method
+            // This shows the icon in the GL tab header in view mode
+            if (panel.icon) {
+                const titleWithIcon = `<i class="${panel.icon}" style="margin-right: 6px;"></i>${panel.title}`;
+                container.setTitle(titleWithIcon);
+            }
+
             // Create the panel content via factory - pass the full panel from componentState
             if (this._componentFactory) {
                 this._componentFactory(panel, wrapper);
