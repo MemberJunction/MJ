@@ -1,24 +1,34 @@
 /**
  * Types and interfaces for the Dashboard Viewer component.
  * These define the configuration schema for metadata-driven dashboards.
+ *
+ * DESIGN PRINCIPLE: Single Source of Truth
+ * - Golden Layout's native config is the ground truth for layout AND panel data
+ * - Full DashboardPanel objects are stored in componentState within the layout
+ * - No redundant arrays or conversion functions needed
  */
 
+import { ResolvedLayoutConfig } from 'golden-layout';
+
 // ========================================
-// Dashboard Configuration (v2)
+// Dashboard Configuration
 // ========================================
 
 /**
  * Root configuration for a dashboard.
  * Stored in Dashboard.UIConfigDetails as JSON.
+ *
+ * The layout contains EVERYTHING - both geometry AND panel configurations.
+ * Panel data is embedded in each component's componentState within the layout tree.
  */
-export interface DashboardConfigV2 {
-    /** Schema version for future compatibility */
-    version: 2;
-    /** Golden Layout configuration for panel arrangement */
-    layout: GoldenLayoutConfig;
-    /** Panel definitions with type-specific configuration */
-    panels: DashboardPanel[];
-    /** Dashboard-level settings */
+export interface DashboardConfig {
+    /**
+     * Golden Layout configuration - THE SINGLE SOURCE OF TRUTH
+     * Contains both layout geometry AND panel configurations (in componentState)
+     * Stored as GL's native format for lossless persistence
+     */
+    layout: ResolvedLayoutConfig | null;
+    /** Dashboard-level settings (not per-panel) */
     settings: DashboardSettings;
 }
 
@@ -53,57 +63,12 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {
 };
 
 // ========================================
-// Golden Layout Configuration
+// Panel Configuration (stored in componentState)
 // ========================================
 
 /**
- * Golden Layout root configuration
- */
-export interface GoldenLayoutConfig {
-    root: LayoutNode;
-}
-
-/**
- * Golden Layout node types
- */
-export type LayoutNodeType = 'row' | 'column' | 'stack' | 'component';
-
-/**
- * Golden Layout node configuration
- */
-/**
- * Component state stored in Golden Layout for panel components
- */
-export interface LayoutComponentState {
-    panelId: string;
-    title?: string;
-    icon?: string;
-    partTypeId?: string;
-}
-
-export interface LayoutNode {
-    /** Node type */
-    type: LayoutNodeType;
-    /** Child nodes (for row/column/stack) */
-    content?: LayoutNode[];
-    /** Component state (for component nodes) - includes panelId, title, icon, partTypeId */
-    componentState?: LayoutComponentState;
-    /** Width percentage (for row children) */
-    width?: number;
-    /** Height percentage (for column children) */
-    height?: number;
-    /** Whether this node is active/selected (for stack tabs) */
-    isActive?: boolean;
-    /** Title for stack tabs */
-    title?: string;
-}
-
-// ========================================
-// Panel Configuration
-// ========================================
-
-/**
- * Dashboard panel definition
+ * Complete panel data stored in Golden Layout's componentState.
+ * This is the ONLY place panel configuration lives.
  */
 export interface DashboardPanel {
     /** Unique panel identifier */
@@ -240,7 +205,7 @@ export interface PanelInteractionEvent {
  */
 export interface DashboardConfigChangedEvent {
     /** Updated configuration */
-    config: DashboardConfigV2;
+    config: DashboardConfig;
     /** What changed */
     changeType: 'panel-added' | 'panel-removed' | 'panel-config' | 'layout' | 'settings';
 }
@@ -249,8 +214,8 @@ export interface DashboardConfigChangedEvent {
  * Event emitted when layout changes (resize, move, etc.)
  */
 export interface LayoutChangedEvent {
-    /** Updated layout */
-    layout: GoldenLayoutConfig;
+    /** Updated layout - Golden Layout's native format */
+    layout: ResolvedLayoutConfig;
     /** What changed */
     changeType: 'resize' | 'move' | 'stack' | 'close' | 'maximize';
 }
@@ -286,18 +251,11 @@ export interface ValidationWarning {
 // ========================================
 
 /**
- * Creates a default dashboard configuration
+ * Creates a default dashboard configuration with empty layout
  */
-export function createDefaultDashboardConfig(): DashboardConfigV2 {
+export function createDefaultDashboardConfig(): DashboardConfig {
     return {
-        version: 2,
-        layout: {
-            root: {
-                type: 'stack',
-                content: []
-            }
-        },
-        panels: [],
+        layout: null,
         settings: { ...DEFAULT_DASHBOARD_SETTINGS }
     };
 }
@@ -307,6 +265,49 @@ export function createDefaultDashboardConfig(): DashboardConfigV2 {
  */
 export function generatePanelId(): string {
     return `panel-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Extract all panels from a Golden Layout config.
+ * Walks the layout tree and extracts DashboardPanel from each component's componentState.
+ */
+export function extractPanelsFromLayout(layout: ResolvedLayoutConfig | null): DashboardPanel[] {
+    if (!layout?.root) {
+        return [];
+    }
+
+    const panels: DashboardPanel[] = [];
+
+    const extractFromNode = (node: ResolvedLayoutConfig['root']): void => {
+        if (!node) return;
+
+        // If this is a component, extract the panel from componentState
+        if (node.type === 'component') {
+            const componentNode = node as unknown as { componentState?: DashboardPanel };
+            if (componentNode.componentState?.id) {
+                panels.push(componentNode.componentState);
+            }
+        }
+
+        // Recursively process children
+        const containerNode = node as unknown as { content?: ResolvedLayoutConfig['root'][] };
+        if (containerNode.content && Array.isArray(containerNode.content)) {
+            for (const child of containerNode.content) {
+                extractFromNode(child);
+            }
+        }
+    };
+
+    extractFromNode(layout.root);
+    return panels;
+}
+
+/**
+ * Find a panel in the layout by ID
+ */
+export function findPanelInLayout(layout: ResolvedLayoutConfig | null, panelId: string): DashboardPanel | null {
+    const panels = extractPanelsFromLayout(layout);
+    return panels.find(p => p.id === panelId) || null;
 }
 
 /**

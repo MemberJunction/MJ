@@ -54,7 +54,7 @@
     </div>
 
     <!-- Empty State -->
-    <div class="empty-state" *ngIf="config?.panels?.length === 0 && !isLoading">
+    <div class="empty-state" *ngIf="!hasPanels && !isLoading">
         <div class="empty-icon">
             <i class="fa-solid fa-layer-group"></i>
         </div>

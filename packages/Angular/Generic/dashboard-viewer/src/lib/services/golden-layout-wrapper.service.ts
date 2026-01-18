@@ -5,15 +5,9 @@ import {
     ResolvedLayoutConfig,
     ComponentContainer,
     JsonValue,
-    RowOrColumnItemConfig,
-    StackItemConfig,
-    ComponentItemConfig,
-    RootItemConfig
+    ComponentItemConfig
 } from 'golden-layout';
 import {
-    GoldenLayoutConfig,
-    LayoutNode,
-    LayoutComponentState,
     DashboardPanel,
     LayoutChangedEvent
 } from '../models/dashboard-types';
@@ -48,23 +42,17 @@ export interface LayoutLocation {
 }
 
 /**
- * Panel component factory function type
+ * Panel component factory function type.
+ * Receives the full DashboardPanel from GL's componentState (single source of truth).
  */
-export type PanelComponentFactory = (panelId: string, container: HTMLElement) => void;
-
-/**
- * State stored in each Golden Layout component
- */
-export interface DashboardPanelState {
-    panelId: string;
-    title: string;
-    icon?: string;
-    partTypeId: string;
-}
+export type PanelComponentFactory = (panel: DashboardPanel, container: HTMLElement) => void;
 
 /**
  * Service that wraps Golden Layout for Angular integration.
- * Uses Golden Layout 2.6.0 VirtualLayout API like the shell's GoldenLayoutManager.
+ * Uses Golden Layout 2.6.0 VirtualLayout API.
+ *
+ * DESIGN: This service works with GL's native ResolvedLayoutConfig format.
+ * Full DashboardPanel objects are stored in componentState - no conversion needed.
  */
 @Injectable()
 export class GoldenLayoutWrapperService {
@@ -96,16 +84,15 @@ export class GoldenLayoutWrapperService {
     }
 
     /**
-     * Initialize Golden Layout in the specified container
-     * Uses VirtualLayout like the shell's GoldenLayoutManager
+     * Initialize Golden Layout in the specified container.
      * @param container The HTML element to render Golden Layout in
-     * @param config The layout configuration
+     * @param savedLayout Previously saved layout (from saveLayout()) or null for empty
      * @param componentFactory Factory function to create panel content
      * @param isEditing Whether editing (drag/drop/resize/close) is enabled
      */
     public initialize(
         container: HTMLElement,
-        config: GoldenLayoutConfig,
+        savedLayout: ResolvedLayoutConfig | null,
         componentFactory: PanelComponentFactory,
         isEditing = false
     ): void {
@@ -113,12 +100,9 @@ export class GoldenLayoutWrapperService {
         this._containerElement = container;
         this._isEditing = isEditing;
 
-        // Import VirtualLayout dynamically at runtime (like shell does)
+        // Import VirtualLayout dynamically at runtime
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { VirtualLayout } = require('golden-layout');
-
-        // Convert our config to Golden Layout's LayoutConfig format
-        const glConfig = this.convertToGLConfig(config);
 
         // Create VirtualLayout instance with bind/unbind callbacks
         this._layout = new VirtualLayout(
@@ -135,11 +119,13 @@ export class GoldenLayoutWrapperService {
             this.emitLayoutChanged('resize');
         });
 
+        // Build the LayoutConfig to load
+        const glConfig = this.buildLayoutConfig(savedLayout);
+
         // Load the layout configuration
         this._layout.loadLayout(glConfig);
 
-        // CRITICAL: Set the size of Golden Layout to match the container
-        // Without this, all internal elements will have height: 0
+        // Set the size of Golden Layout to match the container
         const rect = container.getBoundingClientRect();
         this._layout.setSize(rect.width, rect.height);
 
@@ -150,6 +136,52 @@ export class GoldenLayoutWrapperService {
 
         this._initialized = true;
         this.updatePanelsList();
+    }
+
+    /**
+     * Build LayoutConfig from saved ResolvedLayoutConfig.
+     * Uses GL's LayoutConfig.fromResolved() for proper conversion,
+     * then applies current edit mode settings.
+     */
+    private buildLayoutConfig(savedLayout: ResolvedLayoutConfig | null): LayoutConfig {
+        // Import LayoutConfig namespace for conversion function
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { LayoutConfig: GLLayoutConfig } = require('golden-layout');
+
+        // Base settings based on edit mode
+        const editModeSettings: LayoutConfig = {
+            settings: {
+                reorderEnabled: this._isEditing
+            },
+            header: {
+                show: 'top',
+                popout: false,
+                maximise: false,
+                close: this._isEditing ? 'tab' : false
+            },
+            root: undefined
+        };
+
+        // If we have a saved layout, convert it properly using GL's conversion
+        if (savedLayout) {
+            // Use GL's built-in conversion from ResolvedLayoutConfig to LayoutConfig
+            const convertedConfig = GLLayoutConfig.fromResolved(savedLayout) as LayoutConfig;
+
+            // Merge our edit mode settings with the converted config
+            return {
+                ...convertedConfig,
+                settings: {
+                    ...convertedConfig.settings,
+                    ...editModeSettings.settings
+                },
+                header: {
+                    ...convertedConfig.header,
+                    ...editModeSettings.header
+                }
+            };
+        }
+
+        return editModeSettings;
     }
 
     /**
@@ -165,13 +197,15 @@ export class GoldenLayoutWrapperService {
     }
 
     /**
-     * Bind component event listener (called by Golden Layout VirtualLayout)
+     * Bind component event listener (called by Golden Layout VirtualLayout).
+     * The componentState contains the full DashboardPanel object.
      */
     private bindComponentEventListener(
         container: ComponentContainer,
-        itemConfig: { componentState: Record<string, unknown> }
+        _itemConfig: { componentState: Record<string, unknown> }
     ): { component: HTMLElement; virtual: boolean } {
-        const state = container.state as unknown as DashboardPanelState;
+        // componentState IS the DashboardPanel
+        const panel = container.state as unknown as DashboardPanel;
 
         // Create a wrapper element for our panel content
         const wrapper = document.createElement('div');
@@ -180,49 +214,46 @@ export class GoldenLayoutWrapperService {
         wrapper.style.height = '100%';
         wrapper.style.overflow = 'auto';
 
-        if (!state?.panelId) {
+        if (!panel?.id) {
             wrapper.innerHTML = '<div class="panel-error">No panel ID provided</div>';
         } else {
-
             // Store reference to container
-            this._containerMap.set(state.panelId, container);
+            this._containerMap.set(panel.id, container);
 
-            // Create the panel content via factory
+            // Create the panel content via factory - pass the full panel from componentState
             if (this._componentFactory) {
-                this._componentFactory(state.panelId, wrapper);
+                this._componentFactory(panel, wrapper);
             }
 
             // Listen for close events
             container.on('beforeComponentRelease', () => {
-                this._containerMap.delete(state.panelId);
-                this.onPanelClosed.next(state.panelId);
+                this._containerMap.delete(panel.id);
+                this.onPanelClosed.next(panel.id);
                 this.updatePanelsList();
             });
 
             // Listen for show/focus events
             container.on('show', () => {
-                this.onPanelSelected.next(state.panelId);
+                this.onPanelSelected.next(panel.id);
             });
 
             this.updatePanelsList();
         }
 
-        // CRITICAL: Append the wrapper to container.element (.lm_content)
-        // Golden Layout does NOT automatically append the returned component to the DOM
-        // We must do this ourselves - this is how the shell's tab-container works
+        // Append the wrapper to container.element (.lm_content)
         container.element.appendChild(wrapper);
 
         // Return the bindable component object
         return {
             component: wrapper,
-            virtual: false  // false means actual DOM content
+            virtual: false
         };
     }
 
     /**
      * Unbind component event listener (called by Golden Layout VirtualLayout)
      */
-    private unbindComponentEventListener(container: ComponentContainer): void {
+    private unbindComponentEventListener(_container: ComponentContainer): void {
         // Cleanup handled in beforeComponentRelease
     }
 
@@ -249,19 +280,13 @@ export class GoldenLayoutWrapperService {
     }
 
     /**
-     * Add a panel to the layout
+     * Add a panel to the layout.
+     * The full DashboardPanel is stored in componentState.
      */
     public addPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
         if (!this._layout) {
             return;
         }
-
-        const state: DashboardPanelState = {
-            panelId: panel.id,
-            title: panel.title,
-            icon: panel.icon,
-            partTypeId: panel.partTypeId
-        };
 
         // Try to add to existing stack first, otherwise create new
         const existingStack = this.findFirstStack();
@@ -269,7 +294,7 @@ export class GoldenLayoutWrapperService {
             const componentConfig: ComponentItemConfig = {
                 type: 'component',
                 componentType: 'dashboard-panel',
-                componentState: state as unknown as JsonValue,
+                componentState: panel as unknown as JsonValue,
                 title: panel.title,
                 isClosable: true
             };
@@ -278,7 +303,7 @@ export class GoldenLayoutWrapperService {
             // Use addComponent which will create a stack
             this._layout.addComponent(
                 'dashboard-panel',
-                state as unknown as Record<string, unknown>,
+                panel as unknown as Record<string, unknown>,
                 panel.title
             );
         }
@@ -364,27 +389,17 @@ export class GoldenLayoutWrapperService {
     }
 
     /**
-     * Get the current layout configuration
+     * Get the current layout configuration.
+     * Returns GL's native ResolvedLayoutConfig - no conversion.
      */
-    public getLayoutConfig(): GoldenLayoutConfig | null {
+    public getLayoutConfig(): ResolvedLayoutConfig | null {
         if (!this._layout) return null;
 
         try {
-            const resolved = this._layout.saveLayout();
-            return this.convertFromGLConfig(resolved);
+            return this._layout.saveLayout();
         } catch (error) {
             console.error('[GLWrapper] Failed to save layout:', error);
             return null;
-        }
-    }
-
-    /**
-     * Apply a layout configuration
-     */
-    public applyLayoutConfig(config: GoldenLayoutConfig): void {
-        if (this._layout) {
-            const glConfig = this.convertToGLConfig(config);
-            this._layout.loadLayout(glConfig);
         }
     }
 
@@ -404,150 +419,12 @@ export class GoldenLayoutWrapperService {
     }
 
     /**
-     * Set editing mode and update Golden Layout settings.
-     * When editing is disabled, drag/drop/resize/close are all locked.
-     * Note: This requires reinitializing the layout to apply settings changes.
-     * @param isEditing Whether to enable editing mode
+     * Set editing mode.
+     * Note: Golden Layout 2 doesn't support changing settings after initialization.
+     * The layout must be reinitialized to apply new settings.
      */
     public setEditingMode(isEditing: boolean): void {
         this._isEditing = isEditing;
-        // Note: Golden Layout 2 doesn't support changing settings after initialization
-        // The layout must be reinitialized to apply new settings
-        // The component calling this should reinitialize the layout if settings need to change
-    }
-
-    /**
-     * Convert our config format to Golden Layout's LayoutConfig format
-     * Match shell's config pattern for proper header rendering
-     * Settings are controlled by isEditing mode
-     */
-    private convertToGLConfig(config: GoldenLayoutConfig): LayoutConfig {
-        return {
-            root: this.convertLayoutNode(config.root),
-            settings: {
-                // Disable drag reordering when not editing
-                reorderEnabled: this._isEditing
-            },
-            header: {
-                show: 'top',
-                popout: false,
-                maximise: false,
-                // Only show close button when editing
-                close: this._isEditing ? 'tab' : false
-            }
-        };
-    }
-
-    /**
-     * Convert a layout node to Golden Layout format
-     */
-    private convertLayoutNode(node: LayoutNode): RootItemConfig {
-        if (node.type === 'component' && node.componentState?.panelId) {
-            // Build complete component state for Golden Layout
-            const state: DashboardPanelState = {
-                panelId: node.componentState.panelId,
-                title: node.componentState.title || node.title || 'Panel',
-                icon: node.componentState.icon,
-                partTypeId: node.componentState.partTypeId || ''
-            };
-            const componentConfig: ComponentItemConfig = {
-                type: 'component',
-                componentType: 'dashboard-panel',
-                componentState: state as unknown as JsonValue,
-                title: state.title,
-                isClosable: true
-            };
-            return componentConfig;
-        }
-
-        if (node.type === 'row' || node.type === 'column') {
-            const rowColConfig: RowOrColumnItemConfig = {
-                type: node.type,
-                content: node.content ? node.content.map(child => this.convertLayoutNode(child)) : []
-            };
-            if (node.width !== undefined) {
-                rowColConfig.width = node.width;
-            }
-            if (node.height !== undefined) {
-                rowColConfig.height = node.height;
-            }
-            return rowColConfig;
-        }
-
-        if (node.type === 'stack') {
-            const stackConfig: StackItemConfig = {
-                type: 'stack',
-                content: node.content ? node.content.map(child => {
-                    const childConfig = this.convertLayoutNode(child);
-                    return childConfig as ComponentItemConfig;
-                }) : []
-            };
-            if (node.width !== undefined) {
-                stackConfig.width = node.width;
-            }
-            if (node.height !== undefined) {
-                stackConfig.height = node.height;
-            }
-            return stackConfig;
-        }
-
-        // Default: return an empty stack (enables tabbing by default)
-        return {
-            type: 'stack',
-            content: []
-        };
-    }
-
-    /**
-     * Convert Golden Layout config back to our format
-     */
-    private convertFromGLConfig(resolved: ResolvedLayoutConfig): GoldenLayoutConfig {
-        return {
-            root: this.convertFromGLNode(resolved.root)
-        };
-    }
-
-    /**
-     * Convert a GL node back to our format
-     */
-    private convertFromGLNode(glNode: ResolvedLayoutConfig['root']): LayoutNode {
-        if (!glNode) {
-            return { type: 'stack', content: [] };
-        }
-
-        const node: LayoutNode = {
-            type: glNode.type as LayoutNode['type']
-        };
-
-        // Handle component nodes - preserve full componentState for reload
-        if (glNode.type === 'component') {
-            const componentNode = glNode as unknown as { componentState?: DashboardPanelState; title?: string };
-            if (componentNode.componentState) {
-                // Preserve full component state including panelId, title, icon, partTypeId
-                node.componentState = {
-                    panelId: componentNode.componentState.panelId,
-                    title: componentNode.componentState.title,
-                    icon: componentNode.componentState.icon,
-                    partTypeId: componentNode.componentState.partTypeId
-                };
-            }
-            node.title = componentNode.title;
-        }
-
-        // Handle container nodes (row, column, stack)
-        const containerNode = glNode as unknown as { width?: number; height?: number; content?: ResolvedLayoutConfig['root'][] };
-        if (containerNode.width !== undefined) {
-            node.width = containerNode.width;
-        }
-        if (containerNode.height !== undefined) {
-            node.height = containerNode.height;
-        }
-
-        if (containerNode.content && Array.isArray(containerNode.content)) {
-            node.content = containerNode.content.map(child => this.convertFromGLNode(child));
-        }
-
-        return node;
     }
 
     private updatePanelsList(): void {

@@ -20,17 +20,18 @@ import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DashboardEngine, DashboardEntity, DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { ResolvedLayoutConfig } from 'golden-layout';
 import {
-    DashboardConfigV2,
+    DashboardConfig,
     DashboardPanel,
     PanelConfig,
     PanelInteractionEvent,
     DashboardConfigChangedEvent,
     LayoutChangedEvent,
-    GoldenLayoutConfig,
-    LayoutNode,
     createDefaultDashboardConfig,
     generatePanelId,
+    extractPanelsFromLayout,
+    findPanelInLayout,
     ViewPanelConfig,
     QueryPanelConfig,
     ArtifactPanelConfig,
@@ -177,9 +178,17 @@ export class DashboardViewerComponent implements OnDestroy {
     // ========================================
 
     public isLoading = false;
-    public config: DashboardConfigV2 | null = null;
+    public config: DashboardConfig | null = null;
     public partTypes: DashboardPartTypeEntity[] = [];
     public hasUnsavedChanges = false;
+
+    /**
+     * Helper to check if layout has any panels (for template use).
+     * Panels are stored in componentState within the layout tree.
+     */
+    public get hasPanels(): boolean {
+        return extractPanelsFromLayout(this.config?.layout ?? null).length > 0;
+    }
 
     private readonly _destroy$ = new Subject<void>();
     private readonly _panelComponents = new Map<string, { wrapper: HTMLElement; componentRef?: ComponentRef<BaseDashboardPart> }>();
@@ -226,7 +235,8 @@ export class DashboardViewerComponent implements OnDestroy {
     }
 
     /**
-     * Add a new panel to the dashboard
+     * Add a new panel to the dashboard.
+     * The panel is stored in GL's componentState - no separate panels array.
      */
     public async addPanel(
         partTypeId: string,
@@ -253,11 +263,11 @@ export class DashboardViewerComponent implements OnDestroy {
             config: panelConfig
         };
 
-        this.config.panels.push(panel);
+        // Add to Golden Layout - panel data stored in componentState
         this._glService.addPanel(panel, location);
 
-        // Sync the layout config from Golden Layout to capture the new panel's position
-        // This is critical for persistence - without this, the new panel's layout info is lost
+        // Sync the layout config from Golden Layout to capture the new panel
+        // The layout IS the source of truth - it contains the panel in componentState
         const currentLayout = this._glService.getLayoutConfig();
         if (currentLayout) {
             this.config.layout = currentLayout;
@@ -267,19 +277,20 @@ export class DashboardViewerComponent implements OnDestroy {
     }
 
     /**
-     * Remove a panel from the dashboard
+     * Remove a panel from the dashboard.
+     * Panels live in GL's componentState, so removing from GL removes the panel.
      */
     public removePanel(panelId: string): void {
         if (!this.config || !this._glService) return;
 
-        // Remove from config
-        const index = this.config.panels.findIndex(p => p.id === panelId);
-        if (index >= 0) {
-            this.config.panels.splice(index, 1);
-        }
-
-        // Remove from layout
+        // Remove from layout (panel data is in componentState)
         this._glService.removePanel(panelId);
+
+        // Sync layout config to persist the removal
+        const currentLayout = this._glService.getLayoutConfig();
+        if (currentLayout) {
+            this.config.layout = currentLayout;
+        }
 
         // Destroy component
         this.destroyPanelComponent(panelId);
@@ -338,7 +349,7 @@ export class DashboardViewerComponent implements OnDestroy {
     /**
      * Get the current configuration
      */
-    public getConfig(): DashboardConfigV2 | null {
+    public getConfig(): DashboardConfig | null {
         return this.config;
     }
 
@@ -350,47 +361,82 @@ export class DashboardViewerComponent implements OnDestroy {
     }
 
     /**
-     * Get a panel by ID
+     * Get a panel by ID.
+     * Extracts panel from the layout's componentState (single source of truth).
      */
-    public getPanel(panelId: string): DashboardPanel | undefined {
-        return this.config?.panels.find(p => p.id === panelId);
+    public getPanel(panelId: string): DashboardPanel | null {
+        return findPanelInLayout(this.config?.layout ?? null, panelId);
     }
 
     /**
      * Get the part type for a panel
      */
-    public getPartTypeForPanel(panelId: string): DashboardPartTypeEntity | undefined {
+    public getPartTypeForPanel(panelId: string): DashboardPartTypeEntity | null {
         const panel = this.getPanel(panelId);
-        if (!panel) return undefined;
-        return this.partTypes.find(pt => pt.ID === panel.partTypeId);
+        if (!panel) return null;
+        return this.partTypes.find(pt => pt.ID === panel.partTypeId) ?? null;
     }
 
     /**
-     * Update a panel's configuration
+     * Update a panel's configuration.
+     * Since panels live in componentState within the layout, we need to
+     * update the layout tree directly or reinitialize with updated data.
      */
-    public updatePanelConfig(panelId: string, config: PanelConfig, title?: string, icon?: string): void {
-        const panel = this.config?.panels.find(p => p.id === panelId);
-        if (!panel) return;
+    public updatePanelConfig(panelId: string, newConfig: PanelConfig, title?: string, icon?: string): void {
+        if (!this.config || !this._glService) return;
 
-        panel.config = config;
-        if (title) panel.title = title;
-        if (icon) panel.icon = icon;
+        // Get current layout which contains all panel data
+        const currentLayout = this._glService.getLayoutConfig();
+        if (!currentLayout) return;
+
+        // Update panel in the layout tree
+        this.updatePanelInLayout(currentLayout, panelId, newConfig, title, icon);
+        this.config.layout = currentLayout;
 
         this.markDirty();
 
-        // Sync the layout config from Golden Layout before reinitializing
-        // This preserves all panels that were added dynamically
-        if (this._glService && this.config) {
-            const currentLayout = this._glService.getLayoutConfig();
-            if (currentLayout) {
-                this.config.layout = currentLayout;
-            }
-        }
+        // Reinitialize layout to reflect the updated panel
+        this.initializeLayout();
+    }
 
-        // Refresh the panel to show updated content
-        if (this._glService) {
-            this.initializeLayout();
-        }
+    /**
+     * Recursively update a panel's config within the layout tree
+     */
+    private updatePanelInLayout(
+        layout: ResolvedLayoutConfig,
+        panelId: string,
+        newConfig: PanelConfig,
+        title?: string,
+        icon?: string
+    ): void {
+        if (!layout.root) return;
+
+        const updateNode = (node: ResolvedLayoutConfig['root']): void => {
+            if (!node) return;
+
+            // If this is a component with matching panelId
+            if (node.type === 'component') {
+                const componentNode = node as unknown as { componentState?: DashboardPanel; title?: string };
+                if (componentNode.componentState?.id === panelId) {
+                    componentNode.componentState.config = newConfig;
+                    if (title) {
+                        componentNode.componentState.title = title;
+                        componentNode.title = title;
+                    }
+                    if (icon) componentNode.componentState.icon = icon;
+                }
+            }
+
+            // Recursively process children
+            const containerNode = node as unknown as { content?: ResolvedLayoutConfig['root'][] };
+            if (containerNode.content && Array.isArray(containerNode.content)) {
+                for (const child of containerNode.content) {
+                    updateNode(child);
+                }
+            }
+        };
+
+        updateNode(layout.root);
     }
 
     /**
@@ -459,7 +505,7 @@ export class DashboardViewerComponent implements OnDestroy {
         this.initializeLayout();
     }
 
-    private parseOrCreateConfig(): DashboardConfigV2 {
+    private parseOrCreateConfig(): DashboardConfig {
         if (!this._dashboard?.UIConfigDetails) {
             return createDefaultDashboardConfig();
         }
@@ -467,23 +513,17 @@ export class DashboardViewerComponent implements OnDestroy {
         try {
             const parsed = JSON.parse(this._dashboard.UIConfigDetails);
 
-            // Check if it's V2 config
-            if (parsed.version === 2) {
-                return parsed as DashboardConfigV2;
+            // Validate it has the expected structure (layout + settings)
+            if (parsed.layout !== undefined && parsed.settings) {
+                return parsed as DashboardConfig;
             }
 
-            // Try to migrate from V1 or return default
-            return this.migrateFromV1(parsed);
+            // Invalid format, return default
+            console.warn('[DashboardViewer] Invalid config format, using default');
+            return createDefaultDashboardConfig();
         } catch {
             return createDefaultDashboardConfig();
         }
-    }
-
-    private migrateFromV1(v1Config: Record<string, unknown>): DashboardConfigV2 {
-        // TODO: Implement V1 to V2 migration if needed
-        // For now, return a default config
-        console.warn('Dashboard config migration from V1 not yet implemented');
-        return createDefaultDashboardConfig();
     }
 
     // ========================================
@@ -504,73 +544,21 @@ export class DashboardViewerComponent implements OnDestroy {
         // Subscribe to layout events
         this.subscribeToLayoutEvents();
 
-        // Check if we have a saved layout to restore
-        const hasSavedLayout = this.hasSavedLayoutStructure(this.config.layout);
-
-        // Pass isEditing to control drag/drop/resize/close in Golden Layout
-        const panelFactory = (panelId: string, container: HTMLElement) => {
-            this.createPanelComponent(panelId, container);
+        // Panel factory - called by GL when it binds a component
+        // The panel comes directly from GL's componentState (single source of truth)
+        const panelFactory = (panel: DashboardPanel, container: HTMLElement) => {
+            this.createPanelComponent(panel, container);
         };
 
-        if (hasSavedLayout) {
-            // RESTORE MODE: Use the saved layout structure which includes panel positions
-            // This preserves user's custom arrangements (stacks, rows, columns, widths, heights)
-            this._glService.initialize(
-                this.layoutContainer.nativeElement,
-                this.config.layout,
-                panelFactory,
-                this.isEditing
-            );
-        } else {
-            // FRESH MODE: Initialize with empty config and add panels one-by-one
-            // This is for new dashboards or configs without layout structure
-            const emptyConfig: GoldenLayoutConfig = {
-                root: {
-                    type: 'row',
-                    content: []
-                }
-            };
-
-            this._glService.initialize(
-                this.layoutContainer.nativeElement,
-                emptyConfig,
-                panelFactory,
-                this.isEditing
-            );
-
-            // Add panels one-by-one (like shell's createTab pattern)
-            for (const panel of this.config.panels) {
-                this._glService.addPanel(panel);
-            }
-        }
-    }
-
-    /**
-     * Check if the saved layout has actual component structure to restore.
-     * A layout is considered "saved" if it has nested content with componentState.
-     * This indicates the user has arranged panels and we should preserve that.
-     */
-    private hasSavedLayoutStructure(layout: GoldenLayoutConfig | null | undefined): boolean {
-        if (!layout?.root) {
-            return false;
-        }
-
-        // Recursively check if any node has componentState (actual panel references)
-        const hasComponents = (node: LayoutNode): boolean => {
-            // If this node is a component with a panelId, we have saved structure
-            if (node.componentState?.panelId) {
-                return true;
-            }
-
-            // Check children
-            if (node.content && node.content.length > 0) {
-                return node.content.some((child: LayoutNode) => hasComponents(child));
-            }
-
-            return false;
-        };
-
-        return hasComponents(layout.root);
+        // Initialize with saved layout (or null for empty dashboard)
+        // Golden Layout's native ResolvedLayoutConfig is the source of truth
+        // Panel data is embedded in each component's componentState
+        this._glService.initialize(
+            this.layoutContainer.nativeElement,
+            this.config.layout,
+            panelFactory,
+            this.isEditing
+        );
     }
 
     /** Flag to prevent panel removal during layout reinit */
@@ -637,11 +625,11 @@ export class DashboardViewerComponent implements OnDestroy {
             return;
         }
 
-        // Remove from config
-        if (this.config) {
-            const index = this.config.panels.findIndex(p => p.id === panelId);
-            if (index >= 0) {
-                this.config.panels.splice(index, 1);
+        // Sync layout config - panel was removed from GL's tree
+        if (this.config && this._glService) {
+            const currentLayout = this._glService.getLayoutConfig();
+            if (currentLayout) {
+                this.config.layout = currentLayout;
             }
         }
 
@@ -658,12 +646,11 @@ export class DashboardViewerComponent implements OnDestroy {
     // Private Methods - Panel Components
     // ========================================
 
-    private createPanelComponent(panelId: string, container: HTMLElement): void {
-        const panel = this.config?.panels.find(p => p.id === panelId);
-        if (!panel) {
-            return;
-        }
-
+    /**
+     * Create a panel component from the DashboardPanel data.
+     * Panel comes directly from GL's componentState - no lookup needed.
+     */
+    private createPanelComponent(panel: DashboardPanel, container: HTMLElement): void {
         const partType = this.partTypes.find(pt => pt.ID === panel.partTypeId);
 
         // Create the panel wrapper with header and content
@@ -672,7 +659,7 @@ export class DashboardViewerComponent implements OnDestroy {
         wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: #fff;';
 
         // Create header
-        const header = this.createPartHeader(panel, panelId);
+        const header = this.createPartHeader(panel, panel.id);
         wrapper.appendChild(header);
 
         // Create content area
@@ -692,7 +679,7 @@ export class DashboardViewerComponent implements OnDestroy {
         container.appendChild(wrapper);
 
         // Store reference for cleanup
-        this._panelComponents.set(panelId, { wrapper, componentRef: componentRef || undefined });
+        this._panelComponents.set(panel.id, { wrapper, componentRef: componentRef || undefined });
     }
 
     /**
@@ -1025,7 +1012,7 @@ export class DashboardViewerComponent implements OnDestroy {
 
     private onRemovePart(panelId: string): void {
         // Emit event for parent to show confirmation dialog
-        const panel = this.config?.panels.find(p => p.id === panelId);
+        const panel = findPanelInLayout(this.config?.layout ?? null, panelId);
         this.panelInteraction.emit({
             panelId,
             interactionType: 'custom',
