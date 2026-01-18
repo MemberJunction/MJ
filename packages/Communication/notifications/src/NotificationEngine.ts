@@ -3,37 +3,8 @@ import { UserNotificationEntity, UserNotificationTypeEntity, UserNotificationPre
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
-import { SendNotificationParams, NotificationResult, DeliveryMethod, DeliveryChannels } from './types';
-
-
-
-//Ties templates to notification types
-interface UserNotificationTypeWithTemplates extends UserNotificationTypeEntity {
-  EmailTemplateID: string | null;
-  SMSTemplateID: string | null;
-}
-
-/**
- * Type alias for notification type with boolean delivery channel fields.
- * These fields now exist in the generated entity after CodeGen.
- */
-type UserNotificationTypeWithBooleans = UserNotificationTypeEntity & {
-  DefaultInApp?: boolean;
-  DefaultEmail?: boolean;
-  DefaultSMS?: boolean;
-};
-
-/**
- * Type alias for preference with boolean channel fields.
- * These fields now exist in the generated entity after CodeGen.
- */
-type UserNotificationPreferenceWithBooleans = UserNotificationPreferenceEntity & {
-  InAppEnabled?: boolean | null;
-  EmailEnabled?: boolean | null;
-  SMSEnabled?: boolean | null;
-};
-
-/**
+import { SendNotificationParams, NotificationResult, DeliveryChannels } from './types';
+/*
  * Unified notification engine that handles in-app, email, and SMS delivery
  * based on notification types and user preferences.
  *
@@ -41,21 +12,6 @@ type UserNotificationPreferenceWithBooleans = UserNotificationPreferenceEntity &
  * - Cached notification types (loaded once, auto-refreshed on changes)
  * - Singleton pattern with proper MJ infrastructure
  * - Integration with MJ startup system
- *
- * @example
- * ```typescript
- * // Initialize the engine (typically at server startup)
- * await NotificationEngine.Instance.Config(false, contextUser);
- *
- * // Send a notification
- * const result = await NotificationEngine.Instance.SendNotification({
- *   userId: user.ID,
- *   typeNameOrId: 'Agent Completion',
- *   title: 'Task Complete',
- *   message: 'Your AI agent has finished processing',
- *   templateData: { agentName: 'My Agent' }
- * }, contextUser);
- * ```
  */
 export class NotificationEngine extends BaseEngine<NotificationEngine> {
   /**
@@ -114,39 +70,31 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
   public async SendNotification(params: SendNotificationParams, contextUser: UserInfo): Promise<NotificationResult> {
     this.TryThrowIfNotLoaded();
 
-    const defaultChannels: DeliveryChannels = { inApp: false, email: false, sms: false };
     const result: NotificationResult = {
       success: true,
-      deliveryMethod: 'None',
-      deliveryChannels: defaultChannels,
+      deliveryChannels: { inApp: false, email: false, sms: false },
       errors: [],
     };
 
     try {
-      // 1. Look up notification type from cache (fast!)
+      // Look up notification type from cache
       const type = this.getNotificationType(params.typeNameOrId);
       if (!type) {
         throw new Error(`Notification type not found: ${params.typeNameOrId}`);
       }
 
-      // 2. Load user preferences (per-call, user-specific - not cached)
-      const prefs = this.getUserPreferences(params.userId, type.ID, contextUser);
+      // looks up user preference from cache
+      const prefs = this.getUserPreferences(params.userId, type.ID);
 
-      // 3. Check if user has opted out entirely
-      if (prefs && !prefs.Enabled) {
-        result.success = true;
-        result.deliveryMethod = 'None';
-        result.deliveryChannels = defaultChannels;
-        LogStatus(`User has opted out of notification type: ${type.Name}`);
-        return result;
-      }
-
-      // 4. Determine delivery channels (new boolean-based approach)
+      // Determine delivery channels
       const channels = this.resolveDeliveryChannels(params, prefs, type);
       result.deliveryChannels = channels;
 
-      // Also set legacy deliveryMethod for backwards compatibility
-      result.deliveryMethod = this.channelsToDeliveryMethod(channels);
+      // Early return if user has opted out (all channels disabled)
+      if (!channels.inApp && !channels.email && !channels.sms) {
+        LogStatus(`User has opted out or all channels disabled for notification type: ${type.Name}`);
+        return result;
+      }
 
       // 5. Create in-app notification if enabled
       if (channels.inApp) {
@@ -199,97 +147,30 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
       return params.forceDeliveryChannels;
     }
 
-    // Legacy support: convert forceDeliveryMethod to channels
-    if (params.forceDeliveryMethod) {
-      return this.deliveryMethodToChannels(params.forceDeliveryMethod);
+    // Check if user has opted out entirely (master switch)
+    if (prefs && !prefs.Enabled) {
+      return { inApp: false, email: false, sms: false };
     }
-
-    // Cast to access new boolean fields (until CodeGen runs)
-    const typeWithBooleans = type as UserNotificationTypeWithBooleans;
-    const prefsWithBooleans = prefs as UserNotificationPreferenceWithBooleans | null;
 
     // Determine each channel: user pref (if allowed and set) > type default
     const allowUserPref = type.AllowUserPreference !== false;
 
     // Resolve InApp channel
-    let inApp: boolean;
-    if (allowUserPref && prefsWithBooleans?.InAppEnabled != null) {
-      inApp = prefsWithBooleans.InAppEnabled;
-    } else if (typeWithBooleans.DefaultInApp != null) {
-      inApp = typeWithBooleans.DefaultInApp;
-    } else {
-      // Fallback to legacy DefaultDeliveryMethod parsing
-      const legacyDefault = (type as { DefaultDeliveryMethod?: string }).DefaultDeliveryMethod;
-      inApp = legacyDefault === 'InApp' || legacyDefault === 'All';
-    }
+    const inApp = (allowUserPref && prefs?.InAppEnabled != null)
+      ? prefs.InAppEnabled
+      : (type.DefaultInApp ?? false);
 
     // Resolve Email channel
-    let email: boolean;
-    if (allowUserPref && prefsWithBooleans?.EmailEnabled != null) {
-      email = prefsWithBooleans.EmailEnabled;
-    } else if (typeWithBooleans.DefaultEmail != null) {
-      email = typeWithBooleans.DefaultEmail;
-    } else {
-      const legacyDefault = (type as { DefaultDeliveryMethod?: string }).DefaultDeliveryMethod;
-      email = legacyDefault === 'Email' || legacyDefault === 'All';
-    }
+    const email = (allowUserPref && prefs?.EmailEnabled != null)
+      ? prefs.EmailEnabled
+      : (type.DefaultEmail ?? false);
 
     // Resolve SMS channel
-    let sms: boolean;
-    if (allowUserPref && prefsWithBooleans?.SMSEnabled != null) {
-      sms = prefsWithBooleans.SMSEnabled;
-    } else if (typeWithBooleans.DefaultSMS != null) {
-      sms = typeWithBooleans.DefaultSMS;
-    } else {
-      const legacyDefault = (type as { DefaultDeliveryMethod?: string }).DefaultDeliveryMethod;
-      sms = legacyDefault === 'SMS' || legacyDefault === 'All';
-    }
+    const sms = (allowUserPref && prefs?.SMSEnabled != null)
+      ? prefs.SMSEnabled
+      : (type.DefaultSMS ?? false);
 
     return { inApp, email, sms };
-  }
-
-  /**
-   * Convert legacy DeliveryMethod enum to DeliveryChannels
-   */
-  private deliveryMethodToChannels(method: DeliveryMethod): DeliveryChannels {
-    switch (method) {
-      case 'InApp':
-        return { inApp: true, email: false, sms: false };
-      case 'Email':
-        return { inApp: false, email: true, sms: false };
-      case 'SMS':
-        return { inApp: false, email: false, sms: true };
-      case 'All':
-        return { inApp: true, email: true, sms: true };
-      case 'None':
-      default:
-        return { inApp: false, email: false, sms: false };
-    }
-  }
-
-  /**
-   * Convert DeliveryChannels to legacy DeliveryMethod for backwards compatibility
-   */
-  private channelsToDeliveryMethod(channels: DeliveryChannels): DeliveryMethod {
-    const { inApp, email, sms } = channels;
-
-    if (!inApp && !email && !sms) {
-      return 'None';
-    }
-    if (inApp && email && sms) {
-      return 'All';
-    }
-    if (inApp && !email && !sms) {
-      return 'InApp';
-    }
-    if (!inApp && email && !sms) {
-      return 'Email';
-    }
-    if (!inApp && !email && sms) {
-      return 'SMS';
-    }
-    // Mixed combinations default to 'All' for legacy compatibility
-    return 'All';
   }
 
   /**
@@ -298,8 +179,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private getUserPreferences(
     userId: string,
-    typeId: string,
-    _contextUser: UserInfo
+    typeId: string
   ): UserNotificationPreferenceEntity | null {
     // Use cached preferences from UserInfoEngine
     const pref = UserInfoEngine.Instance.GetUserPreferenceForType(userId, typeId);
@@ -363,8 +243,8 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     type: UserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<boolean> {
-    // Access EmailTemplateID (field exists at runtime but not yet in TypeScript types)
-    const emailTemplateId = (type as UserNotificationTypeWithTemplates).EmailTemplateID;
+    // Access EmailTemplateID
+    const emailTemplateId = type.EmailTemplateID;
 
     if (!emailTemplateId) {
       LogStatus(`No email template configured for notification type: ${type.Name}`);
@@ -380,29 +260,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     if (!templateEntity) {
       throw new Error(`Email template not found: ${emailTemplateId}`);
     }
-    /*
-    // Get highest priority HTML content from the template's Content array
-    // The Content array is already loaded and associated by TemplateEngineBase.AdditionalLoading()
-    const htmlContent = templateEntity.Content?.filter(
-      (c) => c.IsActive && c.Type?.trim().toLowerCase() === 'html'
-    ).sort((a, b) => (b.Priority || 0) - (a.Priority || 0))[0];
-
-    if (!htmlContent) {
-      throw new Error('No active HTML content found for email template');
-    }
-
-    // Render template
-    const renderResult = await templateEngine.RenderTemplate(
-      templateEntity,
-      htmlContent,
-      params.templateData || {},
-      true, // skip validation for flexibility
-    );
-
-    if (!renderResult.Success) {
-      throw new Error(`Template rendering failed: ${renderResult.Message}`);
-    }
-    */
+   
     // Load user entity to get email address
     const md = new Metadata();
     const userEntity = await md.GetEntityObject<UserEntity>('Users', contextUser);
@@ -444,8 +302,8 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     type: UserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<boolean> {
-    // Access SMSTemplateID (field exists at runtime but not yet in TypeScript types)
-    const smsTemplateId = (type as UserNotificationTypeWithTemplates).SMSTemplateID;
+    // Access SMSTemplateID
+    const smsTemplateId = type.SMSTemplateID;
 
     if (!smsTemplateId) {
       LogStatus(`No SMS template configured for notification type: ${type.Name}`);
@@ -462,31 +320,6 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
       throw new Error(`SMS template not found: ${smsTemplateId}`);
     }
 
-    // Get highest priority Text content from the template's Content array
-    // The Content array is already loaded and associated by TemplateEngineBase.AdditionalLoading()
-    const textContent = templateEntity.Content?.filter(
-      (c) => c.IsActive && c.Type?.trim().toLowerCase() === 'text'
-    ).sort((a, b) => (b.Priority || 0) - (a.Priority || 0))[0];
-
-    if (!textContent) {
-      throw new Error('No active Text content found for SMS template');
-    }
-
-    // Render template
-    const renderResult = await templateEngine.RenderTemplate(
-      templateEntity,
-      textContent,
-      params.templateData || {},
-      true
-    );
-
-    if (!renderResult.Success) {
-      throw new Error(`Template rendering failed: ${renderResult.Message}`);
-    }
-
-    // Load user entity to get phone number
-    // TODO: UserEntity doesn't have a Phone field yet - need to determine correct field to use
-    // For now, this will throw an error if SMS is attempted
     const md = new Metadata();
     const userEntity = await md.GetEntityObject<UserEntity>('Users', contextUser);
     if (!(await userEntity.Load(params.userId))) {
@@ -499,13 +332,13 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
       throw new Error('User has no phone number configured');
     }
 
-    // Send via CommunicationEngine
-    // Use Twilio as default SMS provider (can be made configurable later)
+    // Send via CommunicationEngine - let it handle template rendering
     const commEngine = CommunicationEngine.Instance;
     await commEngine.Config(false, contextUser);
     const message = new Message();
     message.To = userWithPhone.Phone;
-    message.Body = renderResult.Output!;
+    message.BodyTemplate = templateEntity;
+    message.ContextData = params.templateData || {};
 
     const sendResult = await commEngine.SendSingleMessage('Twilio', 'Standard SMS', message, undefined, false);
 

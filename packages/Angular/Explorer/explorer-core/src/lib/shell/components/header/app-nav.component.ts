@@ -81,11 +81,24 @@ export class AppNavComponent implements OnInit, OnChanges {
 
     // Check if active tab matches this nav item
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
-    if (activeTab && activeTab.applicationId === this.app.ID) {
-      // Simple route matching
-      return (item.Route && activeTab.configuration['route'] === item.Route) ||
-             activeTab.title === item.Label;
+    if (!activeTab || activeTab.applicationId !== this.app.ID) return false;
+
+    // Use more robust matching hierarchy
+    // 1. Check navItemName if available (most reliable)
+    const navItemName = activeTab.configuration?.['navItemName'] as string | undefined;
+    if (navItemName && navItemName === item.Label) {
+      return true;
     }
-    return false;
+
+    // 2. Check route if available
+    const route = activeTab.configuration?.['route'] as string | undefined;
+    if (item.Route && route && route === item.Route) {
+      return true;
+    }
+
+    // 3. Fallback to case-insensitive, trimmed title match
+    const activeTitle = (activeTab.title || '').trim().toLowerCase();
+    const itemLabel = (item.Label || '').trim().toLowerCase();
+    return activeTitle === itemLabel;
   }
 }

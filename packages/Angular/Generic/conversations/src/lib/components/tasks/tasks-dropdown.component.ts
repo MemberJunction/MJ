@@ -19,7 +19,6 @@ import { takeUntil } from 'rxjs/operators';
         [class.active]="isOpen"
         [class.has-tasks]="allTasks.length > 0"
         [title]="allTasks.length > 0 ? allTasks.length + ' active task' + (allTasks.length > 1 ? 's' : '') : 'View tasks'">
-        <i class="fas fa-bolt"></i>
         <span class="task-count-badge" *ngIf="allTasks.length > 0">{{ allTasks.length }}</span>
       </button>
 

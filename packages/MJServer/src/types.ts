@@ -7,7 +7,7 @@ import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 export type UserPayload = {
   email: string;
-  userRecord: any;
+  userRecord: UserInfo;
   sessionId: string;
   isSystemUser?: boolean;
   apiKey?: string;

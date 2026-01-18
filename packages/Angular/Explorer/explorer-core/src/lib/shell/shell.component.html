@@ -13,7 +13,7 @@
     <div class="nav-bar-apps left-of-switcher" *ngIf="leftOfSwitcherApps.length > 0">
       <button *ngFor="let app of leftOfSwitcherApps"
               class="nav-bar-app-btn"
-              [class.active]="app.ID === activeApp?.ID"
+              [class.active]="app.ID === activeApp?.ID && !isViewingSystemTab"
               [title]="app.Name"
               [style.--app-color]="app.GetColor()"
               (click)="onNavBarAppClick(app, $event)"
@@ -46,7 +46,10 @@
       <button class="icon-btn desktop-only search-toggle-btn" title="Search" (click)="toggleSearch()">
         <i class="fa-solid fa-search"></i>
       </button>
-      <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
+      <button class="icon-btn desktop-only notification-btn"
+              [class.active]="isNotificationsOpen"
+              title="Notifications"
+              (click)="showNotifications()">
         <i class="fa-solid fa-bell"></i>
         <span class="notification-badge" *ngIf="unreadNotificationCount > 0">
           {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
@@ -57,7 +60,7 @@
       <div class="nav-bar-apps left-of-user-menu" *ngIf="leftOfUserMenuApps.length > 0">
         <button *ngFor="let app of leftOfUserMenuApps"
                 class="nav-bar-app-btn"
-                [class.active]="app.ID === activeApp?.ID"
+                [class.active]="app.ID === activeApp?.ID && !isViewingSystemTab"
                 [title]="app.Name"
                 [style.--app-color]="app.GetColor()"
                 (click)="onNavBarAppClick(app, $event)"

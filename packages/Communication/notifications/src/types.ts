@@ -1,10 +1,4 @@
 /**
- * Supported delivery methods for notifications
- * @deprecated Use DeliveryChannels for new code
- */
-export type DeliveryMethod = 'InApp' | 'Email' | 'SMS' | 'All' | 'None';
-
-/**
  * Individual channel settings for notification delivery.
  * Each channel can be independently enabled or disabled.
  */
@@ -70,12 +64,6 @@ export interface SendNotificationParams {
   templateData?: Record<string, any>;
 
   /**
-   * Force specific delivery method, overriding user preferences and type defaults
-   * @deprecated Use forceDeliveryChannels for new code
-   */
-  forceDeliveryMethod?: DeliveryMethod;
-
-  /**
    * Force specific delivery channels, overriding user preferences and type defaults.
    * When specified, these channels are used instead of resolving from preferences.
    */
@@ -105,12 +93,6 @@ export interface NotificationResult {
    * Whether SMS was sent successfully
    */
   smsSent?: boolean;
-
-  /**
-   * Actual delivery method used (after resolving preferences)
-   * @deprecated Use deliveryChannels for new code
-   */
-  deliveryMethod: DeliveryMethod;
 
   /**
    * Actual delivery channels used (after resolving preferences)

@@ -652,7 +652,7 @@ export class RunAIAgentResolver extends ResolverBase {
             }
 
             // Build conversation URL for email/SMS templates
-            const baseUrl = process.env.APP_BASE_URL || 'http://localhost:4200';
+            const baseUrl = process.env.APP_BASE_URL || 'http://localhost:4201';
             const conversationUrl = `${baseUrl}/conversations/${detail.ConversationID}?artifact=${artifactInfo.artifactId}`;
 
             // Craft message based on versioning
@@ -685,7 +685,12 @@ export class RunAIAgentResolver extends ResolverBase {
             }, contextUser);
 
             if (result.success && result.inAppNotificationId) {
-                LogStatus(`📬 Notification sent via ${result.deliveryMethod} (ID: ${result.inAppNotificationId})`);
+                const channels = [];
+                if (result.deliveryChannels.inApp) channels.push('InApp');
+                if (result.deliveryChannels.email) channels.push('Email');
+                if (result.deliveryChannels.sms) channels.push('SMS');
+                const channelList = channels.length > 0 ? channels.join(', ') : 'None';
+                LogStatus(`📬 Notification sent via ${channelList} (ID: ${result.inAppNotificationId})`);
 
                 // Publish real-time notification event so client updates immediately
                 pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {

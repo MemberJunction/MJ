@@ -33,4 +33,4 @@
  */
 
 export { NotificationEngine } from './NotificationEngine';
-export { SendNotificationParams, NotificationResult, DeliveryMethod, DeliveryChannels } from './types';
+export { SendNotificationParams, NotificationResult, DeliveryChannels } from './types';

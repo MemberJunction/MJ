@@ -44,7 +44,7 @@ const result = await NotificationService.Instance.SendNotification({
 }, contextUser);
 
 if (result.success) {
-    console.log(`Notification delivered via: ${result.deliveryMethod}`);
+    console.log(`Notification channels: InApp=${result.deliveryChannels.inApp}, Email=${result.deliveryChannels.email}, SMS=${result.deliveryChannels.sms}`);
     console.log(`In-app notification ID: ${result.inAppNotificationId}`);
     console.log(`Email sent: ${result.emailSent}`);
     console.log(`SMS sent: ${result.smsSent}`);
@@ -89,10 +89,10 @@ The system resolves delivery method in this order:
 3. **Type default** - Fallback to type configuration
 
 ```typescript
-// Example: Force email even if user prefers in-app
-await NotificationService.Instance.SendNotification({
+// Example: Force email and SMS only, even if user prefers in-app
+await NotificationEngine.Instance.SendNotification({
     ...params,
-    forceDeliveryMethod: 'Email'  // Override user preference
+    forceDeliveryChannels: { inApp: false, email: true, sms: true }  // Override user preference
 }, contextUser);
 ```
 
@@ -285,7 +285,7 @@ interface SendNotificationParams {
     resourceRecordId?: string;         // Optional record link
     resourceConfiguration?: any;       // Navigation context (JSON)
     templateData?: Record<string, any>; // Data for template rendering
-    forceDeliveryMethod?: 'InApp' | 'Email' | 'SMS' | 'All' | 'None';
+    forceDeliveryChannels?: { inApp: boolean; email: boolean; sms: boolean };
 }
 ```
 
@@ -297,7 +297,7 @@ interface NotificationResult {
     inAppNotificationId?: string;  // Created notification ID
     emailSent?: boolean;           // Email delivery status
     smsSent?: boolean;             // SMS delivery status
-    deliveryMethod: string;        // Actual method used
+    deliveryChannels: { inApp: boolean; email: boolean; sms: boolean };  // Actual channels used
     errors?: string[];             // Any errors
 }
 ```
@@ -346,12 +346,12 @@ await NotificationService.Instance.SendNotification({
 
 ```typescript
 // Override user preference to always send email
-await NotificationService.Instance.SendNotification({
+await NotificationEngine.Instance.SendNotification({
     userId: contextUser.ID,
     typeNameOrId: 'Critical Alert',
     title: 'System Error',
     message: 'A critical error occurred',
-    forceDeliveryMethod: 'Email',  // Always send email
+    forceDeliveryChannels: { inApp: false, email: true, sms: false },  // Email only
     templateData: {
         errorDetails: '...',
         timestamp: new Date().toISOString()
@@ -363,7 +363,7 @@ await NotificationService.Instance.SendNotification({
 
 ```typescript
 // Send to all channels with navigation context
-await NotificationService.Instance.SendNotification({
+await NotificationEngine.Instance.SendNotification({
     userId: contextUser.ID,
     typeNameOrId: 'Report Ready',
     title: 'Monthly Report Ready',
@@ -373,7 +373,7 @@ await NotificationService.Instance.SendNotification({
         reportType: 'analytics',
         month: 'January'
     },
-    forceDeliveryMethod: 'All',  // In-app + Email + SMS
+    forceDeliveryChannels: { inApp: true, email: true, sms: true },  // All channels
     templateData: {
         reportTitle: 'January Analytics',
         reportUrl: 'https://app.example.com/reports/12345',
@@ -391,13 +391,13 @@ await NotificationService.Instance.SendNotification({
 // Let user preferences determine delivery
 const isUrgent = calculateUrgency(task);
 
-await NotificationService.Instance.SendNotification({
+await NotificationEngine.Instance.SendNotification({
     userId: contextUser.ID,
     typeNameOrId: 'Task Assignment',
     title: `New task: ${task.name}`,
     message: `You've been assigned a ${task.priority} priority task`,
     // Force SMS only if urgent, otherwise respect user preference
-    forceDeliveryMethod: isUrgent ? 'SMS' : undefined,
+    forceDeliveryChannels: isUrgent ? { inApp: false, email: false, sms: true } : undefined,
     templateData: {
         taskName: task.name,
         taskPriority: task.priority,
@@ -413,11 +413,11 @@ await NotificationService.Instance.SendNotification({
 Test the notification service in isolation:
 
 ```typescript
-import { NotificationService } from '@memberjunction/notifications';
+import { NotificationEngine } from '@memberjunction/notifications';
 
-describe('NotificationService', () => {
+describe('NotificationEngine', () => {
     it('should send in-app notification', async () => {
-        const result = await NotificationService.Instance.SendNotification({
+        const result = await NotificationEngine.Instance.SendNotification({
             userId: testUser.ID,
             typeNameOrId: 'Test Type',
             title: 'Test',
@@ -425,7 +425,7 @@ describe('NotificationService', () => {
         }, testUser);
 
         expect(result.success).toBe(true);
-        expect(result.deliveryMethod).toBe('InApp');
+        expect(result.deliveryChannels.inApp).toBe(true);
         expect(result.inAppNotificationId).toBeDefined();
     });
 });
@@ -437,12 +437,12 @@ Test full notification flow with templates:
 
 ```typescript
 it('should render email template and send', async () => {
-    const result = await NotificationService.Instance.SendNotification({
+    const result = await NotificationEngine.Instance.SendNotification({
         userId: testUser.ID,
         typeNameOrId: 'Agent Completion',
         title: 'Test Agent Complete',
         message: 'Test agent finished',
-        forceDeliveryMethod: 'Email',
+        forceDeliveryChannels: { inApp: false, email: true, sms: false },
         templateData: {
             agentName: 'Test Agent',
             artifactTitle: 'Test Artifact',
@@ -499,12 +499,12 @@ try {
 
 ### 4. Use Force Sparingly
 ```typescript
-// Only force delivery method when absolutely necessary
+// Only force delivery channels when absolutely necessary
 // Let user preferences work most of the time
-await NotificationService.Instance.SendNotification({
+await NotificationEngine.Instance.SendNotification({
     ...params,
     // Only force if critical/urgent
-    forceDeliveryMethod: isCritical ? 'All' : undefined
+    forceDeliveryChannels: isCritical ? { inApp: true, email: true, sms: true } : undefined
 }, contextUser);
 ```
 

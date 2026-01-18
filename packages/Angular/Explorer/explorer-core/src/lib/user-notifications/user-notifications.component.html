@@ -141,14 +141,14 @@
           </div>
           
           <div class="notification-actions">
-            <button kendoButton 
-                    *ngIf="dataItem.Unread" 
+            <button kendoButton
+                    *ngIf="dataItem.Unread"
                     (click)="markAsRead(dataItem, true, null)">
               <i class="fa-solid fa-check"></i>
               Mark as Read
             </button>
-            <button kendoButton 
-                    *ngIf="!dataItem.Unread" 
+            <button kendoButton
+                    *ngIf="!dataItem.Unread"
                     (click)="markAsRead(dataItem, false, null)">
               <i class="fa-solid fa-envelope"></i>
               Mark as Unread
