@@ -437,7 +437,7 @@ mj-dashboard-viewer .lm_header .lm_tab .panel-icon {
     position: absolute !important;
     left: 10px !important;
     top: 50% !important;
-    transform: translateY(-43%) !important; /* Slightly lower than center to align with text */
+    transform: translateY(-30%) !important; 
     font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro", "Font Awesome 5 Free", "Font Awesome 5 Pro", FontAwesome !important;
     font-weight: 900 !important; /* Required for solid icons */
     font-size: 12px !important;
