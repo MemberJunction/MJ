@@ -109,21 +109,8 @@ import { WebURLPanelConfig } from '../models/dashboard-types';
                 </iframe>
             </ng-container>
 
-            <!-- Overlay message shown when embedding may be blocked -->
-            <div class="embed-blocked-overlay" *ngIf="!IsLoading && !ErrorMessage && SafeUrl && showBlockedOverlay">
-                <div class="blocked-message">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <h4>This site may not allow embedding</h4>
-                    <p>Some websites block being displayed in frames for security reasons.</p>
-                    <a [href]="rawUrl" target="_blank" class="open-link">
-                        <i class="fa-solid fa-external-link-alt"></i>
-                        Open in new window
-                    </a>
-                </div>
-            </div>
-
-            <!-- Fallback link shown below iframe in case embedding fails silently -->
-            <div class="iframe-fallback" *ngIf="!IsLoading && !ErrorMessage && SafeUrl && showFallbackLink && !showBlockedOverlay">
+            <!-- Fallback link shown below iframe if content might be blocked -->
+            <div class="iframe-fallback" *ngIf="!IsLoading && !ErrorMessage && SafeUrl && showFallbackLink">
                 <span>If the content doesn't load:</span>
                 <a [href]="rawUrl" target="_blank">
                     <i class="fa-solid fa-external-link-alt"></i>
@@ -230,62 +217,6 @@ import { WebURLPanelConfig } from '../models/dashboard-types';
         .iframe-fallback a:hover {
             text-decoration: underline;
         }
-
-        .embed-blocked-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, 0.95);
-            z-index: 10;
-        }
-
-        .blocked-message {
-            text-align: center;
-            padding: 32px;
-            max-width: 400px;
-        }
-
-        .blocked-message i {
-            font-size: 48px;
-            color: #ff9800;
-            margin-bottom: 16px;
-        }
-
-        .blocked-message h4 {
-            margin: 0 0 8px 0;
-            font-size: 18px;
-            color: #333;
-        }
-
-        .blocked-message p {
-            margin: 0 0 20px 0;
-            font-size: 14px;
-            color: #666;
-            line-height: 1.5;
-        }
-
-        .blocked-message .open-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: #5c6bc0;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background 0.2s;
-        }
-
-        .blocked-message .open-link:hover {
-            background: #3f51b5;
-        }
     `]
 })
 export class WebURLPartComponent extends BaseDashboardPart implements AfterViewInit {
@@ -295,8 +226,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     public rawUrl: string = '';
     public sandboxMode: 'standard' | 'strict' | 'permissive' = 'standard';
     public allowFullscreen: boolean = true;
-    public showFallbackLink: boolean = true; // Show fallback by default for sites that block embedding
-    public showBlockedOverlay: boolean = false; // Show overlay when embedding is blocked
+    public showFallbackLink: boolean = false; // Hidden by default, shown if content might be blocked
 
     private sanitizer: DomSanitizer;
     private loadCheckTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -325,7 +255,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
         // Reset state
         this.iframeLoaded = false;
-        this.showBlockedOverlay = false;
+        this.showFallbackLink = false;
 
         if (!config?.url) {
             this.SafeUrl = null;
@@ -365,40 +295,15 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
     /**
      * Check if the iframe content might be blocked.
-     * Due to cross-origin restrictions, we can't access iframe.contentWindow for external sites,
-     * but we can use heuristics like checking if the iframe loaded but we detect it might be blocked.
+     * Called after a timeout - if the iframe load event hasn't fired, show the fallback link.
      */
     private checkIfBlocked(): void {
-        // If the iframe's load event fired but we're still showing (no error),
-        // check if we can detect blocking
-        if (this.iframeLoaded && this.iframeRef?.nativeElement) {
-            try {
-                // Try to access the iframe's contentDocument
-                // This will throw a security error for cross-origin iframes
-                // For blocked iframes, the contentDocument might be null or empty
-                const iframe = this.iframeRef.nativeElement;
-                const contentWindow = iframe.contentWindow;
-
-                // If contentWindow exists but contentDocument is null due to cross-origin,
-                // we can't tell if it's blocked. We rely on the load event.
-                // However, if the iframe is actually showing blank content, the user sees nothing.
-
-                // Heuristic: check if the iframe appears to have no rendered content
-                // by checking its dimensions or if contentWindow.length is 0 (no frames inside)
-                if (contentWindow) {
-                    // Check if there are any frames (most real pages have at least the main frame)
-                    // Note: This is a weak heuristic and may not work for all cases
-                    // For truly blocked content, we'll show the overlay
-                }
-            } catch {
-                // Cross-origin access error - this is expected for external sites
-                // We can't determine if it's blocked, so we'll show the fallback link but not overlay
-            }
+        // If the load event hasn't fired after the timeout, content might be blocked
+        if (!this.iframeLoaded) {
+            this.showFallbackLink = true;
+            this.cdr.detectChanges();
         }
-
-        // For now, we don't automatically show the overlay since we can't reliably detect blocking
-        // The fallback link provides a way for users to open the site if it doesn't load
-        this.cdr.detectChanges();
+        // If iframeLoaded is true, content loaded successfully - keep fallback hidden
     }
 
     /**
