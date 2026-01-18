@@ -219,11 +219,12 @@ export class GoldenLayoutWrapperService {
             // Set the tab title (plain text - GL escapes HTML)
             container.setTitle(panel.title);
 
-            // Add icon to the tab title element via DOM manipulation
+            // Add icon to the tab element via DOM manipulation
             // This must happen after GL has created the tab element
             // Always add an icon - use panel's icon or a default fallback (cube = generic widget)
+            // IMPORTANT: We append to tabElement, NOT modify .lm_title, to preserve GL's drag/drop
             const iconClass = panel.icon || 'fa-solid fa-cube';
-            this.addIconToTabTitle(container, iconClass);
+            this.addIconToTab(container, iconClass);
 
             // Create the panel content via factory - pass the full panel from componentState
             if (this._componentFactory) {
@@ -447,10 +448,11 @@ export class GoldenLayoutWrapperService {
     }
 
     /**
-     * Add an icon to a tab's title element via DOM manipulation.
-     * Golden Layout escapes HTML in setTitle(), so we must manipulate the DOM directly.
+     * Add an icon to a tab element via DOM manipulation.
+     * IMPORTANT: We append to tabElement, NOT modify .lm_title, to preserve GL's drag/drop.
+     * This follows the same pattern as the shell's GoldenLayoutManager.
      */
-    private addIconToTabTitle(container: ComponentContainer, iconClass: string): void {
+    private addIconToTab(container: ComponentContainer, iconClass: string): void {
         // Normalize the icon class - ensure it has the Font Awesome prefix
         let normalizedIconClass = iconClass.trim();
         if (!normalizedIconClass.includes('fa-') && !normalizedIconClass.includes('fa ')) {
@@ -469,33 +471,20 @@ export class GoldenLayoutWrapperService {
             const tab = container.tab;
             if (!tab) return false;
 
-            const tabElement = tab.element;
+            const tabElement = tab.element as HTMLElement;
             if (!tabElement) return false;
 
-            const titleElement = tabElement.querySelector('.lm_title') as HTMLElement;
-            if (!titleElement) return false;
+            // Check if icon already added to tab element
+            if (tabElement.querySelector('.panel-icon')) return true;
 
-            // Check if icon already added
-            if (titleElement.querySelector('.panel-icon')) return true;
-
-            // Get the current text content
-            const textContent = titleElement.textContent || '';
-
-            // Clear the title element
-            titleElement.innerHTML = '';
-
-            // Create icon element
+            // Create icon element and insert at the beginning of tabElement
+            // This preserves GL's .lm_title structure for drag/drop
+            // Icon is positioned absolutely via CSS in the left padding area
             const iconEl = document.createElement('i');
             iconEl.className = `${normalizedIconClass} panel-icon`;
 
-            // Create text span
-            const textSpan = document.createElement('span');
-            textSpan.className = 'panel-title-text';
-            textSpan.textContent = textContent;
-
-            // Add icon and text span
-            titleElement.appendChild(iconEl);
-            titleElement.appendChild(textSpan);
+            // Insert icon as first child of tab element
+            tabElement.insertBefore(iconEl, tabElement.firstChild);
             return true;
         };
 
