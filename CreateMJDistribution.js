@@ -170,7 +170,8 @@ async function createMJDistribution() {
       }
 
       if (dirName === 'migrations') {
-        ignorePatterns.push('**/CLAUDE.md'); // Exclude internal development documentation
+        ignorePatterns.push('**/*.md'); // Exclude all markdown files (documentation and reports)
+        ignorePatterns.push('**/*.backup'); // Exclude backup files
       }
 
       // General Approach Here
