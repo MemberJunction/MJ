@@ -221,8 +221,6 @@ export function buildERDDataFromEntities(
       .map(n => getOriginalEntityFromERDNode(n))
       .filter((e): e is EntityInfo => e !== null && !processedIds.has(e.ID));
 
-    console.log(`[buildERDDataFromEntities] depth=${depth}, starting expansion. Initial nodes=${nodes.length}, currentDepthEntities=${currentDepthEntities.length}`);
-
     for (let d = 1; d < depth; d++) {
       const nextDepthEntities: EntityInfo[] = [];
 
@@ -280,11 +278,9 @@ export function buildERDDataFromEntities(
         }
       }
 
-      console.log(`[buildERDDataFromEntities] d=${d}, processed entities, nextDepthEntities=${nextDepthEntities.length}, total nodes now=${nodes.length}`);
       currentDepthEntities = nextDepthEntities;
     }
   }
 
-  console.log(`[buildERDDataFromEntities] FINAL: nodes=${nodes.length}, links=${links.length}`);
   return { nodes, links };
 }
