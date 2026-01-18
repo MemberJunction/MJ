@@ -1,0 +1,97 @@
+/* Dashboard Breadcrumb Component Styles */
+
+.dashboard-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 24px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    flex-wrap: wrap;
+}
+
+/* Large size variant */
+.dashboard-breadcrumb.large {
+    padding: 16px 24px;
+}
+
+.dashboard-breadcrumb.large .breadcrumb-item {
+    font-size: 15px;
+    padding: 8px 12px;
+}
+
+.dashboard-breadcrumb.large .breadcrumb-item i {
+    font-size: 14px;
+}
+
+.dashboard-breadcrumb.large .breadcrumb-item.root i {
+    font-size: 18px;
+}
+
+.dashboard-breadcrumb.large .breadcrumb-separator {
+    font-size: 12px;
+}
+
+/* Breadcrumb items */
+.breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: none;
+    background: transparent;
+    color: #5c6bc0;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s, border-color 0.15s;
+    border: 2px solid transparent;
+}
+
+.breadcrumb-item:hover {
+    background: #f0f0f0;
+}
+
+.breadcrumb-item.current {
+    color: #333;
+    font-weight: 500;
+    cursor: default;
+}
+
+.breadcrumb-item.current:hover {
+    background: transparent;
+}
+
+.breadcrumb-item i {
+    font-size: 12px;
+}
+
+.breadcrumb-item.root i {
+    font-size: 14px;
+}
+
+/* Drop target highlighting */
+.breadcrumb-item.drop-target {
+    background: #e3f2fd;
+    border-color: #5c6bc0;
+}
+
+.breadcrumb-separator {
+    color: #999;
+    font-size: 10px;
+}
+
+/* Dashboard name styling */
+.breadcrumb-item.dashboard-name {
+    color: #333;
+    font-weight: 500;
+    cursor: default;
+}
+
+.breadcrumb-item.dashboard-name:hover {
+    background: transparent;
+}
+
+.breadcrumb-item.dashboard-name i {
+    color: #5c6bc0;
+}

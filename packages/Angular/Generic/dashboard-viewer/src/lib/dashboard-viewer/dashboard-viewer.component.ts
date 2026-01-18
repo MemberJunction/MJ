@@ -19,7 +19,8 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { DashboardEngine, DashboardEntity, DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { DashboardEngine, DashboardEntity, DashboardPartTypeEntity, DashboardCategoryEntity } from '@memberjunction/core-entities';
+import { BreadcrumbNavigateEvent } from '../breadcrumb/dashboard-breadcrumb.component';
 import { ResolvedLayoutConfig } from 'golden-layout';
 import {
     DashboardConfig,
@@ -127,6 +128,12 @@ export class DashboardViewerComponent implements OnDestroy {
         return this._autoSave;
     }
 
+    /** Whether to show the breadcrumb navigation */
+    @Input() showBreadcrumb = true;
+
+    /** All categories for breadcrumb path resolution */
+    @Input() Categories: DashboardCategoryEntity[] = [];
+
     // ========================================
     // Outputs
     // ========================================
@@ -148,6 +155,9 @@ export class DashboardViewerComponent implements OnDestroy {
 
     /** Emitted when edit mode changes */
     @Output() editModeChanged = new EventEmitter<boolean>();
+
+    /** Emitted when user navigates via breadcrumb */
+    @Output() breadcrumbNavigate = new EventEmitter<BreadcrumbNavigateEvent>();
 
     // ========================================
     // View Children
@@ -432,6 +442,13 @@ export class DashboardViewerComponent implements OnDestroy {
             interactionType: 'custom',
             payload: { action: 'add-panel-requested', partTypes: this.partTypes }
         });
+    }
+
+    /**
+     * Handle breadcrumb navigation
+     */
+    public onBreadcrumbNavigate(event: BreadcrumbNavigateEvent): void {
+        this.breadcrumbNavigate.emit(event);
     }
 
     // ========================================

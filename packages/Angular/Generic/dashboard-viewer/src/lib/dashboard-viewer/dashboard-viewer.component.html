@@ -1,9 +1,23 @@
 <!-- Dashboard Viewer Component -->
 <div class="dashboard-viewer" [class.editing]="isEditing" [class.has-toolbar]="showToolbar">
+    <!-- Breadcrumb Navigation (hidden in edit mode) -->
+    <mj-dashboard-breadcrumb
+        *ngIf="showBreadcrumb && !isEditing && dashboard"
+        [Categories]="Categories"
+        [CurrentCategoryId]="dashboard.CategoryID"
+        [CurrentDashboard]="dashboard"
+        [ShowDashboardName]="true"
+        [AllowDragDrop]="false"
+        Size="large"
+        RootIcon="fa-solid fa-gauge-high"
+        RootLabel="Dashboards"
+        (Navigate)="onBreadcrumbNavigate($event)">
+    </mj-dashboard-breadcrumb>
+
     <!-- Toolbar -->
     <div class="dashboard-toolbar" *ngIf="showToolbar">
         <div class="toolbar-left">
-            <span class="dashboard-title" *ngIf="dashboard">
+            <span class="dashboard-title" *ngIf="dashboard && (isEditing || !showBreadcrumb)">
                 <i class="fa-solid fa-chart-line"></i>
                 {{ dashboard.Name }}
             </span>

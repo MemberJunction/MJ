@@ -11,6 +11,9 @@ export * from './lib/dashboard-viewer/dashboard-viewer.component';
 // Dashboard Browser Component
 export * from './lib/dashboard-browser/dashboard-browser.component';
 
+// Breadcrumb Component
+export * from './lib/breadcrumb/dashboard-breadcrumb.component';
+
 // Generic Dialogs
 export * from './lib/dialogs/add-panel-dialog/add-panel-dialog.component';
 export * from './lib/dialogs/edit-part-dialog/edit-part-dialog.component';
@@ -48,6 +51,7 @@ import {
 } from './lib/config-panels';
 import { LoadAllDashboardParts } from './lib/parts';
 import { LoadDashboardBrowser } from './lib/dashboard-browser/dashboard-browser.component';
+import { LoadDashboardBreadcrumb } from './lib/breadcrumb/dashboard-breadcrumb.component';
 
 LoadDashboardViewerModule();
 LoadWebURLConfigPanel();
@@ -56,3 +60,4 @@ LoadQueryConfigPanel();
 LoadArtifactConfigPanel();
 LoadAllDashboardParts();
 LoadDashboardBrowser();
+LoadDashboardBreadcrumb();

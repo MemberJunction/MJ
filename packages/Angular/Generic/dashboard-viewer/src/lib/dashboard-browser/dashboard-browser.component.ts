@@ -73,6 +73,23 @@ export interface DashboardCreateEvent {
 }
 
 /**
+ * Event emitted when a new category should be created
+ */
+export interface CategoryCreateEvent {
+    ParentCategoryId: string | null;
+    Name: string;
+    Description: string | null;
+}
+
+/**
+ * Event emitted when a category should be deleted
+ */
+export interface CategoryDeleteEvent {
+    Category: DashboardCategoryEntity;
+    IncludeContents: boolean;
+}
+
+/**
  * Event emitted when view preference should be persisted
  */
 export interface ViewPreferenceChangeEvent {
@@ -115,6 +132,9 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     @Input()
     set Categories(value: DashboardCategoryEntity[]) {
         this._categories = value || [];
+        // Update child categories when categories change (async loading)
+        this.updateChildCategories();
+        this.cdr.markForCheck();
     }
     get Categories(): DashboardCategoryEntity[] {
         return this._categories;
@@ -154,11 +174,14 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /** Whether to show the create button */
     @Input() ShowCreateButton = true;
 
-    /** Whether to allow multi-select */
+    /** Whether to allow multi-select (enables selection mode toggle) */
     @Input() AllowMultiSelect = true;
 
     /** Whether to allow drag and drop */
     @Input() AllowDragDrop = true;
+
+    /** Whether currently in selection mode (checkboxes visible) */
+    public IsSelectionMode = false;
 
     /** Title to display in the header */
     @Input() Title = 'Dashboards';
@@ -184,6 +207,12 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
 
     /** Emitted when a new dashboard should be created */
     @Output() DashboardCreate = new EventEmitter<DashboardCreateEvent>();
+
+    /** Emitted when a new category should be created */
+    @Output() CategoryCreate = new EventEmitter<CategoryCreateEvent>();
+
+    /** Emitted when a category should be deleted */
+    @Output() CategoryDelete = new EventEmitter<CategoryDeleteEvent>();
 
     /** Emitted when the category filter changes */
     @Output() CategoryChange = new EventEmitter<CategoryChangeEvent>();
@@ -224,6 +253,37 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
 
     /** Drop target category ID */
     public DropTargetCategoryId: string | null = null;
+
+    /** Whether the "New" dropdown menu is open */
+    public ShowNewMenu = false;
+
+    /** Whether the create category dialog is visible */
+    public ShowCreateCategoryDialog = false;
+
+    /** New category form values */
+    public NewCategoryName = '';
+    public NewCategoryDescription = '';
+
+    /** Child categories of the current folder */
+    public ChildCategories: DashboardCategoryEntity[] = [];
+
+    /** Filtered child categories (based on search) */
+    public FilteredChildCategories: DashboardCategoryEntity[] = [];
+
+    /** Breadcrumb trail from root to current category */
+    public Breadcrumbs: DashboardCategoryEntity[] = [];
+
+    /** Whether the delete category dialog is visible */
+    public ShowDeleteCategoryConfirm = false;
+
+    /** Category pending deletion */
+    public CategoryPendingDelete: DashboardCategoryEntity | null = null;
+
+    /** Whether to include contents when deleting category */
+    public DeleteCategoryIncludeContents = false;
+
+    /** Drop target category ID for drag-over highlighting on category cards */
+    public DragOverChildCategoryId: string | null = null;
 
     private readonly destroy$ = new Subject<void>();
 
@@ -311,6 +371,44 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         this.applyFilters();
     }
 
+    /**
+     * Navigate into a category folder
+     */
+    public NavigateToCategory(categoryId: string | null): void {
+        this._selectedCategoryId = categoryId;
+        const category = categoryId
+            ? this.Categories.find(c => c.ID === categoryId) || null
+            : null;
+        this.CategoryChange.emit({ CategoryId: categoryId, Category: category });
+        this.applyFilters();
+    }
+
+    /**
+     * Navigate up to parent category
+     */
+    public NavigateUp(): void {
+        if (!this._selectedCategoryId) return;
+
+        const currentCategory = this.Categories.find(c => c.ID === this._selectedCategoryId);
+        const parentId = currentCategory?.ParentID || null;
+        this.NavigateToCategory(parentId);
+    }
+
+    /**
+     * Check if we're at the root level
+     */
+    public get IsAtRoot(): boolean {
+        return !this._selectedCategoryId;
+    }
+
+    /**
+     * Get the current category (for display)
+     */
+    public get CurrentCategory(): DashboardCategoryEntity | null {
+        if (!this._selectedCategoryId) return null;
+        return this.Categories.find(c => c.ID === this._selectedCategoryId) || null;
+    }
+
     // ========================================
     // Public Methods - Selection
     // ========================================
@@ -388,6 +486,36 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
+     * Enter selection mode (show checkboxes)
+     */
+    public EnterSelectionMode(): void {
+        if (!this.AllowMultiSelect) return;
+        this.IsSelectionMode = true;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Exit selection mode (hide checkboxes and clear selections)
+     */
+    public ExitSelectionMode(): void {
+        this.IsSelectionMode = false;
+        this.SelectedIds.clear();
+        this.lastClickedId = null;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Toggle selection mode
+     */
+    public ToggleSelectionMode(): void {
+        if (this.IsSelectionMode) {
+            this.ExitSelectionMode();
+        } else {
+            this.EnterSelectionMode();
+        }
+    }
+
+    /**
      * Get count of selected dashboards
      */
     public get SelectedCount(): number {
@@ -406,10 +534,60 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     // ========================================
 
     /**
+     * Toggle the "New" dropdown menu
+     */
+    public ToggleNewMenu(): void {
+        this.ShowNewMenu = !this.ShowNewMenu;
+    }
+
+    /**
+     * Close the "New" dropdown menu
+     */
+    public CloseNewMenu(): void {
+        this.ShowNewMenu = false;
+    }
+
+    /**
      * Request to create a new dashboard
      */
     public OnCreateDashboard(): void {
+        this.CloseNewMenu();
         this.DashboardCreate.emit({ CategoryId: this.SelectedCategoryId });
+    }
+
+    /**
+     * Open the create category dialog
+     */
+    public OpenCreateCategoryDialog(): void {
+        this.CloseNewMenu();
+        this.NewCategoryName = '';
+        this.NewCategoryDescription = '';
+        this.ShowCreateCategoryDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Close the create category dialog
+     */
+    public CloseCreateCategoryDialog(): void {
+        this.ShowCreateCategoryDialog = false;
+        this.NewCategoryName = '';
+        this.NewCategoryDescription = '';
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Confirm category creation
+     */
+    public ConfirmCreateCategory(): void {
+        if (!this.NewCategoryName.trim()) return;
+
+        this.CategoryCreate.emit({
+            ParentCategoryId: this.SelectedCategoryId,
+            Name: this.NewCategoryName.trim(),
+            Description: this.NewCategoryDescription.trim() || null
+        });
+        this.CloseCreateCategoryDialog();
     }
 
     /**
@@ -452,6 +630,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             }
         }
         this.CloseDeleteConfirm();
+        // Exit selection mode after bulk operation
+        this.ExitSelectionMode();
     }
 
     /**
@@ -484,6 +664,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             });
         }
         this.CloseMoveDialog();
+        // Exit selection mode after bulk operation
+        this.ExitSelectionMode();
     }
 
     /**
@@ -492,6 +674,53 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public CloseMoveDialog(): void {
         this.ShowMoveDialog = false;
         this.cdr.markForCheck();
+    }
+
+    // ========================================
+    // Public Methods - Category Actions
+    // ========================================
+
+    /**
+     * Request to delete a category
+     */
+    public OnDeleteCategory(category: DashboardCategoryEntity, event: Event): void {
+        event.stopPropagation();
+        this.CategoryPendingDelete = category;
+        this.DeleteCategoryIncludeContents = false;
+        this.ShowDeleteCategoryConfirm = true;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Confirm category deletion
+     */
+    public ConfirmDeleteCategory(): void {
+        if (this.CategoryPendingDelete) {
+            this.CategoryDelete.emit({
+                Category: this.CategoryPendingDelete,
+                IncludeContents: this.DeleteCategoryIncludeContents
+            });
+        }
+        this.CloseDeleteCategoryConfirm();
+    }
+
+    /**
+     * Cancel category deletion
+     */
+    public CloseDeleteCategoryConfirm(): void {
+        this.ShowDeleteCategoryConfirm = false;
+        this.CategoryPendingDelete = null;
+        this.DeleteCategoryIncludeContents = false;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Get count of dashboards and sub-categories in a category
+     */
+    public GetCategoryContentCount(category: DashboardCategoryEntity): { dashboards: number; categories: number } {
+        const dashboards = this.Dashboards.filter(d => d.CategoryID === category.ID).length;
+        const categories = this.Categories.filter(c => c.ParentID === category.ID).length;
+        return { dashboards, categories };
     }
 
     // ========================================
@@ -520,7 +749,50 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         event.dataTransfer?.setData('application/json', JSON.stringify(dragData));
         event.dataTransfer!.effectAllowed = 'move';
 
+        // Create custom drag image for list view (smaller than full row)
+        if (this._viewMode === 'list' && event.dataTransfer) {
+            const dragPreview = this.createDragPreview(dashboard);
+            document.body.appendChild(dragPreview);
+            event.dataTransfer.setDragImage(dragPreview, 12, 12);
+            // Clean up the preview element after drag starts
+            setTimeout(() => dragPreview.remove(), 0);
+        }
+
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Create a compact drag preview element
+     */
+    private createDragPreview(dashboard: DashboardEntity): HTMLElement {
+        const count = this.SelectedIds.size;
+        const preview = document.createElement('div');
+        preview.style.cssText = `
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #5c6bc0;
+            color: white;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        `;
+
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-chart-line';
+        preview.appendChild(icon);
+
+        const text = document.createElement('span');
+        text.textContent = count > 1 ? `${count} dashboards` : dashboard.Name;
+        preview.appendChild(text);
+
+        return preview;
     }
 
     /**
@@ -629,12 +901,107 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         return category.ID;
     }
 
+    /**
+     * Highlight matching search text in a string
+     * Returns HTML with <mark> tags around matches
+     */
+    public HighlightMatch(text: string): string {
+        if (!this.SearchText.trim() || !text) return text;
+
+        const search = this.SearchText.trim();
+        const regex = new RegExp(`(${this.escapeRegex(search)})`, 'gi');
+        return text.replace(regex, '<mark>$1</mark>');
+    }
+
+    /**
+     * Escape special regex characters
+     */
+    private escapeRegex(str: string): string {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // ========================================
+    // Drag and Drop on Category Cards
+    // ========================================
+
+    /**
+     * Handle drag over a category card
+     */
+    public OnDragOverChildCategory(categoryId: string, event: DragEvent): void {
+        if (!this.AllowDragDrop || !this.DraggingId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer!.dropEffect = 'move';
+        this.DragOverChildCategoryId = categoryId;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Handle drag leave from a category card
+     */
+    public OnDragLeaveChildCategory(): void {
+        this.DragOverChildCategoryId = null;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Handle drop on a category card
+     */
+    public OnDropOnChildCategory(categoryId: string, event: DragEvent): void {
+        if (!this.AllowDragDrop) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const data = event.dataTransfer?.getData('application/json');
+        if (data) {
+            try {
+                const dragData = JSON.parse(data);
+                if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
+                    const dashboards = this.Dashboards.filter(d => dragData.ids.includes(d.ID));
+                    if (dashboards.length > 0) {
+                        this.DashboardMove.emit({
+                            Dashboards: dashboards,
+                            TargetCategoryId: categoryId
+                        });
+                        // Exit selection mode after move
+                        this.ExitSelectionMode();
+                    }
+                }
+            } catch {
+                // Invalid drag data
+            }
+        }
+
+        this.DraggingId = null;
+        this.DragOverChildCategoryId = null;
+        this.DropTargetCategoryId = null;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Handle drop from breadcrumb component
+     */
+    public OnBreadcrumbDrop(event: { TargetCategoryId: string | null; DashboardIds: string[] }): void {
+        const dashboards = this.Dashboards.filter(d => event.DashboardIds.includes(d.ID));
+        if (dashboards.length > 0) {
+            this.DashboardMove.emit({
+                Dashboards: dashboards,
+                TargetCategoryId: event.TargetCategoryId
+            });
+            // Exit selection mode after move
+            this.ExitSelectionMode();
+        }
+    }
+
     // ========================================
     // Private Methods
     // ========================================
 
     private applyFilters(): void {
         let filtered = [...this._dashboards];
+
+        // Filter out non-Config dashboards (Code and Dynamic Code types are not viewable/editable in browser)
+        filtered = filtered.filter(d => d.Type === 'Config');
 
         // Filter by search text
         if (this.SearchText.trim()) {
@@ -645,13 +1012,70 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             );
         }
 
-        // Filter by category
+        // Filter by current folder (category)
+        // When at root (null), show only uncategorized dashboards
+        // When in a category, show only dashboards directly in that category
         if (this._selectedCategoryId) {
             filtered = filtered.filter(d => d.CategoryID === this._selectedCategoryId);
+        } else {
+            // At root level, show only uncategorized dashboards (CategoryID is null or empty)
+            filtered = filtered.filter(d => !d.CategoryID);
         }
 
         this.FilteredDashboards = filtered;
+        this.updateChildCategories();
+        this.updateBreadcrumbs();
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Update the list of child categories for the current folder
+     */
+    private updateChildCategories(): void {
+        // Find categories that are children of the current category
+        // Handle both null and undefined ParentID for root-level categories
+        if (this._selectedCategoryId) {
+            this.ChildCategories = this.Categories.filter(c => c.ParentID === this._selectedCategoryId);
+        } else {
+            // At root level - show categories with no parent (null or undefined)
+            this.ChildCategories = this.Categories.filter(c => !c.ParentID);
+        }
+
+        // Apply search filter to categories if search text exists
+        if (this.SearchText.trim()) {
+            const search = this.SearchText.toLowerCase();
+            this.FilteredChildCategories = this.ChildCategories.filter(c =>
+                c.Name.toLowerCase().includes(search) ||
+                (c.Description || '').toLowerCase().includes(search)
+            );
+        } else {
+            this.FilteredChildCategories = [...this.ChildCategories];
+        }
+    }
+
+    /**
+     * Update breadcrumb trail from root to current category
+     */
+    private updateBreadcrumbs(): void {
+        this.Breadcrumbs = [];
+
+        if (!this._selectedCategoryId) return;
+
+        // Build the path from current category to root
+        const path: DashboardCategoryEntity[] = [];
+        let currentId: string | null = this._selectedCategoryId;
+
+        while (currentId) {
+            const category = this.Categories.find(c => c.ID === currentId);
+            if (category) {
+                path.unshift(category);
+                currentId = category.ParentID;
+            } else {
+                break;
+            }
+        }
+
+        this.Breadcrumbs = path;
     }
 
     /**

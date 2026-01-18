@@ -42,6 +42,9 @@ import { ArtifactPartComponent } from './parts/artifact-part.component';
 // Dashboard Browser Component (generic, no routing dependencies)
 import { DashboardBrowserComponent } from './dashboard-browser/dashboard-browser.component';
 
+// Breadcrumb Component (reusable navigation component)
+import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.component';
+
 /**
  * Prevents tree-shaking of the DashboardViewer module.
  * Import this in your application's module to ensure components are available.
@@ -57,6 +60,9 @@ export function LoadDashboardViewerModule() {
 
         // Dashboard Browser Component
         DashboardBrowserComponent,
+
+        // Breadcrumb Component
+        DashboardBreadcrumbComponent,
 
         // Generic Dialogs
         AddPanelDialogComponent,
@@ -92,6 +98,9 @@ export function LoadDashboardViewerModule() {
 
         // Dashboard Browser Component
         DashboardBrowserComponent,
+
+        // Breadcrumb Component
+        DashboardBreadcrumbComponent,
 
         // Generic Dialogs
         AddPanelDialogComponent,

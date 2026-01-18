@@ -10,14 +10,14 @@
             <p class="confirm-message">{{ message }}</p>
         </div>
 
-        <!-- Footer -->
+        <!-- Footer - Action button on left, Cancel on right -->
         <div class="dialog-footer">
-            <button class="btn-secondary" (click)="cancel()">{{ cancelText }}</button>
             <button
                 [class]="type === 'danger' ? 'btn-danger' : 'btn-primary'"
                 (click)="confirm()">
                 {{ confirmText }}
             </button>
+            <button class="btn-secondary" (click)="cancel()">{{ cancelText }}</button>
         </div>
     </div>
 </div>

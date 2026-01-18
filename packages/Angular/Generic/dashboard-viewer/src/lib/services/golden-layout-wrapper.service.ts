@@ -159,25 +159,82 @@ export class GoldenLayoutWrapperService {
         };
 
         // If we have a saved layout, convert it properly using GL's conversion
-        if (savedLayout) {
-            // Use GL's built-in conversion from ResolvedLayoutConfig to LayoutConfig
-            const convertedConfig = GLLayoutConfig.fromResolved(savedLayout) as LayoutConfig;
-
-            // Merge our base settings with the converted config
-            return {
-                ...convertedConfig,
-                settings: {
-                    ...convertedConfig.settings,
-                    ...baseSettings.settings
-                },
-                header: {
-                    ...convertedConfig.header,
-                    ...baseSettings.header
+        if (savedLayout && savedLayout.root) {
+            try {
+                // Validate the saved layout has required structure
+                if (!this.isValidLayoutConfig(savedLayout)) {
+                    console.warn('[GoldenLayoutWrapper] Invalid saved layout structure, using default');
+                    return baseSettings;
                 }
-            };
+
+                // Use GL's built-in conversion from ResolvedLayoutConfig to LayoutConfig
+                const convertedConfig = GLLayoutConfig.fromResolved(savedLayout) as LayoutConfig;
+
+                // Merge our base settings with the converted config
+                return {
+                    ...convertedConfig,
+                    settings: {
+                        ...convertedConfig.settings,
+                        ...baseSettings.settings
+                    },
+                    header: {
+                        ...convertedConfig.header,
+                        ...baseSettings.header
+                    }
+                };
+            } catch (err) {
+                console.error('[GoldenLayoutWrapper] Error converting saved layout, using default:', err);
+                // Fall through to return base settings
+            }
         }
 
         return baseSettings;
+    }
+
+    /**
+     * Validate that a saved layout config has the required structure for GL conversion.
+     * GL's fromResolved() can crash if certain properties are undefined.
+     */
+    private isValidLayoutConfig(config: ResolvedLayoutConfig): boolean {
+        if (!config || !config.root) {
+            return false;
+        }
+
+        // Check that root has a type
+        if (!config.root.type) {
+            return false;
+        }
+
+        // Recursively validate content items have required properties
+        return this.validateLayoutItem(config.root);
+    }
+
+    /**
+     * Recursively validate a layout item and its children.
+     */
+    private validateLayoutItem(item: unknown): boolean {
+        if (!item || typeof item !== 'object') {
+            return false;
+        }
+
+        const layoutItem = item as Record<string, unknown>;
+
+        // Must have a type
+        if (!layoutItem['type']) {
+            return false;
+        }
+
+        // If it has content, validate each child
+        const content = layoutItem['content'] as unknown[] | undefined;
+        if (content && Array.isArray(content)) {
+            for (const child of content) {
+                if (!this.validateLayoutItem(child)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     /**

@@ -16,6 +16,8 @@
             (DashboardDelete)="onDashboardDelete($event)"
             (DashboardMove)="onDashboardMove($event)"
             (DashboardCreate)="onDashboardCreate($event)"
+            (CategoryCreate)="onCategoryCreate($event)"
+            (CategoryDelete)="onCategoryDelete($event)"
             (CategoryChange)="onCategoryChange($event)"
             (ViewPreferenceChange)="onViewPreferenceChange($event)">
         </mj-dashboard-browser>
@@ -23,31 +25,48 @@
 
     <!-- View/Edit Mode -->
     <ng-container *ngIf="mode === 'view' || mode === 'edit'">
-        <!-- Viewer Header -->
-        <div class="viewer-header" [class.editing]="mode === 'edit'">
-            <div class="header-left">
-                <!-- Back button only in view mode -->
-                <button class="back-btn" *ngIf="mode === 'view'" (click)="backToList()">
-                    <i class="fa-solid fa-arrow-left"></i>
-                </button>
+        <!-- View Mode Toolbar - matches browser toolbar structure -->
+        <div class="viewer-toolbar" *ngIf="mode === 'view'">
+            <!-- Breadcrumb navigation (includes its own padding/styling) -->
+            <mj-dashboard-breadcrumb
+                [Categories]="categories"
+                [CurrentCategoryId]="selectedDashboard?.CategoryID || null"
+                [CurrentDashboard]="selectedDashboard"
+                [ShowDashboardName]="true"
+                [AllowDragDrop]="false"
+                Size="large"
+                RootIcon="fa-solid fa-gauge-high"
+                RootLabel="Dashboards"
+                (Navigate)="onBreadcrumbNavigate($event)">
+            </mj-dashboard-breadcrumb>
 
-                <!-- Edit mode: Add Part button on the left -->
+            <!-- Right-side Actions -->
+            <div class="toolbar-actions">
+                <button
+                    class="btn-icon"
+                    title="Edit Dashboard"
+                    (click)="toggleEditMode()">
+                    <i class="fa-solid fa-edit"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Edit Mode Header - different layout -->
+        <div class="viewer-header editing" *ngIf="mode === 'edit'">
+            <div class="header-left">
+                <!-- Add Part button on the left -->
                 <button
                     class="btn-add-part"
-                    *ngIf="mode === 'edit'"
                     (click)="openAddPartDialog()">
                     <i class="fa-solid fa-plus"></i>
                     Add Part
                 </button>
 
-                <!-- Separator in edit mode -->
-                <div class="header-separator" *ngIf="mode === 'edit'"></div>
+                <!-- Separator -->
+                <div class="header-separator"></div>
 
-                <!-- View mode: static title -->
-                <h2 *ngIf="mode === 'view'">{{ selectedDashboard?.Name }}</h2>
-
-                <!-- Edit mode: editable name/description (compact inline style) -->
-                <div class="dashboard-info-edit" *ngIf="mode === 'edit'">
+                <!-- Editable name/description -->
+                <div class="dashboard-info-edit">
                     <input
                         type="text"
                         class="dashboard-name-input"
@@ -62,29 +81,18 @@
                 </div>
             </div>
             <div class="header-right">
-                <!-- View mode: Edit button -->
+                <!-- Save, Cancel buttons -->
                 <button
-                    class="btn-icon"
-                    *ngIf="mode === 'view'"
-                    title="Edit Dashboard"
-                    (click)="toggleEditMode()">
-                    <i class="fa-solid fa-edit"></i>
+                    class="btn-primary"
+                    (click)="saveDashboard()">
+                    <i class="fa-solid fa-save"></i>
+                    Save
                 </button>
-
-                <!-- Edit mode: Save, Cancel buttons -->
-                <ng-container *ngIf="mode === 'edit'">
-                    <button
-                        class="btn-primary"
-                        (click)="saveDashboard()">
-                        <i class="fa-solid fa-save"></i>
-                        Save
-                    </button>
-                    <button
-                        class="btn-cancel"
-                        (click)="cancelEdit()">
-                        Cancel
-                    </button>
-                </ng-container>
+                <button
+                    class="btn-cancel"
+                    (click)="cancelEdit()">
+                    Cancel
+                </button>
             </div>
         </div>
 
@@ -95,6 +103,7 @@
                 [dashboard]="selectedDashboard"
                 [isEditing]="mode === 'edit'"
                 [showToolbar]="false"
+                [showBreadcrumb]="false"
                 (panelInteraction)="onPanelInteraction($event)"
                 (navigationRequested)="onNavigationRequested($event)">
             </mj-dashboard-viewer>
