@@ -139,8 +139,8 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
             if (config.viewId) {
                 // Load saved view by ID
                 const viewEntity = await md.GetEntityObject<UserViewEntityExtended>('User Views');
-                this.viewEntity = viewEntity;
-                const loaded = await this.viewEntity.Load(config.viewId);
+                const loaded = await viewEntity.Load(config.viewId);
+                this.viewEntity = viewEntity; // IMPORTANT - only set this.viewEntity AFTER we have it loaded in the above
 
                 if (!loaded) {
                     throw new Error('View not found');
