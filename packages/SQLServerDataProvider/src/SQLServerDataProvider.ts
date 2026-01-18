@@ -111,6 +111,7 @@ import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
+import { MJGlobal } from '@memberjunction/global';
 
 /**
  * Represents a single field change in the DiffObjects comparison result
@@ -251,18 +252,29 @@ export class SQLServerDataProvider
   private _transactionDepth: number = 0;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
-  
+
   // Query cache instance
   private queryCache = new QueryCache();
-  
+
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
-  private _sqlLoggingSessions: Map<string, SqlLoggingSessionImpl> = new Map();
-  
+  private static _sqlLoggingSessionsKey: string = 'MJ_SQLServerDataProvider_SqlLoggingSessions';
+  private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
+    const g = MJGlobal.Instance.GetGlobalObjectStore();
+    if (g) {
+      if (!g[SQLServerDataProvider._sqlLoggingSessionsKey]) {
+        g[SQLServerDataProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
+      }
+      return g[SQLServerDataProvider._sqlLoggingSessionsKey];
+    } else {
+      throw new Error('No global object store available for SQL logging session');
+    }
+  }
+
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
   private _sqlQueue$ = new Subject<{
