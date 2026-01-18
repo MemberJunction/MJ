@@ -429,6 +429,29 @@ mj-dashboard-viewer .lm_header .lm_tab.lm_active {
 mj-dashboard-viewer .lm_title {
     cursor: pointer !important;
     user-select: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+/* Panel icon styling in tab titles */
+mj-dashboard-viewer .lm_title .panel-icon {
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro", "Font Awesome 5 Free", "Font Awesome 5 Pro", FontAwesome !important;
+    font-weight: 900 !important; /* Required for solid icons */
+    font-size: 12px !important;
+    color: #5c6bc0 !important;
+    margin-top: 7px !important;
+    flex-shrink: 0 !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Panel title text */
+mj-dashboard-viewer .lm_title .panel-title-text {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    padding-left: 15px !important;
 }
 
 mj-dashboard-viewer .lm_close_tab {

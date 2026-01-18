@@ -129,11 +129,6 @@ export class GoldenLayoutWrapperService {
         const rect = container.getBoundingClientRect();
         this._layout.setSize(rect.width, rect.height);
 
-        // Retry setSize after delays to handle timing issues with flexbox layout
-        setTimeout(() => this.updateSize(), 50);
-        setTimeout(() => this.updateSize(), 150);
-        setTimeout(() => this.updateSize(), 300);
-
         this._initialized = true;
         this.updatePanelsList();
     }
@@ -225,9 +220,9 @@ export class GoldenLayoutWrapperService {
 
             // Add icon to the tab title element via DOM manipulation
             // This must happen after GL has created the tab element
-            if (panel.icon) {
-                this.addIconToTabTitle(container, panel.icon);
-            }
+            // Always add an icon - use panel's icon or a default fallback (cube = generic widget)
+            const iconClass = panel.icon || 'fa-solid fa-cube';
+            this.addIconToTabTitle(container, iconClass);
 
             // Create the panel content via factory - pass the full panel from componentState
             if (this._componentFactory) {
@@ -455,29 +450,65 @@ export class GoldenLayoutWrapperService {
      * Golden Layout escapes HTML in setTitle(), so we must manipulate the DOM directly.
      */
     private addIconToTabTitle(container: ComponentContainer, iconClass: string): void {
-        // Use setTimeout to ensure GL has created the tab element
-        setTimeout(() => {
-            // Find the tab element - GL creates .lm_tab elements with .lm_title inside
-            // The container.tab property gives us access to the Tab object
+        // Normalize the icon class - ensure it has the Font Awesome prefix
+        let normalizedIconClass = iconClass.trim();
+        if (!normalizedIconClass.includes('fa-') && !normalizedIconClass.includes('fa ')) {
+            // If no FA prefix, assume it's a Font Awesome icon name and add fa-solid prefix
+            normalizedIconClass = `fa-solid fa-${normalizedIconClass}`;
+        } else if (!normalizedIconClass.startsWith('fa-') && !normalizedIconClass.startsWith('fa ')) {
+            // Has fa- in it but not at the start - likely just the icon name like "globe"
+            // Check if it's missing the style prefix (fa-solid, fa-regular, etc.)
+            if (!normalizedIconClass.match(/^fa[srldb]?\s/) && !normalizedIconClass.match(/^fa-(solid|regular|light|duotone|brands)\s/)) {
+                normalizedIconClass = `fa-solid ${normalizedIconClass}`;
+            }
+        }
+
+        // Try immediately, then retry with delay if tab not ready
+        const tryAddIcon = (): boolean => {
             const tab = container.tab;
-            if (!tab) return;
+            if (!tab) return false;
 
             const tabElement = tab.element;
-            if (!tabElement) return;
+            if (!tabElement) return false;
 
             const titleElement = tabElement.querySelector('.lm_title') as HTMLElement;
-            if (!titleElement) return;
+            if (!titleElement) return false;
 
             // Check if icon already added
-            if (titleElement.querySelector('.panel-icon')) return;
+            if (titleElement.querySelector('.panel-icon')) return true;
+
+            // Get the current text content
+            const textContent = titleElement.textContent || '';
+
+            // Clear the title element
+            titleElement.innerHTML = '';
 
             // Create icon element
             const iconEl = document.createElement('i');
-            iconEl.className = `${iconClass} panel-icon`;
-            iconEl.style.marginRight = '6px';
+            iconEl.className = `${normalizedIconClass} panel-icon`;
 
-            // Insert icon before the text content
-            titleElement.insertBefore(iconEl, titleElement.firstChild);
-        }, 0);
+            // Create text span
+            const textSpan = document.createElement('span');
+            textSpan.className = 'panel-title-text';
+            textSpan.textContent = textContent;
+
+            // Add icon and text span
+            titleElement.appendChild(iconEl);
+            titleElement.appendChild(textSpan);
+            return true;
+        };
+
+        // Try immediately
+        if (tryAddIcon()) return;
+
+        // Tab may not be created yet - try again after a delay
+        setTimeout(() => {
+            if (tryAddIcon()) return;
+
+            // Still not ready - try one more time with longer delay
+            setTimeout(() => {
+                tryAddIcon();
+            }, 100);
+        }, 50);
     }
 }

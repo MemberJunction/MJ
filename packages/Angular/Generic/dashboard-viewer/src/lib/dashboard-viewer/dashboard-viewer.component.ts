@@ -541,6 +541,16 @@ export class DashboardViewerComponent implements OnDestroy {
             panelFactory,
             this.isEditing
         );
+
+        // After GL.initialize() completes, all components from the saved layout
+        // have been synchronously bound via the panelFactory callback.
+        // However, Angular needs time to complete change detection and render
+        // the dynamic components. A single delayed updateSize() ensures GL
+        // recalculates dimensions after Angular has finished rendering.
+        setTimeout(() => {
+            this._glService?.updateSize();
+            this.cdr.detectChanges();
+        }, 100);
     }
 
     /** Flag to prevent panel removal during layout reinit */
