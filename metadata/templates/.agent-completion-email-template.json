@@ -4,8 +4,8 @@
     "ID": "26153036-666E-4955-9556-43AB94264823"
   },
   "sync": {
-    "lastModified": "2026-01-16T21:27:36.235Z",
-    "checksum": "71a72d593f057e3b76ef0f7606145153d8feff1d7231cb6682ce0f8ec1732d3a"
+    "lastModified": "2026-01-19T18:40:59.161Z",
+    "checksum": "580f7af84f83e3252a9ebe6a3c25e1a2735d4b7213df6f0f8e6e211559b44ac2"
   },
   "fields": {
     "Name": "Agent Completion - Email",
@@ -27,8 +27,8 @@
           "IsActive": true
         },
         "sync": {
-          "lastModified": "2026-01-16T21:27:37.236Z",
-          "checksum": "975cf7e59f5bc23e426897a5fcccc10655affb37f62b29a3b55e83f1165bb640"
+          "lastModified": "2026-01-19T18:40:59.169Z",
+          "checksum": "e25c72402d70c21ca6154f6043f30d696203063fa49b8dcc22aa4336d73401a8"
         }
       }
     ]

@@ -4,8 +4,8 @@
     "ID": "AA9845D4-B5B2-4E18-9587-50CCB6906A4D"
   },
   "sync": {
-    "lastModified": "2026-01-16T21:27:37.252Z",
-    "checksum": "85aafdd84290e69bebb9f8fd5e6b1621baddb9e902c86b8b24261b50a5372e92"
+    "lastModified": "2026-01-19T18:40:59.176Z",
+    "checksum": "191d7eca8aec2a27fdb9448c4bea3b8d6c728f0e4a6d899e6a7bf39146a5ff94"
   },
   "fields": {
     "Name": "Agent Completion - SMS",
@@ -27,8 +27,8 @@
           "IsActive": true
         },
         "sync": {
-          "lastModified": "2026-01-16T21:27:37.911Z",
-          "checksum": "abbc307c0523160691b93311f7398a43e14f46e754d3a9d9324aac4f934607bd"
+          "lastModified": "2026-01-19T18:40:59.182Z",
+          "checksum": "fba265721006d145bf7af94fd9af7ad46a26b7563e53fde2a03a13bce42d5f42"
         }
       }
     ]
