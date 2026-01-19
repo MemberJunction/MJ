@@ -888,6 +888,14 @@ export class TreeComponent implements OnInit, OnDestroy {
             CacheLocal: true
         });
 
+        console.log('[TreeComponent] Branches query result:', {
+            entityName: config.EntityName,
+            filter: config.ExtraFilter || '(none)',
+            success: result.Success,
+            recordCount: result.Results?.length || 0,
+            records: result.Results?.map((r: Record<string, unknown>) => ({ ID: r['ID'], Name: r['Name'] }))
+        });
+
         if (!result.Success) {
             throw new Error(`Failed to load branches: ${result.ErrorMessage}`);
         }
@@ -900,12 +908,23 @@ export class TreeComponent implements OnInit, OnDestroy {
      */
     private async loadLeaves(config: TreeLeafConfig): Promise<Record<string, unknown>[]> {
         const rv = new RunView();
+        // Disable caching when using junction config since data relationships change frequently
+        const useCache = !config.JunctionConfig;
         const result = await rv.RunView({
             EntityName: config.EntityName,
             ExtraFilter: config.ExtraFilter || '',
             OrderBy: config.OrderBy || 'Name ASC',
             ResultType: 'simple',
-            CacheLocal: true
+            CacheLocal: useCache
+        });
+
+        console.log('[TreeComponent] Leaves query result:', {
+            entityName: config.EntityName,
+            filter: config.ExtraFilter || '(none)',
+            cacheLocal: useCache,
+            success: result.Success,
+            recordCount: result.Results?.length || 0,
+            records: result.Results?.map((r: Record<string, unknown>) => ({ ID: r['ID'], Name: r['Name'] }))
         });
 
         if (!result.Success) {
@@ -926,12 +945,20 @@ export class TreeComponent implements OnInit, OnDestroy {
         const rv = new RunView();
         const mappings = new Map<string, string[]>();
 
-        // Load junction records
+        // Load junction records - no caching since junction data changes frequently
         const junctionResult = await rv.RunView({
             EntityName: junctionConfig.EntityName,
             ExtraFilter: junctionConfig.ExtraFilter || '',
             ResultType: 'simple',
-            CacheLocal: true
+            CacheLocal: false
+        });
+
+        console.log('[TreeComponent] Junction query result:', {
+            entityName: junctionConfig.EntityName,
+            filter: junctionConfig.ExtraFilter || '(none)',
+            success: junctionResult.Success,
+            recordCount: junctionResult.Results?.length || 0,
+            records: junctionResult.Results
         });
 
         if (!junctionResult.Success) {
@@ -945,12 +972,20 @@ export class TreeComponent implements OnInit, OnDestroy {
         if (junctionConfig.IndirectLeafMapping) {
             const indirect = junctionConfig.IndirectLeafMapping;
 
-            // Load the intermediate entity records to build the mapping
+            // Load the intermediate entity records to build the mapping - no caching for fresh data
             const intermediateResult = await rv.RunView({
                 EntityName: indirect.IntermediateEntity,
                 ExtraFilter: indirect.ExtraFilter || '',
                 ResultType: 'simple',
-                CacheLocal: true
+                CacheLocal: false
+            });
+
+            console.log('[TreeComponent] Intermediate entity query result:', {
+                entityName: indirect.IntermediateEntity,
+                filter: indirect.ExtraFilter || '(none)',
+                success: intermediateResult.Success,
+                recordCount: intermediateResult.Results?.length || 0,
+                records: intermediateResult.Results
             });
 
             if (!intermediateResult.Success) {
@@ -967,6 +1002,11 @@ export class TreeComponent implements OnInit, OnDestroy {
                     intermediateToLeaf.set(intermediateId, leafId);
                 }
             }
+
+            console.log('[TreeComponent] Intermediate to leaf mapping:', {
+                mapSize: intermediateToLeaf.size,
+                entries: Array.from(intermediateToLeaf.entries())
+            });
 
             // Now process junction records using the intermediate mapping
             for (const junction of junctionRecords) {
@@ -1003,6 +1043,11 @@ export class TreeComponent implements OnInit, OnDestroy {
                 }
             }
         }
+
+        console.log('[TreeComponent] Final junction mappings (leafId -> branchIds):', {
+            mapSize: mappings.size,
+            entries: Array.from(mappings.entries())
+        });
 
         return mappings;
     }
@@ -1088,6 +1133,15 @@ export class TreeComponent implements OnInit, OnDestroy {
         const displayField = config.DisplayField || 'Name';
         const useJunction = !!junctionMappings && junctionMappings.size > 0;
 
+        console.log('[TreeComponent] attachLeavesToBranches input:', {
+            leafDataCount: leafData.length,
+            leafIds: leafData.map((d: Record<string, unknown>) => ({ id: d[idField], name: d[displayField] })),
+            branchMapKeys: Array.from(branchMap.keys()),
+            branchMapEntries: Array.from(branchMap.entries()).map(([k, v]) => ({ id: k, name: v.Label })),
+            useJunction,
+            junctionMappingKeys: junctionMappings ? Array.from(junctionMappings.keys()) : []
+        });
+
         const allLeaves: TreeNode[] = [];
         const addedLeafIds = new Set<string>(); // Track leaves already added to avoid duplicates
 
@@ -1096,6 +1150,7 @@ export class TreeComponent implements OnInit, OnDestroy {
 
             // If using junction mappings, only include leaves that have junction entries
             if (useJunction && !junctionMappings!.has(id)) {
+                console.log(`[TreeComponent] Skipping leaf ${id} (${data[displayField]}) - not in junction mappings`);
                 continue; // Skip leaves not in any branch via junction
             }
 
@@ -1112,15 +1167,19 @@ export class TreeComponent implements OnInit, OnDestroy {
             });
 
             allLeaves.push(leaf);
+            console.log(`[TreeComponent] Processing leaf ${id} (${leaf.Label})`);
 
             if (useJunction) {
                 // M2M relationship: attach to all mapped branches
                 const branchIds = junctionMappings!.get(id) || [];
                 let attached = false;
 
+                console.log(`[TreeComponent] Leaf ${id} junction branchIds:`, branchIds);
+
                 for (const branchId of branchIds) {
                     if (branchMap.has(branchId)) {
                         const parent = branchMap.get(branchId)!;
+                        console.log(`[TreeComponent] Attaching leaf ${id} to branch ${branchId} (${parent.Label})`);
 
                         if (!attached) {
                             // First attachment: use the original leaf
@@ -1140,11 +1199,14 @@ export class TreeComponent implements OnInit, OnDestroy {
                             });
                             parent.Children.push(leafClone);
                         }
+                    } else {
+                        console.log(`[TreeComponent] Branch ${branchId} NOT FOUND in branchMap for leaf ${id}`);
                     }
                 }
 
                 // If no valid branch found, add to root
                 if (!attached) {
+                    console.log(`[TreeComponent] Leaf ${id} not attached to any branch, adding to root`);
                     rootNodes.push(leaf);
                     leaf.Level = 0;
                 }
