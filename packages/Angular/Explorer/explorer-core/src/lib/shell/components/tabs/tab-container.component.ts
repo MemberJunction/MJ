@@ -178,8 +178,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * @param forceCreateTabs - If true, always creates tabs fresh from config.tabs instead of restoring saved layout
    */
   private initializeGoldenLayout(forceCreateTabs = false): void {
-    // only do this work if we are not in single resource mode
-    if (!this.useSingleResourceMode)
+    // If we are in single resource mode we do NOT need to do this work as golden layout should not exist in that state
+    if (this.useSingleResourceMode)
       return;
 
     if (!this.glContainer?.nativeElement) {
