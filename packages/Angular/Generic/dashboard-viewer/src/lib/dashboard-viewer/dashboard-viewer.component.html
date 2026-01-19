@@ -1,5 +1,5 @@
 <!-- Dashboard Viewer Component -->
-<div class="dashboard-viewer" [class.editing]="isEditing" [class.has-toolbar]="showToolbar">
+<div class="dashboard-viewer" [class.editing]="isEditing" [class.has-toolbar]="shouldShowToolbar">
     <!-- Breadcrumb Navigation (hidden in edit mode) -->
     <mj-dashboard-breadcrumb
         *ngIf="showBreadcrumb && !isEditing && dashboard"
@@ -14,8 +14,8 @@
         (Navigate)="onBreadcrumbNavigate($event)">
     </mj-dashboard-breadcrumb>
 
-    <!-- Toolbar -->
-    <div class="dashboard-toolbar" *ngIf="showToolbar">
+    <!-- Toolbar (auto-hides when all elements are disabled) -->
+    <div class="dashboard-toolbar" *ngIf="shouldShowToolbar">
         <div class="toolbar-left">
             <span class="dashboard-title" *ngIf="dashboard && (isEditing || !showBreadcrumb)">
                 <i class="fa-solid fa-chart-line"></i>
@@ -24,7 +24,7 @@
         </div>
 
         <div class="toolbar-center">
-            <span class="unsaved-indicator" *ngIf="hasUnsavedChanges">
+            <span class="unsaved-indicator" *ngIf="hasUnsavedChanges && isEditing">
                 <i class="fa-solid fa-circle"></i>
                 Unsaved changes
             </span>
@@ -52,6 +52,7 @@
             <button
                 class="toolbar-button"
                 [class.active]="isEditing"
+                *ngIf="showEditButton"
                 (click)="toggleEditMode()">
                 <i class="fa-solid fa-edit"></i>
                 {{ isEditing ? 'Editing' : 'Edit' }}

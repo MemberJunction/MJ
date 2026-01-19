@@ -1,10 +1,10 @@
 import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
-import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity, DashboardCategoryEntity } from '@memberjunction/core-entities';
+import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity, DashboardCategoryEntity, DashboardPartTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { DataExplorerDashboardComponent, DataExplorerFilter } from '@memberjunction/ng-dashboards';
-import { DashboardViewerComponent, DashboardNavRequestEvent } from '@memberjunction/ng-dashboard-viewer';
+import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
 
 export function LoadDashboardResource() {
 }
@@ -18,7 +18,8 @@ export function LoadDashboardResource() {
 @Component({
     selector: 'mj-dashboard-resource',
     template: `
-        <div #container class="dashboard-resource-container">
+        <div class="dashboard-resource-wrapper">
+            <!-- Error State -->
             @if (errorMessage) {
                 <div class="error-state">
                     <div class="error-icon">
@@ -34,6 +35,63 @@ export function LoadDashboardResource() {
                     }
                 </div>
             }
+
+            <!-- View Mode Toolbar -->
+            @if (configDashboard && !isEditMode && !errorMessage) {
+                <div class="viewer-toolbar">
+                    <div class="toolbar-left">
+                        <span class="dashboard-title">
+                            <i class="fa-solid fa-chart-line"></i>
+                            {{ configDashboard.Name }}
+                        </span>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button
+                            class="btn-icon"
+                            title="Edit Dashboard"
+                            (click)="toggleEditMode()">
+                            <i class="fa-solid fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Edit Mode Toolbar -->
+            @if (configDashboard && isEditMode && !errorMessage) {
+                <div class="viewer-header editing">
+                    <div class="header-left">
+                        <button class="btn-add-part" (click)="openAddPartDialog()">
+                            <i class="fa-solid fa-plus"></i>
+                            Add Part
+                        </button>
+                        <div class="header-separator"></div>
+                        <div class="dashboard-info-edit">
+                            <input
+                                type="text"
+                                class="dashboard-name-input"
+                                [(ngModel)]="editingName"
+                                placeholder="Dashboard name">
+                            <input
+                                type="text"
+                                class="dashboard-description-input"
+                                [(ngModel)]="editingDescription"
+                                placeholder="Add a description...">
+                        </div>
+                    </div>
+                    <div class="header-right">
+                        <button class="btn-primary" (click)="saveDashboard()">
+                            <i class="fa-solid fa-save"></i>
+                            Save
+                        </button>
+                        <button class="btn-cancel" (click)="cancelEdit()">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Dashboard Content Container -->
+            <div #container class="dashboard-resource-container"></div>
         </div>
     `,
     styles: [`
@@ -44,14 +102,210 @@ export function LoadDashboardResource() {
             position: relative;
             overflow: hidden;
         }
-        .dashboard-resource-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            overflow: auto;
+        .dashboard-resource-wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            background: #f5f5f5;
         }
+        .dashboard-resource-container {
+            flex: 1;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /* View Mode Toolbar */
+        .viewer-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            gap: 16px;
+        }
+        .viewer-toolbar .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .viewer-toolbar .dashboard-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .viewer-toolbar .dashboard-title i {
+            color: #5c6bc0;
+        }
+        .viewer-toolbar .toolbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* Edit Mode Header */
+        .viewer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .viewer-header.editing {
+            background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+            border-bottom: 2px solid #5c6bc0;
+        }
+        .viewer-header .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+        .viewer-header .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Add Part button */
+        .btn-add-part {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #5c6bc0;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 2px 4px rgba(92, 107, 192, 0.3);
+        }
+        .btn-add-part:hover {
+            background: #3f51b5;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 6px rgba(92, 107, 192, 0.4);
+        }
+        .btn-add-part i { font-size: 12px; }
+
+        /* Header separator */
+        .header-separator {
+            width: 1px;
+            height: 28px;
+            background: rgba(92, 107, 192, 0.3);
+            margin: 0 4px;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            background: #5c6bc0;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary:hover { background: #3f51b5; }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background: #fff;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-icon:hover { background: #f5f5f5; }
+
+        .btn-cancel {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border: 1px solid #d0d0d0;
+            border-radius: 6px;
+            background: #fff;
+            color: #666;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-cancel:hover {
+            background: #f5f5f5;
+            border-color: #bbb;
+            color: #333;
+        }
+
+        /* Dashboard info inputs */
+        .dashboard-info-edit {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex: 1;
+        }
+        .dashboard-name-input {
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+            background: rgba(255, 255, 255, 0.7);
+            outline: none;
+            min-width: 200px;
+            max-width: 300px;
+            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+        .dashboard-name-input:hover { background: rgba(255, 255, 255, 0.9); }
+        .dashboard-name-input:focus {
+            background: #fff;
+            border-color: #5c6bc0;
+            box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+        }
+        .dashboard-description-input {
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: #555;
+            background: rgba(255, 255, 255, 0.5);
+            outline: none;
+            flex: 1;
+            min-width: 150px;
+            max-width: 400px;
+            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+        .dashboard-description-input:hover { background: rgba(255, 255, 255, 0.8); }
+        .dashboard-description-input:focus {
+            background: #fff;
+            border-color: #5c6bc0;
+            box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+        }
+        .dashboard-description-input::placeholder {
+            color: #888;
+            font-style: normal;
+        }
+
+        /* Error state */
         .error-state {
             display: flex;
             flex-direction: column;
@@ -103,6 +357,22 @@ export function LoadDashboardResource() {
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 12px;
         }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .viewer-header {
+                flex-direction: column;
+                gap: 12px;
+                align-items: stretch;
+            }
+            .viewer-header .header-left { flex-wrap: wrap; }
+            .dashboard-info-edit {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .dashboard-name-input,
+            .dashboard-description-input { max-width: none; }
+        }
     `]
 })
 export class DashboardResource extends BaseResourceComponent {
@@ -117,6 +387,19 @@ export class DashboardResource extends BaseResourceComponent {
 
     /** Cached dashboard categories for breadcrumb navigation */
     private categories: DashboardCategoryEntity[] = [];
+
+    /** Reference to the dashboard viewer component (for config-based dashboards) */
+    private viewerInstance: DashboardViewerComponent | null = null;
+
+    /** The config-based dashboard entity (null for code-based dashboards) */
+    public configDashboard: DashboardEntity | null = null;
+
+    /** Whether we're in edit mode */
+    public isEditMode = false;
+
+    /** Editing fields */
+    public editingName = '';
+    public editingDescription = '';
 
     /**
      * Sets the error state with a user-friendly message and optional technical details
@@ -165,6 +448,87 @@ export class DashboardResource extends BaseResourceComponent {
     ngOnDestroy(): void {
         if (this.componentRef) {
             this.componentRef.destroy();
+        }
+    }
+
+    // ========================================
+    // Edit Mode Methods
+    // ========================================
+
+    /**
+     * Toggle between view and edit mode
+     */
+    public toggleEditMode(): void {
+        if (this.isEditMode) {
+            this.cancelEdit();
+        } else {
+            this.enterEditMode();
+        }
+    }
+
+    /**
+     * Enter edit mode
+     */
+    private enterEditMode(): void {
+        if (!this.configDashboard) return;
+
+        this.isEditMode = true;
+        this.editingName = this.configDashboard.Name;
+        this.editingDescription = this.configDashboard.Description || '';
+
+        // Tell the viewer to enter edit mode
+        if (this.viewerInstance) {
+            this.viewerInstance.isEditing = true;
+        }
+
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Cancel edit mode and discard changes
+     */
+    public cancelEdit(): void {
+        this.isEditMode = false;
+
+        // Tell the viewer to exit edit mode
+        if (this.viewerInstance) {
+            this.viewerInstance.isEditing = false;
+        }
+
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Save dashboard changes
+     */
+    public async saveDashboard(): Promise<void> {
+        if (!this.configDashboard || !this.viewerInstance) return;
+
+        try {
+            // Update dashboard name and description
+            this.configDashboard.Name = this.editingName;
+            this.configDashboard.Description = this.editingDescription;
+
+            // Save via the viewer (which handles layout saving)
+            await this.viewerInstance.save();
+
+            // Exit edit mode
+            this.isEditMode = false;
+            this.viewerInstance.isEditing = false;
+
+            this.cdr.detectChanges();
+        } catch (error) {
+            console.error('Error saving dashboard:', error);
+        }
+    }
+
+    /**
+     * Open the add panel dialog
+     */
+    public openAddPartDialog(): void {
+        if (this.viewerInstance) {
+            // Trigger the viewer's add panel flow
+            this.viewerInstance.onAddPanelClick();
         }
     }
 
@@ -393,6 +757,10 @@ export class DashboardResource extends BaseResourceComponent {
             this.componentRef = componentRef;
             const instance = componentRef.instance;
 
+            // Store references for external toolbar control
+            this.viewerInstance = instance;
+            this.configDashboard = dashboard;
+
             // Manually append the component's native element inside the div
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
             nativeElement.style.width = '100%';
@@ -405,10 +773,12 @@ export class DashboardResource extends BaseResourceComponent {
             }
 
             // Set the dashboard entity directly on the viewer
+            // We provide our own external toolbar, so disable the viewer's internal toolbar
             instance.dashboard = dashboard;
-            instance.showToolbar = true;
-            instance.showBreadcrumb = true;
-            instance.showOpenInTabButton = true; // Allow opening in a dedicated tab
+            instance.showToolbar = false;         // We provide external toolbar
+            instance.showBreadcrumb = false;      // Already in its own tab, no breadcrumb needed
+            instance.showOpenInTabButton = false; // Already in its own tab
+            instance.showEditButton = false;      // External toolbar handles edit
             instance.Categories = this.categories;
 
             // Wire up navigation events - handle navigation requests from the dashboard

@@ -130,8 +130,23 @@ export class DashboardViewerComponent implements OnDestroy {
     /** Whether to show the "Open in Tab" button (for embedded dashboards) */
     @Input() showOpenInTabButton = false;
 
+    /** Whether to show the Edit button */
+    @Input() showEditButton = true;
+
     /** All categories for breadcrumb path resolution */
     @Input() Categories: DashboardCategoryEntity[] = [];
+
+    /**
+     * Computed: Should the toolbar be visible?
+     * Auto-hides when showToolbar=false OR when all toolbar elements are disabled
+     */
+    public get shouldShowToolbar(): boolean {
+        if (!this._showToolbar) {
+            return false;
+        }
+        // If all elements are hidden, hide the toolbar entirely
+        return this.showBreadcrumb || this.showOpenInTabButton || this.showEditButton;
+    }
 
     // ========================================
     // Outputs
