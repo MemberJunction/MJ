@@ -131,9 +131,9 @@
             <div class="panel-header">
               <h3 class="panel-title">Active Sessions</h3>
               @if (activeSessions.length > 0) {
-                <button 
+                <button
                   class="btn-danger btn-small"
-                  (click)="stopAllSessions()"
+                  (click)="openStopAllSessionsConfirm()"
                   [disabled]="loading"
                   title="Stop all sessions"
                 >
@@ -163,9 +163,9 @@
                         </span>
                       </div>
                     </div>
-                    <button 
+                    <button
                       class="action-btn action-btn-danger"
-                      (click)="stopSession(session, $event)"
+                      (click)="openStopSessionConfirm(session, $event)"
                       title="Stop session"
                     >
                       <i class="fa-solid fa-stop"></i>
@@ -194,24 +194,31 @@
           </div>
           
           <!-- Log viewer panel -->
-          <div class="log-viewer-panel">
+          <div class="log-viewer-panel" [class.expanded]="isLogViewerExpanded">
             @if (selectedSession) {
               <div class="panel-header">
                 <h3 class="panel-title">{{ selectedSession.sessionName }}</h3>
                 <div class="panel-actions">
                   <label class="checkbox-label">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       [(ngModel)]="autoRefresh"
                     />
                     Auto-refresh
                   </label>
-                  <button 
+                  <button
                     class="action-btn"
                     (click)="loadSessionLog(selectedSession)"
                     title="Refresh log"
                   >
                     <i class="fa-solid fa-sync" [class.fa-spin]="loading"></i>
+                  </button>
+                  <button
+                    class="action-btn"
+                    (click)="toggleLogViewerExpand()"
+                    [title]="isLogViewerExpanded ? 'Collapse' : 'Expand'"
+                  >
+                    <i class="fa-solid" [class.fa-expand]="!isLogViewerExpanded" [class.fa-compress]="isLogViewerExpanded"></i>
                   </button>
                 </div>
               </div>
@@ -289,37 +296,162 @@
           
           <div class="form-checkboxes">
             <label class="checkbox-label">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 [(ngModel)]="newSessionOptions.filterToCurrentUser"
               />
               Filter to my SQL statements only
             </label>
-            
+
             <label class="checkbox-label">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 [(ngModel)]="newSessionOptions.formatAsMigration"
               />
               Format as migration file
             </label>
-            
+
             <label class="checkbox-label">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 [(ngModel)]="newSessionOptions.prettyPrint"
               />
               Pretty print SQL statements
             </label>
           </div>
+
+          <!-- SQL Pattern Filtering Section -->
+          <div class="form-section">
+            <h4 class="form-section-title">
+              <i class="fa-solid fa-filter"></i>
+              SQL Pattern Filtering
+            </h4>
+
+            <div class="form-group">
+              <label class="form-label">Filter Mode</label>
+              <select
+                class="form-select"
+                [(ngModel)]="newSessionOptions.filterType"
+              >
+                @for (option of filterTypeOptions; track option.value) {
+                  <option [value]="option.value">{{ option.text }}</option>
+                }
+              </select>
+              <div class="form-hint">
+                Exclude: Skip SQL matching any pattern. Include: Only log SQL matching a pattern.
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Filter Patterns (one per line or comma-separated)</label>
+              <textarea
+                class="form-textarea"
+                [(ngModel)]="newSessionOptions.filterPatterns"
+                rows="4"
+                placeholder="Examples:&#10;*AIPrompt*&#10;/spCreate.*Run/i&#10;SELECT * FROM vwMetadata"
+              ></textarea>
+              <div class="form-hint">
+                Supports wildcards (*) and regex (/pattern/flags).
+                Example: *spCreate* matches any SP starting with spCreate.
+              </div>
+            </div>
+          </div>
+
+          <!-- Advanced Options Section -->
+          <div class="form-section">
+            <h4 class="form-section-title">
+              <i class="fa-solid fa-cog"></i>
+              Advanced Options
+            </h4>
+
+            @if (newSessionOptions.formatAsMigration) {
+              <div class="form-group">
+                <label class="form-label">Default Schema Name</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  [(ngModel)]="newSessionOptions.defaultSchemaName"
+                  placeholder="__mj"
+                />
+                <div class="form-hint">
+                  Schema name to replace with $&#123;flyway:defaultSchema&#125; placeholder.
+                </div>
+              </div>
+            }
+
+            <div class="form-checkboxes">
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="newSessionOptions.verboseOutput"
+                />
+                Verbose Debug Output
+              </label>
+              <div class="form-hint" style="margin-left: 1.5rem;">
+                Log detailed filter decisions to server console (for debugging).
+              </div>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" (click)="showStartSessionDialog = false">
-            Cancel
-          </button>
           <button class="btn-primary" (click)="startNewSession()" [disabled]="loading">
             <i class="fa-solid fa-play"></i>
             Start Session
+          </button>
+          <button class="btn-secondary" (click)="showStartSessionDialog = false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Stop Session Confirmation Dialog -->
+  @if (showStopConfirmDialog) {
+    <div class="modal-backdrop" (click)="cancelStopConfirm()">
+      <div class="confirm-dialog" (click)="$event.stopPropagation()">
+        <div class="confirm-dialog-icon">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+        </div>
+        <div class="confirm-dialog-content">
+          <h3 class="confirm-dialog-title">
+            @if (isStoppingAll) {
+              Stop All Sessions?
+            } @else {
+              Stop Session?
+            }
+          </h3>
+          <p class="confirm-dialog-message">
+            @if (isStoppingAll) {
+              Are you sure you want to stop <strong>all {{ activeSessions.length }} active</strong> SQL logging sessions? This action cannot be undone.
+            } @else if (sessionToStop) {
+              Are you sure you want to stop the session <strong>"{{ sessionToStop.sessionName }}"</strong>?
+              <span class="confirm-dialog-details">
+                This session has captured {{ sessionToStop.statementCount }} SQL statements.
+              </span>
+            }
+          </p>
+        </div>
+        <div class="confirm-dialog-actions">
+          <button
+            class="btn-danger"
+            (click)="confirmStopSession()"
+            [disabled]="loading"
+          >
+            @if (loading) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Stopping...
+            } @else {
+              <i class="fa-solid fa-stop"></i>
+              @if (isStoppingAll) {
+                Stop All Sessions
+              } @else {
+                Stop Session
+              }
+            }
+          </button>
+          <button class="btn-secondary" (click)="cancelStopConfirm()" [disabled]="loading">
+            Cancel
           </button>
         </div>
       </div>
