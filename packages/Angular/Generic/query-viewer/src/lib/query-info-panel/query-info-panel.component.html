@@ -76,10 +76,10 @@
                    [class.fa-chevron-down]="IsSectionExpanded('fields')"
                    [class.fa-chevron-right]="!IsSectionExpanded('fields')"></i>
                 <span class="section-title">Fields</span>
-                <span class="section-count">({{ QueryInfo.Fields?.length || 0 }})</span>
+                <span class="section-count">({{ QueryInfo.Fields.length || 0 }})</span>
             </div>
             <div class="section-content" *ngIf="IsSectionExpanded('fields')">
-                <div class="fields-list" *ngIf="QueryInfo.Fields?.length; else noFields">
+                <div class="fields-list" *ngIf="QueryInfo.Fields.length; else noFields">
                     <div class="field-item" *ngFor="let field of QueryInfo.Fields; trackBy: TrackByField">
                         <div class="field-header">
                             <span class="field-name">{{ field.Name }}</span>
@@ -112,10 +112,10 @@
                    [class.fa-chevron-down]="IsSectionExpanded('parameters')"
                    [class.fa-chevron-right]="!IsSectionExpanded('parameters')"></i>
                 <span class="section-title">Parameters</span>
-                <span class="section-count">({{ QueryInfo.Parameters?.length || 0 }})</span>
+                <span class="section-count">({{ QueryInfo.Parameters.length || 0 }})</span>
             </div>
             <div class="section-content" *ngIf="IsSectionExpanded('parameters')">
-                <div class="params-list" *ngIf="QueryInfo.Parameters?.length; else noParams">
+                <div class="params-list" *ngIf="QueryInfo.Parameters.length; else noParams">
                     <div class="param-item" *ngFor="let param of QueryInfo.Parameters; trackBy: TrackByParam">
                         <div class="param-header">
                             <span class="param-name">
