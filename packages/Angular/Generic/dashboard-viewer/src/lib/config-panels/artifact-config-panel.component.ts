@@ -96,7 +96,7 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
                 IndirectLeafMapping: {
                     IntermediateEntity: 'MJ: Artifact Versions',
                     IntermediateIDField: 'ID', // CollectionArtifact.ArtifactVersionID -> ArtifactVersion.ID
-                    LeafIDField: 'ArtifactID'  // ArtifactVersion.ArtifactID -> Artifact.ID
+                    LeafIDField: 'ArtifactID' // ArtifactVersion.ArtifactID -> Artifact.ID
                 }
             }
         };

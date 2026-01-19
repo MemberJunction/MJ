@@ -46,6 +46,9 @@ export interface TreeBranchConfig {
 
     /** Optional field for badge/count display */
     BadgeField?: string;
+
+    /** Whether to cache results locally (default: true) */
+    CacheLocal?: boolean;
 }
 
 /**
@@ -65,6 +68,9 @@ export interface TreeJunctionConfig {
     /** Optional extra filter for the junction query */
     ExtraFilter?: string;
 
+    /** Whether to cache junction results locally (default: true) */
+    CacheLocal?: boolean;
+
     /**
      * Optional indirect mapping when junction references an intermediate entity.
      * Example: CollectionArtifact.ArtifactVersionID -> ArtifactVersion.ArtifactID -> Artifact.ID
@@ -81,6 +87,9 @@ export interface TreeJunctionConfig {
 
         /** Optional extra filter for the intermediate entity query */
         ExtraFilter?: string;
+
+        /** Whether to cache intermediate results locally (default: true) */
+        CacheLocal?: boolean;
     };
 }
 
@@ -128,6 +137,9 @@ export interface TreeLeafConfig {
      * instead of using the direct ParentField.
      */
     JunctionConfig?: TreeJunctionConfig;
+
+    /** Whether to cache results locally (default: true) */
+    CacheLocal?: boolean;
 }
 
 // ========================================

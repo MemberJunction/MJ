@@ -885,12 +885,13 @@ export class TreeComponent implements OnInit, OnDestroy {
             ExtraFilter: config.ExtraFilter || '',
             OrderBy: config.OrderBy || 'Name ASC',
             ResultType: 'simple',
-            CacheLocal: false
+            CacheLocal: config.CacheLocal ?? true
         });
 
         console.log('[TreeComponent] Branches query result:', {
             entityName: config.EntityName,
             filter: config.ExtraFilter || '(none)',
+            cacheLocal: config.CacheLocal ?? true,
             success: result.Success,
             recordCount: result.Results?.length || 0,
             records: result.Results?.map((r: Record<string, unknown>) => ({ ID: r['ID'], Name: r['Name'] }))
@@ -913,12 +914,13 @@ export class TreeComponent implements OnInit, OnDestroy {
             ExtraFilter: config.ExtraFilter || '',
             OrderBy: config.OrderBy || 'Name ASC',
             ResultType: 'simple',
-            CacheLocal: false
+            CacheLocal: config.CacheLocal ?? true
         });
 
         console.log('[TreeComponent] Leaves query result:', {
             entityName: config.EntityName,
             filter: config.ExtraFilter || '(none)',
+            cacheLocal: config.CacheLocal ?? true,
             success: result.Success,
             recordCount: result.Results?.length || 0,
             records: result.Results?.map((r: Record<string, unknown>) => ({ ID: r['ID'], Name: r['Name'] }))
@@ -942,17 +944,18 @@ export class TreeComponent implements OnInit, OnDestroy {
         const rv = new RunView();
         const mappings = new Map<string, string[]>();
 
-        // Load junction records - no caching since junction data changes frequently
+        // Load junction records
         const junctionResult = await rv.RunView({
             EntityName: junctionConfig.EntityName,
             ExtraFilter: junctionConfig.ExtraFilter || '',
             ResultType: 'simple',
-            CacheLocal: false
+            CacheLocal: junctionConfig.CacheLocal ?? true
         });
 
         console.log('[TreeComponent] Junction query result:', {
             entityName: junctionConfig.EntityName,
             filter: junctionConfig.ExtraFilter || '(none)',
+            cacheLocal: junctionConfig.CacheLocal ?? true,
             success: junctionResult.Success,
             recordCount: junctionResult.Results?.length || 0,
             records: junctionResult.Results
@@ -969,17 +972,18 @@ export class TreeComponent implements OnInit, OnDestroy {
         if (junctionConfig.IndirectLeafMapping) {
             const indirect = junctionConfig.IndirectLeafMapping;
 
-            // Load the intermediate entity records to build the mapping - no caching for fresh data
+            // Load the intermediate entity records to build the mapping
             const intermediateResult = await rv.RunView({
                 EntityName: indirect.IntermediateEntity,
                 ExtraFilter: indirect.ExtraFilter || '',
                 ResultType: 'simple',
-                CacheLocal: false
+                CacheLocal: indirect.CacheLocal ?? true
             });
 
             console.log('[TreeComponent] Intermediate entity query result:', {
                 entityName: indirect.IntermediateEntity,
                 filter: indirect.ExtraFilter || '(none)',
+                cacheLocal: indirect.CacheLocal ?? true,
                 success: intermediateResult.Success,
                 recordCount: intermediateResult.Results?.length || 0,
                 records: intermediateResult.Results
