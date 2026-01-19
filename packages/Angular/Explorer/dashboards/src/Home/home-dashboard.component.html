@@ -78,7 +78,6 @@
   <div class="quick-access-sidebar" *ngIf="hasSidebarContent">
     <div class="sidebar-header">
       <h3>
-        <i class="fa-solid fa-bolt"></i>
         Quick Access
       </h3>
       <button class="sidebar-close-btn" (click)="toggleSidebar()" title="Close panel">
@@ -166,15 +165,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Quick Access FAB Toggle (Fixed Button) -->
-  <button class="sidebar-fab-toggle"
-          *ngIf="hasSidebarContent && !sidebarOpen"
-          (click)="toggleSidebar()"
-          title="Quick Access">
-    <i class="fa-solid fa-bolt"></i>
-    <span class="fab-badge" *ngIf="unreadNotifications.length > 0">{{ unreadNotifications.length }}</span>
-  </button>
 
   <!-- App Configuration Dialog -->
   <mj-user-app-config

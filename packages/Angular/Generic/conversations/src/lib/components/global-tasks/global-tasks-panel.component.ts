@@ -17,7 +17,6 @@ import { takeUntil } from 'rxjs/operators';
         class="minimized-badge"
         (click)="expand()"
         title="View active tasks">
-        <i class="fas fa-bolt"></i>
         <span class="task-count">{{ tasks.length }}</span>
       </button>
 

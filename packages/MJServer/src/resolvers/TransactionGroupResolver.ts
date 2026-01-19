@@ -82,7 +82,7 @@ export class TransactionResolver {
     @Arg('group', () => TransactionInputType ) group: TransactionInputType,
     @Ctx() context: AppContext
     ) {
-        try { 
+        try {
             // we have received the transaction group information via the network, now we need to reconstruct our TransactionGroup object and run it
             const md = new Metadata();
             const tg = await md.CreateTransactionGroup();

@@ -29,6 +29,8 @@
     "components",
     "applications",
     "dashboards",
+    "templates",
+    "notifications",
     "test-types",
     "tests",
     "test-suites",

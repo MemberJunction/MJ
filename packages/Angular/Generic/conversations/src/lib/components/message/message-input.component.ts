@@ -1172,7 +1172,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         conversationDetailId: taskExecutionMessage.ID, // Link tasks to execution message, not CM message
         environmentId: environmentId,
         sessionId: sessionId,
-        createNotifications: true
+        createNotifications: false
       };
 
       const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, variables);

@@ -94,7 +94,7 @@
                         </div>
                       </mj-settings-card>
 
-                      <mj-settings-card 
+                      <mj-settings-card
                         title="Preferences"
                         icon="fa-solid fa-sliders"
                         [expanded]="isSectionExpanded('preferences')"
@@ -106,7 +106,7 @@
                         </div>
                       </mj-settings-card>
 
-                      <mj-settings-card 
+                      <mj-settings-card
                         title="Notifications"
                         icon="fa-solid fa-bell"
                         [expanded]="isSectionExpanded('notifications')"
@@ -120,7 +120,15 @@
                     </div>
                   </div>
                 }
-                
+
+                @case ('notifications') {
+                  <div class="notifications-settings">
+                    <h2 class="section-title">Notification Preferences</h2>
+                    <p class="section-description">Manage how you receive notifications for different types of events</p>
+                    <mj-notification-preferences></mj-notification-preferences>
+                  </div>
+                }
+
                 @case ('users') {
                   <div class="users-settings">
                     <h2 class="section-title">User Management</h2>

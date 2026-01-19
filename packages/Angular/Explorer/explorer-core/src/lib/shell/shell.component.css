@@ -168,6 +168,15 @@ mj-tab-container ::ng-deep .lm_stack {
   background: #f5f5f5;
 }
 
+.icon-btn.active {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.icon-btn.active i {
+  color: #1976d2;
+}
+
 /* Notification button with badge */
 .notification-btn {
   position: relative;

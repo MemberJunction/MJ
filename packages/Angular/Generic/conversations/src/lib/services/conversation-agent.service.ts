@@ -183,7 +183,7 @@ export class ConversationAgentService {
           latestMessageId: message.ID
         },
         createArtifacts: true,
-        createNotification: true,
+        createNotification: false,
         // Adapt progress callback format: GraphQL uses currentStep, AgentExecutionProgressCallback uses step
         onProgress: onProgress ? (progress) => {
           onProgress({

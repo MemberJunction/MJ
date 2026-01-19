@@ -12,6 +12,7 @@ import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse } from '@memberjunction/global';
 import { getAttachmentService } from '@memberjunction/aiengine';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -623,7 +624,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
     /**
      * Create a user notification for agent completion with artifact
-     * Notification includes navigation link back to the conversation
+     * Uses the unified NotificationService for multi-channel delivery
      */
     private async createCompletionNotification(
         agentRun: AIAgentRunEntityExtended,
@@ -650,54 +651,63 @@ export class RunAIAgentResolver extends ResolverBase {
                 throw new Error(`Failed to load conversation detail ${conversationDetailId}`);
             }
 
-            // Create notification entity
-            const notification = await md.GetEntityObject<UserNotificationEntity>(
-                'User Notifications',
-                contextUser
-            );
-
-            notification.UserID = contextUser.ID;
-            notification.Title = `${agentName} completed your request`;
+            // Build conversation URL for email/SMS templates
+            const baseUrl = process.env.APP_BASE_URL || 'http://localhost:4201';
+            const conversationUrl = `${baseUrl}/conversations/${detail.ConversationID}?artifact=${artifactInfo.artifactId}`;
 
             // Craft message based on versioning
-            if (artifactInfo.versionNumber > 1) {
-                notification.Message = `${agentName} has finished processing and created version ${artifactInfo.versionNumber}`;
-            } else {
-                notification.Message = `${agentName} has finished processing and created a new artifact`;
+            const message = artifactInfo.versionNumber > 1
+                ? `${agentName} has finished processing and created version ${artifactInfo.versionNumber}`
+                : `${agentName} has finished processing and created a new artifact`;
+
+            // Use unified notification engine (Config called to ensure loaded)
+            const notificationEngine = NotificationEngine.Instance;
+            await notificationEngine.Config(false, contextUser);
+            const result = await notificationEngine.SendNotification({
+                userId: contextUser.ID,
+                typeNameOrId: 'Agent Completion',
+                title: `${agentName} completed your request`,
+                message: message,
+                resourceConfiguration: {
+                    type: 'conversation',
+                    conversationId: detail.ConversationID,
+                    messageId: conversationDetailId,
+                    artifactId: artifactInfo.artifactId,
+                    versionId: artifactInfo.versionId,
+                    versionNumber: artifactInfo.versionNumber
+                },
+                templateData: {
+                    agentName: agentName,
+                    artifactTitle: artifactInfo.artifactId,
+                    conversationUrl: conversationUrl,
+                    versionNumber: artifactInfo.versionNumber > 1 ? artifactInfo.versionNumber : undefined
+                }
+            }, contextUser);
+
+            if (result.success && result.inAppNotificationId) {
+                const channels = [];
+                if (result.deliveryChannels.inApp) channels.push('InApp');
+                if (result.deliveryChannels.email) channels.push('Email');
+                if (result.deliveryChannels.sms) channels.push('SMS');
+                const channelList = channels.length > 0 ? channels.join(', ') : 'None';
+                LogStatus(`📬 Notification sent via ${channelList} (ID: ${result.inAppNotificationId})`);
+
+                // Publish real-time notification event so client updates immediately
+                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                    userPayload: JSON.stringify(userPayload),
+                    message: JSON.stringify({
+                        type: 'notification',
+                        notificationId: result.inAppNotificationId,
+                        action: 'create',
+                        title: `${agentName} completed your request`,
+                        message: message
+                    })
+                });
+
+                LogStatus(`📡 Published notification event to client`);
+            } else if (!result.success) {
+                LogError(`Notification failed: ${result.errors?.join(', ')}`);
             }
-
-            // Store navigation configuration as JSON
-            // Client will parse this to navigate to the conversation with artifact visible
-            notification.ResourceConfiguration = JSON.stringify({
-                type: 'conversation',
-                conversationId: detail.ConversationID,
-                messageId: conversationDetailId,
-                artifactId: artifactInfo.artifactId,
-                versionNumber: artifactInfo.versionNumber
-            });
-
-            notification.Unread = true;  // Default unread
-            // ResourceTypeID and ResourceRecordID left null - using custom navigation
-
-            if (!(await notification.Save())) {
-                throw new Error('Failed to save notification');
-            }
-
-            LogStatus(`📬 Created notification ${notification.ID} for user ${contextUser.ID}`);
-
-            // Publish real-time notification event so client updates immediately
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                userPayload: JSON.stringify(userPayload),
-                message: JSON.stringify({
-                    type: 'notification',
-                    notificationId: notification.ID,
-                    action: 'create',
-                    title: notification.Title,
-                    message: notification.Message
-                })
-            });
-
-            LogStatus(`📡 Published notification event to client`);
 
         } catch (error) {
             LogError(`Failed to create completion notification: ${(error as Error).message}`);

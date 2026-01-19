@@ -132,7 +132,7 @@ If `my-feature` tracks `origin/next`:
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
 - Key points:
-  - Use format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
+  - Use format `VYYYYMMDDHHMM__v[VERSION].x__[DESCRIPTION].sql`
   - Always use hardcoded UUIDs (not NEWID())
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder

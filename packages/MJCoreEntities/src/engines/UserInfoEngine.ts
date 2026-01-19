@@ -1,4 +1,5 @@
-import { ApplicationInfo, BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RegisterForStartup, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LocalCacheManager, Metadata, RegisterForStartup, UserInfo, RunView } from "@memberjunction/core";
+import { MJGlobal } from '@memberjunction/global';
 
 /**
  * Status indicating why a user can or cannot access an application.
@@ -13,8 +14,24 @@ import {
     UserApplicationEntity,
     UserFavoriteEntity,
     UserRecordLogEntity,
-    UserSettingEntity
+    UserSettingEntity,
+    UserNotificationTypeEntity,
+    UserNotificationPreferenceEntity
 } from "../generated/entity_subclasses";
+
+/**
+ * Cached representation of user notification preference.
+ * Uses plain object instead of BaseEntity to avoid getter/setter mutation issues.
+ */
+export interface CachedUserNotificationPreference {
+    ID: string;
+    UserID: string;
+    NotificationTypeID: string;
+    Enabled: boolean;
+    InAppEnabled: boolean | null;
+    EmailEnabled: boolean | null;
+    SMSEnabled: boolean | null;
+}
 
 /**
  * UserInfoEngine is a singleton engine that provides centralized access to user-specific data
@@ -39,6 +56,11 @@ import {
  */
 @RegisterForStartup()
 export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
+    // Global cache keys for system-wide data
+    private static readonly CACHE_KEY_NOTIFICATION_TYPES = 'MJ_NotificationTypes';
+    private static readonly CACHE_KEY_NOTIFICATION_TYPES_BY_ID = 'MJ_NotificationTypesById';
+    private static readonly CACHE_KEY_NOTIFICATION_TYPES_BY_NAME = 'MJ_NotificationTypesByName';
+
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application.
      * Do not directly create new instances of it, always use this method to get the instance.
@@ -47,13 +69,20 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         return super.getInstance<UserInfoEngine>();
     }
 
-    // Private storage for entity data
     private _UserNotifications: UserNotificationEntity[] = [];
     private _Workspaces: WorkspaceEntity[] = [];
     private _UserApplications: UserApplicationEntity[] = [];
     private _UserFavorites: UserFavoriteEntity[] = [];
     private _UserRecordLogs: UserRecordLogEntity[] = [];
     private _UserSettings: UserSettingEntity[] = [];
+
+    // Notification metadata
+    private _NotificationTypes: UserNotificationTypeEntity[] = [];
+    private _UserNotificationPreferences: CachedUserNotificationPreference[] = [];
+
+    // Notification type lookups
+    private _notificationTypesByName: Map<string, UserNotificationTypeEntity> = new Map();
+    private _notificationTypesById: Map<string, UserNotificationTypeEntity> = new Map();
 
     // Track the user ID we loaded data for
     private _loadedForUserId: string | null = null;
@@ -73,14 +102,25 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         const md = new Metadata();
         const userId = contextUser?.ID || md.CurrentUser?.ID;
 
-        if (!userId) {
-            console.warn('UserInfoEngine: No user context available, skipping configuration');
-            return;
+        // Check if we need to reload due to user change
+        if (userId && this._loadedForUserId && this._loadedForUserId !== userId) {
+            forceRefresh = true; // Force refresh if user changed
         }
 
-        // Check if we need to reload due to user change
-        if (this._loadedForUserId && this._loadedForUserId !== userId) {
-            forceRefresh = true; // Force refresh if user changed
+        // Load notification types from global cache first (system-wide data)
+        // This works even without userId because notification types are global metadata
+        try {
+            await this.ensureNotificationTypesLoaded(contextUser); //Loads the global notification types
+        } catch (error) {
+            console.warn('UserInfoEngine: Failed to load notification types:', error);
+            // Continue anyway - preferences can still load
+        }
+
+        // If no userId, we can't load user-specific data, but at least notification types are loaded
+        if (!userId) {
+            console.warn('UserInfoEngine: No user context available, skipping user-specific data loading');
+            // Notification types have been loaded globally, so components can still function
+            return;
         }
 
         // Note: We intentionally do NOT use Filter or OrderBy in configs.
@@ -124,16 +164,241 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
                 EntityName: 'User Record Logs',
                 PropertyName: '_UserRecordLogs',
                 CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: User Notification Preferences',
+                PropertyName: '_UserNotificationPreferences',
+                CacheLocal: true,
+                AutoRefresh: false  // Disabled - UpdatePreferenceInCache() handles cache updates explicitly
             }
         ];
 
         await super.Load(configs, provider, forceRefresh, contextUser);
+
+        // Convert loaded UserNotificationPreferenceEntity objects to plain CachedUserNotificationPreference objects
+        // This is necessary because BaseEngine.Load() loads BaseEntity instances with getters/setters
+        // but we need plain objects to avoid mutation issues when updating the cache
+        this._UserNotificationPreferences = (this._UserNotificationPreferences as unknown as UserNotificationPreferenceEntity[]).map(p => ({
+            ID: p.ID,
+            UserID: p.UserID,
+            NotificationTypeID: p.NotificationTypeID,
+            Enabled: p.Enabled,
+            InAppEnabled: p.InAppEnabled,
+            EmailEnabled: p.EmailEnabled,
+            SMSEnabled: p.SMSEnabled
+        }));
+
         this._loadedForUserId = userId;
     }
 
-    // ========================================================================
-    // PUBLIC ACCESSORS
-    // ========================================================================
+    /**
+     * Loads notification types into MJGlobal.ObjectCache if not already cached.
+     * This is system-wide data that persists across user context switches.
+     * @param contextUser - User context for database operations
+     */
+    private async ensureNotificationTypesLoaded(contextUser?: UserInfo): Promise<void> {
+        // Check if already cached globally
+        const cached = MJGlobal.Instance.ObjectCache.Find<UserNotificationTypeEntity[]>(
+            UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES
+        );
+
+        //for cache hits
+
+        if (cached && cached.length > 0) {
+            // Already loaded - set local references
+            this._NotificationTypes = cached;
+
+            // Restore lookup maps from global cache
+            this._notificationTypesById = MJGlobal.Instance.ObjectCache.Find<Map<string, UserNotificationTypeEntity>>(
+                UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES_BY_ID
+            ) || new Map();
+
+            this._notificationTypesByName = MJGlobal.Instance.ObjectCache.Find<Map<string, UserNotificationTypeEntity>>(
+                UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES_BY_NAME
+            ) || new Map();
+
+            return; // Already cached, nothing to do
+        }
+
+        // Skip database load if no context user - will load on first authenticated user request
+        // This prevents errors during server startup when @RegisterForStartup calls Config()
+        if (!contextUser) {
+            console.log('UserInfoEngine: Skipping notification types load - no user context (will load on first authenticated request)');
+            return;
+        }
+
+        //Below are for cache misses
+
+        // Load from database (first time only, with valid user context)
+        const rv = new RunView();
+        const result = await rv.RunView<UserNotificationTypeEntity>({
+            EntityName: 'MJ: User Notification Types',
+            ResultType: 'entity_object',
+            OrderBy: 'Name'
+        }, contextUser);
+
+        if (result.Success) {
+            const types = result.Results || [];
+
+            // Build lookup maps
+            const byId = new Map<string, UserNotificationTypeEntity>();
+            const byName = new Map<string, UserNotificationTypeEntity>();
+
+            for (const type of types) {
+                byId.set(type.ID, type);
+                byName.set(type.Name.toLowerCase(), type);
+            }
+
+            // Store in global cache (persists across user switches)
+            MJGlobal.Instance.ObjectCache.Replace(UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES, types);
+            MJGlobal.Instance.ObjectCache.Replace(UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES_BY_ID, byId);
+            MJGlobal.Instance.ObjectCache.Replace(UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES_BY_NAME, byName);
+
+            // Set local references
+            this._NotificationTypes = types;
+            this._notificationTypesById = byId;
+            this._notificationTypesByName = byName;
+        }
+    }
+
+    /**
+     * Additional loading logic called after the main Load() completes.
+     * Notification type maps are now loaded via ensureNotificationTypesLoaded().
+     */
+    protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // Notification type lookups already built in ensureNotificationTypesLoaded()
+        // No additional work needed here
+    }
+
+    /**
+     * Clears the global notification types cache.
+     * Likely an admin feature but can be done with metadata->mj sync
+     */
+    public static ClearNotificationTypesCache(): void {
+        MJGlobal.Instance.ObjectCache.Remove(UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES);
+        MJGlobal.Instance.ObjectCache.Remove(UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES_BY_ID);
+        MJGlobal.Instance.ObjectCache.Remove(UserInfoEngine.CACHE_KEY_NOTIFICATION_TYPES_BY_NAME);
+    }
+
+    /**
+     * Refreshes the user notification preferences from the database.
+     * Call this after a user updates their notification preferences to ensure the cache is up-to-date.
+     *
+     * This method clears BOTH the LocalCacheManager cache AND the in-memory array
+     * to ensure fresh data is used on the next notification send.
+     *
+     * @param userId - Optional user ID to refresh preferences for. Defaults to current loaded user.
+     * @param contextUser - User context for database operations
+     */
+
+    //Once we update in the database, we will also update cache.
+    public async RefreshUserPreferences(userId?: string, contextUser?: UserInfo): Promise<void> {
+        const targetUserId = userId || this._loadedForUserId;
+
+        if (!targetUserId) {
+            console.warn('UserInfoEngine.RefreshUserPreferences: No targetUserId available');
+            return;
+        }
+
+        // Clear the LocalCacheManager cache for preferences (use static import, not dynamic)
+        await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: User Notification Preferences');
+
+        // Reload preferences from database and update in-memory array
+        // On client: contextUser is undefined, RunView uses Metadata.CurrentUser automatically
+        // On server: contextUser must be provided for multi-user environment
+        const rv = new RunView();
+        const result = await rv.RunView<UserNotificationPreferenceEntity>({
+            EntityName: 'MJ: User Notification Preferences',
+            ExtraFilter: `UserID='${targetUserId}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (result.Success) {
+            // Merge refreshed user's preferences into existing array
+            // Remove old preferences for this user, then add the fresh ones
+            // Convert entity objects to plain objects to avoid BaseEntity getter/setter issues
+            const freshPrefs = (result.Results || []).map(p => ({
+                ID: p.ID,
+                UserID: p.UserID,
+                NotificationTypeID: p.NotificationTypeID,
+                Enabled: p.Enabled,
+                InAppEnabled: p.InAppEnabled,
+                EmailEnabled: p.EmailEnabled,
+                SMSEnabled: p.SMSEnabled
+            }));
+            this._UserNotificationPreferences = [
+                ...this._UserNotificationPreferences.filter(p => p.UserID !== targetUserId),
+                ...freshPrefs
+            ];
+        } else {
+            console.error(`UserInfoEngine.RefreshUserPreferences: RunView failed - ${result.ErrorMessage}`);
+        }
+    }
+
+    /**
+     * Directly update a preference in the cache without querying the database.
+     * Called BEFORE database write to implement "arrow shot through" pattern.
+     *
+     * This method is called by the entity extension on both client and server:
+     * - On client: Updates client cache before GraphQL mutation is sent
+     * - On server: Updates server cache before SQL stored procedure executes
+     *
+     * @param id - The preference record ID
+     * @param userId - The user ID
+     * @param notificationTypeId - The notification type ID
+     * @param enabled - Master enable/disable switch
+     * @param inAppEnabled - In-app notification enabled
+     * @param emailEnabled - Email notification enabled
+     * @param smsEnabled - SMS notification enabled
+     */
+    public UpdatePreferenceInCache(
+        id: string,
+        userId: string,
+        notificationTypeId: string,
+        enabled: boolean,
+        inAppEnabled: boolean | null,
+        emailEnabled: boolean | null,
+        smsEnabled: boolean | null
+    ): void {
+        if (!id) return;
+
+        // Find existing preference in cache by ID
+        const existingIndex = this._UserNotificationPreferences.findIndex(p => p.ID === id);
+
+        // Create the new preference object
+        const newPref: CachedUserNotificationPreference = {
+            ID: id,
+            UserID: userId,
+            NotificationTypeID: notificationTypeId,
+            Enabled: enabled,
+            InAppEnabled: inAppEnabled,
+            EmailEnabled: emailEnabled,
+            SMSEnabled: smsEnabled
+        };
+
+        if (existingIndex >= 0) {
+            // REPLACE the entire object instead of mutating BaseEntity properties
+            // BaseEntity getters/setters don't work correctly when mutating cached instances
+            this._UserNotificationPreferences[existingIndex] = newPref;
+        } else {
+            // Add new preference to cache
+            this._UserNotificationPreferences.push(newPref);
+        }
+    }
+
+    /**
+     * Remove a preference from the cache.
+     * Called BEFORE database delete.
+     *
+     * @param preferenceId - The ID of the preference to remove
+     */
+    public RemovePreferenceFromCache(preferenceId: string): void {
+        const index = this._UserNotificationPreferences.findIndex(p => p.ID === preferenceId);
+        if (index >= 0) {
+            this._UserNotificationPreferences.splice(index, 1);
+        }
+    }
 
     /**
      * Get all notifications for the current user, ordered by creation date (newest first)
@@ -251,6 +516,90 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
             console.error('UserInfoEngine.DeleteSetting: Error:', error instanceof Error ? error.message : String(error));
             return false;
         }
+    }
+
+    /**
+     * All notification types (global metadata, not user-specific)
+     */
+    public get NotificationTypes(): UserNotificationTypeEntity[] {
+        return this._NotificationTypes || [];
+    }
+
+    /**
+     * All notification types unfiltered (for admin/server scenarios)
+     */
+    public get AllNotificationTypes(): UserNotificationTypeEntity[] {
+        return this._NotificationTypes || [];
+    }
+
+    /**
+     * Current user's notification preferences
+     */
+    public get UserNotificationPreferences(): CachedUserNotificationPreference[] {
+        if (!this._loadedForUserId) return [];
+        return (this._UserNotificationPreferences || [])
+            .filter(p => p.UserID === this._loadedForUserId);
+    }
+
+    /**
+     * All user notification preferences unfiltered (for admin/server scenarios)
+     */
+    public get AllUserNotificationPreferences(): CachedUserNotificationPreference[] {
+        return this._UserNotificationPreferences || [];
+    }
+
+    /**
+     * Get preferences for all users for a specific notification type
+     */
+    public GetPreferencesForNotificationType(typeId: string): CachedUserNotificationPreference[] {
+        return (this._UserNotificationPreferences || [])
+            .filter(p => p.NotificationTypeID === typeId);
+    }
+
+    /**
+     * Get preferences for a specific user
+     */
+    public GetUserPreferences(userId: string): CachedUserNotificationPreference[] {
+        return (this._UserNotificationPreferences || [])
+            .filter(p => p.UserID === userId);
+    }
+
+    /**
+     * Get a specific user's preference for a specific notification type
+     */
+    public GetUserPreferenceForType(userId: string, typeId: string): CachedUserNotificationPreference | undefined {
+        return (this._UserNotificationPreferences || [])
+            .find(p => p.UserID === userId && p.NotificationTypeID === typeId);
+    }
+
+    /**
+     * Get current user's preference for a specific notification type
+     */
+    public GetCurrentUserPreferenceForType(typeId: string): CachedUserNotificationPreference | undefined {
+        if (!this._loadedForUserId) return undefined;
+        return this.GetUserPreferenceForType(this._loadedForUserId, typeId);
+    }
+
+    /**
+     * Fast O(1) lookup of notification type by ID
+     */
+    public GetNotificationTypeById(id: string): UserNotificationTypeEntity | undefined {
+        return this._notificationTypesById.get(id);
+    }
+
+    /**
+     * Fast O(1) lookup of notification type by name (case-insensitive)
+     */
+    public GetNotificationTypeByName(name: string): UserNotificationTypeEntity | undefined {
+        return this._notificationTypesByName.get(name.toLowerCase());
+    }
+
+    /**
+     * Get notification type by either ID or name
+     */
+    public GetNotificationType(idOrName: string): UserNotificationTypeEntity | undefined {
+        return this.GetNotificationTypeById(idOrName) ||
+               this.GetNotificationTypeByName(idOrName);
     }
 
     /**

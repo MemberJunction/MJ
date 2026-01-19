@@ -51,6 +51,7 @@
     "@memberjunction/doc-utils": "2.133.0",
     "@memberjunction/encryption": "2.133.0",
     "@memberjunction/entity-communications-server": "2.133.0",
+    "@memberjunction/notifications": "2.134.0",
     "@memberjunction/external-change-detection": "2.133.0",
     "@memberjunction/global": "2.133.0",
     "@memberjunction/graphql-dataprovider": "2.133.0",

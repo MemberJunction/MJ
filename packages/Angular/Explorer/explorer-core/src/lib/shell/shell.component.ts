@@ -51,6 +51,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
+  isNotificationsOpen = false; // True when notifications view is active
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
 
@@ -336,6 +337,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           this.syncUrlWithWorkspace(config);
           // Update browser tab title
           this.updateBrowserTitle(config);
+          // Track notifications view state for bell icon highlighting
+          this.trackNotificationsViewState(config);
         }
       })
     );
@@ -1431,6 +1434,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.titleService.setContext(appName, resourceName);
   }
 
+  /**
+   * Track whether the notifications view is currently active.
+   * Updates isNotificationsOpen for bell icon highlighting.
+   */
+  private trackNotificationsViewState(config: WorkspaceConfiguration): void {
+    const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
+    if (!activeTab) {
+      this.isNotificationsOpen = false;
+      return;
+    }
+
+    // Check if this is the notifications tab by checking its title and configuration
+    const isNotificationsTab = activeTab.title === 'Notifications' &&
+                               activeTab.configuration?.['driverClass'] === 'NotificationsResource';
+
+    this.isNotificationsOpen = isNotificationsTab;
+  }
+
   // ========================================
   // SEARCH FUNCTIONALITY
   // ========================================
@@ -1509,6 +1530,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Show notifications page as a tab
    */
   showNotifications(): void {
+    this.isNotificationsOpen = true;
+
     MJGlobal.Instance.RaiseEvent({
       event: MJEventType.ComponentEvent,
       component: this,

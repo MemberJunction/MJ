@@ -445,7 +445,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             delete (fieldsToSet as any).CategoryPath;   // Input-only field, resolved to CategoryID
 
             record.SetMany(fieldsToSet, true);
-            this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
+            this.ListenForEntityMessages(record, pubSub, context.userPayload);
 
             // Attempt to save the query
             const saveResult = await record.Save();
