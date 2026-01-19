@@ -266,7 +266,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     await commEngine.Config(false, contextUser);
     const message = new Message();
     message.From = process.env.NOTIFICATION_FROM_EMAIL || 'notifications@memberjunction.com';
-    message.To = 'madhavrsubramaniyam@gmail.com'; //userEntity.Email;
+    message.To = userEntity.Email;
     message.HTMLBodyTemplate = templateEntity;
     message.ContextData = params.templateData || {};
     message.Subject = params.title;
