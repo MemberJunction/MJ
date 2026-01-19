@@ -47,8 +47,14 @@ export abstract class BaseFileStorageAction extends BaseAction {
             provider.ServerDriverKey
         );
 
-        // Initialize the driver if it has an initialize method
-        await driver.initialize();
+        // Initialize the driver with minimal config using provider configuration
+        // For full enterprise model with credentials, use initializeDriverWithAccountCredentials from @memberjunction/storage
+        const config = provider.Configuration ? JSON.parse(provider.Configuration) : {};
+        await driver.initialize({
+            accountId: provider.ID, // Use provider ID as accountId for non-enterprise usage
+            accountName: provider.Name,
+            ...config
+        });
 
         return driver;
     }

@@ -32,4 +32,16 @@ export type {
     ComponentSpecWithHash
 } from './GraphQLComponentRegistryClient';
 
+export { GraphQLFileStorageClient } from './graphQLFileStorageClient';
+export type {
+    StorageObjectMetadata,
+    StorageListResult,
+    CreatePreAuthUploadUrlResult,
+    CopyBetweenAccountsResult,
+    FileSearchOptions,
+    FileSearchResult,
+    AccountSearchResult,
+    SearchAcrossAccountsResult
+} from './graphQLFileStorageClient';
+
 export * from './storage-providers';

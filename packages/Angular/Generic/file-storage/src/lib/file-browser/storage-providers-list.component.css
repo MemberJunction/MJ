@@ -1,0 +1,579 @@
+/* ===========================
+   Storage Providers List
+   =========================== */
+
+.providers-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Header with Add Button */
+.providers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e5e5;
+  background-color: #fafafa;
+}
+
+.header-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d1d1f;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.add-provider-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background-color: #007aff;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.add-provider-btn:hover:not(:disabled) {
+  background-color: #0056b3;
+  transform: scale(1.05);
+}
+
+.add-provider-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* Loading, Error, and Empty States */
+.loading-state,
+.error-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #86868b;
+  flex: 1;
+}
+
+.error-icon,
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
+
+.error-icon {
+  color: #f44336;
+}
+
+.empty-icon {
+  color: #007aff;
+}
+
+.error-message,
+.empty-message {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 4px 0;
+  color: #1d1d1f;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: #86868b;
+  margin: 4px 0 0 0;
+  max-width: 180px;
+  line-height: 1.4;
+}
+
+/* Provider List Container */
+.providers-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Individual Provider Item */
+.provider-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+}
+
+.provider-item:hover {
+  background-color: #f5f5f7;
+}
+
+.provider-item.selected {
+  background-color: #e8f4fd;
+  border-left: 3px solid #007aff;
+}
+
+.provider-item.selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #007aff;
+}
+
+/* Provider Icon */
+.provider-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #424242;
+  margin-right: 12px;
+}
+
+.provider-item.selected .provider-icon {
+  color: #007aff;
+}
+
+/* Provider Info */
+.provider-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.provider-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1d1d1f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-item.selected .provider-name {
+  color: #007aff;
+  font-weight: 600;
+}
+
+.provider-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #86868b;
+}
+
+/* Default Badge */
+.default-badge {
+  display: inline-flex;
+  align-items: center;
+  color: #f5a623;
+}
+
+.default-badge i {
+  font-size: 10px;
+}
+
+/* Provider Type Badge */
+.provider-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background-color: #f0f0f0;
+  border-radius: 10px;
+  font-size: 10px;
+  color: #666;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-item.selected .provider-type-badge {
+  background-color: rgba(0, 122, 255, 0.15);
+  color: #007aff;
+}
+
+/* Search Badge */
+.search-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background-color: #f0f0f0;
+  border-radius: 10px;
+  font-size: 10px;
+  color: #666;
+}
+
+.provider-item.selected .search-badge {
+  background-color: rgba(0, 122, 255, 0.15);
+  color: #007aff;
+}
+
+.search-badge i {
+  font-size: 9px;
+}
+
+/* Credential Badge */
+.credential-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background-color: #e8f5e9;
+  border-radius: 10px;
+  font-size: 10px;
+  color: #34c759;
+}
+
+.provider-item.selected .credential-badge {
+  background-color: rgba(52, 199, 89, 0.15);
+  color: #34c759;
+}
+
+.credential-badge i {
+  font-size: 9px;
+}
+
+/* Unconfigured Badge */
+.unconfigured-badge {
+  display: inline-flex;
+  align-items: center;
+  color: #ff9500;
+}
+
+.unconfigured-badge i {
+  font-size: 10px;
+}
+
+/* OAuth Status Badges */
+.oauth-connected-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background-color: #e8f5e9;
+  border-radius: 10px;
+  font-size: 10px;
+  color: #34c759;
+}
+
+.oauth-connected-badge i {
+  font-size: 9px;
+}
+
+.oauth-disconnected-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background-color: #fff3e0;
+  border-radius: 10px;
+  font-size: 10px;
+  color: #ff9500;
+}
+
+.oauth-disconnected-badge i {
+  font-size: 9px;
+}
+
+/* Provider Actions (OAuth connect/disconnect buttons) */
+.provider-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.connect-btn,
+.disconnect-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.connect-btn {
+  background-color: #e8f5e9;
+  color: #34c759;
+}
+
+.connect-btn:hover:not(:disabled) {
+  background-color: #c8e6c9;
+  transform: scale(1.05);
+}
+
+.connect-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.disconnect-btn {
+  background-color: transparent;
+  color: #86868b;
+}
+
+.disconnect-btn:hover {
+  background-color: #ffebee;
+  color: #f44336;
+}
+
+/* Remove Provider Button */
+.remove-provider-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background-color: transparent;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 12px;
+  opacity: 0;
+  margin-left: 8px;
+}
+
+.provider-item:hover .remove-provider-btn {
+  opacity: 1;
+}
+
+.remove-provider-btn:hover:not(:disabled) {
+  background-color: #ffebee;
+  color: #f44336;
+}
+
+.remove-provider-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Scrollbar Styling */
+.providers-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.providers-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.providers-container::-webkit-scrollbar-thumb {
+  background: #c7c7cc;
+  border-radius: 3px;
+}
+
+.providers-container::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a5;
+}
+
+/* ===========================
+   Add Provider Dialog
+   =========================== */
+
+.add-provider-dialog {
+  min-height: 150px;
+}
+
+.dialog-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.dialog-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  text-align: center;
+}
+
+.dialog-empty-icon {
+  font-size: 40px;
+  color: #34c759;
+  margin-bottom: 12px;
+}
+
+.dialog-empty-message {
+  font-size: 16px;
+  font-weight: 500;
+  color: #1d1d1f;
+  margin: 0 0 4px 0;
+}
+
+.dialog-empty-hint {
+  font-size: 13px;
+  color: #86868b;
+  margin: 0;
+}
+
+.dialog-instruction {
+  font-size: 13px;
+  color: #666;
+  margin: 0 0 12px 0;
+  padding: 0 4px;
+}
+
+.available-providers {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.available-provider-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+  border: 1px solid #e5e5e5;
+}
+
+.available-provider-item:hover:not(.disabled) {
+  background-color: #f5f5f7;
+  border-color: #007aff;
+}
+
+.available-provider-item.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f9f9f9;
+}
+
+.available-provider-item .provider-icon {
+  margin-right: 12px;
+}
+
+.available-provider-item .provider-info {
+  flex: 1;
+}
+
+.available-provider-item .provider-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1d1d1f;
+}
+
+.available-provider-item .provider-description {
+  font-size: 12px;
+  color: #86868b;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+.available-provider-item .provider-warning {
+  font-size: 11px;
+  color: #ff9500;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.available-provider-item .provider-warning i {
+  font-size: 10px;
+}
+
+/* OAuth hint in add provider dialog */
+.available-provider-item .oauth-hint {
+  font-size: 11px;
+  color: #007aff;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.available-provider-item .oauth-hint i {
+  font-size: 10px;
+}
+
+.available-provider-item.oauth-provider {
+  border-color: #007aff;
+  border-style: dashed;
+}
+
+.available-provider-item.oauth-provider:hover:not(.disabled) {
+  background-color: #e8f4fd;
+  border-style: solid;
+}
+
+.add-indicator {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #007aff;
+  font-size: 14px;
+}
+
+/* Responsive Adjustments */
+@media screen and (max-width: 768px) {
+  .providers-header {
+    padding: 10px 12px;
+  }
+
+  .header-title {
+    font-size: 12px;
+  }
+
+  .add-provider-btn {
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+  }
+
+  .provider-item {
+    padding: 10px 12px;
+  }
+
+  .provider-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
+    margin-right: 10px;
+  }
+
+  .provider-name {
+    font-size: 12px;
+  }
+
+  .provider-status {
+    font-size: 10px;
+  }
+
+  .remove-provider-btn {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+    opacity: 1;
+  }
+}
