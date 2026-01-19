@@ -62,6 +62,8 @@ export class GoldenLayoutWrapperService {
     private _componentFactory: PanelComponentFactory | null = null;
     private _containerMap = new Map<string, ComponentContainer>();
     private _isEditing = false;
+    /** Tracks which panels have been lazily loaded (content created) */
+    private _loadedPanels = new Set<string>();
 
     /** Emitted when layout configuration changes */
     public onLayoutChanged = new Subject<LayoutChangedEvent>();
@@ -283,20 +285,34 @@ export class GoldenLayoutWrapperService {
             const iconClass = panel.icon || 'fa-solid fa-cube';
             this.addIconToTab(container, iconClass);
 
-            // Create the panel content via factory - pass the full panel from componentState
-            if (this._componentFactory) {
-                this._componentFactory(panel, wrapper);
-            }
+            // LAZY LOADING: Show loading placeholder initially
+            // Actual content is created when panel is first shown (visible)
+            wrapper.innerHTML = `
+                <div class="panel-loading" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888;">
+                    <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>
+                    Loading...
+                </div>
+            `;
 
             // Listen for close events
             container.on('beforeComponentRelease', () => {
                 this._containerMap.delete(panel.id);
+                this._loadedPanels.delete(panel.id);
                 this.onPanelClosed.next(panel.id);
                 this.updatePanelsList();
             });
 
-            // Listen for show/focus events
+            // Listen for show/focus events - LAZY LOAD on first show
             container.on('show', () => {
+                // Check if this is first time panel is shown
+                if (!this._loadedPanels.has(panel.id)) {
+                    // First show - create actual content
+                    wrapper.innerHTML = ''; // Clear loading placeholder
+                    if (this._componentFactory) {
+                        this._componentFactory(panel, wrapper);
+                    }
+                    this._loadedPanels.add(panel.id);
+                }
                 this.onPanelSelected.next(panel.id);
             });
 
@@ -337,6 +353,7 @@ export class GoldenLayoutWrapperService {
         }
 
         this._containerMap.clear();
+        this._loadedPanels.clear();
         this._initialized = false;
         this._componentFactory = null;
         this._containerElement = null;
