@@ -75,20 +75,30 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
             ExtraFilter: userId ? `OwnerID = '${userId}'` : ''
         };
 
-        // Artifacts from MJ: Artifacts entity (not MJ: Conversation Artifacts which is deprecated)
-        // Filter to show only artifacts created by the current user.
-        // These are shown flat at root level since the junction table relationship
-        // (Artifact -> ArtifactVersion -> CollectionArtifact -> Collection) doesn't map
-        // directly to a parent field that the tree component can use.
+        // Artifacts from MJ: Artifacts entity using M2M junction config.
+        // The relationship is: Artifact -> ArtifactVersion -> CollectionArtifact -> Collection
+        // We use JunctionConfig to properly parent artifacts under their collections.
         this.ArtifactLeafConfig = {
             EntityName: 'MJ: Artifacts',
             DisplayField: 'Name',
             IDField: 'ID',
-            ParentField: '', // No direct parent - artifacts shown at root level
+            ParentField: '', // Using JunctionConfig instead of direct parent field
             DefaultIcon: 'fa-solid fa-cube',
             DescriptionField: 'Description',
             OrderBy: 'Name ASC',
-            ExtraFilter: userId ? `UserID = '${userId}'` : ''
+            ExtraFilter: userId ? `UserID = '${userId}'` : '',
+            // M2M junction configuration: Artifact -> ArtifactVersion -> CollectionArtifact -> Collection
+            JunctionConfig: {
+                EntityName: 'MJ: Collection Artifacts',
+                LeafForeignKey: 'ArtifactVersionID', // Junction references ArtifactVersion, not Artifact directly
+                BranchForeignKey: 'CollectionID',
+                // Indirect mapping since junction references ArtifactVersion, not Artifact
+                IndirectLeafMapping: {
+                    IntermediateEntity: 'MJ: Artifact Versions',
+                    IntermediateIDField: 'ID', // CollectionArtifact.ArtifactVersionID -> ArtifactVersion.ID
+                    LeafIDField: 'ArtifactID'  // ArtifactVersion.ArtifactID -> Artifact.ID
+                }
+            }
         };
     }
 

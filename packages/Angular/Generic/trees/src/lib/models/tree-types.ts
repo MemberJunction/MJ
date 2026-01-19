@@ -49,6 +49,42 @@ export interface TreeBranchConfig {
 }
 
 /**
+ * Configuration for M2M junction table relationships.
+ * Used when leaves relate to branches through an intermediate junction table.
+ */
+export interface TreeJunctionConfig {
+    /** Junction entity name (e.g., 'MJ: Collection Artifacts') */
+    EntityName: string;
+
+    /** Field in junction that references the leaf entity (e.g., 'ArtifactVersionID') */
+    LeafForeignKey: string;
+
+    /** Field in junction that references the branch entity (e.g., 'CollectionID') */
+    BranchForeignKey: string;
+
+    /** Optional extra filter for the junction query */
+    ExtraFilter?: string;
+
+    /**
+     * Optional indirect mapping when junction references an intermediate entity.
+     * Example: CollectionArtifact.ArtifactVersionID -> ArtifactVersion.ArtifactID -> Artifact.ID
+     */
+    IndirectLeafMapping?: {
+        /** Intermediate entity name (e.g., 'MJ: Artifact Versions') */
+        IntermediateEntity: string;
+
+        /** ID field in intermediate entity that junction references (e.g., 'ID') */
+        IntermediateIDField: string;
+
+        /** Field in intermediate entity that points to the actual leaf (e.g., 'ArtifactID') */
+        LeafIDField: string;
+
+        /** Optional extra filter for the intermediate entity query */
+        ExtraFilter?: string;
+    };
+}
+
+/**
  * Configuration for the tree's leaf entity (optional).
  * Leaf nodes are the selectable items within branch nodes.
  */
@@ -56,7 +92,10 @@ export interface TreeLeafConfig {
     /** Entity name for leaf nodes (e.g., 'Queries') */
     EntityName: string;
 
-    /** Field that links to parent branch (e.g., 'CategoryID') */
+    /**
+     * Field that links to parent branch (e.g., 'CategoryID').
+     * Leave empty string if using JunctionConfig for M2M relationships.
+     */
     ParentField: string;
 
     /** Field to display as node label (default: 'Name') */
@@ -82,6 +121,13 @@ export interface TreeLeafConfig {
 
     /** Optional field for badge/count display */
     BadgeField?: string;
+
+    /**
+     * Optional M2M junction configuration for indirect parent relationships.
+     * When specified, leaves are parented to branches based on junction table lookups
+     * instead of using the direct ParentField.
+     */
+    JunctionConfig?: TreeJunctionConfig;
 }
 
 // ========================================

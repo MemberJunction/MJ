@@ -20,6 +20,7 @@ import {
     TreeNode,
     TreeBranchConfig,
     TreeLeafConfig,
+    TreeJunctionConfig,
     TreeSelectionMode,
     TreeSelectableTypes,
     TreeStyleConfig,
@@ -804,8 +805,14 @@ export class TreeComponent implements OnInit, OnDestroy {
             // Build tree structure
             const { rootNodes, allBranches, branchMap } = this.buildBranchHierarchy(branchData, branchConfig);
 
+            // Load junction mappings if configured (for M2M relationships)
+            let junctionMappings: Map<string, string[]> | null = null;
+            if (leafConfig?.JunctionConfig) {
+                junctionMappings = await this.loadJunctionMappings(leafConfig.JunctionConfig, leafConfig.IDField || 'ID');
+            }
+
             // Attach leaves to branches (or root if orphans)
-            const allLeaves = this.attachLeavesToBranches(rootNodes, branchMap, leafData, leafConfig);
+            const allLeaves = this.attachLeavesToBranches(rootNodes, branchMap, leafData, leafConfig, junctionMappings);
 
             const loadTimeMs = performance.now() - startTime;
 
@@ -909,6 +916,98 @@ export class TreeComponent implements OnInit, OnDestroy {
     }
 
     /**
+     * Load junction mappings for M2M relationships.
+     * Returns a map of leafId -> branchIds[]
+     */
+    private async loadJunctionMappings(
+        junctionConfig: TreeJunctionConfig,
+        leafIdField: string
+    ): Promise<Map<string, string[]>> {
+        const rv = new RunView();
+        const mappings = new Map<string, string[]>();
+
+        // Load junction records
+        const junctionResult = await rv.RunView({
+            EntityName: junctionConfig.EntityName,
+            ExtraFilter: junctionConfig.ExtraFilter || '',
+            ResultType: 'simple',
+            CacheLocal: true
+        });
+
+        if (!junctionResult.Success) {
+            console.warn(`Failed to load junction data: ${junctionResult.ErrorMessage}`);
+            return mappings;
+        }
+
+        const junctionRecords = junctionResult.Results as Record<string, unknown>[];
+
+        // If there's an indirect mapping, we need to resolve it
+        if (junctionConfig.IndirectLeafMapping) {
+            const indirect = junctionConfig.IndirectLeafMapping;
+
+            // Load the intermediate entity records to build the mapping
+            const intermediateResult = await rv.RunView({
+                EntityName: indirect.IntermediateEntity,
+                ExtraFilter: indirect.ExtraFilter || '',
+                ResultType: 'simple',
+                CacheLocal: true
+            });
+
+            if (!intermediateResult.Success) {
+                console.warn(`Failed to load intermediate data: ${intermediateResult.ErrorMessage}`);
+                return mappings;
+            }
+
+            // Build intermediate ID -> leaf ID map
+            const intermediateToLeaf = new Map<string, string>();
+            for (const record of intermediateResult.Results as Record<string, unknown>[]) {
+                const intermediateId = String(record[indirect.IntermediateIDField] || '');
+                const leafId = String(record[indirect.LeafIDField] || '');
+                if (intermediateId && leafId) {
+                    intermediateToLeaf.set(intermediateId, leafId);
+                }
+            }
+
+            // Now process junction records using the intermediate mapping
+            for (const junction of junctionRecords) {
+                const intermediateId = String(junction[junctionConfig.LeafForeignKey] || '');
+                const branchId = String(junction[junctionConfig.BranchForeignKey] || '');
+
+                if (intermediateId && branchId) {
+                    const leafId = intermediateToLeaf.get(intermediateId);
+                    if (leafId) {
+                        if (!mappings.has(leafId)) {
+                            mappings.set(leafId, []);
+                        }
+                        const branchIds = mappings.get(leafId)!;
+                        if (!branchIds.includes(branchId)) {
+                            branchIds.push(branchId);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Direct mapping - junction directly references the leaf
+            for (const junction of junctionRecords) {
+                const leafId = String(junction[junctionConfig.LeafForeignKey] || '');
+                const branchId = String(junction[junctionConfig.BranchForeignKey] || '');
+
+                if (leafId && branchId) {
+                    if (!mappings.has(leafId)) {
+                        mappings.set(leafId, []);
+                    }
+                    const branchIds = mappings.get(leafId)!;
+                    if (!branchIds.includes(branchId)) {
+                        branchIds.push(branchId);
+                    }
+                }
+            }
+        }
+
+        return mappings;
+    }
+
+    /**
      * Build branch hierarchy from flat data
      */
     private buildBranchHierarchy(
@@ -964,13 +1063,21 @@ export class TreeComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Attach leaf nodes to their parent branches or root level
+     * Attach leaf nodes to their parent branches or root level.
+     * Supports both direct parent field relationships and M2M junction mappings.
+     *
+     * @param rootNodes Root nodes to attach orphan leaves to
+     * @param branchMap Map of branch IDs to branch nodes
+     * @param leafData Raw leaf data from database
+     * @param config Leaf configuration
+     * @param junctionMappings Optional M2M mappings (leafId -> branchIds[])
      */
     private attachLeavesToBranches(
         rootNodes: TreeNode[],
         branchMap: Map<string, TreeNode>,
         leafData: Record<string, unknown>[],
-        config?: TreeLeafConfig
+        config?: TreeLeafConfig,
+        junctionMappings?: Map<string, string[]> | null
     ): TreeNode[] {
         if (!config || leafData.length === 0) {
             return [];
@@ -979,20 +1086,24 @@ export class TreeComponent implements OnInit, OnDestroy {
         const idField = config.IDField || 'ID';
         const parentField = config.ParentField;
         const displayField = config.DisplayField || 'Name';
+        const useJunction = !!junctionMappings && junctionMappings.size > 0;
 
         const allLeaves: TreeNode[] = [];
+        const addedLeafIds = new Set<string>(); // Track leaves already added to avoid duplicates
 
         for (const data of leafData) {
             const id = String(data[idField] || '');
-            // Handle the parent field - it might be empty string, null, or missing
-            const parentFieldValue = parentField ? data[parentField] : null;
-            const parentId = parentFieldValue ? String(parentFieldValue) : null;
+
+            // If using junction mappings, only include leaves that have junction entries
+            if (useJunction && !junctionMappings!.has(id)) {
+                continue; // Skip leaves not in any branch via junction
+            }
 
             const leaf = createDefaultTreeNode({
                 ID: id,
                 Label: String(data[displayField] || ''),
                 Type: 'leaf',
-                ParentID: parentId,
+                ParentID: null, // Will be set based on attachment
                 Icon: this.getNodeIcon(data, config.IconField, config.DefaultIcon || 'fa-solid fa-file'),
                 Data: { ...data },
                 Description: config.DescriptionField ? String(data[config.DescriptionField] || '') : undefined,
@@ -1002,15 +1113,56 @@ export class TreeComponent implements OnInit, OnDestroy {
 
             allLeaves.push(leaf);
 
-            // Attach to parent branch if exists, otherwise add to root
-            if (parentId && branchMap.has(parentId)) {
-                const parent = branchMap.get(parentId)!;
-                parent.Children.push(leaf);
-                leaf.Level = parent.Level + 1;
+            if (useJunction) {
+                // M2M relationship: attach to all mapped branches
+                const branchIds = junctionMappings!.get(id) || [];
+                let attached = false;
+
+                for (const branchId of branchIds) {
+                    if (branchMap.has(branchId)) {
+                        const parent = branchMap.get(branchId)!;
+
+                        if (!attached) {
+                            // First attachment: use the original leaf
+                            leaf.ParentID = branchId;
+                            leaf.Level = parent.Level + 1;
+                            parent.Children.push(leaf);
+                            attached = true;
+                        } else {
+                            // Additional attachments: create a clone of the leaf
+                            // This allows the same artifact to appear under multiple collections
+                            const leafClone = createDefaultTreeNode({
+                                ...leaf,
+                                ParentID: branchId,
+                                Level: parent.Level + 1,
+                                Children: [],
+                                Data: { ...leaf.Data }
+                            });
+                            parent.Children.push(leafClone);
+                        }
+                    }
+                }
+
+                // If no valid branch found, add to root
+                if (!attached) {
+                    rootNodes.push(leaf);
+                    leaf.Level = 0;
+                }
             } else {
-                // Orphan leaf (no parent or parent not found) - add to root level
-                rootNodes.push(leaf);
-                leaf.Level = 0;
+                // Direct parent field relationship
+                const parentFieldValue = parentField ? data[parentField] : null;
+                const parentId = parentFieldValue ? String(parentFieldValue) : null;
+                leaf.ParentID = parentId;
+
+                if (parentId && branchMap.has(parentId)) {
+                    const parent = branchMap.get(parentId)!;
+                    parent.Children.push(leaf);
+                    leaf.Level = parent.Level + 1;
+                } else {
+                    // Orphan leaf (no parent or parent not found) - add to root level
+                    rootNodes.push(leaf);
+                    leaf.Level = 0;
+                }
             }
         }
 

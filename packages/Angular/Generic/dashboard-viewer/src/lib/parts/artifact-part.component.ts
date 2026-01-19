@@ -42,6 +42,8 @@ import { Subject } from 'rxjs';
                 [showSaveToCollection]="false"
                 [showHeader]="showHeader"
                 [showTabs]="showTabs"
+                [showCloseButton]="showCloseButton"
+                [showMaximizeButton]="showMaximizeButton"
                 [viewContext]="null"
                 [canShare]="false"
                 [canEdit]="false"
@@ -125,6 +127,8 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
     public versionNumber: number | undefined;
     public showHeader: boolean = false; // Default to false for dashboard embedding
     public showTabs: boolean = true;
+    public showCloseButton: boolean = false; // Always false in dashboard context - close handled by dashboard
+    public showMaximizeButton: boolean = false; // Always false in dashboard context - maximize handled by dashboard
     public refreshTrigger = new Subject<{ artifactId: string; versionNumber: number }>();
 
     // Expose for template
