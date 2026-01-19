@@ -885,7 +885,7 @@ export class TreeComponent implements OnInit, OnDestroy {
             ExtraFilter: config.ExtraFilter || '',
             OrderBy: config.OrderBy || 'Name ASC',
             ResultType: 'simple',
-            CacheLocal: true
+            CacheLocal: false
         });
 
         console.log('[TreeComponent] Branches query result:', {
@@ -908,20 +908,17 @@ export class TreeComponent implements OnInit, OnDestroy {
      */
     private async loadLeaves(config: TreeLeafConfig): Promise<Record<string, unknown>[]> {
         const rv = new RunView();
-        // Disable caching when using junction config since data relationships change frequently
-        const useCache = !config.JunctionConfig;
         const result = await rv.RunView({
             EntityName: config.EntityName,
             ExtraFilter: config.ExtraFilter || '',
             OrderBy: config.OrderBy || 'Name ASC',
             ResultType: 'simple',
-            CacheLocal: useCache
+            CacheLocal: false
         });
 
         console.log('[TreeComponent] Leaves query result:', {
             entityName: config.EntityName,
             filter: config.ExtraFilter || '(none)',
-            cacheLocal: useCache,
             success: result.Success,
             recordCount: result.Results?.length || 0,
             records: result.Results?.map((r: Record<string, unknown>) => ({ ID: r['ID'], Name: r['Name'] }))
