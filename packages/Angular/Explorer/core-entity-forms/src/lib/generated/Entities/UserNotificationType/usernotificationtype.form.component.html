@@ -3,27 +3,49 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Step Identification & Hierarchy Section -->
+    <!-- Notification Details Section -->
     <mj-collapsible-panel slot="field-panels"
-        sectionKey="stepIdentificationHierarchy"
-        sectionName="Step Identification & Hierarchy"
-        icon="fa fa-layer-group"
+        sectionKey="notificationDetails"
+        sectionName="Notification Details"
+        icon="fa fa-bell"
         [form]="this"
         [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AgentRunID"
+            FieldName="Name"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="StepNumber"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Color"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoExpireDays"
             Type="numerictextbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -31,39 +53,67 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="StepType"
-            Type="dropdownlist"
+            FieldName="Priority"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Delivery Defaults Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="deliveryDefaults"
+        sectionName="Delivery Defaults"
+        icon="fa fa-envelope-open"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultInApp"
+            Type="checkbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="StepName"
-            Type="textarea"
+            FieldName="DefaultEmail"
+            Type="checkbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TargetID"
-            Type="textbox"
+            FieldName="DefaultSMS"
+            Type="checkbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TargetLogID"
-            Type="textbox"
+            FieldName="AllowUserPreference"
+            Type="checkbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Template Settings Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="templateSettings"
+        sectionName="Template Settings"
+        icon="fa fa-file-code"
+        [form]="this"
+        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ParentID"
+            FieldName="EmailTemplateID"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
@@ -73,134 +123,26 @@
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="RootParentID"
+            FieldName="SMSTemplateID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EmailTemplate"
             Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Execution Status & Validation Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="executionStatusValidation"
-        sectionName="Execution Status & Validation"
-        icon="fa fa-flag-checkered"
-        [form]="this"
-        [formContext]="formContext">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="StartedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CompletedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Success"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ErrorMessage"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="FinalPayloadValidationResult"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="FinalPayloadValidationMessages"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Data & Payload Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="dataPayload"
-        sectionName="Data & Payload"
-        icon="fa fa-database"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="InputData"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="OutputData"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PayloadAtStart"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="PayloadAtEnd"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [formContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Notes & System Metadata Section -->
-    <mj-collapsible-panel slot="field-panels"
-        sectionKey="notesSystemMetadata"
-        sectionName="Notes & System Metadata"
-        icon="fa fa-cog"
-        [form]="this"
-        [formContext]="formContext">
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="false"
-            FieldName="Comments"
-            Type="textarea"
+            FieldName="SMSTemplate"
+            Type="textbox"
             [EditMode]="EditMode"
             [formContext]="formContext"
         ></mj-form-field>
@@ -236,23 +178,45 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
-    <!-- MJ: AI Agent Run Steps Section -->
+    <!-- User Notifications Section -->
     <mj-collapsible-panel slot="after-panels"
-        sectionKey="mJAIAgentRunSteps"
-        sectionName="MJ: AI Agent Run Steps"
-        icon="fa fa-robot"
+        sectionKey="userNotifications"
+        sectionName="User Notifications"
+        icon="fa fa-bell"
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('mJAIAgentRunSteps')"
+        [badgeCount]="GetSectionRowCount('userNotifications')"
         [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Steps','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Steps')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRunSteps')"
+                [Params]="BuildRelationshipViewParamsByEntityName('User Notifications','NotificationTypeID')"
+                [NewRecordValues]="NewRecordValues('User Notifications')"
+                [AllowLoad]="IsSectionExpanded('userNotifications')"
                 [ShowToolbar]="false"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunSteps', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('userNotifications', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: User Notification Preferences Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJUserNotificationPreferences"
+        sectionName="MJ: User Notification Preferences"
+        icon="fa fa-bell"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJUserNotificationPreferences')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Preferences','NotificationTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Notification Preferences')"
+                [AllowLoad]="IsSectionExpanded('mJUserNotificationPreferences')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationPreferences', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -211,6 +211,8 @@ import { TestSuiteTestFormComponent, LoadTestSuiteTestFormComponent } from "./En
 import { TestSuiteFormComponent, LoadTestSuiteFormComponent } from "./Entities/TestSuite/testsuite.form.component";
 import { TestTypeFormComponent, LoadTestTypeFormComponent } from "./Entities/TestType/testtype.form.component";
 import { TestFormComponent, LoadTestFormComponent } from "./Entities/Test/test.form.component";
+import { UserNotificationPreferenceFormComponent, LoadUserNotificationPreferenceFormComponent } from "./Entities/UserNotificationPreference/usernotificationpreference.form.component";
+import { UserNotificationTypeFormComponent, LoadUserNotificationTypeFormComponent } from "./Entities/UserNotificationType/usernotificationtype.form.component";
 import { UserSettingFormComponent, LoadUserSettingFormComponent } from "./Entities/UserSetting/usersetting.form.component";
 import { OutputDeliveryTypeFormComponent, LoadOutputDeliveryTypeFormComponent } from "./Entities/OutputDeliveryType/outputdeliverytype.form.component";
 import { OutputFormatTypeFormComponent, LoadOutputFormatTypeFormComponent } from "./Entities/OutputFormatType/outputformattype.form.component";
@@ -684,6 +686,8 @@ declarations: [
     TestSuiteFormComponent,
     TestTypeFormComponent,
     TestFormComponent,
+    UserNotificationPreferenceFormComponent,
+    UserNotificationTypeFormComponent,
     UserSettingFormComponent,
     OutputDeliveryTypeFormComponent,
     OutputFormatTypeFormComponent,
@@ -696,9 +700,7 @@ declarations: [
     QueueTaskFormComponent,
     QueueTypeFormComponent,
     QueueFormComponent,
-    RecommendationItemFormComponent,
-    RecommendationProviderFormComponent,
-    RecommendationRunFormComponent],
+    RecommendationItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -724,6 +726,8 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    RecommendationProviderFormComponent,
+    RecommendationRunFormComponent,
     RecommendationFormComponent,
     RecordChangeReplayRunFormComponent,
     RecordChangeFormComponent,
@@ -741,9 +745,7 @@ declarations: [
     ScheduledActionFormComponent,
     SchemaInfoFormComponent,
     SkillFormComponent,
-    TaggedItemFormComponent,
-    TagFormComponent,
-    TemplateCategoryFormComponent],
+    TaggedItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -769,6 +771,8 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    TagFormComponent,
+    TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
     TemplateContentFormComponent,
     TemplateParamFormComponent,
@@ -786,9 +790,7 @@ declarations: [
     UserFormComponent,
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
-    VersionInstallationFormComponent,
-    WorkflowEngineFormComponent,
-    WorkflowRunFormComponent],
+    VersionInstallationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -814,6 +816,8 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    WorkflowEngineFormComponent,
+    WorkflowRunFormComponent,
     WorkflowFormComponent,
     WorkspaceItemFormComponent,
     WorkspaceFormComponent],
@@ -1052,6 +1056,8 @@ export function LoadCoreGeneratedForms() {
     LoadTestSuiteFormComponent();
     LoadTestTypeFormComponent();
     LoadTestFormComponent();
+    LoadUserNotificationPreferenceFormComponent();
+    LoadUserNotificationTypeFormComponent();
     LoadUserSettingFormComponent();
     LoadOutputDeliveryTypeFormComponent();
     LoadOutputFormatTypeFormComponent();
