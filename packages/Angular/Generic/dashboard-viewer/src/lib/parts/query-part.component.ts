@@ -190,7 +190,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
         // Request navigation to open the record
         if (event.entityName && event.recordId) {
-            this.RequestOpenRecord(
+            this.RequestOpenEntityRecord(
                 event.entityName,
                 event.recordId,
                 'view',

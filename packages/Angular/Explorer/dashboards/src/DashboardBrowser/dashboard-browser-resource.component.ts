@@ -566,7 +566,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         const openInNewTab = request.openInNewTab || false;
 
         switch (request.type) {
-            case 'OpenRecord': {
+            case 'OpenEntityRecord': {
                 // Navigate to entity record
                 const compositeKey = new CompositeKey();
                 compositeKey.SimpleLoadFromURLSegment(request.recordId);
@@ -579,12 +579,6 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                     compositeKey,
                     { forceNewTab: openInNewTab }
                 );
-                break;
-            }
-            case 'OpenEntity': {
-                // Navigate to entity browser via a view
-                // TODO: Implement when we have OpenEntity method in NavigationService
-                console.log('OpenEntity navigation not yet implemented:', request);
                 break;
             }
             case 'OpenDashboard': {
@@ -614,17 +608,6 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                         { forceNewTab: openInNewTab }
                     );
                 }
-                break;
-            }
-            case 'OpenReport': {
-                // Navigate to report viewer
-                // We need the report name for the tab title
-                // For now, use the report ID as the name if we can't find it
-                this.navigationService.OpenReport(
-                    request.reportId,
-                    `Report ${request.reportId}`,
-                    { forceNewTab: openInNewTab }
-                );
                 break;
             }
         }

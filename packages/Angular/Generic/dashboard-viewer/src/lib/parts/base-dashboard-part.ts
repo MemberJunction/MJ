@@ -5,11 +5,9 @@ import {
     DashboardPanel,
     DashboardNavRequest,
     DashboardNavRequestEvent,
-    OpenRecordNavRequest,
-    OpenEntityNavRequest,
+    OpenEntityRecordNavRequest,
     OpenDashboardNavRequest,
     OpenQueryNavRequest,
-    OpenReportNavRequest,
     OpenApplicationNavRequest
 } from '../models/dashboard-types';
 
@@ -244,40 +242,20 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
     // ========================================
 
     /**
-     * Request navigation to open a specific record
+     * Request navigation to open a specific entity record
      */
-    public RequestOpenRecord(
+    public RequestOpenEntityRecord(
         entityName: string,
         recordId: string,
         mode: 'view' | 'edit' = 'view',
         openInNewTab = false
     ): void {
-        const request: OpenRecordNavRequest = {
-            type: 'OpenRecord',
+        const request: OpenEntityRecordNavRequest = {
+            type: 'OpenEntityRecord',
             sourcePanelId: this.Panel?.id ?? '',
             entityName,
             recordId,
             mode,
-            openInNewTab
-        };
-        this.emitNavigationRequest(request);
-    }
-
-    /**
-     * Request navigation to an entity browser/list
-     */
-    public RequestOpenEntity(
-        entityName: string,
-        filter?: string,
-        viewId?: string,
-        openInNewTab = false
-    ): void {
-        const request: OpenEntityNavRequest = {
-            type: 'OpenEntity',
-            sourcePanelId: this.Panel?.id ?? '',
-            entityName,
-            filter,
-            viewId,
             openInNewTab
         };
         this.emitNavigationRequest(request);
@@ -316,24 +294,6 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
             queryId,
             parameters,
             autoExecute,
-            openInNewTab
-        };
-        this.emitNavigationRequest(request);
-    }
-
-    /**
-     * Request navigation to a report
-     */
-    public RequestOpenReport(
-        reportId: string,
-        parameters?: Record<string, unknown>,
-        openInNewTab = false
-    ): void {
-        const request: OpenReportNavRequest = {
-            type: 'OpenReport',
-            sourcePanelId: this.Panel?.id ?? '',
-            reportId,
-            parameters,
             openInNewTab
         };
         this.emitNavigationRequest(request);

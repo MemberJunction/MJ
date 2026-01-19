@@ -92,8 +92,7 @@ export type PanelConfig =
     | ViewPanelConfig
     | QueryPanelConfig
     | ArtifactPanelConfig
-    | WebURLPanelConfig
-    | CustomPanelConfig;
+    | WebURLPanelConfig;
 
 // ========================================
 // Panel Type Configurations
@@ -173,17 +172,6 @@ export interface WebURLPanelConfig {
     refreshOnResize: boolean;
 }
 
-/**
- * Configuration for Custom panels
- */
-export interface CustomPanelConfig {
-    type: 'Custom';
-    /** @RegisterClass name for the custom component */
-    driverClass: string;
-    /** Custom configuration passed to the component */
-    configuration?: Record<string, unknown>;
-}
-
 // ========================================
 // Events
 // ========================================
@@ -229,11 +217,9 @@ export interface LayoutChangedEvent {
  * These are high-level abstractions - the parent component handles routing.
  */
 export type DashboardNavRequest =
-    | OpenRecordNavRequest
-    | OpenEntityNavRequest
+    | OpenEntityRecordNavRequest
     | OpenDashboardNavRequest
     | OpenQueryNavRequest
-    | OpenReportNavRequest
     | OpenApplicationNavRequest;
 
 /**
@@ -249,29 +235,16 @@ export interface BaseNavRequest {
 }
 
 /**
- * Request to open a specific record by entity and ID
+ * Request to open a specific entity record by entity name and ID
  */
-export interface OpenRecordNavRequest extends BaseNavRequest {
-    type: 'OpenRecord';
+export interface OpenEntityRecordNavRequest extends BaseNavRequest {
+    type: 'OpenEntityRecord';
     /** Entity name */
     entityName: string;
-    /** Record primary key value */
+    /** Record primary key value (URL segment format) */
     recordId: string;
     /** Optional: Open in edit or view mode */
     mode?: 'view' | 'edit';
-}
-
-/**
- * Request to navigate to an entity browser/list
- */
-export interface OpenEntityNavRequest extends BaseNavRequest {
-    type: 'OpenEntity';
-    /** Entity name */
-    entityName: string;
-    /** Optional: Pre-applied filter */
-    filter?: string;
-    /** Optional: Default view ID */
-    viewId?: string;
 }
 
 /**
@@ -296,17 +269,6 @@ export interface OpenQueryNavRequest extends BaseNavRequest {
     parameters?: Record<string, unknown>;
     /** Optional: Auto-execute on open */
     autoExecute?: boolean;
-}
-
-/**
- * Request to navigate to a report
- */
-export interface OpenReportNavRequest extends BaseNavRequest {
-    type: 'OpenReport';
-    /** Report ID */
-    reportId: string;
-    /** Optional: Pre-filled parameter values */
-    parameters?: Record<string, unknown>;
 }
 
 /**
@@ -471,12 +433,3 @@ export function createDefaultWebURLPanelConfig(): WebURLPanelConfig {
     };
 }
 
-/**
- * Creates a default Custom panel configuration
- */
-export function createDefaultCustomPanelConfig(): CustomPanelConfig {
-    return {
-        type: 'Custom',
-        driverClass: ''
-    };
-}

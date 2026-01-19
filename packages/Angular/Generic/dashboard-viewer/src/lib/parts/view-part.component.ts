@@ -198,7 +198,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
 
         // Request navigation to open the record
         if (event.entity && event.compositeKey) {
-            this.RequestOpenRecord(
+            this.RequestOpenEntityRecord(
                 event.entity.Name,
                 event.compositeKey.ToURLSegment(),
                 'view',

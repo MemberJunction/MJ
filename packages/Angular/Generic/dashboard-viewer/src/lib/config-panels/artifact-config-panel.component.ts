@@ -1,6 +1,6 @@
-import { Component, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, ChangeDetectorRef, ViewChild, OnInit } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, Metadata } from '@memberjunction/core';
 import { BaseConfigPanel } from './base-config-panel';
 import { PanelConfig, ArtifactPanelConfig, createDefaultArtifactPanelConfig } from '../models/dashboard-types';
 import {
@@ -20,7 +20,7 @@ import {
     templateUrl: './artifact-config-panel.component.html',
     styleUrls: ['./config-panel.component.css']
 })
-export class ArtifactConfigPanelComponent extends BaseConfigPanel {
+export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnInit {
     // ViewChild reference
     @ViewChild('artifactDropdown') artifactDropdown!: TreeDropdownComponent;
 
@@ -38,38 +38,50 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel {
     // Validation
     public artifactError = '';
 
-    // Tree configuration for Collections (branches) and Conversation Artifacts (leaves)
-    // Note: Collections have hierarchical ParentID and artifacts are linked via CollectionArtifact junction
-    // For simplicity, we're displaying artifacts directly without collection hierarchy
-    // In a real implementation, you might want to load artifacts grouped by their collections
-    public CollectionConfig: TreeBranchConfig = {
-        EntityName: 'MJ: Collections',
-        DisplayField: 'Name',
-        IDField: 'ID',
-        ParentIDField: 'ParentID',
-        DefaultIcon: 'fa-solid fa-folder',
-        IconField: 'Icon',
-        ColorField: 'Color',
-        DescriptionField: 'Description',
-        OrderBy: 'Name ASC'
-    };
-
-    // Note: Conversation Artifacts don't have a direct parent field to Collections
-    // They're linked via CollectionArtifact junction table
-    // For the tree dropdown, we'll just show all artifacts without collection grouping
-    // A more sophisticated implementation would handle the junction table relationship
-    public ArtifactLeafConfig: TreeLeafConfig = {
-        EntityName: 'MJ: Conversation Artifacts',
-        DisplayField: 'Name',
-        IDField: 'ID',
-        ParentField: '', // No direct parent - artifacts are at root level
-        DefaultIcon: 'fa-solid fa-cube',
-        DescriptionField: 'Description',
-        OrderBy: 'Name ASC'
-    };
+    // Tree configuration - initialized in ngOnInit with current user filter
+    public CollectionConfig!: TreeBranchConfig;
+    public ArtifactLeafConfig!: TreeLeafConfig;
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
+    }
+
+    ngOnInit(): void {
+        // Get current user ID for filtering
+        const md = new Metadata();
+        const userId = md.CurrentUser?.ID;
+
+        // Tree configuration for Collections (branches) and Artifacts (leaves)
+        // Collections have hierarchical ParentID structure.
+        // Filter to show only collections owned by the current user.
+        this.CollectionConfig = {
+            EntityName: 'MJ: Collections',
+            DisplayField: 'Name',
+            IDField: 'ID',
+            ParentIDField: 'ParentID',
+            DefaultIcon: 'fa-solid fa-folder',
+            IconField: 'Icon',
+            ColorField: 'Color',
+            DescriptionField: 'Description',
+            OrderBy: 'Name ASC',
+            ExtraFilter: userId ? `OwnerID = '${userId}'` : ''
+        };
+
+        // Artifacts from MJ: Artifacts entity (not MJ: Conversation Artifacts which is deprecated)
+        // Filter to show only artifacts created by the current user.
+        // These are shown flat at root level since the junction table relationship
+        // (Artifact -> ArtifactVersion -> CollectionArtifact -> Collection) doesn't map
+        // directly to a parent field that the tree component can use.
+        this.ArtifactLeafConfig = {
+            EntityName: 'MJ: Artifacts',
+            DisplayField: 'Name',
+            IDField: 'ID',
+            ParentField: '', // No direct parent - artifacts shown at root level
+            DefaultIcon: 'fa-solid fa-cube',
+            DescriptionField: 'Description',
+            OrderBy: 'Name ASC',
+            ExtraFilter: userId ? `UserID = '${userId}'` : ''
+        };
     }
 
     /**

@@ -2,7 +2,7 @@ import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { ArtifactPanelConfig } from '../models/dashboard-types';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 
 /**
@@ -125,8 +125,13 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
 
     // Expose for template
     public get currentUser(): UserInfo {
-        // Return a default user if not provided - the artifact viewer will handle this
-        return this.CurrentUser || ({} as UserInfo);
+        // Use provided CurrentUser, or fall back to Metadata.CurrentUser
+        // In client-side Angular context, Metadata.CurrentUser should always be available
+        const user = this.CurrentUser || new Metadata().CurrentUser;
+        if (!user) {
+            throw new Error('No current user available - user must be logged in to view artifacts');
+        }
+        return user;
     }
 
     public get environmentId(): string {
@@ -178,8 +183,11 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         }
     }
 
+    /**
+     * Handle navigation link events from artifact viewer (conversation/collection links)
+     */
     public onNavigateToLink(event: { type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string }): void {
-        // Emit data change event for navigation
+        // Emit data change event for navigation link (for listeners)
         this.emitDataChanged({
             type: 'navigate-to-link',
             linkType: event.type,
@@ -188,15 +196,31 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
             versionNumber: event.versionNumber,
             versionId: event.versionId
         });
+
+        // TODO: Add navigation request methods for conversation/collection when needed
+        // For now, these are emitted as data change events for parent components to handle
     }
 
-    public onOpenEntityRecord(event: { entityName: string; compositeKey: unknown }): void {
-        // Emit data change event for entity record navigation
+    /**
+     * Handle entity record navigation events from artifact viewer
+     */
+    public onOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+        // Emit data change event for listeners
         this.emitDataChanged({
             type: 'open-entity-record',
             entityName: event.entityName,
             compositeKey: event.compositeKey
         });
+
+        // Use proper navigation request to bubble up through the stack
+        if (event.entityName && event.compositeKey) {
+            this.RequestOpenEntityRecord(
+                event.entityName,
+                event.compositeKey.ToURLSegment(),
+                'view',
+                false
+            );
+        }
     }
 
     protected override cleanup(): void {
