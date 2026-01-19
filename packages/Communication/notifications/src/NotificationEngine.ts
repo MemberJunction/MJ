@@ -7,11 +7,7 @@ import { SendNotificationParams, NotificationResult, DeliveryChannels } from './
 /*
  * Unified notification engine that handles in-app, email, and SMS delivery
  * based on notification types and user preferences.
- *
- * Extends BaseEngine to provide:
- * - Cached notification types (loaded once, auto-refreshed on changes)
- * - Singleton pattern with proper MJ infrastructure
- * - Integration with MJ startup system
+ 
  */
 export class NotificationEngine extends BaseEngine<NotificationEngine> {
   /**
@@ -23,7 +19,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
 
   /**
    * Configures the notification engine by delegating to UserInfoEngine.
-   * UserInfoEngine now handles caching of notification types and preferences.
+   * UserInfoEngine now handles caching of preferences, etc.; Notification types are globally cached..
    *
    * @param forceRefresh - If true, reloads data even if already loaded
    * @param contextUser - User context for database operations (required on server)
@@ -36,9 +32,6 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
   ): Promise<void> {
     // Delegate to UserInfoEngine which now handles notification metadata
     await UserInfoEngine.Instance.Config(forceRefresh, contextUser, provider);
-
-    // Call Load() with empty configs to properly mark engine as loaded
-    // NotificationEngine has no configs of its own - all data comes from UserInfoEngine
     await this.Load([], provider || Metadata.Provider, forceRefresh, contextUser);
   }
 

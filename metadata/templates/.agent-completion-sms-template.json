@@ -10,7 +10,7 @@
   "fields": {
     "Name": "Agent Completion - SMS",
     "Description": "SMS template for AI agent completion notifications",
-    "UserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E",
+    "UserID": "@lookup:Users.Name=System",
     "IsActive": true
   },
   "relatedEntities": {
@@ -20,7 +20,7 @@
           "ID": "F1E3C4B5-2345-5678-9ABC-DEF123456789"
         },
         "fields": {
-          "TemplateID": "AA9845D4-B5B2-4E18-9587-50CCB6906A4D",
+          "TemplateID": "@parent:ID",
           "TypeID": "@lookup:Template Content Types.Name=Text",
           "TemplateText": "@file:templates/agent-completion-sms.txt",
           "Priority": 100,

@@ -10,7 +10,7 @@
   "fields": {
     "Name": "Agent Completion - Email",
     "Description": "Email template for AI agent completion notifications",
-    "UserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E",
+    "UserID": "@lookup:Users.Name=System",
     "IsActive": true
   },
   "relatedEntities": {
@@ -20,7 +20,7 @@
           "ID": "E0F2B3A4-1234-4567-89AB-CDEF12345678"
         },
         "fields": {
-          "TemplateID": "26153036-666E-4955-9556-43AB94264823",
+          "TemplateID": "@parent:ID",
           "TypeID": "@lookup:Template Content Types.Name=HTML",
           "TemplateText": "@file:templates/agent-completion-email.html",
           "Priority": 100,

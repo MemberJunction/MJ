@@ -6,21 +6,53 @@ import { Router } from '@angular/router';
 import { SafeJSONParse } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
+/**
+ * Radio button filter options for notification read status
+ */
+type ReadFilterOption = 'All' | 'Unread' | 'Read';
+
+/**
+ * Configuration for record-type resource navigation
+ */
+interface RecordResourceConfig {
+  Entity?: string;
+}
+
+/**
+ * Configuration for conversation-type resource navigation
+ */
+interface ConversationResourceConfig {
+  type: 'conversation';
+  conversationId?: string;
+  messageId?: string;
+  artifactId?: string;
+  versionNumber?: string;
+  taskId?: string;
+}
+
+/**
+ * Result of parsing a notification URL
+ */
+interface NotificationUrlInfo {
+  urlParts: string[];
+  queryString: string;
+}
+
 @Component({
   selector: 'app-user-notifications',
   templateUrl: './user-notifications.component.html',
   styleUrls: ['./user-notifications.component.css']
 })
 export class UserNotificationsComponent implements OnInit, AfterViewInit {
-  @ViewChild('allRadio') allRadio!: ElementRef;
-  @ViewChild('unreadRadio') unreadRadio!: ElementRef;
-  @ViewChild('readRadio') readRadio!: ElementRef;
+  @ViewChild('allRadio') allRadio!: ElementRef<HTMLInputElement>;
+  @ViewChild('unreadRadio') unreadRadio!: ElementRef<HTMLInputElement>;
+  @ViewChild('readRadio') readRadio!: ElementRef<HTMLInputElement>;
 
-  public radioSelected: string = 'all';
+  public radioSelected: ReadFilterOption = 'All';
   public currentFilter: string = '';
   public notificationTypes: UserNotificationTypeEntity[] = [];
   public selectedTypeFilter: string | null = null;
-  public loadingTypes = true;
+  public loadingTypes: boolean = true;
 
   constructor (public sharedService: SharedService, private router: Router) {}
 
@@ -54,14 +86,16 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   public get NotificationsToShow(): UserNotificationEntity[] {
     let temp: UserNotificationEntity[] = [];
-    if (this.radioSelected.trim().toLowerCase() === 'all') {
-      temp = this.AllNotifications;
-    }
-    else if (this.radioSelected.trim().toLowerCase() === 'unread') {
-      temp = this.AllNotifications.filter(n => n.Unread);
-    }
-    else {
-      temp = this.AllNotifications.filter(n => !n.Unread);
+    switch (this.radioSelected) {
+      case 'All':
+        temp = this.AllNotifications;
+        break;
+      case 'Unread':
+        temp = this.AllNotifications.filter(n => n.Unread);
+        break;
+      case 'Read':
+        temp = this.AllNotifications.filter(n => !n.Unread);
+        break;
     }
 
     // Apply type filter if selected
@@ -85,18 +119,18 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     return (info !== null && info.urlParts && info.urlParts.length > 0);
   }
 
-  public notificationUrl(notification: UserNotificationEntity): {urlParts: string[], queryString: string} {
-    let url: string[] = [];
+  public notificationUrl(notification: UserNotificationEntity): NotificationUrlInfo {
+    const url: string[] = [];
     let queryString = '';
-    if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 && 
+    if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 &&
         notification.ResourceTypeID && notification.ResourceTypeID.length > 0) {
       // we have a resource here, like a Report, Dashboard, etc
       // we can generate a url to navigate to it
       const rt = this.sharedService.ResourceTypeByID(notification.ResourceTypeID);
-      let routeSegment;
+      let routeSegment: string | null | undefined;
       if (rt)
         routeSegment = this.sharedService.mapResourceTypeNameToRouteSegment(rt.Name);
-      
+
       if (rt && routeSegment && routeSegment.trim().length > 0) {
         url.push('resource');
         url.push(routeSegment);
@@ -104,11 +138,11 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
         if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
           if (rt.Name.trim().toLowerCase() === 'records') {
             // special handling for records
-            const config = SafeJSONParse<any>(notification.ResourceConfiguration);
+            const config = SafeJSONParse<RecordResourceConfig>(notification.ResourceConfiguration);
             if (config && config.Entity)
               queryString = `Entity=${config.Entity}`;
           }
-          else 
+          else
             queryString = notification.ResourceConfiguration;
         }
       }
@@ -118,29 +152,21 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       // string, which means we might have information on how to navigate to what we want if we parse the config
       // HOME screen stuff is done this way
 
-      const config = SafeJSONParse<any>(notification.ResourceConfiguration);
-      if (config) {
-        switch (config.type?.trim().toLowerCase()) {
-          case 'conversation':
-            url.push('chat');
-            // Build query string with conversation and artifact navigation
-            const queryParams: string[] = [];
-            if (config.conversationId) queryParams.push(`conversationId=${config.conversationId}`);
-            if (config.messageId) queryParams.push(`messageId=${config.messageId}`);
-            if (config.artifactId) queryParams.push(`artifactId=${config.artifactId}`);
-            if (config.versionNumber) queryParams.push(`versionNumber=${config.versionNumber}`);
-            if (config.taskId) queryParams.push(`taskId=${config.taskId}`);
-            queryString = queryParams.join('&');
-            break;
-        }
+      const config = SafeJSONParse<ConversationResourceConfig>(notification.ResourceConfiguration);
+      if (config && config.type?.trim().toLowerCase() === 'conversation') {
+        url.push('chat');
+        // Build query string with conversation and artifact navigation
+        const queryParams: string[] = [];
+        if (config.conversationId) queryParams.push(`conversationId=${config.conversationId}`);
+        if (config.messageId) queryParams.push(`messageId=${config.messageId}`);
+        if (config.artifactId) queryParams.push(`artifactId=${config.artifactId}`);
+        if (config.versionNumber) queryParams.push(`versionNumber=${config.versionNumber}`);
+        if (config.taskId) queryParams.push(`taskId=${config.taskId}`);
+        queryString = queryParams.join('&');
       }
     }
-    else {
-      // we have nothing to click on
-      // don't generate a url
-    }
 
-    return {urlParts: url, queryString: queryString};
+    return { urlParts: url, queryString };
   }
 
   public get AllNotifications(): UserNotificationEntity[] {
@@ -155,48 +181,46 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     return this.AllNotifications.filter(n => !n.Unread);
   }
 
-  selectReadOption(option: string): void {
+  selectReadOption(option: ReadFilterOption): void {
     this.radioSelected = option;
     // now update the radio button group in the UI
-    switch (option.trim().toLowerCase()) {
-      case 'all':
+    switch (option) {
+      case 'All':
         this.allRadio.nativeElement.checked = true;
         break;
-      case 'unread':
+      case 'Unread':
         this.unreadRadio.nativeElement.checked = true;
         break;
-      case 'read':
+      case 'Read':
         this.readRadio.nativeElement.checked = true;
         break;
     }
   }
 
   onReadRadioChanged(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    const value = target.value;
-    this.radioSelected = value;
+    if (event.target instanceof HTMLInputElement) {
+      this.radioSelected = event.target.value as ReadFilterOption;
+    }
   }
 
   onFilterChanged(value: string): void {
     this.currentFilter = value;
   }
 
-  getItemTitleClass(notification: UserNotificationEntity) {
+  getItemTitleClass(notification: UserNotificationEntity): string {
     if (notification.Unread) {
       return 'notification-title notification-title-unread';
     }
-    else {
-      return 'notification-title';
-    }
+    return 'notification-title';
   }
 
-  getItemWrapperClass(notification: UserNotificationEntity) {
+  getItemWrapperClass(notification: UserNotificationEntity): string {
     let classInfo = 'notification-wrap';
 
-    if (this.isNotificationClickable(notification)) 
+    if (this.isNotificationClickable(notification))
       classInfo += ' notification-wrap-clickable';
 
-    if (notification.Unread) 
+    if (notification.Unread)
       classInfo += ' notification-wrap-unread';
 
     return classInfo;
@@ -311,7 +335,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       SharedService.RefreshUserNotifications();
   }
   
-  notificationClicked(notification: UserNotificationEntity) {
+  notificationClicked(notification: UserNotificationEntity): void {
     if (this.isNotificationClickable(notification)) {
       // also mark this as read when we click it
       this.markAsRead(notification, true, null);
@@ -321,7 +345,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
         const fullUrl = `${info.urlParts.join('/')}${info.queryString ? '?' + info.queryString : ''}`;
         this.router.navigateByUrl(fullUrl);
       }
-      else{
+      else {
         this.router.navigate(info.urlParts);
       }
     }
@@ -334,18 +358,12 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   public getTypeIcon(notification: UserNotificationEntity): string {
     const type = this.getNotificationType(notification.NotificationTypeID);
-    if (type) {
-      return (type as any).Icon || 'fa-bell';
-    }
-    return 'fa-bell';
+    return type?.Icon || 'fa-bell';
   }
 
   public getTypeColor(notification: UserNotificationEntity): string {
     const type = this.getNotificationType(notification.NotificationTypeID);
-    if (type) {
-      return (type as any).Color || '#999';
-    }
-    return '#999';
+    return type?.Color || '#999';
   }
 
   public getTypeName(notification: UserNotificationEntity): string {

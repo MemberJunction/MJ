@@ -1,69 +1,72 @@
-<div class="notification-list-wrap"> 
+<div class="notifications-container">
   <!-- Header Section -->
-  <div class="header">
-    <div class="title">
-      <i class="fa-solid fa-bell"></i>
-      Notifications
-    </div>
-    
-    <div class="header-actions">
-      <!-- Action Buttons -->
-      <div class="action-buttons">
-        <button *ngIf="UnreadNotifications.length > 0" 
-                kendoButton 
+  <div class="notifications-header">
+    <div class="header-top">
+      <div class="header-title">
+        <div class="title-icon">
+          <i class="fa-solid fa-bell"></i>
+        </div>
+        <h1>Notifications</h1>
+      </div>
+
+      <div class="header-actions" *ngIf="AllNotifications.length > 0">
+        <button *ngIf="UnreadNotifications.length > 0"
+                kendoButton
+                class="action-btn action-btn-primary"
                 (click)="markAllAsRead()">
           <i class="fa-solid fa-check-double"></i>
-          Mark All as Read
+          <span class="btn-text">Mark All Read</span>
         </button>
-        <button *ngIf="ReadNotifications.length > 0" 
-                kendoButton 
+        <button *ngIf="ReadNotifications.length > 0"
+                kendoButton
+                class="action-btn"
                 (click)="markAllAsUnread()">
           <i class="fa-solid fa-envelope"></i>
-          Mark All as Unread
+          <span class="btn-text">Mark All Unread</span>
         </button>
       </div>
-      
-      <!-- Filter Controls -->
-      <div class="filter-controls">
-        <!-- Radio Filter Options -->
-        <div class="radio-group" *ngIf="AllNotifications.length > 0">
-          <div class="radio-option" 
-               *ngIf="AllNotifications.length > 0"
-               (click)="selectReadOption('All')">
-            <input #allRadio 
-                   checked 
-                   type="radio" 
-                   name="UnreadStatus" 
-                   value="All" 
-                   (change)="onReadRadioChanged($event)" />
-            <span class="radio-label">All ({{AllNotifications.length}})</span>
-          </div>
-          
-          <div class="radio-option" 
-               *ngIf="UnreadNotifications.length > 0 && ReadNotifications.length > 0"
-               (click)="selectReadOption('Unread')">
-            <input #unreadRadio 
-                   type="radio" 
-                   name="UnreadStatus" 
-                   value="Unread" 
-                   (change)="onReadRadioChanged($event)" />
-            <span class="radio-label">Unread ({{UnreadNotifications.length}})</span>
-          </div>
-          
-          <div class="radio-option" 
-               *ngIf="ReadNotifications.length > 0 && UnreadNotifications.length > 0"
-               (click)="selectReadOption('Read')">
-            <input #readRadio 
-                   type="radio" 
-                   name="UnreadStatus" 
-                   value="Read" 
-                   (change)="onReadRadioChanged($event)" />
-            <span class="radio-label">Read ({{ReadNotifications.length}})</span>
-          </div>
-        </div>
-        
+    </div>
+
+    <!-- Stats Pills (replaces radio buttons - same functionality) -->
+    <div class="header-stats" *ngIf="AllNotifications.length > 0">
+      <input #allRadio type="radio" name="UnreadStatus" value="All"
+             (change)="onReadRadioChanged($event)" checked class="hidden-radio" />
+      <button class="stat-pill"
+              [class.active]="radioSelected === 'All'"
+              (click)="selectReadOption('All')">
+        <span class="stat-label">All</span>
+        <span class="stat-count">{{AllNotifications.length}}</span>
+      </button>
+
+      <input #unreadRadio type="radio" name="UnreadStatus" value="Unread"
+             (change)="onReadRadioChanged($event)" class="hidden-radio" />
+      <button class="stat-pill"
+              *ngIf="UnreadNotifications.length > 0 || ReadNotifications.length === 0"
+              [class.active]="radioSelected === 'Unread'"
+              [class.has-unread]="UnreadNotifications.length > 0"
+              (click)="selectReadOption('Unread')">
+        <span class="stat-label">Unread</span>
+        <span class="stat-count" [class.unread-count]="UnreadNotifications.length > 0">
+          {{UnreadNotifications.length}}
+        </span>
+      </button>
+
+      <input #readRadio type="radio" name="UnreadStatus" value="Read"
+             (change)="onReadRadioChanged($event)" class="hidden-radio" />
+      <button class="stat-pill"
+              *ngIf="ReadNotifications.length > 0 || UnreadNotifications.length === 0"
+              [class.active]="radioSelected === 'Read'"
+              (click)="selectReadOption('Read')">
+        <span class="stat-label">Read</span>
+        <span class="stat-count">{{ReadNotifications.length}}</span>
+      </button>
+    </div>
+
+    <!-- Filter Toolbar -->
+    <div class="header-toolbar" *ngIf="AllNotifications.length > 0">
+      <div class="toolbar-filters">
         <!-- Type Filter Dropdown -->
-        <div class="type-filter" *ngIf="AllNotifications.length > 0 && notificationTypes.length > 0">
+        <div class="filter-item type-filter" *ngIf="notificationTypes.length > 0">
           <kendo-dropdownlist
             [data]="notificationTypes"
             textField="Name"
@@ -72,90 +75,115 @@
             [(ngModel)]="selectedTypeFilter"
             (valueChange)="onTypeFilterChange($event)"
             [defaultItem]="{ ID: null, Name: 'All Types' }"
-            class="type-filter-dropdown">
+            class="type-dropdown">
           </kendo-dropdownlist>
         </div>
 
         <!-- Search Filter -->
-        <div class="mj-search filter-input" *ngIf="AllNotifications.length > 0">
+        <div class="filter-item search-filter">
           <kendo-textbox
-            placeholder="Filter notifications..."
+            placeholder="Search notifications..."
             (valueChange)="onFilterChanged($event)"
-            class="mj-search-input">
+            class="search-input">
             <ng-template kendoTextBoxSuffixTemplate>
-              <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+              <i class="fa-solid fa-magnifying-glass search-icon"></i>
             </ng-template>
           </kendo-textbox>
         </div>
       </div>
+
+      <div class="toolbar-info" *ngIf="NotificationsToShow.length !== AllNotifications.length">
+        <span class="filter-badge">
+          <i class="fa-solid fa-filter"></i>
+          Showing {{NotificationsToShow.length}} of {{AllNotifications.length}}
+        </span>
+      </div>
     </div>
-  </div> 
+  </div>
 
   <!-- Notifications Content -->
-  @if(NotificationsToShow.length === 0 && AllNotifications.length === 0) {
-    <div class="empty-notifications">
-      <i class="fa-solid fa-bell-slash"></i>
-      <h3>No Notifications</h3>
-      <p>You're all caught up! New notifications will appear here.</p>
-    </div>
-  }
-  @else if(NotificationsToShow.length === 0) {
-    <div class="empty-notifications">
-      <i class="fa-solid fa-filter"></i>
-      <h3>No Matching Notifications</h3>
-      <p>Try adjusting your filters to see more notifications.</p>
-    </div>
-  }
-  @else {
-    <!-- Notifications List -->
-    <kendo-listview [data]="NotificationsToShow">
-      <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
-        <div [class]="getItemWrapperClass(dataItem)"
-             [style.border-left-color]="getTypeColor(dataItem)">
-          <div class="notification-status"></div>
+  <div class="notifications-content">
+    @if(NotificationsToShow.length === 0 && AllNotifications.length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">
+          <i class="fa-solid fa-bell-slash"></i>
+        </div>
+        <h3>No Notifications</h3>
+        <p>You're all caught up! New notifications will appear here.</p>
+      </div>
+    }
+    @else if(NotificationsToShow.length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">
+          <i class="fa-solid fa-filter-circle-xmark"></i>
+        </div>
+        <h3>No Matching Notifications</h3>
+        <p>Try adjusting your filters to see more notifications.</p>
+      </div>
+    }
+    @else {
+      <!-- Notifications List -->
+      <kendo-listview [data]="NotificationsToShow" class="notifications-list">
+        <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
+          <div class="notification-card"
+               [class.unread]="dataItem.Unread"
+               [class.clickable]="isNotificationClickable(dataItem)">
 
-          <div class="notification-header">
-            <div class="notification-type-badge"
-                 [style.background-color]="getTypeColor(dataItem) + '20'">
+            <!-- Unread Indicator Bar -->
+            <div class="card-indicator"></div>
+
+            <!-- Type Icon -->
+            <div class="card-icon"
+                 [style.background-color]="getTypeColor(dataItem) + '15'">
               <i [class]="'fa-solid ' + getTypeIcon(dataItem)"
                  [style.color]="getTypeColor(dataItem)"></i>
             </div>
 
-            <div [class]="getItemTitleClass(dataItem)"
-                 (click)="notificationClicked(dataItem)">
-              {{dataItem.Title}}
-            </div>
-          </div>
+            <!-- Content -->
+            <div class="card-content" (click)="notificationClicked(dataItem)">
+              <div class="card-header">
+                <h3 class="card-title" [class.card-title-unread]="dataItem.Unread">
+                  {{dataItem.Title}}
+                </h3>
+                <span class="card-time">
+                  <i class="fa-regular fa-clock"></i>
+                  {{dataItem.__mj_CreatedAt | date:'MMM d, h:mm a'}}
+                </span>
+              </div>
 
-          <div class="notification-body" (click)="notificationClicked(dataItem)">
-            <div class="notification-metadata">
-              <span class="notification-type-label"
-                    [style.color]="getTypeColor(dataItem)">
-                {{getTypeName(dataItem)}}
-              </span>
-              <span class="notification-date">
-                {{dataItem.__mj_CreatedAt | date:'MMM d, y \'at\' h:mm a'}}
-              </span>
+              <div class="card-meta">
+                <span class="card-type"
+                      [style.background-color]="getTypeColor(dataItem) + '15'"
+                      [style.color]="getTypeColor(dataItem)">
+                  {{getTypeName(dataItem)}}
+                </span>
+              </div>
+
+              <p class="card-message">{{dataItem.Message}}</p>
             </div>
-            <div class="notification-message">{{dataItem.Message}}</div>
+
+            <!-- Actions -->
+            <div class="card-actions">
+              <button kendoButton
+                      class="card-action-btn"
+                      *ngIf="dataItem.Unread"
+                      (click)="markAsRead(dataItem, true, null)"
+                      title="Mark as Read">
+                <i class="fa-solid fa-check"></i>
+                <span class="action-text">Read</span>
+              </button>
+              <button kendoButton
+                      class="card-action-btn"
+                      *ngIf="!dataItem.Unread"
+                      (click)="markAsRead(dataItem, false, null)"
+                      title="Mark as Unread">
+                <i class="fa-solid fa-envelope"></i>
+                <span class="action-text">Unread</span>
+              </button>
+            </div>
           </div>
-          
-          <div class="notification-actions">
-            <button kendoButton
-                    *ngIf="dataItem.Unread"
-                    (click)="markAsRead(dataItem, true, null)">
-              <i class="fa-solid fa-check"></i>
-              Mark as Read
-            </button>
-            <button kendoButton
-                    *ngIf="!dataItem.Unread"
-                    (click)="markAsRead(dataItem, false, null)">
-              <i class="fa-solid fa-envelope"></i>
-              Mark as Unread
-            </button>
-          </div>  
-        </div>
-      </ng-template>
-    </kendo-listview>
-  }
+        </ng-template>
+      </kendo-listview>
+    }
+  </div>
 </div>
