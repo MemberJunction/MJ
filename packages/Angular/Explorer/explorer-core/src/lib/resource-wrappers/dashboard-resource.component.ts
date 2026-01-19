@@ -1,10 +1,10 @@
-import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef } from '@angular/core';
+import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
-import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity } from '@memberjunction/core-entities';
+import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity, DashboardCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
 import { DataExplorerDashboardComponent, DataExplorerFilter } from '@memberjunction/ng-dashboards';
+import { DashboardViewerComponent, DashboardNavRequestEvent } from '@memberjunction/ng-dashboard-viewer';
 
 export function LoadDashboardResource() {
 }
@@ -115,6 +115,9 @@ export class DashboardResource extends BaseResourceComponent {
     /** Technical error details (shown in expandable section) */
     public errorDetails: string | null = null;
 
+    /** Cached dashboard categories for breadcrumb navigation */
+    private categories: DashboardCategoryEntity[] = [];
+
     /**
      * Sets the error state with a user-friendly message and optional technical details
      */
@@ -140,7 +143,8 @@ export class DashboardResource extends BaseResourceComponent {
 
     constructor(
         private viewContainer: ViewContainerRef,
-        private navigationService: NavigationService
+        private navigationService: NavigationService,
+        private cdr: ChangeDetectorRef
     ) {
         super();
     }
@@ -380,13 +384,14 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     /**
-     * Load a config-based dashboard using the generic SingleDashboardComponent
+     * Load a config-based dashboard using the new DashboardViewerComponent (Golden Layout)
      */
     private async loadConfigBasedDashboard(dashboard: DashboardEntity): Promise<void> {
         try {
             this.containerElement.nativeElement.innerHTML = '';
-            this.componentRef = this.viewContainer.createComponent(SingleDashboardComponent);
-            const instance = this.componentRef.instance as any;
+            const componentRef = this.viewContainer.createComponent(DashboardViewerComponent);
+            this.componentRef = componentRef;
+            const instance = componentRef.instance;
 
             // Manually append the component's native element inside the div
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
@@ -394,34 +399,79 @@ export class DashboardResource extends BaseResourceComponent {
             nativeElement.style.height = '100%';
             this.containerElement.nativeElement.appendChild(nativeElement);
 
-            // Initialize with dashboard data
-            const baseData = this.Data;
-            const resourceData = new ResourceData({
-                ResourceRecordID: baseData.ResourceRecordID,
-                Configuration: baseData.Configuration || {}
+            // Load categories for breadcrumb navigation (if not already loaded)
+            if (this.categories.length === 0) {
+                this.categories = DashboardEngine.Instance.DashboardCategories;
+            }
+
+            // Set the dashboard entity directly on the viewer
+            instance.dashboard = dashboard;
+            instance.showToolbar = true;
+            instance.showBreadcrumb = true;
+            instance.showOpenInTabButton = true; // Allow opening in a dedicated tab
+            instance.Categories = this.categories;
+
+            // Wire up navigation events - handle navigation requests from the dashboard
+            instance.navigationRequested.subscribe((event: DashboardNavRequestEvent) => {
+                this.handleNavigationRequest(event);
             });
 
-            instance.ResourceData = resourceData;
+            // Wire up "Open in Tab" button click
+            instance.openInTab.subscribe((event: { dashboardId: string; dashboardName: string }) => {
+                this.navigationService.OpenDashboard(event.dashboardId, event.dashboardName);
+            });
 
-            // Wire up events if they exist
-            if (instance.loadComplete) {
-                instance.loadComplete.subscribe(() => {
-                    this.NotifyLoadComplete();
-                });
-            } else {
-                // Fallback if event emitter not available
-                setTimeout(() => this.NotifyLoadComplete(), 100);
-            }
+            // Wire up dashboard saved event
+            instance.dashboardSaved.subscribe((savedDashboard: DashboardEntity) => {
+                this.ResourceRecordSaved(savedDashboard);
+            });
 
-            if (instance.dashboardSaved) {
-                instance.dashboardSaved.subscribe((entity: any) => {
-                    this.ResourceRecordSaved(entity);
-                });
-            }
+            // Wire up error events
+            instance.error.subscribe((errorEvent: { message: string; error?: Error }) => {
+                console.error('Dashboard error:', errorEvent.message, errorEvent.error);
+            });
+
+            // Notify load complete after a brief delay to let Golden Layout initialize
+            setTimeout(() => {
+                this.NotifyLoadComplete();
+                this.cdr.detectChanges();
+            }, 150);
+
         } catch (error) {
             console.error('Error loading config-based dashboard:', error);
             this.setError(`The dashboard "${dashboard.Name}" could not be loaded. There may be an issue with the dashboard configuration.`, error);
             this.NotifyLoadComplete();
+        }
+    }
+
+    /**
+     * Handle navigation requests from the dashboard viewer
+     */
+    private handleNavigationRequest(event: DashboardNavRequestEvent): void {
+        const request = event.request;
+
+        switch (request.type) {
+            case 'OpenEntityRecord': {
+                const entityRequest = request as { type: 'OpenEntityRecord'; entityName: string; recordId: string };
+                const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityRequest.recordId }]);
+                this.navigationService.OpenEntityRecord(entityRequest.entityName, pkey);
+                break;
+            }
+            case 'OpenDashboard': {
+                const dashRequest = request as { type: 'OpenDashboard'; dashboardId: string };
+                // Load dashboard name from engine cache
+                const targetDashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === dashRequest.dashboardId);
+                const name = targetDashboard?.Name || 'Dashboard';
+                this.navigationService.OpenDashboard(dashRequest.dashboardId, name);
+                break;
+            }
+            case 'OpenQuery': {
+                const queryRequest = request as { type: 'OpenQuery'; queryId: string };
+                this.navigationService.OpenQuery(queryRequest.queryId, 'Query');
+                break;
+            }
+            default:
+                console.warn('Unhandled navigation request type:', request.type);
         }
     }
 

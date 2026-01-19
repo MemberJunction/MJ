@@ -31,6 +31,16 @@
         </div>
 
         <div class="toolbar-right">
+            <!-- Open in New Tab button (when embedded) -->
+            <button
+                class="toolbar-button"
+                *ngIf="showOpenInTabButton && !isEditing"
+                (click)="onOpenInTabClick()"
+                title="Open in its own tab">
+                <i class="fa-solid fa-up-right-from-square"></i>
+                Open in Tab
+            </button>
+
             <button
                 class="toolbar-button"
                 *ngIf="isEditing"

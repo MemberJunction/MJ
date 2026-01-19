@@ -44,6 +44,12 @@
             <div class="toolbar-actions">
                 <button
                     class="btn-icon"
+                    title="Open in its own tab"
+                    (click)="openInNewTab()">
+                    <i class="fa-solid fa-up-right-from-square"></i>
+                </button>
+                <button
+                    class="btn-icon"
                     title="Edit Dashboard"
                     (click)="toggleEditMode()">
                     <i class="fa-solid fa-edit"></i>

@@ -134,10 +134,29 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     public onDashboardOpen(event: DashboardOpenEvent): void {
         if (event.OpenInNewTab) {
-            // TODO: Open in new tab via NavigationService
-            console.log('Open in new tab:', event.Dashboard.Name);
+            // Open in a dedicated Explorer tab via NavigationService
+            this.navigationService.OpenDashboard(
+                event.Dashboard.ID,
+                event.Dashboard.Name,
+                { forceNewTab: true }
+            );
+        } else {
+            // Open inline in the browser's view pane
+            this.openDashboard(event.Dashboard);
         }
-        this.openDashboard(event.Dashboard);
+    }
+
+    /**
+     * Open the current dashboard in its own dedicated Explorer tab
+     */
+    public openInNewTab(): void {
+        if (this.selectedDashboard) {
+            this.navigationService.OpenDashboard(
+                this.selectedDashboard.ID,
+                this.selectedDashboard.Name,
+                { forceNewTab: true }
+            );
+        }
     }
 
     /**

@@ -127,6 +127,9 @@ export class DashboardViewerComponent implements OnDestroy {
     /** Whether to show the breadcrumb navigation */
     @Input() showBreadcrumb = true;
 
+    /** Whether to show the "Open in Tab" button (for embedded dashboards) */
+    @Input() showOpenInTabButton = false;
+
     /** All categories for breadcrumb path resolution */
     @Input() Categories: DashboardCategoryEntity[] = [];
 
@@ -154,6 +157,9 @@ export class DashboardViewerComponent implements OnDestroy {
 
     /** Emitted when user navigates via breadcrumb */
     @Output() breadcrumbNavigate = new EventEmitter<BreadcrumbNavigateEvent>();
+
+    /** Emitted when user clicks "Open in Tab" button */
+    @Output() openInTab = new EventEmitter<{ dashboardId: string; dashboardName: string }>();
 
     // ========================================
     // View Children
@@ -438,6 +444,18 @@ export class DashboardViewerComponent implements OnDestroy {
             interactionType: 'custom',
             payload: { action: 'add-panel-requested', partTypes: this.partTypes }
         });
+    }
+
+    /**
+     * Handle "Open in Tab" button click - emits event for parent to open dashboard in its own tab
+     */
+    public onOpenInTabClick(): void {
+        if (this._dashboard) {
+            this.openInTab.emit({
+                dashboardId: this._dashboard.ID,
+                dashboardName: this._dashboard.Name
+            });
+        }
     }
 
     /**

@@ -3,7 +3,7 @@
     "Name": "Admin",
     "Description": "MemberJunction Administration",
     "Icon": "fa-solid fa-screwdriver-wrench",
-    "DefaultForNewUser": true,
+    "DefaultForNewUser": false,
     "Color": "#4caf50",
     "DefaultSequence": 999,
     "DefaultNavItems": [
