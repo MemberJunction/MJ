@@ -1,7 +1,7 @@
 import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
-import { ViewPanelConfig } from '../models/dashboard-types';
+import { PanelConfig } from '../models/dashboard-types';
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
@@ -119,9 +119,11 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
     }
 
     public async loadContent(): Promise<void> {
-        const config = this.getConfig<ViewPanelConfig>();
+        const config = this.getConfig<PanelConfig>();
+        const viewId = config?.['viewId'] as string | undefined;
+        const entityName = config?.['entityName'] as string | undefined;
 
-        if (!config?.viewId && !config?.entityName) {
+        if (!viewId && !entityName) {
             this.hasView = false;
             this.cdr.detectChanges();
             return;
@@ -133,13 +135,13 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
             const md = new Metadata();
 
             // Set view mode from config
-            this.viewMode = config.displayMode || 'grid';
-            this.selectionMode = config.selectionMode === 'multiple' ? 'multiple' : 'single';
+            this.viewMode = (config?.['displayMode'] as EntityViewMode) || 'grid';
+            this.selectionMode = config?.['selectionMode'] === 'multiple' ? 'multiple' : 'single';
 
-            if (config.viewId) {
+            if (viewId) {
                 // Load saved view by ID
                 const viewEntity = await md.GetEntityObject<UserViewEntityExtended>('User Views');
-                const loaded = await viewEntity.Load(config.viewId);
+                const loaded = await viewEntity.Load(viewId);
                 this.viewEntity = viewEntity; // IMPORTANT - only set this.viewEntity AFTER we have it loaded in the above
 
                 if (!loaded) {
@@ -158,14 +160,14 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                 }
 
                 if (!this.entityInfo) {
-                    throw new Error(`Could not determine entity for view "${this.viewEntity.Name}" (ID: ${config.viewId})`);
+                    throw new Error(`Could not determine entity for view "${this.viewEntity.Name}" (ID: ${viewId})`);
                 }
-            } else if (config.entityName) {
+            } else if (entityName) {
                 // Create dynamic view for entity (no saved view)
-                this.entityInfo = md.Entities.find(e => e.Name === config.entityName) || null;
+                this.entityInfo = md.Entities.find(e => e.Name === entityName) || null;
 
                 if (!this.entityInfo) {
-                    throw new Error(`Entity "${config.entityName}" not found`);
+                    throw new Error(`Entity "${entityName}" not found`);
                 }
 
                 // No viewEntity means the entity-viewer will show all records

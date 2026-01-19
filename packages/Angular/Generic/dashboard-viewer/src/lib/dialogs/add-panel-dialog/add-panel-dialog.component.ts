@@ -12,10 +12,7 @@ import {
 } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DashboardPartTypeEntity } from '@memberjunction/core-entities';
-import {
-    PanelConfig,
-    createDefaultCustomPanelConfig
-} from '../../models/dashboard-types';
+import { PanelConfig } from '../../models/dashboard-types';
 import { BaseConfigPanel, ConfigPanelResult } from '../../config-panels/base-config-panel';
 
 /**
@@ -211,10 +208,10 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
             return;
         }
 
-        // Handle types without a config panel
+        // Handle types without a config panel - use a generic config with just the type
         this.panelAdded.emit({
             PartType: this.selectedPartType,
-            Config: createDefaultCustomPanelConfig(),
+            Config: { type: this.selectedPartType.Name },
             Title: this.selectedPartType.Name,
             Icon: this.selectedPartType.Icon || 'fa-solid fa-puzzle-piece'
         });

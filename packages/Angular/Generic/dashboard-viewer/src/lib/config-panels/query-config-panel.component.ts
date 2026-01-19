@@ -2,7 +2,7 @@ import { Component, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { BaseConfigPanel } from './base-config-panel';
-import { PanelConfig, QueryPanelConfig, createDefaultQueryPanelConfig } from '../models/dashboard-types';
+import { PanelConfig } from '../models/dashboard-types';
 import {
     TreeBranchConfig,
     TreeLeafConfig,
@@ -32,6 +32,9 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
     public parameterLayout: 'header' | 'sidebar' | 'dialog' = 'header';
     public autoRefreshSeconds = 0;
     public showExecutionMetadata = true;
+
+    // Track previous selection name for smart title updates
+    private previousQueryName = '';
 
     // Collapsible section state
     public showAdvancedOptions = false;
@@ -73,24 +76,24 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
 
     public initFromConfig(config: PanelConfig | null): void {
         if (config && config.type === 'Query') {
-            const queryConfig = config as QueryPanelConfig;
-            this.queryId = queryConfig.queryId || '';
-            this.queryName = queryConfig.queryName || '';
-            this.showParameterControls = queryConfig.showParameterControls ?? true;
-            this.parameterLayout = queryConfig.parameterLayout || 'header';
-            this.autoRefreshSeconds = queryConfig.autoRefreshSeconds || 0;
-            this.showExecutionMetadata = queryConfig.showExecutionMetadata ?? true;
+            this.queryId = (config['queryId'] as string) || '';
+            this.queryName = (config['queryName'] as string) || '';
+            this.showParameterControls = (config['showParameterControls'] as boolean) ?? true;
+            this.parameterLayout = (config['parameterLayout'] as 'header' | 'sidebar' | 'dialog') || 'header';
+            this.autoRefreshSeconds = (config['autoRefreshSeconds'] as number) || 0;
+            this.showExecutionMetadata = (config['showExecutionMetadata'] as boolean) ?? true;
         } else {
-            const defaults = createDefaultQueryPanelConfig();
+            // Defaults for new Query panel
             this.queryId = '';
             this.queryName = '';
-            this.showParameterControls = defaults.showParameterControls;
-            this.parameterLayout = defaults.parameterLayout;
-            this.autoRefreshSeconds = defaults.autoRefreshSeconds;
-            this.showExecutionMetadata = defaults.showExecutionMetadata;
+            this.showParameterControls = true;
+            this.parameterLayout = 'header';
+            this.autoRefreshSeconds = 0;
+            this.showExecutionMetadata = true;
         }
 
         this.title = this.panel?.title || '';
+        this.previousQueryName = '';
         this.queryError = '';
         this.cdr.detectChanges();
     }
@@ -104,7 +107,7 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
             parameterLayout: this.parameterLayout,
             autoRefreshSeconds: this.autoRefreshSeconds,
             showExecutionMetadata: this.showExecutionMetadata
-        } as QueryPanelConfig;
+        };
     }
 
     public override validate(): { valid: boolean; errors: string[] } {
@@ -150,13 +153,15 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
         if (!Array.isArray(node)) {
             // Only accept leaf nodes (actual queries, not categories)
             if (node.Type === 'leaf') {
+                const oldQueryName = this.queryName;
                 this.queryId = node.ID;
                 this.queryName = node.Label;
 
-                // Auto-fill title if empty
-                if (!this.title) {
+                // Smart title update: if title matches old name, update to new name
+                if (!this.title || this.title === oldQueryName || this.title === this.previousQueryName) {
                     this.title = node.Label;
                 }
+                this.previousQueryName = node.Label;
             }
         }
 

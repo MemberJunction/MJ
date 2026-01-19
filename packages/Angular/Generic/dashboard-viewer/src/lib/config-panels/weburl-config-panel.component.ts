@@ -1,7 +1,7 @@
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseConfigPanel } from './base-config-panel';
-import { PanelConfig, WebURLPanelConfig, createDefaultWebURLPanelConfig } from '../models/dashboard-types';
+import { PanelConfig } from '../models/dashboard-types';
 
 /**
  * Configuration panel for WebURL parts.
@@ -31,17 +31,16 @@ export class WebURLConfigPanelComponent extends BaseConfigPanel {
 
     public initFromConfig(config: PanelConfig | null): void {
         if (config && config.type === 'WebURL') {
-            const webConfig = config as WebURLPanelConfig;
-            this.url = webConfig.url || '';
-            this.sandboxMode = webConfig.sandboxMode || 'standard';
-            this.allowFullscreen = webConfig.allowFullscreen ?? true;
-            this.refreshOnResize = webConfig.refreshOnResize ?? false;
+            this.url = (config['url'] as string) || '';
+            this.sandboxMode = (config['sandboxMode'] as 'standard' | 'strict' | 'permissive') || 'standard';
+            this.allowFullscreen = (config['allowFullscreen'] as boolean) ?? true;
+            this.refreshOnResize = (config['refreshOnResize'] as boolean) ?? false;
         } else {
-            const defaults = createDefaultWebURLPanelConfig();
-            this.url = defaults.url;
-            this.sandboxMode = defaults.sandboxMode;
-            this.allowFullscreen = defaults.allowFullscreen;
-            this.refreshOnResize = defaults.refreshOnResize;
+            // Defaults for new WebURL panel
+            this.url = '';
+            this.sandboxMode = 'standard';
+            this.allowFullscreen = true;
+            this.refreshOnResize = false;
         }
 
         this.title = this.panel?.title || '';
@@ -57,7 +56,7 @@ export class WebURLConfigPanelComponent extends BaseConfigPanel {
             sandboxMode: this.sandboxMode,
             allowFullscreen: this.allowFullscreen,
             refreshOnResize: this.refreshOnResize
-        } as WebURLPanelConfig;
+        };
     }
 
     public override validate(): { valid: boolean; errors: string[] } {

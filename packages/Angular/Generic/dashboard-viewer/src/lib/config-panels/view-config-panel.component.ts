@@ -2,7 +2,7 @@ import { Component, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { BaseConfigPanel } from './base-config-panel';
-import { PanelConfig, ViewPanelConfig, createDefaultViewPanelConfig } from '../models/dashboard-types';
+import { PanelConfig } from '../models/dashboard-types';
 import {
     TreeBranchConfig,
     TreeLeafConfig,
@@ -34,6 +34,9 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
     public allowModeSwitch = true;
     public enableSelection = true;
     public selectionMode: 'none' | 'single' | 'multiple' = 'single';
+
+    // Track previous selection name for smart title updates
+    private previousViewName = '';
 
     // Collapsible section states
     public showDisplayOptions = false;
@@ -76,27 +79,27 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
 
     public initFromConfig(config: PanelConfig | null): void {
         if (config && config.type === 'View') {
-            const viewConfig = config as ViewPanelConfig;
-            this.entityName = viewConfig.entityName || '';
-            this.viewId = viewConfig.viewId || '';
-            this.extraFilter = viewConfig.extraFilter || '';
-            this.displayMode = viewConfig.displayMode || 'grid';
-            this.allowModeSwitch = viewConfig.allowModeSwitch ?? true;
-            this.enableSelection = viewConfig.enableSelection ?? true;
-            this.selectionMode = viewConfig.selectionMode || 'single';
+            this.entityName = (config['entityName'] as string) || '';
+            this.viewId = (config['viewId'] as string) || '';
+            this.extraFilter = (config['extraFilter'] as string) || '';
+            this.displayMode = (config['displayMode'] as 'grid' | 'cards' | 'timeline') || 'grid';
+            this.allowModeSwitch = (config['allowModeSwitch'] as boolean) ?? true;
+            this.enableSelection = (config['enableSelection'] as boolean) ?? true;
+            this.selectionMode = (config['selectionMode'] as 'none' | 'single' | 'multiple') || 'single';
         } else {
-            const defaults = createDefaultViewPanelConfig();
+            // Defaults for new View panel
             this.entityName = '';
             this.viewId = '';
             this.extraFilter = '';
-            this.displayMode = defaults.displayMode;
-            this.allowModeSwitch = defaults.allowModeSwitch;
-            this.enableSelection = defaults.enableSelection;
-            this.selectionMode = defaults.selectionMode;
+            this.displayMode = 'grid';
+            this.allowModeSwitch = true;
+            this.enableSelection = true;
+            this.selectionMode = 'single';
         }
 
         this.title = this.panel?.title || '';
         this.viewName = '';
+        this.previousViewName = '';
         this.viewError = '';
         this.cdr.detectChanges();
     }
@@ -111,7 +114,7 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
             allowModeSwitch: this.allowModeSwitch,
             enableSelection: this.enableSelection,
             selectionMode: this.selectionMode
-        } as ViewPanelConfig;
+        };
     }
 
     public override validate(): { valid: boolean; errors: string[] } {
@@ -161,6 +164,7 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
         if (!Array.isArray(node)) {
             // Only accept leaf nodes (actual views, not categories)
             if (node.Type === 'leaf') {
+                const oldViewName = this.viewName;
                 this.viewId = node.ID;
                 this.viewName = node.Label;
 
@@ -169,10 +173,11 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
                     this.entityName = String(node.Data['Entity']);
                 }
 
-                // Auto-fill title if empty
-                if (!this.title) {
+                // Smart title update: if title matches old name, update to new name
+                if (!this.title || this.title === oldViewName || this.title === this.previousViewName) {
                     this.title = node.Label;
                 }
+                this.previousViewName = node.Label;
             }
         }
 

@@ -2,7 +2,7 @@ import { Component, ChangeDetectorRef, ElementRef, ViewChild, AfterViewInit } fr
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
-import { WebURLPanelConfig } from '../models/dashboard-types';
+import { PanelConfig } from '../models/dashboard-types';
 
 /**
  * Runtime renderer for WebURL dashboard parts.
@@ -245,7 +245,8 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     }
 
     public async loadContent(): Promise<void> {
-        const config = this.getConfig<WebURLPanelConfig>();
+        const config = this.getConfig<PanelConfig>();
+        const url = config?.['url'] as string | undefined;
 
         // Clear any existing timeout
         if (this.loadCheckTimeout) {
@@ -257,7 +258,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         this.iframeLoaded = false;
         this.showFallbackLink = false;
 
-        if (!config?.url) {
+        if (!url) {
             this.SafeUrl = null;
             this.rawUrl = '';
             this.cdr.detectChanges();
@@ -268,16 +269,16 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
         try {
             // Store raw URL for fallback link
-            this.rawUrl = config.url;
+            this.rawUrl = url;
 
             // Sanitize and set URL for iframe src binding
-            this.SafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(config.url);
+            this.SafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
 
             // Set sandbox mode (used by template to select correct iframe)
-            this.sandboxMode = config.sandboxMode || 'standard';
+            this.sandboxMode = (config?.['sandboxMode'] as 'standard' | 'strict' | 'permissive') || 'standard';
 
             // Set fullscreen permission
-            this.allowFullscreen = config.allowFullscreen ?? true;
+            this.allowFullscreen = (config?.['allowFullscreen'] as boolean) ?? true;
 
             this.setLoading(false);
 

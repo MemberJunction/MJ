@@ -1,7 +1,7 @@
 import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
-import { ArtifactPanelConfig } from '../models/dashboard-types';
+import { PanelConfig } from '../models/dashboard-types';
 import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 
@@ -40,6 +40,8 @@ import { Subject } from 'rxjs';
                 [environmentId]="environmentId"
                 [versionNumber]="versionNumber"
                 [showSaveToCollection]="false"
+                [showHeader]="showHeader"
+                [showTabs]="showTabs"
                 [viewContext]="null"
                 [canShare]="false"
                 [canEdit]="false"
@@ -121,6 +123,8 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
     public hasArtifact = false;
     public artifactId: string | null = null;
     public versionNumber: number | undefined;
+    public showHeader: boolean = false; // Default to false for dashboard embedding
+    public showTabs: boolean = true;
     public refreshTrigger = new Subject<{ artifactId: string; versionNumber: number }>();
 
     // Expose for template
@@ -149,9 +153,10 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
     }
 
     public async loadContent(): Promise<void> {
-        const config = this.getConfig<ArtifactPanelConfig>();
+        const config = this.getConfig<PanelConfig>();
+        const artifactId = config?.['artifactId'] as string | undefined;
 
-        if (!config?.artifactId) {
+        if (!artifactId) {
             this.hasArtifact = false;
             this.cdr.detectChanges();
             return;
@@ -161,8 +166,11 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
 
         try {
             // Set artifact ID and version from config
-            this.artifactId = config.artifactId;
-            this.versionNumber = config.versionNumber;
+            this.artifactId = artifactId;
+            this.versionNumber = config?.['versionNumber'] as number | undefined;
+            // Display options - showHeader defaults to false for clean dashboard embedding
+            this.showHeader = (config?.['showHeader'] as boolean) ?? false;
+            this.showTabs = (config?.['showTabs'] as boolean) ?? true;
             this.hasArtifact = true;
 
             this.setLoading(false);

@@ -1,7 +1,7 @@
 import { Component, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
-import { QueryPanelConfig } from '../models/dashboard-types';
+import { PanelConfig } from '../models/dashboard-types';
 import { Metadata } from '@memberjunction/core';
 import { QueryEntity } from '@memberjunction/core-entities';
 import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction/ng-query-viewer';
@@ -131,9 +131,11 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     }
 
     public async loadContent(): Promise<void> {
-        const config = this.getConfig<QueryPanelConfig>();
+        const config = this.getConfig<PanelConfig>();
+        const queryId = config?.['queryId'] as string | undefined;
+        const queryName = config?.['queryName'] as string | undefined;
 
-        if (!config?.queryId && !config?.queryName) {
+        if (!queryId && !queryName) {
             this.hasQuery = false;
             this.cdr.detectChanges();
             return;
@@ -145,31 +147,31 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         try {
             const md = new Metadata();
 
-            if (config.queryId) {
+            if (queryId) {
                 // Load query by ID to verify it exists
                 this.queryEntity = await md.GetEntityObject<QueryEntity>('Queries');
-                const loaded = await this.queryEntity.Load(config.queryId);
+                const loaded = await this.queryEntity.Load(queryId);
 
                 if (!loaded) {
                     throw new Error('Query not found');
                 }
 
-                this.queryId = config.queryId;
-            } else if (config.queryName) {
+                this.queryId = queryId;
+            } else if (queryName) {
                 // Query by name - find the query ID from metadata
-                const queryInfo = md.Queries.find(q => q.Name === config.queryName);
+                const queryInfo = md.Queries.find(q => q.Name === queryName);
                 if (queryInfo) {
                     this.queryId = queryInfo.ID;
                 } else {
-                    throw new Error(`Query "${config.queryName}" not found`);
+                    throw new Error(`Query "${queryName}" not found`);
                 }
             }
 
             this.hasQuery = true;
-            this.showToolbar = config.showParameterControls !== false;
+            this.showToolbar = (config?.['showParameterControls'] as boolean) !== false;
 
             // Set auto-refresh if configured
-            const autoRefreshSeconds = config.autoRefreshSeconds || 0;
+            const autoRefreshSeconds = (config?.['autoRefreshSeconds'] as number) || 0;
             if (autoRefreshSeconds > 0) {
                 this.startAutoRefresh(autoRefreshSeconds);
             }

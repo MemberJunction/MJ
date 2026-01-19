@@ -33,11 +33,7 @@ import {
     createDefaultDashboardConfig,
     generatePanelId,
     extractPanelsFromLayout,
-    findPanelInLayout,
-    ViewPanelConfig,
-    QueryPanelConfig,
-    ArtifactPanelConfig,
-    WebURLPanelConfig
+    findPanelInLayout
 } from '../models/dashboard-types';
 import { GoldenLayoutWrapperService, LayoutLocation } from '../services/golden-layout-wrapper.service';
 import { BaseDashboardPart } from '../parts/base-dashboard-part';
@@ -868,8 +864,9 @@ export class DashboardViewerComponent implements OnDestroy {
         }
     }
 
-    private renderWebURLPart(panel: DashboardPanel, container: HTMLElement, config: WebURLPanelConfig): void {
-        if (!config.url) {
+    private renderWebURLPart(panel: DashboardPanel, container: HTMLElement, config: PanelConfig): void {
+        const url = config['url'] as string | undefined;
+        if (!url) {
             container.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
                     <i class="fa-solid fa-globe" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
@@ -880,19 +877,20 @@ export class DashboardViewerComponent implements OnDestroy {
             return;
         }
 
+        const sandboxMode = config['sandboxMode'] as string | undefined;
         // Determine sandbox permissions based on mode
         let sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups';
-        if (config.sandboxMode === 'strict') {
+        if (sandboxMode === 'strict') {
             sandbox = 'allow-scripts';
-        } else if (config.sandboxMode === 'permissive') {
+        } else if (sandboxMode === 'permissive') {
             sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation';
         }
 
         const iframe = document.createElement('iframe');
-        iframe.src = config.url;
+        iframe.src = url;
         iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
         iframe.sandbox.value = sandbox;
-        if (config.allowFullscreen) {
+        if (config['allowFullscreen'] !== false) {
             iframe.allowFullscreen = true;
         }
         iframe.title = panel.title;
@@ -900,8 +898,10 @@ export class DashboardViewerComponent implements OnDestroy {
         container.appendChild(iframe);
     }
 
-    private renderViewPart(panel: DashboardPanel, container: HTMLElement, config: ViewPanelConfig): void {
-        if (!config.viewId && !config.entityName) {
+    private renderViewPart(panel: DashboardPanel, container: HTMLElement, config: PanelConfig): void {
+        const viewId = config['viewId'] as string | undefined;
+        const entityName = config['entityName'] as string | undefined;
+        if (!viewId && !entityName) {
             container.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
                     <i class="fa-solid fa-table" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
@@ -912,8 +912,9 @@ export class DashboardViewerComponent implements OnDestroy {
             return;
         }
 
-        const viewInfo = config.viewId ? config.viewId.substring(0, 8) + '...' : config.entityName;
-        const displayMode = config.displayMode === 'grid' ? 'Grid View' : config.displayMode === 'cards' ? 'Card View' : 'Timeline View';
+        const viewInfo = viewId ? viewId.substring(0, 8) + '...' : entityName;
+        const displayModeValue = config['displayMode'] as string | undefined;
+        const displayMode = displayModeValue === 'grid' ? 'Grid View' : displayModeValue === 'cards' ? 'Card View' : 'Timeline View';
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
                 <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
@@ -921,7 +922,7 @@ export class DashboardViewerComponent implements OnDestroy {
                         <i class="fa-solid fa-table" style="font-size: 20px; color: #5c6bc0;"></i>
                         <div>
                             <div style="font-weight: 500; color: #333; font-size: 14px;">Entity View</div>
-                            <div style="font-size: 12px; color: #666;">${config.entityName || 'View ' + viewInfo}</div>
+                            <div style="font-size: 12px; color: #666;">${entityName || 'View ' + viewInfo}</div>
                         </div>
                         <span style="margin-left: auto; padding: 4px 10px; background: #e3f2fd; color: #1976d2; border-radius: 12px; font-size: 11px; font-weight: 500;">${displayMode}</span>
                     </div>
@@ -935,8 +936,10 @@ export class DashboardViewerComponent implements OnDestroy {
         `;
     }
 
-    private renderQueryPart(panel: DashboardPanel, container: HTMLElement, config: QueryPanelConfig): void {
-        if (!config.queryId && !config.queryName) {
+    private renderQueryPart(panel: DashboardPanel, container: HTMLElement, config: PanelConfig): void {
+        const queryId = config['queryId'] as string | undefined;
+        const queryName = config['queryName'] as string | undefined;
+        if (!queryId && !queryName) {
             container.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
                     <i class="fa-solid fa-database" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
@@ -947,7 +950,8 @@ export class DashboardViewerComponent implements OnDestroy {
             return;
         }
 
-        const queryInfo = config.queryName || (config.queryId ? config.queryId.substring(0, 8) + '...' : 'Unknown');
+        const autoRefreshSeconds = (config['autoRefreshSeconds'] as number) || 0;
+        const queryInfo = queryName || (queryId ? queryId.substring(0, 8) + '...' : 'Unknown');
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
                 <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
@@ -957,7 +961,7 @@ export class DashboardViewerComponent implements OnDestroy {
                             <div style="font-weight: 500; color: #333; font-size: 14px;">Query Results</div>
                             <div style="font-size: 12px; color: #666;">${queryInfo}</div>
                         </div>
-                        <span style="margin-left: auto; padding: 4px 10px; background: #e8f5e9; color: #388e3c; border-radius: 12px; font-size: 11px; font-weight: 500;">${config.autoRefreshSeconds > 0 ? 'Refresh: ' + config.autoRefreshSeconds + 's' : 'Manual refresh'}</span>
+                        <span style="margin-left: auto; padding: 4px 10px; background: #e8f5e9; color: #388e3c; border-radius: 12px; font-size: 11px; font-weight: 500;">${autoRefreshSeconds > 0 ? 'Refresh: ' + autoRefreshSeconds + 's' : 'Manual refresh'}</span>
                     </div>
                 </div>
                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 24px;">
@@ -969,8 +973,9 @@ export class DashboardViewerComponent implements OnDestroy {
         `;
     }
 
-    private renderArtifactPart(panel: DashboardPanel, container: HTMLElement, config: ArtifactPanelConfig): void {
-        if (!config.artifactId) {
+    private renderArtifactPart(panel: DashboardPanel, container: HTMLElement, config: PanelConfig): void {
+        const artifactId = config['artifactId'] as string | undefined;
+        if (!artifactId) {
             container.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
                     <i class="fa-solid fa-cube" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
@@ -981,8 +986,9 @@ export class DashboardViewerComponent implements OnDestroy {
             return;
         }
 
-        const artifactInfo = config.artifactId.substring(0, 8) + '...';
-        const versionInfo = config.versionNumber ? `v${config.versionNumber}` : 'Latest';
+        const versionNumber = config['versionNumber'] as number | undefined;
+        const artifactInfo = artifactId.substring(0, 8) + '...';
+        const versionInfo = versionNumber ? `v${versionNumber}` : 'Latest';
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
                 <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">

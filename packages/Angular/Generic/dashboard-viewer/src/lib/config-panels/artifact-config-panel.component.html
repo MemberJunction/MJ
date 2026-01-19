@@ -29,6 +29,36 @@
         </span>
     </div>
 
+    <!-- Version Selection (Available only after artifact is selected) -->
+    <div class="form-group" *ngIf="artifactId">
+        <label for="versionSelect">
+            <i class="fa-solid fa-code-branch"></i>
+            Version
+        </label>
+        <div class="version-select-wrapper">
+            <select
+                *ngIf="!isLoadingVersions && versions.length > 0"
+                id="versionSelect"
+                [(ngModel)]="versionNumber"
+                (change)="onVersionChange()"
+                class="form-select">
+                <option *ngFor="let v of versions" [ngValue]="v.VersionNumber">
+                    v{{ v.VersionNumber }} - {{ v.__mj_CreatedAt | date:'short' }}
+                </option>
+            </select>
+            <span class="form-hint" *ngIf="isLoadingVersions">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Loading versions...
+            </span>
+            <span class="form-hint" *ngIf="!isLoadingVersions && versions.length === 0">
+                No versions available
+            </span>
+        </div>
+        <span class="form-hint" *ngIf="versions.length > 0">
+            Select which version to display (latest is default)
+        </span>
+    </div>
+
     <!-- Title (Optional) -->
     <div class="form-group">
         <label for="partTitle">
@@ -44,26 +74,6 @@
             [placeholder]="artifactName ? 'Default: ' + artifactName : 'Enter a custom title'"
             class="form-input">
         <span class="form-hint">Leave empty to use artifact name as title</span>
-    </div>
-
-    <!-- Version Number (Optional) -->
-    <div class="form-group">
-        <label for="versionNumber">
-            <i class="fa-solid fa-code-branch"></i>
-            Version
-            <span class="optional-tag">(optional)</span>
-        </label>
-        <input
-            type="number"
-            id="versionNumber"
-            [(ngModel)]="versionNumber"
-            (input)="onVersionChange()"
-            placeholder="Leave empty for latest version"
-            class="form-input"
-            min="1">
-        <span class="form-hint">
-            Specify a version number or leave empty to always show the latest
-        </span>
     </div>
 
     <!-- Display Options (Collapsible) -->
@@ -84,6 +94,22 @@
 
         <div class="collapsible-content" *ngIf="showOptions">
             <div class="checkbox-group checkbox-group--compact">
+                <label class="checkbox-option checkbox-option--compact">
+                    <input
+                        type="checkbox"
+                        [(ngModel)]="showHeader"
+                        (change)="onOptionChange()">
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label">Show Header</span>
+                </label>
+                <label class="checkbox-option checkbox-option--compact">
+                    <input
+                        type="checkbox"
+                        [(ngModel)]="showTabs"
+                        (change)="onOptionChange()">
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label">Show Tabs</span>
+                </label>
                 <label class="checkbox-option checkbox-option--compact">
                     <input
                         type="checkbox"

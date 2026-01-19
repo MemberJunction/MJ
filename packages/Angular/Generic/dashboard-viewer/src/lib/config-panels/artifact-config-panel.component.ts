@@ -1,8 +1,9 @@
 import { Component, ChangeDetectorRef, ViewChild, OnInit } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, Metadata } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { BaseConfigPanel } from './base-config-panel';
-import { PanelConfig, ArtifactPanelConfig, createDefaultArtifactPanelConfig } from '../models/dashboard-types';
+import { PanelConfig } from '../models/dashboard-types';
 import {
     TreeBranchConfig,
     TreeLeafConfig,
@@ -29,8 +30,15 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
     public artifactId = '';
     public artifactName = '';
     public versionNumber: number | null = null;
+    public showHeader = false; // Default false for clean dashboard embedding
+    public showTabs = true;
     public showVersionSelector = true;
     public showMetadata = false;
+
+    // Version selection
+    public versions: ArtifactVersionEntity[] = [];
+    public isLoadingVersions = false;
+    private previousArtifactName = ''; // Track for smart title updates
 
     // Collapsible section state
     public showOptions = false;
@@ -91,25 +99,35 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
         return this.artifactId ? CompositeKey.FromID(this.artifactId) : null;
     }
 
-    public initFromConfig(config: PanelConfig | null): void {
+    public async initFromConfig(config: PanelConfig | null): Promise<void> {
         if (config && config.type === 'Artifact') {
-            const artifactConfig = config as ArtifactPanelConfig;
-            this.artifactId = artifactConfig.artifactId || '';
-            this.versionNumber = artifactConfig.versionNumber ?? null;
-            this.showVersionSelector = artifactConfig.showVersionSelector ?? true;
-            this.showMetadata = artifactConfig.showMetadata ?? false;
+            this.artifactId = (config['artifactId'] as string) || '';
+            this.versionNumber = (config['versionNumber'] as number) ?? null;
+            this.showHeader = (config['showHeader'] as boolean) ?? false;
+            this.showTabs = (config['showTabs'] as boolean) ?? true;
+            this.showVersionSelector = (config['showVersionSelector'] as boolean) ?? true;
+            this.showMetadata = (config['showMetadata'] as boolean) ?? false;
         } else {
-            const defaults = createDefaultArtifactPanelConfig();
-            this.artifactId = defaults.artifactId;
+            // Defaults for new Artifact panel
+            this.artifactId = '';
             this.versionNumber = null;
-            this.showVersionSelector = defaults.showVersionSelector;
-            this.showMetadata = defaults.showMetadata;
+            this.showHeader = false;
+            this.showTabs = true;
+            this.showVersionSelector = true;
+            this.showMetadata = false;
         }
 
         this.title = this.panel?.title || '';
         this.artifactName = '';
+        this.previousArtifactName = '';
         this.artifactError = '';
+        this.versions = [];
         this.cdr.detectChanges();
+
+        // If editing an existing artifact config, load its versions
+        if (this.artifactId) {
+            await this.loadVersionsForArtifact(this.artifactId);
+        }
     }
 
     public buildConfig(): PanelConfig {
@@ -117,9 +135,11 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
             type: 'Artifact',
             artifactId: this.artifactId.trim(),
             versionNumber: this.versionNumber ?? undefined,
+            showHeader: this.showHeader,
+            showTabs: this.showTabs,
             showVersionSelector: this.showVersionSelector,
             showMetadata: this.showMetadata
-        } as ArtifactPanelConfig;
+        };
     }
 
     public override validate(): { valid: boolean; errors: string[] } {
@@ -154,7 +174,7 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
     /**
      * Handle artifact selection from tree dropdown
      */
-    public onArtifactSelection(node: TreeNode | TreeNode[] | null): void {
+    public async onArtifactSelection(node: TreeNode | TreeNode[] | null): Promise<void> {
         // Ignore null/empty selections (these happen during sync, not user interaction)
         if (!node || (Array.isArray(node) && node.length === 0)) {
             return;
@@ -165,18 +185,55 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
         if (!Array.isArray(node)) {
             // Only accept leaf nodes (actual artifacts, not collections)
             if (node.Type === 'leaf') {
+                const oldArtifactName = this.artifactName;
                 this.artifactId = node.ID;
                 this.artifactName = node.Label;
 
-                // Auto-fill title if empty
-                if (!this.title) {
+                // Smart title update: if title matches old name, update to new name
+                if (!this.title || this.title === oldArtifactName || this.title === this.previousArtifactName) {
                     this.title = node.Label;
                 }
+                this.previousArtifactName = node.Label;
+
+                // Load versions for the selected artifact
+                await this.loadVersionsForArtifact(node.ID);
             }
         }
 
         this.emitConfigChanged();
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Load all versions for a given artifact
+     */
+    private async loadVersionsForArtifact(artifactId: string): Promise<void> {
+        this.isLoadingVersions = true;
+        this.versions = [];
+        this.cdr.detectChanges();
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<ArtifactVersionEntity>({
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID = '${artifactId}'`,
+                OrderBy: 'VersionNumber DESC',
+                ResultType: 'entity_object'
+            });
+
+            if (result.Success && result.Results) {
+                this.versions = result.Results;
+                // Default to latest version (first in descending order) if no version selected
+                if (this.versions.length > 0 && this.versionNumber == null) {
+                    this.versionNumber = this.versions[0].VersionNumber;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load artifact versions:', error);
+        } finally {
+            this.isLoadingVersions = false;
+            this.cdr.detectChanges();
+        }
     }
 
     public onVersionChange(): void {

@@ -86,90 +86,18 @@ export interface DashboardPanel {
 }
 
 /**
- * Union type for all panel configurations
+ * Generic panel configuration interface.
+ * Each panel type (View, Query, Artifact, WebURL, etc.) defines its own config shape.
+ * The `type` field must match the DashboardPartType.Name from metadata.
+ *
+ * This is intentionally generic to support pluggable panel types - new types can be
+ * added via metadata without requiring code changes to this interface.
  */
-export type PanelConfig =
-    | ViewPanelConfig
-    | QueryPanelConfig
-    | ArtifactPanelConfig
-    | WebURLPanelConfig;
-
-// ========================================
-// Panel Type Configurations
-// ========================================
-
-/**
- * Configuration for View panels
- */
-export interface ViewPanelConfig {
-    type: 'View';
-    /** Specific saved view ID */
-    viewId?: string;
-    /** Entity name for dynamic/default view */
-    entityName?: string;
-    /** Additional filter criteria */
-    extraFilter?: string;
-    /** Display mode */
-    displayMode: 'grid' | 'cards' | 'timeline';
-    /** Show mode toggle in panel header */
-    allowModeSwitch: boolean;
-    /** Enable row selection */
-    enableSelection: boolean;
-    /** Selection mode */
-    selectionMode: 'none' | 'single' | 'multiple';
-}
-
-/**
- * Configuration for Query panels
- */
-export interface QueryPanelConfig {
-    type: 'Query';
-    /** Query ID */
-    queryId?: string;
-    /** Query name (alternative to ID) */
-    queryName?: string;
-    /** Category path for browsing */
-    categoryPath?: string;
-    /** Default parameter values */
-    defaultParameters?: Record<string, unknown>;
-    /** Show parameter controls */
-    showParameterControls: boolean;
-    /** Parameter UI layout */
-    parameterLayout: 'header' | 'sidebar' | 'dialog';
-    /** Auto-refresh interval in seconds (0 = disabled) */
-    autoRefreshSeconds: number;
-    /** Show execution metadata (time, row count) */
-    showExecutionMetadata: boolean;
-}
-
-/**
- * Configuration for Artifact panels
- */
-export interface ArtifactPanelConfig {
-    type: 'Artifact';
-    /** Artifact ID */
-    artifactId: string;
-    /** Specific version number (null = latest) */
-    versionNumber?: number;
-    /** Show version selector dropdown */
-    showVersionSelector: boolean;
-    /** Show artifact metadata */
-    showMetadata: boolean;
-}
-
-/**
- * Configuration for WebURL panels
- */
-export interface WebURLPanelConfig {
-    type: 'WebURL';
-    /** URL to embed */
-    url: string;
-    /** iframe sandbox mode */
-    sandboxMode: 'standard' | 'strict' | 'permissive';
-    /** Allow fullscreen */
-    allowFullscreen: boolean;
-    /** Refresh iframe on resize */
-    refreshOnResize: boolean;
+export interface PanelConfig {
+    /** Type discriminator - must match DashboardPartType.Name */
+    type: string;
+    /** Any additional configuration properties specific to the panel type */
+    [key: string]: unknown;
 }
 
 // ========================================
@@ -380,56 +308,5 @@ export function extractPanelsFromLayout(layout: ResolvedLayoutConfig | null): Da
 export function findPanelInLayout(layout: ResolvedLayoutConfig | null, panelId: string): DashboardPanel | null {
     const panels = extractPanelsFromLayout(layout);
     return panels.find(p => p.id === panelId) || null;
-}
-
-/**
- * Creates a default View panel configuration
- */
-export function createDefaultViewPanelConfig(): ViewPanelConfig {
-    return {
-        type: 'View',
-        displayMode: 'grid',
-        allowModeSwitch: true,
-        enableSelection: true,
-        selectionMode: 'single'
-    };
-}
-
-/**
- * Creates a default Query panel configuration
- */
-export function createDefaultQueryPanelConfig(): QueryPanelConfig {
-    return {
-        type: 'Query',
-        showParameterControls: true,
-        parameterLayout: 'header',
-        autoRefreshSeconds: 0,
-        showExecutionMetadata: true
-    };
-}
-
-/**
- * Creates a default Artifact panel configuration
- */
-export function createDefaultArtifactPanelConfig(): ArtifactPanelConfig {
-    return {
-        type: 'Artifact',
-        artifactId: '',
-        showVersionSelector: true,
-        showMetadata: false
-    };
-}
-
-/**
- * Creates a default WebURL panel configuration
- */
-export function createDefaultWebURLPanelConfig(): WebURLPanelConfig {
-    return {
-        type: 'WebURL',
-        url: '',
-        sandboxMode: 'standard',
-        allowFullscreen: true,
-        refreshOnResize: false
-    };
 }
 
