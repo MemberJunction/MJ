@@ -1,5 +1,7 @@
 # @memberjunction/ng-markdown
 
+## 3.0.0
+
 ## 2.133.0
 
 ## 2.132.0
