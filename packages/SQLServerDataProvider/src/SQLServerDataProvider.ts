@@ -1698,11 +1698,19 @@ export class SQLServerDataProvider
       // Execute batched cache status check for all items that need it
       const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsNeedingCacheCheck, contextUser);
 
-      // Determine which items are current vs stale
-      const staleItems: Array<{ index: number; params: RunViewParams }> = [];
+      // Determine which items are current vs stale, and whether they support differential updates
+      const differentialItems: Array<{
+        index: number;
+        params: RunViewParams;
+        entityInfo: EntityInfo;
+        whereSQL: string;
+        clientMaxUpdatedAt: string;
+        serverStatus: { maxUpdatedAt?: string; rowCount?: number };
+      }> = [];
+      const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
       const currentResults: RunViewWithCacheCheckResult<T>[] = [];
 
-      for (const { index, item } of itemsNeedingCacheCheck) {
+      for (const { index, item, entityInfo, whereSQL } of itemsNeedingCacheCheck) {
         const serverStatus = cacheStatusResults.get(index);
         if (!serverStatus || !serverStatus.success) {
           errorResults.push({
@@ -1720,23 +1728,52 @@ export class SQLServerDataProvider
             status: 'current',
           });
         } else {
-          staleItems.push({ index, params: item.params });
+          // Cache is stale - check if entity supports differential updates
+          if (entityInfo.TrackRecordChanges) {
+            // Entity tracks record changes - we can do differential update
+            differentialItems.push({
+              index,
+              params: item.params,
+              entityInfo,
+              whereSQL,
+              clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+              serverStatus,
+            });
+          } else {
+            // Entity doesn't track record changes - fall back to full refresh
+            staleItemsNoTracking.push({ index, params: item.params });
+          }
         }
       }
 
-      // Run full queries in parallel for:
-      // 1. Items without cache status (no fingerprint from client)
-      // 2. Items with stale cache
-      const fullQueryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
+      // Run queries in parallel:
+      // 1. Items without cache status (no fingerprint from client) - full query
+      // 2. Items with stale cache but no tracking - full query
+      // 3. Items with stale cache and tracking - differential query
+      const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
+        // Full queries for items without cache status
         ...itemsWithoutCacheCheck.map(({ index, item }) =>
           this.runFullQueryAndReturn<T>(item.params, index, contextUser)
         ),
-        ...staleItems.map(({ index, params: viewParams }) =>
+        // Full queries for entities that don't track record changes
+        ...staleItemsNoTracking.map(({ index, params: viewParams }) =>
           this.runFullQueryAndReturn<T>(viewParams, index, contextUser)
+        ),
+        // Differential queries for entities that track record changes
+        ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, serverStatus }) =>
+          this.runDifferentialQueryAndReturn<T>(
+            viewParams,
+            entityInfo,
+            clientMaxUpdatedAt,
+            serverStatus,
+            whereSQL,
+            index,
+            contextUser
+          )
         ),
       ];
 
-      const fullQueryResults = await Promise.all(fullQueryPromises);
+      const fullQueryResults = await Promise.all(queryPromises);
 
       // Combine all results and sort by viewIndex
       const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
@@ -1937,6 +1974,145 @@ export class SQLServerDataProvider
     }
 
     return maxDate ? maxDate.toISOString() : new Date().toISOString();
+  }
+
+  /**
+   * Gets the IDs of records that have been deleted since a given timestamp.
+   * Uses the RecordChange table which tracks all deletions for entities with TrackRecordChanges enabled.
+   * @param entityID - The entity ID to check deletions for
+   * @param sinceTimestamp - ISO timestamp to check deletions since
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of record IDs (in CompositeKey concatenated string format)
+   */
+  protected async getDeletedRecordIDsSince(
+    entityID: string,
+    sinceTimestamp: string,
+    contextUser?: UserInfo
+  ): Promise<string[]> {
+    try {
+      const sql = `
+        SELECT DISTINCT RecordID
+        FROM [${this.MJCoreSchemaName}].vwRecordChanges
+        WHERE EntityID = '${entityID}'
+          AND Type = 'Delete'
+          AND ChangedAt > '${sinceTimestamp}'
+      `;
+      const results = await this.ExecuteSQL<{ RecordID: string }>(sql, undefined, undefined, contextUser);
+      return results.map(r => r.RecordID);
+    } catch (e) {
+      LogError(e);
+      return [];
+    }
+  }
+
+  /**
+   * Gets rows that have been created or updated since a given timestamp.
+   * @param params - RunView parameters (used for entity, filter, etc.)
+   * @param entityInfo - Entity metadata
+   * @param sinceTimestamp - ISO timestamp to check updates since
+   * @param whereSQL - Pre-built WHERE clause from the original query
+   * @param contextUser - Optional user context for permissions
+   * @returns Array of updated/created rows
+   */
+  protected async getUpdatedRowsSince<T = unknown>(
+    params: RunViewParams,
+    entityInfo: EntityInfo,
+    sinceTimestamp: string,
+    whereSQL: string,
+    contextUser?: UserInfo
+  ): Promise<T[]> {
+    try {
+      // Add the timestamp filter to the existing WHERE clause
+      const timestampFilter = `__mj_UpdatedAt > '${sinceTimestamp}'`;
+      const combinedWhere = whereSQL
+        ? `(${whereSQL}) AND ${timestampFilter}`
+        : timestampFilter;
+
+      // Build field list
+      const fields = params.Fields && params.Fields.length > 0
+        ? params.Fields.map(f => `[${f}]`).join(', ')
+        : '*';
+
+      // Build the query
+      let sql = `SELECT ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView} WHERE ${combinedWhere}`;
+
+      // Add ORDER BY if specified
+      if (params.OrderBy && params.OrderBy.length > 0) {
+        if (!this.validateUserProvidedSQLClause(params.OrderBy)) {
+          throw new Error(`Invalid OrderBy clause: ${params.OrderBy}`);
+        }
+        sql += ` ORDER BY ${params.OrderBy}`;
+      }
+
+      const results = await this.ExecuteSQL<T>(sql, undefined, undefined, contextUser);
+      return results;
+    } catch (e) {
+      LogError(e);
+      return [];
+    }
+  }
+
+  /**
+   * Runs a differential query and returns only changes since the client's cached state.
+   * This includes updated/created rows and deleted record IDs.
+   * @param params - RunView parameters
+   * @param entityInfo - Entity metadata
+   * @param clientMaxUpdatedAt - Client's cached maxUpdatedAt timestamp
+   * @param serverStatus - Current server status (for new row count)
+   * @param whereSQL - Pre-built WHERE clause
+   * @param viewIndex - Index for correlation in batch operations
+   * @param contextUser - Optional user context
+   * @returns RunViewWithCacheCheckResult with differential data
+   */
+  protected async runDifferentialQueryAndReturn<T = unknown>(
+    params: RunViewParams,
+    entityInfo: EntityInfo,
+    clientMaxUpdatedAt: string,
+    serverStatus: { maxUpdatedAt?: string; rowCount?: number },
+    whereSQL: string,
+    viewIndex: number,
+    contextUser?: UserInfo
+  ): Promise<RunViewWithCacheCheckResult<T>> {
+    try {
+      // Get updated/created rows since client's timestamp
+      const updatedRows = await this.getUpdatedRowsSince<T>(
+        params,
+        entityInfo,
+        clientMaxUpdatedAt,
+        whereSQL,
+        contextUser
+      );
+
+      // Get deleted record IDs since client's timestamp
+      const deletedRecordIDs = await this.getDeletedRecordIDsSince(
+        entityInfo.ID,
+        clientMaxUpdatedAt,
+        contextUser
+      );
+
+      // Extract maxUpdatedAt from the updated rows (or use server status)
+      const newMaxUpdatedAt = updatedRows.length > 0
+        ? this.extractMaxUpdatedAt(updatedRows)
+        : serverStatus.maxUpdatedAt || new Date().toISOString();
+
+      return {
+        viewIndex,
+        status: 'differential',
+        differentialData: {
+          updatedRows,
+          deletedRecordIDs,
+        },
+        maxUpdatedAt: newMaxUpdatedAt,
+        rowCount: serverStatus.rowCount,
+      };
+    } catch (e) {
+      LogError(e);
+      return {
+        viewIndex,
+        status: 'error',
+        errorMessage: e instanceof Error ? e.message : String(e),
+      };
+    }
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {

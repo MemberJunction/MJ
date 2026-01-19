@@ -788,8 +788,58 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     cacheMiss: false
                 };
             }
+        } else if (checkResult.status === 'differential') {
+            // Cache is stale but we have differential data - merge with cached data
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+
+            // Get entity info for primary key field name
+            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+            const primaryKeyFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
+
+            // Apply differential update to cache
+            if (param.CacheLocal && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+                const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
+                    fingerprint,
+                    param,
+                    checkResult.differentialData.updatedRows,
+                    checkResult.differentialData.deletedRecordIDs,
+                    primaryKeyFieldName,
+                    checkResult.maxUpdatedAt || new Date().toISOString(),
+                    checkResult.rowCount || 0
+                );
+
+                if (merged) {
+                    const mergedResult: RunViewResult<T> = {
+                        Success: true,
+                        Results: merged.results as T[],
+                        RowCount: merged.rowCount,
+                        TotalRowCount: merged.rowCount,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        UserViewRunID: ''
+                    };
+                    // Transform to entity objects if needed
+                    await this.TransformSimpleObjectToEntityObject(param, mergedResult, contextUser);
+                    return { result: mergedResult, cacheHit: true, cacheMiss: false };
+                }
+            }
+
+            // Fallback if differential merge fails - shouldn't happen normally
+            // In this case, we have updated rows but couldn't merge, so just return them
+            // This is a partial result, but better than nothing
+            const fallbackResult: RunViewResult<T> = {
+                Success: true,
+                Results: (checkResult.differentialData?.updatedRows || []) as T[],
+                RowCount: checkResult.rowCount || 0,
+                TotalRowCount: checkResult.rowCount || 0,
+                ExecutionTime: 0,
+                ErrorMessage: 'Differential merge failed - returning partial results',
+                UserViewRunID: ''
+            };
+            await this.TransformSimpleObjectToEntityObject(param, fallbackResult, contextUser);
+            return { result: fallbackResult, cacheHit: false, cacheMiss: true };
         } else if (checkResult.status === 'stale') {
-            // Cache is stale - use fresh data and update cache
+            // Cache is stale - use fresh data and update cache (entity doesn't support differential)
             const freshResult: RunViewResult<T> = {
                 Success: true,
                 Results: checkResult.results || [],

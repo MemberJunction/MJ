@@ -532,6 +532,148 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Applies a differential update to a cached RunView result.
+     * Merges updated/created rows and removes deleted records from the existing cache.
+     *
+     * This is the core method for differential caching - instead of replacing the entire cache,
+     * we efficiently merge only the changes (deltas) with the existing cached data.
+     *
+     * @param fingerprint - The cache fingerprint to update
+     * @param params - The original RunView parameters (for re-storing the cache)
+     * @param updatedRows - Rows that have been created or updated since the cache was stored
+     * @param deletedRecordIDs - Record IDs (in CompositeKey concatenated string format) that have been deleted
+     * @param primaryKeyFieldName - The name of the primary key field (or first PK field for composite keys)
+     * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
+     * @param newRowCount - The new total row count after applying the delta
+     * @returns The merged results after applying the differential update, or null if cache not found
+     */
+    public async ApplyDifferentialUpdate(
+        fingerprint: string,
+        params: RunViewParams,
+        updatedRows: unknown[],
+        deletedRecordIDs: string[],
+        primaryKeyFieldName: string,
+        newMaxUpdatedAt: string,
+        newRowCount: number
+    ): Promise<{ results: unknown[]; maxUpdatedAt: string; rowCount: number } | null> {
+        if (!this._storageProvider || !this._config.enabled) return null;
+
+        try {
+            // Get existing cached data
+            const cached = await this.GetRunViewResult(fingerprint);
+            if (!cached) {
+                // No existing cache - can't apply differential, caller should do full fetch
+                return null;
+            }
+
+            // Build a map of existing records by primary key for O(1) lookups
+            const resultMap = new Map<string, unknown>();
+            for (const row of cached.results) {
+                const rowObj = row as Record<string, unknown>;
+                const pkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
+                if (pkValue) {
+                    resultMap.set(pkValue, row);
+                }
+            }
+
+            // Apply deletions - remove records that have been deleted
+            for (const deletedID of deletedRecordIDs) {
+                // deletedID is in CompositeKey concatenated format: "Field1|Value1||Field2|Value2"
+                // For single-field PKs, it's just "ID|abc123"
+                // We need to extract just the value(s) to match against our map
+                const pkValue = this.extractValueFromConcatenatedKey(deletedID, primaryKeyFieldName);
+                if (pkValue) {
+                    resultMap.delete(pkValue);
+                }
+            }
+
+            // Apply updates/inserts - add or replace records
+            for (const row of updatedRows) {
+                const rowObj = row as Record<string, unknown>;
+                const pkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
+                if (pkValue) {
+                    resultMap.set(pkValue, row);
+                }
+            }
+
+            // Convert map back to array
+            const mergedResults = Array.from(resultMap.values());
+
+            // Store the updated cache
+            await this.SetRunViewResult(
+                fingerprint,
+                params,
+                mergedResults,
+                newMaxUpdatedAt,
+                newRowCount
+            );
+
+            return {
+                results: mergedResults,
+                maxUpdatedAt: newMaxUpdatedAt,
+                rowCount: newRowCount
+            };
+        } catch (e) {
+            LogError(`LocalCacheManager.ApplyDifferentialUpdate failed: ${e}`);
+            return null;
+        }
+    }
+
+    /**
+     * Extracts the primary key value as a string from a row object.
+     * Handles both single-field and composite primary keys.
+     * @param row - The row object
+     * @param primaryKeyFieldName - The primary key field name (first field for composite keys)
+     * @returns The primary key value as a string, or null if not found
+     */
+    private extractPrimaryKeyString(row: Record<string, unknown>, primaryKeyFieldName: string): string | null {
+        const value = row[primaryKeyFieldName];
+        if (value === null || value === undefined) {
+            return null;
+        }
+        return String(value);
+    }
+
+    /**
+     * Extracts the primary key value from a CompositeKey concatenated string.
+     * Format: "Field1|Value1||Field2|Value2" for composite keys, or "ID|abc123" for single keys.
+     * @param concatenatedKey - The concatenated key string from RecordChange.RecordID
+     * @param primaryKeyFieldName - The primary key field name to extract
+     * @returns The value for the specified field, or the first value if field not found
+     */
+    private extractValueFromConcatenatedKey(concatenatedKey: string, primaryKeyFieldName: string): string | null {
+        if (!concatenatedKey) {
+            return null;
+        }
+
+        // Split by field delimiter (||)
+        const fieldPairs = concatenatedKey.split('||');
+
+        for (const pair of fieldPairs) {
+            // Split by value delimiter (|)
+            const parts = pair.split('|');
+            if (parts.length >= 2) {
+                const fieldName = parts[0];
+                const value = parts.slice(1).join('|'); // Rejoin in case value contained |
+
+                if (fieldName === primaryKeyFieldName) {
+                    return value;
+                }
+            }
+        }
+
+        // If field name not found, return the first value (fallback for simple keys)
+        if (fieldPairs.length > 0) {
+            const parts = fieldPairs[0].split('|');
+            if (parts.length >= 2) {
+                return parts.slice(1).join('|');
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Invalidates all cached RunView results for a specific entity.
      * Useful when an entity's data changes and all related caches should be cleared.
      *
