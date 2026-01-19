@@ -137,6 +137,40 @@ If `my-feature` tracks `origin/next`:
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
 
+### 🚨 CRITICAL: CodeGen Handles These Automatically
+**NEVER include the following in migration CREATE TABLE statements - CodeGen generates them:**
+
+1. **Timestamp Columns**: Do NOT add `__mj_CreatedAt` or `__mj_UpdatedAt` columns
+   - CodeGen automatically adds these with proper defaults and triggers
+   - Including them manually will cause conflicts
+
+2. **Foreign Key Indexes**: Do NOT create indexes for foreign key columns
+   - CodeGen creates these with the naming pattern `IDX_AUTO_MJ_FKEY_<table>_<column>`
+   - Manual FK indexes will duplicate CodeGen's work
+
+**Example - What to include vs exclude:**
+```sql
+-- ✅ CORRECT - Only include business columns and constraints
+CREATE TABLE ${flyway:defaultSchema}.DashboardPermission (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    DashboardID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL,
+    CanRead BIT NOT NULL DEFAULT 1,
+    CanEdit BIT NOT NULL DEFAULT 0,
+    SharedByUserID UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_DashboardPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_DashboardPermission_Dashboard FOREIGN KEY (DashboardID) REFERENCES ${flyway:defaultSchema}.Dashboard(ID),
+    CONSTRAINT FK_DashboardPermission_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.User(ID),
+    CONSTRAINT UQ_DashboardPermission UNIQUE (DashboardID, UserID)
+);
+
+-- ❌ WRONG - Don't include these (CodeGen handles them)
+-- __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- CREATE INDEX IDX_DashboardPermission_DashboardID ON DashboardPermission(DashboardID);
+-- CREATE INDEX IDX_DashboardPermission_UserID ON DashboardPermission(UserID);
+```
+
 ## Entity Version Control
 - MemberJunction includes built-in version control called "Record Changes" for all entities
 - This feature tracks all changes to entity records unless explicitly disabled
