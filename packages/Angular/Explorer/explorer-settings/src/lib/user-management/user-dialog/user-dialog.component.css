@@ -1,61 +1,24 @@
-/* Modern Dialog Styling - Matching Dashboard Design */
-:host ::ng-deep .k-window {
-  border: none;
-  border-radius: 12px;
-  box-shadow: 0 19px 38px rgba(0, 0, 0, 0.30), 0 15px 12px rgba(0, 0, 0, 0.22);
-  background: #ffffff;
-  overflow: hidden;
-}
+/* =============================================================================
+   User Dialog Component - MD3 Design System
+   Following UIUX-DESIGN-GUIDE.md principles
 
-:host ::ng-deep .k-window-titlebar {
-  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
-  border: none;
-  padding: 24px 32px;
-  min-height: 70px;
-}
+   NOTE: Kendo Window base styling is handled by global theme override in
+   packages/MJExplorer/src/styles/_kendo-theme-override.scss (lines 878-941)
+   ============================================================================= */
 
-:host ::ng-deep .k-window-titlebar .k-window-title {
-  display: none; /* Hide default title */
-}
-
-:host ::ng-deep .k-window-titlebar .k-window-actions {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-}
-
-:host ::ng-deep .k-window-titlebar .k-window-actions .k-button {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
-  min-width: auto;
-}
-
-:host ::ng-deep .k-window-titlebar .k-window-actions .k-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-:host ::ng-deep .k-window-content {
-  padding: 0;
-  background: #ffffff;
-}
-
-/* Custom Title Bar */
+/* -----------------------------------------------------------------------------
+   Custom Title Bar (inside kendo-window-titlebar)
+   ----------------------------------------------------------------------------- */
 .dialog-header {
   position: relative;
-  color: #ffffff;
+  color: var(--mat-sys-on-primary);
 }
 
 .dialog-header .dialog-title {
-  font-size: 18px;
-  font-weight: 600;
+  font: var(--mat-sys-title-large);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 1rem;
   margin: 0;
 }
 
@@ -65,88 +28,98 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  font-size: 14px;
+  background: color-mix(in srgb, var(--mat-sys-on-primary) 15%, transparent);
+  border-radius: var(--mat-sys-corner-small);
+  font-size: 0.875rem;
 }
 
 .dialog-header .dialog-subtitle {
-  margin: 4px 0 0 0;
-  font-size: 12px;
+  margin: 0.25rem 0 0 0;
+  font: var(--mat-sys-body-small);
   opacity: 0.85;
-  font-weight: 400;
 }
 
-/* Modal Content Areas */
+/* -----------------------------------------------------------------------------
+   Dialog Content Area
+   ----------------------------------------------------------------------------- */
 .dialog-content {
   padding: 0;
-  background: #ffffff;
+  background: var(--mat-sys-surface);
 }
 
 .dialog-content .content-section {
-  padding: 32px;
+  padding: 2rem;
 }
 
 .dialog-content .content-section:not(:last-child) {
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
 }
 
+/* -----------------------------------------------------------------------------
+   Dialog Footer - Buttons on LEFT (Primary first), Cancel on RIGHT
+   ----------------------------------------------------------------------------- */
 .dialog-footer {
-  padding: 24px 32px;
-  background: #fafafa;
-  border-top: 1px solid #e0e0e0;
+  padding: 1.5rem 2rem;
+  background: var(--mat-sys-surface-container-low);
+  border-top: 1px solid var(--mat-sys-outline-variant);
   display: flex;
-  justify-content: flex-end;
-  gap: 16px;
+  justify-content: flex-start;
+  gap: 1rem;
 }
 
-/* Form Sections */
+/* -----------------------------------------------------------------------------
+   Form Sections
+   ----------------------------------------------------------------------------- */
 .form-section .section-header {
-  margin-bottom: 24px;
+  margin-bottom: 1.5rem;
 }
 
 .form-section .section-header .section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #212121;
-  margin: 0 0 4px 0;
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-surface);
+  margin: 0 0 0.25rem 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .form-section .section-header .section-title i {
-  color: #2196f3;
-  font-size: 14px;
+  color: var(--mat-sys-primary);
+  font-size: 0.875rem;
 }
 
 .form-section .section-header .section-description {
-  font-size: 12px;
-  color: #666666;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
   margin: 0;
 }
 
+/* -----------------------------------------------------------------------------
+   Form Grid Layout
+   ----------------------------------------------------------------------------- */
 .form-grid {
   display: grid;
-  gap: 24px;
+  gap: 1.5rem;
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 1.5rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .form-row {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 1rem;
   }
 }
 
-/* Modern Form Fields */
+/* -----------------------------------------------------------------------------
+   Form Fields
+   ----------------------------------------------------------------------------- */
 .form-field {
-  margin-bottom: 24px;
+  margin-bottom: 1.5rem;
 }
 
 .form-field:last-child {
@@ -155,81 +128,82 @@
 
 .form-field .field-label {
   display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: #212121;
-  margin-bottom: 8px;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface);
+  margin-bottom: 0.5rem;
 }
 
 .form-field .field-label.required::after {
   content: ' *';
-  color: #f44336;
+  color: var(--mat-sys-error);
 }
 
 .form-field .field-input,
 .form-field .field-select {
   width: 100%;
-  height: 36px;
-  padding: 0 16px;
-  border: 1px solid #bdbdbd;
-  border-radius: 6px;
-  font-size: 14px;
-  background: #ffffff;
-  transition: all 0.15s ease;
+  height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: var(--mat-sys-corner-small);
+  font: var(--mat-sys-body-medium);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-field .field-input:focus,
 .form-field .field-select:focus {
   outline: none;
-  border-color: #2196f3;
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+  border-color: var(--mat-sys-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
 }
 
 .form-field .field-input.error,
 .form-field .field-select.error {
-  border-color: #f44336;
+  border-color: var(--mat-sys-error);
 }
 
 .form-field .field-input.error:focus,
 .form-field .field-select.error:focus {
-  border-color: #f44336;
-  box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.1);
+  border-color: var(--mat-sys-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mat-sys-error) 12%, transparent);
 }
 
-.form-field .field-input::placeholder,
-.form-field .field-select::placeholder {
-  color: #9e9e9e;
+.form-field .field-input::placeholder {
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .form-field .field-select {
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-  background-position: right 16px center;
+  background-position: right 1rem center;
   background-repeat: no-repeat;
-  background-size: 16px;
-  padding-right: calc(16px + 24px);
+  background-size: 1rem;
+  padding-right: 2.5rem;
   appearance: none;
   cursor: pointer;
 }
 
 .form-field .field-error {
-  margin-top: 8px;
-  font-size: 11px;
-  color: #f44336;
+  margin-top: 0.5rem;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-error);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .form-field .field-error i {
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
-/* Modern Checkbox Fields */
+/* -----------------------------------------------------------------------------
+   Checkbox Fields
+   ----------------------------------------------------------------------------- */
 .checkbox-field {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
   cursor: pointer;
 }
 
@@ -240,8 +214,8 @@
 }
 
 .checkbox-field .checkbox-input:checked + .checkbox-label .checkbox-indicator {
-  background: #2196f3;
-  border-color: #2196f3;
+  background: var(--mat-sys-primary);
+  border-color: var(--mat-sys-primary);
 }
 
 .checkbox-field .checkbox-input:checked + .checkbox-label .checkbox-indicator::after {
@@ -250,16 +224,16 @@
 }
 
 .checkbox-field .checkbox-input:focus + .checkbox-label .checkbox-indicator {
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
 }
 
 .checkbox-field .checkbox-label {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 1rem;
   cursor: pointer;
-  font-size: 14px;
-  color: #212121;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
   line-height: 1.4;
   margin: 0;
 }
@@ -267,9 +241,9 @@
 .checkbox-field .checkbox-indicator {
   width: 20px;
   height: 20px;
-  border: 2px solid #bdbdbd;
-  border-radius: 4px;
-  background: #ffffff;
+  border: 2px solid var(--mat-sys-outline);
+  border-radius: var(--mat-sys-corner-extra-small);
+  background: var(--mat-sys-surface);
   flex-shrink: 0;
   position: relative;
   transition: all 0.15s ease;
@@ -283,52 +257,65 @@
   top: 2px;
   width: 4px;
   height: 8px;
-  border: solid #ffffff;
+  border: solid var(--mat-sys-on-primary);
   border-width: 0 2px 2px 0;
   opacity: 0;
   transform: rotate(45deg) scale(0.8);
   transition: all 0.15s ease;
 }
 
-/* Role Assignment Section */
-.roles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+.checkbox-description {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  margin-top: 0.125rem;
 }
 
-@media (max-width: 640px) {
+/* -----------------------------------------------------------------------------
+   Role Assignment Section
+   ----------------------------------------------------------------------------- */
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 639px) {
   .roles-grid {
     grid-template-columns: 1fr;
   }
 }
 
 .role-card {
-  padding: 24px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: #fafafa;
+  padding: 1.5rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--mat-sys-surface-container-lowest);
   transition: all 0.2s ease;
   cursor: pointer;
 }
 
 .role-card:hover {
-  border-color: rgba(33, 150, 243, 0.2);
-  background: #ffffff;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+  border-color: color-mix(in srgb, var(--mat-sys-primary) 40%, transparent);
+  background: var(--mat-sys-surface);
+  box-shadow: var(--mat-sys-elevation-1);
   transform: translateY(-1px);
 }
 
+.role-card:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
 .role-card.selected {
-  border-color: #2196f3;
-  background: #e3f2fd;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+  border-color: var(--mat-sys-primary);
+  background: var(--mat-sys-primary-container);
+  box-shadow: var(--mat-sys-elevation-2);
 }
 
 .role-card .role-content {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 1rem;
 }
 
 .role-card .role-info {
@@ -337,16 +324,15 @@
 }
 
 .role-card .role-info .role-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #212121;
-  margin: 0 0 4px 0;
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface);
+  margin: 0 0 0.25rem 0;
   line-height: 1.2;
 }
 
 .role-card .role-info .role-description {
-  font-size: 12px;
-  color: #666666;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
   line-height: 1.4;
   margin: 0;
   display: -webkit-box;
@@ -355,49 +341,52 @@
   overflow: hidden;
 }
 
-/* Alert Messages */
+/* -----------------------------------------------------------------------------
+   Alert Messages
+   ----------------------------------------------------------------------------- */
 .alert {
-  padding: 16px 24px;
-  border-radius: 8px;
-  margin-bottom: 24px;
+  padding: 1rem 1.5rem;
+  border-radius: var(--mat-sys-corner-small);
+  margin-bottom: 1.5rem;
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 1rem;
 }
 
 .alert i {
-  font-size: 16px;
+  font-size: 1rem;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 0.125rem;
 }
 
 .alert.alert-error {
-  background: rgba(244, 67, 54, 0.1);
-  border: 1px solid rgba(244, 67, 54, 0.2);
-  color: #c62828;
+  background: var(--mat-sys-error-container);
+  border: 1px solid color-mix(in srgb, var(--mat-sys-error) 20%, transparent);
+  color: var(--mat-sys-on-error-container);
 }
 
 .alert.alert-error i {
-  color: #f44336;
+  color: var(--mat-sys-error);
 }
 
-/* Button Styles */
+/* -----------------------------------------------------------------------------
+   Button Styles
+   ----------------------------------------------------------------------------- */
 .dialog-footer .btn {
-  padding: 8px 24px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  padding: 0.5rem 1.5rem;
+  border-radius: var(--mat-sys-corner-small);
+  font: var(--mat-sys-label-large);
   border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 36px;
+  gap: 0.5rem;
+  min-height: 44px;
 }
 
 .dialog-footer .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -406,25 +395,24 @@
 }
 
 .dialog-footer .btn.btn-secondary {
-  background: #ffffff;
-  color: #666666;
-  border-color: #bdbdbd;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+  border-color: var(--mat-sys-outline);
 }
 
 .dialog-footer .btn.btn-secondary:hover:not(:disabled) {
-  background: #f8f9fa;
-  border-color: #757575;
-  color: #212121;
+  background: var(--mat-sys-surface-container);
+  border-color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface);
 }
 
 .dialog-footer .btn.btn-primary {
-  background: #2196f3;
-  color: #ffffff;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
 }
 
 .dialog-footer .btn.btn-primary:hover:not(:disabled) {
-  background: #1976d2;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+  box-shadow: var(--mat-sys-elevation-1);
   transform: translateY(-1px);
 }
 
@@ -433,34 +421,48 @@
   to { transform: rotate(360deg); }
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  :host ::ng-deep .k-window {
-    margin: 16px;
-    max-width: none;
-    width: calc(100vw - 24px) !important;
-    height: calc(100vh - 24px) !important;
+/* -----------------------------------------------------------------------------
+   Accessibility: Focus Indicators
+   ----------------------------------------------------------------------------- */
+.field-input:focus-visible,
+.field-select:focus-visible,
+.btn:focus-visible,
+.checkbox-input:focus-visible + .checkbox-label .checkbox-indicator {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Accessibility: Reduced Motion
+   ----------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
-  
-  :host ::ng-deep .k-window-titlebar {
-    padding: 16px 24px;
-    min-height: 60px;
-  }
-  
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive Design
+   ----------------------------------------------------------------------------- */
+@media (max-width: 767px) {
   .dialog-content .content-section {
-    padding: 24px 16px;
+    padding: 1.5rem 1rem;
   }
-  
+
   .dialog-footer {
-    padding: 16px 24px;
-    flex-direction: column-reverse;
+    padding: 1rem 1.5rem;
+    flex-direction: column;
   }
-  
+
   .dialog-footer .btn {
     width: 100%;
     justify-content: center;
   }
-  
+
   .roles-grid {
     grid-template-columns: 1fr;
   }

@@ -35,10 +35,19 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public selectedUser: UserEntity | null = null;
   public isLoading = false;
   public error: string | null = null;
-  
+
+  // Selection state for bulk actions
+  public selectedUserIds = new Set<string>();
+
   // Dialog state
   public showUserDialog = false;
   public userDialogData: UserDialogData | null = null;
+
+  // Bulk action dialog state
+  public showBulkActionConfirm = false;
+  public bulkActionType: 'enable' | 'disable' | 'delete' | null = null;
+  public showBulkRoleAssign = false;
+  public bulkRoleId: string = '';
   
   // Stats
   public stats: UserStats = {
@@ -399,10 +408,208 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public onUserDialogResult(result: UserDialogResult): void {
     this.showUserDialog = false;
     this.userDialogData = null;
-    
+
     if (result.action === 'save') {
       // Refresh the user list to show changes
       this.loadInitialData();
+    }
+  }
+
+  // Selection methods for bulk actions
+  public get isAllSelected(): boolean {
+    return this.filteredUsers.length > 0 &&
+           this.filteredUsers.every(user => this.selectedUserIds.has(user.ID));
+  }
+
+  public get isIndeterminate(): boolean {
+    const selectedCount = this.filteredUsers.filter(user => this.selectedUserIds.has(user.ID)).length;
+    return selectedCount > 0 && selectedCount < this.filteredUsers.length;
+  }
+
+  public get hasSelection(): boolean {
+    return this.selectedUserIds.size > 0;
+  }
+
+  public get selectedCount(): number {
+    return this.selectedUserIds.size;
+  }
+
+  public toggleSelectAll(): void {
+    if (this.isAllSelected) {
+      // Deselect all filtered users
+      this.filteredUsers.forEach(user => this.selectedUserIds.delete(user.ID));
+    } else {
+      // Select all filtered users
+      this.filteredUsers.forEach(user => this.selectedUserIds.add(user.ID));
+    }
+  }
+
+  public toggleUserSelection(userId: string, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (this.selectedUserIds.has(userId)) {
+      this.selectedUserIds.delete(userId);
+    } else {
+      this.selectedUserIds.add(userId);
+    }
+  }
+
+  public isUserSelected(userId: string): boolean {
+    return this.selectedUserIds.has(userId);
+  }
+
+  public clearSelection(): void {
+    this.selectedUserIds.clear();
+  }
+
+  // Bulk action methods
+  public confirmBulkAction(action: 'enable' | 'disable' | 'delete'): void {
+    if (!this.hasSelection) return;
+    this.bulkActionType = action;
+    this.showBulkActionConfirm = true;
+  }
+
+  public cancelBulkAction(): void {
+    this.showBulkActionConfirm = false;
+    this.bulkActionType = null;
+  }
+
+  public async executeBulkAction(): Promise<void> {
+    if (!this.bulkActionType || !this.hasSelection) return;
+
+    try {
+      this.isLoading = true;
+      const selectedUsers = this.users.filter(user => this.selectedUserIds.has(user.ID));
+
+      switch (this.bulkActionType) {
+        case 'enable':
+          await this.bulkSetUserStatus(selectedUsers, true);
+          break;
+        case 'disable':
+          await this.bulkSetUserStatus(selectedUsers, false);
+          break;
+        case 'delete':
+          await this.bulkDeleteUsers(selectedUsers);
+          break;
+      }
+
+      this.clearSelection();
+      this.showBulkActionConfirm = false;
+      this.bulkActionType = null;
+      await this.loadInitialData();
+    } catch (error: unknown) {
+      console.error('Bulk action failed:', error);
+      this.error = error instanceof Error ? error.message : 'Bulk action failed';
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  private async bulkSetUserStatus(users: UserEntity[], isActive: boolean): Promise<void> {
+    for (const user of users) {
+      user.IsActive = isActive;
+      const result = await user.Save();
+      if (!result) {
+        throw new Error(`Failed to update user ${user.Name}: ${user.LatestResult?.Message}`);
+      }
+    }
+  }
+
+  private async bulkDeleteUsers(users: UserEntity[]): Promise<void> {
+    for (const user of users) {
+      const result = await user.Delete();
+      if (!result) {
+        throw new Error(`Failed to delete user ${user.Name}: ${user.LatestResult?.Message}`);
+      }
+    }
+  }
+
+  // Bulk role assignment
+  public openBulkRoleAssign(): void {
+    if (!this.hasSelection) return;
+    this.bulkRoleId = '';
+    this.showBulkRoleAssign = true;
+  }
+
+  public cancelBulkRoleAssign(): void {
+    this.showBulkRoleAssign = false;
+    this.bulkRoleId = '';
+  }
+
+  public async executeBulkRoleAssign(): Promise<void> {
+    if (!this.bulkRoleId || !this.hasSelection) return;
+
+    try {
+      this.isLoading = true;
+      const selectedUserIds = Array.from(this.selectedUserIds);
+
+      for (const userId of selectedUserIds) {
+        // Check if user already has this role
+        const existingRoles = this.userRoleMap.get(userId) || [];
+        if (!existingRoles.includes(this.bulkRoleId)) {
+          const userRole = await this.metadata.GetEntityObject<UserRoleEntity>('User Roles');
+          userRole.NewRecord();
+          userRole.UserID = userId;
+          userRole.RoleID = this.bulkRoleId;
+
+          const result = await userRole.Save();
+          if (!result) {
+            console.warn(`Failed to assign role to user ${userId}:`, userRole.LatestResult?.Message);
+          }
+        }
+      }
+
+      this.clearSelection();
+      this.showBulkRoleAssign = false;
+      this.bulkRoleId = '';
+      await this.loadInitialData();
+    } catch (error: unknown) {
+      console.error('Bulk role assignment failed:', error);
+      this.error = error instanceof Error ? error.message : 'Bulk role assignment failed';
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  public getBulkActionMessage(): string {
+    const count = this.selectedCount;
+    switch (this.bulkActionType) {
+      case 'enable':
+        return `Are you sure you want to enable ${count} user${count > 1 ? 's' : ''}?`;
+      case 'disable':
+        return `Are you sure you want to disable ${count} user${count > 1 ? 's' : ''}?`;
+      case 'delete':
+        return `Are you sure you want to delete ${count} user${count > 1 ? 's' : ''}? This action cannot be undone.`;
+      default:
+        return '';
+    }
+  }
+
+  public getBulkActionTitle(): string {
+    switch (this.bulkActionType) {
+      case 'enable':
+        return 'Enable Users';
+      case 'disable':
+        return 'Disable Users';
+      case 'delete':
+        return 'Delete Users';
+      default:
+        return 'Confirm Action';
+    }
+  }
+
+  public getBulkActionButtonText(): string {
+    const count = this.selectedCount;
+    switch (this.bulkActionType) {
+      case 'enable':
+        return `Enable ${count} User${count > 1 ? 's' : ''}`;
+      case 'disable':
+        return `Disable ${count} User${count > 1 ? 's' : ''}`;
+      case 'delete':
+        return `Delete ${count} User${count > 1 ? 's' : ''}`;
+      default:
+        return 'Confirm';
     }
   }
 }

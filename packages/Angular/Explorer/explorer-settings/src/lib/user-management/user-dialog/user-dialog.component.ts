@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -18,7 +18,6 @@ export interface UserDialogResult {
 
 @Component({
   selector: 'mj-user-dialog',
-  encapsulation: ViewEncapsulation.None,
   templateUrl: './user-dialog.component.html',
   styleUrls: ['./user-dialog.component.css']
 })
