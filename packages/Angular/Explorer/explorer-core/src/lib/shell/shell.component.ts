@@ -852,17 +852,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const tabAppId = tab.applicationId;
     const tabTitle = tab.title;
 
-    console.log('[buildResourceUrl] Input:', {
-      tabId: tab.id,
-      title: tabTitle,
-      applicationId: tabAppId,
-      resourceType,
-      recordId,
-      appName,
-      navItemName,
-      config
-    });
-
     // Helper function to get app path for URL
     const getAppPath = (appIdOrName: string): string | null => {
       // First try by ID
@@ -901,10 +890,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Fallback: If tab belongs to a non-system app but doesn't have appName/navItemName,
     // try to reconstruct the URL from the ApplicationId and tab title
-    console.log('[buildResourceUrl] Checking non-system app fallback - tabAppId:', tabAppId);
     if (tabAppId && tabAppId !== '__explorer') {
       const app = this.appManager.GetAppById(tabAppId);
-      console.log('[buildResourceUrl] Found app:', app?.Name, 'navItems count:', app?.GetNavItems()?.length);
       if (app) {
         // Prefer Path, fall back to Name
         const appPath = app.Path || app.Name;
@@ -912,13 +899,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // If app has nav items, try to find the matching one by title
         if (navItems.length > 0) {
-          console.log('[buildResourceUrl] App has nav items, looking for title match:', tabTitle);
           const navItem = navItems.find(item =>
             item.Label?.trim().toLowerCase() === tabTitle?.trim().toLowerCase()
           );
 
           if (navItem) {
-            console.log('[buildResourceUrl] Found matching nav item:', navItem.Label);
             let url = `/app/${encodeURIComponent(appPath)}/${encodeURIComponent(navItem.Label)}`;
 
             // Add query params if present
@@ -929,16 +914,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
             return url;
           }
-          console.log('[buildResourceUrl] No matching nav item found, continuing to orphan resource handling');
+          // No matching nav item found, continue to orphan resource handling
         } else if (!resourceType || resourceType === 'custom') {
           // App has zero nav items AND this is not an orphan resource (no resourceType or custom)
           // Use app-level URL - this handles apps that only have a default dashboard
-          console.log('[buildResourceUrl] App has zero nav items and no orphan resource, using app-level URL');
           return `/app/${encodeURIComponent(appPath)}`;
         }
         // If app has zero nav items but we have a resourceType (orphan resource),
         // fall through to orphan resource URL building below
-        console.log('[buildResourceUrl] App has zero nav items but has orphan resource, continuing');
       }
     }
 
@@ -946,14 +929,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const isDynamic = config['isDynamic'] as boolean | undefined;
     const extraFilter = (config['ExtraFilter'] || config['extraFilter']) as string | undefined;
 
-    console.log('[buildResourceUrl] Parsed values:', { entityName, isDynamic, extraFilter });
-
     // For orphan resources (not tied to a specific nav item), use app-scoped URLs
     // Get the app path for the URL
     let appPath: string | null = null;
     if (tabAppId && tabAppId !== SYSTEM_APP_ID) {
       const app = this.appManager.GetAppById(tabAppId);
-      console.log('[buildResourceUrl] Looking up app by ID:', tabAppId, 'found:', app?.Name, 'path:', app?.Path);
       if (app) {
         appPath = app.Path || app.Name;
       }
@@ -962,24 +942,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // If no app path found, try to use Home app as the default
     if (!appPath) {
       const homeApp = this.appManager.GetAppByName('Home');
-      console.log('[buildResourceUrl] Fallback to Home app:', homeApp?.Name, 'path:', homeApp?.Path);
       if (homeApp) {
         appPath = homeApp.Path || homeApp.Name;
       }
     }
-
-    console.log('[buildResourceUrl] Building URL with appPath:', appPath, 'resourceType:', resourceType);
 
     // Build app-scoped URLs (new pattern) if we have an app context
     if (appPath) {
       switch (resourceType) {
         case 'records':
           // /app/:appName/record/:entityName/:recordId
-          console.log('[buildResourceUrl] records case - entityName:', entityName, 'recordId:', recordId);
           if (entityName && recordId) {
-            const url = `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`;
-            console.log('[buildResourceUrl] Built URL:', url);
-            return url;
+            return `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`;
           }
           break;
 
@@ -1083,7 +1057,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         break;
     }
 
-    console.log('[buildResourceUrl] No URL built for tab:', tab.id, tab.title);
     return null;
   }
 

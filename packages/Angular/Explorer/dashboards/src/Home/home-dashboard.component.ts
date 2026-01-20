@@ -1,7 +1,7 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BaseDashboard, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { ResourceData, UserFavoriteEntity, UserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
@@ -12,14 +12,17 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 /**
  * Home Dashboard - Personalized home screen showing all available applications
  * with quick access navigation and configuration options.
+ *
+ * Registered as a BaseResourceComponent so it can be used as a Custom resource type
+ * in nav items, allowing users to return to the Home dashboard after viewing orphan resources.
  */
 @Component({
   selector: 'mj-home-dashboard',
   templateUrl: './home-dashboard.component.html',
   styleUrls: ['./home-dashboard.component.css']
 })
-@RegisterClass(BaseDashboard, 'HomeDashboard')
-export class HomeDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
+@RegisterClass(BaseResourceComponent, 'HomeDashboard')
+export class HomeDashboardComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
@@ -82,7 +85,11 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
 
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return "Home"
+    return 'Home';
+  }
+
+  async GetResourceIconClass(data: ResourceData): Promise<string> {
+    return '';
   }
 
   async ngAfterViewInit(): Promise<void> {
@@ -143,18 +150,9 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
     this.loadRecents();
   }
 
-  override ngOnDestroy(): void {
+  ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    super.ngOnDestroy();
-  }
-
-  protected initDashboard(): void {
-    // Called by BaseDashboard
-  }
-
-  protected loadData(): void {
-    // Data loading handled by subscription
   }
 
   /**

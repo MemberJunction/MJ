@@ -23,6 +23,9 @@ import { LoadListsResources } from './Lists';
 import { LoadQueryBrowserResource } from './QueryBrowser/query-browser-resource.component';
 // Dashboard Browser
 import { LoadDashboardBrowserResource } from './DashboardBrowser/dashboard-browser-resource.component';
+// Home Application and Dashboard
+import { LoadHomeApplication } from './Home/home-application';
+import { LoadHomeDashboard } from './Home/home-dashboard.component';
 
 import {
   LoadActionsOverviewResource,
@@ -163,6 +166,10 @@ export {
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
+// Home Application and Dashboard
+export { HomeApplication, LoadHomeApplication } from './Home/home-application';
+export { HomeDashboardComponent, LoadHomeDashboard } from './Home/home-dashboard.component';
+
 // Module
 export * from './module';
 
@@ -228,3 +235,7 @@ LoadQueryBrowserResource();
 
 // Dashboard Browser resource loader
 LoadDashboardBrowserResource();
+
+// Home Application and Dashboard loader
+LoadHomeApplication();
+LoadHomeDashboard();
