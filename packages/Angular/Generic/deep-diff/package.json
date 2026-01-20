@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-deep-diff",
-  "version": "2.133.0",
+  "version": "3.0.0",
   "description": "MemberJunction: Generic Angular component to display the differences between two objects, using the non-visual functionality from the @memberjunction/global package",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -24,8 +24,8 @@
   },
   "dependencies": {
     "@angular/forms": "18.2.14",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/global": "2.133.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/global": "3.0.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false,

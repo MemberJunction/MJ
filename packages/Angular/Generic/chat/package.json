@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-chat",
-  "version": "2.133.0",
+  "version": "3.0.0",
   "description": "MemberJunction: Reusable Chat Component - can be used for AI or peer to peer chat applications.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -24,14 +24,14 @@
     "@angular/forms": "18.2.14"
   },
   "dependencies": {
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/ng-container-directives": "2.133.0",
-    "@memberjunction/ng-shared-generic": "2.133.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/ng-container-directives": "3.0.0",
+    "@memberjunction/ng-shared-generic": "3.0.0",
     "@progress/kendo-angular-indicators": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "tslib": "^2.3.0",
-    "@memberjunction/ng-markdown": "2.133.0"
+    "@memberjunction/ng-markdown": "3.0.0"
   },
   "sideEffects": false,
   "repository": {
