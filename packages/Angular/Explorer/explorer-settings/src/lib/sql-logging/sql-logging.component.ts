@@ -1,4 +1,4 @@
-import { Component, OnDestroy, HostListener } from '@angular/core';
+import { Component, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata } from '@memberjunction/core';
@@ -144,7 +144,10 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     { text: 'Include Matching Only', value: 'include' },
   ];
 
-  constructor(private sharedService: SharedService) {
+  constructor(
+    private sharedService: SharedService,
+    private cdr: ChangeDetectorRef
+  ) {
     super();
   }
 
@@ -501,6 +504,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
 
       this.sqlLoggingConfig = configData || null;
       this.configEnabled = this.sqlLoggingConfig?.enabled || false;
+      this.cdr.detectChanges();
 
       console.log('Component state after update:');
       console.log('  this.sqlLoggingConfig:', this.sqlLoggingConfig);
@@ -554,6 +558,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
       console.log('Extracted sessions data:', sessionsData);
 
       this.activeSessions = sessionsData || [];
+      this.cdr.detectChanges();
 
       // Update selected session if it still exists
       if (this.selectedSession) {

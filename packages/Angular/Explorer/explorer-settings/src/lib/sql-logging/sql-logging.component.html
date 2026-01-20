@@ -1,8 +1,13 @@
 <div class="sql-logging-container">
   <!-- Action Buttons -->
-  <div class="action-buttons">
-    <button class="btn-secondary" (click)="loadActiveSessions()" [disabled]="loading">
-      <i class="fa-solid fa-refresh" [class.fa-spin]="loading"></i>
+  <div class="action-buttons" role="toolbar" aria-label="SQL logging actions">
+    <button
+      class="btn-secondary"
+      (click)="loadActiveSessions()"
+      [disabled]="loading"
+      aria-label="Refresh sessions"
+    >
+      <i class="fa-solid fa-refresh" [class.fa-spin]="loading" aria-hidden="true"></i>
       Refresh
     </button>
     @if (isOwner && configEnabled) {
@@ -10,9 +15,9 @@
         class="btn-primary"
         [disabled]="loading || activeSessions.length >= (sqlLoggingConfig?.maxActiveSessions || 5)"
         (click)="openStartSessionDialog()"
-        title="Start SQL logging session"
+        [attr.aria-label]="'Start new SQL logging session' + (activeSessions.length >= (sqlLoggingConfig?.maxActiveSessions || 5) ? ' (maximum sessions reached)' : '')"
       >
-        <i class="fa-solid fa-play"></i>
+        <i class="fa-solid fa-play" aria-hidden="true"></i>
         Start New Session
       </button>
     }
@@ -20,43 +25,51 @@
 
   <!-- Stats Cards -->
   @if (isOwner && configEnabled) {
-    <div class="stats-grid" style="display: flex">
+    <div class="stats-grid" role="region" aria-label="SQL logging statistics">
       <div class="stat-card">
         <div class="stat-icon stat-icon-status">
-          <i class="fa-solid fa-power-off"></i>
+          <i class="fa-solid fa-power-off" aria-hidden="true"></i>
         </div>
         <div class="stat-content">
-          <div class="stat-value">{{ configEnabled ? "Enabled" : "Disabled" }}</div>
+          <div class="stat-value" [attr.aria-label]="'Status: ' + (configEnabled ? 'Enabled' : 'Disabled')">
+            {{ configEnabled ? "Enabled" : "Disabled" }}
+          </div>
           <div class="stat-label">Status</div>
         </div>
       </div>
 
       <div class="stat-card">
         <div class="stat-icon stat-icon-active">
-          <i class="fa-solid fa-play-circle"></i>
+          <i class="fa-solid fa-play-circle" aria-hidden="true"></i>
         </div>
         <div class="stat-content">
-          <div class="stat-value">{{ activeSessions.length }}</div>
+          <div class="stat-value" [attr.aria-label]="activeSessions.length + ' active sessions'">
+            {{ activeSessions.length }}
+          </div>
           <div class="stat-label">Active Sessions</div>
         </div>
       </div>
 
       <div class="stat-card">
         <div class="stat-icon stat-icon-limit">
-          <i class="fa-solid fa-gauge-high"></i>
+          <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
         </div>
         <div class="stat-content">
-          <div class="stat-value">{{ sqlLoggingConfig?.maxActiveSessions || 5 }}</div>
+          <div class="stat-value" [attr.aria-label]="(sqlLoggingConfig?.maxActiveSessions || 5) + ' maximum sessions allowed'">
+            {{ sqlLoggingConfig?.maxActiveSessions || 5 }}
+          </div>
           <div class="stat-label">Max Sessions</div>
         </div>
       </div>
 
       <div class="stat-card">
         <div class="stat-icon stat-icon-total">
-          <i class="fa-solid fa-database"></i>
+          <i class="fa-solid fa-database" aria-hidden="true"></i>
         </div>
         <div class="stat-content">
-          <div class="stat-value">{{ getTotalStatementCount() }}</div>
+          <div class="stat-value" [attr.aria-label]="getTotalStatementCount() + ' total SQL statements captured'">
+            {{ getTotalStatementCount() }}
+          </div>
           <div class="stat-label">Total Statements</div>
         </div>
       </div>
@@ -65,13 +78,8 @@
 
   <!-- Loading State -->
   @if (loading && !activeSessions.length) {
-    <div class="loading-container">
-      <div class="loading-spinner">
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-      </div>
-      <div class="loading-text">Loading SQL logging configuration...</div>
+    <div class="loading-container" role="status" aria-live="polite" aria-busy="true">
+      <mj-loading text="Loading SQL logging configuration..." size="medium"></mj-loading>
     </div>
   }
 
@@ -80,19 +88,19 @@
     <div class="content-area">
       @if (!isOwner) {
         <!-- Not authorized -->
-        <div class="empty-state">
-          <i class="fa-solid fa-lock empty-icon"></i>
+        <div class="empty-state" role="alert">
+          <i class="fa-solid fa-lock empty-icon" aria-hidden="true"></i>
           <p class="empty-text">Access Denied</p>
           <p class="empty-subtext">SQL logging requires Owner privileges. Please contact your system administrator for access.</p>
-          <button class="btn-secondary" (click)="refreshUserPermissions()" style="margin-top: 1rem">
-            <i class="fa-solid fa-sync"></i>
+          <button class="btn-secondary" (click)="refreshUserPermissions()" style="margin-top: 1rem" aria-label="Refresh user permissions">
+            <i class="fa-solid fa-sync" aria-hidden="true"></i>
             Refresh Permissions
           </button>
         </div>
       } @else if (!configEnabled) {
         <!-- Not enabled in config -->
-        <div class="empty-state">
-          <i class="fa-solid fa-exclamation-triangle empty-icon warning"></i>
+        <div class="empty-state" role="alert">
+          <i class="fa-solid fa-exclamation-triangle empty-icon warning" aria-hidden="true"></i>
           <p class="empty-text">SQL Logging Disabled</p>
           <p class="empty-subtext">SQL logging is not enabled in the server configuration.</p>
           <div class="info-box">
@@ -106,12 +114,12 @@
         </div>
       } @else if (activeSessions.length === 0) {
         <!-- No active sessions -->
-        <div class="empty-state">
-          <i class="fa-solid fa-file-code empty-icon"></i>
+        <div class="empty-state" role="status">
+          <i class="fa-solid fa-file-code empty-icon" aria-hidden="true"></i>
           <p class="empty-text">No Active Sessions</p>
           <p class="empty-subtext">Start a new SQL logging session to begin capturing SQL statements.</p>
-          <button class="btn-primary" (click)="openStartSessionDialog()" style="margin-top: 1rem">
-            <i class="fa-solid fa-play"></i>
+          <button class="btn-primary" (click)="openStartSessionDialog()" style="margin-top: 1rem" aria-label="Start a new SQL logging session">
+            <i class="fa-solid fa-play" aria-hidden="true"></i>
             Start New Session
           </button>
         </div>
@@ -119,47 +127,66 @@
         <!-- Sessions layout -->
         <div class="sessions-layout">
           <!-- Sessions panel -->
-          <div class="sessions-panel">
+          <div class="sessions-panel" role="region" aria-label="Active sessions list">
             <div class="panel-header">
               <h3 class="panel-title">Active Sessions</h3>
               @if (activeSessions.length > 0) {
-                <button class="btn-danger btn-small" (click)="openStopAllSessionsConfirm()" [disabled]="loading" title="Stop all sessions">
-                  <i class="fa-solid fa-stop"></i>
+                <button
+                  class="btn-danger btn-small"
+                  (click)="openStopAllSessionsConfirm()"
+                  [disabled]="loading"
+                  aria-label="Stop all active sessions"
+                >
+                  <i class="fa-solid fa-stop" aria-hidden="true"></i>
                   Stop All
                 </button>
               }
             </div>
-            <div class="sessions-list">
+            <div class="sessions-list" role="list" aria-label="SQL logging sessions">
               @for (session of activeSessions; track session.id) {
-                <div class="session-card" [class.selected]="selectedSession?.id === session.id" (click)="selectSession(session)">
+                <div
+                  class="session-card"
+                  [class.selected]="selectedSession?.id === session.id"
+                  (click)="selectSession(session)"
+                  role="listitem"
+                  tabindex="0"
+                  (keydown.enter)="selectSession(session)"
+                  (keydown.space)="selectSession(session); $event.preventDefault()"
+                  [attr.aria-label]="'Session: ' + session.sessionName + ', ' + session.statementCount + ' statements, duration ' + getSessionDuration(session.startTime)"
+                  [attr.aria-selected]="selectedSession?.id === session.id"
+                >
                   <div class="session-header">
                     <div class="session-info">
                       <h4 class="session-title">{{ session.sessionName }}</h4>
                       <div class="session-meta">
                         <span class="meta-item">
-                          <i class="fa-solid fa-clock"></i>
+                          <i class="fa-solid fa-clock" aria-hidden="true"></i>
                           {{ getSessionDuration(session.startTime) }}
                         </span>
                         <span class="meta-item">
-                          <i class="fa-solid fa-database"></i>
+                          <i class="fa-solid fa-database" aria-hidden="true"></i>
                           {{ session.statementCount }} statements
                         </span>
                       </div>
                     </div>
-                    <button class="action-btn action-btn-danger" (click)="openStopSessionConfirm(session, $event)" title="Stop session">
-                      <i class="fa-solid fa-stop"></i>
+                    <button
+                      class="action-btn action-btn-danger"
+                      (click)="openStopSessionConfirm(session, $event)"
+                      [attr.aria-label]="'Stop session ' + session.sessionName"
+                    >
+                      <i class="fa-solid fa-stop" aria-hidden="true"></i>
                     </button>
                   </div>
                   <div class="session-badges">
                     @if (session.filterByUserId) {
                       <span class="badge badge-user">
-                        <i class="fa-solid fa-user"></i>
+                        <i class="fa-solid fa-user" aria-hidden="true"></i>
                         User Filtered
                       </span>
                     }
                     @if (session.options?.formatAsMigration) {
                       <span class="badge badge-migration">
-                        <i class="fa-solid fa-code-branch"></i>
+                        <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
                         Migration
                       </span>
                     }
@@ -173,20 +200,33 @@
           </div>
 
           <!-- Log viewer panel -->
-          <div class="log-viewer-panel" [class.expanded]="isLogViewerExpanded">
+          <div class="log-viewer-panel" [class.expanded]="isLogViewerExpanded" role="region" aria-label="SQL log viewer">
             @if (selectedSession) {
               <div class="panel-header">
                 <h3 class="panel-title">{{ selectedSession.sessionName }}</h3>
                 <div class="panel-actions">
                   <label class="checkbox-label">
-                    <input type="checkbox" [(ngModel)]="autoRefresh" />
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="autoRefresh"
+                      aria-label="Enable auto-refresh"
+                    />
                     Auto-refresh
                   </label>
-                  <button class="action-btn" (click)="loadSessionLog(selectedSession)" title="Refresh log">
-                    <i class="fa-solid fa-sync" [class.fa-spin]="loading"></i>
+                  <button
+                    class="action-btn"
+                    (click)="loadSessionLog(selectedSession)"
+                    aria-label="Refresh log content"
+                  >
+                    <i class="fa-solid fa-sync" [class.fa-spin]="loading" aria-hidden="true"></i>
                   </button>
-                  <button class="action-btn" (click)="toggleLogViewerExpand()" [title]="isLogViewerExpanded ? 'Collapse' : 'Expand'">
-                    <i class="fa-solid" [class.fa-expand]="!isLogViewerExpanded" [class.fa-compress]="isLogViewerExpanded"></i>
+                  <button
+                    class="action-btn"
+                    (click)="toggleLogViewerExpand()"
+                    [attr.aria-label]="isLogViewerExpanded ? 'Collapse log viewer' : 'Expand log viewer to fullscreen'"
+                    [attr.aria-expanded]="isLogViewerExpanded"
+                  >
+                    <i class="fa-solid" [class.fa-expand]="!isLogViewerExpanded" [class.fa-compress]="isLogViewerExpanded" aria-hidden="true"></i>
                   </button>
                 </div>
               </div>
@@ -200,11 +240,12 @@
                   [lineWrapping]="true"
                   [highlightWhitespace]="false"
                   style="height: 100%"
+                  aria-label="SQL log content"
                 ></mj-code-editor>
               </div>
             } @else {
-              <div class="empty-state">
-                <i class="fa-solid fa-arrow-left empty-icon"></i>
+              <div class="empty-state" role="status">
+                <i class="fa-solid fa-arrow-left empty-icon" aria-hidden="true"></i>
                 <p class="empty-text">Select a Session</p>
                 <p class="empty-subtext">Choose a session from the list to view its SQL log.</p>
               </div>
@@ -217,39 +258,66 @@
 
   <!-- Start Session Dialog -->
   @if (showStartSessionDialog) {
-    <div class="modal-backdrop" (click)="showStartSessionDialog = false">
+    <div
+      class="modal-backdrop"
+      (click)="showStartSessionDialog = false"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="start-session-dialog-title"
+    >
       <div class="modal-dialog modal-large" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h3 class="modal-title">
-            <i class="fa-solid fa-play"></i>
+          <h3 class="modal-title" id="start-session-dialog-title">
+            <i class="fa-solid fa-play" aria-hidden="true"></i>
             Start SQL Logging Session
           </h3>
-          <button class="modal-close" (click)="showStartSessionDialog = false">
-            <i class="fa-solid fa-times"></i>
+          <button class="modal-close" (click)="showStartSessionDialog = false" aria-label="Close dialog">
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
           </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label">Session Name</label>
-            <input type="text" class="form-input" [(ngModel)]="newSessionOptions.sessionName" placeholder="Enter a descriptive name for this session" />
+            <label class="form-label" for="session-name">Session Name</label>
+            <input
+              type="text"
+              id="session-name"
+              class="form-input"
+              [(ngModel)]="newSessionOptions.sessionName"
+              placeholder="Enter a descriptive name for this session"
+              aria-describedby="session-name-hint"
+            />
+            <div id="session-name-hint" class="form-hint">A descriptive name to identify this logging session</div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">File Name</label>
-            <input type="text" class="form-input" [(ngModel)]="newSessionOptions.fileName" placeholder="sql-log-2024-01-01.sql" />
-            <div class="form-hint">The SQL log will be saved to this file</div>
+            <label class="form-label" for="file-name">File Name</label>
+            <input
+              type="text"
+              id="file-name"
+              class="form-input"
+              [(ngModel)]="newSessionOptions.fileName"
+              placeholder="sql-log-2024-01-01.sql"
+              aria-describedby="file-name-hint"
+            />
+            <div id="file-name-hint" class="form-hint">The SQL log will be saved to this file</div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Statement Types</label>
-            <select class="form-select" [(ngModel)]="newSessionOptions.statementTypes">
+            <label class="form-label" for="statement-types">Statement Types</label>
+            <select
+              id="statement-types"
+              class="form-select"
+              [(ngModel)]="newSessionOptions.statementTypes"
+              aria-describedby="statement-types-hint"
+            >
               @for (option of statementTypeOptions; track option.value) {
                 <option [value]="option.value">{{ option.text }}</option>
               }
             </select>
+            <div id="statement-types-hint" class="form-hint">Filter which types of SQL statements to capture</div>
           </div>
 
-          <div class="form-checkboxes">
+          <div class="form-checkboxes" role="group" aria-label="Session options">
             <label class="checkbox-label">
               <input type="checkbox" [(ngModel)]="newSessionOptions.filterToCurrentUser" />
               Filter to my SQL statements only
@@ -269,44 +337,58 @@
           <!-- SQL Pattern Filtering Section -->
           <div class="form-section">
             <h4 class="form-section-title">
-              <i class="fa-solid fa-filter"></i>
+              <i class="fa-solid fa-filter" aria-hidden="true"></i>
               SQL Pattern Filtering
             </h4>
 
             <div class="form-group">
-              <label class="form-label">Filter Mode</label>
-              <select class="form-select" [(ngModel)]="newSessionOptions.filterType">
+              <label class="form-label" for="filter-type">Filter Mode</label>
+              <select
+                id="filter-type"
+                class="form-select"
+                [(ngModel)]="newSessionOptions.filterType"
+                aria-describedby="filter-type-hint"
+              >
                 @for (option of filterTypeOptions; track option.value) {
                   <option [value]="option.value">{{ option.text }}</option>
                 }
               </select>
-              <div class="form-hint">Exclude: Skip SQL matching any pattern. Include: Only log SQL matching a pattern.</div>
+              <div id="filter-type-hint" class="form-hint">Exclude: Skip SQL matching any pattern. Include: Only log SQL matching a pattern.</div>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Filter Patterns (one per line or comma-separated)</label>
+              <label class="form-label" for="filter-patterns">Filter Patterns (one per line or comma-separated)</label>
               <textarea
+                id="filter-patterns"
                 class="form-textarea"
                 [(ngModel)]="newSessionOptions.filterPatterns"
                 rows="4"
                 placeholder="Examples:&#10;*AIPrompt*&#10;/spCreate.*Run/i&#10;SELECT * FROM vwMetadata"
+                aria-describedby="filter-patterns-hint"
               ></textarea>
-              <div class="form-hint">Supports wildcards (*) and regex (/pattern/flags). Example: *spCreate* matches any SP starting with spCreate.</div>
+              <div id="filter-patterns-hint" class="form-hint">Supports wildcards (*) and regex (/pattern/flags). Example: *spCreate* matches any SP starting with spCreate.</div>
             </div>
           </div>
 
           <!-- Advanced Options Section -->
           <div class="form-section">
             <h4 class="form-section-title">
-              <i class="fa-solid fa-cog"></i>
+              <i class="fa-solid fa-cog" aria-hidden="true"></i>
               Advanced Options
             </h4>
 
             @if (newSessionOptions.formatAsMigration) {
               <div class="form-group">
-                <label class="form-label">Default Schema Name</label>
-                <input type="text" class="form-input" [(ngModel)]="newSessionOptions.defaultSchemaName" placeholder="__mj" />
-                <div class="form-hint">Schema name to replace with $&#123;flyway:defaultSchema&#125; placeholder.</div>
+                <label class="form-label" for="default-schema">Default Schema Name</label>
+                <input
+                  type="text"
+                  id="default-schema"
+                  class="form-input"
+                  [(ngModel)]="newSessionOptions.defaultSchemaName"
+                  placeholder="__mj"
+                  aria-describedby="default-schema-hint"
+                />
+                <div id="default-schema-hint" class="form-hint">Schema name to replace with $&#123;flyway:defaultSchema&#125; placeholder.</div>
               </div>
             }
 
@@ -315,16 +397,21 @@
                 <input type="checkbox" [(ngModel)]="newSessionOptions.verboseOutput" />
                 Verbose Debug Output
               </label>
-              <div class="form-hint" style="margin-left: 1.5rem">Log detailed filter decisions to server console (for debugging).</div>
+              <div class="form-hint" style="margin-left: 1.75rem">Log detailed filter decisions to server console (for debugging).</div>
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-primary" (click)="startNewSession()" [disabled]="loading">
-            <i class="fa-solid fa-play"></i>
-            Start Session
+          <button class="btn-primary" (click)="startNewSession()" [disabled]="loading" aria-label="Start the SQL logging session">
+            @if (loading) {
+              <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+              Starting...
+            } @else {
+              <i class="fa-solid fa-play" aria-hidden="true"></i>
+              Start Session
+            }
           </button>
-          <button class="btn-secondary" (click)="showStartSessionDialog = false">Cancel</button>
+          <button class="btn-secondary" (click)="showStartSessionDialog = false" aria-label="Cancel and close dialog">Cancel</button>
         </div>
       </div>
     </div>
@@ -332,20 +419,27 @@
 
   <!-- Stop Session Confirmation Dialog -->
   @if (showStopConfirmDialog) {
-    <div class="modal-backdrop" (click)="cancelStopConfirm()">
+    <div
+      class="modal-backdrop"
+      (click)="cancelStopConfirm()"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="stop-dialog-title"
+      aria-describedby="stop-dialog-desc"
+    >
       <div class="confirm-dialog" (click)="$event.stopPropagation()">
         <div class="confirm-dialog-icon">
-          <i class="fa-solid fa-exclamation-triangle"></i>
+          <i class="fa-solid fa-exclamation-triangle" aria-hidden="true"></i>
         </div>
         <div class="confirm-dialog-content">
-          <h3 class="confirm-dialog-title">
+          <h3 class="confirm-dialog-title" id="stop-dialog-title">
             @if (isStoppingAll) {
               Stop All Sessions?
             } @else {
               Stop Session?
             }
           </h3>
-          <p class="confirm-dialog-message">
+          <p class="confirm-dialog-message" id="stop-dialog-desc">
             @if (isStoppingAll) {
               Are you sure you want to stop <strong>all {{ activeSessions.length }} active</strong> SQL logging sessions? This action cannot be undone.
             } @else if (sessionToStop) {
@@ -355,12 +449,12 @@
           </p>
         </div>
         <div class="confirm-dialog-actions">
-          <button class="btn-danger" (click)="confirmStopSession()" [disabled]="loading">
+          <button class="btn-danger" (click)="confirmStopSession()" [disabled]="loading" [attr.aria-label]="isStoppingAll ? 'Confirm stop all sessions' : 'Confirm stop session'">
             @if (loading) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
+              <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
               Stopping...
             } @else {
-              <i class="fa-solid fa-stop"></i>
+              <i class="fa-solid fa-stop" aria-hidden="true"></i>
               @if (isStoppingAll) {
                 Stop All Sessions
               } @else {
@@ -368,7 +462,7 @@
               }
             }
           </button>
-          <button class="btn-secondary" (click)="cancelStopConfirm()" [disabled]="loading">Cancel</button>
+          <button class="btn-secondary" (click)="cancelStopConfirm()" [disabled]="loading" aria-label="Cancel and keep sessions running">Cancel</button>
         </div>
       </div>
     </div>
