@@ -1,0 +1,22 @@
+{
+  "entity": "Producers",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".producers.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "relatedEntities": {
+      "Producer Consumers": {
+        "entity": "Producer Consumers",
+        "foreignKey": "ProducerID",
+        "lookupFields": {
+          "ConsumerID": {
+            "entity": "Consumers",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}

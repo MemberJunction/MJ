@@ -1,0 +1,10 @@
+{
+  "entity": "Consumers",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".consumers.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true
+  }
+}
