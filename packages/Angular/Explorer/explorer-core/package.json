@@ -48,6 +48,7 @@
     "@memberjunction/ng-dashboards": "3.0.0",
     "@memberjunction/ng-entity-form-dialog": "3.0.0",
     "@memberjunction/ng-entity-permissions": "3.0.0",
+    "@memberjunction/ng-dashboard-viewer": "3.0.0",
     "@memberjunction/ng-entity-viewer": "3.0.0",
     "@memberjunction/ng-list-detail-grid": "3.0.0",
     "@memberjunction/ng-explorer-settings": "3.0.0",

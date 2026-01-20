@@ -5106,8 +5106,7 @@ export class SQLServerDataProvider
     const e = this.Entities.find((e) => e.Name === entityName);
     if (!e) throw new Error(`Entity ${entityName} not found`);
     else {
-      let f = e.Fields.find((f) => f.IsNameField);
-      if (!f) f = e.Fields.find((f) => f.Name === 'Name');
+      const f = e.NameField;
       if (!f) {
         LogError(`Entity ${entityName} does not have an IsNameField or a field with the column name of Name, returning null, use recordId`);
         return null;

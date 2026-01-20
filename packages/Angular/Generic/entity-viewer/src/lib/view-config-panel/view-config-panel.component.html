@@ -37,6 +37,16 @@
     </button>
     <button
       class="tab-btn"
+      [class.active]="activeTab === 'sorting'"
+      (click)="setActiveTab('sorting')">
+      <i class="fa-solid fa-arrow-up-wide-short"></i>
+      <span>Sorting</span>
+      @if (sortItems.length > 0) {
+        <span class="tab-badge">{{ sortItems.length }}</span>
+      }
+    </button>
+    <button
+      class="tab-btn"
       [class.active]="activeTab === 'filters'"
       (click)="setActiveTab('filters')">
       <i class="fa-solid fa-filter"></i>
@@ -56,42 +66,6 @@
     <!-- Columns Tab -->
     @if (activeTab === 'columns' && !formatEditingColumn) {
       <div class="tab-content">
-        <!-- Sort Configuration -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-sort"></i>
-            <span>Default Sort</span>
-          </div>
-          <div class="sort-config">
-            <select
-              class="sort-field-select"
-              [(ngModel)]="sortField">
-              <option [value]="null">No default sort</option>
-              @for (field of sortableFields; track field.ID) {
-                <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
-              }
-            </select>
-            @if (sortField) {
-              <div class="sort-direction-toggle">
-                <button
-                  class="direction-btn"
-                  [class.active]="sortDirection === 'asc'"
-                  (click)="sortDirection = 'asc'"
-                  title="Ascending">
-                  <i class="fa-solid fa-arrow-up"></i>
-                </button>
-                <button
-                  class="direction-btn"
-                  [class.active]="sortDirection === 'desc'"
-                  (click)="sortDirection = 'desc'"
-                  title="Descending">
-                  <i class="fa-solid fa-arrow-down"></i>
-                </button>
-              </div>
-            }
-          </div>
-        </div>
-
         <!-- Visible Columns -->
         <div class="config-section">
           <div class="section-header">
@@ -472,6 +446,112 @@
             <i class="fa-solid fa-eraser"></i>
             Clear Formatting
           </button>
+        </div>
+      </div>
+    }
+
+    <!-- Sorting Tab -->
+    @if (activeTab === 'sorting') {
+      <div class="tab-content">
+        <div class="config-section sorting-section">
+          <div class="sorting-header">
+            <p class="sorting-description">
+              Define how records should be ordered. Add multiple levels to sort by secondary fields when values are equal.
+            </p>
+          </div>
+
+          <!-- Add Sort Button -->
+          <button
+            class="add-sort-btn"
+            (click)="addSortLevel()"
+            [disabled]="!canEdit || sortItems.length >= sortableFields.length"
+            title="Add another sort level">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add Sort Level</span>
+          </button>
+
+          <!-- Sort Items List -->
+          @if (sortItems.length > 0) {
+            <div class="sort-items-list">
+              @for (sortItem of sortItems; track $index; let i = $index) {
+                <!-- Drop indicator before -->
+                @if (isSortDropBefore(sortItem)) {
+                  <div class="sort-drop-indicator"></div>
+                }
+                <div
+                  class="sort-item"
+                  [class.dragging]="draggedSortItem === sortItem"
+                  [class.drop-target]="dropTargetSortItem === sortItem"
+                  draggable="true"
+                  (dragstart)="onSortDragStart($event, sortItem)"
+                  (dragover)="onSortDragOver($event, sortItem)"
+                  (dragleave)="onSortDragLeave($event)"
+                  (drop)="onSortDrop($event, sortItem)"
+                  (dragend)="onSortDragEnd($event)">
+                  <!-- Priority Badge -->
+                  <div class="sort-priority-badge">{{ i + 1 }}</div>
+                  <!-- Drag Handle -->
+                  <div class="sort-drag-handle" title="Drag to reorder">
+                    <i class="fa-solid fa-grip-vertical"></i>
+                  </div>
+                  <!-- Field Dropdown -->
+                  <select
+                    class="sort-field-dropdown"
+                    [(ngModel)]="sortItem.field"
+                    (ngModelChange)="onSortFieldChange(sortItem, $event)"
+                    [disabled]="!canEdit">
+                    @for (field of sortableFields; track field.ID) {
+                      <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
+                    }
+                  </select>
+                  <!-- Direction Toggle -->
+                  <div class="sort-direction-toggle">
+                    <button
+                      class="direction-btn"
+                      [class.active]="sortItem.direction === 'asc'"
+                      (click)="onSortDirectionChange(sortItem, 'asc')"
+                      [disabled]="!canEdit"
+                      title="Ascending (A-Z, 1-9)">
+                      <i class="fa-solid fa-arrow-up"></i>
+                    </button>
+                    <button
+                      class="direction-btn"
+                      [class.active]="sortItem.direction === 'desc'"
+                      (click)="onSortDirectionChange(sortItem, 'desc')"
+                      [disabled]="!canEdit"
+                      title="Descending (Z-A, 9-1)">
+                      <i class="fa-solid fa-arrow-down"></i>
+                    </button>
+                  </div>
+                  <!-- Remove Button -->
+                  <button
+                    class="sort-remove-btn"
+                    (click)="removeSortLevel(sortItem)"
+                    [disabled]="!canEdit"
+                    title="Remove sort level">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                <!-- Drop indicator after (only for last item) -->
+                @if (isSortDropAfter(sortItem) && i === sortItems.length - 1) {
+                  <div class="sort-drop-indicator"></div>
+                }
+              }
+            </div>
+            <!-- Multi-sort hint -->
+            @if (sortItems.length > 1) {
+              <div class="sort-hint">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>Drag items to change priority. Records sort by first level, then second, etc.</span>
+              </div>
+            }
+          } @else {
+            <div class="sort-empty-state">
+              <i class="fa-solid fa-arrow-up-wide-short"></i>
+              <span>No sorting configured</span>
+              <p class="sort-empty-hint">Click "Add Sort Level" to define how records should be ordered</p>
+            </div>
+          }
         </div>
       </div>
     }

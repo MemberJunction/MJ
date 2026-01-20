@@ -22,6 +22,10 @@ module.exports = {
    * ====================
    */
 
+  // Include __mj schema for MJ framework development
+  // Default excludes __mj since end-users shouldn't modify core entities
+  excludeSchemas: ['sys', 'staging'],
+
   // Custom SQL scripts specific to this monorepo
   customSQLScripts: [
     {

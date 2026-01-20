@@ -1,3 +1,8 @@
+/**
+ * @deprecated This module is deprecated and will be removed in a future release.
+ * The package name `@memberjunction/ng-treelist` is misleading - it contains a Timeline component, not a tree list.
+ * @packageDocumentation
+ */
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
@@ -14,6 +19,10 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 // LOCAL
 import { TimelineComponent } from './component/timeline.component';
 
+/**
+ * @deprecated This module is deprecated and will be removed in a future release.
+ * The package name `@memberjunction/ng-treelist` is misleading - it contains a Timeline component, not a tree list.
+ */
 @NgModule({
   declarations: [
     TimelineComponent
@@ -24,7 +33,7 @@ import { TimelineComponent } from './component/timeline.component';
     ButtonsModule,
     EntityFormDialogModule,
     IndicatorsModule,
-    LayoutModule, 
+    LayoutModule,
     SchedulerModule
   ],
   exports: [
