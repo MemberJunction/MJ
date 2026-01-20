@@ -620,6 +620,168 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Upserts a single entity in a cached RunView result.
+     * Used by BaseEngine for immediate cache sync when an entity is saved.
+     * If the entity exists (by primary key), it is replaced; otherwise it is added.
+     *
+     * @param fingerprint - The cache fingerprint to update
+     * @param entityData - The entity data as a plain object (use entity.GetAll())
+     * @param primaryKeyFieldName - Name of the primary key field
+     * @param newMaxUpdatedAt - New maxUpdatedAt timestamp (from entity's __mj_UpdatedAt)
+     * @returns true if cache was updated, false if cache not found or update failed
+     */
+    public async UpsertSingleEntity(
+        fingerprint: string,
+        entityData: Record<string, unknown>,
+        primaryKeyFieldName: string,
+        newMaxUpdatedAt: string
+    ): Promise<boolean> {
+        if (!this._storageProvider || !this._config.enabled) return false;
+
+        try {
+            // Get existing cached data
+            const cached = await this.GetRunViewResult(fingerprint);
+            if (!cached) {
+                // No existing cache - nothing to update
+                // The next RunView call will populate the cache
+                return false;
+            }
+
+            // Get the primary key value from the entity
+            const pkValue = this.extractPrimaryKeyString(entityData, primaryKeyFieldName);
+            if (!pkValue) {
+                LogError(`LocalCacheManager.UpsertSingleEntity: Could not extract primary key from entity data`);
+                return false;
+            }
+
+            // Build a map of existing records by primary key
+            const resultMap = new Map<string, unknown>();
+            for (const row of cached.results) {
+                const rowObj = row as Record<string, unknown>;
+                const rowPkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
+                if (rowPkValue) {
+                    resultMap.set(rowPkValue, row);
+                }
+            }
+
+            // Upsert the entity (add or replace)
+            const isNew = !resultMap.has(pkValue);
+            resultMap.set(pkValue, entityData);
+
+            // Convert map back to array
+            const updatedResults = Array.from(resultMap.values());
+
+            // Update row count: increment if new, same if update
+            const newRowCount = isNew ? cached.rowCount + 1 : cached.rowCount;
+
+            // Store the updated cache
+            // Note: We need the original params to store, but we don't have them
+            // Use a minimal params object - the fingerprint is the key anyway
+            const value = JSON.stringify({
+                results: updatedResults,
+                maxUpdatedAt: newMaxUpdatedAt,
+                rowCount: newRowCount
+            });
+            const sizeBytes = this.estimateSize(value);
+
+            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
+
+            // Update registry entry
+            const existingEntry = this._registry.get(fingerprint);
+            if (existingEntry) {
+                existingEntry.maxUpdatedAt = newMaxUpdatedAt;
+                existingEntry.rowCount = newRowCount;
+                existingEntry.sizeBytes = sizeBytes;
+                existingEntry.lastAccessedAt = Date.now();
+                this.debouncedPersistRegistry();
+            }
+
+            return true;
+        } catch (e) {
+            LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Removes a single entity from a cached RunView result.
+     * Used by BaseEngine for immediate cache sync when an entity is deleted.
+     *
+     * @param fingerprint - The cache fingerprint to update
+     * @param primaryKeyValue - The primary key value of the entity to remove
+     * @param primaryKeyFieldName - Name of the primary key field
+     * @param newMaxUpdatedAt - New maxUpdatedAt timestamp
+     * @returns true if cache was updated, false if cache not found or update failed
+     */
+    public async RemoveSingleEntity(
+        fingerprint: string,
+        primaryKeyValue: string,
+        primaryKeyFieldName: string,
+        newMaxUpdatedAt: string
+    ): Promise<boolean> {
+        if (!this._storageProvider || !this._config.enabled) return false;
+
+        try {
+            // Get existing cached data
+            const cached = await this.GetRunViewResult(fingerprint);
+            if (!cached) {
+                // No existing cache - nothing to update
+                return false;
+            }
+
+            // Build a map of existing records by primary key
+            const resultMap = new Map<string, unknown>();
+            for (const row of cached.results) {
+                const rowObj = row as Record<string, unknown>;
+                const rowPkValue = this.extractPrimaryKeyString(rowObj, primaryKeyFieldName);
+                if (rowPkValue) {
+                    resultMap.set(rowPkValue, row);
+                }
+            }
+
+            // Check if entity exists in cache
+            if (!resultMap.has(primaryKeyValue)) {
+                // Entity not in cache, nothing to remove
+                return true; // Not an error, just a no-op
+            }
+
+            // Remove the entity
+            resultMap.delete(primaryKeyValue);
+
+            // Convert map back to array
+            const updatedResults = Array.from(resultMap.values());
+
+            // Decrement row count
+            const newRowCount = Math.max(0, cached.rowCount - 1);
+
+            // Store the updated cache
+            const value = JSON.stringify({
+                results: updatedResults,
+                maxUpdatedAt: newMaxUpdatedAt,
+                rowCount: newRowCount
+            });
+            const sizeBytes = this.estimateSize(value);
+
+            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
+
+            // Update registry entry
+            const existingEntry = this._registry.get(fingerprint);
+            if (existingEntry) {
+                existingEntry.maxUpdatedAt = newMaxUpdatedAt;
+                existingEntry.rowCount = newRowCount;
+                existingEntry.sizeBytes = sizeBytes;
+                existingEntry.lastAccessedAt = Date.now();
+                this.debouncedPersistRegistry();
+            }
+
+            return true;
+        } catch (e) {
+            LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
+            return false;
+        }
+    }
+
+    /**
      * Extracts the primary key value as a string from a row object.
      * Handles both single-field and composite primary keys.
      * @param row - The row object

@@ -1705,6 +1705,7 @@ export class SQLServerDataProvider
         entityInfo: EntityInfo;
         whereSQL: string;
         clientMaxUpdatedAt: string;
+        clientRowCount: number;
         serverStatus: { maxUpdatedAt?: string; rowCount?: number };
       }> = [];
       const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
@@ -1737,6 +1738,7 @@ export class SQLServerDataProvider
               entityInfo,
               whereSQL,
               clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+              clientRowCount: item.cacheStatus!.rowCount,
               serverStatus,
             });
           } else {
@@ -1760,11 +1762,12 @@ export class SQLServerDataProvider
           this.runFullQueryAndReturn<T>(viewParams, index, contextUser)
         ),
         // Differential queries for entities that track record changes
-        ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, serverStatus }) =>
+        ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
           this.runDifferentialQueryAndReturn<T>(
             viewParams,
             entityInfo,
             clientMaxUpdatedAt,
+            clientRowCount,
             serverStatus,
             whereSQL,
             index,
@@ -2055,19 +2058,26 @@ export class SQLServerDataProvider
   /**
    * Runs a differential query and returns only changes since the client's cached state.
    * This includes updated/created rows and deleted record IDs.
+   *
+   * Validates that the differential can be safely applied by checking for "hidden" deletes
+   * (rows deleted outside of MJ's RecordChanges tracking, e.g., direct SQL deletes).
+   * If hidden deletes are detected, falls back to a full query with 'stale' status.
+   *
    * @param params - RunView parameters
    * @param entityInfo - Entity metadata
    * @param clientMaxUpdatedAt - Client's cached maxUpdatedAt timestamp
+   * @param clientRowCount - Client's cached row count
    * @param serverStatus - Current server status (for new row count)
    * @param whereSQL - Pre-built WHERE clause
    * @param viewIndex - Index for correlation in batch operations
    * @param contextUser - Optional user context
-   * @returns RunViewWithCacheCheckResult with differential data
+   * @returns RunViewWithCacheCheckResult with differential data, or falls back to full query if unsafe
    */
   protected async runDifferentialQueryAndReturn<T = unknown>(
     params: RunViewParams,
     entityInfo: EntityInfo,
     clientMaxUpdatedAt: string,
+    clientRowCount: number,
     serverStatus: { maxUpdatedAt?: string; rowCount?: number },
     whereSQL: string,
     viewIndex: number,
@@ -2090,6 +2100,47 @@ export class SQLServerDataProvider
         contextUser
       );
 
+      // === VALIDATION: Detect "hidden" deletes not tracked in RecordChanges ===
+      // Count how many returned rows are NEW (created after client's cache timestamp)
+      // vs rows that already existed and were just updated
+      const clientMaxUpdatedDate = new Date(clientMaxUpdatedAt);
+      const newInserts = updatedRows.filter(row => {
+        const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
+        if (!createdAt) return false;
+        return new Date(String(createdAt)) > clientMaxUpdatedDate;
+      }).length;
+
+      // Calculate implied deletes using the algebra:
+      // serverRowCount = clientRowCount - deletes + inserts
+      // Therefore: impliedDeletes = clientRowCount + newInserts - serverRowCount
+      const serverRowCount = serverStatus.rowCount ?? 0;
+      const impliedDeletes = clientRowCount + newInserts - serverRowCount;
+      const actualDeletes = deletedRecordIDs.length;
+
+      // Validate: if impliedDeletes < 0, there are unexplained rows on the server
+      // This could happen with direct SQL inserts that bypassed MJ's tracking
+      if (impliedDeletes < 0) {
+        LogStatus(
+          `Differential validation failed for ${entityInfo.Name}: impliedDeletes=${impliedDeletes} (negative). ` +
+          `clientRowCount=${clientRowCount}, newInserts=${newInserts}, serverRowCount=${serverRowCount}. ` +
+          `Falling back to full refresh.`
+        );
+        return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+      }
+
+      // Validate: if impliedDeletes > actualDeletes, there are "hidden" deletes
+      // not tracked in RecordChanges (e.g., direct SQL deletes)
+      if (impliedDeletes > actualDeletes) {
+        LogStatus(
+          `Differential validation failed for ${entityInfo.Name}: hidden deletes detected. ` +
+          `impliedDeletes=${impliedDeletes}, actualDeletes=${actualDeletes}. ` +
+          `clientRowCount=${clientRowCount}, newInserts=${newInserts}, serverRowCount=${serverRowCount}. ` +
+          `Falling back to full refresh.`
+        );
+        return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+      }
+
+      // Validation passed - safe to apply differential
       // Extract maxUpdatedAt from the updated rows (or use server status)
       const newMaxUpdatedAt = updatedRows.length > 0
         ? this.extractMaxUpdatedAt(updatedRows)

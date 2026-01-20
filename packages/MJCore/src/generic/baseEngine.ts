@@ -12,6 +12,8 @@ import { BaseInfo } from "./baseInfo";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
+import { LocalCacheManager } from "./localCacheManager";
+import { ProviderBase } from "./providerBase";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -733,44 +735,42 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (event.saveSubType === 'create') {
                 // For create, first check if the exact object is already in the array
                 const existsByRef = currentData.indexOf(entity) >= 0;
-                if (existsByRef) {
-                    // Object already in array, nothing to do (already up to date)
-                    return;
-                }
-
-                // Check by composite primary key in case it was added with a different object reference
-                const indexByKey = this.findEntityIndexByPrimaryKeys(currentData, entity);
-                if (indexByKey >= 0) {
-                    // Already exists by key, treat as update
-                    currentData[indexByKey] = entity;
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                    this.NotifyDataChange(config, currentData, 'update', entity);
-                } else {
-                    // Add the new entity to the array
-                    currentData.push(entity);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                    this.NotifyDataChange(config, currentData, 'add', entity);
+                // if already in the array, nothing to do, but we keep going
+                // in the method as there is stuff below the outer if block
+                if (!existsByRef) {
+                    // Check by composite primary key in case it was added with a different object reference
+                    const indexByKey = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                    if (indexByKey >= 0) {
+                        // Already exists by key, treat as update
+                        currentData[indexByKey] = entity;
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this.NotifyDataChange(config, currentData, 'update', entity);
+                    } else {
+                        // Add the new entity to the array
+                        currentData.push(entity);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this.NotifyDataChange(config, currentData, 'add', entity);
+                    }
                 }
             } else {
                 // Update: first check if the exact object is already in the array
+                // if already in the array, we don't do anything but we keep going
+                // in the method so stuff at end can be done 
                 const existsByRef = currentData.indexOf(entity) >= 0;
-                if (existsByRef) {
-                    // Object already in array and is the same reference, nothing to do
-                    return;
-                }
-
-                // Find by composite primary key and replace
-                const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
-                if (index >= 0) {
-                    currentData[index] = entity;
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                    this.NotifyDataChange(config, currentData, 'update', entity);
-                } else {
-                    // Entity not found in array - this shouldn't happen normally,
-                    // but if it does, add it (might have been created before we started listening)
-                    currentData.push(entity);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                    this.NotifyDataChange(config, currentData, 'add', entity);
+                if (!existsByRef) {
+                    // Find by composite primary key and replace
+                    const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                    if (index >= 0) {
+                        currentData[index] = entity;
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this.NotifyDataChange(config, currentData, 'update', entity);
+                    } else {
+                        // Entity not found in array - this shouldn't happen normally,
+                        // but if it does, add it (might have been created before we started listening)
+                        currentData.push(entity);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this.NotifyDataChange(config, currentData, 'add', entity);
+                    }
                 }
             }
         } else if (event.type === 'delete') {
@@ -786,6 +786,86 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
+        }
+
+        // Sync to LocalCacheManager if CacheLocal is enabled for this config
+        // This keeps IndexedDB/localStorage in sync with in-memory array
+        if (config.CacheLocal) {
+            this.syncLocalCacheForConfig(config, event).catch(e => {
+                // Log status but don't fail - cache will self-correct on next fetch
+                LogStatus(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`);
+            });
+        }
+    }
+
+    /**
+     * Syncs an entity change to the LocalCacheManager for a config with CacheLocal enabled.
+     * This ensures that IndexedDB/localStorage stays in sync with the engine's in-memory array.
+     *
+     * Only called for configs WITHOUT Filter/OrderBy (immediate mutation path).
+     * Filtered/sorted configs use debounced refresh which handles its own caching.
+     *
+     * @param config - The configuration for the property being synced
+     * @param event - The entity event containing the affected entity and event type
+     */
+    protected async syncLocalCacheForConfig(config: BaseEnginePropertyConfig, event: BaseEntityEvent): Promise<void> {
+        // Check if LocalCacheManager is available and initialized
+        if (!LocalCacheManager.Instance.IsInitialized) {
+            return;
+        }
+
+        const entity = event.baseEntity;
+        const entityInfo = entity.EntityInfo;
+
+        // Get the connection string from the provider for fingerprint generation
+        // The provider is needed because fingerprints include connection prefix
+        const provider = this.ProviderToUse;
+        let connectionString: string | undefined;
+        if (provider && 'InstanceConnectionString' in provider) {
+            connectionString = (provider as ProviderBase).InstanceConnectionString;
+        }
+
+        // Generate the same fingerprint that would be used when loading this data
+        const params: RunViewParams = {
+            EntityName: config.EntityName,
+            ExtraFilter: config.Filter || '',
+            OrderBy: config.OrderBy || '',
+            ResultType: 'entity_object',
+            MaxRows: -1,
+            StartRow: 0
+        };
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connectionString);
+
+        // Get the primary key field name
+        const primaryKeyFieldName = entityInfo.FirstPrimaryKey?.Name || 'ID';
+
+        // Get the updated timestamp from the entity
+        const updatedAt = entity.Get('__mj_UpdatedAt') as string | null || new Date().toISOString();
+
+        if (event.type === 'delete') {
+            // For deletes, remove the entity from cache
+            // Use the first primary key value for simple keys
+            const pkValue = entity.PrimaryKey.KeyValuePairs[0]?.Value;
+            if (pkValue === null || pkValue === undefined) {
+                LogStatus(`BaseEngine.syncLocalCacheForConfig: Cannot sync delete - primary key value is null for ${config.EntityName}`);
+                return;
+            }
+            await LocalCacheManager.Instance.RemoveSingleEntity(
+                fingerprint,
+                String(pkValue),
+                primaryKeyFieldName,
+                updatedAt
+            );
+        } else {
+            // For save (create or update), upsert the entity data
+            // Use GetAll() to get a plain object representation
+            const entityData = entity.GetAll();
+            await LocalCacheManager.Instance.UpsertSingleEntity(
+                fingerprint,
+                entityData,
+                primaryKeyFieldName,
+                updatedAt
+            );
         }
     }
 
