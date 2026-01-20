@@ -101,7 +101,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
-        return data.Name || 'Data Explorer';
+        return data.Name || 'Data';
     }
 
     async GetResourceIconClass(data: ResourceData): Promise<string> {

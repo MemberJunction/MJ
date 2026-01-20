@@ -10,7 +10,8 @@ import {
   TabService,
   WorkspaceConfiguration,
   WorkspaceTab,
-  AppAccessResult
+  AppAccessResult,
+  NavItem
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
@@ -1441,19 +1442,42 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     try {
       await this.appManager.SetActiveApp(appId);
 
+      const app = this.appManager.GetAppById(appId);
+      if (!app) {
+        return;
+      }
+
+      // Get the default nav item for this app (if any)
+      const navItems = app.GetNavItems();
+      const defaultNavItem = navItems.find(item => item.isDefault);
+
       // Check if app has any tabs
       const appTabs = this.workspaceManager.GetAppTabs(appId);
+
       if (appTabs.length === 0) {
         // No tabs - create default tab (will trigger URL sync via workspace config subscription)
-        const app = this.appManager.GetAppById(appId);
-        if (app) {
-          const defaultTab = await app.CreateDefaultTab();
-          if (defaultTab) {
-            this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+        const defaultTab = await app.CreateDefaultTab();
+        if (defaultTab) {
+          this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+        }
+      } else if (defaultNavItem) {
+        // App has tabs AND has a default nav item - try to find/create tab for default nav item
+        // This ensures clicking the app icon always goes to the "home" of that app
+        const defaultNavItemTab = this.findTabForDefaultNavItem(appTabs, defaultNavItem);
+
+        if (defaultNavItemTab) {
+          // Found existing tab for default nav item - activate it
+          this.workspaceManager.SetActiveTab(defaultNavItemTab.id);
+          const resourceUrl = this.buildResourceUrl(defaultNavItemTab);
+          if (resourceUrl) {
+            this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
           }
+        } else {
+          // No tab for default nav item - create one via NavigationService
+          this.navigationService.OpenNavItem(appId, defaultNavItem, app.GetColor());
         }
       } else {
-        // App has existing tabs - activate the first one and sync URL
+        // App has existing tabs but no default nav item - activate the first one
         const firstTab = appTabs[0];
         this.workspaceManager.SetActiveTab(firstTab.id);
 
@@ -1469,6 +1493,35 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.loadingAppId = null;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Find an existing tab that matches the default nav item
+   */
+  private findTabForDefaultNavItem(tabs: WorkspaceTab[], defaultNavItem: NavItem): WorkspaceTab | null {
+    return tabs.find(tab => {
+      const config = tab.configuration || {};
+
+      // For Custom resource type, match by DriverClass
+      if (defaultNavItem.ResourceType === 'Custom' && defaultNavItem.DriverClass) {
+        return config['driverClass'] === defaultNavItem.DriverClass ||
+               config['resourceTypeDriverClass'] === defaultNavItem.DriverClass;
+      }
+
+      // For other resource types, match by navItemName or by ResourceType + RecordID
+      if (config['navItemName'] === defaultNavItem.Label) {
+        return true;
+      }
+
+      if (defaultNavItem.ResourceType && defaultNavItem.RecordID) {
+        const tabResourceType = (config['resourceType'] as string)?.toLowerCase();
+        const tabRecordId = config['recordId'] || tab.resourceRecordId;
+        return tabResourceType === defaultNavItem.ResourceType.toLowerCase() &&
+               tabRecordId === defaultNavItem.RecordID;
+      }
+
+      return false;
+    }) || null;
   }
 
   /**
