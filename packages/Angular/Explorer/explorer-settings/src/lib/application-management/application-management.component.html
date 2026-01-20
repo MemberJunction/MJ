@@ -1,7 +1,12 @@
 <div class="application-management-container">
   <!-- Action Buttons -->
   <div class="action-buttons">
-    <button class="mj-btn mj-btn-secondary" (click)="refreshData()" [disabled]="isLoading">
+    <button
+      class="mj-btn mj-btn-secondary"
+      (click)="refreshData()"
+      [disabled]="isLoading"
+      aria-label="Refresh applications"
+    >
       <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
       Refresh
     </button>
@@ -12,7 +17,7 @@
   </div>
 
   <!-- Stats Cards -->
-  <div class="mj-grid mj-grid-4">
+  <div class="mj-grid-4">
     <div class="mj-card">
       <div class="stat-icon stat-icon-total">
         <i class="fa-solid fa-grid-2"></i>
@@ -22,7 +27,7 @@
         <div class="stat-label">Total Applications</div>
       </div>
     </div>
-    
+
     <div class="mj-card">
       <div class="stat-icon stat-icon-active">
         <i class="fa-solid fa-check-circle"></i>
@@ -32,7 +37,7 @@
         <div class="stat-label">Active Applications</div>
       </div>
     </div>
-    
+
     <div class="mj-card">
       <div class="stat-icon stat-icon-entities">
         <i class="fa-solid fa-database"></i>
@@ -42,7 +47,7 @@
         <div class="stat-label">Total Entities</div>
       </div>
     </div>
-    
+
     <div class="mj-card">
       <div class="stat-icon stat-icon-public">
         <i class="fa-solid fa-globe"></i>
@@ -59,38 +64,42 @@
     <div class="filters-row">
       <!-- Search -->
       <div class="mj-search">
-        <i class="fa-solid fa-search mj-search-icon"></i>
-        <input 
-          type="text" 
-          class="mj-search-input" 
+        <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+        <input
+          type="text"
+          class="mj-search-input"
           placeholder="Search applications by name or description..."
           (input)="onSearchChange($event)"
           [value]="filters$.value.search"
+          aria-label="Search applications"
         />
       </div>
-      
+
       <!-- Status Filter -->
       <div class="mj-filter-group">
-        <label class="mj-filter-label">Status</label>
-        <div class="mj-filter-buttons">
-          <button 
+        <label class="mj-filter-label" id="status-filter-label">Status</label>
+        <div class="mj-filter-buttons" role="group" aria-labelledby="status-filter-label">
+          <button
             class="mj-btn mj-btn-ghost"
             [class.mj-btn-primary]="filters$.value.status === 'all'"
             (click)="onStatusFilterChange('all')"
+            [attr.aria-pressed]="filters$.value.status === 'all'"
           >
             All
           </button>
-          <button 
+          <button
             class="mj-btn mj-btn-ghost"
             [class.mj-btn-primary]="filters$.value.status === 'active'"
             (click)="onStatusFilterChange('active')"
+            [attr.aria-pressed]="filters$.value.status === 'active'"
           >
             Active
           </button>
-          <button 
+          <button
             class="mj-btn mj-btn-ghost"
             [class.mj-btn-primary]="filters$.value.status === 'inactive'"
             (click)="onStatusFilterChange('inactive')"
+            [attr.aria-pressed]="filters$.value.status === 'inactive'"
           >
             Inactive
           </button>
@@ -101,21 +110,16 @@
 
   <!-- Loading State -->
   @if (isLoading) {
-    <div class="loading-container">
-      <div class="loading-spinner">
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-        <div class="spinner-ring"></div>
-      </div>
-      <div class="loading-text">Loading applications...</div>
+    <div class="loading-container" role="status" aria-live="polite">
+      <mj-loading text="Loading applications..."></mj-loading>
     </div>
   }
 
   <!-- Error State -->
   @if (error && !isLoading) {
-    <div class="error-container">
+    <div class="error-container" role="alert">
       <div class="error-content">
-        <i class="fa-solid fa-exclamation-triangle error-icon"></i>
+        <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
         <p class="error-message">{{ error }}</p>
         <button class="mj-btn mj-btn-primary" (click)="loadInitialData()">
           <i class="fa-solid fa-refresh"></i>
@@ -128,64 +132,74 @@
   <!-- Content Area -->
   @if (!isLoading && !error) {
     <div class="content-area">
-      <div class="applications-list">
+      <div class="applications-list" role="list">
         @for (app of filteredApplications; track app.ID) {
-          <div class="app-card" [class.expanded]="isAppExpanded(app.ID)">
-            <div class="app-header" (click)="toggleAppExpansion(app.ID)">
+          <div class="app-card" [class.expanded]="isAppExpanded(app.ID)" role="listitem">
+            <div class="app-header" (click)="toggleAppExpansion(app.ID)" role="button" [attr.aria-expanded]="isAppExpanded(app.ID)">
               <div class="app-info">
                 <div class="app-icon-wrapper">
-                  <i [class]="'fa-solid ' + getAppIcon(app)"></i>
+                  <i [class]="'fa-solid ' + getAppIcon(app)" aria-hidden="true"></i>
                 </div>
                 <div class="app-details">
                   <h3 class="app-name">{{ app.Name }}</h3>
                   <p class="app-description">{{ app.Description || 'No description available' }}</p>
                 </div>
               </div>
-              
+
               <div class="app-meta">
                 <span class="status-badge" [class]="getAppStatusClass(app)">
                   {{ getAppStatusLabel(app) }}
                 </span>
                 <div class="app-actions" (click)="$event.stopPropagation()">
-                  <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editApplication(app)" title="Edit">
+                  <button
+                    class="mj-btn mj-btn-ghost mj-btn-sm"
+                    (click)="editApplication(app)"
+                    title="Edit"
+                    [attr.aria-label]="'Edit ' + app.Name"
+                  >
                     <i class="fa-solid fa-edit"></i>
                   </button>
-                  <button class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger" (click)="confirmDeleteApplication(app)" title="Delete">
+                  <button
+                    class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                    (click)="confirmDeleteApplication(app)"
+                    title="Delete"
+                    [attr.aria-label]="'Delete ' + app.Name"
+                  >
                     <i class="fa-solid fa-trash"></i>
                   </button>
                 </div>
-                <button class="expand-btn">
-                  <i class="fa-solid fa-chevron-down"></i>
+                <button class="expand-btn" aria-label="Toggle details">
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
-            
+
             @if (isAppExpanded(app.ID)) {
               <div class="app-content">
                 <div class="app-stats">
                   <div class="stat-item">
-                    <i class="fa-solid fa-database"></i>
+                    <i class="fa-solid fa-database" aria-hidden="true"></i>
                     <span class="stat-label">Entities:</span>
                     <span class="stat-value">{{ getAppEntities(app.ID).length }}</span>
                   </div>
                   <div class="stat-item">
-                    <i class="fa-solid fa-calendar"></i>
+                    <i class="fa-solid fa-calendar" aria-hidden="true"></i>
                     <span class="stat-label">Created:</span>
                     <span class="stat-value">{{ app.__mj_CreatedAt | date:'short' }}</span>
                   </div>
                   <div class="stat-item">
-                    <i class="fa-solid fa-clock"></i>
+                    <i class="fa-solid fa-clock" aria-hidden="true"></i>
                     <span class="stat-label">Updated:</span>
                     <span class="stat-value">{{ app.__mj_UpdatedAt | date:'short' }}</span>
                   </div>
                 </div>
-                
+
                 <div class="entities-section">
                   <h4 class="section-title">
-                    <i class="fa-solid fa-database"></i>
+                    <i class="fa-solid fa-database" aria-hidden="true"></i>
                     Application Entities
                   </h4>
-                  
+
                   @if (getAppEntities(app.ID).length > 0) {
                     <div class="entities-grid">
                       @for (appEntity of getAppEntities(app.ID); track appEntity.ID) {
@@ -210,10 +224,10 @@
             }
           </div>
         }
-        
+
         @if (filteredApplications.length === 0) {
           <div class="empty-state">
-            <i class="fa-solid fa-grid-2 empty-icon"></i>
+            <i class="fa-solid fa-grid-2 empty-icon" aria-hidden="true"></i>
             <p class="empty-text">No applications found</p>
             <p class="empty-subtext">Try adjusting your filters or create a new application</p>
           </div>
@@ -231,37 +245,48 @@
 
   <!-- Delete Confirmation Dialog -->
   @if (showDeleteConfirm && selectedApp) {
-    <div class="modal-backdrop" (click)="showDeleteConfirm = false">
-      <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-backdrop" (click)="showDeleteConfirm = false" role="presentation">
+      <div
+        class="modal-dialog"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
+        aria-describedby="delete-dialog-description"
+      >
         <div class="modal-header">
-          <h3 class="modal-title">
-            <i class="fa-solid fa-exclamation-triangle text-danger"></i>
+          <h3 class="modal-title" id="delete-dialog-title">
+            <i class="fa-solid fa-exclamation-triangle text-danger" aria-hidden="true"></i>
             Confirm Delete
           </h3>
-          <button class="modal-close" (click)="showDeleteConfirm = false">
-            <i class="fa-solid fa-times"></i>
+          <button
+            class="modal-close"
+            (click)="showDeleteConfirm = false"
+            aria-label="Close dialog"
+          >
+            <i class="fa-solid fa-times" aria-hidden="true"></i>
           </button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" id="delete-dialog-description">
           <p>Are you sure you want to delete the application <strong>{{ selectedApp.Name }}</strong>?</p>
           <p class="text-warning">
-            <i class="fa-solid fa-warning"></i>
+            <i class="fa-solid fa-warning" aria-hidden="true"></i>
             This will remove all entity associations for this application.
           </p>
         </div>
         <div class="modal-footer">
-          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
-            <i class="fa-solid fa-times"></i>
-            Cancel
-          </button>
+          <!-- Primary action (Delete) on LEFT per MD3 design guide -->
           <button class="mj-btn mj-btn-danger" (click)="deleteApplication()" [disabled]="isLoading">
             @if (isLoading) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
+              <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
               Deleting...
             } @else {
-              <i class="fa-solid fa-trash"></i>
+              <i class="fa-solid fa-trash" aria-hidden="true"></i>
               Delete Application
             }
+          </button>
+          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
+            Cancel
           </button>
         </div>
       </div>
