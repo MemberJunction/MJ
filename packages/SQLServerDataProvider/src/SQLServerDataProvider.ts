@@ -1997,7 +1997,7 @@ export class SQLServerDataProvider
           AND Type = 'Delete'
           AND ChangedAt > '${sinceTimestamp}'
       `;
-      const results = await this.ExecuteSQL<{ RecordID: string }>(sql, undefined, undefined, contextUser);
+      const results = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
       return results.map(r => r.RecordID);
     } catch (e) {
       LogError(e);
@@ -2044,7 +2044,7 @@ export class SQLServerDataProvider
         sql += ` ORDER BY ${params.OrderBy}`;
       }
 
-      const results = await this.ExecuteSQL<T>(sql, undefined, undefined, contextUser);
+      const results = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
       return results;
     } catch (e) {
       LogError(e);
