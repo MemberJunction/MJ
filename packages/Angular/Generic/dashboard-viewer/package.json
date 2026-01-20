@@ -40,6 +40,7 @@
     "@memberjunction/core": "3.0.0",
     "@memberjunction/ng-shared-generic": "3.0.0",
     "@memberjunction/ng-entity-viewer": "3.0.0",
+    "@memberjunction/ng-artifacts": "3.0.0",
     "@memberjunction/ng-query-viewer": "3.0.0",
     "@memberjunction/ng-trees": "3.0.0",
     "rxjs": "^7.8.1",
