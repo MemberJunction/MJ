@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/testing-engine-base",
-  "version": "2.133.0",
+  "version": "3.0.0",
   "description": "MemberJunction Testing Framework Engine Base - Metadata cache for test types, suites, and tests (UI-safe, no execution)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,9 +20,9 @@
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "@memberjunction/global": "2.133.0",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/core-entities": "2.133.0",
+    "@memberjunction/global": "3.0.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/core-entities": "3.0.0",
     "rxjs": "^7.8.1",
     "debug": "^4.4.0"
   },
