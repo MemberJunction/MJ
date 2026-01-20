@@ -26,6 +26,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@memberjunction/config": "3.0.0",
     "@memberjunction/core": "3.0.0",
     "@memberjunction/core-entities": "3.0.0",
     "@memberjunction/core-entities-server": "3.0.0",
