@@ -1,9 +1,8 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
 import { RoleEntity } from '@memberjunction/core-entities';
-import { WindowModule } from '@progress/kendo-angular-dialog';
 
 export interface RoleDialogData {
   role?: RoleEntity;
@@ -17,7 +16,6 @@ export interface RoleDialogResult {
 
 @Component({
   selector: 'mj-role-dialog',
-  encapsulation: ViewEncapsulation.None,
   templateUrl: './role-dialog.component.html',
   styleUrls: ['./role-dialog.component.css']
 })
