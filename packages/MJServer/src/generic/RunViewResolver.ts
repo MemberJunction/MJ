@@ -410,23 +410,42 @@ export class RunViewWithCacheCheckInput {
 }
 
 @ObjectType()
+export class DifferentialDataOutput {
+  @Field(() => [RunViewGenericResultRow], {
+    description: 'Records that have been created or updated since the client\'s maxUpdatedAt'
+  })
+  updatedRows: RunViewGenericResultRow[];
+
+  @Field(() => [String], {
+    description: 'Primary key values (as concatenated strings) of records that have been deleted'
+  })
+  deletedRecordIDs: string[];
+}
+
+@ObjectType()
 export class RunViewWithCacheCheckResultOutput {
   @Field(() => Int, { description: 'The index of this view in the batch request' })
   viewIndex: number;
 
-  @Field(() => String, { description: "'current', 'stale', or 'error'" })
+  @Field(() => String, { description: "'current', 'differential', 'stale', or 'error'" })
   status: string;
 
   @Field(() => [RunViewGenericResultRow], {
     nullable: true,
-    description: 'Fresh results - only populated when status is stale'
+    description: 'Fresh results - only populated when status is stale (full refresh)'
   })
   Results?: RunViewGenericResultRow[];
 
-  @Field(() => String, { nullable: true, description: 'Max __mj_UpdatedAt from results when stale' })
+  @Field(() => DifferentialDataOutput, {
+    nullable: true,
+    description: 'Differential update data - only populated when status is differential'
+  })
+  differentialData?: DifferentialDataOutput;
+
+  @Field(() => String, { nullable: true, description: 'Max __mj_UpdatedAt from results when stale or differential' })
   maxUpdatedAt?: string;
 
-  @Field(() => Int, { nullable: true, description: 'Row count of results when stale' })
+  @Field(() => Int, { nullable: true, description: 'Row count of results when stale or differential (total after applying delta)' })
   rowCount?: number;
 
   @Field(() => String, { nullable: true, description: 'Error message if status is error' })
@@ -886,13 +905,43 @@ export class RunViewResolver extends ResolverBase {
         const inputItem = input[index];
         const entity = provider.Entities.find(e => e.Name === inputItem.params.EntityName);
 
+        // If we have differential data but no entity, that's a configuration error
+        if (result.status === 'differential' && result.differentialData && !entity) {
+          throw new Error(
+            `Entity '${inputItem.params.EntityName}' not found in provider metadata but server returned differential data. ` +
+            `This may indicate a metadata sync issue.`
+          );
+        }
+
+        if (result.status === 'differential' && result.differentialData && entity) {
+          // Process differential data into GraphQL-compatible format
+          const processedUpdatedRows = this.processRawData(
+            result.differentialData.updatedRows as Record<string, unknown>[],
+            entity.ID,
+            entity
+          );
+          return {
+            viewIndex: result.viewIndex,
+            status: result.status,
+            Results: undefined,
+            differentialData: {
+              updatedRows: processedUpdatedRows,
+              deletedRecordIDs: result.differentialData.deletedRecordIDs,
+            },
+            maxUpdatedAt: result.maxUpdatedAt,
+            rowCount: result.rowCount,
+            errorMessage: result.errorMessage,
+          };
+        }
+
         if (result.status === 'stale' && result.results && entity) {
-          // Process raw data into GraphQL-compatible format
+          // Process raw data into GraphQL-compatible format (full refresh)
           const processedRows = this.processRawData(result.results as Record<string, unknown>[], entity.ID, entity);
           return {
             viewIndex: result.viewIndex,
             status: result.status,
             Results: processedRows,
+            differentialData: undefined,
             maxUpdatedAt: result.maxUpdatedAt,
             rowCount: result.rowCount,
             errorMessage: result.errorMessage,
@@ -903,6 +952,7 @@ export class RunViewResolver extends ResolverBase {
           viewIndex: result.viewIndex,
           status: result.status,
           Results: undefined,
+          differentialData: undefined,
           maxUpdatedAt: result.maxUpdatedAt,
           rowCount: result.rowCount,
           errorMessage: result.errorMessage,

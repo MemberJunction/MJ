@@ -640,8 +640,26 @@ export type RunViewWithCacheCheckParams = {
 }
 
 /**
+ * Differential update data containing only changes since the client's cached state.
+ * Used to efficiently update client caches without transferring the entire dataset.
+ */
+export type DifferentialData<T = unknown> = {
+    /**
+     * Records that have been created or updated since the client's maxUpdatedAt.
+     * These should be merged into the client's cache, replacing any existing records with the same primary key.
+     */
+    updatedRows: T[];
+    /**
+     * Primary key values (as concatenated strings) of records that have been deleted.
+     * Format uses CompositeKey.ToConcatenatedString() - e.g., "ID|abc123" or "Field1|val1||Field2|val2"
+     * These should be removed from the client's cache.
+     */
+    deletedRecordIDs: string[];
+}
+
+/**
  * Result for a single RunView with cache check.
- * The server returns either 'current' (cache is valid) or 'stale' (with fresh data).
+ * The server returns 'current' (cache valid), 'differential' (partial update), or 'stale' (full refresh needed).
  */
 export type RunViewWithCacheCheckResult<T = unknown> = {
     /**
@@ -650,20 +668,27 @@ export type RunViewWithCacheCheckResult<T = unknown> = {
     viewIndex: number;
     /**
      * 'current' means the client's cache is still valid - no data returned
-     * 'stale' means the cache is outdated - fresh data is included in results
+     * 'differential' means only changes are returned - client should merge with existing cache
+     * 'stale' means full refresh is needed - fresh data is included in results (fallback when entity doesn't track changes)
      * 'error' means there was an error checking/executing the view
      */
-    status: 'current' | 'stale' | 'error';
+    status: 'current' | 'differential' | 'stale' | 'error';
     /**
-     * The fresh results - only populated when status is 'stale'
+     * The fresh results - only populated when status is 'stale' (full refresh)
      */
     results?: T[];
     /**
-     * The maximum __mj_UpdatedAt from the results - only when status is 'stale'
+     * Differential update data - only populated when status is 'differential'
+     * Contains updated/created rows and deleted record IDs since client's maxUpdatedAt
+     */
+    differentialData?: DifferentialData<T>;
+    /**
+     * The maximum __mj_UpdatedAt from the results - populated when status is 'stale' or 'differential'
      */
     maxUpdatedAt?: string;
     /**
-     * The row count of the results - only when status is 'stale'
+     * The row count of the results - populated when status is 'stale' or 'differential'
+     * For 'differential', this is the NEW total row count after applying the delta
      */
     rowCount?: number;
     /**
