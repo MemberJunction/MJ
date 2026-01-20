@@ -1,0 +1,1159 @@
+// ===================================
+// KENDO UI THEME OVERRIDES
+// ===================================
+// This file enhances ALL Kendo UI components with the MJ design system
+// Import this AFTER the Kendo theme in your main.scss
+
+// ===================================
+// KENDO BUTTONS - Enhanced automatically
+// ===================================
+
+// All Kendo buttons get enhanced styling
+.k-button {
+  border-radius: var(--border-radius);
+  font-weight: 500;
+  transition: all var(--transition-time);
+  padding: 10px 20px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1.5;
+  font-family: "Montserrat", sans-serif;
+
+  // Hover effect for all buttons
+  &:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+
+  // Primary buttons
+  &.k-primary {
+    background: var(--mj-blue);
+    border-color: var(--mj-blue);
+    color: var(--white-color);
+
+    &:hover:not(:disabled) {
+      box-shadow: 0 4px 8px rgba(0, 118, 182, 0.3);
+      background: var(--mj-blue);
+      border-color: var(--mj-blue);
+    }
+  }
+
+  // Flat/ghost buttons
+  &.k-flat {
+    &:hover:not(:disabled) {
+      background: var(--gray-600);
+      color: var(--mj-blue);
+      border-color: var(--mj-blue);
+    }
+  }
+
+  // Icon-only buttons
+  &.k-icon-button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+
+  // Disabled state
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  // Size variants
+  &.k-small {
+    padding: 6px 12px;
+    font-size: 14px;
+    min-height: 32px;
+  }
+
+  &.k-large {
+    padding: 14px 28px;
+    font-size: 18px;
+    min-height: 52px;
+  }
+}
+
+// ===================================
+// BUTTONGROUP BASE STYLING
+// ===================================
+
+.k-button-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--white-color);
+  border: 2px solid var(--gray-700);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+
+  // Modern glass effect overlay
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  // Hover effect for the entire group
+  &:hover {
+    border-color: var(--mj-blue);
+    box-shadow: 
+      0 4px 12px rgba(0, 118, 182, 0.15),
+      0 2px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+  }
+
+  // Focus-within state
+  &:focus-within {
+    border-color: var(--mj-blue);
+    box-shadow: 
+      0 0 0 3px rgba(0, 118, 182, 0.15),
+      0 4px 16px rgba(0, 118, 182, 0.2);
+  }
+}
+
+// ===================================
+// BUTTONGROUP BUTTONS
+// ===================================
+
+.k-button-group .k-button,
+kendo-buttongroup .k-button,
+kendo-buttongroup button[kendoButton],
+.k-buttongroup .k-button {
+  // Reset individual button borders and shadows
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: var(--white-color);
+  color: var(--navy) !important;
+  min-height: 44px;
+  padding: 10px 20px;
+  font-weight: 500;
+  position: relative;
+  transition: all 0.3s ease;
+  
+  // Remove transform on hover since we're in a group
+  &:hover {
+    transform: none !important;
+  }
+
+  // Separator between buttons
+  &:not(:last-child) {
+    border-right: 1px solid var(--gray-700) !important;
+  }
+
+  // Icon styling
+  i, .k-icon, .k-svg-icon {
+    font-size: 16px;
+    transition: all 0.3s ease;
+  }
+
+  // Default state
+  &:not(.k-selected):not(.k-state-selected):not([aria-pressed="true"]) {
+    &:hover {
+      background: var(--gray-600) !important;
+      color: var(--mj-blue) !important;
+      
+      i, .k-icon, .k-svg-icon {
+        color: var(--mj-blue) !important;
+      }
+    }
+
+    &:active {
+      background: var(--light-blue) !important;
+      color: var(--navy) !important;
+    }
+  }
+
+  // Selected/Active state
+  &.k-selected,
+  &.k-state-selected,
+  &[aria-pressed="true"] {
+    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%) !important;
+    color: var(--white-color) !important;
+    font-weight: 600;
+    position: relative;
+    
+    // Shine effect
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s ease;
+      pointer-events: none;
+    }
+
+    &:hover::before {
+      left: 100%;
+    }
+
+    i, .k-icon, .k-svg-icon {
+      color: var(--white-color);
+    }
+
+    &:hover {
+      background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%);
+    }
+  }
+
+  // Focus state
+  &:focus-visible {
+    outline: 2px solid var(--mj-blue);
+    outline-offset: -2px;
+    z-index: 2;
+  }
+
+  // Disabled state
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: var(--gray-600);
+    color: var(--gray-800);
+
+    &:hover {
+      background: var(--gray-600);
+      color: var(--gray-800);
+    }
+  }
+
+  // First and last button border radius
+  &:first-child {
+    border-top-left-radius: calc(var(--border-radius) - 2px) !important;
+    border-bottom-left-radius: calc(var(--border-radius) - 2px) !important;
+  }
+
+  &:last-child {
+    border-top-right-radius: calc(var(--border-radius) - 2px) !important;
+    border-bottom-right-radius: calc(var(--border-radius) - 2px) !important;
+  }
+}
+
+// ===================================
+// BUTTONGROUP VARIATIONS
+// ===================================
+
+// Primary theme variant
+.k-button-group.k-button-group-primary {
+  border-color: var(--mj-blue);
+  background: var(--mj-blue);
+
+  .k-button {
+    background: var(--mj-blue);
+    color: var(--white-color);
+    
+    &:not(:last-child) {
+      border-right-color: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    &:not(.k-selected):not(.k-state-selected) {
+      &:hover {
+        background: #0084d1;
+        color: var(--white-color);
+      }
+    }
+
+    &.k-selected,
+    &.k-state-selected {
+      background: var(--navy);
+      color: var(--white-color);
+    }
+  }
+}
+
+// Secondary theme variant
+.k-button-group.k-button-group-secondary {
+  border-color: var(--navy);
+  
+  .k-button {
+    color: var(--navy);
+    
+    &.k-selected,
+    &.k-state-selected {
+      background: var(--navy);
+      color: var(--white-color);
+    }
+  }
+}
+
+// Outline variant
+.k-button-group.k-button-group-outline {
+  background: transparent;
+  
+  .k-button {
+    background: transparent;
+  }
+}
+
+// ===================================
+// BUTTONGROUP SIZES
+// ===================================
+
+// Small size
+.k-button-group.k-button-group-sm {
+  .k-button {
+    min-height: 32px;
+    padding: 6px 12px;
+    font-size: 14px;
+    
+    i, .k-icon, .k-svg-icon {
+      font-size: 14px;
+    }
+  }
+}
+
+// Large size
+.k-button-group.k-button-group-lg {
+  .k-button {
+    min-height: 52px;
+    padding: 14px 28px;
+    font-size: 18px;
+    
+    i, .k-icon, .k-svg-icon {
+      font-size: 18px;
+    }
+  }
+}
+
+// ===================================
+// ICON-ONLY BUTTONGROUP
+// ===================================
+
+.k-button-group.k-button-group-icon-only {
+  .k-button {
+    padding: 10px;
+    min-width: 44px;
+    
+    i, .k-icon, .k-svg-icon {
+      margin: 0;
+    }
+  }
+  
+  &.k-button-group-sm .k-button {
+    padding: 6px;
+    min-width: 32px;
+  }
+  
+  &.k-button-group-lg .k-button {
+    padding: 14px;
+    min-width: 52px;
+  }
+}
+
+// ===================================
+// VERTICAL BUTTONGROUP
+// ===================================
+
+.k-button-group.k-button-group-vertical {
+  flex-direction: column;
+  align-items: stretch;
+  
+  .k-button {
+    border-right: none !important;
+    border-bottom: 1px solid var(--gray-700) !important;
+    border-radius: 0 !important;
+    
+    &:last-child {
+      border-bottom: none !important;
+    }
+    
+    &:first-child {
+      border-top-left-radius: calc(var(--border-radius) - 2px) !important;
+      border-top-right-radius: calc(var(--border-radius) - 2px) !important;
+      border-bottom-left-radius: 0 !important;
+      border-bottom-right-radius: 0 !important;
+    }
+    
+    &:last-child {
+      border-bottom-left-radius: calc(var(--border-radius) - 2px) !important;
+      border-bottom-right-radius: calc(var(--border-radius) - 2px) !important;
+      border-top-left-radius: 0 !important;
+      border-top-right-radius: 0 !important;
+    }
+  }
+}
+
+// ===================================
+// TOGGLE BUTTONGROUP
+// ===================================
+
+.k-button-group[role="group"] {
+  // For toggle button groups
+  .k-button[aria-pressed] {
+    position: relative;
+    
+    // Transition for toggle animation
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--mj-blue);
+      transform: scaleX(0);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    &[aria-pressed="true"]::after {
+      transform: scaleX(1);
+    }
+  }
+}
+
+// ===================================
+// SPECIAL EFFECTS
+// ===================================
+
+// Ripple effect on click
+.k-button-group .k-button {
+  overflow: hidden;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+    pointer-events: none;
+  }
+  
+  &:active::after {
+    width: 300px;
+    height: 300px;
+  }
+}
+
+// ===================================
+// RESPONSIVE ADJUSTMENTS
+// ===================================
+
+@media (max-width: 768px) {
+  .k-button-group {
+    flex-wrap: wrap;
+    
+    &:not(.k-button-group-vertical) .k-button {
+      flex: 1 1 auto;
+      min-width: 80px;
+    }
+  }
+  
+  // Force vertical on mobile for better UX
+  .k-button-group-mobile-vertical {
+    flex-direction: column;
+    
+    .k-button {
+      width: 100%;
+      border-right: none !important;
+      border-bottom: 1px solid var(--gray-700) !important;
+      border-radius: 0 !important;
+      
+      &:last-child {
+        border-bottom: none !important;
+      }
+      
+      &:first-child {
+        border-radius: calc(var(--border-radius) - 2px) calc(var(--border-radius) - 2px) 0 0 !important;
+      }
+      
+      &:last-child {
+        border-radius: 0 0 calc(var(--border-radius) - 2px) calc(var(--border-radius) - 2px) !important;
+      }
+    }
+  }
+}
+
+// ===================================
+// ACCESSIBILITY ENHANCEMENTS
+// ===================================
+
+// High contrast mode
+@media (prefers-contrast: high) {
+  .k-button-group {
+    border-width: 3px !important;
+    
+    .k-button {
+      font-weight: 600;
+      
+      &:not(:last-child) {
+        border-right-width: 2px !important;
+      }
+      
+      &.k-selected,
+      &.k-state-selected {
+        outline: 2px solid var(--white-color);
+        outline-offset: -4px;
+      }
+    }
+  }
+}
+
+// Reduced motion
+@media (prefers-reduced-motion: reduce) {
+  .k-button-group,
+  .k-button-group .k-button,
+  .k-button-group .k-button::before,
+  .k-button-group .k-button::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  
+  .k-button-group:hover {
+    transform: none !important;
+  }
+}
+
+
+// ===================================
+// PRINT STYLES
+// ===================================
+
+@media print {
+  .k-button-group {
+    border: 1px solid #000 !important;
+    box-shadow: none !important;
+    
+    .k-button {
+      border-right: 1px solid #000 !important;
+      
+      &.k-selected {
+        background: #000 !important;
+        color: #fff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  }
+}
+
+// ===================================
+// GLOBAL OVERRIDE FIXES
+// ===================================
+// Force override any conflicting global styles
+
+kendo-buttongroup {
+  .k-button,
+  button[kendoButton],
+  button.k-button {
+    // Reset any inherited black color
+    color: var(--navy) !important;
+    
+    &:not(.k-selected):not(.k-state-selected):not([aria-pressed="true"]) {
+      background: var(--white-color) !important;
+      color: var(--navy) !important;
+      
+      &:hover:not(:disabled) {
+        background: var(--gray-600) !important;
+        color: var(--mj-blue) !important;
+      }
+    }
+    
+    &.k-selected,
+    &.k-state-selected,
+    &[aria-pressed="true"] {
+      background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%) !important;
+      color: var(--white-color) !important;
+      
+      &:hover {
+        background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%) !important;
+        color: var(--white-color) !important;
+      }
+    }
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .k-button-group {
+    background: none !important;
+    border-color: var(--gray-700) !important;
+  }
+}
+
+// Specific fix for toggle buttons
+.k-button-group[role="group"] {
+  button[kendoButton][toggleable],
+  .k-button[toggleable] {
+    color: var(--navy) !important;
+    
+    &[aria-pressed="false"] {
+      background: var(--white-color) !important;
+      color: var(--navy) !important;
+    }
+    
+    &[aria-pressed="true"] {
+      background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%) !important;
+      color: var(--white-color) !important;
+    }
+  }
+}
+
+// ===================================
+// KENDO INPUTS - Enhanced automatically
+// ===================================
+
+// Text inputs, textareas, etc.
+.k-textbox,
+.k-textarea,
+.k-input {
+  border-radius: var(--border-radius);
+  border: 2px solid var(--gray-700);
+  padding: 8px;
+  font-size: 16px;
+  background: var(--white-color);
+  transition: var(--transition-time);
+  font-family: "Montserrat", sans-serif;
+
+  &:focus,
+  &.k-focus {
+    outline: none;
+    border-color: var(--mj-blue);
+    box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.2);
+  }
+
+  &::placeholder {
+    color: var(--gray-800);
+  }
+  button {
+    padding: 0 !important;
+    background: transparent;
+    border: none;
+    min-width: 0 !important;
+    min-height: 0 !important;
+  }
+}
+
+// Input wrappers
+.k-floating-label-container {
+  margin-bottom: 1rem;
+}
+
+// ===================================
+// KENDO DROPDOWNS - Enhanced automatically
+// ===================================
+
+.k-dropdown,
+.k-dropdownlist,
+.k-combobox,
+.k-multiselect,
+.k-autocomplete {
+  border: 2px solid var(--gray-700);
+  border-radius: 12px;
+  background: var(--white-color);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  min-height: 48px;
+
+  &:hover:not(.k-disabled) {
+    border-color: var(--mj-blue);
+    box-shadow: 0 4px 12px rgba(0, 118, 182, 0.15);
+    transform: translateY(-1px);
+  }
+
+  &:focus-within,
+  &.k-focus {
+    border-color: var(--mj-blue);
+    box-shadow: 
+      0 0 0 3px rgba(0, 118, 182, 0.15),
+      0 4px 16px rgba(0, 118, 182, 0.2);
+    transform: translateY(-1px);
+  }
+
+  // Dropdown arrow button
+  .k-select {
+    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%);
+    border: none;
+    border-radius: 0 10px 10px 0;
+    width: 40px;
+    transition: all 0.3s ease;
+
+    .k-icon,
+    .k-svg-icon {
+      color: var(--white-color);
+    }
+
+    &:hover {
+      background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%);
+    }
+  }
+
+  // Active state
+  &.k-state-active .k-select {
+    background: var(--navy);
+  }
+}
+
+// Dropdown popup
+.k-popup,
+.k-dropdown-popup,
+.k-list-container {
+  border: 2px solid var(--mj-blue);
+  background: var(--white-color);
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.15),
+    0 8px 24px rgba(0, 118, 182, 0.2);
+  margin-top: 8px;
+  animation: dropdown-appear 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// Dropdown items
+.k-list .k-item,
+.k-list-item {
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+  position: relative;
+
+  &:hover {
+    background: var(--light-blue);
+    color: var(--navy);
+    padding-left: 20px;
+  }
+
+  &.k-selected,
+  &.k-state-selected {
+    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%);
+    color: var(--white-color);
+    font-weight: 600;
+  }
+}
+
+// ===================================
+// KENDO GRID - Enhanced automatically
+// ===================================
+
+.k-grid {
+  border: 2px solid var(--gray-700);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  background: var(--mj-blue);
+
+  // Grid header
+  .k-grid-header {
+    background: var(--mj-blue);
+    border-bottom: 2px solid var(--gray-700);
+
+    .k-header {
+      background: var(--mj-blue);
+      border-color: var(--light-blue);
+      color: var(--white-color);
+      font-weight: 600;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 16px 12px;
+    }
+  }
+
+  // Grid rows
+  tbody tr {
+    transition: all 0.2s ease;
+    border-bottom: 1px solid var(--gray-600);
+
+    &.k-selected,
+    &.k-state-selected {
+      background: rgba(0, 118, 182, 0.1);
+      border-left: 4px solid var(--mj-blue);
+    }
+
+    td {
+      padding: 12px;
+      border-color: var(--gray-600);
+      color: var(--navy);
+      font-size: 14px;
+    }
+  }
+
+  // Grid pager
+  .k-pager-wrap {
+    background: var(--gray-600);
+    border-top: 2px solid var(--gray-700);
+    padding: 12px 16px;
+
+    .k-pager-numbers .k-button {
+      border: 1px solid var(--gray-700);
+      background: var(--white-color);
+      color: var(--navy);
+      border-radius: 6px;
+      margin: 0 2px;
+      min-width: 32px;
+      height: 32px;
+
+      &:hover {
+        background: var(--mj-blue);
+        color: var(--white-color);
+        border-color: var(--mj-blue);
+      }
+
+      &.k-selected {
+        background: var(--mj-blue);
+        color: var(--white-color);
+        border-color: var(--mj-blue);
+      }
+    }
+  }
+
+  // Grid toolbar
+  .k-grid-toolbar {
+    background: var(--gray-600);
+    border-bottom: 1px solid var(--gray-700);
+    padding: 12px 16px;
+  }
+}
+
+// ===================================
+// KENDO CARDS - Enhanced automatically
+// ===================================
+
+.k-card {
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  border: 2px solid transparent;
+  transition: var(--transition-time);
+  overflow: hidden;
+  width: 100% !important; // Force full width and override inline styles
+  display: block; // Override any inline-block defaults
+
+  &:hover {
+    border-color: var(--light-blue);
+    box-shadow: 
+      0 8px 32px rgba(9, 35, 64, 0.12),
+      0 4px 16px rgba(0, 118, 182, 0.1);
+    transform: translateY(-4px);
+  }
+
+  .k-card-header {
+    background: var(--gray-600);
+    border-bottom: 1px solid var(--gray-600);
+    padding: 16px 20px;
+  }
+
+  .k-card-body {
+    padding: 20px;
+  }
+
+  .k-card-footer {
+    background: var(--gray-600);
+    border-top: 1px solid var(--gray-600);
+    padding: 16px 20px;
+  }
+
+  .k-card-actions {
+    gap: 10px;
+  }
+}
+
+// Ensure Kendo cards respect grid layouts
+.mj-grid .k-card,
+.mj-grid-1 .k-card,
+.mj-grid-2 .k-card,
+.mj-grid-3 .k-card,
+.mj-grid-4 .k-card,
+.mj-grid-responsive .k-card {
+  width: 100% !important;
+  max-width: none !important;
+  display: block;
+}
+
+// ===================================
+// KENDO DIALOG/WINDOW - Enhanced automatically
+// ===================================
+
+.k-dialog,
+.k-window {
+  border-radius: 20px;
+  box-shadow: 
+    0 25px 50px rgba(0, 0, 0, 0.25),
+    0 10px 30px rgba(0, 118, 182, 0.2);
+  border: 2px solid rgba(0, 118, 182, 0.1);
+  overflow: hidden;
+
+  .k-dialog-titlebar,
+  .k-window-titlebar {
+    background: linear-gradient(135deg, var(--gray-600) 0%, #f8f9fa 100%);
+    border-bottom: 2px solid var(--gray-600);
+    padding: 24px 30px;
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+    }
+  }
+
+  .k-dialog-title,
+  .k-window-title {
+    color: var(--navy);
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+
+  .k-dialog-close,
+  .k-window-close {
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    background: rgba(170, 170, 170, 0.1);
+    border: 2px solid var(--gray-700);
+    transition: all 0.3s ease;
+
+    &:hover {
+      background: #dc3545;
+      color: var(--white-color);
+      border-color: #dc3545;
+      transform: scale(1.1);
+    }
+  }
+
+  .k-dialog-content,
+  .k-window-content {
+    padding: 30px;
+  }
+
+  .k-dialog-actions {
+    background: var(--gray-600);
+    border-top: 2px solid var(--gray-600);
+    padding: 20px 30px;
+    gap: 12px;
+  }
+}
+
+// ===================================
+// KENDO BADGES & CHIPS - Enhanced automatically
+// ===================================
+
+.k-badge {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+
+  &.k-badge-rounded {
+    border-radius: 50rem;
+  }
+}
+
+.k-chip {
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border-radius: var(--border-radius);
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// ===================================
+// KENDO FORM FIELDS - Enhanced automatically
+// ===================================
+
+.k-form-field {
+  margin-bottom: 1rem;
+
+  .k-label {
+    font-weight: 500;
+    color: var(--navy);
+    margin-bottom: 0.5rem;
+    font-size: 14px;
+  }
+
+  .k-form-error {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+  }
+}
+
+// ===================================
+// KENDO PROGRESS BARS - Enhanced automatically
+// ===================================
+
+.k-progressbar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--gray-600);
+
+  .k-progress-status-wrap {
+    font-weight: 500;
+    color: var(--navy);
+  }
+
+  .k-selected {
+    background: var(--mj-blue);
+    border-radius: 4px;
+  }
+}
+
+// ===================================
+// KENDO LOADERS - Enhanced automatically
+// ===================================
+
+.loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 9999;
+}
+
+.k-loader {
+    color: var(--mj-blue);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%);
+}
+
+// ===================================
+// KENDO TABSTRIP - Enhanced automatically
+// ===================================
+
+.k-tabstrip {
+  .k-tabstrip-items-wrapper {
+    border-bottom: 2px solid var(--gray-700);
+
+    .k-item {
+      color: var(--navy);
+      font-weight: 500;
+      transition: all 0.2s ease;
+      padding: 12px 20px;
+
+      &:hover {
+        background: var(--gray-600);
+        color: var(--mj-blue);
+      }
+
+      &.k-active {
+        color: var(--mj-blue);
+        border-bottom: 3px solid var(--mj-blue) !important;
+        font-weight: 600;
+        background: var(--white-color);
+      }
+    }
+  }
+
+  .k-content {
+    padding: 20px;
+  }
+}
+
+// ===================================
+// KENDO AVATARS - Enhanced automatically
+// ===================================
+
+.k-avatar {
+  font-weight: 600;
+  font-family: "Montserrat", sans-serif;
+}
+
+// ===================================
+// ANIMATIONS
+// ===================================
+
+@keyframes dropdown-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+// ===================================
+// FONT AWESOME INTEGRATION
+// ===================================
+
+// Ensure Font Awesome icons work well in Kendo components
+.k-button .fa,
+.k-button .fas,
+.k-button .far,
+.k-button .fab {
+  font-size: 14px;
+  line-height: 1;
+}
+
+// Fix for Font Awesome icon fonts
+.fas, .far, .fab, .fa {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// ===================================
+// RESPONSIVE OVERRIDES
+// ===================================
+
+@media (max-width: 768px) {
+  .k-grid {
+    font-size: 12px;
+  }
+
+  .k-grid td,
+  .k-grid th {
+    padding: 8px;
+  }
+
+  .k-dialog,
+  .k-window {
+    margin: 10px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .k-button {
+    min-height: 44px; // Maintain touch target
+  }
+}
+
+// ===================================
+// ACCESSIBILITY ENHANCEMENTS
+// ===================================
+
+// Focus visible styles
+.k-button:focus-visible,
+.k-textbox:focus-visible,
+.k-dropdown:focus-visible {
+  outline: 2px solid var(--mj-blue);
+  outline-offset: 2px;
+}
+
+// High contrast mode
+@media (prefers-contrast: high) {
+  .k-button,
+  .k-textbox,
+  .k-dropdown,
+  .k-grid,
+  .k-card {
+    border-width: 2px !important;
+  }
+}
+
+// Reduced motion
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

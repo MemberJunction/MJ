@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/aiengine
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@3.0.0
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/ai-vectors-memory@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+- @memberjunction/storage@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -1321,19 +1335,16 @@
   building during `npm install`.
 
   **Root Cause:**
-
   - `@memberjunction/aiengine` imported `AIPromptRunResult` from `@memberjunction/ai-prompts`
   - `@memberjunction/ai-prompts` depended on `@memberjunction/aiengine` in package.json
   - This circular dependency blocked the build chain
 
   **Solution:**
-
   - Moved `AIPromptRunResult` and related types to `@memberjunction/ai` as shared types
   - Updated all packages to import from the shared location instead of creating circular references
   - Added comprehensive build failure debugging guide to development documentation
 
   **Packages Fixed:**
-
   - `@memberjunction/core-entities-server` now builds successfully
   - All AI packages (`aiengine`, `ai-prompts`, `ai-agents`) build without circular dependency issues
   - Build order now resolves properly in the monorepo

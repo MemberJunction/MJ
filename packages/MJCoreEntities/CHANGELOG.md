@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/core-entities
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/interactive-component-types@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/global@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes
@@ -369,7 +378,6 @@
   Improved model selection caching by checking all candidates for valid API keys instead of stopping at first match, ensuring retry logic has access to complete list of viable model/vendor combinations. Added `extractValidCandidates()` method to `AIModelSelectionInfo` class and `buildCandidatesFromSelectionInfo()` helper to properly reconstruct candidate lists from selection metadata during hierarchical template execution.
 
   Enhanced error-based retry and failover with intelligent handling for authentication and rate limit errors. Authentication errors now trigger vendor-level filtering (excluding all models from vendors with invalid API keys) and immediate failover to different vendors. Rate limit errors now retry the same model/vendor using configurable `MaxRetries` (default: 3) with backoff delay based on `RetryStrategy` (Fixed/Linear/Exponential) before failing over. Improved log messages with human-readable formatting showing model/vendor names, time in seconds, and clear status indicators. Fixed MJCLI sync commands to properly propagate exit codes for CI/CD integration.
-
   - @memberjunction/interactive-component-types@2.105.0
   - @memberjunction/core@2.105.0
   - @memberjunction/global@2.105.0
@@ -447,7 +455,6 @@
 
 - eb7677d: feat(ai-agents): Add ChatHandlingOption for flexible Chat step
   handling
-
   - Add ChatHandlingOption field to AIAgent table with values:
     Success, Failed, Retry
   - Implement Chat step remapping in
@@ -518,7 +525,6 @@
 ### Minor Changes
 
 - 103e4a9: Added comprehensive tracking fields to AI execution entities:
-
   - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
   - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
   - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
@@ -672,7 +678,6 @@
 
   Add comprehensive audit logging and caching capabilities to the
   MemberJunction Query system:
-
   - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
     granular audit control
   - Implement TTL-based result caching with LRU eviction strategy for
@@ -739,7 +744,6 @@
 ### Patch Changes
 
 - 8ee0d86: Fix: Query parameter validation and cascade delete transaction handling
-
   - Added validation to ensure query parameters are JSON objects rather than arrays in GraphQL system user client
   - Implemented automatic transaction wrapping for entities with CascadeDeletes enabled
   - For database providers (server-side), delete operations are wrapped in
@@ -1054,7 +1058,6 @@
 ### Minor Changes
 
 - 031e724: Implement agent architecture separation of concerns
-
   - **NEW**: Add BaseAgent class for domain-specific prompt execution
   - **NEW**: Add ConductorAgent for autonomous orchestration decisions and action planning
   - **NEW**: Add AgentRunner class to coordinate BaseAgent + ConductorAgent interactions
@@ -1069,7 +1072,6 @@
   - **NEW**: Template rendering with data context
 
   This implements clean separation of concerns:
-
   - BaseAgent: Domain-specific execution only (~500 lines)
   - ConductorAgent: Orchestration decisions with structured responses
   - AgentRunner: Coordination layer providing unified user interface
@@ -1150,7 +1152,6 @@
 ### Minor Changes
 
 - 7e0523d: Persist Skip conversation status and add completion time display
-
   - Added 'Status' column to Conversation table with 'Processing' and 'Available' states
   - Added 'CompletionTime' column to ConversationDetail table to track processing duration
   - Updated AskSkipResolver to manage conversation status and track processing time

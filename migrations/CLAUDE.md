@@ -4,6 +4,56 @@
 
 This directory contains SQL migration scripts for MemberJunction database schema changes. We use Flyway for migration management.
 
+## Version 3.0 Baseline Migration
+
+Starting with v3.0, MemberJunction uses a **baseline migration** approach to streamline fresh installations:
+
+### Migration Paths
+
+1. **Fresh Installation (Blank Database)**:
+   - Flyway detects blank database and baselines at version `202601122300`
+   - Runs `B202601122300__v3.0_Baseline.sql` from v3 (complete v3.0 schema based on v2.133.0)
+   - Runs `R__RefreshMetadata.sql` from root (repeatable migration, always runs after versioned migrations)
+   - Skips all v2 versioned migrations (V202407171600... through V202601121038)
+   - Runs any future v3 migrations with versions > 202601122300
+
+2. **Existing Installation (< v2.133.0)**:
+   - Continues running remaining v2 migrations incrementally
+   - Skips baseline script (already has migration history)
+   - Runs v3 migrations when they arrive
+   - Repeatable scripts run as normal
+
+3. **Existing Installation (at v2.133.0)**:
+   - Skips baseline script (already at that schema state)
+   - Runs v3 migrations with versions > 202601122300
+   - Repeatable scripts run as normal
+
+### Configuration
+
+The baseline is configured in Flyway settings:
+```javascript
+{
+  migrationsLocation: 'filesystem:./migrations',  // Flyway recursively scans v2/ and v3/ subdirectories
+  baselineVersion: '202601122300',                // Baseline version (v2.133.0 equivalent)
+  baselineOnMigrate: true                         // Auto-baseline blank databases
+}
+```
+
+### Version Numbering for v3+
+
+**IMPORTANT**: All v3+ migrations must use **timestamp-based versions** (not semantic versions like 3.0.1):
+
+```
+V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
+```
+
+Examples:
+- ✅ `V202601130900__v3.0.1_Add_NewFeature.sql`
+- ✅ `V202601141400__v3.1.0_Major_Update.sql`
+- ❌ `V3.0.1__Add_NewFeature.sql` (would be interpreted as 3.0001, less than 202601122300!)
+
+This ensures v3 migrations run **after** all v2 migrations (including v2.133.0) in Flyway's version ordering.
+
 ## Migration File Naming Convention
 
 **CRITICAL**: Migration files must follow this exact format:
