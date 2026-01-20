@@ -1,4 +1,4 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
@@ -79,7 +79,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef) {
     super();
   }
 
@@ -103,27 +103,42 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   
   public async loadInitialData(): Promise<void> {
     try {
+      console.log('[EntityPermissions] Starting to load data...');
       this.isLoading = true;
       this.error = null;
-      
+      this.cdr.detectChanges();
+
       // Load all required data in parallel
       const [entities, permissions, roles] = await Promise.all([
         this.loadEntities(),
         this.loadEntityPermissions(),
         this.loadRoles()
       ]);
-      
+
+      console.log('[EntityPermissions] Data loaded:', {
+        entities: entities.length,
+        permissions: permissions.length,
+        roles: roles.length
+      });
+
       // Process the data
       this.roles = roles;
       this.processEntityAccess(entities, permissions);
       this.calculateStats();
       this.applyFilters();
-      
+
+      console.log('[EntityPermissions] Data processed:', {
+        entityAccess: this.entityAccess.length,
+        filteredEntityAccess: this.filteredEntityAccess.length,
+        stats: this.stats
+      });
+
     } catch (error) {
-      console.error('Error loading permissions data:', error);
+      console.error('[EntityPermissions] Error loading permissions data:', error);
       this.error = 'Failed to load permissions data. Please try again.';
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
   
@@ -134,8 +149,12 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
-    
-    return result.Success ? result.Results : [];
+
+    if (!result.Success) {
+      throw new Error(`Failed to load entities: ${result.ErrorMessage || 'Unknown error'}`);
+    }
+
+    return result.Results || [];
   }
   
   private async loadEntityPermissions(): Promise<EntityPermissionEntity[]> {
@@ -145,8 +164,12 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       ResultType: 'entity_object',
       OrderBy: 'EntityID, RoleID'
     });
-    
-    return result.Success ? result.Results : [];
+
+    if (!result.Success) {
+      throw new Error(`Failed to load entity permissions: ${result.ErrorMessage || 'Unknown error'}`);
+    }
+
+    return result.Results || [];
   }
   
   private async loadRoles(): Promise<RoleEntity[]> {
@@ -156,8 +179,12 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
-    
-    return result.Success ? result.Results : [];
+
+    if (!result.Success) {
+      throw new Error(`Failed to load roles: ${result.ErrorMessage || 'Unknown error'}`);
+    }
+
+    return result.Results || [];
   }
   
   private processEntityAccess(entities: EntityEntity[], permissions: EntityPermissionEntity[]): void {
@@ -212,8 +239,11 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   
   private applyFilters(): void {
     const filters = this.filters$.value;
+    console.log('[EntityPermissions] Applying filters:', filters);
+    console.log('[EntityPermissions] entityAccess before filtering:', this.entityAccess.length);
+
     let filtered = [...this.entityAccess];
-    
+
     // Apply entity search
     if (filters.entitySearch) {
       const searchLower = filters.entitySearch.toLowerCase();
@@ -221,29 +251,35 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
         ea.entity.Name?.toLowerCase().includes(searchLower) ||
         ea.entity.Description?.toLowerCase().includes(searchLower)
       );
+      console.log('[EntityPermissions] After search filter:', filtered.length);
     }
-    
+
     // Apply access level filter
     switch (filters.accessLevel) {
       case 'public':
         filtered = filtered.filter(ea => ea.isPublic);
+        console.log('[EntityPermissions] After public filter:', filtered.length);
         break;
       case 'restricted':
         filtered = filtered.filter(ea => !ea.isPublic && ea.permissions.length === 0);
+        console.log('[EntityPermissions] After restricted filter:', filtered.length);
         break;
       case 'custom':
         filtered = filtered.filter(ea => !ea.isPublic && ea.permissions.length > 0);
+        console.log('[EntityPermissions] After custom filter:', filtered.length);
         break;
     }
-    
+
     // Apply role filter
     if (filters.roleId) {
-      filtered = filtered.filter(ea => 
+      filtered = filtered.filter(ea =>
         ea.rolePermissions.has(filters.roleId!)
       );
+      console.log('[EntityPermissions] After role filter:', filtered.length);
     }
-    
+
     this.filteredEntityAccess = filtered;
+    console.log('[EntityPermissions] Final filtered count:', this.filteredEntityAccess.length);
   }
   
   private calculateStats(): void {
