@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-dashboard-viewer",
-  "version": "2.133.0",
+  "version": "3.0.0",
   "description": "MemberJunction: Angular components for metadata-driven dashboards with Golden Layout panels, supporting views, queries, artifacts, and custom content",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -23,25 +23,25 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2"
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/animations": "18.0.2",
-    "@angular/platform-browser": "18.0.2",
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/forms": "18.2.14",
+    "@angular/animations": "18.2.14",
+    "@angular/platform-browser": "18.2.14",
     "golden-layout": "^2.6.0"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.133.0",
-    "@memberjunction/global": "2.133.0",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/ng-shared-generic": "2.133.0",
-    "@memberjunction/ng-entity-viewer": "2.133.0",
-    "@memberjunction/ng-query-viewer": "2.133.0",
-    "@memberjunction/ng-trees": "2.133.0",
+    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/global": "3.0.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/ng-shared-generic": "3.0.0",
+    "@memberjunction/ng-entity-viewer": "3.0.0",
+    "@memberjunction/ng-query-viewer": "3.0.0",
+    "@memberjunction/ng-trees": "3.0.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },
