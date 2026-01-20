@@ -15,7 +15,7 @@ SELECT
     -- Only includes fields needed for display in the gear icon
     (
         SELECT
-            ar.ID,
+            ar.ID, 
             ar.AgentID,
             ar.Agent,
             ar.Status,

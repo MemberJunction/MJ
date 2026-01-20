@@ -1,0 +1,330 @@
+/* Dashboard Browser Resource Styles */
+/* This is a thin wrapper - list mode styles are in the generic DashboardBrowserComponent */
+
+:host {
+    display: block;
+    height: 100%;
+    width: 100%;
+}
+
+.dashboard-browser-resource {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: #f5f5f5;
+    position: relative;
+}
+
+/* Generic browser fills the container in list mode */
+.dashboard-browser-resource mj-dashboard-browser {
+    display: block;
+    height: 100%;
+    width: 100%;
+}
+
+/* ========================================
+   Viewer Toolbar (View Mode) - Matches Browser Toolbar
+   ======================================== */
+
+.viewer-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px 0 0;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    gap: 16px;
+}
+
+.viewer-toolbar .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Shared with you indicator */
+.shared-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #1565c0;
+    white-space: nowrap;
+}
+
+.shared-indicator i {
+    font-size: 11px;
+}
+
+/* ========================================
+   Viewer Header (Edit Mode)
+   ======================================== */
+
+.viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+/* Edit mode header styling */
+.viewer-header.editing {
+    background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+    border-bottom: 2px solid #5c6bc0;
+}
+
+.viewer-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.viewer-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+}
+
+.viewer-header .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.back-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 6px;
+    background: #f5f5f5;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.back-btn:hover {
+    background: #e0e0e0;
+    color: #333;
+}
+
+/* Add Part button (left side in edit mode) */
+.btn-add-part {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    background: #5c6bc0;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    box-shadow: 0 2px 4px rgba(92, 107, 192, 0.3);
+}
+
+.btn-add-part:hover {
+    background: #3f51b5;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 6px rgba(92, 107, 192, 0.4);
+}
+
+.btn-add-part i {
+    font-size: 12px;
+}
+
+/* Header separator */
+.header-separator {
+    width: 1px;
+    height: 28px;
+    background: rgba(92, 107, 192, 0.3);
+    margin: 0 4px;
+}
+
+/* ========================================
+   Buttons
+   ======================================== */
+
+.btn-primary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 6px;
+    background: #5c6bc0;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background: #3f51b5;
+}
+
+.btn-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fff;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    background: #f5f5f5;
+}
+
+.btn-icon.active {
+    background: #e3f2fd;
+    border-color: #5c6bc0;
+    color: #5c6bc0;
+}
+
+/* Cancel button styling */
+.btn-cancel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    background: #fff;
+    color: #666;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+    background: #f5f5f5;
+    border-color: #bbb;
+    color: #333;
+}
+
+/* ========================================
+   Dashboard Info Edit (Edit Mode)
+   ======================================== */
+
+.dashboard-info-edit {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+
+.dashboard-name-input {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+    background: rgba(255, 255, 255, 0.7);
+    outline: none;
+    min-width: 200px;
+    max-width: 300px;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.dashboard-name-input:hover {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.dashboard-name-input:focus {
+    background: #fff;
+    border-color: #5c6bc0;
+    box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+}
+
+.dashboard-description-input {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #555;
+    background: rgba(255, 255, 255, 0.5);
+    outline: none;
+    flex: 1;
+    min-width: 150px;
+    max-width: 400px;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.dashboard-description-input:hover {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.dashboard-description-input:focus {
+    background: #fff;
+    border-color: #5c6bc0;
+    box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+}
+
+.dashboard-description-input::placeholder {
+    color: #888;
+    font-style: normal;
+}
+
+/* ========================================
+   Viewer Content
+   ======================================== */
+
+.viewer-content {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.viewer-content mj-dashboard-viewer {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+
+@media (max-width: 768px) {
+    .viewer-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .viewer-header .header-left {
+        flex-wrap: wrap;
+    }
+
+    .dashboard-info-edit {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dashboard-name-input,
+    .dashboard-description-input {
+        max-width: none;
+    }
+}

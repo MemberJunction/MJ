@@ -1,0 +1,6 @@
+{
+  "entity": "MJ: Dashboard Part Types",
+  "filePattern": "**/.*.json",
+  "pull": {
+  }
+}

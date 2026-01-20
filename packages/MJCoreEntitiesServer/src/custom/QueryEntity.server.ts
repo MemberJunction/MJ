@@ -25,6 +25,12 @@ interface ExtractedField {
     description: string;
     type: 'number' | 'string' | 'date' | 'boolean';
     optional: boolean;
+    // Source entity tracking - identifies where the field data originates
+    sourceEntity?: string | null;      // Entity name this field comes from (null if computed/aggregated)
+    sourceFieldName?: string | null;   // Original field name on the source entity (null if computed/aggregated)
+    isComputed?: boolean;              // True if field is an expression/calculation (not direct column)
+    isSummary?: boolean;               // True if field uses aggregate function (SUM, COUNT, AVG, etc.)
+    computationDescription?: string;   // Explanation of how the field is computed (if applicable)
 }
 
 interface ParameterExtractionResult {
@@ -179,23 +185,17 @@ export class QueryEntityExtended extends QueryEntity {
     
     private async extractAndSyncData(): Promise<void> {
         try {
-            // Pre-check: Skip AI call if SQL doesn't contain Nunjucks syntax
+            // Check if SQL contains Nunjucks syntax (determines if query uses templates/parameters)
             const hasNunjucksSyntax = this.SQL && (
                 this.SQL.includes('{{') ||
                 this.SQL.includes('{%') ||
                 this.SQL.includes('{#')
             );
 
-            if (!hasNunjucksSyntax) {
-                // No Nunjucks syntax found - skip AI processing to save tokens/time
-                this.UsesTemplate = false;
-                return;
-            }
-
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, this.ContextCurrentUser, this.ProviderToUse as any as IMetadataProvider);
 
-            // Find the Template Parameter Extraction prompt (we'll reuse it for SQL)
+            // Find the SQL Query Parameter Extraction prompt
             const aiPrompt = AIEngine.Instance.Prompts.find(p =>
                 p.Name === 'SQL Query Parameter Extraction' &&
                 p.Category === 'MJ: System'
@@ -203,7 +203,8 @@ export class QueryEntityExtended extends QueryEntity {
 
             if (!aiPrompt) {
                 // Prompt not configured, non-fatal, just warn and return
-                console.warn('AI prompt for SQL Query Parameter Extraction not found. Skipping parameter extraction.');
+                console.warn('AI prompt for SQL Query Parameter Extraction not found. Skipping query metadata extraction.');
+                this.UsesTemplate = false;
                 return;
             }
 
@@ -212,24 +213,24 @@ export class QueryEntityExtended extends QueryEntity {
             const entityMetadata = await this.extractEntityMetadataFromSQL();
 
             // Prepare prompt data - we'll send the SQL as templateText since the prompt
-            // is designed to extract Nunjucks parameters from any template content
+            // is designed to extract both parameters (if any) and query fields/entities
             const promptData = {
                 templateText: this.SQL,
                 entities: entityMetadata
             };
-            
+
             // Execute the prompt using AIPromptRunner
             const promptRunner = new AIPromptRunner();
             const params = new AIPromptParams();
             params.prompt = aiPrompt;
             params.data = promptData;
             params.contextUser = this.ContextCurrentUser;
-            
+
             const result = await promptRunner.ExecutePrompt<ParameterExtractionResult>(params);
 
             if (!result.success || !result.result) {
                 // AI extraction failed - log details for debugging
-                console.warn(`Query "${this.Name}" - AI parameter extraction failed:`, {
+                console.warn(`Query "${this.Name}" - AI query metadata extraction failed:`, {
                     success: result.success,
                     status: result.status,
                     errorMessage: result.errorMessage,
@@ -239,23 +240,19 @@ export class QueryEntityExtended extends QueryEntity {
                 return;
             }
 
-            // Validate that result.result has the expected structure
-            if (!result.result.parameters || !Array.isArray(result.result.parameters)) {
-                // AI returned malformed result - log for debugging
-                console.warn(`Query "${this.Name}" - AI returned malformed result:`, {
-                    hasParameters: !!result.result.parameters,
-                    isArray: Array.isArray(result.result.parameters),
-                    resultKeys: Object.keys(result.result)
-                });
-                this.UsesTemplate = false;
-                return;
+            // Process the extracted data in parallel
+            const syncPromises: Promise<void>[] = [];
+
+            // Sync parameters if we have Nunjucks syntax and parameters were extracted
+            // For non-templated queries, ensure any stale parameters are removed
+            if (hasNunjucksSyntax && result.result.parameters && Array.isArray(result.result.parameters)) {
+                syncPromises.push(this.syncQueryParameters(result.result.parameters));
+            } else {
+                // No Nunjucks syntax - remove any existing parameters
+                syncPromises.push(this.removeAllQueryParameters());
             }
 
-            // Process the extracted data in parallel
-            const syncPromises: Promise<void>[] = [
-                this.syncQueryParameters(result.result.parameters)
-            ];
-
+            // Always sync query fields if we got a selectClause back
             if (result.result.selectClause && Array.isArray(result.result.selectClause) && result.result.selectClause.length > 0) {
                 syncPromises.push(this.syncQueryFields(result.result.selectClause));
             }
@@ -268,9 +265,12 @@ export class QueryEntityExtended extends QueryEntity {
 
             await Promise.all(syncPromises);
 
-            // Update UsesTemplate flag based on whether parameters were found
-            this.UsesTemplate = result.result.parameters.length > 0;
-            
+            // Update UsesTemplate flag based on whether Nunjucks syntax exists and parameters were found
+            this.UsesTemplate = hasNunjucksSyntax &&
+                result.result.parameters &&
+                Array.isArray(result.result.parameters) &&
+                result.result.parameters.length > 0;
+
         } catch (e) {
             // Unexpected error during extraction - log for debugging but don't fail the save
             LogError(`Query "${this.Name}" AI extraction error:`, e);
@@ -832,10 +832,71 @@ export class QueryEntityExtended extends QueryEntity {
         }
     }
     
+    /**
+     * Expands wildcard (*) entries in the extracted fields list.
+     * When AI returns a field with sourceFieldName="*", it indicates a SELECT table.* pattern.
+     * We expand this into individual field entries by looking up the entity's fields from metadata.
+     */
+    private expandWildcardFields(extractedFields: ExtractedField[], md: IMetadataProvider): ExtractedField[] {
+        const expandedFields: ExtractedField[] = [];
+
+        for (const field of extractedFields) {
+            // Check if this is a wildcard entry: sourceFieldName is "*" and sourceEntity is set
+            if (field.sourceFieldName === '*' && field.sourceEntity) {
+                // Look up the entity in metadata
+                const sourceEntityInfo = md.Entities.find(e =>
+                    e.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
+                );
+
+                if (sourceEntityInfo) {
+                    // Expand the wildcard into individual fields from the entity
+                    for (const entityField of sourceEntityInfo.Fields) {
+                        // Map SQL type to our simplified type system
+                        let fieldType: 'number' | 'string' | 'date' | 'boolean' = 'string';
+                        const sqlTypeLower = entityField.Type.toLowerCase();
+                        if (sqlTypeLower.includes('int') || sqlTypeLower.includes('decimal') ||
+                            sqlTypeLower.includes('numeric') || sqlTypeLower.includes('float') ||
+                            sqlTypeLower.includes('real') || sqlTypeLower.includes('money')) {
+                            fieldType = 'number';
+                        } else if (sqlTypeLower.includes('date') || sqlTypeLower.includes('time')) {
+                            fieldType = 'date';
+                        } else if (sqlTypeLower.includes('bit')) {
+                            fieldType = 'boolean';
+                        }
+
+                        expandedFields.push({
+                            name: entityField.Name, // SQL Server returns original column names for *
+                            description: entityField.Description || `${entityField.Name} field from ${field.sourceEntity}`,
+                            type: fieldType,
+                            optional: field.optional, // Inherit from the wildcard entry
+                            sourceEntity: field.sourceEntity,
+                            sourceFieldName: entityField.Name,
+                            isComputed: false,
+                            isSummary: false
+                        });
+                    }
+                } else {
+                    // Entity not found in metadata - keep the original entry as-is
+                    // but log a warning
+                    console.warn(`Query "${this.Name}" - Could not expand wildcard for entity "${field.sourceEntity}" - entity not found in metadata`);
+                    expandedFields.push(field);
+                }
+            } else {
+                // Not a wildcard entry - keep as-is
+                expandedFields.push(field);
+            }
+        }
+
+        return expandedFields;
+    }
+
     private async syncQueryFields(extractedFields: ExtractedField[]): Promise<void> {
         // Use the entity's provider instead of creating new Metadata instance
         // Use same casting pattern as RefreshRelatedMetadata method
         const md = this.ProviderToUse as any as IMetadataProvider;
+
+        // Expand any wildcard (*) entries before processing
+        const fieldsToSync = this.expandWildcardFields(extractedFields, md);
 
         try {
             const existingFields: QueryFieldEntity[] = [];
@@ -847,28 +908,28 @@ export class QueryEntityExtended extends QueryEntity {
                     ExtraFilter: `QueryID='${this.ID}'`,
                     ResultType: 'entity_object'
                 }, this.ContextCurrentUser);
-                
+
                 if (!existingFieldsResult.Success) {
                     throw new Error(`Failed to load existing query fields: ${existingFieldsResult.ErrorMessage}`);
                 }
-                
-                existingFields.push(...existingFieldsResult.Results || []);
-            }            
 
-            // Convert extracted field names to lowercase for comparison
-            const extractedFieldNames = extractedFields.map(f => f.name.toLowerCase());
-            
+                existingFields.push(...existingFieldsResult.Results || []);
+            }
+
+            // Convert field names to lowercase for comparison (using expanded fieldsToSync)
+            const fieldNamesToSync = fieldsToSync.map(f => f.name.toLowerCase());
+
             // Find fields to add, update, or remove
-            const fieldsToAdd = extractedFields.filter(f => 
+            const fieldsToAdd = fieldsToSync.filter(f =>
                 !existingFields.some(ef => ef.Name.toLowerCase() === f.name.toLowerCase())
             );
-            
+
             const fieldsToUpdate = existingFields.filter(ef =>
-                extractedFields.some(f => f.name.toLowerCase() === ef.Name.toLowerCase())
+                fieldsToSync.some(f => f.name.toLowerCase() === ef.Name.toLowerCase())
             );
-            
+
             const fieldsToRemove = existingFields.filter(ef =>
-                !extractedFieldNames.includes(ef.Name.toLowerCase())
+                !fieldNamesToSync.includes(ef.Name.toLowerCase())
             );
             
             // Prepare all save/delete operations
@@ -902,36 +963,81 @@ export class QueryEntityExtended extends QueryEntity {
                         newField.SQLFullType = 'nvarchar(MAX)';
                 }
                 
-                newField.IsComputed = field.dynamicName || false;
-                if (field.dynamicName) {
-                    newField.SourceFieldName = field.name;
+                // Set computed/summary flags
+                newField.IsComputed = field.isComputed || field.dynamicName || false;
+                newField.IsSummary = field.isSummary || false;
+                if (field.computationDescription) {
+                    newField.ComputationDescription = field.computationDescription;
                 }
-                
+
+                // Set source entity tracking
+                if (field.sourceEntity) {
+                    // Look up entity ID from entity name
+                    const sourceEntityInfo = md.Entities.find(e =>
+                        e.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
+                    );
+                    if (sourceEntityInfo) {
+                        newField.SourceEntityID = sourceEntityInfo.ID;
+                    }
+                }
+                newField.SourceFieldName = field.sourceFieldName || (field.dynamicName ? field.name : null);
+
                 promises.push(newField.Save());
             }
             
             // Update existing fields if properties changed
             for (const existingField of fieldsToUpdate) {
-                const extractedField = extractedFields.find(f => f.name.toLowerCase() === existingField.Name.toLowerCase());
+                const extractedField = fieldsToSync.find(f => f.name.toLowerCase() === existingField.Name.toLowerCase());
                 if (extractedField) {
                     let hasChanges = false;
-                    
+
                     if (existingField.Description !== extractedField.description) {
                         existingField.Description = extractedField.description;
                         hasChanges = true;
                     }
-                    
-                    const isDynamic = extractedField.dynamicName || false;
-                    if (existingField.IsComputed !== isDynamic) {
-                        existingField.IsComputed = isDynamic;
+
+                    const newIsComputed = extractedField.isComputed || extractedField.dynamicName || false;
+                    if (existingField.IsComputed !== newIsComputed) {
+                        existingField.IsComputed = newIsComputed;
                         hasChanges = true;
                     }
 
-                    if (existingField.Sequence !== extractedFields.indexOf(extractedField) + 1) {
-                        existingField.Sequence = extractedFields.indexOf(extractedField) + 1;
+                    const newIsSummary = extractedField.isSummary || false;
+                    if (existingField.IsSummary !== newIsSummary) {
+                        existingField.IsSummary = newIsSummary;
                         hasChanges = true;
                     }
-                    
+
+                    if (extractedField.computationDescription && existingField.ComputationDescription !== extractedField.computationDescription) {
+                        existingField.ComputationDescription = extractedField.computationDescription;
+                        hasChanges = true;
+                    }
+
+                    // Update source entity tracking
+                    if (extractedField.sourceEntity) {
+                        const sourceEntityInfo = md.Entities.find(e =>
+                            e.Name.toLowerCase() === extractedField.sourceEntity!.toLowerCase()
+                        );
+                        if (sourceEntityInfo && existingField.SourceEntityID !== sourceEntityInfo.ID) {
+                            existingField.SourceEntityID = sourceEntityInfo.ID;
+                            hasChanges = true;
+                        }
+                    } else if (existingField.SourceEntityID != null) {
+                        existingField.SourceEntityID = null;
+                        hasChanges = true;
+                    }
+
+                    const newSourceFieldName = extractedField.sourceFieldName || (extractedField.dynamicName ? extractedField.name : null);
+                    if (existingField.SourceFieldName !== newSourceFieldName) {
+                        existingField.SourceFieldName = newSourceFieldName;
+                        hasChanges = true;
+                    }
+
+                    if (existingField.Sequence !== fieldsToSync.indexOf(extractedField) + 1) {
+                        existingField.Sequence = fieldsToSync.indexOf(extractedField) + 1;
+                        hasChanges = true;
+                    }
+
                     if (hasChanges) {
                         promises.push(existingField.Save());
                     }

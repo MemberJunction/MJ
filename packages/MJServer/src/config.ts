@@ -93,6 +93,7 @@ const sqlLoggingOptionsSchema = z.object({
   prettyPrint: z.boolean().optional().default(true),
   logRecordChangeMetadata: z.boolean().optional().default(false),
   retainEmptyLogFiles: z.boolean().optional().default(false),
+  verboseOutput: z.boolean().optional().default(false),
 });
 
 const sqlLoggingSchema = z.object({
@@ -223,9 +224,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   dbPassword: process.env.DB_PASSWORD,
   dbReadOnlyUsername: process.env.DB_READ_ONLY_USERNAME,
   dbReadOnlyPassword: process.env.DB_READ_ONLY_PASSWORD,
-  dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE
-    ? (process.env.DB_TRUST_SERVER_CERTIFICATE === 'true' ? 'Y' : 'N')
-    : 'N',
+  dbTrustServerCertificate: ['true', '1', 'Y', 'y'].includes(process.env.DB_TRUST_SERVER_CERTIFICATE ?? '') ? 'Y' : 'N',
   dbInstanceName: process.env.DB_INSTANCE_NAME,
   mjCoreSchema: process.env.MJ_CORE_SCHEMA ?? '__mj',
 
@@ -305,6 +304,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
       prettyPrint: true,
       logRecordChangeMetadata: false,
       retainEmptyLogFiles: false,
+      verboseOutput: false,
     },
     allowedLogDirectory: './logs/sql',
     maxActiveSessions: 5,

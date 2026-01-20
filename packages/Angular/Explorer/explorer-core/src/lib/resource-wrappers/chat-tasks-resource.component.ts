@@ -2,14 +2,14 @@ import { Component, ViewEncapsulation, OnDestroy, ViewChild } from '@angular/cor
 import { Router, NavigationEnd } from '@angular/router';
 import { Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
 import { Subject, takeUntil, filter } from 'rxjs';
 
 export function LoadChatTasksResource() {
-  const test = new ChatTasksResource(null!); // Force inclusion in production builds (tree shaking workaround)
+  const test = new ChatTasksResource(null!, null!); // Force inclusion in production builds (tree shaking workaround)
 }
 
 /**
@@ -63,7 +63,10 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   private destroy$ = new Subject<void>();
   private lastNavigatedUrl: string = ''; // Track URL to avoid reacting to our own navigation
 
-  constructor(private router: Router) {
+  constructor(
+    private router: Router,
+    private navigationService: NavigationService
+  ) {
     super();
   }
 
@@ -152,26 +155,19 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
 
   /**
    * Update URL query string to reflect current state.
-   * Uses Angular Router for proper browser history integration.
+   * Uses NavigationService for proper URL management that respects app-scoped routes.
    */
   private updateUrl(): void {
-    const params = new URLSearchParams();
+    const queryParams: Record<string, string | null> = {};
 
     if (this.activeTaskId) {
-      params.set('taskId', this.activeTaskId);
+      queryParams['taskId'] = this.activeTaskId;
+    } else {
+      queryParams['taskId'] = null;
     }
 
-    // Get current path without query string
-    const currentUrl = this.router.url;
-    const currentPath = currentUrl.split('?')[0];
-    const queryString = params.toString();
-    const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
-
-    // Track this URL so we don't react to our own navigation
-    this.lastNavigatedUrl = newUrl;
-
-    // Use Angular Router for proper browser history integration
-    this.router.navigateByUrl(newUrl, { replaceUrl: false });
+    // Use NavigationService to update query params properly
+    this.navigationService.UpdateActiveTabQueryParams(queryParams);
   }
 
   /**

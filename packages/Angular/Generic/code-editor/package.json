@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-code-editor",
-  "version": "2.133.0",
+  "version": "3.0.0",
   "description": "MemberJunction: Angular Code Editor",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -35,10 +35,10 @@
     "@codemirror/merge": "^6.6.3",
     "@codemirror/state": "latest",
     "@codemirror/view": "latest",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/core-entities": "2.133.0",
-    "@memberjunction/global": "2.133.0",
-    "@memberjunction/ng-container-directives": "2.133.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/global": "3.0.0",
+    "@memberjunction/ng-container-directives": "3.0.0",
     "codemirror": "^6.0.1",
     "tslib": "^2.3.0"
   },

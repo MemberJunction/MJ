@@ -223,26 +223,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        // Pre-processing: telemetry, validation, entity status check
-        const preResult = await this.PreRunView(params, contextUser);
-
-        // Check for cached result - end telemetry with cache hit info
-        if (preResult.cachedResult) {
-            TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
-                cacheHit: true,
-                cacheStatus: preResult.cacheStatus,
-                resultCount: preResult.cachedResult.Results?.length ?? 0
-            });
-            return preResult.cachedResult as RunViewResult<T>;
-        }
-
-        // Execute the internal implementation
-        const result = await this.InternalRunView<T>(params, contextUser);
-
-        // Post-processing: transformation, cache storage, telemetry end
-        await this.PostRunView(result, params, preResult, contextUser);
-
-        return result;
+        // Delegate to RunViews with a single-element array to ensure smart cache check is used
+        // This guarantees that CacheLocal uses server-side validation (maxUpdatedAt + rowCount check)
+        // rather than blindly accepting stale local cache
+        const results = await this.RunViews<T>([params], contextUser);
+        return results[0];
     }
 
     /**
