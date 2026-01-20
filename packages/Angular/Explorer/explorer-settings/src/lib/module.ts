@@ -5,7 +5,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 // Kendo UI Angular imports
 import { GridModule } from '@progress/kendo-angular-grid';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
+import { DialogsModule } from '@progress/kendo-angular-dialog';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
@@ -64,7 +64,6 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     ReactiveFormsModule,
     GridModule,
     DialogsModule,
-    WindowModule,
     ExcelExportModule,
     CompareRecordsModule,
     ContainerDirectivesModule,

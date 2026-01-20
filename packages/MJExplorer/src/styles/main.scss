@@ -1,6 +1,7 @@
 // Core style imports
 @import './variables';
 @import './typography';
+@import './md3-theme';
 
 // Import Kendo theme BEFORE our overrides
 // Using package resolution - works regardless of repository structure
