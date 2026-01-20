@@ -711,11 +711,7 @@ export class NavigationService implements OnDestroy {
    * navigationService.UpdateActiveTabQueryParams({ category: null });
    */
   UpdateActiveTabQueryParams(queryParams: Record<string, string | null>): void {
-    console.log('[NavigationService.UpdateActiveTabQueryParams] Called with:', queryParams);
-
     const activeTabId = this.workspaceManager.GetActiveTabId();
-    console.log('[NavigationService.UpdateActiveTabQueryParams] activeTabId:', activeTabId);
-
     if (!activeTabId) {
       console.warn('NavigationService.UpdateActiveTabQueryParams: No active tab');
       return;
@@ -727,8 +723,6 @@ export class NavigationService implements OnDestroy {
       console.warn('NavigationService.UpdateActiveTabQueryParams: Tab not found');
       return;
     }
-
-    console.log('[NavigationService.UpdateActiveTabQueryParams] Current tab config:', tab.configuration);
 
     // Get existing queryParams from tab configuration
     const existingQueryParams = (tab.configuration?.['queryParams'] || {}) as Record<string, string | null>;
@@ -752,13 +746,9 @@ export class NavigationService implements OnDestroy {
       }
     }
 
-    console.log('[NavigationService.UpdateActiveTabQueryParams] Merged queryParams:', mergedQueryParams);
-
     // Update the tab configuration
     this.workspaceManager.UpdateTabConfiguration(activeTabId, {
       queryParams: Object.keys(mergedQueryParams).length > 0 ? mergedQueryParams : undefined
     });
-
-    console.log('[NavigationService.UpdateActiveTabQueryParams] Called UpdateTabConfiguration');
   }
 }
