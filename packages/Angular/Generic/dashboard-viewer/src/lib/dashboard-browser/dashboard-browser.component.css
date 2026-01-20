@@ -420,6 +420,23 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Shared Badge */
+.shared-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #e3f2fd;
+    color: #1976d2;
+    font-size: 10px;
+    flex-shrink: 0;
 }
 
 .card-description {
@@ -509,6 +526,12 @@
     flex: 1;
     min-width: 200px;
     gap: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.name-col .shared-badge {
+    margin-left: 4px;
 }
 
 .row-icon {

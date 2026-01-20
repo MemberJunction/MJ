@@ -484,29 +484,42 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Sync URL with active tab's resource
    */
   private syncUrlWithWorkspace(config: WorkspaceConfiguration): void {
+    console.log('[Shell.syncUrlWithWorkspace] Called, urlBasedNavigation:', this.urlBasedNavigation, 'activeTabId:', config.activeTabId);
+
     // Don't sync URL during URL-based navigation initialization
     if (this.urlBasedNavigation) {
+      console.log('[Shell.syncUrlWithWorkspace] Skipping - urlBasedNavigation is true');
       return;
     }
 
     if (!config.activeTabId) {
+      console.log('[Shell.syncUrlWithWorkspace] Skipping - no activeTabId');
       return;
     }
 
     // Find the active tab
     const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
     if (!activeTab) {
+      console.log('[Shell.syncUrlWithWorkspace] Skipping - activeTab not found');
       return;
     }
 
+    console.log('[Shell.syncUrlWithWorkspace] Active tab:', activeTab.title, 'config:', activeTab.configuration);
+
     // Build resource URL from tab configuration
     const resourceUrl = this.buildResourceUrl(activeTab);
-    if (resourceUrl) {
-      // Only update URL if it's different from current URL to avoid navigation loops
-      const currentUrl = this.router.url.split('?')[0];
-      const newUrl = resourceUrl.split('?')[0];
+    console.log('[Shell.syncUrlWithWorkspace] Built resourceUrl:', resourceUrl);
 
+    if (resourceUrl) {
+      // Compare full URLs including query params to detect changes
+      const currentUrl = this.router.url;
+      const newUrl = resourceUrl;
+
+      console.log('[Shell.syncUrlWithWorkspace] Comparing URLs - current:', currentUrl, 'new:', newUrl);
+
+      // Only update if URL is different (path or query params changed)
       if (currentUrl !== newUrl) {
+        console.log('[Shell.syncUrlWithWorkspace] URLs differ, navigating to:', resourceUrl);
         // Suppress ResourceResolver for this navigation - we're just syncing the URL
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
@@ -515,7 +528,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         const replaceUrl = this.firstUrlSync;
         this.firstUrlSync = false;
         this.router.navigateByUrl(resourceUrl, { replaceUrl });
+      } else {
+        console.log('[Shell.syncUrlWithWorkspace] URLs are identical, skipping navigation');
       }
+    } else {
+      console.log('[Shell.syncUrlWithWorkspace] No resourceUrl built');
     }
   }
 
@@ -636,6 +653,125 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
 
+    // Check for app-scoped resource URLs (new pattern)
+    // Pattern: /app/:appName/:resourceType/:param1/:param2?
+
+    // Dashboard: /app/:appName/dashboard/:dashboardId
+    const appDashboardMatch = urlPath.match(/^\/app\/([^\/]+)\/dashboard\/(.+)$/);
+    if (appDashboardMatch) {
+      const dashboardId = appDashboardMatch[2];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'dashboards' && tabDashboardId === dashboardId;
+      }) || null;
+    }
+
+    // Record: /app/:appName/record/:entityName/:recordId
+    const appRecordMatch = urlPath.match(/^\/app\/([^\/]+)\/record\/([^\/]+)\/(.+)$/);
+    if (appRecordMatch) {
+      const entityName = decodeURIComponent(appRecordMatch[2]);
+      const recordId = appRecordMatch[3];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
+               tabRecordId === recordId;
+      }) || null;
+    }
+
+    // Dynamic view: /app/:appName/view/dynamic/:entityName
+    const appDynamicViewMatch = urlPath.match(/^\/app\/([^\/]+)\/view\/dynamic\/(.+)$/);
+    if (appDynamicViewMatch) {
+      const entityName = decodeURIComponent(appDynamicViewMatch[2]);
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+        const isDynamic = tabConfig['isDynamic'] as boolean | undefined;
+
+        return resourceType === 'user views' && isDynamic && tabEntity?.toLowerCase() === entityName.toLowerCase();
+      }) || null;
+    }
+
+    // Saved view: /app/:appName/view/:viewId
+    const appViewMatch = urlPath.match(/^\/app\/([^\/]+)\/view\/([^\/]+)$/);
+    if (appViewMatch) {
+      const viewId = appViewMatch[2];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabViewId = (tabConfig['viewId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'user views' && tabViewId === viewId;
+      }) || null;
+    }
+
+    // Query: /app/:appName/query/:queryId
+    const appQueryMatch = urlPath.match(/^\/app\/([^\/]+)\/query\/(.+)$/);
+    if (appQueryMatch) {
+      const queryId = appQueryMatch[2];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabQueryId = (tabConfig['queryId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'queries' && tabQueryId === queryId;
+      }) || null;
+    }
+
+    // Report: /app/:appName/report/:reportId
+    const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
+    if (appReportMatch) {
+      const reportId = appReportMatch[2];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabReportId = (tabConfig['reportId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'reports' && tabReportId === reportId;
+      }) || null;
+    }
+
+    // Artifact: /app/:appName/artifact/:artifactId
+    const appArtifactMatch = urlPath.match(/^\/app\/([^\/]+)\/artifact\/(.+)$/);
+    if (appArtifactMatch) {
+      const artifactId = appArtifactMatch[2];
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabArtifactId = (tabConfig['artifactId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'artifacts' && tabArtifactId === artifactId;
+      }) || null;
+    }
+
+    // Search: /app/:appName/search/:searchInput
+    const appSearchMatch = urlPath.match(/^\/app\/([^\/]+)\/search\/(.+)$/);
+    if (appSearchMatch) {
+      const searchInput = decodeURIComponent(appSearchMatch[2]);
+
+      return tabs.find(tab => {
+        const tabConfig = tab.configuration || {};
+        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
+        const tabSearchInput = (tabConfig['SearchInput'] || tab.resourceRecordId) as string | undefined;
+
+        return resourceType === 'search results' && tabSearchInput === searchInput;
+      }) || null;
+    }
+
+    // Legacy resource URLs (kept for backward compatibility)
     // Check for resource record URL: /resource/record/:entityName/:recordId
     const recordMatch = urlPath.match(/^\/resource\/record\/([^\/]+)\/(.+)$/);
     if (recordMatch) {
@@ -806,18 +942,103 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const isDynamic = config['isDynamic'] as boolean | undefined;
     const extraFilter = (config['ExtraFilter'] || config['extraFilter']) as string | undefined;
 
+    // For orphan resources (not tied to a specific nav item), use app-scoped URLs
+    // Get the app path for the URL
+    let appPath: string | null = null;
+    if (tabAppId && tabAppId !== SYSTEM_APP_ID) {
+      const app = this.appManager.GetAppById(tabAppId);
+      if (app) {
+        appPath = app.Path || app.Name;
+      }
+    }
+
+    // If no app path found, try to use Home app as the default
+    if (!appPath) {
+      const homeApp = this.appManager.GetAppByName('Home');
+      if (homeApp) {
+        appPath = homeApp.Path || homeApp.Name;
+      }
+    }
+
+    // Build app-scoped URLs (new pattern) if we have an app context
+    if (appPath) {
+      switch (resourceType) {
+        case 'records':
+          // /app/:appName/record/:entityName/:recordId
+          if (entityName && recordId) {
+            return `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`;
+          }
+          break;
+
+        case 'user views':
+          // Check if it's a dynamic view
+          if (isDynamic || recordId === 'dynamic') {
+            // /app/:appName/view/dynamic/:entityName?ExtraFilter=...
+            if (entityName) {
+              let url = `/app/${encodeURIComponent(appPath)}/view/dynamic/${encodeURIComponent(entityName)}`;
+              if (extraFilter) {
+                url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
+              }
+              return url;
+            }
+          } else if (recordId) {
+            // /app/:appName/view/:viewId (saved view)
+            return `/app/${encodeURIComponent(appPath)}/view/${recordId}`;
+          }
+          break;
+
+        case 'dashboards':
+          // /app/:appName/dashboard/:dashboardId
+          if (recordId) {
+            return `/app/${encodeURIComponent(appPath)}/dashboard/${recordId}`;
+          }
+          break;
+
+        case 'artifacts':
+          // /app/:appName/artifact/:artifactId
+          if (recordId) {
+            return `/app/${encodeURIComponent(appPath)}/artifact/${recordId}`;
+          }
+          break;
+
+        case 'queries':
+          // /app/:appName/query/:queryId
+          if (recordId) {
+            return `/app/${encodeURIComponent(appPath)}/query/${recordId}`;
+          }
+          break;
+
+        case 'reports':
+          // /app/:appName/report/:reportId
+          if (recordId) {
+            return `/app/${encodeURIComponent(appPath)}/report/${recordId}`;
+          }
+          break;
+
+        case 'search results':
+          // /app/:appName/search/:searchInput?Entity=...
+          const searchInput = config['SearchInput'] as string | undefined;
+          if (searchInput) {
+            let url = `/app/${encodeURIComponent(appPath)}/search/${encodeURIComponent(searchInput)}`;
+            if (entityName) {
+              url += `?Entity=${encodeURIComponent(entityName)}`;
+            }
+            return url;
+          }
+          break;
+      }
+    }
+
+    // Fallback to legacy routes (for backward compatibility during transition)
     switch (resourceType) {
       case 'records':
-        // /resource/record/:entityName/:recordId
         if (entityName && recordId) {
           return `/resource/record/${encodeURIComponent(entityName)}/${recordId}`;
         }
         break;
 
       case 'user views':
-        // Check if it's a dynamic view
         if (isDynamic || recordId === 'dynamic') {
-          // /resource/view/dynamic/:entityName?ExtraFilter=...
           if (entityName) {
             let url = `/resource/view/dynamic/${encodeURIComponent(entityName)}`;
             if (extraFilter) {
@@ -826,27 +1047,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             return url;
           }
         } else if (recordId) {
-          // /resource/view/:viewId (saved view)
           return `/resource/view/${recordId}`;
         }
         break;
 
       case 'dashboards':
-        // /resource/dashboard/:dashboardId
         if (recordId) {
           return `/resource/dashboard/${recordId}`;
         }
         break;
 
       case 'artifacts':
-        // /resource/artifact/:artifactId
         if (recordId) {
           return `/resource/artifact/${recordId}`;
         }
         break;
 
       case 'queries':
-        // /resource/query/:queryId
         if (recordId) {
           return `/resource/query/${recordId}`;
         }

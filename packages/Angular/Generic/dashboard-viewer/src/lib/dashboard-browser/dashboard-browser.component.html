@@ -58,7 +58,7 @@
                     <button class="action-btn" (click)="OnMoveSelected()" title="Move to folder" [disabled]="SelectedCount === 0">
                         <i class="fa-solid fa-folder-open"></i>
                     </button>
-                    <button class="action-btn danger" (click)="OnDeleteSelected()" title="Delete selected" [disabled]="SelectedCount === 0">
+                    <button class="action-btn danger" (click)="OnDeleteSelected()" title="Delete selected" [disabled]="!CanDeleteAnySelected">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                     <button class="action-btn" (click)="ExitSelectionMode()" title="Exit selection mode">
@@ -189,12 +189,14 @@
                 </div>
                 <div class="card-actions">
                     <button
+                        *ngIf="CanEdit(dashboard.ID)"
                         class="action-btn"
                         title="Edit"
                         (click)="OnEditDashboard(dashboard, $event)">
                         <i class="fa-solid fa-edit"></i>
                     </button>
                     <button
+                        *ngIf="CanDelete(dashboard.ID)"
                         class="action-btn danger"
                         title="Delete"
                         (click)="OnDeleteDashboard(dashboard, $event)">
@@ -203,7 +205,12 @@
                 </div>
             </div>
             <div class="card-content">
-                <h3 class="card-title" [innerHTML]="HighlightMatch(dashboard.Name)"></h3>
+                <h3 class="card-title">
+                    <span [innerHTML]="HighlightMatch(dashboard.Name)"></span>
+                    <span class="shared-badge" *ngIf="IsShared(dashboard.ID)" title="Shared with you">
+                        <i class="fa-solid fa-share-nodes"></i>
+                    </span>
+                </h3>
                 <p class="card-description" *ngIf="dashboard.Description" [innerHTML]="HighlightMatch(dashboard.Description)">
                 </p>
                 <div class="card-meta">
@@ -282,6 +289,9 @@
             <div class="list-col name-col">
                 <i class="fa-solid fa-chart-line row-icon"></i>
                 <span class="dashboard-name" [innerHTML]="HighlightMatch(dashboard.Name)"></span>
+                <span class="shared-badge" *ngIf="IsShared(dashboard.ID)" title="Shared with you">
+                    <i class="fa-solid fa-share-nodes"></i>
+                </span>
             </div>
             <div class="list-col type-col">
                 Dashboard
@@ -291,12 +301,14 @@
             </div>
             <div class="list-col actions-col" (click)="$event.stopPropagation()">
                 <button
+                    *ngIf="CanEdit(dashboard.ID)"
                     class="action-btn"
                     title="Edit"
                     (click)="OnEditDashboard(dashboard, $event)">
                     <i class="fa-solid fa-edit"></i>
                 </button>
                 <button
+                    *ngIf="CanDelete(dashboard.ID)"
                     class="action-btn danger"
                     title="Delete"
                     (click)="OnDeleteDashboard(dashboard, $event)">

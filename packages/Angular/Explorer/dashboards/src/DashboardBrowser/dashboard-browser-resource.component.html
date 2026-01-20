@@ -11,6 +11,8 @@
             [ShowCreateButton]="true"
             [AllowMultiSelect]="true"
             [AllowDragDrop]="true"
+            [DashboardPermissions]="dashboardPermissionsMap"
+            [EffectiveCategoryMap]="effectiveCategoryMap"
             (DashboardOpen)="onDashboardOpen($event)"
             (DashboardEdit)="onDashboardEdit($event)"
             (DashboardDelete)="onDashboardDelete($event)"
@@ -42,13 +44,31 @@
 
             <!-- Right-side Actions -->
             <div class="toolbar-actions">
+                <!-- Shared indicator for non-owned dashboards -->
+                <span class="shared-indicator" *ngIf="!selectedDashboardPermissions.IsOwner && selectedDashboardPermissions.CanRead">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    Shared with you
+                </span>
+
                 <button
                     class="btn-icon"
                     title="Open in its own tab"
                     (click)="openInNewTab()">
                     <i class="fa-solid fa-up-right-from-square"></i>
                 </button>
+
+                <!-- Share button - only shown if user can share -->
                 <button
+                    *ngIf="selectedDashboardPermissions.CanShare"
+                    class="btn-icon"
+                    title="Share Dashboard"
+                    (click)="openShareDialog()">
+                    <i class="fa-solid fa-user-plus"></i>
+                </button>
+
+                <!-- Edit button - only shown if user can edit -->
+                <button
+                    *ngIf="selectedDashboardPermissions.CanEdit"
                     class="btn-icon"
                     title="Edit Dashboard"
                     (click)="toggleEditMode()">
@@ -145,5 +165,12 @@
             (confirmed)="onRemoveConfirmed()"
             (cancelled)="onRemoveCancelled()">
         </mj-confirm-dialog>
+
+        <!-- Share Dashboard Dialog -->
+        <mj-dashboard-share-dialog
+            [Visible]="showShareDialog"
+            [Dashboard]="selectedDashboard"
+            (Result)="onShareDialogResult($event)">
+        </mj-dashboard-share-dialog>
     </ng-container>
 </div>

@@ -131,6 +131,7 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
 // Dashboard Browser Components (Coming Soon Placeholder)
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
+import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
 // Query Viewer Module
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 // Dashboard Viewer Module
@@ -237,7 +238,8 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     // Query Browser Components
     QueryBrowserResourceComponent,
     // Dashboard Browser Components
-    DashboardBrowserResourceComponent
+    DashboardBrowserResourceComponent,
+    DashboardShareDialogComponent
   ],
   imports: [
     CommonModule,
@@ -346,7 +348,8 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
     // Query Browser Components
     QueryBrowserResourceComponent,
     // Dashboard Browser Components
-    DashboardBrowserResourceComponent
+    DashboardBrowserResourceComponent,
+    DashboardShareDialogComponent
   ]
 })
 export class DashboardsModule { }

@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, ViewChild, AfterViewInit, NgZone } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
@@ -4896,8 +4896,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         private cdr: ChangeDetectorRef,
         private ngZone: NgZone,
         private navigationService: NavigationService,
-        private route: ActivatedRoute,
-        private router: Router
+        private route: ActivatedRoute
     ) {
         super();
     }
@@ -7403,6 +7402,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
     /**
      * Update query parameters to reflect current state (for deep linking)
+     * Uses NavigationService for proper URL management that respects app-scoped routes.
      */
     private updateQueryParams(): void {
         const queryParams: Record<string, string | null> = {
@@ -7414,21 +7414,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             kpi: this.kpiCardsCollapsed ? 'collapsed' : null
         };
 
-        // Remove null values for cleaner URLs
-        const cleanParams: Record<string, string> = {};
-        for (const [key, value] of Object.entries(queryParams)) {
-            if (value !== null) {
-                cleanParams[key] = value;
-            }
-        }
-
-        // Update URL without navigation
-        this.router.navigate([], {
-            relativeTo: this.route,
-            queryParams: cleanParams,
-            queryParamsHandling: '', // Replace all query params
-            replaceUrl: true // Don't add to browser history
-        });
+        // Use NavigationService to update query params properly
+        this.navigationService.UpdateActiveTabQueryParams(queryParams);
     }
 
     // === User Preferences Persistence ===

@@ -1,9 +1,9 @@
 import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
-import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity, DashboardCategoryEntity, DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { ResourceData, DashboardEntity, DashboardEngine, DashboardUserStateEntity, DashboardCategoryEntity, DashboardPartTypeEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { DataExplorerDashboardComponent, DataExplorerFilter } from '@memberjunction/ng-dashboards';
+import { DataExplorerDashboardComponent, DataExplorerFilter, ShareDialogResult } from '@memberjunction/ng-dashboards';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
 
 export function LoadDashboardResource() {
@@ -44,14 +44,29 @@ export function LoadDashboardResource() {
                             <i class="fa-solid fa-chart-line"></i>
                             {{ configDashboard.Name }}
                         </span>
+                        @if (!dashboardPermissions.IsOwner && dashboardPermissions.PermissionSource !== 'none') {
+                            <span class="shared-indicator" title="Shared with you">
+                                <i class="fa-solid fa-share-nodes"></i>
+                            </span>
+                        }
                     </div>
                     <div class="toolbar-actions">
-                        <button
-                            class="btn-icon"
-                            title="Edit Dashboard"
-                            (click)="toggleEditMode()">
-                            <i class="fa-solid fa-edit"></i>
-                        </button>
+                        @if (dashboardPermissions.CanShare) {
+                            <button
+                                class="btn-icon"
+                                title="Share Dashboard"
+                                (click)="openShareDialog()">
+                                <i class="fa-solid fa-share-nodes"></i>
+                            </button>
+                        }
+                        @if (dashboardPermissions.CanEdit) {
+                            <button
+                                class="btn-icon"
+                                title="Edit Dashboard"
+                                (click)="toggleEditMode()">
+                                <i class="fa-solid fa-edit"></i>
+                            </button>
+                        }
                     </div>
                 </div>
             }
@@ -92,6 +107,15 @@ export function LoadDashboardResource() {
 
             <!-- Dashboard Content Container -->
             <div #container class="dashboard-resource-container"></div>
+
+            <!-- Share Dashboard Dialog -->
+            @if (configDashboard) {
+                <mj-dashboard-share-dialog
+                    [Visible]="showShareDialog"
+                    [Dashboard]="configDashboard"
+                    (Result)="onShareDialogResult($event)">
+                </mj-dashboard-share-dialog>
+            }
         </div>
     `,
     styles: [`
@@ -140,6 +164,17 @@ export function LoadDashboardResource() {
         }
         .viewer-toolbar .dashboard-title i {
             color: #5c6bc0;
+        }
+        .shared-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e3f2fd;
+            color: #1976d2;
+            font-size: 11px;
         }
         .viewer-toolbar .toolbar-actions {
             display: flex;
@@ -401,6 +436,20 @@ export class DashboardResource extends BaseResourceComponent {
     public editingName = '';
     public editingDescription = '';
 
+    /** Current user's permissions for this dashboard */
+    public dashboardPermissions: DashboardUserPermissions = {
+        DashboardID: '',
+        CanRead: true,
+        CanEdit: true,
+        CanDelete: true,
+        CanShare: true,
+        IsOwner: true,
+        PermissionSource: 'owner'
+    };
+
+    /** Whether the share dialog is visible */
+    public showShareDialog = false;
+
     /**
      * Sets the error state with a user-friendly message and optional technical details
      */
@@ -530,6 +579,40 @@ export class DashboardResource extends BaseResourceComponent {
             // Trigger the viewer's add panel flow
             this.viewerInstance.onAddPanelClick();
         }
+    }
+
+    /**
+     * Open the share dialog for this dashboard
+     */
+    public openShareDialog(): void {
+        this.showShareDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Close the share dialog
+     */
+    public closeShareDialog(): void {
+        this.showShareDialog = false;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handle share dialog result
+     */
+    public onShareDialogResult(result: ShareDialogResult): void {
+        this.showShareDialog = false;
+
+        if (result.Action === 'save' && this.configDashboard) {
+            // Recompute permissions after sharing changes
+            const md = new Metadata();
+            this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
+                this.configDashboard.ID,
+                md.CurrentUser.ID
+            );
+        }
+
+        this.cdr.detectChanges();
     }
 
     /**
@@ -760,6 +843,13 @@ export class DashboardResource extends BaseResourceComponent {
             // Store references for external toolbar control
             this.viewerInstance = instance;
             this.configDashboard = dashboard;
+
+            // Compute user permissions for this dashboard
+            const md = new Metadata();
+            this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
+                dashboard.ID,
+                md.CurrentUser.ID
+            );
 
             // Manually append the component's native element inside the div
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];

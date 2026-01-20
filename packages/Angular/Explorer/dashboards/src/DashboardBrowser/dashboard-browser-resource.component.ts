@@ -1,11 +1,12 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, DashboardEntity, DashboardCategoryEntity, DashboardPartTypeEntity, DashboardEngine } from '@memberjunction/core-entities';
+import { ResourceData, DashboardEntity, DashboardCategoryEntity, DashboardPartTypeEntity, DashboardEngine, DashboardUserPermissions, DashboardCategoryLinkEntity } from '@memberjunction/core-entities';
+import { ShareDialogResult } from './dashboard-share-dialog.component';
 import {
     DashboardViewerComponent,
     DashboardNavRequestEvent,
@@ -74,12 +75,32 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public confirmPanelId: string = '';
     public confirmPanelTitle: string = '';
 
+    // Share dialog state
+    public showShareDialog = false;
+
     // Edit mode state for name/description
     public editingName = '';
     public editingDescription = '';
     private originalName = '';
     private originalDescription = '';
     private originalConfig = '';
+
+    // Permission state for selected dashboard
+    public selectedDashboardPermissions: DashboardUserPermissions = {
+        DashboardID: '',
+        CanRead: true,
+        CanEdit: true,
+        CanDelete: true,
+        CanShare: true,
+        IsOwner: true,
+        PermissionSource: 'owner'
+    };
+
+    // Permission map for all dashboards (used by browser component)
+    public dashboardPermissionsMap: Map<string, DashboardUserPermissions> = new Map();
+
+    // Effective category map for shared dashboards (maps dashboard ID to effective category for display)
+    public effectiveCategoryMap: Map<string, string | null> = new Map();
 
     private readonly _destroy$ = new Subject<void>();
 
@@ -91,7 +112,6 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     constructor(
         private cdr: ChangeDetectorRef,
-        private router: Router,
         private route: ActivatedRoute,
         private navigationService: NavigationService
     ) {
@@ -197,17 +217,36 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     }
 
     /**
-     * Handle dashboard move request from generic browser
+     * Handle dashboard move request from generic browser.
+     * For owned dashboards: updates the dashboard's CategoryID directly.
+     * For shared dashboards: creates/updates a DashboardCategoryLink to organize without modifying the original.
      */
     public async onDashboardMove(event: DashboardMoveEvent): Promise<void> {
         try {
             this.isLoading = true;
             this.cdr.detectChanges();
 
+            const md = new Metadata();
+            const currentUserId = md.CurrentUser.ID;
+
             for (const dashboard of event.Dashboards) {
-                dashboard.CategoryID = event.TargetCategoryId;
-                await dashboard.Save();
+                const permissions = DashboardEngine.Instance.GetDashboardPermissions(dashboard.ID, currentUserId);
+
+                if (permissions.IsOwner) {
+                    // Owner can modify the dashboard directly
+                    dashboard.CategoryID = event.TargetCategoryId;
+                    await dashboard.Save();
+                } else {
+                    // Non-owner: create or update a category link instead
+                    await this.createOrUpdateCategoryLink(dashboard.ID, currentUserId, event.TargetCategoryId);
+
+                    // Update the effective category map immediately for UI refresh
+                    this.effectiveCategoryMap.set(dashboard.ID, event.TargetCategoryId);
+                }
             }
+
+            // Create new map reference to trigger change detection
+            this.effectiveCategoryMap = new Map(this.effectiveCategoryMap);
 
             // Refresh the list
             this.dashboards = [...this.dashboards];
@@ -220,6 +259,45 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         } finally {
             this.isLoading = false;
             this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Creates or updates a DashboardCategoryLink for organizing a shared dashboard.
+     * Ensures only one link exists per user/dashboard combination.
+     * @param dashboardId - The ID of the shared dashboard
+     * @param userId - The current user's ID
+     * @param categoryId - The target category ID (null for root/uncategorized)
+     */
+    private async createOrUpdateCategoryLink(
+        dashboardId: string,
+        userId: string,
+        categoryId: string | null
+    ): Promise<void> {
+        const md = new Metadata();
+
+        // Check if a link already exists for this user/dashboard
+        const existingLinks = DashboardEngine.Instance.DashboardCategoryLinks.filter(
+            link => link.DashboardID === dashboardId && link.UserID === userId
+        );
+
+        let link: DashboardCategoryLinkEntity;
+
+        if (existingLinks.length > 0) {
+            // Update existing link
+            link = existingLinks[0];
+            link.DashboardCategoryID = categoryId;
+        } else {
+            // Create new link
+            link = await md.GetEntityObject<DashboardCategoryLinkEntity>('MJ: Dashboard Category Links');
+            link.DashboardID = dashboardId;
+            link.UserID = userId;
+            link.DashboardCategoryID = categoryId;
+        }
+
+        const saved = await link.Save();
+        if (!saved) {
+            console.error('Failed to save dashboard category link:', link.LatestResult);
         }
     }
 
@@ -389,6 +467,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public openDashboard(dashboard: DashboardEntity): void {
         this.selectedDashboard = dashboard;
         this.mode = 'view';
+
+        // Compute permissions for the selected dashboard
+        const md = new Metadata();
+        this.selectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
+            dashboard.ID,
+            md.CurrentUser.ID
+        );
+
         this.updateUrlQueryParams();
         this.cdr.detectChanges();
     }
@@ -397,7 +483,20 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Open a dashboard for editing
      */
     public editDashboard(dashboard: DashboardEntity): void {
+        // Check if user has edit permission
+        const md = new Metadata();
+        const permissions = DashboardEngine.Instance.GetDashboardPermissions(
+            dashboard.ID,
+            md.CurrentUser.ID
+        );
+
+        if (!permissions.CanEdit) {
+            console.warn('User does not have permission to edit this dashboard');
+            return;
+        }
+
         this.selectedDashboard = dashboard;
+        this.selectedDashboardPermissions = permissions;
         this.mode = 'edit';
 
         // Initialize editing fields
@@ -432,6 +531,48 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.mode = 'view';
             this.cdr.detectChanges();
         }
+    }
+
+    /**
+     * Open the share dialog for the current dashboard
+     */
+    public openShareDialog(): void {
+        if (!this.selectedDashboard) return;
+
+        // Verify user has share permission
+        if (!this.selectedDashboardPermissions.CanShare) {
+            console.warn('User does not have permission to share this dashboard');
+            return;
+        }
+
+        this.showShareDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Close the share dialog
+     */
+    public closeShareDialog(): void {
+        this.showShareDialog = false;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handle share dialog result
+     */
+    public onShareDialogResult(result: ShareDialogResult): void {
+        this.showShareDialog = false;
+
+        if (result.Action === 'save' && this.selectedDashboard) {
+            // Recompute permissions after sharing changes
+            const md = new Metadata();
+            this.selectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
+                this.selectedDashboard.ID,
+                md.CurrentUser.ID
+            );
+        }
+
+        this.cdr.detectChanges();
     }
 
     // ========================================
@@ -768,6 +909,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const engine = DashboardEngine.Instance;
             await engine.Config(false); // Wait for engine to load data
 
+            const md = new Metadata();
+            const currentUserId = md.CurrentUser.ID;
+
             // Get data from engine - sort dashboards by updated date, categories by name
             this.dashboards = [...engine.Dashboards].sort((a, b) =>
                 new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime()
@@ -776,9 +920,42 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 a.Name.localeCompare(b.Name)
             );
 
+            // Build permissions map and effective category map for all dashboards
+            this.dashboardPermissionsMap = new Map();
+            this.effectiveCategoryMap = new Map();
+
+            // Get category links for current user (from engine's cached data)
+            const userCategoryLinks = engine.DashboardCategoryLinks.filter(
+                link => link.UserID === currentUserId
+            );
+
+            for (const dashboard of this.dashboards) {
+                const perms = engine.GetDashboardPermissions(dashboard.ID, currentUserId);
+                this.dashboardPermissionsMap.set(dashboard.ID, perms);
+
+                // For shared dashboards (not owned), determine effective category
+                if (!perms.IsOwner) {
+                    // Look for a category link for this dashboard
+                    const categoryLink = userCategoryLinks.find(
+                        link => link.DashboardID === dashboard.ID
+                    );
+
+                    if (categoryLink) {
+                        // User has explicitly organized this shared dashboard
+                        this.effectiveCategoryMap.set(dashboard.ID, categoryLink.DashboardCategoryID);
+                    } else {
+                        // No link exists - show in root (null category)
+                        this.effectiveCategoryMap.set(dashboard.ID, null);
+                    }
+                }
+                // For owned dashboards, we don't add to effectiveCategoryMap
+                // so the browser will use the dashboard's actual CategoryID
+            }
+
             console.log('[DashboardBrowserResource] Loaded from DashboardEngine:', {
                 dashboardCount: this.dashboards.length,
                 categoryCount: this.categories.length,
+                sharedDashboardsInEffectiveMap: this.effectiveCategoryMap.size,
                 categories: this.categories.map(c => ({ id: c.ID, name: c.Name, parentId: c.ParentID }))
             });
 
@@ -828,6 +1005,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             });
     }
 
+    /**
+     * Update the URL query params for the current tab.
+     * Uses NavigationService to update the tab configuration, which triggers
+     * the shell's URL sync mechanism to update the browser URL properly
+     * while respecting app-scoped routes.
+     */
     private updateUrlQueryParams(): void {
         const queryParams: Record<string, string | null> = {};
 
@@ -845,11 +1028,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             queryParams['dashboard'] = null;
         }
 
-        this.router.navigate([], {
-            relativeTo: this.route,
-            queryParams,
-            queryParamsHandling: 'merge'
-        });
+        // Use NavigationService to update query params properly
+        // This ensures the URL update respects app-scoped routes
+        this.navigationService.UpdateActiveTabQueryParams(queryParams);
     }
 
     // ========================================

@@ -9,7 +9,7 @@ import {
     ChangeDetectionStrategy
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { DashboardEntity, DashboardCategoryEntity } from '@memberjunction/core-entities';
+import { DashboardEntity, DashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
 
 // ========================================
 // Event Types
@@ -188,6 +188,38 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
 
     /** Icon class for the header */
     @Input() IconClass = 'fa-solid fa-gauge-high';
+
+    /**
+     * Map of dashboard ID to user permissions.
+     * Used to show shared indicators and control edit/delete button visibility.
+     */
+    private _dashboardPermissions: Map<string, DashboardUserPermissions> = new Map();
+
+    @Input()
+    set DashboardPermissions(value: Map<string, DashboardUserPermissions> | null) {
+        this._dashboardPermissions = value || new Map();
+        this.cdr.markForCheck();
+    }
+    get DashboardPermissions(): Map<string, DashboardUserPermissions> {
+        return this._dashboardPermissions;
+    }
+
+    /**
+     * Map of dashboard ID to effective category ID for display.
+     * Used to show shared dashboards in the user's chosen category instead of owner's category.
+     * If a dashboard ID is not in this map, its actual CategoryID is used.
+     * Use empty string '' to indicate root/uncategorized.
+     */
+    private _effectiveCategoryMap: Map<string, string | null> = new Map();
+
+    @Input()
+    set EffectiveCategoryMap(value: Map<string, string | null> | null) {
+        this._effectiveCategoryMap = value || new Map();
+        this.applyFilters();
+    }
+    get EffectiveCategoryMap(): Map<string, string | null> {
+        return this._effectiveCategoryMap;
+    }
 
     // ========================================
     // Outputs
@@ -609,11 +641,20 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Request to delete selected dashboards
+     * Request to delete selected dashboards.
+     * Only includes dashboards the user has permission to delete.
      */
     public OnDeleteSelected(): void {
         if (this.SelectedIds.size === 0) return;
-        this.DashboardsPendingDelete = this.GetSelectedDashboards();
+
+        // Only include dashboards the user can delete
+        this.DashboardsPendingDelete = this.GetDeletableSelectedDashboards();
+
+        if (this.DashboardsPendingDelete.length === 0) {
+            // No deletable dashboards selected
+            return;
+        }
+
         this.ShowDeleteConfirm = true;
         this.cdr.markForCheck();
     }
@@ -901,6 +942,79 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         return category.ID;
     }
 
+    // ========================================
+    // Public Methods - Category Helpers
+    // ========================================
+
+    /**
+     * Gets the effective category ID for a dashboard for display purposes.
+     * For shared dashboards, this may differ from the actual CategoryID
+     * based on the user's DashboardCategoryLink.
+     */
+    public GetEffectiveCategoryId(dashboard: DashboardEntity): string | null {
+        // If we have an effective category mapping, use it
+        if (this._effectiveCategoryMap.has(dashboard.ID)) {
+            return this._effectiveCategoryMap.get(dashboard.ID) ?? null;
+        }
+        // Otherwise use the dashboard's actual category
+        return dashboard.CategoryID || null;
+    }
+
+    // ========================================
+    // Public Methods - Permission Checks
+    // ========================================
+
+    /**
+     * Check if a dashboard is shared with the current user (not owned)
+     */
+    public IsShared(dashboardId: string): boolean {
+        const perms = this._dashboardPermissions.get(dashboardId);
+        // If permissions exist and user is not owner but can read, it's shared
+        return perms ? !perms.IsOwner && perms.CanRead : false;
+    }
+
+    /**
+     * Check if user can edit a dashboard
+     */
+    public CanEdit(dashboardId: string): boolean {
+        const perms = this._dashboardPermissions.get(dashboardId);
+        // Default to true if no permissions provided (backwards compatibility)
+        return perms ? perms.CanEdit : true;
+    }
+
+    /**
+     * Check if user can delete a dashboard
+     */
+    public CanDelete(dashboardId: string): boolean {
+        const perms = this._dashboardPermissions.get(dashboardId);
+        // Default to true if no permissions provided (backwards compatibility)
+        return perms ? perms.CanDelete : true;
+    }
+
+    /**
+     * Check if any of the currently selected dashboards can be deleted.
+     * Returns true only if at least one selected dashboard can be deleted.
+     * Used to enable/disable the bulk delete button in selection mode.
+     */
+    public get CanDeleteAnySelected(): boolean {
+        if (this.SelectedIds.size === 0) return false;
+
+        for (const id of this.SelectedIds) {
+            if (this.CanDelete(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Gets the list of selected dashboards that can be deleted.
+     * Filters out dashboards the user doesn't have permission to delete.
+     */
+    public GetDeletableSelectedDashboards(): DashboardEntity[] {
+        return this.GetSelectedDashboards().filter(d => this.CanDelete(d.ID));
+    }
+
     /**
      * Highlight matching search text in a string
      * Returns HTML with <mark> tags around matches
@@ -1015,11 +1129,12 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         // Filter by current folder (category)
         // When at root (null), show only uncategorized dashboards
         // When in a category, show only dashboards directly in that category
+        // Uses effective category (from EffectiveCategoryMap) for shared dashboards
         if (this._selectedCategoryId) {
-            filtered = filtered.filter(d => d.CategoryID === this._selectedCategoryId);
+            filtered = filtered.filter(d => this.GetEffectiveCategoryId(d) === this._selectedCategoryId);
         } else {
-            // At root level, show only uncategorized dashboards (CategoryID is null or empty)
-            filtered = filtered.filter(d => !d.CategoryID);
+            // At root level, show only uncategorized dashboards (effective CategoryID is null or empty)
+            filtered = filtered.filter(d => !this.GetEffectiveCategoryId(d));
         }
 
         this.FilteredDashboards = filtered;

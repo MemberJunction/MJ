@@ -157,6 +157,11 @@ export {
   DashboardBrowserResourceComponent,
   LoadDashboardBrowserResource
 } from './DashboardBrowser/dashboard-browser-resource.component';
+export {
+  DashboardShareDialogComponent,
+  UserSharePermission,
+  ShareDialogResult
+} from './DashboardBrowser/dashboard-share-dialog.component';
 
 // Module
 export * from './module';

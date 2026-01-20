@@ -2058,47 +2058,41 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Update the URL query string to reflect current navigation state.
    * This enables deep linking - users can bookmark or share URLs to specific views.
    * Called immediately on state changes (not debounced).
-   * Uses Angular Router for proper browser history integration.
+   * Uses NavigationService for proper URL management that respects app-scoped routes.
    */
   private updateUrl(): void {
-    const params = new URLSearchParams();
+    const queryParams: Record<string, string | null> = {};
 
     // Add entity if selected
     if (this.state.selectedEntityName) {
-      params.set('entity', this.state.selectedEntityName);
+      queryParams['entity'] = this.state.selectedEntityName;
+    } else {
+      queryParams['entity'] = null;
     }
 
     // Add record if selected (only if entity is also selected)
-    // Use the stored selectedRecordId which is already in URL segment format
     if (this.state.selectedRecordId && this.state.selectedEntityName) {
-      // The selectedRecordId is stored using ToConcatenatedString which uses the same format as ToURLSegment
-      params.set('record', this.state.selectedRecordId);
+      queryParams['record'] = this.state.selectedRecordId;
+    } else {
+      queryParams['record'] = null;
     }
 
     // Add filter if present (only if entity is also selected)
     if (this.state.smartFilterPrompt && this.state.selectedEntityName) {
-      params.set('filter', this.state.smartFilterPrompt);
+      queryParams['filter'] = this.state.smartFilterPrompt;
+    } else {
+      queryParams['filter'] = null;
     }
 
     // Add view mode if not default (grid is default)
     if (this.state.viewMode && this.state.viewMode !== 'grid') {
-      params.set('view', this.state.viewMode);
+      queryParams['view'] = this.state.viewMode;
+    } else {
+      queryParams['view'] = null;
     }
 
-    // Get the current path without query string
-    const currentUrl = this.router.url;
-    const currentPath = currentUrl.split('?')[0];
-
-    // Build the new URL
-    const queryString = params.toString();
-    const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
-
-    // Track this URL so we don't react to our own navigation
-    this.lastNavigatedUrl = newUrl;
-
-    // Use Angular Router for proper browser history integration
-    // This allows back/forward buttons to work correctly
-    this.router.navigateByUrl(newUrl, { replaceUrl: false });
+    // Use NavigationService to update query params properly
+    this.navigationService.UpdateActiveTabQueryParams(queryParams);
   }
 
   /**

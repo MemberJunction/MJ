@@ -373,29 +373,22 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     /**
      * Update URL query string to reflect current state.
-     * Uses Angular Router for proper browser history integration.
+     * Uses NavigationService for proper URL management that respects app-scoped routes.
      */
     private updateUrl(): void {
         if (this.skipUrlUpdate) return;
 
-        const params = new URLSearchParams();
+        const queryParams: Record<string, string | null> = {};
 
-        // Add query ID if selected
+        // Add query ID if selected, null to remove
         if (this.selectedQuery?.ID) {
-            params.set('queryId', this.selectedQuery.ID);
+            queryParams['queryId'] = this.selectedQuery.ID;
+        } else {
+            queryParams['queryId'] = null;
         }
 
-        // Get current path without query string
-        const currentUrl = this.router.url;
-        const currentPath = currentUrl.split('?')[0];
-        const queryString = params.toString();
-        const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
-
-        // Track this URL so we don't react to our own navigation
-        this.lastNavigatedUrl = newUrl;
-
-        // Use Angular Router for proper browser history integration
-        this.router.navigateByUrl(newUrl, { replaceUrl: false });
+        // Use NavigationService to update query params properly
+        this.navigationService.UpdateActiveTabQueryParams(queryParams);
     }
 
     /**

@@ -1,10 +1,9 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
-import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseDashboard, NavigationService, RecentAccessService, RecentAccessItem } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { ResourceData, UserFavoriteEntity, UserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
@@ -76,7 +75,6 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
     private appManager: ApplicationManager,
     private navigationService: NavigationService,
     private recentAccessService: RecentAccessService,
-    private router: Router,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -258,56 +256,63 @@ export class HomeDashboardComponent extends BaseDashboard implements AfterViewIn
   }
 
   /**
-   * Navigate to a favorite item
+   * Navigate to a favorite item using NavigationService
    */
   onFavoriteClick(favorite: UserFavoriteEntity): void {
-    // Navigate based on entity type
+    // Navigate based on entity type using NavigationService
     const entityName = favorite.Entity?.toLowerCase();
+    const recordId = favorite.RecordID;
 
     if (entityName === 'dashboards') {
-      this.router.navigate(['/resource/dashboard', favorite.RecordID]);
+      this.navigationService.OpenDashboard(recordId, 'Dashboard');
     } else if (entityName === 'user views') {
-      this.router.navigate(['/resource/view', favorite.RecordID]);
+      this.navigationService.OpenView(recordId, 'View');
     } else if (entityName === 'reports') {
-      this.router.navigate(['/resource/report', favorite.RecordID]);
+      this.navigationService.OpenReport(recordId, 'Report');
     } else if (entityName?.includes('artifact')) {
-      this.router.navigate(['/resource/artifact', favorite.RecordID]);
+      this.navigationService.OpenArtifact(recordId, 'Artifact');
     } else {
       // Default: navigate to record
-      this.router.navigate(['/resource/record', favorite.Entity, favorite.RecordID]);
+      const compositeKey = new CompositeKey();
+      compositeKey.LoadFromSingleKeyValuePair('ID', recordId);
+      this.navigationService.OpenEntityRecord(favorite.Entity, compositeKey);
     }
   }
 
   /**
-   * Navigate to a recent item
+   * Navigate to a recent item using NavigationService
    */
   onRecentClick(item: RecentAccessItem): void {
+    // Use recordName if available, otherwise fall back to generic titles
+    const name = item.recordName;
+
     switch (item.resourceType) {
       case 'view':
-        this.router.navigate(['/resource/view', item.recordId]);
+        this.navigationService.OpenView(item.recordId, name || 'View');
         break;
       case 'dashboard':
-        this.router.navigate(['/resource/dashboard', item.recordId]);
+        this.navigationService.OpenDashboard(item.recordId, name || 'Dashboard');
         break;
       case 'artifact':
-        this.router.navigate(['/resource/artifact', item.recordId]);
+        this.navigationService.OpenArtifact(item.recordId, name || 'Artifact');
         break;
       case 'report':
-        this.router.navigate(['/resource/report', item.recordId]);
+        this.navigationService.OpenReport(item.recordId, name || 'Report');
         break;
       default:
         // Regular record
-        this.router.navigate(['/resource/record', item.entityName, item.recordId]);
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromSingleKeyValuePair('ID', item.recordId);
+        this.navigationService.OpenEntityRecord(item.entityName, compositeKey);
     }
   }
 
   /**
-   * Navigate to a notification
+   * Navigate to a notification using NavigationService
    */
   onNotificationClick(notification: UserNotificationEntity): void {
-    // Navigate to the notifications view or handle based on notification type
-    // For now, just navigate to the user notifications page
-    this.router.navigate(['/resource/view/dynamic/User%20Notifications']);
+    // Navigate to the notifications view using NavigationService
+    this.navigationService.OpenDynamicView('User Notifications');
   }
 
   /**
