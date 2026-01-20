@@ -12,15 +12,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.115Z",
       "checksum": "caf675f0566d09cfa6e32a2b28adfb157f4ae577b57ee0e571653953d6f42c4f"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -35,21 +27,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.209Z",
       "checksum": "f31c2412662d525d5fc2e2d1fbf9be2a4ea953177521f538af257480ce407299"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -64,21 +42,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.222Z",
       "checksum": "25170ad11e789126a99a0ed49b046b2f2e1d542e39f6ffe8f13991024ae17b69"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -93,21 +57,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.233Z",
       "checksum": "0fcdb3cbfe6d8c007922d8eadb32289d0ebd6877f1c3d815cefa7c76b01e8f8d"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -122,21 +72,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.248Z",
       "checksum": "d0d6140ebfbcc0f0d44f6abe70cc8b5c8d32c8c96e3156ccb7e25acdc6e5c706"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -151,21 +87,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.261Z",
       "checksum": "eaf3b3015180e354817176c8333da3e8560ff94eb0302c19cd71eeda5e054623"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -180,21 +102,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.272Z",
       "checksum": "86c1b3cf8edd7bfdfb4a7f12780766fcf01d64666acb341877a8ea1c9a8456a0"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -209,21 +117,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.283Z",
       "checksum": "e0f1a7324fffead8d683ba35b2313788b2fd25d9b5a18226c909ee13f97a30ad"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -238,21 +132,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.294Z",
       "checksum": "852248373cd59e2f660604143b0a793828c75920fbaaab2789ab7aee6f6e958d"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -267,21 +147,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.304Z",
       "checksum": "b9e85a844ff03ce909c6aed0f4b6a1c83647d032781316865a4f70fec34dc785"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -296,21 +162,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.315Z",
       "checksum": "3e2fc562d43457937e6e0a5f766543b432cfe72e90856d3a8804ba01196b3bb1"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -325,21 +177,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.397Z",
       "checksum": "bd5ee34b5838bb179f57a7680b7c1a53b2271a837fc03e115fd0de3137a1ca7b"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -354,21 +192,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.408Z",
       "checksum": "87b044986b54d3e92ae7bd39b3ec0fecf1041786ec90a84bd71b9e4f1355ff2b"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -383,21 +207,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.419Z",
       "checksum": "1061f8917c960f9e9a9681fbfdefb26824ab070ba49eaf3e08615fb7f93811ab"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -412,21 +222,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.434Z",
       "checksum": "680c81c85eb13772b08a7ede9ba9ba04e2251cb465545f7773bf546b13795c56"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -441,21 +237,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.449Z",
       "checksum": "18b50406a9f393685c589eaf0291e77c96f256f8eb0b9bf87cc4d75cfe14d538"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -470,21 +252,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.462Z",
       "checksum": "07aef57ccea5523692bef91e0255338a6b9e33515158f9d8228619fb3e5011a6"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -499,21 +267,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.473Z",
       "checksum": "87045f3d0081065de9597a0bf3b8e8120eaeb8d4b478cf8f20b662a0c9bdd58a"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -528,21 +282,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.485Z",
       "checksum": "469bde2dcbe2b1e122bfce0b427cb83be205f937575911a20021992939aae512"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -557,21 +297,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.500Z",
       "checksum": "c6b4e88ef780b30da2edb072c57d265c343b51a214ec4fcbea6b0372cd8718d6"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -586,21 +312,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.517Z",
       "checksum": "e7ddf51872b08e1725415bf2d2722de29b5f4705cbf8fbb06b61cd0a9f5ddce2"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -615,21 +327,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.578Z",
       "checksum": "2376d4c8e0745da8f34a98aab8192b353d426765da880b37945d56a72e077c94"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -644,21 +342,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.592Z",
       "checksum": "307de34a39eb16480826470f13576e0d80f3cc7448317cbdaf1a2f9dc6ffd30c"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -673,21 +357,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.604Z",
       "checksum": "34429f1c7b0d824e80497579da845c591f5e14298b3113582703280c8a8bed8c"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -702,21 +372,7 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.616Z",
       "checksum": "d2522d0f795649aafa459beaf4df3811694218ea3c4aa9898c8e8d44b8ec16c1"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   },
   {
     "fields": {
@@ -731,20 +387,6 @@
     "sync": {
       "lastModified": "2026-01-03T18:34:35.626Z",
       "checksum": "9abad73db8840f98eab8f36f489b022a42e301e2fa2c7abc6fb814ea04fb5919"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.ParentID",
-        "expression": "@lookup:Query Categories.Name=Golden-Queries",
-        "resolved": "ADF08ABE-6881-4A34-8411-C9621BE18476"
-      },
-      {
-        "type": "lookup",
-        "field": "fields.UserID",
-        "expression": "@lookup:Users.Name=System",
-        "resolved": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-      }
-    ]
+    }
   }
 ]
