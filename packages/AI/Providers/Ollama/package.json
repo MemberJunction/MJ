@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-ollama",
-  "version": "2.132.0",
+  "version": "3.0.0",
   "description": "MemberJunction Wrapper for Ollama - Local Inference",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.132.0",
-    "@memberjunction/global": "2.132.0",
+    "@memberjunction/ai": "3.0.0",
+    "@memberjunction/global": "3.0.0",
     "ollama": "^0.5.17"
   },
   "repository": {

@@ -1,5 +1,32 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@3.0.0
+- @memberjunction/ai-engine-base@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/actions@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-agent-manager@2.133.0
+  - @memberjunction/ai-engine-base@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/actions-base@2.133.0
+  - @memberjunction/actions@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes
@@ -434,7 +461,6 @@
 - 49171c3: - Implement missing AI Agent Manager action drivers including
   deactivate-agent, export-agent-bundle, set-agent-prompt, and
   validate-agent-configuration
-
   - Add comprehensive UUID validation with regex patterns to prevent SQL
     conversion errors
   - Enhance parameter validation and error handling across all actions
@@ -452,7 +478,6 @@
 - 7980171: entity name corrections
 
   ### Features
-
   - **Resizable & Draggable Dialogs**: Converted all AI Agent dialog
     types from DialogService to WindowService
     - Added corner resizing and drag-and-drop movement capabilities for
@@ -464,7 +489,6 @@
     styling
 
   ### Bug Fixes
-
   - **Critical Entity Name Corrections**: Fixed entity references to use
     proper "MJ: " prefix for newer core entities
     - Fixed 'AI Agent Prompts' → 'MJ: AI Agent Prompts' (3 occurrences)
@@ -473,14 +497,12 @@
       MemberJunction framework and prevents runtime errors
 
   ### Documentation
-
   - Updated CLAUDE.md with comprehensive entity naming guidelines
   - Added complete list of all 23 core entities requiring "MJ: " prefix
   - Added warning section with code examples to prevent future entity
     naming issues
 
   ### Impact
-
   - **Enhanced User Experience**: All AI Agent dialogs now provide
     modern, resizable, and draggable interfaces
   - **Database Compatibility**: Ensures proper entity schema compliance

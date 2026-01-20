@@ -39,12 +39,87 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
 - This is **non-negotiable** - standalone components are strictly forbidden
 
+### 5. NO RE-EXPORTS BETWEEN PACKAGES
+- **NEVER re-export types, classes, or interfaces from other packages**
+- **ALWAYS** import directly from the source package that defines them
+- **Why**: Re-exports create confusing dependency chains, obscure the true source of types, and can cause issues with tree-shaking and bundle sizes
+- Each package's `public-api.ts` or `index.ts` should only export:
+  - Code defined within that package
+  - Angular module, services, and components it provides
+- Example:
+  ```typescript
+  // ❌ BAD - Re-exporting from another package
+  export { ExportFormat, ExportOptions } from '@memberjunction/export-engine';
+
+  // ✅ GOOD - Only export what this package defines
+  export * from './lib/module';
+  export * from './lib/export.service';
+  export * from './lib/export-dialog.component';
+  // NOTE: For export types, import directly from @memberjunction/export-engine
+  ```
+- Consumers should import types from their original source package
+- Add comments directing users to the correct import location when helpful
+
 ---
 
 **VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
 
 ## IMPORTANT
 - Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
+
+## 🚨 CRITICAL: Git Branch Tracking Rules 🚨
+
+### Feature Branches MUST Track Same-Named Remote Branches
+When creating or working with feature branches, **ALWAYS** ensure the local branch tracks a remote branch **with the same name**. Never track `next`, `main`, or other permanent branches.
+
+**Why this matters**: If a feature branch tracks `origin/next` instead of `origin/feature-branch`, pushes will accidentally go to `next` directly, bypassing PR review and potentially breaking the main branch.
+
+### Creating New Feature Branches
+```bash
+# ✅ CORRECT - Create branch and push with upstream tracking to same-named remote
+git checkout -b my-feature-branch
+git push -u origin my-feature-branch
+
+# ❌ WRONG - Branch created from next will track origin/next by default!
+git checkout next
+git checkout -b my-feature-branch
+# Now my-feature-branch tracks origin/next - DANGEROUS!
+```
+
+### Verify Branch Tracking
+**ALWAYS check tracking before pushing:**
+```bash
+# Check what remote branch your local branch tracks
+git branch -vv
+
+# Example output:
+# * my-feature [origin/my-feature] Good - tracks same name  ✅
+# * my-feature [origin/next] BAD - tracks next!            ❌
+```
+
+### Fix Incorrect Tracking
+If a branch is tracking the wrong remote:
+```bash
+# Fix tracking to point to same-named remote branch
+git branch --set-upstream-to=origin/my-feature-branch my-feature-branch
+
+# Verify the fix
+git branch -vv
+```
+
+### Before Every Push
+1. Run `git branch -vv` to verify tracking
+2. Ensure your branch tracks `origin/<same-branch-name>`
+3. If tracking is wrong, fix it before pushing
+
+### The Danger of Wrong Tracking
+If `my-feature` tracks `origin/next`:
+- `git push` sends commits directly to `next`
+- Bypasses pull request review process
+- Can break the main branch for everyone
+- Requires reverts and cleanup to fix
+
+**This is a non-negotiable safety requirement.**
 
 ## Build Commands
 - Build all packages: `npm run build` - from repo root

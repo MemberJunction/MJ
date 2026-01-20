@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes
@@ -221,7 +233,6 @@
   Improved model selection caching by checking all candidates for valid API keys instead of stopping at first match, ensuring retry logic has access to complete list of viable model/vendor combinations. Added `extractValidCandidates()` method to `AIModelSelectionInfo` class and `buildCandidatesFromSelectionInfo()` helper to properly reconstruct candidate lists from selection metadata during hierarchical template execution.
 
   Enhanced error-based retry and failover with intelligent handling for authentication and rate limit errors. Authentication errors now trigger vendor-level filtering (excluding all models from vendors with invalid API keys) and immediate failover to different vendors. Rate limit errors now retry the same model/vendor using configurable `MaxRetries` (default: 3) with backoff delay based on `RetryStrategy` (Fixed/Linear/Exponential) before failing over. Improved log messages with human-readable formatting showing model/vendor names, time in seconds, and clear status indicators. Fixed MJCLI sync commands to properly propagate exit codes for CI/CD integration.
-
   - @memberjunction/global@2.105.0
 
 ## 2.104.0
@@ -450,7 +461,6 @@
   errors.
 
   **New Features:**
-
   - **ContextLengthExceeded Error Type**: New error classification for
     context length exceeded errors
   - **Smart Failover Logic**: Automatically switches to models with larger
@@ -461,7 +471,6 @@
     during failover
 
   **Enhanced Components:**
-
   - **ErrorAnalyzer**: Detects context_length_exceeded errors from
     provider codes, error messages, and JSON objects
   - **AIPromptRunner**: Adds token estimation, context validation, and
@@ -470,7 +479,6 @@
     logging
 
   **Key Improvements:**
-
   - Prevents infinite agent stalling on context length exceeded errors
   - Reduces API costs by avoiding repeated failed attempts with
     insufficient context models
@@ -478,11 +486,9 @@
   - Provides detailed logging for monitoring and debugging
 
   **Breaking Changes:**
-
   - None - all changes are backward compatible
 
   **Migration Notes:**
-
   - No migration required - existing code will automatically benefit from
     enhanced context handling
   - Models with MaxInputTokens/MaxOutputTokens configured will be
@@ -492,7 +498,6 @@
   This resolves the critical issue where agents would infinitely retry
   prompts that exceed model context limits, improving system reliability
   and reducing unnecessary API calls.
-
   - @memberjunction/global@2.73.0
 
 ## 2.72.0
@@ -672,19 +677,16 @@
   building during `npm install`.
 
   **Root Cause:**
-
   - `@memberjunction/aiengine` imported `AIPromptRunResult` from `@memberjunction/ai-prompts`
   - `@memberjunction/ai-prompts` depended on `@memberjunction/aiengine` in package.json
   - This circular dependency blocked the build chain
 
   **Solution:**
-
   - Moved `AIPromptRunResult` and related types to `@memberjunction/ai` as shared types
   - Updated all packages to import from the shared location instead of creating circular references
   - Added comprehensive build failure debugging guide to development documentation
 
   **Packages Fixed:**
-
   - `@memberjunction/core-entities-server` now builds successfully
   - All AI packages (`aiengine`, `ai-prompts`, `ai-agents`) build without circular dependency issues
   - Build order now resolves properly in the monorepo

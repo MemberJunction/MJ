@@ -172,6 +172,12 @@ export class ResourceResolver implements Resolve<void> {
 
     this.processedUrls.set(state.url, now);
 
+    // Check if this resolve should be suppressed (URL sync from tab click, not real navigation)
+    if (this.tabService.ShouldSuppressResolve()) {
+      this.tabService.ClearSuppressFlag();
+      return;
+    }
+
     const md = new Metadata();
     const applications = md.Applications;
 

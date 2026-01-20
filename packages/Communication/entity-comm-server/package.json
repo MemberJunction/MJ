@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/entity-communications-server",
-  "version": "2.132.0",
+  "version": "3.0.0",
   "description": "MemberJunction: Library that connects the MJ entities framework to the communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,12 +19,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/communication-engine": "2.132.0",
-    "@memberjunction/communication-types": "2.132.0",
-    "@memberjunction/core": "2.132.0",
-    "@memberjunction/core-entities": "2.132.0",
-    "@memberjunction/entity-communications-base": "2.132.0",
-    "@memberjunction/global": "2.132.0"
+    "@memberjunction/communication-engine": "3.0.0",
+    "@memberjunction/communication-types": "3.0.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/entity-communications-base": "3.0.0",
+    "@memberjunction/global": "3.0.0"
   },
   "repository": {
     "type": "git",

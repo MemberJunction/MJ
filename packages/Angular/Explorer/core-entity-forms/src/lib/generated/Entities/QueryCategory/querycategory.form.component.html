@@ -152,16 +152,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queries')">
+        [badgeCount]="GetSectionRowCount('queries')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Queries','CategoryID')"
                 [NewRecordValues]="NewRecordValues('Queries')"
                 [AllowLoad]="IsSectionExpanded('queries')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('queries', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('queries', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -173,16 +174,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('queryCategories')">
+        [badgeCount]="GetSectionRowCount('queryCategories')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Query Categories','ParentID')"
                 [NewRecordValues]="NewRecordValues('Query Categories')"
                 [AllowLoad]="IsSectionExpanded('queryCategories')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('queryCategories', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('queryCategories', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

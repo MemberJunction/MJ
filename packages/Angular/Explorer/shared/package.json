@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-shared",
-  "version": "2.132.0",
+  "version": "3.0.0",
   "description": "MemberJunction: MJ Explorer Angular Shared Package - utility functions and other reusable elements used across other MJ Angular packages within the MJ Explorer App - do not use outside of MJ Explorer.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -18,27 +18,27 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2"
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/router": "18.0.2",
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/router": "18.2.14",
     "rxjs": "^7.8.1"
   },
   "dependencies": {
-    "@angular/platform-browser": "18.0.2",
-    "@memberjunction/ai-engine-base": "2.132.0",
-    "@memberjunction/core": "2.132.0",
-    "@memberjunction/core-entities": "2.132.0",
-    "@memberjunction/global": "2.132.0",
-    "@memberjunction/graphql-dataprovider": "2.132.0",
-    "@memberjunction/entity-communications-base": "2.132.0",
-    "@memberjunction/ng-base-application": "2.132.0",
-    "@memberjunction/ng-base-types": "2.132.0",
-    "@memberjunction/ng-notifications": "2.132.0",
-    "@memberjunction/ng-shared-generic": "2.132.0",
+    "@angular/platform-browser": "18.2.14",
+    "@memberjunction/ai-engine-base": "3.0.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/global": "3.0.0",
+    "@memberjunction/graphql-dataprovider": "3.0.0",
+    "@memberjunction/entity-communications-base": "3.0.0",
+    "@memberjunction/ng-base-application": "3.0.0",
+    "@memberjunction/ng-base-types": "3.0.0",
+    "@memberjunction/ng-notifications": "3.0.0",
+    "@memberjunction/ng-shared-generic": "3.0.0",
     "@progress/kendo-angular-notification": "16.2.0",
     "tslib": "^2.3.0"
   },

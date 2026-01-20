@@ -1,5 +1,40 @@
 # @memberjunction/ng-ai-test-harness
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@3.0.0
+- @memberjunction/ai@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/ng-shared@3.0.0
+- @memberjunction/ng-code-editor@3.0.0
+- @memberjunction/ng-container-directives@3.0.0
+- @memberjunction/ng-notifications@3.0.0
+- @memberjunction/ng-shared-generic@3.0.0
+- @memberjunction/graphql-dataprovider@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-engine-base@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/ng-shared@2.133.0
+  - @memberjunction/ng-code-editor@2.133.0
+  - @memberjunction/ng-container-directives@2.133.0
+  - @memberjunction/ng-notifications@2.133.0
+  - @memberjunction/ng-shared-generic@2.133.0
+  - @memberjunction/graphql-dataprovider@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes
@@ -516,13 +551,11 @@
 - 8f2a4fa: Enhance Web Page Content action with comprehensive format support (resolves #1414)
 
   **New Format Support**:
-
   - JSON APIs, PDF, DOCX, XML, CSV, HTML, and images
   - Intelligent content type detection from headers and file extensions
   - New 'auto' mode for automatic format selection (default)
 
   **Improvements**:
-
   - Enhanced HTML to Markdown conversion (Turndown library)
   - Robust HTML parsing with JSDOM
   - Increased default MaxContentLength to 100,000 characters

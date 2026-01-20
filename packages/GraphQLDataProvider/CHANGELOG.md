@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/interactive-component-types@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/actions-base@2.133.0
+  - @memberjunction/interactive-component-types@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes
@@ -419,7 +442,6 @@
 - 4567af3: **Component Feedback System (Registry-Agnostic)**
 
   Implement comprehensive component feedback system that works across any component registry (Skip, MJ Central, etc.) with support for custom feedback handlers.
-
   - Add skip-component-feedback-panel component with sliding panel UI (444 lines CSS, 161 lines HTML, 274 lines TS)
   - Add star ratings (0-5 scale), comments, and component hierarchy visualization
   - Add FeedbackHandler interface for customizable feedback logic per registry
@@ -436,7 +458,6 @@
   **React Runtime Debug Logging Enhancements**
 
   Restore debug logging with production guards for better debugging capabilities.
-
   - Restore 12 debug console.log statements throughout React runtime (prop-builder, component-hierarchy)
   - Wrap all debug logs with LogStatus/GetProductionStatus checks
   - Add comprehensive README.md documentation (95 lines) for debug configuration
@@ -446,7 +467,6 @@
   **AI Prompt Error Handling Improvements**
 
   Replace hardcoded error truncation with configurable maxErrorLength parameter.
-
   - Add maxErrorLength?: number property to AIPromptParams class
   - Update AIPromptRunner.logError() to accept maxErrorLength in options
   - Thread maxErrorLength through 18 logError calls throughout AIPromptRunner
@@ -455,7 +475,6 @@
   - When set, errors are truncated with "... [truncated]" suffix
 
   **Bug Fixes**
-
   - Fix AI parameter extraction edge cases in AIPromptRunner and QueryEntity
   - Fix mj.config.cjs configuration
   - Fix component hierarchy tracking in dynamic reports
@@ -657,7 +676,6 @@
 ### Patch Changes
 
 - 56257ed: Fix RunView pagination implementation
-
   - Added StartRow parameter support for server-side pagination
   - Fixed SQL generation to prevent TOP and OFFSET/FETCH conflicts
   - Improved total row count calculation for paginated queries
@@ -731,7 +749,6 @@
 ### Patch Changes
 
 - c35f869: Fix: Remove non-existent ComputationEnabled field from Query operations
-
   - Removed ComputationEnabled field from GraphQL mutations (CreateQuerySystemUser and UpdateQuerySystemUser) in GraphQLSystemUserClient
   - Removed ComputationEnabled from QueryField TypeScript interface
   - Fixed CreateQueryResolver to not set ComputationEnabled when mapping query fields
@@ -808,7 +825,6 @@
 ### Patch Changes
 
 - 8ee0d86: Fix: Query parameter validation and cascade delete transaction handling
-
   - Added validation to ensure query parameters are JSON objects rather than arrays in GraphQL system user client
   - Implemented automatic transaction wrapping for entities with CascadeDeletes enabled
   - For database providers (server-side), delete operations are wrapped in
@@ -831,7 +847,6 @@
 - f1e5990: bug fix
 - 087595d: feat: make DeleteQuery options parameter optional and refactor
   GraphQLSystemUserClient methods
-
   - Made options parameter optional in DeleteQuerySystemResolver with
     sensible defaults (SkipEntityAIActions: false, SkipEntityActions: false)
   - Refactored GraphQLSystemUserClient method names for better usability by
@@ -863,14 +878,12 @@
   GetQueryDataByNameSystemUser resolver.
 
   Key Features:
-
   - Parameters support for templated queries (enabling AI cost calculations)
   - MaxRows and StartRow pagination support
   - Complete resolver coverage for system user operations
   - Fixed TypeScript compilation errors with missing TotalRowCount fields
   - Updated both GetQueryDataSystemUser and GetQueryDataByNameSystemUser
     methods with full parameter support
-
     - Added missing GetQueryDataByNameSystemUser resolver with proper
       @RequireSystemUser decoration
     - Fixed error handling cases to include required TotalRowCount field
@@ -883,7 +896,6 @@
 
 - 6a65fad: feat: Add AI Agent Run cost calculation with high-performance templated
   queries
-
   - Add AIAgentRunCostService with intelligent caching and single-query
     performance optimization
   - Implement CalculateAIAgentRunCost templated query using recursive CTE for
@@ -1287,7 +1299,6 @@
 ### Minor Changes
 
 - 7e0523d: Persist Skip conversation status and add completion time display
-
   - Added 'Status' column to Conversation table with 'Processing' and 'Available' states
   - Added 'CompletionTime' column to ConversationDetail table to track processing duration
   - Updated AskSkipResolver to manage conversation status and track processing time

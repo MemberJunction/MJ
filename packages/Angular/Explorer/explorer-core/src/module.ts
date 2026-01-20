@@ -37,6 +37,7 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
 import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
+import { ListDetailGridModule } from '@memberjunction/ng-list-detail-grid';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
@@ -145,7 +146,8 @@ import { NotificationsResource } from './lib/resource-wrappers/notifications-res
     AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,
-    EntityViewerModule
+    EntityViewerModule,
+    ListDetailGridModule
   ],
   exports: [
     FormToolbarComponent,

@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { AIModelVendorEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-user-view-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Model Vendors') // Tell MemberJunction about this class
 @Component({

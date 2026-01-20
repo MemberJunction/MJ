@@ -92,6 +92,9 @@ export * from './custom/user-management/create-employee.action';
 export * from './custom/user-management/assign-user-roles.action';
 export * from './custom/user-management/validate-email-unique.action';
 
+// List Management Actions
+export * from './custom/lists';
+
 // Visualization Actions
 export * from './custom/visualization/create-svg-chart.action';
 export * from './custom/visualization/create-svg-diagram.action';
@@ -193,6 +196,7 @@ import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 import { LoadGetRecordsAction } from './custom/crud';
 import { LoadCodeExecutionAction } from './custom/code-execution/execute-code.action';
+import { LoadListActions } from './custom/lists';
 
 export function LoadAllCoreActions() {
     LoadGeneratedActions()
@@ -283,6 +287,9 @@ export function LoadAllCoreActions() {
     LoadCreateMermaidDiagramAction();
     LoadCodeExecutionAction();
     LoadBettyAction();
+
+    // List Management Actions
+    LoadListActions();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

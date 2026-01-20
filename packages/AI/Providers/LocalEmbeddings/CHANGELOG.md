@@ -1,5 +1,19 @@
 # @memberjunction/ai-local-embeddings
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.133.0
+- @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes
@@ -339,7 +353,6 @@
 ### Patch Changes
 
 - 5161d9f: Add ESM/CommonJS compatibility documentation
-
   - Document the dynamic import workaround for @xenova/transformers ESM-only module
   - Add clear migration instructions for future ESM conversion
   - Include specific notes for AI assistants handling future migrations

@@ -13,6 +13,7 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 
 import { SectionLoaderComponent } from './lib/section-loader-component';
 import { MJFormField } from './lib/base-field-component';
@@ -25,6 +26,7 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { MJLinkField } from './lib/link-field.component';
 import { FormSectionControlsComponent } from './lib/form-section-controls.component';
 import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
+import { ExplorerEntityDataGridComponent } from './lib/explorer-entity-data-grid.component';
 
  
 @NgModule({
@@ -33,7 +35,8 @@ import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
     MJFormField,
     MJLinkField,
     FormSectionControlsComponent,
-    CollapsiblePanelComponent
+    CollapsiblePanelComponent,
+    ExplorerEntityDataGridComponent
   ],
   imports: [
     CommonModule,
@@ -50,14 +53,16 @@ import { CollapsiblePanelComponent } from './lib/collapsible-panel.component';
     ContainerDirectivesModule,
     MemberJunctionSharedModule,
     CodeEditorModule,
-    MarkdownModule
+    MarkdownModule,
+    EntityViewerModule
   ],
   exports: [
     SectionLoaderComponent,
     MJFormField,
     MJLinkField,
     FormSectionControlsComponent,
-    CollapsiblePanelComponent
+    CollapsiblePanelComponent,
+    ExplorerEntityDataGridComponent
   ]
 })
 export class BaseFormsModule { }

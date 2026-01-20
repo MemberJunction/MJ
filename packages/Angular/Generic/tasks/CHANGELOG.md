@@ -1,5 +1,24 @@
 # @memberjunction/ng-tasks
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@3.0.0
+- @memberjunction/ai-core-plus@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ai-engine-base@2.133.0
+  - @memberjunction/ai-core-plus@2.133.0
+  - @memberjunction/core-entities@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes

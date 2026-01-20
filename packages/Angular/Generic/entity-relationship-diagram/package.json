@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-relationship-diagram",
-  "version": "2.132.0",
+  "version": "3.0.0",
   "description": "MemberJunction: Entity Relationship Diagram (ERD) component for visualizing entity relationships using D3.js force-directed graphs",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -22,19 +22,19 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2",
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14",
     "sass": "^1.77.2"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/platform-browser": "18.0.2"
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/platform-browser": "18.2.14"
   },
   "dependencies": {
-    "@angular/forms": "18.0.2",
+    "@angular/forms": "18.2.14",
     "@dagrejs/dagre": "^1.1.8",
-    "@memberjunction/core": "2.132.0",
+    "@memberjunction/core": "3.0.0",
     "@progress/kendo-angular-layout": "^16.2.0",
     "@types/d3": "^7.4.3",
     "d3": "^7.9.0",

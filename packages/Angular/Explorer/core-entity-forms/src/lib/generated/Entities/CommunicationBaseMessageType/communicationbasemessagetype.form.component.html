@@ -100,16 +100,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('communicationProviderMessageTypes')">
+        [badgeCount]="GetSectionRowCount('communicationProviderMessageTypes')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Communication Provider Message Types','CommunicationBaseMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('Communication Provider Message Types')"
                 [AllowLoad]="IsSectionExpanded('communicationProviderMessageTypes')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('communicationProviderMessageTypes', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('communicationProviderMessageTypes', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 
@@ -121,16 +122,17 @@
         variant="related-entity"
         [form]="this"
         [formContext]="formContext"
-        [badgeCount]="GetSectionRowCount('entityCommunicationMessageTypes')">
+        [badgeCount]="GetSectionRowCount('entityCommunicationMessageTypes')"
+        [defaultExpanded]="false">
         <div *ngIf="record.IsSaved">
-            <mj-user-view-grid
+            <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types','BaseMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
                 [AllowLoad]="IsSectionExpanded('entityCommunicationMessageTypes')"
-                [EditMode]="GridEditMode()"
-                (dataLoaded)="SetSectionRowCount('entityCommunicationMessageTypes', $event.totalRowCount)"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('entityCommunicationMessageTypes', $event.totalRowCount)"
                 >
-            </mj-user-view-grid>
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 </mj-record-form-container>

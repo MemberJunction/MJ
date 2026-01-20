@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/core@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes
@@ -32,21 +47,18 @@
 - f0b3126: Refactor authentication system to v3.0 with proper encapsulation and eliminate leaky abstractions. This is a breaking change as the authentication provider API has been completely redesigned.
 
   **Breaking Changes:**
-
   - Removed `getUserClaims()` method - replaced with `getUserInfo()` that returns `Observable<StandardUserInfo>`
   - Removed direct access to provider-specific token structures (e.g., `claims?.__raw`, `claims?.idToken`)
   - New standardized API: `getIdToken()`, `getTokenInfo()`, `refreshToken()`, `classifyError()`, `getProfilePictureUrl()`
   - Error handling now uses semantic `AuthErrorType` enum instead of provider-specific error checking
 
   **New Features:**
-
   - Standardized `StandardUserInfo` and `StandardAuthToken` interfaces across all providers
   - Semantic error classification with user-friendly messages
   - Profile picture URL retrieval abstraction (handles Auth0 claims, Microsoft Graph API, and Okta userinfo)
   - Proper encapsulation - consumers no longer need to know which provider is being used
 
   **Migration Guide:**
-
   - Replace `getUserClaims()` with `getUserInfo()` and use async pipe in templates
   - Replace token access patterns with `getIdToken()` or `getTokenInfo()`
   - Replace provider-specific error checking with `classifyError()` and `AuthErrorType` enum
@@ -319,7 +331,6 @@
 ### Patch Changes
 
 - 2eaf6c9: Fix Okta token refresh to prevent GraphQL re-initialization errors
-
   - Prevents authStateManager from updating userClaims$ during token
     refresh operations
   - Uses proper token.renewTokens() method for PKCE flow instead of
@@ -361,9 +372,7 @@
 ### Patch Changes
 
 - 4b52f29: Skip Chat UI improvements and auth provider fixes
-
   - **Skip Chat UI Enhancements**:
-
     - Fixed timer display persistence when switching between conversations
     - Prevented clock icon from disappearing when other conversations complete
     - Eliminated delay when displaying status messages on conversation switch
@@ -373,7 +382,6 @@
     - Fixed text overflow issues under buttons in chat input area
 
   - **Auth Provider Improvements**:
-
     - Simplified Load function implementation across auth providers (Auth0, MSAL,
       Okta)
 
@@ -390,7 +398,6 @@
 
 - 2a87d36: Fix auth provider initialization latency causing multi-second
   delays on app startup
-
   - Implemented lazy initialization for MSAL, Auth0, and Okta
     providers to defer expensive operations until authentication is
     actually needed
@@ -407,7 +414,6 @@
 
   This reduces MJExplorer startup time from several seconds to under
   50ms while maintaining full auth functionality.
-
   - @memberjunction/core@2.94.0
 
 ## 2.93.0
@@ -430,7 +436,6 @@
 ### Minor Changes
 
 - f703033: Implement extensible N-provider authentication architecture
-
   - Created shared authentication types in @memberjunction/core for use
     across frontend and backend
   - Refactored authentication to support multiple providers using MJGlobal

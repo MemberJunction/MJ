@@ -718,16 +718,17 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * Checks if a section is expanded.
    * Uses FormStateService for persisted state.
    * @param sectionKey The section key
+   * @param defaultExpanded Optional default value to use when no persisted state exists
    * @returns True if expanded, false otherwise
    */
-  public IsSectionExpanded(sectionKey: string): boolean {
+  public IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean {
     const entityName = this.getEntityName();
     if (entityName) {
-      return this.formStateService.isSectionExpanded(entityName, sectionKey);
+      return this.formStateService.isSectionExpanded(entityName, sectionKey, defaultExpanded);
     }
     // Fallback to in-memory state if no entity name
     const section = this.sectionMap.get(sectionKey);
-    return section ? section.isExpanded : true;
+    return section ? section.isExpanded : (defaultExpanded !== undefined ? defaultExpanded : true);
   }
 
   /**

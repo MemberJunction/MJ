@@ -1,7 +1,7 @@
-import { Component, Input, Output, EventEmitter, OnChanges, OnInit, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnInit, OnDestroy, SimpleChanges, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
@@ -24,6 +24,13 @@ import {
   TimelineOrientation,
   TimelineState
 } from '../types';
+import {
+  AfterRowClickEventArgs,
+  AfterRowDoubleClickEventArgs,
+  AfterSortEventArgs
+} from '../entity-data-grid/events/grid-events';
+import { GridToolbarConfig, GridSelectionMode } from '../entity-data-grid/models/grid-types';
+import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.component';
 
 /**
  * EntityViewerComponent - Full-featured composite component for viewing entity data
@@ -159,6 +166,33 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
   private _timelineConfig: TimelineState | null = null;
 
+  /**
+   * Whether to show the grid toolbar.
+   * When false, the grid is displayed without its own toolbar - useful when
+   * entity-viewer provides its own filter/actions in the header.
+   * @default false
+   */
+  @Input() showGridToolbar: boolean = false;
+
+  /**
+   * Grid toolbar configuration - controls which buttons are shown and their behavior
+   * When not provided, uses sensible defaults
+   */
+  @Input() gridToolbarConfig: Partial<GridToolbarConfig> | null = null;
+
+  /**
+   * Grid selection mode
+   * @default 'single'
+   */
+  @Input() gridSelectionMode: GridSelectionMode = 'single';
+
+  /**
+   * Show the "Add to List" button in the grid toolbar.
+   * Requires gridSelectionMode to be 'multiple' for best UX.
+   * @default false
+   */
+  @Input() showAddToListButton: boolean = false;
+
   // ========================================
   // OUTPUTS
   // ========================================
@@ -208,6 +242,46 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Output() timelineConfigChange = new EventEmitter<TimelineState>();
 
+  /**
+   * Emitted when the Add/New button is clicked in the grid toolbar
+   */
+  @Output() addRequested = new EventEmitter<void>();
+
+  /**
+   * Emitted when the Delete button is clicked in the grid toolbar
+   * Includes the selected records to be deleted
+   */
+  @Output() deleteRequested = new EventEmitter<{ records: BaseEntity[] }>();
+
+  /**
+   * Emitted when the Refresh button is clicked in the grid toolbar
+   */
+  @Output() refreshRequested = new EventEmitter<void>();
+
+  /**
+   * Emitted when the Export button is clicked in the grid toolbar
+   */
+  @Output() exportRequested = new EventEmitter<{ format: 'excel' | 'csv' | 'json' }>();
+
+  /**
+   * Emitted when the Add to List button is clicked in the grid toolbar.
+   * Parent components should handle this to show the list management dialog.
+   */
+  @Output() addToListRequested = new EventEmitter<{
+    entityInfo: EntityInfo;
+    records: BaseEntity[];
+    recordIds: string[];
+  }>();
+
+  /**
+   * Emitted when grid selection changes.
+   * Parent components can use this to track selected records for their own toolbar buttons.
+   */
+  @Output() selectionChanged = new EventEmitter<{
+    records: BaseEntity[];
+    recordIds: string[];
+  }>();
+
   // ========================================
   // INTERNAL STATE
   // ========================================
@@ -226,6 +300,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
   /** Current sort state */
   public internalSortState: SortState | null = null;
+
+  /** Cached grid params to avoid recreating object on every change detection */
+  private _cachedGridParams: RunViewParams | null = null;
+  private _lastGridParamsEntity: string | null = null;
+  private _lastGridParamsViewEntity: UserViewEntityExtended | null = null;
 
   /** Pagination state */
   public pagination: PaginationState = {
@@ -285,7 +364,22 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   /** Track if this is the first load (vs. load more) */
   private isInitialLoad: boolean = true;
 
+  /** Reference to the data grid component for flushing pending changes */
+  @ViewChild(EntityDataGridComponent) private dataGridRef: EntityDataGridComponent | undefined;
+
   constructor(private cdr: ChangeDetectorRef) {}
+
+  // ========================================
+  // PUBLIC METHODS
+  // ========================================
+
+  /**
+   * Ensures any pending grid state changes are saved immediately without waiting for debounce.
+   * Call this before switching views or entities to ensure changes are saved.
+   */
+  public EnsurePendingChangesSaved(): void {
+    this.dataGridRef?.EnsurePendingChangesSaved();
+  }
 
   // ========================================
   // COMPUTED PROPERTIES
@@ -337,10 +431,65 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * Get the OrderBy string for mj-entity-data-grid from the effective sort state
+   */
+  get effectiveSortOrderBy(): string {
+    const sortState = this.effectiveSortState;
+    if (!sortState?.field || !sortState.direction) {
+      return '';
+    }
+    return `${sortState.field} ${sortState.direction.toUpperCase()}`;
+  }
+
+  /**
    * Get merged configuration with defaults
    */
   get effectiveConfig(): Required<EntityViewerConfig> {
     return { ...DEFAULT_VIEWER_CONFIG, ...this.config };
+  }
+
+  /**
+   * Get cached grid params - only recreates object when entity or viewEntity changes
+   * This prevents Angular from seeing a new object reference on every change detection
+   * which would cause the grid to reinitialize
+   */
+  get gridParams(): RunViewParams | null {
+    if (!this.entity) {
+      return null;
+    }
+
+    // Check if we need to recreate the params object
+    const entityChanged = this._lastGridParamsEntity !== this.entity.Name;
+    const viewEntityChanged = this._lastGridParamsViewEntity !== this.viewEntity;
+
+    if (entityChanged || viewEntityChanged || !this._cachedGridParams) {
+      this._lastGridParamsEntity = this.entity.Name;
+      this._lastGridParamsViewEntity = this.viewEntity ?? null;
+      this._cachedGridParams = {
+        EntityName: this.entity.Name,
+        ViewEntity: this.viewEntity || undefined
+      };
+    }
+
+    return this._cachedGridParams;
+  }
+
+  /**
+   * Get the effective grid toolbar configuration
+   * Merges user-provided config with defaults appropriate for entity-viewer context
+   */
+  get effectiveGridToolbarConfig(): GridToolbarConfig {
+    const defaults: GridToolbarConfig = {
+      showSearch: false, // Entity-viewer has its own filter
+      showRefresh: true,
+      showAdd: true,
+      showDelete: true,
+      showExport: true,
+      showColumnChooser: true,
+      showRowCount: true,
+      showSelectionCount: true
+    };
+    return { ...defaults, ...this.gridToolbarConfig };
   }
 
   /**
@@ -907,6 +1056,118 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   // ========================================
+  // DATA GRID EVENT HANDLERS
+  // ========================================
+
+  /**
+   * Handle row click from mj-entity-data-grid
+   * Maps to recordSelected event for parent components
+   */
+  onDataGridRowClick(event: AfterRowClickEventArgs): void {
+    if (!this.entity || !event.row) return;
+
+    this.recordSelected.emit({
+      record: event.row,
+      entity: this.entity,
+      compositeKey: event.row.PrimaryKey
+    });
+  }
+
+  /**
+   * Handle row double-click from mj-entity-data-grid
+   * Maps to recordOpened event for parent components
+   */
+  onDataGridRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+    if (!this.entity || !event.row) return;
+
+    this.recordOpened.emit({
+      record: event.row,
+      entity: this.entity,
+      compositeKey: event.row.PrimaryKey
+    });
+  }
+
+  /**
+   * Handle sort changed from mj-entity-data-grid
+   * Maps to sortChanged event for parent components
+   */
+  onDataGridSortChanged(event: AfterSortEventArgs): void {
+    // Convert the data grid's sort state to our SortState format
+    const newSort: SortState | null = event.newSortState && event.newSortState.length > 0
+      ? {
+          field: event.newSortState[0].field,
+          direction: event.newSortState[0].direction
+        }
+      : null;
+
+    this.internalSortState = newSort;
+    this.sortChanged.emit({ sort: newSort });
+
+    // If server-side sorting, reload from page 1
+    if (this.effectiveConfig.serverSideSorting && !this.records) {
+      this.resetPaginationState();
+      this.loadData();
+    }
+  }
+
+  /**
+   * Handle Add/New button click from data grid toolbar
+   */
+  onGridAddRequested(): void {
+    this.addRequested.emit();
+  }
+
+  /**
+   * Handle Refresh button click from data grid toolbar
+   */
+  onGridRefreshRequested(): void {
+    this.refreshRequested.emit();
+    // Also trigger an internal refresh
+    this.refresh();
+  }
+
+  /**
+   * Handle Delete button click from data grid toolbar
+   */
+  onGridDeleteRequested(records: BaseEntity[]): void {
+    this.deleteRequested.emit({ records });
+  }
+
+  /**
+   * Handle Export button click from data grid toolbar
+   */
+  onGridExportRequested(): void {
+    this.exportRequested.emit({ format: 'excel' });
+  }
+
+  /**
+   * Handle Add to List button click from data grid toolbar.
+   * Forwards the event to parent components for list management.
+   */
+  onGridAddToListRequested(event: { entityInfo: EntityInfo; records: BaseEntity[]; recordIds: string[] }): void {
+    this.addToListRequested.emit(event);
+  }
+
+  /**
+   * Handle selection change from data grid.
+   * Converts selected keys to records and forwards to parent components.
+   */
+  onGridSelectionChange(selectedKeys: string[]): void {
+    // Find the actual records from our filtered records
+    const records = this.filteredRecords.filter(record => {
+      const key = record.PrimaryKey?.ToConcatenatedString() || String(record.Get('ID'));
+      return selectedKeys.includes(key);
+    });
+
+    // Get the raw primary key values for list management
+    const recordIds = records.map(record =>
+      String(record.PrimaryKey.KeyValuePairs[0].Value)
+    );
+
+    this.selectionChanged.emit({ records, recordIds });
+  }
+
+  // ========================================
   // TIMELINE METHODS
   // ========================================
 
@@ -1193,3 +1454,4 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     return firstOther?.Name || null;
   }
 }
+

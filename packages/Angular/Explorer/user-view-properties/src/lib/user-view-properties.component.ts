@@ -292,7 +292,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     // we go through our EntityFields and add any that aren't already in the columnSettings
     // this is so that we can add new columns to the view that were not previously used in this view
     const unusedFields = this.ViewEntityInfo?.Fields.filter(f => {
-      if (gridState.columnSettings.find((col: any) => col.Name.trim().toLowerCase() === f.Name.trim().toLowerCase())) 
+      if (gridState.columnSettings?.find((col: any) => col.Name.trim().toLowerCase() === f.Name.trim().toLowerCase())) 
         return false; // this entity field is already in the columnSettings
       else
         return true; // this entity field is not in the columnSettings
@@ -300,13 +300,13 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
     // now we add the unused fields to the columnSettings
     unusedFields?.forEach((f: EntityFieldInfo) => {
-      gridState.columnSettings.push({
+      gridState.columnSettings?.push({
         ID: f.ID,
         DisplayName: f.DisplayName,
         Name: f.Name,
         orderIndex: gridState.columnSettings.length,
         width: f.DefaultColumnWidth ? f.DefaultColumnWidth : 100,
-        EntityField: f,
+        //EntityField: f,
         hidden: true
       });
     });

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/data-context",
-  "version": "2.132.0",
+  "version": "3.0.0",
   "description": "This library provides a set of objects that handle run-time loading of data contexts as well as types to be able to use across application tiers for interacting with data contexts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,9 +19,9 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.132.0",
-    "@memberjunction/core-entities": "2.132.0",
-    "@memberjunction/core": "2.132.0"
+    "@memberjunction/global": "3.0.0",
+    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/core": "3.0.0"
   },
   "repository": {
     "type": "git",

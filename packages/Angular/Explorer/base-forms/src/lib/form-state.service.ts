@@ -95,10 +95,17 @@ export class FormStateService {
      * Check if a section is expanded.
      * @param entityName The entity name
      * @param sectionKey The section key
+     * @param defaultExpanded Optional default value to use when no persisted state exists (defaults to DEFAULT_SECTION_STATE.isExpanded)
      * @returns True if expanded
      */
-    isSectionExpanded(entityName: string, sectionKey: string): boolean {
-        return this.getSectionState(entityName, sectionKey).isExpanded;
+    isSectionExpanded(entityName: string, sectionKey: string, defaultExpanded?: boolean): boolean {
+        const state = this.getCurrentState(entityName);
+        const sectionState = state.sections[sectionKey];
+        if (sectionState) {
+            return sectionState.isExpanded;
+        }
+        // No persisted state - use provided default or fall back to DEFAULT_SECTION_STATE
+        return defaultExpanded !== undefined ? defaultExpanded : DEFAULT_SECTION_STATE.isExpanded;
     }
 
     /**

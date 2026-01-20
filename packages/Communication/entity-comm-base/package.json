@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/entity-communications-base",
-  "version": "2.132.0",
+  "version": "3.0.0",
   "description": "MemberJunction: Base Types for Client/Server use with Entity Communications Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,10 +19,10 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.132.0",
-    "@memberjunction/core": "2.132.0",
-    "@memberjunction/core-entities": "2.132.0",
-    "@memberjunction/communication-types": "2.132.0"
+    "@memberjunction/global": "3.0.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/communication-types": "3.0.0"
   },
   "repository": {
     "type": "git",

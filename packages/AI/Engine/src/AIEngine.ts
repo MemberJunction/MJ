@@ -1154,7 +1154,8 @@ export class AIEngine extends BaseSingleton<AIEngine> {
                     const newRecord = await md.GetEntityObject(entityAction.OutputEntity);
                     newRecord.NewRecord();
                     newRecord.Set('EntityID', params.entityRecord.EntityInfo.ID);
-                    newRecord.Set('RecordID', params.entityRecord.FirstPrimaryKey.Value);
+                    // Use concatenated key format to properly support both single and composite primary keys
+                    newRecord.Set('RecordID', params.entityRecord.PrimaryKey.ToConcatenatedString());
                     newRecord.Set(entityAction.OutputField, sOutput);
                     await newRecord.Save();
                 }

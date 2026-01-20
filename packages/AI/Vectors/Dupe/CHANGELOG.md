@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/aiengine@3.0.0
+- @memberjunction/ai-vectors-pinecone@3.0.0
+- @memberjunction/ai-vectors@3.0.0
+- @memberjunction/ai-vectordb@3.0.0
+- @memberjunction/ai-vector-sync@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/aiengine@2.133.0
+  - @memberjunction/ai-vectors-pinecone@2.133.0
+  - @memberjunction/ai-vectors@2.133.0
+  - @memberjunction/ai-vectordb@2.133.0
+  - @memberjunction/ai-vector-sync@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
 ## 2.132.0
 
 ### Patch Changes

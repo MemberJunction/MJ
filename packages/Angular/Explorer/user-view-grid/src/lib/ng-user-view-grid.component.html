@@ -270,6 +270,16 @@
       </kendo-dialog-actions>
     </kendo-dialog>
 
+    <!-- Enhanced List Management Dialog -->
+    @if (showEnhancedListDialog && listManagementConfig) {
+        <mj-list-management-dialog
+            [config]="listManagementConfig"
+            [visible]="showEnhancedListDialog"
+            (complete)="onEnhancedListDialogComplete($event)"
+            (cancel)="onEnhancedListDialogCancel()">
+        </mj-list-management-dialog>
+    }
+
     <!-- Entity Form Dialog Component here for future use as needed -->
     <mj-entity-form-dialog
         #entityFormDialog
