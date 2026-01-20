@@ -1,30 +1,73 @@
 /* =============================================================================
    User Dialog Component - MD3 Design System
-   Following UIUX-DESIGN-GUIDE.md principles
-
-   NOTE: Kendo Window base styling is handled by global theme override in
-   packages/MJExplorer/src/styles/_kendo-theme-override.scss (lines 878-941)
+   Native modal pattern following UIUX-DESIGN-GUIDE.md principles
    ============================================================================= */
 
 /* -----------------------------------------------------------------------------
-   Custom Title Bar (inside kendo-window-titlebar)
+   Modal Backdrop & Container
    ----------------------------------------------------------------------------- */
-.dialog-header {
-  position: relative;
-  color: var(--mat-sys-on-primary);
-}
-
-.dialog-header .dialog-title {
-  font: var(--mat-sys-title-large);
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
-  gap: 1rem;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s cubic-bezier(0, 0, 0.2, 1);
+  padding: 1rem;
+}
+
+.modal-dialog {
+  background: var(--mat-sys-surface);
+  border-radius: 28px;
+  box-shadow: var(--mat-sys-elevation-5);
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.modal-dialog.modal-large {
+  max-width: 700px;
+}
+
+/* -----------------------------------------------------------------------------
+   Modal Header
+   ----------------------------------------------------------------------------- */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  flex-shrink: 0;
+}
+
+.modal-header-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-header .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font: var(--mat-sys-title-large);
+  color: var(--mat-sys-on-primary);
   margin: 0;
 }
 
-.dialog-header .dialog-title i {
-  width: 24px;
-  height: 24px;
+.modal-header .modal-title i {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,65 +76,103 @@
   font-size: 0.875rem;
 }
 
-.dialog-header .dialog-subtitle {
-  margin: 0.25rem 0 0 0;
+.modal-header .modal-subtitle {
+  margin: 0.375rem 0 0 0;
   font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-primary);
   opacity: 0.85;
 }
 
+.modal-header .modal-close {
+  padding: 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--mat-sys-on-primary);
+  font-size: 1.25rem;
+  cursor: pointer;
+  border-radius: var(--mat-sys-corner-small);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.modal-header .modal-close:hover {
+  background: color-mix(in srgb, var(--mat-sys-on-primary) 15%, transparent);
+}
+
+.modal-header .modal-close:focus-visible {
+  outline: 2px solid var(--mat-sys-on-primary);
+  outline-offset: 2px;
+}
+
 /* -----------------------------------------------------------------------------
-   Dialog Content Area
+   Modal Body
    ----------------------------------------------------------------------------- */
-.dialog-content {
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0;
   background: var(--mat-sys-surface);
 }
 
-.dialog-content .content-section {
-  padding: 2rem;
+/* -----------------------------------------------------------------------------
+   Modal Footer - Primary button LEFT, Cancel RIGHT
+   ----------------------------------------------------------------------------- */
+.modal-footer {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface-container-low);
+  flex-shrink: 0;
 }
 
-.dialog-content .content-section:not(:last-child) {
+/* -----------------------------------------------------------------------------
+   Form Sections (Fieldset)
+   ----------------------------------------------------------------------------- */
+.form-section {
+  border: none;
+  margin: 0;
+  padding: 1.5rem;
   border-bottom: 1px solid var(--mat-sys-outline-variant);
 }
 
-/* -----------------------------------------------------------------------------
-   Dialog Footer - Buttons on LEFT (Primary first), Cancel on RIGHT
-   ----------------------------------------------------------------------------- */
-.dialog-footer {
-  padding: 1.5rem 2rem;
-  background: var(--mat-sys-surface-container-low);
-  border-top: 1px solid var(--mat-sys-outline-variant);
+.form-section:last-of-type {
+  border-bottom: none;
+}
+
+.section-header {
   display: flex;
-  justify-content: flex-start;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  padding: 0;
+  font-weight: normal;
 }
 
-/* -----------------------------------------------------------------------------
-   Form Sections
-   ----------------------------------------------------------------------------- */
-.form-section .section-header {
-  margin-bottom: 1.5rem;
-}
-
-.form-section .section-header .section-title {
-  font: var(--mat-sys-title-medium);
-  color: var(--mat-sys-on-surface);
-  margin: 0 0 0.25rem 0;
+.section-header .section-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-surface);
 }
 
-.form-section .section-header .section-title i {
+.section-header .section-title i {
   color: var(--mat-sys-primary);
   font-size: 0.875rem;
 }
 
-.form-section .section-header .section-description {
+.section-header .section-description {
   font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
-  margin: 0;
 }
 
 /* -----------------------------------------------------------------------------
@@ -99,38 +180,27 @@
    ----------------------------------------------------------------------------- */
 .form-grid {
   display: grid;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-
-@media (max-width: 639px) {
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
+  gap: 1.25rem;
 }
 
 /* -----------------------------------------------------------------------------
    Form Fields
    ----------------------------------------------------------------------------- */
 .form-field {
-  margin-bottom: 1.5rem;
-}
-
-.form-field:last-child {
-  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .form-field .field-label {
-  display: block;
   font: var(--mat-sys-label-medium);
   color: var(--mat-sys-on-surface);
-  margin-bottom: 0.5rem;
 }
 
 .form-field .field-label.required::after {
@@ -141,8 +211,8 @@
 .form-field .field-input,
 .form-field .field-select {
   width: 100%;
-  height: 44px;
-  padding: 0 1rem;
+  min-height: 44px;
+  padding: 0.75rem 1rem;
   border: 1px solid var(--mat-sys-outline);
   border-radius: var(--mat-sys-corner-small);
   font: var(--mat-sys-body-medium);
@@ -174,7 +244,7 @@
 }
 
 .form-field .field-select {
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
   background-position: right 1rem center;
   background-repeat: no-repeat;
   background-size: 1rem;
@@ -184,7 +254,7 @@
 }
 
 .form-field .field-error {
-  margin-top: 0.5rem;
+  margin-top: 0.25rem;
   font: var(--mat-sys-body-small);
   color: var(--mat-sys-error);
   display: flex;
@@ -202,8 +272,7 @@
 .checkbox-field {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 0.75rem;
   cursor: pointer;
 }
 
@@ -230,7 +299,7 @@
 .checkbox-field .checkbox-label {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 0.75rem;
   cursor: pointer;
   font: var(--mat-sys-body-medium);
   color: var(--mat-sys-on-surface);
@@ -271,26 +340,20 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Role Assignment Section
+   Role Assignment Grid
    ----------------------------------------------------------------------------- */
 .roles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-}
-
-@media (max-width: 639px) {
-  .roles-grid {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
 }
 
 .role-card {
-  padding: 1.5rem;
+  padding: 1rem;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: var(--mat-sys-corner-small);
   background: var(--mat-sys-surface-container-lowest);
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
 }
 
@@ -315,7 +378,7 @@
 .role-card .role-content {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .role-card .role-info {
@@ -345,12 +408,12 @@
    Alert Messages
    ----------------------------------------------------------------------------- */
 .alert {
-  padding: 1rem 1.5rem;
+  padding: 1rem 1.25rem;
   border-radius: var(--mat-sys-corner-small);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .alert i {
@@ -370,70 +433,88 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Button Styles
+   MJ Button System
    ----------------------------------------------------------------------------- */
-.dialog-footer .btn {
-  padding: 0.5rem 1.5rem;
-  border-radius: var(--mat-sys-corner-small);
-  font: var(--mat-sys-label-large);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.15s ease;
+.mj-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  font: var(--mat-sys-label-large);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
   min-height: 44px;
 }
 
-.dialog-footer .btn:disabled {
+.mj-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.dialog-footer .btn:disabled i.fa-spinner {
-  animation: spin 1s linear infinite;
-}
-
-.dialog-footer .btn.btn-secondary {
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface-variant);
-  border-color: var(--mat-sys-outline);
-}
-
-.dialog-footer .btn.btn-secondary:hover:not(:disabled) {
-  background: var(--mat-sys-surface-container);
-  border-color: var(--mat-sys-outline);
-  color: var(--mat-sys-on-surface);
-}
-
-.dialog-footer .btn.btn-primary {
+.mj-btn-primary {
   background: var(--mat-sys-primary);
   color: var(--mat-sys-on-primary);
 }
 
-.dialog-footer .btn.btn-primary:hover:not(:disabled) {
-  box-shadow: var(--mat-sys-elevation-1);
-  transform: translateY(-1px);
+.mj-btn-primary:hover:not(:disabled) {
+  box-shadow: var(--mat-sys-elevation-2);
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.mj-btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.mj-btn-secondary {
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  border: 1px solid var(--mat-sys-outline);
+}
+
+.mj-btn-secondary:hover:not(:disabled) {
+  background: var(--mat-sys-surface-container-high);
+  border-color: var(--mat-sys-primary);
+  color: var(--mat-sys-primary);
 }
 
 /* -----------------------------------------------------------------------------
-   Accessibility: Focus Indicators
+   Animations
+   ----------------------------------------------------------------------------- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Focus Indicators - Accessibility
    ----------------------------------------------------------------------------- */
 .field-input:focus-visible,
 .field-select:focus-visible,
-.btn:focus-visible,
-.checkbox-input:focus-visible + .checkbox-label .checkbox-indicator {
+.mj-btn:focus-visible {
   outline: 2px solid var(--mat-sys-primary);
   outline-offset: 2px;
 }
 
 /* -----------------------------------------------------------------------------
-   Accessibility: Reduced Motion
+   Reduced Motion Support
    ----------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -446,24 +527,96 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Responsive Design
+   Responsive Design - Mobile First
    ----------------------------------------------------------------------------- */
-@media (max-width: 767px) {
-  .dialog-content .content-section {
-    padding: 1.5rem 1rem;
+
+/* Mobile (< 640px) - Base styles above */
+@media (max-width: 639px) {
+  .modal-backdrop {
+    padding: 0.5rem;
   }
 
-  .dialog-footer {
-    padding: 1rem 1.5rem;
+  .modal-dialog {
+    border-radius: 20px;
+    max-height: 95vh;
+  }
+
+  .modal-header {
+    padding: 1.25rem 1rem 1rem 1rem;
+  }
+
+  .modal-header .modal-title {
+    font: var(--mat-sys-title-medium);
+  }
+
+  .form-section {
+    padding: 1.25rem 1rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .modal-footer {
+    padding: 1rem;
     flex-direction: column;
   }
 
-  .dialog-footer .btn {
+  .modal-footer .mj-btn {
     width: 100%;
     justify-content: center;
   }
 
   .roles-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet Portrait (640px - 767px) */
+@media (min-width: 640px) {
+  .modal-dialog.modal-large {
+    max-width: 600px;
+  }
+
+  .roles-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Tablet Landscape (768px - 1023px) */
+@media (min-width: 768px) {
+  .modal-dialog.modal-large {
+    max-width: 750px;
+  }
+
+  .modal-header {
+    padding: 1.5rem 2rem 1.25rem 2rem;
+  }
+
+  .form-section {
+    padding: 1.75rem 2rem;
+  }
+
+  .modal-footer {
+    padding: 1.25rem 2rem;
+  }
+}
+
+/* Laptop (1024px - 1439px) */
+@media (min-width: 1024px) {
+  .modal-dialog.modal-large {
+    max-width: 850px;
+  }
+
+  .roles-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Desktop (1440px+) */
+@media (min-width: 1440px) {
+  .modal-dialog.modal-large {
+    max-width: 900px;
   }
 }

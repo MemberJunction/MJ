@@ -121,6 +121,13 @@
   }
 }
 
+@media (min-width: 1440px) {
+  .mj-grid-4 {
+    gap: 2rem;
+    padding: 1.5rem 2.5rem;
+  }
+}
+
 .mj-card {
   background: var(--mat-sys-surface);
   border-radius: var(--mat-sys-corner-medium);
@@ -150,22 +157,22 @@
 
 .stat-icon-total {
   background: var(--mat-sys-primary-container);
-  color: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary-container);
 }
 
 .stat-icon-active {
   background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-tertiary);
+  color: var(--mat-sys-on-tertiary-container);
 }
 
 .stat-icon-inactive {
   background: var(--mat-sys-error-container);
-  color: var(--mat-sys-error);
+  color: var(--mat-sys-on-error-container);
 }
 
 .stat-icon-admin {
   background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-secondary);
+  color: var(--mat-sys-on-secondary-container);
 }
 
 .stat-content {
@@ -902,6 +909,37 @@
 
 .text-warning {
   color: var(--mat-sys-secondary);
+}
+
+/* -----------------------------------------------------------------------------
+   Desktop (1440px+) - Large Screen Optimizations
+   ----------------------------------------------------------------------------- */
+@media (min-width: 1440px) {
+  .user-management-container {
+    max-width: 1920px;
+    margin: 0 auto;
+  }
+
+  .action-buttons {
+    padding: 1.25rem 2.5rem;
+  }
+
+  .bulk-action-toolbar {
+    padding: 1.25rem 2.5rem;
+  }
+
+  .filters-section {
+    padding: 1.75rem 2.5rem;
+  }
+
+  .content-area {
+    padding: 2.5rem;
+  }
+
+  .users-grid {
+    gap: 2rem;
+    padding: 2rem;
+  }
 }
 
 /* -----------------------------------------------------------------------------
