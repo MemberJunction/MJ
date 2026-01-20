@@ -204,9 +204,9 @@ export class SqlLoggingConfig {
 /**
  * GraphQL resolver for SQL logging configuration and session management.
  * Provides queries and mutations for controlling SQL logging functionality.
- * 
+ *
  * **Security**: All operations require Owner-level privileges.
- * 
+ *
  * @example
  * ```typescript
  * // Start a new logging session
@@ -218,13 +218,13 @@ export class SqlLoggingConfig {
  *     statementTypes: "both"
  *   }
  * });
- * 
+ *
  * // Get current configuration
  * const config = await sqlLoggingConfig();
- * 
+ *
  * // List active sessions
  * const sessions = await activeSqlLoggingSessions();
- * 
+ *
  * // Stop a session
  * await stopSqlLogging(session.id);
  * ```
@@ -236,19 +236,19 @@ export class SqlLoggingConfigResolver extends ResolverBase {
 
   /** Track active session timeouts for proper cleanup when sessions are manually stopped */
   private static sessionTimeouts = new Map<string, NodeJS.Timeout>();
-  
+
   /**
    * Validates that the current user has Owner-level privileges required for SQL logging operations.
-   * 
+   *
    * This method performs authentication and authorization checks:
    * - Verifies user is authenticated (has email in context)
    * - Looks up user in UserCache by email (case-insensitive)
    * - Checks that user Type field equals 'Owner' (trimmed for nchar padding)
-   * 
+   *
    * @param context - The GraphQL application context containing user authentication data
    * @returns Promise resolving to the authenticated UserInfo object
    * @throws Error if user is not authenticated, not found, or lacks Owner privileges
-   * 
+   *
    * @private
    */
   private async checkOwnerAccess(context: AppContext): Promise<UserInfo> {
@@ -256,45 +256,45 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     if (!userEmail) {
       throw new Error('User not authenticated');
     }
-    
+
     // Get the user from cache
     const users = UserCache.Instance.Users;
-    const user = users.find(u => u.Email.toLowerCase() === userEmail.toLowerCase());
+    const user = users.find((u) => u.Email.toLowerCase() === userEmail.toLowerCase());
     if (!user) {
       throw new Error('User not found');
     }
-    
+
     // Debug logging
     console.log('SQL Logging access check:', {
       email: user.Email,
       type: user.Type,
       typeLength: user.Type?.length,
       typeTrimmed: user.Type?.trim(),
-      isOwner: user.Type?.trim().toLowerCase() === 'owner'
+      isOwner: user.Type?.trim().toLowerCase() === 'owner',
     });
-    
+
     // Check if user has Type = 'Owner' (trim and case-insensitive for nchar fields)
     if (user.Type?.trim().toLowerCase() !== 'owner') {
       throw new Error('Access denied. This feature requires Owner privileges.');
     }
-    
+
     return user;
   }
-  
+
   /**
    * Retrieves the current SQL logging configuration and status information.
-   * 
+   *
    * Returns comprehensive configuration details including:
    * - Whether SQL logging is enabled in server config
    * - Default logging options (formatting, statement types, etc.)
    * - File system settings (log directory, cleanup options)
    * - Session limits and timeout settings
    * - Count of currently active logging sessions
-   * 
+   *
    * @param context - GraphQL context (requires Owner privileges)
    * @returns Promise resolving to complete SQL logging configuration
    * @throws Error if user lacks Owner privileges
-   * 
+   *
    * @example
    * ```graphql
    * query {
@@ -315,7 +315,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   async sqlLoggingConfig(@Ctx() context: AppContext): Promise<SqlLoggingConfig> {
     await this.checkOwnerAccess(context);
     const config = await loadConfig();
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as SQLServerDataProvider;
     const activeSessions = provider.GetActiveSqlLoggingSessions();
 
     return {
@@ -326,29 +326,29 @@ export class SqlLoggingConfigResolver extends ResolverBase {
         batchSeparator: 'GO',
         prettyPrint: true,
         logRecordChangeMetadata: false,
-        retainEmptyLogFiles: false
+        retainEmptyLogFiles: false,
       },
       allowedLogDirectory: config.sqlLogging?.allowedLogDirectory ?? './logs/sql',
       maxActiveSessions: config.sqlLogging?.maxActiveSessions ?? 5,
       autoCleanupEmptyFiles: config.sqlLogging?.autoCleanupEmptyFiles ?? true,
       sessionTimeout: config.sqlLogging?.sessionTimeout ?? 3600000,
-      activeSessionCount: activeSessions.length
+      activeSessionCount: activeSessions.length,
     };
   }
 
   /**
    * Retrieves a list of all currently active SQL logging sessions.
-   * 
+   *
    * Returns detailed information for each active session including:
    * - Unique session identifier and file path
    * - Start time and statement count
    * - Session configuration options
    * - User filtering settings
-   * 
+   *
    * @param context - GraphQL context (requires Owner privileges)
    * @returns Promise resolving to array of active SqlLoggingSession objects
    * @throws Error if user lacks Owner privileges
-   * 
+   *
    * @example
    * ```graphql
    * query {
@@ -370,30 +370,30 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   @Query(() => [SqlLoggingSession])
   async activeSqlLoggingSessions(@Ctx() context: AppContext): Promise<SqlLoggingSession[]> {
     await this.checkOwnerAccess(context);
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as SQLServerDataProvider;
     const sessions = provider.GetActiveSqlLoggingSessions();
 
-    return sessions.map(session => ({
+    return sessions.map((session) => ({
       id: session.id,
       filePath: session.filePath,
       startTime: session.startTime,
       statementCount: session.statementCount,
       options: this.convertOptionsToGraphQL(session.options),
       sessionName: session.options.sessionName,
-      filterByUserId: session.options.filterByUserId
+      filterByUserId: session.options.filterByUserId,
     }));
   }
 
   /**
    * Creates and starts a new SQL logging session with specified configuration.
-   * 
+   *
    * This mutation:
    * - Validates SQL logging is enabled and session limits
    * - Creates a secure file path within the allowed log directory
    * - Configures session options (filtering, formatting, etc.)
    * - Starts the logging session in SQLServerDataProvider
    * - Sets up automatic cleanup after session timeout
-   * 
+   *
    * @param input - Configuration for the new logging session
    * @param input.fileName - Optional custom filename for the log file
    * @param input.filterToCurrentUser - Whether to filter SQL to current user only
@@ -401,7 +401,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * @param context - GraphQL context (requires Owner privileges)
    * @returns Promise resolving to the created SqlLoggingSession object
    * @throws Error if logging disabled, session limit reached, or invalid file path
-   * 
+   *
    * @example
    * ```graphql
    * mutation {
@@ -422,20 +422,17 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Mutation(() => SqlLoggingSession)
-  async startSqlLogging(
-    @Arg('input', () => StartSqlLoggingInput) input: StartSqlLoggingInput,
-    @Ctx() context: AppContext
-  ): Promise<SqlLoggingSession> {
+  async startSqlLogging(@Arg('input', () => StartSqlLoggingInput) input: StartSqlLoggingInput, @Ctx() context: AppContext): Promise<SqlLoggingSession> {
     await this.checkOwnerAccess(context);
     const config = await loadConfig();
-    
+
     // Check if SQL logging is enabled
     if (!config.sqlLogging?.enabled) {
       throw new Error('SQL logging is not enabled in the server configuration');
     }
 
     // Check max active sessions
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as SQLServerDataProvider;
     const activeSessions = provider.GetActiveSqlLoggingSessions();
     if (activeSessions.length >= (config.sqlLogging.maxActiveSessions ?? 5)) {
       throw new Error(`Maximum number of active SQL logging sessions (${config.sqlLogging.maxActiveSessions}) reached`);
@@ -461,7 +458,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
       ...defaultOptions,
       ...input.options,
       sessionName: input.options?.sessionName || `Session started by ${context.userPayload.email}`,
-      filterByUserId: input.filterToCurrentUser ? userInfo?.ID : input.options?.filterByUserId
+      filterByUserId: input.filterToCurrentUser ? userInfo?.ID : input.options?.filterByUserId,
     };
 
     // Create the logging session
@@ -496,18 +493,18 @@ export class SqlLoggingConfigResolver extends ResolverBase {
 
   /**
    * Stops and disposes of a specific SQL logging session.
-   * 
+   *
    * This mutation:
    * - Validates the session exists and user has access
    * - Calls dispose() on the session to close file handles
    * - Removes the session from the active sessions map
    * - Performs any configured cleanup operations
-   * 
+   *
    * @param sessionId - Unique identifier of the session to stop
    * @param context - GraphQL context (requires Owner privileges)
    * @returns Promise resolving to true if session was successfully stopped
    * @throws Error if session not found or user lacks Owner privileges
-   * 
+   *
    * @example
    * ```graphql
    * mutation {
@@ -516,12 +513,9 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Mutation(() => Boolean)
-  async stopSqlLogging(
-    @Arg('sessionId', () => String) sessionId: string,
-    @Ctx() context: AppContext
-  ): Promise<boolean> {
+  async stopSqlLogging(@Arg('sessionId', () => String) sessionId: string, @Ctx() context: AppContext): Promise<boolean> {
     await this.checkOwnerAccess(context);
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as SQLServerDataProvider;
 
     // Use the public method to get and dispose the session
     const session = provider.GetSqlLoggingSessionById(sessionId);
@@ -543,17 +537,17 @@ export class SqlLoggingConfigResolver extends ResolverBase {
 
   /**
    * Stops and disposes of all currently active SQL logging sessions.
-   * 
+   *
    * This is a convenience method that:
    * - Calls DisposeAllSqlLoggingSessions() on the data provider
    * - Ensures all file handles are properly closed
    * - Clears the active sessions map
    * - Performs cleanup for all sessions at once
-   * 
+   *
    * @param context - GraphQL context (requires Owner privileges)
    * @returns Promise resolving to true if all sessions were successfully stopped
    * @throws Error if user lacks Owner privileges
-   * 
+   *
    * @example
    * ```graphql
    * mutation {
@@ -564,23 +558,23 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   @Mutation(() => Boolean)
   async stopAllSqlLogging(@Ctx() context: AppContext): Promise<boolean> {
     await this.checkOwnerAccess(context);
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as SQLServerDataProvider;
     await provider.DisposeAllSqlLoggingSessions();
     return true;
   }
 
   /**
    * Updates the default SQL logging options for new sessions.
-   * 
+   *
    * **Note**: This updates runtime configuration only, not the static config file.
    * Changes apply to new sessions but do not persist across server restarts.
    * In a production system, consider persisting changes to a database.
-   * 
+   *
    * @param options - New default options to apply (partial update supported)
    * @param context - GraphQL context (requires Owner privileges)
    * @returns Promise resolving to the updated SqlLoggingOptions object
    * @throws Error if SQL logging not configured or user lacks Owner privileges
-   * 
+   *
    * @example
    * ```graphql
    * mutation {
@@ -599,7 +593,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   @Mutation(() => SqlLoggingOptions)
   async updateSqlLoggingDefaults(
     @Arg('options', () => SqlLoggingOptionsInput) options: SqlLoggingOptionsInput,
-    @Ctx() context: AppContext
+    @Ctx() context: AppContext,
   ): Promise<SqlLoggingOptions> {
     await this.checkOwnerAccess(context);
     // Note: This updates the runtime configuration only, not the file
@@ -611,7 +605,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
 
     config.sqlLogging.defaultOptions = {
       ...config.sqlLogging.defaultOptions,
-      ...options
+      ...options,
     };
 
     return config.sqlLogging.defaultOptions;
@@ -619,19 +613,19 @@ export class SqlLoggingConfigResolver extends ResolverBase {
 
   /**
    * Reads the contents of a specific SQL log file.
-   * 
+   *
    * This method:
    * - Validates the session exists and user has access
    * - Ensures the file path is within the allowed log directory
    * - Reads the file content with optional line limits
    * - Returns the content as a string
-   * 
+   *
    * @param sessionId - Unique identifier of the logging session
    * @param maxLines - Maximum number of lines to read (optional, defaults to all)
    * @param context - GraphQL context (requires Owner privileges)
    * @returns Promise resolving to the log file content
    * @throws Error if session not found, file not accessible, or user lacks privileges
-   * 
+   *
    * @example
    * ```graphql
    * query {
@@ -643,21 +637,21 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   async readSqlLogFile(
     @Arg('sessionId', () => String) sessionId: string,
     @Arg('maxLines', () => Int, { nullable: true }) maxLines: number | null,
-    @Ctx() context: AppContext
+    @Ctx() context: AppContext,
   ): Promise<string> {
     await this.checkOwnerAccess(context);
     const config = await loadConfig();
-    
+
     // Check if SQL logging is enabled
     if (!config.sqlLogging?.enabled) {
       throw new Error('SQL logging is not enabled in the server configuration');
     }
 
     // Find the session
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as SQLServerDataProvider;
     const sessions = provider.GetActiveSqlLoggingSessions();
     const session = sessions.find((s) => s.id === sessionId);
-    
+
     if (!session) {
       throw new Error(`SQL logging session ${sessionId} not found`);
     }
@@ -672,10 +666,10 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     try {
       // Check if file exists
       await fs.access(session.filePath);
-      
+
       // Read file content
       const content = await fs.readFile(session.filePath, 'utf-8');
-      
+
       // Apply line limit if specified
       if (maxLines && maxLines > 0) {
         const lines = content.split('\n');
@@ -684,7 +678,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
           return lines.slice(-maxLines).join('\n');
         }
       }
-      
+
       return content;
     } catch (error: any) {
       if (error.code === 'ENOENT') {
@@ -697,11 +691,11 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   /**
    * Debug query to check what the current user email is in the SQL provider.
    * This helps diagnose user filtering issues when SQL statements aren't being captured.
-   * 
+   *
    * Returns a comparison of the user email stored in the SQLServerDataProvider
    * versus the user email from the GraphQL context, which helps identify mismatches
    * that could prevent SQL filtering from working correctly.
-   * 
+   *
    * @param context - GraphQL context containing user information
    * @returns Formatted string showing both email values and whether they match
    * @throws Error if user doesn't have Owner privileges
@@ -711,21 +705,21 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     await this.checkOwnerAccess(context);
 
     const contextUserEmail = context.userPayload?.email || 'NOT_SET';
-    
+
     return `Context User Email: "${contextUserEmail}" | Note: Provider no longer stores user email - uses contextUser parameter for SQL logging`;
   }
 
   /**
    * Ensures the specified log directory exists, creating it if necessary.
-   * 
+   *
    * This method:
    * - Attempts to access the directory to check if it exists
    * - Creates the directory recursively if it doesn't exist
    * - Handles permission and file system errors gracefully
-   * 
+   *
    * @param dir - Absolute path to the directory to ensure exists
    * @throws Error if directory cannot be created due to permissions or other issues
-   * 
+   *
    * @private
    */
   private async ensureDirectoryExists(dir: string): Promise<void> {

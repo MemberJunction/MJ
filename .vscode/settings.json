@@ -1,8 +1,14 @@
 {
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
-    "source.fixAll": "never",
-    "source.organizeImports": "never"
+    "source.fixAll.eslint": "explicit"
   },
+  "eslint.validate": [
+    "javascript",
+    "typescript"
+  ],
+  "prettier.requireConfig": true,
   "angular.enable-strict-mode-prompt": false,
   "workbench.colorCustomizations": {
     "activityBar.activeBackground": "#214174",
