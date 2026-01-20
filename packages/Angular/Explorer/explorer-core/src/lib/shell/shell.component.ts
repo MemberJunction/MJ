@@ -850,7 +850,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const queryParams = config['queryParams'] as Record<string, string> | undefined;
     const isAppDefault = config['isAppDefault'] as boolean | undefined;
     const tabAppId = tab.applicationId;
-    const tabTitle = tab.title;
 
     // Helper function to get app path for URL
     const getAppPath = (appIdOrName: string): string | null => {
@@ -897,11 +896,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         const appPath = app.Path || app.Name;
         const navItems = app.GetNavItems();
 
-        // If app has nav items, try to find the matching one by title
-        if (navItems.length > 0) {
-          const navItem = navItems.find(item =>
-            item.Label?.trim().toLowerCase() === tabTitle?.trim().toLowerCase()
-          );
+        // If app has nav items, try to find the matching one
+        // Filter out dynamic nav items - they're generated from tab state and shouldn't affect URL building
+        const staticNavItems = navItems.filter(item => !(item as { isDynamic?: boolean }).isDynamic);
+        if (staticNavItems.length > 0) {
+          const driverClass = config['driverClass'] as string | undefined;
+
+          // Match by DriverClass for Custom resources (more reliable than title matching)
+          // or by ResourceType + RecordID for other resource types
+          const navItem = staticNavItems.find(item => {
+            if (item.ResourceType === 'Custom' && item.DriverClass && driverClass) {
+              return item.DriverClass === driverClass;
+            }
+            // For non-Custom resources, match by ResourceType + RecordID
+            if (item.ResourceType && item.RecordID) {
+              return item.ResourceType.toLowerCase() === resourceType && item.RecordID === recordId;
+            }
+            return false;
+          });
 
           if (navItem) {
             let url = `/app/${encodeURIComponent(appPath)}/${encodeURIComponent(navItem.Label)}`;
@@ -914,14 +926,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
             return url;
           }
-          // No matching nav item found, continue to orphan resource handling
-        } else if (!resourceType || resourceType === 'custom') {
-          // App has zero nav items AND this is not an orphan resource (no resourceType or custom)
+          // No matching nav item found - fall through to orphan resource handling
+        }
+
+        // Handle apps with no static nav items that show a default dashboard (custom resource type)
+        if (staticNavItems.length === 0 && (!resourceType || resourceType === 'custom')) {
+          // App has zero static nav items AND this is not an orphan resource (no resourceType or custom)
           // Use app-level URL - this handles apps that only have a default dashboard
           return `/app/${encodeURIComponent(appPath)}`;
         }
-        // If app has zero nav items but we have a resourceType (orphan resource),
-        // fall through to orphan resource URL building below
+        // Fall through to orphan resource URL building below
       }
     }
 
