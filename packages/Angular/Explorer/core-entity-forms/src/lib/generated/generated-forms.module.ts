@@ -189,6 +189,7 @@ import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent 
 import { EncryptionKeySourceFormComponent, LoadEncryptionKeySourceFormComponent } from "./Entities/EncryptionKeySource/encryptionkeysource.form.component";
 import { EncryptionKeyFormComponent, LoadEncryptionKeyFormComponent } from "./Entities/EncryptionKey/encryptionkey.form.component";
 import { EnvironmentFormComponent, LoadEnvironmentFormComponent } from "./Entities/Environment/environment.form.component";
+import { FileStorageAccountFormComponent, LoadFileStorageAccountFormComponent } from "./Entities/FileStorageAccount/filestorageaccount.form.component";
 import { ListInvitationFormComponent, LoadListInvitationFormComponent } from "./Entities/ListInvitation/listinvitation.form.component";
 import { ListShareFormComponent, LoadListShareFormComponent } from "./Entities/ListShare/listshare.form.component";
 import { ProjectFormComponent, LoadProjectFormComponent } from "./Entities/Project/project.form.component";
@@ -637,6 +638,7 @@ declarations: [
     EncryptionKeySourceFormComponent,
     EncryptionKeyFormComponent,
     EnvironmentFormComponent,
+    FileStorageAccountFormComponent,
     ListInvitationFormComponent,
     ListShareFormComponent,
     ProjectFormComponent,
@@ -652,8 +654,7 @@ declarations: [
     TaskTypeFormComponent,
     TaskFormComponent,
     TestRubricFormComponent,
-    TestRunFeedbackFormComponent,
-    TestRunFormComponent],
+    TestRunFeedbackFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -679,6 +680,7 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    TestRunFormComponent,
     TestSuiteRunFormComponent,
     TestSuiteTestFormComponent,
     TestSuiteFormComponent,
@@ -697,8 +699,7 @@ declarations: [
     QueueTypeFormComponent,
     QueueFormComponent,
     RecommendationItemFormComponent,
-    RecommendationProviderFormComponent,
-    RecommendationRunFormComponent],
+    RecommendationProviderFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -724,6 +725,7 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    RecommendationRunFormComponent,
     RecommendationFormComponent,
     RecordChangeReplayRunFormComponent,
     RecordChangeFormComponent,
@@ -742,8 +744,7 @@ declarations: [
     SchemaInfoFormComponent,
     SkillFormComponent,
     TaggedItemFormComponent,
-    TagFormComponent,
-    TemplateCategoryFormComponent],
+    TagFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -769,6 +770,7 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
     TemplateContentFormComponent,
     TemplateParamFormComponent,
@@ -787,8 +789,7 @@ declarations: [
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
     VersionInstallationFormComponent,
-    WorkflowEngineFormComponent,
-    WorkflowRunFormComponent],
+    WorkflowEngineFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -814,6 +815,7 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    WorkflowRunFormComponent,
     WorkflowFormComponent,
     WorkspaceItemFormComponent,
     WorkspaceFormComponent],
@@ -1030,6 +1032,7 @@ export function LoadCoreGeneratedForms() {
     LoadEncryptionKeySourceFormComponent();
     LoadEncryptionKeyFormComponent();
     LoadEnvironmentFormComponent();
+    LoadFileStorageAccountFormComponent();
     LoadListInvitationFormComponent();
     LoadListShareFormComponent();
     LoadProjectFormComponent();

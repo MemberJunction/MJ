@@ -34,6 +34,7 @@
     "@memberjunction/ng-compare-records": "2.133.0",
     "@memberjunction/ng-container-directives": "2.133.0",
     "@memberjunction/ng-shared": "2.133.0",
+    "@memberjunction/ng-shared-generic": "2.133.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",

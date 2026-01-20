@@ -4,6 +4,7 @@ import {
   SingleRecordComponent,
   AuthGuardService as AuthGuard
 } from './public-api';
+import { FileBrowserDemoComponent } from '@memberjunction/ng-file-storage';
 import { LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
@@ -440,7 +441,11 @@ export class ResourceResolver implements Resolve<void> {
   }
 }
 
-const routes: Routes = [ 
+const routes: Routes = [
+  {
+    path: 'demo/file-browser',
+    component: FileBrowserDemoComponent,
+  },
   {
     path: 'app/:appName/:navItemName',
     resolve: { data: ResourceResolver },
