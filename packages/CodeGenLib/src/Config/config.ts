@@ -454,7 +454,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   dbInstanceName: process.env.DB_INSTANCE_NAME,
-  dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true' ? 'Y' : 'N',
+  dbTrustServerCertificate: ['true', '1', 'Y', 'y'].includes(process.env.DB_TRUST_SERVER_CERTIFICATE ?? '') ? 'Y' : 'N',
   mjCoreSchema: '__mj',
   graphqlPort: 4000,
   verboseOutput: false,
