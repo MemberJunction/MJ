@@ -12,7 +12,7 @@ import {
   WorkspaceTab,
   AppAccessResult
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, StartupManager } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
@@ -545,36 +545,127 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /**
    * Handle the case where no tab matches the URL during back/forward navigation.
-   * For apps with zero nav items, creates a new default tab.
+   * Creates new tabs for resources when the original tab was replaced.
    */
   private async handleMissingTabForUrl(url: string): Promise<void> {
     const urlPath = url.split('?')[0];
+    const queryString = url.split('?')[1] || '';
+    const queryParams = new URLSearchParams(queryString);
 
-    // Check for app-only URL: /app/:appName
-    const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
-    if (appOnlyMatch) {
-      const appPath = decodeURIComponent(appOnlyMatch[1]);
-      const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+    // Use urlBasedNavigation flag to prevent syncUrlWithWorkspace from triggering again
+    this.urlBasedNavigation = true;
+    try {
+      // Check for app-scoped record URL: /app/:appName/record/:entityName/:recordId
+      const appRecordMatch = urlPath.match(/^\/app\/([^\/]+)\/record\/([^\/]+)\/(.+)$/);
+      if (appRecordMatch) {
+        const entityName = decodeURIComponent(appRecordMatch[2]);
+        const recordId = decodeURIComponent(appRecordMatch[3]);
+        const compositeKey = new CompositeKey();
+        compositeKey.SimpleLoadFromURLSegment(recordId);
+        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        return;
+      }
 
-      if (app) {
-        const navItems = app.GetNavItems();
-        // Only auto-create tabs for apps with zero nav items
-        // Apps with nav items should have had their tabs preserved
-        if (navItems.length === 0) {
-          // Set the app as active and create its default tab
-          // Use urlBasedNavigation flag to prevent syncUrlWithWorkspace from navigating again
-          this.urlBasedNavigation = true;
-          try {
+      // Check for app-scoped view URL: /app/:appName/view/:viewId
+      const appViewMatch = urlPath.match(/^\/app\/([^\/]+)\/view\/([^\/]+)$/);
+      if (appViewMatch && appViewMatch[2] !== 'dynamic') {
+        const viewId = appViewMatch[2];
+        this.navigationService.OpenView(viewId, 'View');
+        return;
+      }
+
+      // Check for app-scoped dynamic view URL: /app/:appName/view/dynamic/:entityName
+      const appDynamicViewMatch = urlPath.match(/^\/app\/([^\/]+)\/view\/dynamic\/(.+)$/);
+      if (appDynamicViewMatch) {
+        const entityName = decodeURIComponent(appDynamicViewMatch[2]);
+        const extraFilter = queryParams.get('ExtraFilter') || undefined;
+        this.navigationService.OpenDynamicView(entityName, extraFilter);
+        return;
+      }
+
+      // Check for app-scoped dashboard URL: /app/:appName/dashboard/:dashboardId
+      const appDashboardMatch = urlPath.match(/^\/app\/([^\/]+)\/dashboard\/(.+)$/);
+      if (appDashboardMatch) {
+        const dashboardId = appDashboardMatch[2];
+        this.navigationService.OpenDashboard(dashboardId, 'Dashboard');
+        return;
+      }
+
+      // Check for app-scoped artifact URL: /app/:appName/artifact/:artifactId
+      const appArtifactMatch = urlPath.match(/^\/app\/([^\/]+)\/artifact\/(.+)$/);
+      if (appArtifactMatch) {
+        const artifactId = appArtifactMatch[2];
+        this.navigationService.OpenArtifact(artifactId, 'Artifact');
+        return;
+      }
+
+      // Check for app-scoped query URL: /app/:appName/query/:queryId
+      const appQueryMatch = urlPath.match(/^\/app\/([^\/]+)\/query\/(.+)$/);
+      if (appQueryMatch) {
+        const queryId = appQueryMatch[2];
+        this.navigationService.OpenQuery(queryId, 'Query');
+        return;
+      }
+
+      // Check for app-scoped report URL: /app/:appName/report/:reportId
+      const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
+      if (appReportMatch) {
+        const reportId = appReportMatch[2];
+        this.navigationService.OpenReport(reportId, 'Report');
+        return;
+      }
+
+      // Check for app-only URL: /app/:appName
+      const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
+      if (appOnlyMatch) {
+        const appPath = decodeURIComponent(appOnlyMatch[1]);
+        const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+
+        if (app) {
+          const navItems = app.GetNavItems();
+          // Only auto-create tabs for apps with zero nav items
+          // Apps with nav items should have had their tabs preserved
+          if (navItems.length === 0) {
+            // Set the app as active and create its default tab
             await this.appManager.SetActiveApp(app.ID);
             const defaultTab = await app.CreateDefaultTab();
             if (defaultTab) {
               this.workspaceManager.OpenTab(defaultTab, app.GetColor());
             }
-          } finally {
-            this.urlBasedNavigation = false;
           }
         }
+        return;
       }
+
+      // Legacy resource URLs (backward compatibility)
+      // Check for legacy record URL: /resource/record/:entityName/:recordId
+      const legacyRecordMatch = urlPath.match(/^\/resource\/record\/([^\/]+)\/(.+)$/);
+      if (legacyRecordMatch) {
+        const entityName = decodeURIComponent(legacyRecordMatch[1]);
+        const recordId = decodeURIComponent(legacyRecordMatch[2]);
+        const compositeKey = new CompositeKey();
+        compositeKey.SimpleLoadFromURLSegment(recordId);
+        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        return;
+      }
+
+      // Check for legacy view URL: /resource/view/:viewId
+      const legacyViewMatch = urlPath.match(/^\/resource\/view\/([^\/]+)$/);
+      if (legacyViewMatch && legacyViewMatch[1] !== 'dynamic') {
+        const viewId = legacyViewMatch[1];
+        this.navigationService.OpenView(viewId, 'View');
+        return;
+      }
+
+      // Check for legacy dashboard URL: /resource/dashboard/:dashboardId
+      const legacyDashboardMatch = urlPath.match(/^\/resource\/dashboard\/(.+)$/);
+      if (legacyDashboardMatch) {
+        const dashboardId = legacyDashboardMatch[1];
+        this.navigationService.OpenDashboard(dashboardId, 'Dashboard');
+        return;
+      }
+    } finally {
+      this.urlBasedNavigation = false;
     }
   }
 
@@ -658,7 +749,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const appRecordMatch = urlPath.match(/^\/app\/([^\/]+)\/record\/([^\/]+)\/(.+)$/);
     if (appRecordMatch) {
       const entityName = decodeURIComponent(appRecordMatch[2]);
-      const recordId = appRecordMatch[3];
+      const recordId = decodeURIComponent(appRecordMatch[3]);
 
       return tabs.find(tab => {
         const tabConfig = tab.configuration || {};
@@ -760,7 +851,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const recordMatch = urlPath.match(/^\/resource\/record\/([^\/]+)\/(.+)$/);
     if (recordMatch) {
       const entityName = decodeURIComponent(recordMatch[1]);
-      const recordId = recordMatch[2];
+      const recordId = decodeURIComponent(recordMatch[2]);
 
       return tabs.find(tab => {
         const tabConfig = tab.configuration || {};
