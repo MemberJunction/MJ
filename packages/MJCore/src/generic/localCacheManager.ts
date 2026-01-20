@@ -63,6 +63,31 @@ export interface CacheStats {
 }
 
 /**
+ * Structure of cached RunView data stored in the storage provider.
+ * Note: rowCount is NOT persisted - it is always derived from results.length
+ * to prevent data inconsistency.
+ */
+export interface CachedRunViewData {
+    /** The cached result rows */
+    results: unknown[];
+    /** The maximum __mj_UpdatedAt timestamp from the results */
+    maxUpdatedAt: string;
+}
+
+/**
+ * Return type for GetRunViewResult and ApplyDifferentialUpdate.
+ * Includes rowCount which is derived from results.length.
+ */
+export interface CachedRunViewResult {
+    /** The cached result rows */
+    results: unknown[];
+    /** The maximum __mj_UpdatedAt timestamp from the results */
+    maxUpdatedAt: string;
+    /** Row count - always derived from results.length */
+    rowCount: number;
+}
+
+/**
  * Configuration for the LocalCacheManager
  */
 export interface LocalCacheManagerConfig {
@@ -435,23 +460,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     /**
      * Stores a RunView result in the cache.
      *
+     * Note: rowCount is NOT persisted - it is always derived from results.length
+     * when reading to prevent data inconsistency.
+     *
      * @param fingerprint - The cache fingerprint (from GenerateRunViewFingerprint)
      * @param params - The original RunView parameters
      * @param results - The results to cache
      * @param maxUpdatedAt - The latest __mj_UpdatedAt from the results
-     * @param rowCount - Optional row count (defaults to results.length if not provided)
+     * @param _rowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from results.length.
      */
     public async SetRunViewResult(
         fingerprint: string,
         params: RunViewParams,
         results: unknown[],
         maxUpdatedAt: string,
-        rowCount?: number
+        _rowCount?: number
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
-        const actualRowCount = rowCount ?? results.length;
-        const value = JSON.stringify({ results, maxUpdatedAt, rowCount: actualRowCount });
+        // Only persist results and maxUpdatedAt - rowCount is derived from results.length on read
+        const data: CachedRunViewData = { results, maxUpdatedAt };
+        const value = JSON.stringify(data);
         const sizeBytes = this.estimateSize(value);
 
         // Check if we need to evict entries
@@ -477,7 +506,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 accessCount: 1,
                 sizeBytes,
                 maxUpdatedAt,
-                rowCount: actualRowCount
+                rowCount: results.length  // Registry still tracks this for display/stats, derived from actual results
             });
         } catch (e) {
             LogError(`LocalCacheManager.SetRunViewResult failed: ${e}`);
@@ -487,10 +516,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     /**
      * Retrieves a cached RunView result.
      *
+     * Note: rowCount is always derived from results.length, never from persisted data.
+     *
      * @param fingerprint - The cache fingerprint
-     * @returns The cached results, maxUpdatedAt, and rowCount, or null if not found
+     * @returns The cached results, maxUpdatedAt, and rowCount (derived), or null if not found
      */
-    public async GetRunViewResult(fingerprint: string): Promise<{ results: unknown[]; maxUpdatedAt: string; rowCount: number } | null> {
+    public async GetRunViewResult(fingerprint: string): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
@@ -499,12 +530,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             if (value) {
                 this.recordAccess(fingerprint);
                 this._stats.hits++;
-                const parsed = JSON.parse(value);
-                // Handle legacy entries that may not have rowCount
+                const parsed = JSON.parse(value) as CachedRunViewData;
+                const results = parsed.results || [];
+                // Always derive rowCount from results.length - never trust persisted rowCount
                 return {
-                    results: parsed.results,
+                    results,
                     maxUpdatedAt: parsed.maxUpdatedAt,
-                    rowCount: parsed.rowCount ?? parsed.results?.length ?? 0
+                    rowCount: results.length
                 };
             }
         } catch (e) {
@@ -538,13 +570,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * This is the core method for differential caching - instead of replacing the entire cache,
      * we efficiently merge only the changes (deltas) with the existing cached data.
      *
+     * Note: rowCount is always derived from the merged results length, not from a parameter.
+     *
      * @param fingerprint - The cache fingerprint to update
      * @param params - The original RunView parameters (for re-storing the cache)
      * @param updatedRows - Rows that have been created or updated since the cache was stored
      * @param deletedRecordIDs - Record IDs (in CompositeKey concatenated string format) that have been deleted
      * @param primaryKeyFieldName - The name of the primary key field (or first PK field for composite keys)
      * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
-     * @param newRowCount - The new total row count after applying the delta
+     * @param _serverRowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from merged results.length.
      * @returns The merged results after applying the differential update, or null if cache not found
      */
     public async ApplyDifferentialUpdate(
@@ -554,8 +588,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         deletedRecordIDs: string[],
         primaryKeyFieldName: string,
         newMaxUpdatedAt: string,
-        newRowCount: number
-    ): Promise<{ results: unknown[]; maxUpdatedAt: string; rowCount: number } | null> {
+        _serverRowCount?: number
+    ): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
@@ -599,19 +633,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Convert map back to array
             const mergedResults = Array.from(resultMap.values());
 
-            // Store the updated cache
+            // Store the updated cache (rowCount is derived from mergedResults.length inside SetRunViewResult)
             await this.SetRunViewResult(
                 fingerprint,
                 params,
                 mergedResults,
-                newMaxUpdatedAt,
-                newRowCount
+                newMaxUpdatedAt
             );
 
+            // Return with rowCount derived from merged results
             return {
                 results: mergedResults,
                 maxUpdatedAt: newMaxUpdatedAt,
-                rowCount: newRowCount
+                rowCount: mergedResults.length
             };
         } catch (e) {
             LogError(`LocalCacheManager.ApplyDifferentialUpdate failed: ${e}`);
@@ -665,32 +699,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
 
             // Upsert the entity (add or replace)
-            const isNew = !resultMap.has(pkValue);
             resultMap.set(pkValue, entityData);
 
             // Convert map back to array
             const updatedResults = Array.from(resultMap.values());
 
-            // Update row count: increment if new, same if update
-            const newRowCount = isNew ? cached.rowCount + 1 : cached.rowCount;
-
-            // Store the updated cache
-            // Note: We need the original params to store, but we don't have them
-            // Use a minimal params object - the fingerprint is the key anyway
-            const value = JSON.stringify({
+            // Store the updated cache - rowCount is derived from results.length
+            const data: CachedRunViewData = {
                 results: updatedResults,
-                maxUpdatedAt: newMaxUpdatedAt,
-                rowCount: newRowCount
-            });
+                maxUpdatedAt: newMaxUpdatedAt
+            };
+            const value = JSON.stringify(data);
             const sizeBytes = this.estimateSize(value);
 
             await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
 
-            // Update registry entry
+            // Update registry entry with derived rowCount
             const existingEntry = this._registry.get(fingerprint);
             if (existingEntry) {
                 existingEntry.maxUpdatedAt = newMaxUpdatedAt;
-                existingEntry.rowCount = newRowCount;
+                existingEntry.rowCount = updatedResults.length;
                 existingEntry.sizeBytes = sizeBytes;
                 existingEntry.lastAccessedAt = Date.now();
                 this.debouncedPersistRegistry();
@@ -751,24 +779,21 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Convert map back to array
             const updatedResults = Array.from(resultMap.values());
 
-            // Decrement row count
-            const newRowCount = Math.max(0, cached.rowCount - 1);
-
-            // Store the updated cache
-            const value = JSON.stringify({
+            // Store the updated cache - rowCount is derived from results.length
+            const data: CachedRunViewData = {
                 results: updatedResults,
-                maxUpdatedAt: newMaxUpdatedAt,
-                rowCount: newRowCount
-            });
+                maxUpdatedAt: newMaxUpdatedAt
+            };
+            const value = JSON.stringify(data);
             const sizeBytes = this.estimateSize(value);
 
             await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
 
-            // Update registry entry
+            // Update registry entry with derived rowCount
             const existingEntry = this._registry.get(fingerprint);
             if (existingEntry) {
                 existingEntry.maxUpdatedAt = newMaxUpdatedAt;
-                existingEntry.rowCount = newRowCount;
+                existingEntry.rowCount = updatedResults.length;
                 existingEntry.sizeBytes = sizeBytes;
                 existingEntry.lastAccessedAt = Date.now();
                 this.debouncedPersistRegistry();
