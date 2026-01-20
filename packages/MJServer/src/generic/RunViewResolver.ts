@@ -905,6 +905,14 @@ export class RunViewResolver extends ResolverBase {
         const inputItem = input[index];
         const entity = provider.Entities.find(e => e.Name === inputItem.params.EntityName);
 
+        // If we have differential data but no entity, that's a configuration error
+        if (result.status === 'differential' && result.differentialData && !entity) {
+          throw new Error(
+            `Entity '${inputItem.params.EntityName}' not found in provider metadata but server returned differential data. ` +
+            `This may indicate a metadata sync issue.`
+          );
+        }
+
         if (result.status === 'differential' && result.differentialData && entity) {
           // Process differential data into GraphQL-compatible format
           const processedUpdatedRows = this.processRawData(

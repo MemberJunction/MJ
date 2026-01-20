@@ -905,6 +905,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                 EntityID
                                 Data
                             }
+                            differentialData {
+                                updatedRows {
+                                    PrimaryKey {
+                                        FieldName
+                                        Value
+                                    }
+                                    EntityID
+                                    Data
+                                }
+                                deletedRecordIDs
+                            }
                         }
                     }
                 }
@@ -921,6 +932,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     rowCount?: number;
                     errorMessage?: string;
                     Results?: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
+                    differentialData?: {
+                        updatedRows: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
+                        deletedRecordIDs: string[];
+                    };
                 }>;
             };
 
@@ -932,15 +947,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 };
             }
 
-            // Transform results - deserialize Data fields for stale results
+            // Transform results - deserialize Data fields for stale/differential results
             const transformedResults: RunViewWithCacheCheckResult<T>[] = response.results.map((result, index) => {
                 const inputItem = params[index];
 
-                if (result.status === 'stale' && result.Results) {
-                    // Get entity info for field conversion
-                    const entityName = inputItem.params.EntityName;
-                    const entityInfo = this.Entities.find(e => e.Name === entityName);
+                if (result.status === 'differential' && result.differentialData) {
+                    // Deserialize the differential data
+                    const deserializedUpdatedRows: T[] = result.differentialData.updatedRows.map(r => {
+                        const data = JSON.parse(r.Data);
+                        this.ConvertBackToMJFields(data);
+                        return data as T;
+                    });
 
+                    return {
+                        viewIndex: result.viewIndex,
+                        status: result.status as 'current' | 'stale' | 'differential' | 'error',
+                        results: undefined,
+                        differentialData: {
+                            updatedRows: deserializedUpdatedRows,
+                            deletedRecordIDs: result.differentialData.deletedRecordIDs,
+                        },
+                        maxUpdatedAt: result.maxUpdatedAt,
+                        rowCount: result.rowCount,
+                        errorMessage: result.errorMessage,
+                    };
+                }
+
+                if (result.status === 'stale' && result.Results) {
                     // Deserialize the Data field and convert back MJ fields
                     const deserializedResults: T[] = result.Results.map(r => {
                         const data = JSON.parse(r.Data);
@@ -950,7 +983,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                     return {
                         viewIndex: result.viewIndex,
-                        status: result.status as 'current' | 'stale' | 'error',
+                        status: result.status as 'current' | 'stale' | 'differential' | 'error',
                         results: deserializedResults,
                         maxUpdatedAt: result.maxUpdatedAt,
                         rowCount: result.rowCount,
@@ -960,7 +993,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 return {
                     viewIndex: result.viewIndex,
-                    status: result.status as 'current' | 'stale' | 'error',
+                    status: result.status as 'current' | 'stale' | 'differential' | 'error',
                     results: undefined,
                     maxUpdatedAt: result.maxUpdatedAt,
                     rowCount: result.rowCount,
