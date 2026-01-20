@@ -2,15 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI Angular imports
-import { GridModule } from '@progress/kendo-angular-grid';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { DialogsModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { SortableModule } from '@progress/kendo-angular-sortable';
-
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
@@ -62,23 +53,16 @@ import { UserAppConfigComponent } from './user-app-config/user-app-config.compon
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    GridModule,
-    DialogsModule,
-    ExcelExportModule,
     CompareRecordsModule,
     ContainerDirectivesModule,
-    ButtonsModule,
-    DropDownsModule,
     EntityPermissionsModule,
     MJTabStripModule,
     EntityFormDialogModule,
-    IndicatorsModule,
     UserViewGridModule,
     SimpleRecordListModule,
     JoinGridModule,
     CodeEditorModule,
     SharedSettingsModule,
-    SortableModule,
     SharedGenericModule
   ],
   exports: [

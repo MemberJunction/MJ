@@ -6,19 +6,19 @@
 
   <!-- Error Message -->
   @if (errorMessage) {
-    <div class="alert alert-error">
-      <i class="fa-solid fa-exclamation-triangle"></i>
+    <div class="alert alert-error" role="alert">
+      <i class="fa-solid fa-exclamation-triangle" aria-hidden="true"></i>
       <span>{{ errorMessage }}</span>
-      <button class="close-btn" (click)="errorMessage = ''">
-        <i class="fa-solid fa-xmark"></i>
+      <button class="close-btn" (click)="errorMessage = ''" aria-label="Dismiss error">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
       </button>
     </div>
   }
 
   <!-- Success Message -->
   @if (showSuccessMessage) {
-    <div class="alert alert-success">
-      <i class="fa-solid fa-check-circle"></i>
+    <div class="alert alert-success" role="status" aria-live="polite">
+      <i class="fa-solid fa-check-circle" aria-hidden="true"></i>
       <span>Avatar updated successfully!</span>
     </div>
   }
@@ -31,11 +31,11 @@
         <img [src]="previewUrl" alt="Avatar preview" class="preview-image" />
       } @else if (previewIconClass) {
         <div class="preview-icon-wrapper">
-          <i [class]="previewIconClass + ' preview-icon'"></i>
+          <i [class]="previewIconClass + ' preview-icon'" aria-hidden="true"></i>
         </div>
       } @else {
         <div class="preview-placeholder">
-          <i class="fa-solid fa-user"></i>
+          <i class="fa-solid fa-user" aria-hidden="true"></i>
           <span>No avatar selected</span>
         </div>
       }
@@ -43,37 +43,49 @@
   </div>
 
   <!-- Tab Navigation -->
-  <div class="tab-navigation">
+  <div class="tab-navigation" role="tablist" aria-label="Avatar customization options">
     <button
       class="tab-btn"
       [class.active]="selectedTab === 'upload'"
       (click)="selectTab('upload')"
+      role="tab"
+      [attr.aria-selected]="selectedTab === 'upload'"
+      aria-controls="panel-upload"
     >
-      <i class="fa-solid fa-upload"></i>
+      <i class="fa-solid fa-upload" aria-hidden="true"></i>
       <span>Upload</span>
     </button>
     <button
       class="tab-btn"
       [class.active]="selectedTab === 'url'"
       (click)="selectTab('url')"
+      role="tab"
+      [attr.aria-selected]="selectedTab === 'url'"
+      aria-controls="panel-url"
     >
-      <i class="fa-solid fa-link"></i>
+      <i class="fa-solid fa-link" aria-hidden="true"></i>
       <span>URL</span>
     </button>
     <button
       class="tab-btn"
       [class.active]="selectedTab === 'icon'"
       (click)="selectTab('icon')"
+      role="tab"
+      [attr.aria-selected]="selectedTab === 'icon'"
+      aria-controls="panel-icon"
     >
-      <i class="fa-solid fa-icons"></i>
+      <i class="fa-solid fa-icons" aria-hidden="true"></i>
       <span>Icon</span>
     </button>
     <button
       class="tab-btn"
       [class.active]="selectedTab === 'provider'"
       (click)="selectTab('provider')"
+      role="tab"
+      [attr.aria-selected]="selectedTab === 'provider'"
+      aria-controls="panel-provider"
     >
-      <i class="fa-brands fa-microsoft"></i>
+      <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
       <span>Sync</span>
     </button>
   </div>
@@ -82,7 +94,7 @@
   <div class="tab-content">
     <!-- Upload Tab -->
     @if (selectedTab === 'upload') {
-      <div class="upload-section">
+      <div class="upload-section" id="panel-upload" role="tabpanel">
         <input
           type="file"
           #fileInput
@@ -92,21 +104,21 @@
         />
 
         <button class="upload-btn" (click)="fileInput.click()">
-          <i class="fa-solid fa-upload"></i>
+          <i class="fa-solid fa-upload" aria-hidden="true"></i>
           Choose Image
         </button>
 
         <div class="upload-info">
-          <i class="fa-solid fa-info-circle"></i>
-          Max 200KB • PNG, JPG, GIF, WEBP
+          <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
+          Max 200KB - PNG, JPG, GIF, WEBP
         </div>
 
         @if (uploadedFileName) {
           <div class="selected-file">
-            <i class="fa-solid fa-file-image"></i>
+            <i class="fa-solid fa-file-image" aria-hidden="true"></i>
             <span>{{ uploadedFileName }}</span>
-            <button class="remove-btn" (click)="clearUpload()">
-              <i class="fa-solid fa-xmark"></i>
+            <button class="remove-btn" (click)="clearUpload()" aria-label="Remove selected file">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
             </button>
           </div>
         }
@@ -115,7 +127,7 @@
 
     <!-- URL Tab -->
     @if (selectedTab === 'url') {
-      <div class="url-section">
+      <div class="url-section" id="panel-url" role="tabpanel">
         <label for="imageUrl">Image URL</label>
         <input
           type="text"
@@ -126,7 +138,7 @@
           (input)="onUrlChange()"
         />
         <div class="url-info">
-          <i class="fa-solid fa-info-circle"></i>
+          <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
           Enter a URL to an image hosted online
         </div>
       </div>
@@ -134,32 +146,73 @@
 
     <!-- Icon Tab -->
     @if (selectedTab === 'icon') {
-      <div class="icon-section">
-        @for (category of iconCategories; track category.name) {
-          <div class="icon-category">
-            <h4 class="category-title">{{ category.name }}</h4>
-            <div class="icon-grid">
-              @for (icon of category.icons; track icon) {
-                <button
-                  class="icon-option"
-                  [class.selected]="isIconSelected(icon)"
-                  (click)="selectIcon(icon)"
-                  [title]="icon"
-                >
-                  <i [class]="icon"></i>
-                </button>
-              }
-            </div>
+      <div class="icon-section" id="panel-icon" role="tabpanel">
+        <!-- Icon Search -->
+        <div class="icon-search-container">
+          <div class="mj-search">
+            <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
+            <input
+              type="text"
+              class="mj-search-input"
+              placeholder="Search icons by name..."
+              [value]="iconSearchTerm"
+              (input)="onIconSearchChange($event)"
+              aria-label="Search icons"
+            />
+            @if (iconSearchTerm) {
+              <button
+                class="mj-search-clear"
+                (click)="clearIconSearch()"
+                aria-label="Clear search"
+              >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            }
           </div>
-        }
+          <div class="icon-filter-info">
+            {{ totalFilteredIcons }} icon{{ totalFilteredIcons !== 1 ? 's' : '' }} found
+          </div>
+        </div>
+
+        <!-- Icon Categories -->
+        <div class="icon-categories-container">
+          @if (filteredIconCategories.length > 0) {
+            @for (category of filteredIconCategories; track category.name) {
+              <div class="icon-category">
+                <h4 class="category-title">{{ category.name }}</h4>
+                <div class="icon-grid" role="radiogroup" [attr.aria-label]="category.name + ' icons'">
+                  @for (icon of category.icons; track icon) {
+                    <button
+                      class="icon-option"
+                      [class.selected]="isIconSelected(icon)"
+                      (click)="selectIcon(icon)"
+                      [title]="extractIconName(icon)"
+                      role="radio"
+                      [attr.aria-checked]="isIconSelected(icon)"
+                      [attr.aria-label]="extractIconName(icon) + ' icon'"
+                    >
+                      <i [class]="icon" aria-hidden="true"></i>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          } @else {
+            <div class="empty-state">
+              <i class="fa-solid fa-search empty-icon" aria-hidden="true"></i>
+              <p class="empty-text">No icons found</p>
+              <p class="empty-subtext">Try a different search term</p>
+            </div>
+          }
+        </div>
       </div>
     }
 
     <!-- Provider Sync Tab -->
     @if (selectedTab === 'provider') {
-      <div class="provider-section">
+      <div class="provider-section" id="panel-provider" role="tabpanel">
         <div class="provider-info">
-          <i class="fa-solid fa-info-circle"></i>
+          <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
           <p>Sync your avatar from your authentication provider account</p>
         </div>
 
@@ -168,7 +221,7 @@
           (click)="syncFromProvider()"
           [disabled]="isSaving"
         >
-          <i class="fa-brands fa-microsoft"></i>
+          <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
           @if (isSaving) {
             <span>Syncing...</span>
           } @else {
@@ -177,18 +230,18 @@
         </button>
 
         <div class="provider-note">
-          <i class="fa-solid fa-lightbulb"></i>
+          <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
           <small>This will download your profile photo from Microsoft and save it to your profile</small>
         </div>
 
-        <div style="border-top: 1px solid #ddd; width: 100%; max-width: 500px; margin: 1rem 0;"></div>
+        <hr class="provider-divider" />
 
         <button
           class="revert-btn"
           (click)="revertToDefault()"
           [disabled]="isSaving"
         >
-          <i class="fa-solid fa-rotate-left"></i>
+          <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
           @if (isSaving) {
             <span>Reverting...</span>
           } @else {
@@ -197,34 +250,34 @@
         </button>
 
         <div class="provider-note">
-          <i class="fa-solid fa-info-circle"></i>
+          <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
           <small>Clears your avatar settings and restores the automatic sync from your auth provider</small>
         </div>
       </div>
     }
   </div>
 
-  <!-- Action Buttons -->
+  <!-- Action Buttons - Primary (Save) on LEFT per MD3 design guide -->
   <div class="action-buttons">
     <button
-      class="btn btn-secondary"
-      (click)="cancel()"
-      [disabled]="isSaving"
-    >
-      Cancel
-    </button>
-    <button
-      class="btn btn-primary"
+      class="mj-btn mj-btn-primary"
       (click)="save()"
       [disabled]="isSaving || selectedTab === 'provider'"
     >
       @if (isSaving) {
-        <i class="fa-solid fa-spinner fa-spin"></i>
+        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
         <span>Saving...</span>
       } @else {
-        <i class="fa-solid fa-save"></i>
+        <i class="fa-solid fa-save" aria-hidden="true"></i>
         <span>Save Changes</span>
       }
+    </button>
+    <button
+      class="mj-btn mj-btn-secondary"
+      (click)="cancel()"
+      [disabled]="isSaving"
+    >
+      Cancel
     </button>
   </div>
 </div>
