@@ -378,7 +378,10 @@ const configInfoSchema = z.object({
     { name: 'auto_index_foreign_keys', value: true },
   ]),
   excludeSchemas: z.string().array().default(['sys', 'staging']),
-  excludeTables: tableInfoSchema.array().default([{ schema: '%', table: 'sys%' }]),
+  excludeTables: tableInfoSchema.array().default([
+    { schema: '%', table: 'sys%' },
+    { schema: '%', table: 'flyway_schema_history' }
+  ]),
   customSQLScripts: customSQLScriptSchema.array().default([
     {
       scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
@@ -501,7 +504,10 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     CreateNewApplicationWithSchemaName: true,
   },
   excludeSchemas: ['sys', 'staging', '__mj'],
-  excludeTables: [{ schema: '%', table: 'sys%' }],
+  excludeTables: [
+    { schema: '%', table: 'sys%' },
+    { schema: '%', table: 'flyway_schema_history' }
+  ],
   customSQLScripts: [],
   dbSchemaJSONOutput: {
     excludeEntities: [],
