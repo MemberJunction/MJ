@@ -93,6 +93,7 @@ const sqlLoggingOptionsSchema = z.object({
   prettyPrint: z.boolean().optional().default(true),
   logRecordChangeMetadata: z.boolean().optional().default(false),
   retainEmptyLogFiles: z.boolean().optional().default(false),
+  verboseOutput: z.boolean().optional().default(false),
 });
 
 const sqlLoggingSchema = z.object({
@@ -303,6 +304,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
       prettyPrint: true,
       logRecordChangeMetadata: false,
       retainEmptyLogFiles: false,
+      verboseOutput: false,
     },
     allowedLogDirectory: './logs/sql',
     maxActiveSessions: 5,
