@@ -305,25 +305,265 @@ The primary endpoint for Server-Sent Events (SSE) based MCP protocol communicati
 
 The MCP protocol uses JSON-RPC 2.0 over Server-Sent Events for communication.
 
-## Security
+## Security and Authentication
 
-By default, the server runs without authentication. For production, you should configure authentication in the server options:
+The MCP Server uses API key authentication to secure access. All requests must include a valid API key in the request headers.
+
+### Authentication Overview
+
+- **Authentication Method**: API Key via HTTP headers
+- **Supported Headers**: `x-api-key` or `x-mj-api-key`
+- **Key Format**: `mjkey_` prefix followed by 32 random characters (e.g., `mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`)
+- **Storage**: Keys are stored as SHA-256 hashes in the database for security
+- **User Context**: Each API key is associated with a MemberJunction user account
+
+### Creating API Keys
+
+API keys are managed through the MemberJunction database. Here's how to create a new API key:
+
+#### Step 1: Generate a Raw Key
+
+Use the MemberJunction Core library to generate a properly formatted key:
+
+```typescript
+import { generateAPIKey } from '@memberjunction/core';
+
+// Generate a new API key with mjkey_ prefix
+const rawKey = generateAPIKey();
+console.log('Your API Key:', rawKey);
+// Example output: mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+
+// IMPORTANT: Save this key immediately - it cannot be recovered once hashed!
+```
+
+#### Step 2: Hash the Key for Database Storage
+
+```typescript
+import { hashAPIKey } from '@memberjunction/core';
+
+const keyHash = hashAPIKey(rawKey);
+console.log('Key Hash:', keyHash);
+// This is what gets stored in the database
+```
+
+#### Step 3: Insert into Database
+
+```sql
+INSERT INTO __mj.APIKey (ID, Hash, UserID, Label, Status, CreatedByUserID)
+VALUES (
+  NEWID(),
+  'your-hashed-key-here',
+  'user-id-guid',
+  'My MCP Client Key',
+  'Active',
+  'creator-user-id-guid'
+);
+```
+
+**Complete Example:**
+
+```typescript
+import { generateAPIKey, hashAPIKey } from '@memberjunction/core';
+import sql from 'mssql';
+
+// 1. Generate the raw key
+const rawKey = generateAPIKey();
+console.log('🔑 Your API Key (save this!):', rawKey);
+
+// 2. Hash it for storage
+const keyHash = hashAPIKey(rawKey);
+
+// 3. Store in database
+const pool = await sql.connect(config);
+await pool.request()
+  .input('hash', sql.NVarChar(64), keyHash)
+  .input('userId', sql.UniqueIdentifier, 'your-user-id-guid')
+  .input('label', sql.NVarChar(255), 'My Application Key')
+  .query(`
+    INSERT INTO __mj.APIKey (ID, Hash, UserID, Label, Status, CreatedByUserID)
+    VALUES (NEWID(), @hash, @userId, @label, 'Active', @userId)
+  `);
+
+console.log('✅ API Key created successfully!');
+```
+
+### API Key Schema
+
+The API Key system uses four tables:
+
+**APIKey Table:**
+- `ID`: Unique identifier
+- `Hash`: SHA-256 hash of the raw API key (64 hex characters)
+- `UserID`: Foreign key to User - the account context for this key
+- `Label`: Friendly name (e.g., "Production MCP Client", "CI/CD Pipeline")
+- `Description`: Optional detailed description
+- `Status`: `Active` or `Revoked`
+- `ExpiresAt`: Optional expiration timestamp (NULL = never expires)
+- `LastUsedAt`: Automatically updated on each use
+- `CreatedByUserID`: User who created the key
+
+**APIScope Table:**
+- Defines reusable permission definitions (e.g., `entities:read`, `agents:execute`)
+- Organized by category (Entities, Agents, Admin)
+
+**APIKeyScope Table:**
+- Junction table linking API keys to scopes
+- Enables fine-grained permission control (coming soon)
+
+**APIKeyUsageLog Table:**
+- Tracks API key usage for analytics and debugging
+- Records endpoint, operation, response time, IP address, etc.
+
+### Using API Keys
+
+#### With HTTP Headers
+
+```bash
+# Using x-api-key header
+curl -H "x-api-key: mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+  http://localhost:3100/mcp
+
+# Using x-mj-api-key header (alternative)
+curl -H "x-mj-api-key: mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+  http://localhost:3100/mcp
+```
+
+#### With MCP Clients
+
+Configure your MCP client to include the API key in headers:
+
+```typescript
+// Example MCP client configuration
+const client = new MCPClient({
+  url: 'http://localhost:3100/mcp',
+  headers: {
+    'x-api-key': 'mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6'
+  }
+});
+```
+
+#### With Claude Desktop
+
+Add to your Claude Desktop MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "memberjunction": {
+      "command": "npx",
+      "args": ["-y", "@memberjunction/ai-mcp-server"],
+      "env": {
+        "X_API_KEY": "mjkey_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+      }
+    }
+  }
+}
+```
+
+### System API Key (Development Mode)
+
+For backward compatibility and development, you can configure a system API key in your `mj.config.cjs`:
 
 ```javascript
-// Example using basic auth
-const serverOptions = {
-  transportType: "sse",
-  sse: {
-    endpoint: "/mcp",
-    port: 3100
-  },
-  auth: {
-    type: "basic",
-    username: "user",
-    password: "pass"
+module.exports = {
+  mcpServerSettings: {
+    systemApiKey: true,  // Allows requests without API key header
+    // ... other settings
   }
-};
+}
 ```
+
+**⚠️ Warning**: System API key mode is for development only. Always use proper API key authentication in production.
+
+### Key Lifecycle Management
+
+#### Revoking a Key
+
+```sql
+UPDATE __mj.APIKey
+SET Status = 'Revoked'
+WHERE ID = 'key-id-guid';
+```
+
+#### Setting Expiration
+
+```sql
+-- Expire in 90 days
+UPDATE __mj.APIKey
+SET ExpiresAt = DATEADD(day, 90, GETUTCDATE())
+WHERE ID = 'key-id-guid';
+```
+
+#### Monitoring Usage
+
+```sql
+-- View recent usage for a key
+SELECT TOP 100
+  Endpoint,
+  Operation,
+  StatusCode,
+  ResponseTimeMs,
+  __mj_CreatedAt as UsedAt
+FROM __mj.APIKeyUsageLog
+WHERE APIKeyID = 'key-id-guid'
+ORDER BY __mj_CreatedAt DESC;
+
+-- Check last usage time
+SELECT Label, LastUsedAt
+FROM __mj.APIKey
+WHERE UserID = 'your-user-id';
+```
+
+### Security Best Practices
+
+1. **Never Commit Keys**: Add API keys to `.gitignore` and use environment variables
+2. **Rotate Keys**: Regularly rotate keys, especially for production systems
+3. **Use Expiration**: Set expiration dates for temporary or test keys
+4. **Monitor Usage**: Review APIKeyUsageLog for suspicious activity
+5. **Label Keys**: Use descriptive labels to track what each key is used for
+6. **Revoke Unused Keys**: Clean up keys that are no longer needed
+7. **Store Securely**: Save raw keys in a secure password manager or secrets vault
+
+### Authentication Flow
+
+1. Client sends request with `x-api-key` header
+2. Server validates key format (must start with `mjkey_`)
+3. Server hashes the key and looks up in database
+4. Server checks:
+   - Key exists and hash matches
+   - Status is `Active`
+   - Not expired (ExpiresAt is NULL or in future)
+   - Associated user account is active
+5. Server loads the user context from UserCache
+6. Server updates `LastUsedAt` timestamp (async, non-blocking)
+7. Request proceeds with authenticated user context
+
+### Troubleshooting Authentication
+
+**"API key required"**
+- Ensure you're including the `x-api-key` or `x-mj-api-key` header
+- Check that the header value is not empty
+
+**"Invalid API key format"**
+- Key must start with `mjkey_` prefix
+- Key must be exactly 37 characters total
+
+**"API key not found"**
+- The key hash doesn't match any record in the database
+- Verify you're using the raw key, not the hash
+- Check that the key was inserted into `__mj.APIKey`
+
+**"API key has been revoked"**
+- The key's Status field is set to 'Revoked'
+- Create a new key or update the Status back to 'Active'
+
+**"API key has expired"**
+- The ExpiresAt timestamp is in the past
+- Update the expiration date or create a new key
+
+**"User account is inactive"**
+- The associated user's IsActive field is false
+- Activate the user account or create a key for an active user
 
 ## Complete Example
 
