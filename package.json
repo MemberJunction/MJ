@@ -94,6 +94,8 @@
     "caniuse-lite": "1.0.30001764",
     "rimraf": "^5.0.10",
     "glob": "^10.5.0",
+    "archiver": "~7.0.0",
+    "archiver-utils": "^5.0.0",
     "inflight": "^1.0.6",
     "fstream": "npm:tar-fs@^3.0.4",
     "lodash.isequal": "npm:fast-deep-equal@^3.1.3",
