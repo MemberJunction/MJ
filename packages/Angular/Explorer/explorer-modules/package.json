@@ -1,0 +1,49 @@
+{
+  "name": "@memberjunction/ng-explorer-modules",
+  "version": "3.0.0",
+  "description": "MemberJunction: Consolidated Explorer Modules Bundle",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ngc"
+  },
+  "keywords": [
+    "memberjunction",
+    "explorer",
+    "angular",
+    "modules"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
+  },
+  "peerDependencies": {
+    "@angular/common": "^18.0.0",
+    "@angular/core": "^18.0.0",
+    "@angular/forms": "^18.0.0",
+    "@angular/router": "^18.0.0"
+  },
+  "dependencies": {
+    "@memberjunction/ng-core-entity-forms": "3.0.0",
+    "@memberjunction/ng-container-directives": "3.0.0",
+    "@memberjunction/ng-explorer-core": "3.0.0",
+    "@memberjunction/ng-explorer-settings": "3.0.0",
+    "@memberjunction/ng-kendo-modules": "3.0.0",
+    "@memberjunction/ng-link-directives": "3.0.0",
+    "@memberjunction/ng-shared": "3.0.0",
+    "@memberjunction/ng-user-view-grid": "3.0.0",
+    "@memberjunction/ng-workspace-initializer": "3.0.0",
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

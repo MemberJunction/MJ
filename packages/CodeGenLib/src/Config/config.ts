@@ -9,6 +9,7 @@ import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
 import { LogError } from '@memberjunction/core';
+import { mergeConfigs } from '@memberjunction/config';
 
 /** Global configuration explorer for finding MJ config files */
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
@@ -275,7 +276,7 @@ const sqlOutputConfigSchema = z.object({
    * The path of the folder to use when logging is enabled.
    * If provided, a file will be created with the format "CodeGen_Run_yyyy-mm-dd_hh-mm-ss.sql"
    */
-  folderPath: z.string().default('../../migrations/v2/'),
+  folderPath: z.string().default('../../migrations/v3/'),
   /**
    * Optional, the file name that will be written WITHIN the folderPath specified.
    */
@@ -377,7 +378,10 @@ const configInfoSchema = z.object({
     { name: 'auto_index_foreign_keys', value: true },
   ]),
   excludeSchemas: z.string().array().default(['sys', 'staging']),
-  excludeTables: tableInfoSchema.array().default([{ schema: '%', table: 'sys%' }]),
+  excludeTables: tableInfoSchema.array().default([
+    { schema: '%', table: 'sys%' },
+    { schema: '%', table: 'flyway_schema_history' }
+  ]),
   customSQLScripts: customSQLScriptSchema.array().default([
     {
       scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
@@ -438,13 +442,162 @@ const configInfoSchema = z.object({
 
   verboseOutput: z.boolean().optional().default(false),
 });
+
+/**
+ * Default CodeGen configuration - provides sensible defaults for all CodeGen settings.
+ * These defaults can be overridden in user's mj.config.cjs file.
+ *
+ * Database connection settings come from environment variables.
+ */
+export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
+  // Database connection settings (from environment variables)
+  dbHost: process.env.DB_HOST ?? 'localhost',
+  dbPort: 1433,
+  dbDatabase: process.env.DB_DATABASE ?? '',
+  codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
+  codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
+  dbInstanceName: process.env.DB_INSTANCE_NAME,
+  dbTrustServerCertificate: ['true', '1', 'Y', 'y'].includes(process.env.DB_TRUST_SERVER_CERTIFICATE ?? '') ? 'Y' : 'N',
+  mjCoreSchema: '__mj',
+  graphqlPort: 4000,
+  verboseOutput: false,
+
+  settings: [
+    { name: 'mj_core_schema', value: '__mj' },
+    { name: 'skip_database_generation', value: false },
+    { name: 'recompile_mj_views', value: true },
+    { name: 'auto_index_foreign_keys', value: true },
+  ],
+  logging: {
+    log: true,
+    logFile: 'codegen.output.log',
+    console: true,
+  },
+  newEntityDefaults: {
+    TrackRecordChanges: true,
+    AuditRecordAccess: false,
+    AuditViewRuns: false,
+    AllowAllRowsAPI: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    AllowUserSearchAPI: false,
+    CascadeDeletes: false,
+    UserViewMaxRows: 1000,
+    AddToApplicationWithSchemaName: true,
+    IncludeFirstNFieldsAsDefaultInView: 5,
+    PermissionDefaults: {
+      AutoAddPermissionsForNewEntities: true,
+      Permissions: [
+        { RoleName: 'UI', CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false },
+        { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false },
+        { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
+      ],
+    },
+    NameRulesBySchema: [
+      {
+        SchemaName: '${mj_core_schema}',
+        EntityNamePrefix: 'MJ: ',
+        EntityNameSuffix: '',
+      },
+    ],
+  },
+  newEntityRelationshipDefaults: {
+    AutomaticallyCreateRelationships: true,
+    CreateOneToManyRelationships: true,
+  },
+  newSchemaDefaults: {
+    CreateNewApplicationWithSchemaName: true,
+  },
+  excludeSchemas: ['sys', 'staging', '__mj'],
+  excludeTables: [
+    { schema: '%', table: 'sys%' },
+    { schema: '%', table: 'flyway_schema_history' }
+  ],
+  customSQLScripts: [],
+  dbSchemaJSONOutput: {
+    excludeEntities: [],
+    excludeSchemas: ['sys', 'staging', 'dbo'],
+    bundles: [{ name: '_Core_Apps', schemas: [], excludeSchemas: ['__mj'], excludeEntities: [] }],
+  },
+  integrityChecks: {
+    enabled: true,
+    entityFieldsSequenceCheck: true,
+  },
+  advancedGeneration: {
+    enableAdvancedGeneration: true,
+    features: [
+      {
+        name: 'EntityNames',
+        description: 'Use AI to generate better entity names when creating new entities',
+        enabled: false,
+      },
+      {
+        name: 'DefaultInViewFields',
+        description: 'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
+        enabled: true,
+      },
+      {
+        name: 'EntityDescriptions',
+        description: 'Use AI to generate descriptions for entities, only used when creating new entities',
+        enabled: false,
+      },
+      {
+        name: 'SmartFieldIdentification',
+        description: 'Use AI to identify the best name field and default field to show in views for each entity',
+        enabled: true,
+      },
+      {
+        name: 'TransitiveJoinIntelligence',
+        description: 'Use AI to analyze entity relationships and detect junction tables for many-to-many relationships',
+        enabled: true,
+      },
+      {
+        name: 'FormLayoutGeneration',
+        description: 'Use AI to generate semantic field categories for better form organization. This includes using AI to determine the way to layout fields on each entity form by assigning them to domain-specific categories. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
+        enabled: true,
+      },
+      {
+        name: 'ParseCheckConstraints',
+        description: 'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
+        enabled: true,
+      },
+    ],
+  },
+  SQLOutput: {
+    enabled: true,
+    folderPath: './migrations/v3/',
+    appendToFile: true,
+    convertCoreSchemaToFlywayMigrationFile: true,
+    omitRecurringScriptsFromLog: true,
+  },
+  forceRegeneration: {
+    enabled: false,
+    baseViews: false,
+    spCreate: false,
+    spUpdate: false,
+    spDelete: false,
+    allStoredProcedures: false,
+    indexes: false,
+    fullTextSearch: false,
+  },
+};
+
 /**
  * Current working directory for the code generation process
  */
 export let currentWorkingDirectory: string = process.cwd();
 
-/** Parse and validate the configuration file */
-const configParsing = configInfoSchema.safeParse(configSearchResult?.config);
+/**
+ * Merge user config with DEFAULT_CODEGEN_CONFIG.
+ * Database settings come from user config or environment variables.
+ */
+const mergedConfig = configSearchResult?.config
+  ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, configSearchResult.config)
+  : DEFAULT_CODEGEN_CONFIG;
+
+/** Parse and validate the merged configuration */
+const configParsing = configInfoSchema.safeParse(mergedConfig);
 // Don't log errors at module load - commands that need config will validate explicitly
 // if (!configParsing.success) {
 //   LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
@@ -468,7 +621,13 @@ export const { mjCoreSchema, dbDatabase } = configInfo;
 export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
-  const maybeConfig = configInfoSchema.safeParse(explorer.search(currentWorkingDirectory)?.config);
+  // Merge user config with DEFAULT_CODEGEN_CONFIG
+  const userConfigResult = explorer.search(currentWorkingDirectory);
+  const mergedConfig = userConfigResult?.config
+    ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfigResult.config)
+    : DEFAULT_CODEGEN_CONFIG;
+
+  const maybeConfig = configInfoSchema.safeParse(mergedConfig);
   // Don't log errors - let the calling code handle validation failures
   // if (!maybeConfig.success) {
   //   LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));

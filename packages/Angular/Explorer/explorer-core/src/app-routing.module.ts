@@ -172,8 +172,222 @@ export class ResourceResolver implements Resolve<void> {
 
     this.processedUrls.set(state.url, now);
 
+    // Check if this resolve should be suppressed (URL sync from tab click, not real navigation)
+    if (this.tabService.ShouldSuppressResolve()) {
+      this.tabService.ClearSuppressFlag();
+      return;
+    }
+
     const md = new Metadata();
     const applications = md.Applications;
+
+    // Known resource types for app-scoped resource URLs
+    const KNOWN_RESOURCE_TYPES = ['dashboard', 'record', 'view', 'query', 'report', 'artifact', 'search'];
+
+    // Handle app-scoped resource navigation: /app/:appName/:resourceType/:param1/:param2?
+    // This pattern supports resources opened within an app context (e.g., /app/home/dashboard/abc123)
+    // Only handle if the second path segment is a known resource type
+    if (route.params['appName'] !== undefined &&
+        route.params['resourceType'] !== undefined &&
+        KNOWN_RESOURCE_TYPES.includes(route.params['resourceType'].toLowerCase())) {
+      const appName = decodeURIComponent(route.params['appName']);
+      const resourceType = route.params['resourceType'].toLowerCase();
+      const param1 = route.params['param1'];
+      const param2 = route.params['param2'];
+
+      // Check app access
+      const accessResult = this.appManager.CheckAppAccess(appName);
+      if (accessResult.status !== 'accessible') {
+        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
+        return;
+      }
+
+      // Get the app for its ID
+      const app = this.appManager.GetAppByPath(appName) || this.appManager.GetAppByName(appName);
+      if (!app) {
+        LogError(`Application ${appName} not found in metadata`);
+        return;
+      }
+
+      // Handle based on resource type
+      switch (resourceType) {
+        case 'dashboard': {
+          // /app/:appName/dashboard/:dashboardId
+          const dashboardId = param1;
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Dashboard - ${dashboardId}`,
+            Configuration: {
+              resourceType: 'Dashboards',
+              dashboardId,
+              recordId: dashboardId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: dashboardId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'record': {
+          // /app/:appName/record/:entityName/:recordId
+          const entityName = decodeURIComponent(param1);
+          const recordId = param2;
+
+          const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+          if (!entityInfo) {
+            LogError(`Entity ${entityName} not found in metadata`);
+            return;
+          }
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `${entityName} - ${recordId}`,
+            Configuration: {
+              resourceType: 'Records',
+              Entity: entityName,
+              recordId: recordId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: recordId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'view': {
+          // /app/:appName/view/:viewId OR /app/:appName/view/dynamic/:entityName
+          if (param1 === 'dynamic' && param2) {
+            // Dynamic view: /app/:appName/view/dynamic/:entityName
+            const entityName = decodeURIComponent(param2);
+            const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
+            const filterSuffix = extraFilter ? ' (Filtered)' : '';
+
+            this.tabService.OpenTab({
+              ApplicationId: app.ID,
+              Title: `${entityName}${filterSuffix}`,
+              Configuration: {
+                resourceType: 'User Views',
+                Entity: entityName,
+                ExtraFilter: extraFilter,
+                isDynamic: true,
+                recordId: 'dynamic',
+                appName: appName,
+                appId: app.ID
+              },
+              ResourceRecordId: 'dynamic',
+              IsPinned: false
+            });
+          } else {
+            // Saved view: /app/:appName/view/:viewId
+            const viewId = param1;
+
+            this.tabService.OpenTab({
+              ApplicationId: app.ID,
+              Title: `View - ${viewId}`,
+              Configuration: {
+                resourceType: 'User Views',
+                viewId,
+                recordId: viewId,
+                appName: appName,
+                appId: app.ID
+              },
+              ResourceRecordId: viewId,
+              IsPinned: false
+            });
+          }
+          return;
+        }
+
+        case 'query': {
+          // /app/:appName/query/:queryId
+          const queryId = param1;
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Query - ${queryId}`,
+            Configuration: {
+              resourceType: 'Queries',
+              queryId,
+              recordId: queryId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: queryId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'report': {
+          // /app/:appName/report/:reportId
+          const reportId = param1;
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Report - ${reportId}`,
+            Configuration: {
+              resourceType: 'Reports',
+              reportId,
+              recordId: reportId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: reportId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'artifact': {
+          // /app/:appName/artifact/:artifactId
+          const artifactId = param1;
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Artifact - ${artifactId}`,
+            Configuration: {
+              resourceType: 'Artifacts',
+              artifactId,
+              recordId: artifactId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: artifactId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'search': {
+          // /app/:appName/search/:searchInput
+          const searchInput = decodeURIComponent(param1);
+          const entityName = route.queryParams['Entity'] || '';
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Search: ${searchInput}`,
+            Configuration: {
+              resourceType: 'Search Results',
+              Entity: entityName,
+              SearchInput: searchInput,
+              recordId: searchInput,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: searchInput,
+            IsPinned: false
+          });
+          return;
+        }
+
+        default:
+          LogError(`Unknown resource type in app-scoped URL: ${resourceType}`);
+          return;
+      }
+    }
 
     // Handle app-level navigation: /app/:appName (no nav item - app default)
     if (route.params['appName'] !== undefined && route.params['navItemName'] === undefined) {
@@ -314,12 +528,6 @@ export class ResourceResolver implements Resolve<void> {
       const viewId = route.params['viewId'];
 
       // Queue tab request via TabService
-      console.log('[ResourceResolver] 🔗 Creating tab request for view:', {
-        viewId,
-        appId: SYSTEM_APP_ID,
-        resourceType: 'User Views',
-        url: state.url
-      });
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
         Title: `View - ${viewId}`,
@@ -440,7 +648,30 @@ export class ResourceResolver implements Resolve<void> {
   }
 }
 
-const routes: Routes = [ 
+const routes: Routes = [
+  // App-scoped resource routes (new pattern)
+  // These must come BEFORE app/:appName/:navItemName to be matched first
+  {
+    path: 'app/:appName/view/dynamic/:param2',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+    data: { resourceType: 'view' }
+  },
+  {
+    path: 'app/:appName/record/:param1/:param2',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+    data: { resourceType: 'record' }
+  },
+  {
+    path: 'app/:appName/:resourceType/:param1',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  // App navigation routes
   {
     path: 'app/:appName/:navItemName',
     resolve: { data: ResourceResolver },
@@ -453,6 +684,7 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
   },
+  // Legacy resource routes (kept for backward compatibility, will redirect in future)
   {
     path: 'resource/record/:entityName/:recordId',
     resolve: { data: ResourceResolver },

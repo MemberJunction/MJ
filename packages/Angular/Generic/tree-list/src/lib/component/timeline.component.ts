@@ -8,7 +8,8 @@ import { SchedulerEvent } from '@progress/kendo-angular-scheduler';
 import { sampleData, displayDate } from './dummy-data';
 
 /**
- * 
+ * @deprecated This class is deprecated and will be removed in a future release.
+ * The package name `@memberjunction/ng-treelist` is misleading - it contains a Timeline component, not a tree list.
  */
 export class TimelineGroup {
   /**
@@ -75,7 +76,10 @@ export class TimelineGroup {
 }
 
 /**
- * Displays data on a timeline UI so that information can see a chronolgoical display of the provided data.
+ * Displays data on a timeline UI so that information can see a chronological display of the provided data.
+ *
+ * @deprecated This component is deprecated and will be removed in a future release.
+ * The package name `@memberjunction/ng-treelist` is misleading - it contains a Timeline component, not a tree list.
  */
 @Component({
   selector: 'mj-timeline',

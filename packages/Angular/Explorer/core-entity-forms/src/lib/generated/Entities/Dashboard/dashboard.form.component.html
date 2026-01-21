@@ -198,6 +198,28 @@
          RELATED ENTITY PANELS - AFTER
          ======================================== -->
 
+    <!-- MJ: Dashboard Category Links Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJDashboardCategoryLinks"
+        sectionName="MJ: Dashboard Category Links"
+        icon="fa fa-folder-open"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJDashboardCategoryLinks')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Links','DashboardID')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Links')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardCategoryLinks')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryLinks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+
     <!-- MJ: Dashboard User States Section -->
     <mj-collapsible-panel slot="after-panels"
         sectionKey="mJDashboardUserStates"
@@ -216,6 +238,28 @@
                 (dataLoaded)="SetSectionRowCount('mJDashboardUserStates', $event.totalRowCount)"
                 >
             </mj-user-view-grid>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- MJ: Dashboard Permissions Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJDashboardPermissions"
+        sectionName="MJ: Dashboard Permissions"
+        icon="fa fa-tachometer-alt"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJDashboardPermissions')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Permissions','DashboardID')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJDashboardPermissions')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJDashboardPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
         </div>
     </mj-collapsible-panel>
 

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-react",
-  "version": "2.133.0",
+  "version": "3.0.0",
   "description": "Angular components for hosting React components in MemberJunction applications",
   "scripts": {
     "build": "ngc -p tsconfig.json",
@@ -40,17 +40,17 @@
     "styles"
   ],
   "dependencies": {
-    "@memberjunction/ai-vectors-memory": "2.133.0",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/core-entities": "2.133.0",
-    "@memberjunction/global": "2.133.0",
-    "@memberjunction/graphql-dataprovider": "2.133.0",
-    "@memberjunction/interactive-component-types": "2.133.0",
-    "@memberjunction/ng-notifications": "2.133.0",
-    "@memberjunction/react-runtime": "2.133.0",
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/platform-browser": "18.0.2",
+    "@memberjunction/ai-vectors-memory": "3.0.0",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/global": "3.0.0",
+    "@memberjunction/graphql-dataprovider": "3.0.0",
+    "@memberjunction/interactive-component-types": "3.0.0",
+    "@memberjunction/ng-notifications": "3.0.0",
+    "@memberjunction/react-runtime": "3.0.0",
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/platform-browser": "18.2.14",
     "@babel/standalone": "^7.23.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -59,8 +59,8 @@
     "@types/react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2",
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14",
     "typescript": "5.3.3"
   }
 }

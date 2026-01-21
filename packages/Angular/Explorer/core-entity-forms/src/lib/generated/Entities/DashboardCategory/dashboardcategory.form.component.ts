@@ -19,7 +19,9 @@ export class DashboardCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'dashboardCategories', sectionName: 'Dashboard Categories', isExpanded: false },
-            { sectionKey: 'dashboards', sectionName: 'Dashboards', isExpanded: false }
+            { sectionKey: 'dashboards', sectionName: 'Dashboards', isExpanded: false },
+            { sectionKey: 'mJDashboardCategoryLinks', sectionName: 'MJ: Dashboard Category Links', isExpanded: false },
+            { sectionKey: 'mJDashboardCategoryPermissions', sectionName: 'MJ: Dashboard Category Permissions', isExpanded: false }
         ]);
     }
 }

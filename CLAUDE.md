@@ -67,6 +67,60 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 ## IMPORTANT
 - Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
 
+## 🚨 CRITICAL: Git Branch Tracking Rules 🚨
+
+### Feature Branches MUST Track Same-Named Remote Branches
+When creating or working with feature branches, **ALWAYS** ensure the local branch tracks a remote branch **with the same name**. Never track `next`, `main`, or other permanent branches.
+
+**Why this matters**: If a feature branch tracks `origin/next` instead of `origin/feature-branch`, pushes will accidentally go to `next` directly, bypassing PR review and potentially breaking the main branch.
+
+### Creating New Feature Branches
+```bash
+# ✅ CORRECT - Create branch and push with upstream tracking to same-named remote
+git checkout -b my-feature-branch
+git push -u origin my-feature-branch
+
+# ❌ WRONG - Branch created from next will track origin/next by default!
+git checkout next
+git checkout -b my-feature-branch
+# Now my-feature-branch tracks origin/next - DANGEROUS!
+```
+
+### Verify Branch Tracking
+**ALWAYS check tracking before pushing:**
+```bash
+# Check what remote branch your local branch tracks
+git branch -vv
+
+# Example output:
+# * my-feature [origin/my-feature] Good - tracks same name  ✅
+# * my-feature [origin/next] BAD - tracks next!            ❌
+```
+
+### Fix Incorrect Tracking
+If a branch is tracking the wrong remote:
+```bash
+# Fix tracking to point to same-named remote branch
+git branch --set-upstream-to=origin/my-feature-branch my-feature-branch
+
+# Verify the fix
+git branch -vv
+```
+
+### Before Every Push
+1. Run `git branch -vv` to verify tracking
+2. Ensure your branch tracks `origin/<same-branch-name>`
+3. If tracking is wrong, fix it before pushing
+
+### The Danger of Wrong Tracking
+If `my-feature` tracks `origin/next`:
+- `git push` sends commits directly to `next`
+- Bypasses pull request review process
+- Can break the main branch for everyone
+- Requires reverts and cleanup to fix
+
+**This is a non-negotiable safety requirement.**
+
 ## Build Commands
 - Build all packages: `npm run build` - from repo root
 - Build specific packages: `cd packagedirectory && npm run build`
@@ -82,6 +136,40 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
   - Always use hardcoded UUIDs (not NEWID())
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
+
+### 🚨 CRITICAL: CodeGen Handles These Automatically
+**NEVER include the following in migration CREATE TABLE statements - CodeGen generates them:**
+
+1. **Timestamp Columns**: Do NOT add `__mj_CreatedAt` or `__mj_UpdatedAt` columns
+   - CodeGen automatically adds these with proper defaults and triggers
+   - Including them manually will cause conflicts
+
+2. **Foreign Key Indexes**: Do NOT create indexes for foreign key columns
+   - CodeGen creates these with the naming pattern `IDX_AUTO_MJ_FKEY_<table>_<column>`
+   - Manual FK indexes will duplicate CodeGen's work
+
+**Example - What to include vs exclude:**
+```sql
+-- ✅ CORRECT - Only include business columns and constraints
+CREATE TABLE ${flyway:defaultSchema}.DashboardPermission (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    DashboardID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL,
+    CanRead BIT NOT NULL DEFAULT 1,
+    CanEdit BIT NOT NULL DEFAULT 0,
+    SharedByUserID UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_DashboardPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_DashboardPermission_Dashboard FOREIGN KEY (DashboardID) REFERENCES ${flyway:defaultSchema}.Dashboard(ID),
+    CONSTRAINT FK_DashboardPermission_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.User(ID),
+    CONSTRAINT UQ_DashboardPermission UNIQUE (DashboardID, UserID)
+);
+
+-- ❌ WRONG - Don't include these (CodeGen handles them)
+-- __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- CREATE INDEX IDX_DashboardPermission_DashboardID ON DashboardPermission(DashboardID);
+-- CREATE INDEX IDX_DashboardPermission_UserID ON DashboardPermission(UserID);
+```
 
 ## Entity Version Control
 - MemberJunction includes built-in version control called "Record Changes" for all entities
@@ -222,7 +310,9 @@ Look for packages that depend on each other:
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces
-  - camelCase for variables, functions, methods
+  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`)
+  - **camelCase for private/protected class members**
+  - camelCase for local variables and function parameters
   - Use descriptive names and avoid abbreviations
 - Imports: group imports by type (external, internal, relative)
 - Error handling: use try/catch blocks and provide meaningful error messages
@@ -232,6 +322,50 @@ Look for packages that depend on each other:
   - Functions should have a clear, single purpose
   - Break complex operations into smaller, well-named helper functions
   - Aim for functions that fit on a single screen when possible
+
+### Class Member Naming Convention (IMPORTANT)
+
+MemberJunction uses **PascalCase for all public class members** and **camelCase for private/protected members**. This applies to:
+
+```typescript
+// ✅ CORRECT - MemberJunction naming convention
+export class MyComponent {
+    // Public properties - PascalCase
+    @Input() QueryId: string | null = null;
+    @Input() AutoRun: boolean = false;
+    @Output() EntityLinkClick = new EventEmitter<EntityLinkEvent>();
+
+    public IsLoading: boolean = false;
+    public SelectedRows: Record<string, unknown>[] = [];
+
+    // Private/protected properties - camelCase
+    private destroy$ = new Subject<void>();
+    private _internalState: string = '';
+    protected cdr: ChangeDetectorRef;
+
+    // Public methods - PascalCase
+    public LoadData(): void { }
+    public OnGridReady(event: GridReadyEvent): void { }
+    public GetSelectedRows(): Record<string, unknown>[] { }
+
+    // Private/protected methods - camelCase
+    private buildColumnDefs(): void { }
+    protected applyVisualConfig(): void { }
+}
+
+// ❌ WRONG - Standard TypeScript convention (not used in MJ)
+export class MyComponent {
+    @Input() queryId: string | null = null;  // Should be PascalCase
+    public isLoading: boolean = false;        // Should be PascalCase
+    public loadData(): void { }               // Should be PascalCase
+}
+```
+
+**Why this matters:**
+- Consistency across the entire MemberJunction codebase
+- Clear visual distinction between public API and internal implementation
+- Matches the naming style used in MJ's generated entity classes
+- HTML template bindings must match the PascalCase property names
 
 ## 🚨 IMPORTANT: FUNCTIONAL DECOMPOSITION IS MANDATORY 🚨
 

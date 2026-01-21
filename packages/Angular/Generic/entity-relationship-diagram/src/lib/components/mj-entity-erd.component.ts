@@ -334,9 +334,6 @@ export class MJEntityERDComponent implements OnChanges {
       depth: this.depth
     });
 
-    // DEBUG: Log node count for debugging depth issues
-    console.log(`[mj-entity-erd] buildERDData called with depth=${this.depth}, entities=${this.entities.length}, allEntities=${allEntities.length}, resultNodes=${result.nodes.length}, resultLinks=${result.links.length}`);
-
     // Note: Links are derived automatically by the ERD diagram component
     // from the node field relationships (relatedNodeId)
     this.erdNodes = result.nodes;

@@ -527,10 +527,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     await this.stateService.setContext(this.entityFilter);
     this.state = this.stateService.CurrentState;
 
-    // Initialize debounced filter from persisted state (only if no URL state)
-    if (!urlState && this.state.smartFilterPrompt) {
-      this.debouncedFilterText = this.state.smartFilterPrompt;
-    }
+    // User search text starts empty - it's separate from smart filter
+    this.debouncedFilterText = '';
 
     // Load available entities (async to support applicationId filter)
     // Pass urlState so we don't restore persisted entity if URL specifies one
@@ -553,9 +551,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         this.state = state;
 
-        // When entity changes, immediately update the debounced filter text
-        if (entityChanged && state.smartFilterPrompt !== this.debouncedFilterText) {
-          this.debouncedFilterText = state.smartFilterPrompt;
+        // When entity changes, clear user search text
+        if (entityChanged) {
+          this.debouncedFilterText = '';
         }
 
         this.onStateChanged();
@@ -864,12 +862,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // For regular filter views, the WhereClause is applied in the entity-viewer
       if (event.view.SmartFilterEnabled && event.view.SmartFilterPrompt) {
         this.stateService.setSmartFilterPrompt(event.view.SmartFilterPrompt);
-        this.debouncedFilterText = event.view.SmartFilterPrompt;
       } else {
-        // Clear the quick filter when switching to a view with regular filters
+        // Clear the smart filter when switching to a view with regular filters
         this.stateService.setSmartFilterPrompt('');
-        this.debouncedFilterText = '';
       }
+      // Always clear user search text when switching views - smart filter is separate
+      this.debouncedFilterText = '';
     } else {
       // Switching to default view - load user's saved defaults from UserInfoEngine
       this.currentGridState = this.loadUserDefaultGridState();
@@ -878,7 +876,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     // Force refresh to ensure the grid reloads with the new view configuration
-    // This fixes the issue where switching from a filtered view to default shows no results
     this.cdr.detectChanges();
     this.entityViewerRef?.refresh();
   }
@@ -1151,8 +1148,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       const gridState = this.buildGridState(event);
 
       if (gridState) {
-        // Build sort settings if present
-        if (event.sortField) {
+        // Build sort settings if present - prefer sortItems (multi-sort)
+        if (event.sortItems && event.sortItems.length > 0) {
+          gridState.sortSettings = event.sortItems.map(item => ({
+            field: item.field,
+            dir: item.direction
+          }));
+        } else if (event.sortField) {
+          // Fallback to deprecated sortField for backward compatibility
           gridState.sortSettings = [{
             field: event.sortField,
             dir: event.sortDirection
@@ -1219,12 +1222,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       return null;
     }
 
-    // Build sort settings - prefer event.sortField, fall back to currentGridState
+    // Build sort settings - prefer event.sortItems (multi-sort), fall back to currentGridState
     let sortSettings: object[] | undefined;
-    if (event.sortField) {
+    if (event.sortItems && event.sortItems.length > 0) {
+      sortSettings = event.sortItems.map(item => ({
+        field: item.field,
+        dir: item.direction // 'asc' or 'desc'
+      }));
+    } else if (event.sortField) {
+      // Fallback to deprecated sortField for backward compatibility
       sortSettings = [{
         field: event.sortField,
-        dir: event.sortDirection // 'asc' or 'desc'
+        dir: event.sortDirection
       }];
     } else if (this.currentGridState?.sortSettings && this.currentGridState.sortSettings.length > 0) {
       sortSettings = this.currentGridState.sortSettings;
@@ -1236,14 +1245,26 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Build SortState in Kendo-compatible format
    * Format: [{field, direction}] where direction is 'asc' or 'desc'
+   * Supports multi-column sorting via sortItems array
    */
   private buildSortState(event: ViewSaveEvent): object[] | null {
-    if (!event.sortField) return null;
+    // Prefer sortItems array (multi-sort) over deprecated sortField
+    if (event.sortItems && event.sortItems.length > 0) {
+      return event.sortItems.map(item => ({
+        field: item.field,
+        direction: item.direction // 'asc' or 'desc'
+      }));
+    }
 
-    return [{
-      field: event.sortField,
-      direction: event.sortDirection // 'asc' or 'desc'
-    }];
+    // Fallback to deprecated sortField for backward compatibility
+    if (event.sortField) {
+      return [{
+        field: event.sortField,
+        direction: event.sortDirection
+      }];
+    }
+
+    return null;
   }
 
   /**
@@ -1674,10 +1695,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // The filter is in SQL format like "ParentID='xxx'" - we just show it in the filter box
     // The entity viewer will apply it as a smart filter
     if (event.filter) {
-      // For now, we'll apply the filter as-is
-      // A future enhancement could parse and display it more user-friendly
+      // Apply the filter to the smart filter state (separate from user search)
       this.stateService.setSmartFilterPrompt(event.filter);
-      this.debouncedFilterText = event.filter;
     }
   }
 
@@ -1817,10 +1836,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedEntity = entity;
         this.stateService.selectEntity(entity.Name);
 
-        // Apply filter if specified
+        // Apply filter if specified (to smart filter state, not user search)
         if (deepLink.filter) {
           this.stateService.setSmartFilterPrompt(deepLink.filter);
-          this.debouncedFilterText = deepLink.filter;
         }
 
         // Note: Record selection is handled after data loads via onDataLoaded
@@ -1984,15 +2002,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.selectEntity(entity.Name);
         }
 
-        // Apply filter if specified
+        // Apply filter if specified (to smart filter state, not user search)
         if (urlState.filter) {
           this.stateService.setSmartFilterPrompt(urlState.filter);
-          this.debouncedFilterText = urlState.filter;
         } else if (entityChanged) {
           // Only clear filter if entity changed (selectEntity already handles this)
           this.stateService.setSmartFilterPrompt('');
-          this.debouncedFilterText = '';
         }
+        // User search text is always cleared when applying URL state
+        this.debouncedFilterText = '';
 
         // Handle record selection
         if (urlState.record) {
@@ -2040,47 +2058,41 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Update the URL query string to reflect current navigation state.
    * This enables deep linking - users can bookmark or share URLs to specific views.
    * Called immediately on state changes (not debounced).
-   * Uses Angular Router for proper browser history integration.
+   * Uses NavigationService for proper URL management that respects app-scoped routes.
    */
   private updateUrl(): void {
-    const params = new URLSearchParams();
+    const queryParams: Record<string, string | null> = {};
 
     // Add entity if selected
     if (this.state.selectedEntityName) {
-      params.set('entity', this.state.selectedEntityName);
+      queryParams['entity'] = this.state.selectedEntityName;
+    } else {
+      queryParams['entity'] = null;
     }
 
     // Add record if selected (only if entity is also selected)
-    // Use the stored selectedRecordId which is already in URL segment format
     if (this.state.selectedRecordId && this.state.selectedEntityName) {
-      // The selectedRecordId is stored using ToConcatenatedString which uses the same format as ToURLSegment
-      params.set('record', this.state.selectedRecordId);
+      queryParams['record'] = this.state.selectedRecordId;
+    } else {
+      queryParams['record'] = null;
     }
 
     // Add filter if present (only if entity is also selected)
     if (this.state.smartFilterPrompt && this.state.selectedEntityName) {
-      params.set('filter', this.state.smartFilterPrompt);
+      queryParams['filter'] = this.state.smartFilterPrompt;
+    } else {
+      queryParams['filter'] = null;
     }
 
     // Add view mode if not default (grid is default)
     if (this.state.viewMode && this.state.viewMode !== 'grid') {
-      params.set('view', this.state.viewMode);
+      queryParams['view'] = this.state.viewMode;
+    } else {
+      queryParams['view'] = null;
     }
 
-    // Get the current path without query string
-    const currentUrl = this.router.url;
-    const currentPath = currentUrl.split('?')[0];
-
-    // Build the new URL
-    const queryString = params.toString();
-    const newUrl = queryString ? `${currentPath}?${queryString}` : currentPath;
-
-    // Track this URL so we don't react to our own navigation
-    this.lastNavigatedUrl = newUrl;
-
-    // Use Angular Router for proper browser history integration
-    // This allows back/forward buttons to work correctly
-    this.router.navigateByUrl(newUrl, { replaceUrl: false });
+    // Use NavigationService to update query params properly
+    this.navigationService.UpdateActiveTabQueryParams(queryParams);
   }
 
   /**
@@ -2433,3 +2445,4 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 export function LoadDataExplorerDashboard() {
   // Force inclusion in production builds
 }
+

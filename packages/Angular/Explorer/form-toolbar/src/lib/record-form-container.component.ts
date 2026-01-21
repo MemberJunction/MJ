@@ -1,4 +1,4 @@
-import { Component, Input, ViewEncapsulation } from '@angular/core';
+import { AfterViewChecked, ChangeDetectorRef, Component, Input, ViewEncapsulation } from '@angular/core';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 /**
@@ -19,14 +19,14 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
                 <mj-form-toolbar [form]="formComponent">
                     <mj-form-section-controls
                         toolbar-additional-controls
-                        [visibleCount]="formComponent.getVisibleSectionCount()"
-                        [totalCount]="formComponent.getTotalSectionCount()"
-                        [expandedCount]="formComponent.getExpandedCount()"
+                        [visibleCount]="visibleCount"
+                        [totalCount]="totalCount"
+                        [expandedCount]="expandedCount"
                         [searchFilter]="formComponent.searchFilter"
                         [showEmptyFields]="formComponent.showEmptyFields"
                         (expandAll)="formComponent.expandAllSections()"
                         (collapseAll)="formComponent.collapseAllSections()"
-                        (filterChange)="formComponent.onFilterChange($event)"
+                        (filterChange)="onFilterChange($event)"
                         (showEmptyFieldsChange)="formComponent.showEmptyFields = $event">
                     </mj-form-section-controls>
                 </mj-form-toolbar>
@@ -48,7 +48,43 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
     `,
     styleUrls: ['./record-form-container.component.css']
 })
-export class RecordFormContainerComponent {
+export class RecordFormContainerComponent implements AfterViewChecked {
     @Input() record: any;
     @Input() formComponent!: BaseFormComponent;
+
+    // Cached counts to avoid ExpressionChangedAfterItHasBeenCheckedError
+    visibleCount = 0;
+    totalCount = 0;
+    expandedCount = 0;
+
+    private countsInitialized = false;
+
+    constructor(private cdr: ChangeDetectorRef) {}
+
+    ngAfterViewChecked(): void {
+        // Only update counts once after initial render to avoid the error
+        // Subsequent updates happen through onFilterChange
+        if (!this.countsInitialized && this.formComponent) {
+            const newTotal = this.formComponent.getTotalSectionCount();
+            if (newTotal > 0) {
+                this.countsInitialized = true;
+                this.updateCounts();
+                this.cdr.detectChanges();
+            }
+        }
+    }
+
+    onFilterChange(filter: string): void {
+        this.formComponent.onFilterChange(filter);
+        // Update counts after filter change
+        this.updateCounts();
+    }
+
+    private updateCounts(): void {
+        if (this.formComponent) {
+            this.visibleCount = this.formComponent.getVisibleSectionCount();
+            this.totalCount = this.formComponent.getTotalSectionCount();
+            this.expandedCount = this.formComponent.getExpandedCount();
+        }
+    }
 }

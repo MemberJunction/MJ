@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-record-changes",
-  "version": "2.133.0",
+  "version": "3.0.0",
   "description": "MemberJunction: Angular pop-up window and grid to show changes made to a specific individual record",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -15,26 +15,26 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2"
+    "@angular/compiler": "18.2.14",
+    "@angular/compiler-cli": "18.2.14"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/router": "18.0.2",
+    "@angular/common": "18.2.14",
+    "@angular/core": "18.2.14",
+    "@angular/forms": "18.2.14",
+    "@angular/router": "18.2.14",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-indicators": "16.2.0"
   },
   "dependencies": {
-    "@angular/platform-browser": "18.0.2",
-    "@memberjunction/core": "2.133.0",
-    "@memberjunction/core-entities": "2.133.0",
-    "@memberjunction/global": "2.133.0",
-    "@memberjunction/ng-compare-records": "2.133.0",
-    "@memberjunction/ng-container-directives": "2.133.0",
-    "@memberjunction/ng-notifications": "2.133.0",
-    "@memberjunction/ng-shared-generic": "2.133.0",
+    "@angular/platform-browser": "18.2.14",
+    "@memberjunction/core": "3.0.0",
+    "@memberjunction/core-entities": "3.0.0",
+    "@memberjunction/global": "3.0.0",
+    "@memberjunction/ng-compare-records": "3.0.0",
+    "@memberjunction/ng-container-directives": "3.0.0",
+    "@memberjunction/ng-notifications": "3.0.0",
+    "@memberjunction/ng-shared-generic": "3.0.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-excel-export": "16.2.0",

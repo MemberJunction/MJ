@@ -278,20 +278,12 @@ export class GoldenLayoutManager {
       return;
     }
 
-    console.log('[GoldenLayoutManager.AddTab] ➕ Adding tab to layout:', {
-      tabId: state.tabId,
-      title: state.title,
-      currentTabIds: Array.from(this.containerMap.keys())
-    });
-
     try {
       // First, check if there's an existing stack to add to
       const existingStack = this.findFirstStack();
-      console.log('[GoldenLayoutManager.AddTab] 🔍 findFirstStack() returned:', existingStack ? 'FOUND stack' : 'NO stack found');
 
       if (existingStack) {
         // Add to existing stack (creates tabbed interface)
-        console.log('[GoldenLayoutManager.AddTab] 📌 Adding to EXISTING stack');
         const componentConfig: GLComponentItemConfig = {
           type: 'component',
           componentType: 'tab-content',
@@ -301,7 +293,6 @@ export class GoldenLayoutManager {
         existingStack.addItem(componentConfig);
       } else {
         // No existing stack - use addComponent which will create one
-        console.log('[GoldenLayoutManager.AddTab] 🆕 Creating NEW stack (no existing stack found)');
         this.layout.addComponent(
           'tab-content',  // componentType
           state as unknown as Record<string, unknown>,  // componentState

@@ -42,6 +42,7 @@ import { ListDetailGridModule } from '@memberjunction/ng-list-detail-grid';
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { DashboardsModule } from '@memberjunction/ng-dashboards';
+import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
@@ -130,6 +131,7 @@ import { NotificationsResource } from './lib/resource-wrappers/notifications-res
     MemberJunctionSharedModule,
     ConversationsModule,
     DashboardsModule,
+    DashboardViewerModule,
     ExplorerSettingsModule,
     FileStorageModule,
     UserViewPropertiesDialogModule,

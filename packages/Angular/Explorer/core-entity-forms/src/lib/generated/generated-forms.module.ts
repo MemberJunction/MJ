@@ -185,6 +185,10 @@ import { ConversationDetailRatingFormComponent, LoadConversationDetailRatingForm
 import { CredentialCategoryFormComponent, LoadCredentialCategoryFormComponent } from "./Entities/CredentialCategory/credentialcategory.form.component";
 import { CredentialTypeFormComponent, LoadCredentialTypeFormComponent } from "./Entities/CredentialType/credentialtype.form.component";
 import { CredentialFormComponent, LoadCredentialFormComponent } from "./Entities/Credential/credential.form.component";
+import { DashboardCategoryLinkFormComponent, LoadDashboardCategoryLinkFormComponent } from "./Entities/DashboardCategoryLink/dashboardcategorylink.form.component";
+import { DashboardCategoryPermissionFormComponent, LoadDashboardCategoryPermissionFormComponent } from "./Entities/DashboardCategoryPermission/dashboardcategorypermission.form.component";
+import { DashboardPartTypeFormComponent, LoadDashboardPartTypeFormComponent } from "./Entities/DashboardPartType/dashboardparttype.form.component";
+import { DashboardPermissionFormComponent, LoadDashboardPermissionFormComponent } from "./Entities/DashboardPermission/dashboardpermission.form.component";
 import { DashboardUserPreferenceFormComponent, LoadDashboardUserPreferenceFormComponent } from "./Entities/DashboardUserPreference/dashboarduserpreference.form.component";
 import { DashboardUserStateFormComponent, LoadDashboardUserStateFormComponent } from "./Entities/DashboardUserState/dashboarduserstate.form.component";
 import { EncryptionAlgorithmFormComponent, LoadEncryptionAlgorithmFormComponent } from "./Entities/EncryptionAlgorithm/encryptionalgorithm.form.component";
@@ -610,7 +614,9 @@ declarations: [
     CredentialCategoryFormComponent,
     CredentialTypeFormComponent,
     CredentialFormComponent,
-    DashboardUserPreferenceFormComponent],
+    DashboardCategoryLinkFormComponent,
+    DashboardCategoryPermissionFormComponent,
+    DashboardPartTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -636,6 +642,10 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    DashboardPermissionFormComponent,
+    DashboardUserPreferenceFormComponent,
+    DashboardUserStateFormComponent,
+    EncryptionAlgorithmFormComponent,
     DashboardUserStateFormComponent,
     EncryptionAlgorithmFormComponent,
     EncryptionKeySourceFormComponent,
@@ -653,9 +663,7 @@ declarations: [
     ScheduledJobTypeFormComponent,
     ScheduledJobFormComponent,
     TaskDependencyFormComponent,
-    TaskTypeFormComponent,
-    TaskFormComponent,
-    TestRubricFormComponent],
+    TaskTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -681,6 +689,10 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    TaskFormComponent,
+    TestRubricFormComponent,
+    TestRunFeedbackFormComponent,
+    TestRunFormComponent,
     TestRunFeedbackFormComponent,
     TestRunFormComponent,
     TestSuiteRunFormComponent,
@@ -698,9 +710,7 @@ declarations: [
     QueryFieldFormComponent,
     QueryPermissionFormComponent,
     QueueTaskFormComponent,
-    QueueTypeFormComponent,
-    QueueFormComponent,
-    RecommendationItemFormComponent],
+    QueueTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -726,6 +736,10 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    QueueFormComponent,
+    RecommendationItemFormComponent,
+    RecommendationProviderFormComponent,
+    RecommendationRunFormComponent,
     RecommendationProviderFormComponent,
     RecommendationRunFormComponent,
     RecommendationFormComponent,
@@ -743,9 +757,7 @@ declarations: [
     RowLevelSecurityFilterFormComponent,
     ScheduledActionParamFormComponent,
     ScheduledActionFormComponent,
-    SchemaInfoFormComponent,
-    SkillFormComponent,
-    TaggedItemFormComponent],
+    SchemaInfoFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -771,6 +783,10 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    SkillFormComponent,
+    TaggedItemFormComponent,
+    TagFormComponent,
+    TemplateCategoryFormComponent,
     TagFormComponent,
     TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
@@ -788,9 +804,7 @@ declarations: [
     UserViewRunFormComponent,
     UserViewFormComponent,
     UserFormComponent,
-    VectorDatabaseFormComponent,
-    VectorIndexFormComponent,
-    VersionInstallationFormComponent],
+    VectorDatabaseFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -816,6 +830,10 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    VectorIndexFormComponent,
+    VersionInstallationFormComponent,
+    WorkflowEngineFormComponent,
+    WorkflowRunFormComponent,
     WorkflowEngineFormComponent,
     WorkflowRunFormComponent,
     WorkflowFormComponent,
@@ -1030,6 +1048,10 @@ export function LoadCoreGeneratedForms() {
     LoadCredentialCategoryFormComponent();
     LoadCredentialTypeFormComponent();
     LoadCredentialFormComponent();
+    LoadDashboardCategoryLinkFormComponent();
+    LoadDashboardCategoryPermissionFormComponent();
+    LoadDashboardPartTypeFormComponent();
+    LoadDashboardPermissionFormComponent();
     LoadDashboardUserPreferenceFormComponent();
     LoadDashboardUserStateFormComponent();
     LoadEncryptionAlgorithmFormComponent();
