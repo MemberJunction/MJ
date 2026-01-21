@@ -21,10 +21,6 @@
     "@angular/common": "^18.0.0",
     "@angular/core": "^18.0.0",
     "@angular/router": "^18.0.0",
-    "@memberjunction/core": "3.0.0",
-    "@memberjunction/graphql-dataprovider": "3.0.0",
-    "@memberjunction/ng-auth-services": "3.0.0",
-    "@memberjunction/ng-shared": "3.0.0",
     "rxjs": "^7.8.1"
   },
   "dependencies": {
