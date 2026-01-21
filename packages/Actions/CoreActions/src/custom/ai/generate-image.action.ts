@@ -7,6 +7,7 @@ import {
     BaseImageGenerator,
     ImageGenerationParams,
     ImageGenerationResult,
+    ImageEditParams,
     GeneratedImage,
     GetAIAPIKey
 } from "@memberjunction/ai";
@@ -56,16 +57,31 @@ import { AIEngineBase } from "@memberjunction/ai-engine-base";
  *     Value: 3
  *   }]
  * });
+ *
+ * // Image-to-image editing (transform a source image)
+ * await runAction({
+ *   ActionName: 'Generate Image',
+ *   Params: [{
+ *     Name: 'Prompt',
+ *     Value: 'Transform this into a professional infographic with dark theme'
+ *   }, {
+ *     Name: 'SourceImage',
+ *     Value: 'base64_encoded_image_or_url'
+ *   }]
+ * });
  * ```
  */
 @RegisterClass(BaseAction, "Generate Image")
 export class GenerateImageAction extends BaseAction {
 
     /**
-     * Generates image(s) using AI image generation models
+     * Generates or edits image(s) using AI image generation models.
+     *
+     * When SourceImage is provided, performs image-to-image editing (style transfer, transformation).
+     * When SourceImage is not provided, performs text-to-image generation.
      *
      * @param params - The action parameters containing:
-     *   - Prompt: Text description of the image to generate (required)
+     *   - Prompt: Text description of the image to generate or edit instructions (required)
      *   - Model: Model name/ID to use (optional, uses default if not specified)
      *   - NumberOfImages: Number of images to generate (optional, default: 1)
      *   - Size: Image size like "1024x1024" (optional)
@@ -73,8 +89,10 @@ export class GenerateImageAction extends BaseAction {
      *   - Style: Style preset - "vivid" or "natural" (optional)
      *   - NegativePrompt: Things to avoid in the image (optional)
      *   - OutputFormat: "base64" or "url" (optional, default: "base64")
+     *   - SourceImage: Source image for image-to-image editing (optional, base64 or URL)
+     *   - Mask: Mask image for inpainting - white/transparent areas are regenerated (optional)
      *
-     * @returns Generated image(s) as base64 or URLs
+     * @returns Generated or edited image(s) as base64 or URLs
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
@@ -86,6 +104,8 @@ export class GenerateImageAction extends BaseAction {
             const style = this.getParamValue(params, 'style');
             const negativePrompt = this.getParamValue(params, 'negativeprompt');
             const outputFormat = this.getParamValue(params, 'outputformat') || 'base64';
+            const sourceImage = this.getParamValue(params, 'sourceimage');
+            const mask = this.getParamValue(params, 'mask');
 
             // Validate prompt
             if (!prompt) {
@@ -102,27 +122,33 @@ export class GenerateImageAction extends BaseAction {
                 modelName
             );
 
-            // Build generation parameters
-            const genParams: ImageGenerationParams = {
-                prompt: prompt,
-                model: apiName,
-                n: numberOfImages,
-                size: size,
-                outputFormat: outputFormat === 'url' ? 'url' : 'b64_json'
-            };
+            let result: ImageGenerationResult;
 
-            if (quality) {
-                genParams.quality = quality as ImageGenerationParams['quality'];
+            if (sourceImage) {
+                // Image-to-image: use EditImage when source image is provided
+                result = await this.executeImageEdit(generator, {
+                    prompt,
+                    apiName,
+                    sourceImage,
+                    mask,
+                    numberOfImages,
+                    size,
+                    outputFormat,
+                    negativePrompt
+                });
+            } else {
+                // Text-to-image: use GenerateImage
+                result = await this.executeImageGeneration(generator, {
+                    prompt,
+                    apiName,
+                    numberOfImages,
+                    size,
+                    outputFormat,
+                    quality,
+                    style,
+                    negativePrompt
+                });
             }
-            if (style) {
-                genParams.style = style as ImageGenerationParams['style'];
-            }
-            if (negativePrompt) {
-                genParams.negativePrompt = negativePrompt;
-            }
-
-            // Generate images
-            const result = await generator.GenerateImage(genParams);
 
             if (!result.success) {
                 return {
@@ -268,6 +294,78 @@ export class GenerateImageAction extends BaseAction {
         }
 
         return { generator, model, apiName };
+    }
+
+    /**
+     * Execute text-to-image generation
+     */
+    private async executeImageGeneration(
+        generator: BaseImageGenerator,
+        options: {
+            prompt: string;
+            apiName: string;
+            numberOfImages: number;
+            size: string;
+            outputFormat: string;
+            quality?: string;
+            style?: string;
+            negativePrompt?: string;
+        }
+    ): Promise<ImageGenerationResult> {
+        const genParams: ImageGenerationParams = {
+            prompt: options.prompt,
+            model: options.apiName,
+            n: options.numberOfImages,
+            size: options.size,
+            outputFormat: options.outputFormat === 'url' ? 'url' : 'b64_json'
+        };
+
+        if (options.quality) {
+            genParams.quality = options.quality as ImageGenerationParams['quality'];
+        }
+        if (options.style) {
+            genParams.style = options.style as ImageGenerationParams['style'];
+        }
+        if (options.negativePrompt) {
+            genParams.negativePrompt = options.negativePrompt;
+        }
+
+        return generator.GenerateImage(genParams);
+    }
+
+    /**
+     * Execute image-to-image editing
+     */
+    private async executeImageEdit(
+        generator: BaseImageGenerator,
+        options: {
+            prompt: string;
+            apiName: string;
+            sourceImage: string;
+            mask?: string;
+            numberOfImages: number;
+            size: string;
+            outputFormat: string;
+            negativePrompt?: string;
+        }
+    ): Promise<ImageGenerationResult> {
+        const editParams: ImageEditParams = {
+            prompt: options.prompt,
+            model: options.apiName,
+            image: options.sourceImage,
+            n: options.numberOfImages,
+            size: options.size,
+            outputFormat: options.outputFormat === 'url' ? 'url' : 'b64_json'
+        };
+
+        if (options.mask) {
+            editParams.mask = options.mask;
+        }
+        if (options.negativePrompt) {
+            editParams.negativePrompt = options.negativePrompt;
+        }
+
+        return generator.EditImage(editParams);
     }
 
     /**
