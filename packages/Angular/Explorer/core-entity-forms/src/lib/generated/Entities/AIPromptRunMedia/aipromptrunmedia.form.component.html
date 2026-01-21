@@ -1,0 +1,229 @@
+<mj-record-form-container [record]="record" [formComponent]="this">
+
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Association Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="association"
+        sectionName="Association"
+        icon="fa fa-link"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModalityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DisplayOrder"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Modality"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Media Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="mediaMetadata"
+        sectionName="Media Metadata"
+        icon="fa fa-image"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MimeType"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FileName"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FileSizeBytes"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Width"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Height"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DurationSeconds"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Metadata"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Content Data Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="contentData"
+        sectionName="Content Data"
+        icon="fa fa-database"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="InlineData"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FileID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ThumbnailBase64"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="File"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel slot="field-panels"
+        sectionKey="systemMetadata"
+        sectionName="System Metadata"
+        icon="fa fa-cog"
+        [form]="this"
+        [formContext]="formContext">
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [formContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+    <!-- ========================================
+         RELATED ENTITY PANELS - AFTER
+         ======================================== -->
+
+    <!-- MJ: AI Agent Run Medias Section -->
+    <mj-collapsible-panel slot="after-panels"
+        sectionKey="mJAIAgentRunMedias"
+        sectionName="MJ: AI Agent Run Medias"
+        icon="fa fa-robot"
+        variant="related-entity"
+        [form]="this"
+        [formContext]="formContext"
+        [badgeCount]="GetSectionRowCount('mJAIAgentRunMedias')"
+        [defaultExpanded]="false">
+        <div *ngIf="record.IsSaved">
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','SourcePromptRunMediaID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
+                [ShowToolbar]="false"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+    </mj-collapsible-panel>
+</mj-record-form-container>
+        

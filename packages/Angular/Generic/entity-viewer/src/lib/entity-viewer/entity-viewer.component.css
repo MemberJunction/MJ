@@ -172,7 +172,7 @@ mj-pagination {
   background: white;
 }
 
-/* Loading State - positioned as overlay when data exists */
+/* Loading State - full-page centered loading for initial load when no data exists */
 .loading-container {
   display: flex;
   align-items: center;
@@ -180,7 +180,7 @@ mj-pagination {
   height: 100%;
 }
 
-/* Loading overlay when shown on top of content */
+/* Loading overlay - semi-transparent overlay on top of existing content during refresh */
 .loading-overlay {
   position: absolute;
   top: 0;
@@ -192,6 +192,12 @@ mj-pagination {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Ensure [hidden] attribute works properly on loading elements */
+.loading-container[hidden],
+.loading-overlay[hidden] {
+  display: none !important;
 }
 
 /* Empty State */

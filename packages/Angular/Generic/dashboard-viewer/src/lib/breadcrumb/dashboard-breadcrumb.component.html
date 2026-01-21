@@ -1,0 +1,43 @@
+<!-- Dashboard Breadcrumb Component -->
+<div
+    class="dashboard-breadcrumb"
+    [class.large]="Size === 'large'"
+    *ngIf="Visible">
+
+    <!-- Root item -->
+    <button
+        class="breadcrumb-item root"
+        [class.drop-target]="DragOverCategoryId === null"
+        (click)="OnNavigate(null)"
+        (dragover)="OnDragOver(null, $event)"
+        (dragleave)="OnDragLeave()"
+        (drop)="OnDrop(null, $event)">
+        <i [class]="RootIcon"></i>
+        <span>{{ RootLabel }}</span>
+    </button>
+
+    <!-- Category path -->
+    <ng-container *ngFor="let crumb of Breadcrumbs; let last = last; trackBy: TrackByCategory">
+        <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+        <button
+            class="breadcrumb-item"
+            [class.current]="last && !ShowDashboardName"
+            [class.drop-target]="DragOverCategoryId === crumb.ID"
+            (click)="!last || ShowDashboardName ? OnNavigate(crumb.ID) : null"
+            (dragover)="OnDragOver(crumb.ID, $event)"
+            (dragleave)="OnDragLeave()"
+            (drop)="OnDrop(crumb.ID, $event)">
+            <i class="fa-solid fa-folder"></i>
+            <span>{{ crumb.Name }}</span>
+        </button>
+    </ng-container>
+
+    <!-- Dashboard name (when viewing a specific dashboard) -->
+    <ng-container *ngIf="ShowDashboardName && CurrentDashboard">
+        <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+        <span class="breadcrumb-item current dashboard-name">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>{{ CurrentDashboard.Name }}</span>
+        </span>
+    </ng-container>
+</div>

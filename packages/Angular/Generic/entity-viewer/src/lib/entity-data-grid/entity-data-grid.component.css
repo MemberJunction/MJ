@@ -998,3 +998,97 @@
 ::ng-deep .ag-theme-alpine .ag-header-cell:hover .ag-sort-indicator-icon {
   transform: scale(1.1);
 }
+
+/* ========================================
+   Enhanced Multi-Sort Indicators
+   These styles use :host to ensure they're scoped to this component
+   and !important to override AG Grid's built-in styles
+   ======================================== */
+
+/* Highlight sorted column headers with eye-catching background */
+/* Ascending = blue tint */
+:host ::ng-deep .ag-header-cell-sorted-asc {
+  background: linear-gradient(180deg, rgba(25, 118, 210, 0.15) 0%, rgba(25, 118, 210, 0.08) 100%) !important;
+  position: relative;
+}
+
+/* Descending = pink tint */
+:host ::ng-deep .ag-header-cell-sorted-desc {
+  background: linear-gradient(180deg, rgba(216, 27, 96, 0.15) 0%, rgba(216, 27, 96, 0.08) 100%) !important;
+  position: relative;
+}
+
+/* Bottom border accent for sorted columns - ascending = blue */
+:host ::ng-deep .ag-header-cell-sorted-asc::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #1976d2;
+}
+
+/* Bottom border accent for sorted columns - descending = pink */
+:host ::ng-deep .ag-header-cell-sorted-desc::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #d81b60;
+}
+
+/* Sorted column header text - ascending = blue, bold */
+:host ::ng-deep .ag-header-cell-sorted-asc .ag-header-cell-text {
+  color: #1976d2 !important;
+  font-weight: 700 !important;
+}
+
+/* Sorted column header text - descending = pink, bold */
+:host ::ng-deep .ag-header-cell-sorted-desc .ag-header-cell-text {
+  color: #d81b60 !important;
+  font-weight: 700 !important;
+}
+
+/* Sort icons - larger and more prominent */
+/* Ascending = blue */
+:host ::ng-deep .ag-sort-ascending-icon {
+  color: #1976d2 !important;
+}
+
+/* Descending = pink/magenta */
+:host ::ng-deep .ag-sort-descending-icon {
+  color: #d81b60 !important;
+}
+
+:host ::ng-deep .ag-sort-ascending-icon .ag-icon,
+:host ::ng-deep .ag-sort-descending-icon .ag-icon {
+  font-size: 14px !important;
+}
+
+/* Sort order number (1, 2, 3) - show as plain number, no bubble */
+/* This avoids AG Grid bug where .ag-sort-order is always present but empty when unsorted */
+/* The number is only visible when AG Grid populates it (i.e., when column is sorted) */
+/* Default blue for ascending */
+:host ::ng-deep .ag-sort-order {
+  margin-left: 4px;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #1976d2 !important;
+}
+
+/* Sort order number - pink for descending */
+:host ::ng-deep .ag-header-cell-sorted-desc .ag-sort-order {
+  color: #d81b60 !important;
+}
+
+/* Hover state for sortable headers */
+:host ::ng-deep .ag-header-cell-sortable:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:host ::ng-deep .ag-header-cell-sortable:hover .ag-header-cell-text {
+  color: #1976d2;
+}

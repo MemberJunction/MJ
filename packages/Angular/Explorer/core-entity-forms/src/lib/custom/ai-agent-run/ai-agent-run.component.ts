@@ -63,7 +63,6 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     route: ActivatedRoute,
     cdr: ChangeDetectorRef,
     private costService: AIAgentRunCostService,
-    private navigationService: NavigationService,
     private appManager: ApplicationManager
   ) {
     super(elementRef, sharedService, router, route, cdr);

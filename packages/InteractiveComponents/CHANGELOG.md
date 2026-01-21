@@ -1,5 +1,12 @@
 # @memberjunction/interactive-component-types
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@3.0.0
+- @memberjunction/core@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes

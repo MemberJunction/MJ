@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-simple-record-list
 
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ng-entity-form-dialog@3.0.0
+- @memberjunction/ng-container-directives@3.0.0
+- @memberjunction/ng-notifications@3.0.0
+- @memberjunction/ng-shared-generic@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
 ## 2.133.0
 
 ### Patch Changes

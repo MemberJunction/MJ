@@ -19,7 +19,9 @@ export class DashboardFormComponent extends BaseFormComponent {
             { sectionKey: 'accessScopeSettings', sectionName: 'Access & Scope Settings', isExpanded: true },
             { sectionKey: 'technicalConfiguration', sectionName: 'Technical Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJDashboardCategoryLinks', sectionName: 'MJ: Dashboard Category Links', isExpanded: false },
             { sectionKey: 'mJDashboardUserStates', sectionName: 'MJ: Dashboard User States', isExpanded: false },
+            { sectionKey: 'mJDashboardPermissions', sectionName: 'MJ: Dashboard Permissions', isExpanded: false },
             { sectionKey: 'mJDashboardUserPreferences', sectionName: 'MJ: Dashboard User Preferences', isExpanded: false }
         ]);
     }
