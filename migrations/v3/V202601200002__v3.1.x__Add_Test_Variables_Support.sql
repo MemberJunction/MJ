@@ -3849,7 +3849,7 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 		if (!allowed.includes(this.FinalStep)) {
 			result.Errors.push(new ValidationErrorInfo(
 				"FinalStep",
-				`FinalStep must be one of the allowed values: ${allowed.join(", ")}.`,
+				`FinalStep must be one of the allowed values: While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, Success.`,
 				this.FinalStep,
 				ValidationErrorType.Failure
 			));
