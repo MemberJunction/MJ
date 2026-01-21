@@ -3995,5 +3995,5 @@ UPDATE [${flyway:defaultSchema}].EntityField
             SET DefaultForNewUser = 1,
                 __mj_UpdatedAt = GETUTCDATE()
             WHERE EntityID = '4B35F25F-D5E7-4489-B722-29B75AF384A8'
-         b
+         
 

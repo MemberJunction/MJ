@@ -30,6 +30,8 @@
     "applications",
     "dashboard-part-types",
     "dashboards",
+    "templates",
+    "notifications",
     "test-types",
     "tests",
     "test-suites",
