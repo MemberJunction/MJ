@@ -157,7 +157,8 @@
               }
             ],
             "styles": [
-              "src/styles/main.scss"
+              "@memberjunction/ng-explorer-app/dist/styles.scss",
+              "src/styles.css"
             ],
             "scripts": []
           }
