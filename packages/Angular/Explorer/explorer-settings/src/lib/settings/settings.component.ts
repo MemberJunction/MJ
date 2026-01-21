@@ -44,6 +44,12 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       badgeCount: 0
     },
     {
+      id: 'notifications',
+      label: 'Notifications',
+      icon: 'fa-solid fa-bell',
+      badgeCount: 0
+    },
+    {
       id: 'users',
       label: 'Users',
       icon: 'fa-solid fa-users',

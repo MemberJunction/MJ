@@ -363,5 +363,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
  * Tree-shaking prevention
  */
 export function LoadHomeDashboard() {
-  // Force inclusion in production builds
+  // Reference the component to prevent tree-shaking
+  console.log('HomeDashboardComponent registered:', HomeDashboardComponent.name);
 }
