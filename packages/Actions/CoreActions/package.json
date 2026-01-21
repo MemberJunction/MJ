@@ -21,6 +21,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "@asamuzakjp/css-color": "^3.2.0",
     "@dagrejs/dagre": "^1.1.4",
     "@memberjunction/actions": "3.0.0",
     "@memberjunction/actions-base": "3.0.0",
